@@ -197,9 +197,9 @@ impl FieldStory {
                                 group,
                                 detail,
                                 if group == projects {
-                                    Glyph::Folder
+                                    Glyph::FolderKanban
                                 } else {
-                                    Glyph::Book
+                                    Glyph::FileText
                                 },
                             )
                             .keywords(format!("{id} {detail}"))

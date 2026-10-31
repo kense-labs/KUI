@@ -4,7 +4,7 @@ use crate::{
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
-        family::{Paint, Slide, Tone, face},
+        family::{Paint, PhaseClock, Slide, Tone, face, standard_ease},
         glyph::{Glyph, icon},
     },
 };
@@ -26,7 +26,7 @@ impl SearchItem {
             detail: "".into(),
             group: "".into(),
             keywords: "".into(),
-            icon: Glyph::Book,
+            icon: Glyph::FileText,
         }
     }
     pub fn description(
@@ -73,6 +73,8 @@ pub struct ExpandingSearch {
     panel_bounds: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     slide: Slide,
     high: Slide,
+    icon_fade: PhaseClock,
+    icon_start: Vec<f32>,
     _sub: Subscription,
 }
 impl EventEmitter<SearchEvent> for ExpandingSearch {}
@@ -133,6 +135,8 @@ impl ExpandingSearch {
             panel_bounds: Default::default(),
             slide: Slide::new(0.),
             high: Slide::snappy(0.),
+            icon_fade: PhaseClock::default(),
+            icon_start: Vec::new(),
             _sub: sub,
         }
     }
@@ -188,10 +192,29 @@ impl ExpandingSearch {
             results
         };
         self.active = (!query.is_empty() && !self.results.is_empty()).then_some(0);
+        self.icon_fade = PhaseClock::default();
+        self.icon_start.clear();
         self.high.reset(0.);
         cx.notify()
     }
+    const ICON_FADE_SECONDS: f32 = 0.16;
+
+    fn icon_emphasis(&self, i: usize, progress: f32) -> f32 {
+        let target = f32::from(self.active == Some(i));
+        let start = self.icon_start.get(i).copied().unwrap_or(target);
+        start + (target - start) * progress
+    }
+
     fn activate(&mut self, i: usize, cx: &mut Context<Self>) {
+        if self.active == Some(i) {
+            return;
+        }
+        // Snapshot the visible colors so rapid pointer and keyboard retargets stay continuous.
+        let progress = standard_ease(self.icon_fade.age(cx) / Self::ICON_FADE_SECONDS);
+        self.icon_start = (0..self.results.len())
+            .map(|row| self.icon_emphasis(row, progress))
+            .collect();
+        self.icon_fade.restart(cx);
         self.active = Some(i);
         self.high.set(self.row_y(i, cx), cx);
         cx.notify()
@@ -355,6 +378,9 @@ impl Render for ExpandingSearch {
                 )
             }
             let empty = query.trim().is_empty();
+            let icon_progress = standard_ease(
+                self.icon_fade.time(Self::ICON_FADE_SECONDS, w, cx) / Self::ICON_FADE_SECONDS,
+            );
             for (i, &idx) in self.results.iter().enumerate() {
                 let item = &self.items[idx];
                 if self.header(i, cx) {
@@ -403,10 +429,23 @@ impl Render for ExpandingSearch {
                         .w_full()
                         .flex()
                         .items_center()
-                        .gap(px(9.))
-                        .px(px(8.))
+                        .gap(px(12.))
+                        .px(px(12.))
                         .cursor_pointer()
-                        .child(icon(item.icon, 16., p.secondary))
+                        .child(
+                            div()
+                                .w(px(18.))
+                                .flex_none()
+                                .flex()
+                                .justify_center()
+                                .items_center()
+                                .child(icon(
+                                    item.icon,
+                                    16.,
+                                    p.faint
+                                        .blend(p.ink.opacity(self.icon_emphasis(i, icon_progress))),
+                                )),
+                        )
                         .child(
                             div().min_w_0().flex_1().child(title).child(
                                 div()
