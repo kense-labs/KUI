@@ -2698,6 +2698,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kui-story-web"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "kui",
+ "kui-story",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "kui-template"
 version = "0.1.0"
 dependencies = [

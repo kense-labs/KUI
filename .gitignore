@@ -6,3 +6,4 @@
 *.pdb
 .idea/
 .vscode/
+apps/story-web/www/pkg/

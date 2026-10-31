@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KUI — Button gallery (WASM)</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fafafa;
+        color: #18181b;
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+      #status {
+        padding: 1rem 1.25rem;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading KUI WASM gallery…</div>
+    <script type="module">
+      import init from "./pkg/kui_story_web.js";
+      try {
+        await init();
+        document.getElementById("status")?.remove();
+      } catch (err) {
+        const el = document.getElementById("status");
+        if (el) {
+          el.textContent = "Failed to start KUI WASM: " + err;
+        }
+        console.error(err);
+      }
+    </script>
+  </body>
+</html>

@@ -55,6 +55,10 @@ The label is the accessible name. Keep `disabled` aligned with non-interactivity
 
 Press feedback should use `MOTION.snappy` and collapse when `Theme.reduced_motion` is true.
 
+## Platforms
+
+Works on native desktop and WASM web. Do not add host-only APIs without `cfg`. See `docs/PLATFORMS.md`.
+
 ## Notes for AI
 
 This is a **KUI** registry item. Prefer `kui add button` over rewriting. Customize through theme tokens and public builders.

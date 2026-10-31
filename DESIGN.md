@@ -15,6 +15,7 @@ KUI chrome is a quiet work surface. Structure comes from type size, neutral fiel
 - Components read semantic tokens (`accent`, `surface`, `danger`). They do not hard-code brand hex in call sites.
 - Motion explains cause and effect. When `Theme.reduced_motion` is true, durations collapse to zero.
 - Sentence case for labels. Regular and medium weights only. No eyebrow labels, no emoji in chrome.
+- **Desktop and WASM share the same chrome.** Do not author a second web-only Button look. Platform notes live in [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
 
 ## 2. Color
 
@@ -149,8 +150,9 @@ When `Theme.reduced_motion` is true, effective duration is `0`.
 
 - Do not invent a second primary accent hue for navigation.
 - Do not add decorative gradients, glows, or multi-layer shadows on Button.
-- Do not ship Tailwind class strings; KUI chrome is GPUI style builders + tokens.
+- Do not ship Tailwind / CSS-module chrome; KUI paints through GPUI on desktop and canvas/WebGPU on web.
 - Do not copy Magic UI / marketing-effect patterns into application chrome.
+- Do not maintain a separate DOM React tree for KUI controls.
 
 ## 10. Change process
 

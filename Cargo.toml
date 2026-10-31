@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "registry",
     "apps/story",
+    "apps/story-web",
     "tools/cli",
     "tools/registry-build",
     "templates/app",
@@ -19,7 +20,9 @@ repository = "https://github.com/kense-labs/KUI"
 # Exact pin — do not widen to caret ranges.
 gpui = { package = "gpui-pre", version = "=0.3.10", default-features = false }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", default-features = false }
-kui = { path = "registry", version = "0.1.0" }
+gpui_web = { package = "gpui-pre-web", version = "=0.3.10", default-features = false }
+kui = { path = "registry", version = "0.1.0", default-features = false }
+kui-story = { path = "apps/story", version = "0.1.0", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

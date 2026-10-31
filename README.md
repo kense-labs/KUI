@@ -1,27 +1,35 @@
 # KUI
 
-**KUI** is a Rust-native UI kit for [GPUI](https://gpui.rs). Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
+**KUI** is a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
 
 This repository ships a **button MVP** — foundation tokens plus a finished `Button` — as the first registry item.
 
 ## Why KUI
 
-- **GPUI native** — GPU UI, pinned `gpui-pre =0.3.10`
+- **Dual runtime** — macOS / Windows / Linux desktop and `wasm32-unknown-unknown` web
+- **GPUI** — GPU UI, pinned `gpui-pre =0.3.10`
 - **Copy the source** — no runtime component crate lock-in for your chrome
 - **Behavior vs presentation** — primitives stay unstyled; components ship finished defaults
-- **Preview = install source** — `apps/story` depends on the same `registry/` tree
+- **Preview = install source** — story hosts depend on the same `registry/` tree
 
 ## Quick start
 
 ```bash
-# Check the KUI registry library (no Xcode Metal required)
+# Check the KUI registry library (host CI; no Xcode Metal required)
 cargo check -p kui
+
+# Same library for WASM
+cargo check -p kui --target wasm32-unknown-unknown --no-default-features
 
 # Story smoke (headless)
 cargo run -p kui-story
 
-# Native window (needs GPUI platform / Xcode Metal on macOS)
+# Native desktop window (needs GPUI platform / Xcode Metal on macOS)
 cargo run -p kui-story --features native
+
+# WASM web gallery
+./scripts/build-story-web.sh
+python3 -m http.server -d apps/story-web/www 8080
 
 # CLI
 cargo install --path tools/cli
@@ -29,6 +37,8 @@ kui init
 kui add button
 kui doctor
 ```
+
+Platform details: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
 
 ## Install a button into your app
 
@@ -43,11 +53,14 @@ use crate::ui::components::button::Button;
 Button::new("save").primary().label("Save")
 ```
 
+The installed `ui/` source is host-agnostic. Your app Cargo.toml selects desktop `gpui_platform` or a WASM cdylib host.
+
 ## Layout
 
 ```text
 registry/           # authoritative KUI source (crate: kui)
-apps/story/         # gallery — same source
+apps/story/         # shared gallery + desktop/smoke host
+apps/story-web/     # WASM web host + www/
 tools/cli/          # kui init | add | doctor | sync-mod
 tools/registry-build/
 website/public/r/   # registry JSON
@@ -63,6 +76,7 @@ Use **KUI** in product copy and **`kui`** in crate names, CLI, modules, and path
 
 - [`AGENTS.md`](./AGENTS.md) — agent and contributor rules (Microsoft Pragmatic Rust Guidelines)
 - [`DESIGN.md`](./DESIGN.md) — chrome tokens, Button metrics, interaction
+- [`docs/PLATFORMS.md`](./docs/PLATFORMS.md) — native + WASM matrix
 
 ## License
 

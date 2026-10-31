@@ -8,8 +8,12 @@ publish = false
 
 [features]
 default = ["test-support"]
+# Desktop/CI test harness. Do not enable for wasm32 (pulls host-only crates).
 test-support = ["gpui/test-support"]
+# Optional platform hooks for native hosts that embed kui helpers.
 native = ["dep:gpui_platform"]
+# Marker feature: same source compiles for wasm32; runtime is gpui_platform's wasm backend.
+web = []
 
 [dependencies]
 gpui = { workspace = true, default-features = false }

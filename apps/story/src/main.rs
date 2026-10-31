@@ -1,129 +1,20 @@
-//! KUI button gallery — depends on the `kui` registry path (preview = install source).
+//! KUI button gallery host (desktop / smoke).
+//!
+//! - Default: headless smoke via `TestApp`
+//! - `--features native`: desktop window through `gpui_platform`
+//! - WASM web host lives in `apps/story-web` (same gallery source)
 
-use gpui::{div, prelude::*, px, Context, TestApp, Window};
+mod gallery;
+
+use gallery::ButtonGallery;
+use gpui::TestApp;
 use kui::components::button::Button;
 use kui::foundation::{init, Theme};
-use kui::primitives::Size;
-
-struct ButtonGallery {
-    clicks: u32,
-}
-
-impl ButtonGallery {
-    fn new() -> Self {
-        Self { clicks: 0 }
-    }
-}
-
-impl Render for ButtonGallery {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::global(cx);
-        let clicks = self.clicks;
-
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .p_6()
-            .bg(theme.tokens.colors.background)
-            .text_color(theme.tokens.colors.foreground)
-            .child(div().text_size(px(22.)).child("KUI"))
-            .child(
-                div()
-                    .text_size(px(14.))
-                    .text_color(theme.tokens.colors.text_secondary)
-                    .child("Button MVP — same source the kui CLI installs"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(Button::new("primary").primary().label("Primary").into_themed(cx))
-                    .child(
-                        Button::new("secondary")
-                            .secondary()
-                            .label("Secondary")
-                            .into_themed(cx),
-                    )
-                    .child(Button::new("ghost").ghost().label("Ghost").into_themed(cx))
-                    .child(Button::new("danger").danger().label("Danger").into_themed(cx))
-                    .child(
-                        Button::new("sm")
-                            .secondary()
-                            .with_size(Size::Sm)
-                            .label("Small")
-                            .into_themed(cx),
-                    )
-                    .child(
-                        Button::new("lg")
-                            .primary()
-                            .with_size(Size::Lg)
-                            .label("Large")
-                            .into_themed(cx),
-                    )
-                    .child(
-                        Button::new("loading")
-                            .primary()
-                            .loading(true)
-                            .label("Loading")
-                            .into_themed(cx),
-                    )
-                    .child(
-                        Button::new("disabled")
-                            .secondary()
-                            .disabled(true)
-                            .label("Disabled")
-                            .into_themed(cx),
-                    )
-                    .child(
-                        Button::new("click")
-                            .primary()
-                            .label(format!("Clicked {clicks}"))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.clicks += 1;
-                                cx.notify();
-                            }))
-                            .into_themed(cx),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        Button::new("theme")
-                            .secondary()
-                            .label("Toggle theme")
-                            .on_click(|_, _, cx| {
-                                Theme::global_mut(cx).toggle_mode();
-                                cx.refresh_windows();
-                            })
-                            .into_themed(cx),
-                    )
-                    .child(
-                        Button::new("motion")
-                            .ghost()
-                            .label(if theme.reduced_motion {
-                                "Motion: off"
-                            } else {
-                                "Motion: on"
-                            })
-                            .on_click(|_, _, cx| {
-                                let theme = Theme::global_mut(cx);
-                                theme.reduced_motion = !theme.reduced_motion;
-                                cx.refresh_windows();
-                            })
-                            .into_themed(cx),
-                    ),
-            )
-    }
-}
 
 #[cfg(feature = "native")]
 fn run_native() {
-    use gpui::{size, App, Bounds, WindowBounds, WindowOptions};
+    use gpui::prelude::*;
+    use gpui::{px, size, App, Bounds, WindowBounds, WindowOptions};
 
     gpui_platform::application().run(|cx: &mut App| {
         init(cx);
@@ -146,9 +37,8 @@ fn run_smoke() {
         init(cx);
         let _ = Theme::global(cx);
         let _ = Button::new("smoke").primary().label("KUI").into_themed(cx);
-        // Keep gallery type referenced for compile coverage under test-support.
         let _gallery = ButtonGallery::new();
-        let _ = &_gallery.clicks;
+        let _ = &_gallery;
     });
     println!("kui-story smoke ok");
 }
@@ -160,7 +50,8 @@ fn main() {
     }
     #[cfg(not(feature = "native"))]
     {
-        eprintln!("kui-story: use --features native for a window");
+        eprintln!("kui-story: use --features native for a desktop window");
+        eprintln!("kui-story: use apps/story-web for WASM (see docs/PLATFORMS.md)");
         run_smoke();
     }
 }

@@ -21,27 +21,40 @@ Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is a
 | Path | Role |
 | --- | --- |
 | `registry/` | Authoritative UI source; crate name `kui`. Preview and install share this tree. |
-| `apps/story/` | Button gallery (`kui-story`). Depends on `kui` by path. |
+| `apps/story/` | Shared gallery lib + desktop/smoke host (`kui-story`). |
+| `apps/story-web/` | WASM web host (`kui-story-web`) for the same gallery. |
 | `tools/cli/` | `kui` binary: `init`, `add`, `doctor`, `sync-mod`. |
 | `tools/registry-build/` | `kui-build`: registry JSON, docs stubs, preview hashes. |
-| `docs/` | Contracts and per-item Markdown. |
+| `docs/` | Contracts and per-item Markdown. See `docs/PLATFORMS.md`. |
 | `skills/kui/` | Agent skills for install and Button usage. |
 | `templates/app/` | Blank app scaffold for `kui init`. |
 | `website/public/r/` | Generated registry items. |
 
 MVP catalog: `kui-foundation`, `button`. Do not add unrelated controls unless the user asks.
 
+## Platforms
+
+KUI targets **native desktop** and **WASM web** with one control source. Details: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
+
+- Library: `cargo check -p kui --target wasm32-unknown-unknown --no-default-features` must stay green.
+- Do not enable `kui/test-support` on wasm32.
+- Do not fork chrome per platform. Use `cfg(target_family = "wasm")` only for host-only OS APIs.
+- Desktop story: `cargo run -p kui-story --features native`
+- Web story: `./scripts/build-story-web.sh`
+
 ## Toolchain and verification (M-STATIC-VERIFICATION)
 
 - Edition: `2024` (workspace).
-- GPUI pin: `gpui-pre =0.3.10` exact. Never widen to a caret range.
-- Default features use `gpui` with `default-features = false` and `test-support` so CI works without Metal shaders.
+- GPUI pin: `gpui-pre` / `gpui-pre-platform` / `gpui-pre-web` at `=0.3.10` exact. Never widen to a caret range.
+- Default features use `gpui` with `default-features = false` and `test-support` so host CI works without Metal shaders.
 - Required local gates before landing:
 
 ```bash
 cargo fmt --check
 cargo clippy -p kui -p kui-story -p kui-cli -p kui-build -- -D warnings
 cargo test -p kui-story
+cargo check -p kui --target wasm32-unknown-unknown --no-default-features
+cargo check -p kui-story-web --target wasm32-unknown-unknown
 cargo run -p kui-build -- build
 cargo run -p kui-build -- verify-preview
 ```
@@ -52,10 +65,11 @@ cargo run -p kui-build -- verify-preview
 ## Architecture
 
 1. **Copy-source distribution.** Applications own installed `ui/` source. The published surface for apps is not a versioned component crate on crates.io; the `kui` crate exists so story and CI compile the same tree.
-2. **Behavior vs presentation.** `registry/src/primitives` owns behavior (ids, disabled, sizing enums). `registry/src/components` owns chrome (tokens, padding, variants). Do not put brand colors in primitives.
-3. **Foundation once.** `kui-foundation` installs theme, motion, and `init`. Components must not reinstall foundation by default.
-4. **Preview = source.** `apps/story` must keep a path dependency on `kui`. `kui-build verify-preview` enforces this.
-5. **Stable `ElementId`.** Changing an id resets focus and interaction state. Treat ids as part of the public contract.
+2. **Dual runtime, single UI.** Native and WASM hosts bootstrap GPUI differently; gallery and registry controls stay shared.
+3. **Behavior vs presentation.** `registry/src/primitives` owns behavior (ids, disabled, sizing enums). `registry/src/components` owns chrome (tokens, padding, variants). Do not put brand colors in primitives.
+4. **Foundation once.** `kui-foundation` installs theme, motion, and `init`. Components must not reinstall foundation by default.
+5. **Preview = source.** `apps/story` must keep a path dependency on `kui`. `kui-build verify-preview` enforces this.
+6. **Stable `ElementId`.** Changing an id resets focus and interaction state. Treat ids as part of the public contract.
 
 ## Public API UX (Library / UX)
 
@@ -121,8 +135,10 @@ Builder methods on controls stay chainable and consume `self` by value unless GP
 
 ```bash
 cargo check -p kui
+cargo check -p kui --target wasm32-unknown-unknown --no-default-features
 cargo run -p kui-story
 cargo run -p kui-story --features native
+./scripts/build-story-web.sh
 cargo install --path tools/cli
 kui init
 kui add button

@@ -17,6 +17,7 @@ Read repository root [`AGENTS.md`](../../AGENTS.md) and [`DESIGN.md`](../../DESI
 - Prefer `kui add <id>` for components
 - Use semantic theme tokens from `DESIGN.md`, not hard-coded brand colors in new code
 - Honor `Theme.reduced_motion`
+- Keep controls host-agnostic: native desktop and WASM web share `registry/` (see `docs/PLATFORMS.md`)
 - Public modules and items use rustdoc summaries and canonical sections (M-MODULE-DOCS, M-CANONICAL-DOCS)
 
 ## MVP catalog

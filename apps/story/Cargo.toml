@@ -5,16 +5,22 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
+[lib]
+name = "kui_story"
+path = "src/lib.rs"
+
 [[bin]]
 name = "kui-story"
 path = "src/main.rs"
 
 [features]
 default = ["test-support"]
+# Headless / CI. Not for wasm32 — use --no-default-features on that target.
 test-support = ["kui/test-support", "gpui/test-support"]
+# Desktop window host (macOS / Windows / Linux).
 native = ["kui/native", "dep:gpui_platform"]
 
 [dependencies]
-kui = { workspace = true }
+kui = { workspace = true, default-features = false }
 gpui = { workspace = true }
 gpui_platform = { workspace = true, optional = true }
