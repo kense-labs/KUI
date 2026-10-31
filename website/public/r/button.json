@@ -1,0 +1,41 @@
+{
+  "name": "button",
+  "kind": "component",
+  "title": "Button",
+  "description": "Finished KUI button with variants, sizes, loading, and disabled states.",
+  "categories": [
+    "actions"
+  ],
+  "registry_dependencies": [
+    "kui-foundation"
+  ],
+  "cargo_dependencies": [],
+  "gpui_version": "=0.3.10",
+  "files": [
+    {
+      "path": "components/button/style.rs",
+      "content": "//! KUI Button presentation helpers.\n\nuse gpui::{px, Hsla, Pixels};\n\nuse crate::foundation::ColorTokens;\nuse crate::primitives::Size;\n\nuse super::ButtonVariant;\n\npub struct ButtonChrome {\n    pub pad_x: Pixels,\n    pub pad_y: Pixels,\n    pub text: Pixels,\n    pub radius: Pixels,\n    pub bg: Hsla,\n    pub fg: Hsla,\n    pub border: Option<Hsla>,\n}\n\npub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> ButtonChrome {\n    let (pad_x, pad_y, text) = match size {\n        Size::Sm => (px(10.), px(4.), px(12.)),\n        Size::Md => (px(14.), px(6.), px(14.)),\n        Size::Lg => (px(18.), px(8.), px(16.)),\n    };\n    let (bg, fg, border) = match variant {\n        ButtonVariant::Primary => (colors.accent, colors.accent_foreground, None),\n        ButtonVariant::Secondary => (colors.surface_muted, colors.foreground, Some(colors.border)),\n        ButtonVariant::Ghost => (colors.background.opacity(0.), colors.foreground, None),\n        ButtonVariant::Danger => (colors.danger, colors.danger_foreground, None),\n    };\n    ButtonChrome {\n        pad_x,\n        pad_y,\n        text,\n        radius: px(8.),\n        bg,\n        fg,\n        border,\n    }\n}\n"
+    },
+    {
+      "path": "components/button/mod.rs",
+      "content": "mod button;\nmod style;\n\npub use button::*;\npub use style::*;\n"
+    },
+    {
+      "path": "components/button/button.rs",
+      "content": "use std::rc::Rc;\n\nuse gpui::{\n    div, px, App, ClickEvent, Div, ElementId, InteractiveElement, IntoElement, ParentElement,\n    SharedString, Stateful, StatefulInteractiveElement, Styled, Window,\n};\n\nuse crate::foundation::{Theme, MOTION};\nuse crate::primitives::Size;\n\nuse super::style::chrome;\n\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]\npub enum ButtonVariant {\n    #[default]\n    Primary,\n    Secondary,\n    Ghost,\n    Danger,\n}\n\n/// Finished KUI button with theme-aware chrome and press feedback.\npub struct Button {\n    id: ElementId,\n    label: SharedString,\n    variant: ButtonVariant,\n    size: Size,\n    disabled: bool,\n    loading: bool,\n    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,\n}\n\nimpl Button {\n    pub fn new(id: impl Into<ElementId>) -> Self {\n        Self {\n            id: id.into(),\n            label: SharedString::from(\"\"),\n            variant: ButtonVariant::Primary,\n            size: Size::Md,\n            disabled: false,\n            loading: false,\n            on_click: None,\n        }\n    }\n\n    pub fn label(mut self, label: impl Into<SharedString>) -> Self {\n        self.label = label.into();\n        self\n    }\n\n    pub fn primary(mut self) -> Self {\n        self.variant = ButtonVariant::Primary;\n        self\n    }\n\n    pub fn secondary(mut self) -> Self {\n        self.variant = ButtonVariant::Secondary;\n        self\n    }\n\n    pub fn ghost(mut self) -> Self {\n        self.variant = ButtonVariant::Ghost;\n        self\n    }\n\n    pub fn danger(mut self) -> Self {\n        self.variant = ButtonVariant::Danger;\n        self\n    }\n\n    pub fn with_size(mut self, size: Size) -> Self {\n        self.size = size;\n        self\n    }\n\n    pub fn disabled(mut self, disabled: bool) -> Self {\n        self.disabled = disabled;\n        self\n    }\n\n    pub fn loading(mut self, loading: bool) -> Self {\n        self.loading = loading;\n        self\n    }\n\n    pub fn on_click(\n        mut self,\n        listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,\n    ) -> Self {\n        self.on_click = Some(Rc::new(listener));\n        self\n    }\n\n    /// Build with live KUI theme tokens from `App`.\n    pub fn into_themed(self, cx: &App) -> Stateful<Div> {\n        let theme = Theme::global(cx);\n        let look = chrome(self.variant, self.size, &theme.tokens.colors);\n        let _press = MOTION.effective(MOTION.snappy, theme.reduced_motion);\n\n        let label = if self.loading {\n            SharedString::from(\"…\")\n        } else {\n            self.label.clone()\n        };\n\n        let mut el = div()\n            .id(self.id)\n            .flex()\n            .items_center()\n            .justify_center()\n            .px(look.pad_x)\n            .py(look.pad_y)\n            .rounded(look.radius)\n            .text_size(look.text)\n            .line_height(px(20.))\n            .bg(look.bg)\n            .text_color(look.fg)\n            .child(label);\n\n        if let Some(border) = look.border {\n            el = el.border_1().border_color(border);\n        }\n\n        if self.disabled || self.loading {\n            el = el.opacity(0.5);\n        } else if let Some(on_click) = self.on_click.clone() {\n            el = el.on_click(move |event, window, cx| on_click(event, window, cx));\n        }\n\n        el\n    }\n}\n\nimpl IntoElement for Button {\n    type Element = Stateful<Div>;\n\n    fn into_element(self) -> Self::Element {\n        // Fallback light chrome when no App borrow is available (static builders).\n        let colors = crate::foundation::ColorTokens::light();\n        let look = chrome(self.variant, self.size, &colors);\n        let label = if self.loading {\n            SharedString::from(\"…\")\n        } else {\n            self.label.clone()\n        };\n\n        let mut el = div()\n            .id(self.id)\n            .flex()\n            .items_center()\n            .justify_center()\n            .px(look.pad_x)\n            .py(look.pad_y)\n            .rounded(look.radius)\n            .text_size(look.text)\n            .line_height(px(20.))\n            .bg(look.bg)\n            .text_color(look.fg)\n            .child(label);\n\n        if let Some(border) = look.border {\n            el = el.border_1().border_color(border);\n        }\n\n        if self.disabled || self.loading {\n            el = el.opacity(0.5);\n        } else if let Some(on_click) = self.on_click {\n            el = el.on_click(move |event, window, cx| on_click(event, window, cx));\n        }\n\n        el\n    }\n}\n"
+    },
+    {
+      "path": "primitives/button.rs",
+      "content": "use gpui::ElementId;\n\n/// Behavior contract for a KUI button-like control (no default chrome).\n#[derive(Clone)]\npub struct ButtonBehavior {\n    pub id: ElementId,\n    pub disabled: bool,\n    pub selected: bool,\n}\n\nimpl ButtonBehavior {\n    pub fn new(id: impl Into<ElementId>) -> Self {\n        Self {\n            id: id.into(),\n            disabled: false,\n            selected: false,\n        }\n    }\n\n    pub fn disabled(mut self, disabled: bool) -> Self {\n        self.disabled = disabled;\n        self\n    }\n\n    pub fn selected(mut self, selected: bool) -> Self {\n        self.selected = selected;\n        self\n    }\n}\n"
+    },
+    {
+      "path": "primitives/sizing.rs",
+      "content": "#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]\npub enum Size {\n    Sm,\n    #[default]\n    Md,\n    Lg,\n}\n"
+    },
+    {
+      "path": "primitives/mod.rs",
+      "content": "//! KUI unstyled behavior roots.\n//!\n//! Presentation belongs to `components`. These modules own focus, activation,\n//! and accessibility seams.\n\npub mod button;\npub mod sizing;\n\npub use button::ButtonBehavior;\npub use sizing::Size;\n"
+    }
+  ],
+  "docs_url": "docs/items/button.md"
+}

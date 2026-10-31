@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check KUI library
+        run: cargo check -p kui
+      - name: Test KUI story
+        run: cargo test -p kui-story
+      - name: Build registry JSON
+        run: cargo run -p kui-build -- build && cargo run -p kui-build -- verify-preview
+      - name: Check CLI
+        run: cargo check -p kui-cli

@@ -1,0 +1,20 @@
+[package]
+name = "kui-cli"
+description = "KUI registry CLI: init, add, doctor, sync-mod"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "kui"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+walkdir.workspace = true
+ureq.workspace = true

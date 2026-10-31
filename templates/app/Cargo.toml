@@ -1,0 +1,17 @@
+[package]
+name = "kui-template"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "kui-template"
+path = "src/main.rs"
+
+[features]
+default = ["test-support"]
+test-support = ["gpui/test-support"]
+
+[dependencies]
+gpui = { workspace = true }

@@ -1,0 +1,10 @@
+# KUI workspace registry metadata
+name = "kui"
+namespace = "@kui"
+gpui_version = "=0.3.10"
+gpui_package = "gpui-pre"
+registry_root = "registry"
+output_dir = "website/public/r"
+docs_dir = "docs/items"
+ui_install_dir = "ui"
+schema_version = 1

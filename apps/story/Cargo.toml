@@ -1,0 +1,20 @@
+[package]
+name = "kui-story"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "kui-story"
+path = "src/main.rs"
+
+[features]
+default = ["test-support"]
+test-support = ["kui/test-support", "gpui/test-support"]
+native = ["kui/native", "dep:gpui_platform"]
+
+[dependencies]
+kui = { workspace = true }
+gpui = { workspace = true }
+gpui_platform = { workspace = true, optional = true }

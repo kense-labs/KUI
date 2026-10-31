@@ -1,0 +1,18 @@
+[
+  {
+    "categories": [
+      "foundation"
+    ],
+    "kind": "foundation",
+    "name": "kui-foundation",
+    "title": "KUI foundation"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "button",
+    "title": "Button"
+  }
+]

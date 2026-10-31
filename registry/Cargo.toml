@@ -1,0 +1,19 @@
+[package]
+name = "kui"
+description = "KUI registry source — the same tree the kui CLI copies into applications"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = ["test-support"]
+test-support = ["gpui/test-support"]
+native = ["dep:gpui_platform"]
+
+[dependencies]
+gpui = { workspace = true, default-features = false }
+gpui_platform = { workspace = true, optional = true }
+
+[dev-dependencies]
+gpui = { workspace = true, default-features = false, features = ["test-support"] }
