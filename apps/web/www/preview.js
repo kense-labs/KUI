@@ -1,4 +1,4 @@
-import init, { start, show_story, set_preferences, set_icon_intent } from "./pkg/kui_web.js";
+import init, { start, show_story, install_input_font, set_preferences, set_icon_intent } from "./pkg/kui_web.js";
 
 const params = new URLSearchParams(location.search);
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -17,10 +17,17 @@ let paintRevision = 0;
 const waiters = new Set();
 const status = document.getElementById("status");
 
-// These embedded button stories have no scroll surface. Let the browser chain
-// wheel/pinch gestures into the document before the GPUI canvas cancels them.
+// Only a textarea with more content in the direction of travel consumes the wheel.
+let editorScroll;
+window.kuiEditorScroll = (x,y,w,h,up,down) => { editorScroll = {x,y,w,h,up,down}; };
 if (frame?.matches("iframe.rust-story[data-story]")) {
-  window.addEventListener("wheel", event => event.stopPropagation(), {capture: true, passive: true});
+  window.addEventListener("wheel", event => {
+    const r = editorScroll;
+    if (selected.story === "textarea" && r && !event.ctrlKey && !event.metaKey &&
+        event.clientX >= r.x && event.clientX < r.x + r.w && event.clientY >= r.y &&
+        event.clientY < r.y + r.h && (event.deltaY > 0 ? r.down : event.deltaY < 0 && r.up)) return;
+    event.stopPropagation();
+  }, {capture: true, passive: true});
 }
 
 // The GPU buffer may be discarded between frames. Keep the most recently
@@ -117,8 +124,17 @@ function setPageColor() {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 }
 
+const textFieldStories = new Set(["input","textarea","password-field","password-strength","search-field","expanding-search","inline-edit"]);
+let inputFont;
+function warmInputFont(story) {
+  if (running && textFieldStories.has(story)) inputFont ??= fetch(new URL("./fonts/KUIInputSans.ttf", import.meta.url))
+    .then(async res => {
+      if (!res.ok || !install_input_font(new Uint8Array(await res.arrayBuffer()))) throw new Error("Input font unavailable");
+    }).catch(error => { inputFont = undefined; console.warn(error.message); });
+}
 function show(story, lang) {
-  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; lastPicture = undefined; }
+  warmInputFont(story);
+  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = undefined; lastPicture = undefined; }
   selected = { story, lang };
   document.documentElement.dataset.story = story.split(":")[0];
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";

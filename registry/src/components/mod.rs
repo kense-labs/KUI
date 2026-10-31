@@ -19,3 +19,11 @@ pub mod split_button;
 pub mod swipe_actions;
 pub mod theme_switch;
 pub mod user_menu;
+
+pub mod expanding_search;
+pub mod inline_edit;
+pub mod input;
+pub mod password_field;
+pub mod password_strength;
+pub mod search_field;
+pub mod textarea;

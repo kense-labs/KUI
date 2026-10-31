@@ -142,5 +142,61 @@
     "kind": "component",
     "name": "user-menu",
     "title": "UserMenu"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "input",
+    "title": "Input"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "textarea",
+    "title": "Textarea"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "password-field",
+    "title": "PasswordField"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "password-strength",
+    "title": "PasswordStrength"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "search-field",
+    "title": "SearchField"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "expanding-search",
+    "title": "ExpandingSearch"
+  },
+  {
+    "categories": [
+      "text-fields"
+    ],
+    "kind": "component",
+    "name": "inline-edit",
+    "title": "InlineEdit"
   }
 ]

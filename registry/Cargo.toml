@@ -20,6 +20,7 @@ gpui = { workspace = true, default-features = false }
 gpui_platform = { workspace = true, optional = true }
 
 web-time = "1"
+unicode-segmentation = "1"
 
 
 [dev-dependencies]

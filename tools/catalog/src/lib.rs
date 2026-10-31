@@ -121,6 +121,41 @@ pub const ITEMS: &[(&str, &str, &str)] = &[
         "UserMenu",
         "An account entry point with destinations, a theme preference and asynchronous sign-out.",
     ),
+    (
+        "input",
+        "Input",
+        "Edit a single line with a visible label, helper text and validation.",
+    ),
+    (
+        "textarea",
+        "Textarea",
+        "Write a multiline project note, select text across lines and drag the bottom corner to resize.",
+    ),
+    (
+        "password-field",
+        "PasswordField",
+        "Reveal or mask an access key without losing the editing position.",
+    ),
+    (
+        "password-strength",
+        "PasswordStrength",
+        "Check a new password against a visible policy as you type.",
+    ),
+    (
+        "search-field",
+        "SearchField",
+        "Type a search query and clear it without shifting the toolbar.",
+    ),
+    (
+        "expanding-search",
+        "ExpandingSearch",
+        "Open a compact search button, browse recent items and choose from grouped results.",
+    ),
+    (
+        "inline-edit",
+        "InlineEdit",
+        "Rename a project or edit its description in place, with validation and retry.",
+    ),
 ];
 pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
     let (_, title, description) = ITEMS
@@ -164,11 +199,26 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         | "reactions"
         | "dropdown-menu"
         | "context-menu"
-        | "user-menu" => {
+        | "user-menu"
+        | "input"
+        | "textarea"
+        | "password-field"
+        | "password-strength"
+        | "search-field"
+        | "expanding-search"
+        | "inline-edit" => {
             let mut files = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
             let mut primitives = vec!["control", "family", "glyph"];
             cargo.push("web-time@1".into());
             match id {
+                "input" | "textarea" | "password-field" | "password-strength" | "search-field"
+                | "expanding-search" | "inline-edit" => {
+                    primitives.push("editor");
+                    cargo.push("unicode-segmentation@1".to_owned());
+                    if !matches!(id, "inline-edit" | "expanding-search") {
+                        primitives.push("field");
+                    }
+                }
                 "copy-button" => {
                     primitives.push("clipboard");
                     cargo.extend(
@@ -237,6 +287,8 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         categories: vec![
             match id {
                 "kui-foundation" => "foundation",
+                "input" | "textarea" | "password-field" | "password-strength" | "search-field"
+                | "expanding-search" | "inline-edit" => "text-fields",
                 "hold-to-confirm" | "swipe-actions" | "reactions" => "gestures",
                 "dropdown-menu" | "context-menu" | "user-menu" => "menus",
                 _ => "actions",
@@ -245,6 +297,8 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         ],
         registry_dependencies: if foundation {
             vec![]
+        } else if id == "password-strength" {
+            vec!["kui-foundation".into(), "password-field".into()]
         } else if id == "swipe-actions" {
             vec!["kui-foundation".into(), "dropdown-menu".into()]
         } else {

@@ -33,6 +33,13 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [dropdown-menu](/md/dropdown-menu.md): DropdownMenu
 - [context-menu](/md/context-menu.md): ContextMenu
 - [user-menu](/md/user-menu.md): UserMenu
+- [input](/md/input.md): Input
+- [textarea](/md/textarea.md): Textarea
+- [password-field](/md/password-field.md): PasswordField
+- [password-strength](/md/password-strength.md): PasswordStrength
+- [search-field](/md/search-field.md): SearchField
+- [expanding-search](/md/expanding-search.md): ExpandingSearch
+- [inline-edit](/md/inline-edit.md): InlineEdit
 
 ## Registry JSON
 
@@ -55,3 +62,10 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [dropdown-menu](/r/dropdown-menu.json)
 - [context-menu](/r/context-menu.json)
 - [user-menu](/r/user-menu.json)
+- [input](/r/input.json)
+- [textarea](/r/textarea.json)
+- [password-field](/r/password-field.json)
+- [password-strength](/r/password-strength.json)
+- [search-field](/r/search-field.json)
+- [expanding-search](/r/expanding-search.json)
+- [inline-edit](/r/inline-edit.json)

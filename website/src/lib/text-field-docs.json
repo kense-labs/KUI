@@ -1,0 +1,233 @@
+[
+  {
+    "id": "input",
+    "group": "text-fields",
+    "title": {
+      "en": "Input",
+      "zh": "单行输入"
+    },
+    "rustType": "Input",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::input::Input;\n\nlet control = cx.new(|cx| Input::new(\"project\", \"Project name\", window, cx).with_description(\"A short descriptive name.\"));",
+    "method": "set_error",
+    "signature": "(impl Into<SharedString>, &mut Context<Self>)",
+    "event": "FieldEvent",
+    "lead": {
+      "en": "Edit a single line with a visible label, helper text and validation.",
+      "zh": "编辑一行文字，标签、说明和校验结果始终跟随输入框。"
+    },
+    "rule": {
+      "en": "Tab or click the label to focus. Select, paste or use an IME. Enter submits.",
+      "zh": "Tab 或点击标签聚焦。支持选区、粘贴和输入法，Enter 提交。"
+    },
+    "api": {
+      "en": "FieldEvent reports changes as you type and when you submit. set_error accepts an empty string to clear validation.",
+      "zh": "FieldEvent 报告值的变化与提交。set_error 传空字符串即可清除错误。"
+    },
+    "motion": {
+      "en": "The border tracks focus; validation appears beneath the field.",
+      "zh": "边框跟随焦点，错误在输入框下展开。"
+    },
+    "avoid": {
+      "en": "Use Textarea for paragraphs.",
+      "zh": "多段文字请用 Textarea。"
+    }
+  },
+  {
+    "id": "textarea",
+    "group": "text-fields",
+    "title": {
+      "en": "Textarea",
+      "zh": "多行输入"
+    },
+    "rustType": "Textarea",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::textarea::Textarea;\n\nlet control = cx.new(|cx| Textarea::new(\"notes\", \"Project note\", window, cx).with_value(\"Ready for review.\", window, cx));",
+    "method": "set_description",
+    "signature": "(impl Into<SharedString>, &mut Context<Self>)",
+    "event": "FieldEvent",
+    "lead": {
+      "en": "Write a multiline project note, select text across lines and drag the bottom corner to resize.",
+      "zh": "编辑多行项目备注，可跨行选择文字或拖动右下角调整高度。"
+    },
+    "rule": {
+      "en": "Enter inserts a line. Shift with arrows extends the selection; drag the handle to change height.",
+      "zh": "Enter 换行，Shift 配合方向键扩选，拖动右下角改变高度。"
+    },
+    "api": {
+      "en": "Textarea preserves line breaks. set_description can display a live count supplied by the host.",
+      "zh": "Textarea 保留换行。可通过 set_description 显示宿主计算的字数。"
+    },
+    "motion": {
+      "en": "Helper and error feedback stay below the editable area while resizing.",
+      "zh": "调整高度时，说明和错误始终位于编辑区域下方。"
+    },
+    "avoid": {
+      "en": "Use Input for a single-line name.",
+      "zh": "单行名称请用 Input。"
+    }
+  },
+  {
+    "id": "password-field",
+    "group": "text-fields",
+    "title": {
+      "en": "Password field",
+      "zh": "密码框"
+    },
+    "rustType": "PasswordField",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::password_field::PasswordField;\n\nlet control = cx.new(|cx| PasswordField::new(\"access\", \"Access key\", window, cx));",
+    "method": "value",
+    "signature": "(&App) → &str",
+    "event": "FieldEvent",
+    "lead": {
+      "en": "Reveal or mask an access key without losing the editing position.",
+      "zh": "显示或隐藏访问密钥，并保留输入位置。"
+    },
+    "rule": {
+      "en": "Tab to the eye and press Enter or Space to reveal or mask the same value.",
+      "zh": "Tab 移到眼睛按钮，按 Enter 或空格切换明文与密文。"
+    },
+    "api": {
+      "en": "The initial value is masked. FieldEvent::Visibility reports whether it is revealed.",
+      "zh": "默认隐藏内容。FieldEvent::Visibility 通知宿主当前是否显示明文。"
+    },
+    "motion": {
+      "en": "A stroke travels across the eye while the value changes visibility in place.",
+      "zh": "斜线在眼睛图标内绘出或收回，数值原位切换。"
+    },
+    "avoid": {
+      "en": "Use PasswordStrength when choosing a new password against a policy.",
+      "zh": "新密码要显示规则时使用 PasswordStrength。"
+    }
+  },
+  {
+    "id": "password-strength",
+    "group": "text-fields",
+    "title": {
+      "en": "Password strength",
+      "zh": "密码强度"
+    },
+    "rustType": "PasswordStrength",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::password_strength::PasswordStrength;\n\nlet control = cx.new(|cx| PasswordStrength::new(\"password\", \"New password\", window, cx));",
+    "method": "with_policy",
+    "signature": "(Vec<PasswordRule>, usize, &mut Context<Self>)",
+    "event": "StrengthEvent",
+    "lead": {
+      "en": "Check a new password against a visible policy as you type.",
+      "zh": "输入新密码时，用四段指示条和规则清单查看满足情况。"
+    },
+    "rule": {
+      "en": "Type or paste, then activate the eye, Suggest one or Save. A failed policy check keeps your entry.",
+      "zh": "输入或粘贴后可查看明文、生成示例或保存。校验未通过时保留输入内容。"
+    },
+    "api": {
+      "en": "Strength gives the 0–4 level and each rule result. Supply custom rules with with_policy.",
+      "zh": "Strength 提供 0–4 级强度和各规则结果。可用 with_policy 配置自己的规则。"
+    },
+    "motion": {
+      "en": "Four segments fill in sequence and fulfilled rules draw checks. New errors shake once.",
+      "zh": "四段指示条依次填充，已满足规则绘出勾号，新错误触发一次晃动。"
+    },
+    "avoid": {
+      "en": "Use PasswordField to sign in with an existing password.",
+      "zh": "登录时输入已有密码请用 PasswordField。"
+    }
+  },
+  {
+    "id": "search-field",
+    "group": "text-fields",
+    "title": {
+      "en": "Search field",
+      "zh": "搜索框"
+    },
+    "rustType": "SearchField",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::search_field::SearchField;\n\nlet control = cx.new(|cx| SearchField::new(\"query\", \"Search projects\", window, cx).with_placeholder(\"Search by name\", cx));",
+    "method": "set_value",
+    "signature": "(impl Into<String>, &Window, &mut Context<Self>)",
+    "event": "FieldEvent",
+    "lead": {
+      "en": "Type a search query and clear it without shifting the toolbar.",
+      "zh": "输入搜索词，一键清除后继续输入。"
+    },
+    "rule": {
+      "en": "Escape or Clear search resets the query. The clear action returns focus to the field.",
+      "zh": "Esc 或清除按钮清空搜索词，焦点留在输入框。"
+    },
+    "api": {
+      "en": "FieldEvent::Changed supplies the query, including the empty string after clearing.",
+      "zh": "FieldEvent::Changed 提供最新搜索词，清除时值为空字符串。"
+    },
+    "motion": {
+      "en": "The clear icon scales inside a reserved slot.",
+      "zh": "清除图标在预留位置缩放。"
+    },
+    "avoid": {
+      "en": "Use ExpandingSearch for a grouped result picker.",
+      "zh": "需要下拉分组结果时使用 ExpandingSearch。"
+    }
+  },
+  {
+    "id": "expanding-search",
+    "group": "text-fields",
+    "title": {
+      "en": "Expanding search",
+      "zh": "展开搜索"
+    },
+    "rustType": "ExpandingSearch",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expanding_search::{ExpandingSearch, SearchItem};\n\nlet control = cx.new(|cx| ExpandingSearch::new(\"find\", \"Search\", vec![SearchItem::new(\"notes\", \"Release notes\")], window, cx).with_suggestions(vec![\"notes\".into()]));",
+    "method": "with_suggestions",
+    "signature": "(Vec<SharedString>)",
+    "event": "SearchEvent",
+    "lead": {
+      "en": "Open a compact search button, browse recent items and choose from grouped results.",
+      "zh": "展开搜索按钮，查看最近项目或从分组结果中选择。"
+    },
+    "rule": {
+      "en": "Open with Enter or Space. Type to filter. Arrow keys wrap, Enter selects and Escape closes.",
+      "zh": "Enter 或空格展开，输入关键词筛选。上下键循环选择，Enter 确定，Esc 收起。"
+    },
+    "api": {
+      "en": "SearchItem has a stable ID, title, detail, group and keywords. Choose a result through SearchEvent::Selected.",
+      "zh": "SearchItem 含稳定 ID、标题、说明、分组与关键词。通过 SearchEvent::Selected 接收选择。"
+    },
+    "motion": {
+      "en": "The field grows on a spring and one highlight follows the active row.",
+      "zh": "输入框以弹簧展开，一片高亮跟随当前结果。"
+    },
+    "avoid": {
+      "en": "Use SearchField for an always-visible query.",
+      "zh": "始终可见、只需接受查询时使用 SearchField。"
+    }
+  },
+  {
+    "id": "inline-edit",
+    "group": "text-fields",
+    "title": {
+      "en": "Inline edit",
+      "zh": "行内编辑"
+    },
+    "rustType": "InlineEdit",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::inline_edit::InlineEdit;\n\nlet control = cx.new(|cx| InlineEdit::new(\"name\", \"Project name\", \"KUI project\", window, cx).with_validator(|s| s.is_empty().then(|| \"Enter a name.\".into())));",
+    "method": "finish",
+    "signature": "(u64, Result<(), SharedString>, &mut Context<Self>)",
+    "event": "SaveRequest",
+    "lead": {
+      "en": "Rename a project or edit its description in place, with validation and retry.",
+      "zh": "就地修改项目名称或描述，支持校验、保存失败回退和重试。"
+    },
+    "rule": {
+      "en": "Activate the value to edit. Enter saves, Escape cancels, leaving saves. Shift+Enter inserts a line in descriptions.",
+      "zh": "激活文字进入编辑，Enter 保存，Esc 取消，移开焦点保存。描述中 Shift+Enter 换行。"
+    },
+    "api": {
+      "en": "Subscribe to SaveRequest and call finish with its revision and result. An outdated response is ignored.",
+      "zh": "订阅 SaveRequest，完成后将此次 revision 和结果传回 finish，过期响应会被忽略。"
+    },
+    "motion": {
+      "en": "The pending draft appears immediately. Success draws a check; failure shows the saved value and a retry.",
+      "zh": "保存时立即展示草稿，成功后绘出勾号，失败后显示原文和重试入口。"
+    },
+    "avoid": {
+      "en": "Use separate fields when a form saves several values together.",
+      "zh": "多项同时提交的表单请用独立字段。"
+    }
+  }
+]

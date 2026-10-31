@@ -16,3 +16,6 @@ pub mod family;
 pub mod glyph;
 pub mod menu;
 pub mod strip;
+
+pub mod editor;
+pub mod field;

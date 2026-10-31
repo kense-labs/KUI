@@ -19,3 +19,9 @@ mod family_story;
 pub use family_story::{FAMILY_IDS, FamilyStory, ThemeBridge};
 
 pub use family_story::collections::{AccountHost, IDS as COLLECTION_IDS};
+
+pub use family_story::fields::IDS as FIELD_IDS;
+
+/// The web host has loaded its optional user-input font.
+pub struct InputFontLoaded;
+impl gpui::Global for InputFontLoaded {}

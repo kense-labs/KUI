@@ -39,6 +39,24 @@ mod web {
             })
         })
     }
+    #[wasm_bindgen]
+    pub fn install_input_font(bytes: Vec<u8>) -> bool {
+        PREVIEW.with_borrow(|preview| {
+            preview.as_ref().is_some_and(|preview| {
+                preview.app.update(|cx| {
+                    if cx.try_global::<kui_story::InputFontLoaded>().is_some() {
+                        return true;
+                    }
+                    if cx.text_system().add_fonts(vec![bytes.into()]).is_err() {
+                        return false;
+                    }
+                    cx.set_global(kui_story::InputFontLoaded);
+                    cx.refresh_windows();
+                    true
+                })
+            })
+        })
+    }
     fn appearance(dark: bool, reduced: bool, cx: &mut App) {
         let mode = if dark {
             ThemeMode::Dark
@@ -91,6 +109,7 @@ mod web {
         export function accountAppearance(mode){parent.postMessage({type:'kui:account-appearance',mode},location.origin)}
         export function previewStarted() { queueMicrotask(() => window.kuiPreviewStarted?.()); }
         export function reportThemeTarget(x,y,w,h,radius) { window.kuiThemeTarget?.(x,y,w,h,radius); }
+        export function editorRegion(x,y,w,h,up,down) { window.kuiEditorScroll?.(x,y,w,h,up,down); }
         export function reportFrame(height, dark) {
             window.kuiFramePainted?.(Math.ceil(height), dark);
         }
@@ -114,6 +133,8 @@ mod web {
         fn preview_started();
         #[wasm_bindgen(js_name=reportThemeTarget)]
         fn report_theme_target(x: f32, y: f32, w: f32, h: f32, radius: f32);
+        #[wasm_bindgen(js_name=editorRegion)]
+        fn editor_region(x: f32, y: f32, w: f32, h: f32, up: bool, down: bool);
         #[wasm_bindgen(js_name=reportFrame)]
         fn report_frame(height: f32, dark: bool);
         #[wasm_bindgen(js_name=buttonTheme)]
@@ -142,6 +163,18 @@ mod web {
                 UiLanguage::English
             });
             if embedded {
+                cx.set_global(kui::primitives::editor::EditorScrollRegion(
+                    |b, up, down| {
+                        editor_region(
+                            b.left().into(),
+                            b.top().into(),
+                            b.size.width.into(),
+                            b.size.height.into(),
+                            up,
+                            down,
+                        )
+                    },
+                ));
                 cx.set_global(kui_story::AccountHost {
                     compact: || compact_host(),
                     current: || {

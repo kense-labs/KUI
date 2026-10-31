@@ -2661,6 +2661,7 @@ dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
  "js-sys",
+ "unicode-segmentation",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-time",

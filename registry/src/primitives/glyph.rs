@@ -20,6 +20,8 @@ pub enum Glyph {
     Undo,
     Redo,
     Comment,
+    Search,
+    Slash,
     ZoomIn,
     ZoomOut,
     Fit,
@@ -391,6 +393,8 @@ impl Glyph {
                 (3.00, 17.00),
                 (3.00, 4.00),
             ]],
+            Self::Search => &[ZOOM_LENS, ZOOM_HANDLE],
+            Self::Slash => &[&[(3., 3.), (21., 21.)]],
             Self::ZoomIn => &[ZOOM_LENS, ZOOM_HANDLE, ZOOM_BAR, &[(10., 7.), (10., 13.)]],
             Self::ZoomOut => &[ZOOM_LENS, ZOOM_HANDLE, ZOOM_BAR],
             Self::Fit => &[

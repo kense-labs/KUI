@@ -28,7 +28,7 @@ const docs: NavLink[] = [
   },
 ];
 
-const groups = (["buttons","gestures","menus"] as const).map(id => ({
+const groups = (["buttons","gestures","menus","text-fields"] as const).map(id => ({
   id, label:t(`sidebar.group.${id}`), items: COMPONENT_CATALOG.filter(doc => (doc.group ?? "buttons") === id).map(doc => ({
     href: localePath(locale,`/kui/components/${doc.id}`), label:doc.title[locale], match:slug === doc.id
   }))

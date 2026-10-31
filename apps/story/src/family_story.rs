@@ -1,6 +1,7 @@
 //! Reference examples rendered with the same installed components on both platforms.
 pub mod collections;
 mod connection_switch;
+pub mod fields;
 use connection_switch::ConnectionSwitch;
 use gpui::{prelude::*, *};
 use kui::{
@@ -741,6 +742,9 @@ impl FamilyStory {
                 });
                 add!((e.into(), sub));
             }
+            id if fields::IDS.contains(&id) => s
+                .views
+                .push(cx.new(|cx| fields::FieldStory::new(id, w, cx)).into()),
             id if collections::IDS.contains(&id) => s.views.push(
                 cx.new(|cx| collections::CollectionStory::new(id, w, cx))
                     .into(),
@@ -1126,6 +1130,18 @@ impl Render for FamilyStory {
             .when(
                 cfg!(target_family = "wasm") && UiLanguage::current(cx) == UiLanguage::Chinese,
                 |e| e.font_family("KUI Story Sans"),
+            )
+            .when(
+                fields::IDS.contains(&self.id.as_str())
+                    && cx.try_global::<crate::InputFontLoaded>().is_some(),
+                |mut s| {
+                    if UiLanguage::current(cx) == UiLanguage::Chinese {
+                        s = s.font_family("KUI Input Sans");
+                    }
+                    s.text_style().font_fallbacks =
+                        Some(FontFallbacks::from_fonts(vec!["KUI Input Sans".into()]));
+                    s
+                },
             )
             .on_key_down(cx.listener(|v, e: &KeyDownEvent, w, cx| {
                 if e.keystroke.key == "tab" {

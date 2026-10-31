@@ -24,6 +24,7 @@ def verify(work):
         "button", "action-button", "split-button", "button-group", "floating-button-group",
         "expanding-button-group", "copy-button", "action-swap", "icon-morph", "confirm-morph", "theme-switch",
         "hold-to-confirm", "swipe-actions", "reactions", "dropdown-menu", "context-menu", "user-menu",
+        "input", "textarea", "password-field", "password-strength", "search-field", "expanding-search", "inline-edit",
     ]
     manifests = ["button", *items, "all-components"]
     (work / "Cargo.toml").write_text('[workspace]\nresolver = "2"\nmembers = ' + json.dumps(manifests))

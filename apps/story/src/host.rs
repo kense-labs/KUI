@@ -12,6 +12,7 @@ impl StoryHost {
     fn select(id: &str, w: &mut Window, cx: &mut Context<Self>) -> Option<gpui::AnyView> {
         if FAMILY_IDS.contains(&id.split(':').next().unwrap_or(id))
             || crate::COLLECTION_IDS.contains(&id)
+            || crate::FIELD_IDS.contains(&id)
         {
             Some(cx.new(|cx| FamilyStory::new(id, w, cx)).into())
         } else {
@@ -57,11 +58,16 @@ impl Render for StoryHost {
                 .into_any_element();
         }
         let mut row = div().flex().flex_wrap().gap_2().p_4();
-        for id in FAMILY_IDS.into_iter().chain(crate::COLLECTION_IDS).chain([
-            "theme-switch:eclipse",
-            "theme-switch:split",
-            "theme-switch:rise",
-        ]) {
+        for id in FAMILY_IDS
+            .into_iter()
+            .chain(crate::COLLECTION_IDS)
+            .chain(crate::FIELD_IDS)
+            .chain([
+                "theme-switch:eclipse",
+                "theme-switch:split",
+                "theme-switch:rise",
+            ])
+        {
             row = row.child(action(id, id, cx, move |v, w, cx| {
                 v.selected = Self::select(id, w, cx);
                 cx.notify();
