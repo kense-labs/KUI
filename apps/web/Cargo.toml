@@ -1,5 +1,5 @@
 [package]
-name = "kui-story-web"
+name = "kui-web"
 description = "KUI Button gallery as a WASM web host"
 version.workspace = true
 edition.workspace = true

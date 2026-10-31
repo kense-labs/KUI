@@ -1,7 +1,7 @@
 use gpui::{px, rgb, Hsla, Pixels};
 
 /// Semantic color tokens. KUI components must read these instead of hard-coded RGB
-/// when an `App` theme is available.
+/// when an `App` theme is available. Default chrome is pure black/white (DESIGN.md).
 #[derive(Clone, Debug)]
 pub struct ColorTokens {
     pub background: Hsla,
@@ -25,43 +25,43 @@ pub struct ColorTokens {
 impl ColorTokens {
     pub fn light() -> Self {
         Self {
-            background: rgb(0xfafafa).into(),
+            background: rgb(0xffffff).into(),
             surface: rgb(0xffffff).into(),
-            surface_muted: rgb(0xf4f4f5).into(),
-            foreground: rgb(0x18181b).into(),
-            text_secondary: rgb(0x52525b).into(),
-            text_muted: rgb(0x71717a).into(),
-            border: rgb(0xe4e4e7).into(),
-            border_strong: rgb(0xa1a1aa).into(),
-            accent: rgb(0x18181b).into(),
-            accent_foreground: rgb(0xfafafa).into(),
-            accent_subtle: rgb(0xe4e4e7).into(),
-            danger: rgb(0xdc2626).into(),
+            surface_muted: rgb(0xf5f5f5).into(),
+            foreground: rgb(0x000000).into(),
+            text_secondary: rgb(0x525252).into(),
+            text_muted: rgb(0x737373).into(),
+            border: rgb(0xe5e5e5).into(),
+            border_strong: rgb(0xa3a3a3).into(),
+            accent: rgb(0x000000).into(),
+            accent_foreground: rgb(0xffffff).into(),
+            accent_subtle: rgb(0xf5f5f5).into(),
+            danger: rgb(0xb42318).into(),
             danger_foreground: rgb(0xffffff).into(),
             success: rgb(0x16a34a).into(),
             warning: rgb(0xd97706).into(),
-            focus_outline: rgb(0x2563eb).into(),
+            focus_outline: rgb(0x000000).into(),
         }
     }
 
     pub fn dark() -> Self {
         Self {
-            background: rgb(0x09090b).into(),
-            surface: rgb(0x18181b).into(),
-            surface_muted: rgb(0x27272a).into(),
-            foreground: rgb(0xfafafa).into(),
-            text_secondary: rgb(0xa1a1aa).into(),
-            text_muted: rgb(0x71717a).into(),
-            border: rgb(0x27272a).into(),
-            border_strong: rgb(0x52525b).into(),
-            accent: rgb(0xfafafa).into(),
-            accent_foreground: rgb(0x18181b).into(),
-            accent_subtle: rgb(0x27272a).into(),
-            danger: rgb(0xf87171).into(),
-            danger_foreground: rgb(0x18181b).into(),
+            background: rgb(0x000000).into(),
+            surface: rgb(0x000000).into(),
+            surface_muted: rgb(0x1a1a1a).into(),
+            foreground: rgb(0xffffff).into(),
+            text_secondary: rgb(0xa3a3a3).into(),
+            text_muted: rgb(0x737373).into(),
+            border: rgb(0x2a2a2a).into(),
+            border_strong: rgb(0x525252).into(),
+            accent: rgb(0xffffff).into(),
+            accent_foreground: rgb(0x000000).into(),
+            accent_subtle: rgb(0x1a1a1a).into(),
+            danger: rgb(0xf97066).into(),
+            danger_foreground: rgb(0x000000).into(),
             success: rgb(0x4ade80).into(),
             warning: rgb(0xfbbf24).into(),
-            focus_outline: rgb(0x60a5fa).into(),
+            focus_outline: rgb(0xffffff).into(),
         }
     }
 }
@@ -78,8 +78,9 @@ impl Default for RadiusTokens {
     fn default() -> Self {
         Self {
             sm: px(4.),
-            md: px(8.),
-            lg: px(12.),
+            // Control radius — tight corners, not soft/pill.
+            md: px(4.),
+            lg: px(8.),
             full: px(9999.),
         }
     }

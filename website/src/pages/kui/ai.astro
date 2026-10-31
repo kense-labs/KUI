@@ -1,0 +1,72 @@
+---
+import ProductLayout from "../../layouts/ProductLayout.astro";
+import CodePanel from "../../components/CodePanel.astro";
+import { getLocale, useTranslations } from "../../i18n/utils";
+
+const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+---
+
+<ProductLayout title={t("ai.title")} description={t("ai.lead")}>
+  <article class="doc">
+    <p class="muted crumb">{t("docs.crumb")}</p>
+    <h1>{t("ai.title")}</h1>
+    <p class="muted lead">{t("ai.lead")}</p>
+
+    <h2>{t("ai.start")}</h2>
+    <ol>
+      <li><a href="/llms.txt"><code>/llms.txt</code></a></li>
+      <li><a href="/md/button.md"><code>/md/button.md</code></a></li>
+      <li><code>kui init</code> · <code>kui add button</code></li>
+      <li>AGENTS.md</li>
+    </ol>
+
+    <h2>{t("ai.install")}</h2>
+    <CodePanel title="shell" code={`kui init
+kui add button`} />
+
+    <h2>{t("ai.registry")}</h2>
+    <ul>
+      <li><a href="/r/catalog.json"><code>/r/catalog.json</code></a></li>
+      <li><a href="/r/button.json"><code>/r/button.json</code></a></li>
+      <li><a href="/r/kui-foundation.json"><code>/r/kui-foundation.json</code></a></li>
+    </ul>
+
+    <h2>{t("ai.rules")}</h2>
+    <ul>
+      <li>{t("ai.rule.1")}</li>
+      <li>{t("ai.rule.2")}</li>
+      <li>{t("ai.rule.3")}</li>
+      <li>{t("ai.rule.4")}</li>
+    </ul>
+  </article>
+</ProductLayout>
+
+<style>
+  .crumb {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+  }
+  h1 {
+    margin: 0 0 0.65rem;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  .lead {
+    margin: 0 0 1.5rem;
+  }
+  h2 {
+    margin: 1.6rem 0 0.55rem;
+    font-size: 1.05rem;
+  }
+  ol,
+  ul {
+    color: var(--muted);
+  }
+  a {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    color: var(--ink);
+  }
+</style>

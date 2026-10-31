@@ -1,0 +1,238 @@
+---
+import type { Locale, UiKey } from "../i18n/ui";
+
+interface Props {
+  locale: Locale;
+  t: (key: UiKey) => string;
+}
+const { locale, t } = Astro.props;
+const label = locale === "en" ? "English" : "中文";
+---
+
+<div class="controls">
+  <button
+    type="button"
+    class="chip interactive"
+    data-theme-toggle
+    aria-label={t("nav.theme")}
+    title={t("nav.theme")}
+  >
+    <span class="sun" aria-hidden="true">☀</span>
+    <span class="moon" aria-hidden="true">☾</span>
+  </button>
+
+  <div class="lang" data-lang>
+    <button
+      type="button"
+      class="lang-trigger interactive"
+      data-lang-trigger
+      aria-haspopup="listbox"
+      aria-expanded="false"
+      aria-label={t("nav.lang")}
+      title={t("nav.lang")}
+    >
+      <span data-lang-label>{label}</span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <ul class="lang-menu" data-lang-menu role="listbox" hidden>
+      <li role="option" aria-selected={locale === "zh" ? "true" : "false"}>
+        <button type="button" class="lang-option" data-locale="zh">中文</button>
+      </li>
+      <li role="option" aria-selected={locale === "en" ? "true" : "false"}>
+        <button type="button" class="lang-option" data-locale="en">English</button>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+
+  function applyTheme(theme: "light" | "dark") {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("theme", theme);
+    } catch {
+      /* ignore */
+    }
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
+  }
+
+  /** Strip `/en` prefix; zh is unprefixed. */
+  function stripLocalePath(pathname: string): string {
+    if (pathname === "/en") return "/";
+    if (pathname.startsWith("/en/")) {
+      const rest = pathname.slice(3);
+      return rest || "/";
+    }
+    return pathname || "/";
+  }
+
+  function hrefForLocale(next: "zh" | "en"): string {
+    const base = stripLocalePath(window.location.pathname);
+    if (next === "zh") return base;
+    return base === "/" ? "/en" : `/en${base}`;
+  }
+
+  function closeAllLangMenus(except?: HTMLElement) {
+    document.querySelectorAll<HTMLElement>("[data-lang]").forEach((root) => {
+      if (except && root === except) return;
+      const trigger = root.querySelector<HTMLButtonElement>("[data-lang-trigger]");
+      const menu = root.querySelector<HTMLElement>("[data-lang-menu]");
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+      if (menu) menu.hidden = true;
+    });
+  }
+
+  function wireThemeButtons() {
+    document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]").forEach((btn) => {
+      if (btn.dataset.wired === "1") return;
+      btn.dataset.wired = "1";
+      btn.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        applyTheme(next);
+      });
+    });
+  }
+
+  function wireLangMenus() {
+    document.querySelectorAll<HTMLElement>("[data-lang]").forEach((root) => {
+      if (root.dataset.wired === "1") return;
+      root.dataset.wired = "1";
+
+      const trigger = root.querySelector<HTMLButtonElement>("[data-lang-trigger]");
+      const menu = root.querySelector<HTMLElement>("[data-lang-menu]");
+      if (!trigger || !menu) return;
+
+      trigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const open = trigger.getAttribute("aria-expanded") === "true";
+        closeAllLangMenus();
+        if (!open) {
+          trigger.setAttribute("aria-expanded", "true");
+          menu.hidden = false;
+        }
+      });
+
+      menu.querySelectorAll<HTMLButtonElement>("[data-locale]").forEach((option) => {
+        option.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const next = option.dataset.locale === "en" ? "en" : "zh";
+          closeAllLangMenus();
+          try {
+            localStorage.setItem("locale", next);
+          } catch {
+            /* ignore */
+          }
+          const href = hrefForLocale(next);
+          if (href === window.location.pathname) return;
+          void navigate(href);
+        });
+      });
+    });
+  }
+
+  function onReady() {
+    wireThemeButtons();
+    wireLangMenus();
+  }
+
+  onReady();
+  document.addEventListener("astro:page-load", onReady);
+  document.addEventListener("click", () => closeAllLangMenus());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeAllLangMenus();
+  });
+</script>
+
+<style>
+  .controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .chip,
+  .lang-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    font: 500 0.75rem/1 var(--font);
+    cursor: pointer;
+  }
+  .chip {
+    min-width: 2rem;
+    padding: 0 0.55rem;
+  }
+  .chip:hover,
+  .lang-trigger:hover {
+    background: var(--surface-muted);
+    opacity: 1;
+  }
+  .lang {
+    position: relative;
+  }
+  .lang-trigger {
+    gap: 0.35rem;
+    padding: 0 0.55rem 0 0.65rem;
+  }
+  .chev {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: translateY(-1px) rotate(45deg);
+  }
+  .lang-trigger[aria-expanded="true"] .chev {
+    transform: translateY(1px) rotate(225deg);
+  }
+  .lang-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 50;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    min-width: 7.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-raised);
+  }
+  .lang-option {
+    display: block;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ink);
+    font: 500 0.8125rem/1.2 var(--font);
+    text-align: left;
+    cursor: pointer;
+  }
+  .lang-option:hover {
+    background: var(--surface-muted);
+  }
+  li[aria-selected="true"] .lang-option {
+    background: var(--surface-muted);
+  }
+  .sun,
+  .moon {
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+  :global(html[data-theme="dark"]) .sun {
+    display: none;
+  }
+  :global(html:not([data-theme="dark"])) .moon {
+    display: none;
+  }
+</style>

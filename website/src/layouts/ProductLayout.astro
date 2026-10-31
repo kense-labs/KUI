@@ -1,0 +1,76 @@
+---
+import { fade } from "astro:transitions";
+import BaseLayout from "./BaseLayout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import LibrarySidebar from "../components/LibrarySidebar.astro";
+import Footer from "../components/Footer.astro";
+import { getLocale } from "../i18n/utils";
+
+interface Props {
+  title?: string;
+  description?: string;
+  shell?: "library" | "landing";
+}
+const { title = "KUI", description, shell = "library" } = Astro.props;
+const locale = getLocale(Astro.url.pathname);
+const pageFade = fade({ duration: "180ms" });
+---
+
+<BaseLayout title={title} description={description} locale={locale}>
+  <div class="product">
+    <SiteHeader mode="product" />
+    {
+      shell === "landing" ? (
+        <main class="landing" transition:name="page-main" transition:animate={pageFade}>
+          <slot />
+        </main>
+      ) : (
+        <div class="frame" transition:name="page-main" transition:animate={pageFade}>
+          <LibrarySidebar />
+          <main class="content">
+            <div class="pad">
+              <slot />
+            </div>
+          </main>
+        </div>
+      )
+    }
+    {shell === "landing" && <Footer tone="product" />}
+  </div>
+</BaseLayout>
+
+<style>
+  .product {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  .landing {
+    flex: 1;
+  }
+  .frame {
+    display: flex;
+    flex: 1;
+    width: min(1280px, 100%);
+    margin-inline: auto;
+    border-inline: 1px solid var(--hairline);
+    background: var(--surface);
+    min-height: calc(100vh - 3.5rem);
+  }
+  .content {
+    flex: 1;
+    min-width: 0;
+  }
+  .pad {
+    width: min(720px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: 2.25rem 0 4rem;
+  }
+  @media (max-width: 900px) {
+    .frame {
+      flex-direction: column;
+      border-inline: 0;
+    }
+  }
+</style>

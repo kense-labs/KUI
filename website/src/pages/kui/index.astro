@@ -1,0 +1,135 @@
+---
+import ProductLayout from "../../layouts/ProductLayout.astro";
+import CodePanel from "../../components/CodePanel.astro";
+import { getLocale, localePath, useTranslations } from "../../i18n/utils";
+
+const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+const install = `cargo install --path tools/cli
+kui init
+kui add button`;
+---
+
+<ProductLayout title="KUI" description={t("meta.kui")} shell="landing">
+  <section class="hero wrap">
+    <h1 class="motion-fade-up">{t("kui.hero")}</h1>
+    <p class="muted lead motion-fade-up motion-fade-up-delay-1">
+      {t("kui.lead")}
+    </p>
+    <div class="actions motion-fade-up motion-fade-up-delay-2">
+      <a class="btn btn-primary interactive" href={localePath(locale, "/kui/docs")} data-astro-prefetch>
+        {t("kui.cta.start")}
+      </a>
+      <a
+        class="btn btn-secondary interactive"
+        href={localePath(locale, "/kui/components/button")}
+        data-astro-prefetch
+      >
+        {t("kui.cta.button")}
+      </a>
+      <a class="btn btn-secondary interactive" href={localePath(locale, "/kui/ai")} data-astro-prefetch>
+        {t("kui.cta.ai")}
+      </a>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap cards">
+      <a class="card interactive lift" href={localePath(locale, "/kui/docs")} data-astro-prefetch>
+        <h2>{t("kui.card.docs")}</h2>
+        <p class="muted">{t("kui.card.docs.blurb")}</p>
+      </a>
+      <a
+        class="card interactive lift"
+        href={localePath(locale, "/kui/components/button")}
+        data-astro-prefetch
+      >
+        <h2>{t("kui.card.components")}</h2>
+        <p class="muted">{t("kui.card.components.blurb")}</p>
+      </a>
+      <a class="card interactive lift" href={localePath(locale, "/kui/ai")} data-astro-prefetch>
+        <h2>{t("kui.card.ai")}</h2>
+        <p class="muted">{t("kui.card.ai.blurb")}</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="wrap install">
+    <h2>{t("kui.install")}</h2>
+    <p class="muted">{t("kui.install.blurb")}</p>
+    <CodePanel title="shell" code={install} />
+  </section>
+</ProductLayout>
+
+<style>
+  .wrap {
+    width: min(960px, calc(100% - 2rem));
+    margin-inline: auto;
+  }
+  .hero {
+    padding: 4.25rem 0 2.75rem;
+  }
+  h1 {
+    margin: 0 0 1rem;
+    max-width: 18ch;
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+  }
+  .lead {
+    margin: 0;
+    max-width: 38rem;
+    font-size: 1.05rem;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 1.75rem;
+  }
+  .band {
+    border-block: 1px solid var(--hairline);
+    background: var(--surface-muted);
+    padding: 1.5rem 0;
+  }
+  .cards {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .card {
+    display: block;
+    padding: 1.15rem 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    text-decoration: none;
+  }
+  .card:hover {
+    opacity: 1;
+  }
+  .card h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .card p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .install {
+    padding: 2.5rem 0 1rem;
+  }
+  .install h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.25rem;
+  }
+  .install p {
+    margin: 0 0 1rem;
+  }
+  @media (min-width: 800px) {
+    .cards {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+</style>

@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "registry",
     "apps/story",
-    "apps/story-web",
+    "apps/web",
     "tools/cli",
     "tools/registry-build",
     "templates/app",

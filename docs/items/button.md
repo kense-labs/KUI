@@ -1,6 +1,6 @@
 # Button
 
-Finished KUI button with variants, sizes, loading, and disabled states.
+Finished KUI button with Arc-aligned control rhythm (44px md, 4px radius, medium weight, outlined danger) on pure black/white tokens.
 
 ## When to use
 
@@ -39,7 +39,7 @@ Button::new("save").primary().label("Save").into_themed(cx)
 | `primary` / `secondary` / `ghost` / `danger` | `primary` | Variant |
 | `with_size` | `Md` | `Sm` / `Md` / `Lg` |
 | `disabled` | `false` | Blocks clicks |
-| `loading` | `false` | Shows `…`, blocks clicks |
+| `loading` | `false` | Shows `…`, blocks clicks (inert) |
 | `on_click` | none | Click handler |
 | `into_themed(cx)` | — | Applies KUI theme tokens |
 
@@ -53,7 +53,7 @@ The label is the accessible name. Keep `disabled` aligned with non-interactivity
 
 ## Motion
 
-Press feedback should use `MOTION.snappy` and collapse when `Theme.reduced_motion` is true.
+Press feedback should use `MOTION.snappy` (~0.97 scale) and collapse when `Theme.reduced_motion` is true. Primary disabled uses 52% opacity; secondary/danger/ghost keep shape and mute the label.
 
 ## Platforms
 

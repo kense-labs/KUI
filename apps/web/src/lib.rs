@@ -1,8 +1,8 @@
 //! WASM entry for the KUI Button gallery.
 //!
 //! ```bash
-//! ./scripts/build-story-web.sh
-//! python3 -m http.server -d apps/story-web/www 8080
+//! ./scripts/build-web.sh
+//! python3 -m http.server -d apps/web/www 8080
 //! ```
 
 #[cfg(target_family = "wasm")]

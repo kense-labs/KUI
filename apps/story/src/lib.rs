@@ -1,4 +1,4 @@
-//! Gallery library shared with `kui-story-web`.
+//! Gallery library shared with `kui-web`.
 
 pub mod gallery;
 

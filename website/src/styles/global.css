@@ -1,0 +1,202 @@
+:root,
+html[data-theme="light"] {
+  --ink: #000000;
+  --on-ink: #ffffff;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f5f5f5;
+  --muted: #737373;
+  --hairline: #f0f0f0;
+  --border: #e5e5e5;
+  --danger: #b42318;
+  --focus: #000000;
+  --brand: #171717;
+  --on-brand: #ffffff;
+  --code-bg: #000000;
+  --code-fg: #ffffff;
+  --radius: 4px;
+  --font: "IBM Plex Sans", "Helvetica Neue", "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --logo-light: block;
+  --logo-dark: none;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --ink: #ffffff;
+  --on-ink: #000000;
+  --bg: #000000;
+  --surface: #000000;
+  --surface-muted: #1a1a1a;
+  --muted: #8a8a8a;
+  --hairline: #1a1a1a;
+  --border: #2a2a2a;
+  --danger: #f97066;
+  --focus: #ffffff;
+  --brand: #e8e8e8;
+  --on-brand: #000000;
+  --code-bg: #111111;
+  --code-fg: #ffffff;
+  --logo-light: none;
+  --logo-dark: block;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+a:hover {
+  opacity: 0.72;
+}
+
+code,
+pre {
+  font-family: var(--mono);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.wrap {
+  width: min(960px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.logo-swap {
+  position: relative;
+  display: inline-grid;
+}
+.logo-swap img {
+  grid-area: 1 / 1;
+  display: block;
+}
+.logo-swap .light {
+  display: var(--logo-light);
+}
+.logo-swap .dark {
+  display: var(--logo-dark);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 500 0.875rem/1.4 var(--font);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-instant) var(--ease-standard);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--on-ink);
+  border-color: var(--ink);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover {
+    opacity: 0.91;
+    box-shadow: var(--shadow-resting);
+  }
+
+  .btn-secondary:hover {
+    background: var(--surface-muted);
+    box-shadow: var(--shadow-resting);
+    opacity: 1;
+  }
+}
+
+.btn-primary:active:not(:disabled) {
+  opacity: 0.84;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  margin: 2rem 0;
+}
+
+/*
+  Page transitions: root stays put; header snaps; main uses Astro fade(180ms).
+  Avoid the default full-document crossfade — it reads as a double image.
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(site-header),
+::view-transition-new(site-header) {
+  animation: none !important;
+}
+
+::view-transition-old(page-main),
+::view-transition-new(page-main) {
+  mix-blend-mode: normal;
+  height: 100%;
+  overflow: clip;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page-main),
+  ::view-transition-new(page-main) {
+    animation: none !important;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

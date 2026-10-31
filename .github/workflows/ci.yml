@@ -17,8 +17,8 @@ jobs:
         run: cargo check -p kui
       - name: Check KUI library (wasm32)
         run: cargo check -p kui --target wasm32-unknown-unknown --no-default-features
-      - name: Check story-web (wasm32)
-        run: cargo check -p kui-story-web --target wasm32-unknown-unknown
+      - name: Check web (wasm32)
+        run: cargo check -p kui-web --target wasm32-unknown-unknown
       - name: Test KUI story
         run: cargo test -p kui-story
       - name: Build registry JSON

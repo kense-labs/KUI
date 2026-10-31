@@ -1,0 +1,88 @@
+/* Arc-aligned motion tokens for the Kense / KUI site. */
+:root {
+  --duration-instant: 120ms;
+  --duration-fast: 160ms;
+  --duration-exit: 180ms;
+  --duration-standard: 240ms;
+  --duration-considered: 480ms;
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --shadow-resting: 0 1px 2px rgb(0 0 0 / 0.035);
+  --shadow-raised: 0 6px 18px rgb(0 0 0 / 0.065), 0 1px 3px rgb(0 0 0 / 0.035);
+  --press-scale: 0.97;
+}
+
+html[data-theme="dark"] {
+  --shadow-resting: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-raised: 0 8px 22px rgb(0 0 0 / 0.45);
+}
+
+.motion-fade-up {
+  animation: motion-fade-up var(--duration-standard) var(--ease-enter) both;
+}
+
+.motion-fade-up-delay-1 {
+  animation-delay: 40ms;
+}
+.motion-fade-up-delay-2 {
+  animation-delay: 80ms;
+}
+.motion-fade-up-delay-3 {
+  animation-delay: 120ms;
+}
+
+@keyframes motion-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* After the first client navigation, skip enter motion — page VT handles it. */
+html.is-client-nav .motion-fade-up,
+html.is-client-nav .motion-fade-up-delay-1,
+html.is-client-nav .motion-fade-up-delay-2,
+html.is-client-nav .motion-fade-up-delay-3 {
+  animation: none;
+}
+
+.interactive {
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-instant) var(--ease-standard);
+}
+
+.interactive:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lift:hover {
+    box-shadow: var(--shadow-resting);
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade-up,
+  .motion-fade-up-delay-1,
+  .motion-fade-up-delay-2,
+  .motion-fade-up-delay-3 {
+    animation: none !important;
+  }
+
+  .interactive:active:not(:disabled),
+  .lift:hover {
+    transform: none !important;
+  }
+}

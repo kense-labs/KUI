@@ -1,0 +1,69 @@
+---
+import ProductLayout from "../../../../layouts/ProductLayout.astro";
+import CodePanel from "../../../../components/CodePanel.astro";
+import { getLocale, localePath, useTranslations } from "../../../../i18n/utils";
+
+const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+---
+
+<ProductLayout title={t("docs.install.title")} description={t("docs.install.lead")}>
+  <article class="doc">
+    <p class="muted crumb">{t("docs.crumb")}</p>
+    <h1>{t("docs.install.title")}</h1>
+    <p class="muted lead">{t("docs.install.lead")}</p>
+
+    <h2>{t("docs.install.cli")}</h2>
+    <CodePanel
+      title="shell"
+      code={`cargo install --path tools/cli
+kui init
+kui add button
+kui doctor`}
+    />
+
+    <h2>{t("docs.install.hosts")}</h2>
+    <ul>
+      <li>{t("docs.install.host.desktop")}</li>
+      <li>{t("docs.install.host.wasm")}</li>
+    </ul>
+
+    <h2>{t("docs.install.also")}</h2>
+    <ul>
+      <li>AGENTS.md · DESIGN.md · docs/PLATFORMS.md</li>
+      <li>
+        <a href={localePath(locale, "/kui/ai")} data-astro-prefetch>{t("ai.title")}</a> ·
+        <a href="/llms.txt">llms.txt</a>
+      </li>
+    </ul>
+  </article>
+</ProductLayout>
+
+<style>
+  .crumb {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+  }
+  h1 {
+    margin: 0 0 0.65rem;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  .lead {
+    margin: 0 0 1.5rem;
+  }
+  h2 {
+    margin: 1.75rem 0 0.6rem;
+    font-size: 1.05rem;
+  }
+  ul {
+    color: var(--muted);
+    padding-left: 1.1rem;
+  }
+  a {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    color: var(--ink);
+  }
+</style>

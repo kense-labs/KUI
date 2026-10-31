@@ -1,0 +1,62 @@
+---
+import { ClientRouter } from "astro:transitions";
+import "../styles/global.css";
+import "../styles/motion.css";
+import type { Locale } from "../i18n/ui";
+
+interface Props {
+  title?: string;
+  description?: string;
+  locale?: Locale;
+}
+const {
+  title = "Kense",
+  description = "Kense",
+  locale = "zh",
+} = Astro.props;
+const pageTitle = title === "Kense" || title === "KUI" ? `${title}` : `${title} · KUI`;
+---
+
+<!doctype html>
+<html lang={locale === "zh" ? "zh-CN" : "en"} data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="llms" href="/llms.txt" />
+    <title>{pageTitle}</title>
+    <link rel="icon" href="/assets/icon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
+        } catch (_) {}
+      })();
+    </script>
+    <ClientRouter />
+    <script>
+      document.addEventListener("astro:after-swap", () => {
+        document.documentElement.classList.add("is-client-nav");
+      });
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

@@ -1,30 +1,43 @@
-# KUI brand
+# Kense + KUI brand
 
-- Product: **KUI**
-- Crate / CLI / modules: **`kui`**
-- Org: Kense Labs (`kense-labs`)
+- Mark / site brand: **Kense** (氪锶科技)
+- This product: **KUI** (copy-source Rust UI for GPUI)
+- Code / CLI: **`kui`**
+- License: **MIT**
 
-## Naming
+Do not treat KUI as the org name. Do not invent sibling product names here.
+**Website copy:** never explain “Kense is the company” / “KUI is a Kense product”. Show the mark and names; don’t narrate the org chart.
 
-| Context | Use |
+## Logos
+
+| File | Surface |
 | --- | --- |
-| README titles, docs headings | KUI |
-| Rust crate, CLI binary, paths | `kui` |
-| Registry namespace | `@kui` |
-| Foundation install id | `kui-foundation` |
+| `logo-light.png` | Light backgrounds — black K (Kense mark) |
+| `logo-dark.png` | Dark backgrounds — white K |
+| `mark-light.png` / `mark-dark.png` | Transparent marks |
+| `icon.png` | App / favicon for **this** product |
 
-Do not brand this kit as Arc, gpui-kit, or a3s tenant assets.
+## Site IA
 
-## Colors (MVP)
+- `/` — **Kense** company site (simple homepage; products list)
+- `/kui/*` — **KUI** product area (docs, components, AI)
+- Do not make the company homepage look like a component library
 
-| Token | Value |
-| --- | --- |
-| Accent (light) | `#18181b` |
-| Accent foreground | `#fafafa` |
-| Danger | `#dc2626` |
+Product chrome lockup: Kense mark · **KUI** · **Kense** (org). Company chrome: Kense mark · **Kense**.
 
-Theme tokens live in `registry/src/foundation/tokens.rs`.
+## Colors
 
-## Assets
+Default product chrome is **pure black and white**. Kense brand ink is reserved for important brand moments (logo lockup, org attribution, rare brand CTAs). Do not paint everyday buttons, page fills, or body text with brand gray.
 
-PNG / ICO / ICNS marks in this folder are optional site/app icons for Kense Labs. Product copy still says **KUI**.
+| Role | Value | When |
+| --- | --- | --- |
+| Ink / accent (default) | `#000000` | Body text, primary controls, focus |
+| Surface / page | `#FFFFFF` | Page and control fills |
+| On accent | `#FFFFFF` | Ink on black fills |
+| Muted | `#737373` | Secondary labels only |
+| Hairline / border | `#E5E5E5` | Dividers, outlines |
+| **Brand (Kense)** | `#171717` | Logo lockup / org-only moments |
+| On brand | `#FFFFFF` | Ink on brand fill |
+| Danger | `#B42318` | Destructive actions only |
+| Page dark | `#000000` | Dark mode fill |
+| Ink dark | `#FFFFFF` | Dark mode text |

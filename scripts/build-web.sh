@@ -10,13 +10,13 @@ if ! command -v wasm-bindgen >/dev/null 2>&1; then
   cargo install wasm-bindgen-cli --locked
 fi
 
-cargo build -p kui-story-web --target wasm32-unknown-unknown --release
-OUT="$ROOT/apps/story-web/www/pkg"
+cargo build -p kui-web --target wasm32-unknown-unknown --release
+OUT="$ROOT/apps/web/www/pkg"
 mkdir -p "$OUT"
 wasm-bindgen \
   --target web \
   --out-dir "$OUT" \
-  "$ROOT/target/wasm32-unknown-unknown/release/kui_story_web.wasm"
+  "$ROOT/target/wasm32-unknown-unknown/release/kui_web.wasm"
 
-echo "KUI WASM gallery ready: apps/story-web/www/"
-echo "Serve with: python3 -m http.server -d apps/story-web/www 8080"
+echo "KUI WASM gallery ready: apps/web/www/"
+echo "Serve with: python3 -m http.server -d apps/web/www 8080"

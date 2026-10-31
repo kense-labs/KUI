@@ -88,16 +88,41 @@ fn build(root: &Path) -> Result<()> {
     )?;
 
     let mut llms = String::from(
-        "# KUI\n\n> KUI is a copy-source Rust UI kit for GPUI. Button MVP.\n\n## Items\n\n",
+        "# KUI\n\n\
+         > KUI is copy-source Rust UI for GPUI (desktop + WASM). Button MVP. From Kense.\n\n\
+         Product: KUI. Crate/CLI: `kui`. License: MIT.\n\
+         Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.\n\n\
+         ## For agents\n\n\
+         - AI guide: https://kense.ai/kui/ai (local: /kui/ai)\n\
+         - Install: `kui init` then `kui add button`\n\
+         - Rules: repository AGENTS.md (Microsoft Pragmatic Rust Guidelines)\n\
+         - Design: repository DESIGN.md\n\
+         - Platforms: repository docs/PLATFORMS.md\n\n\
+         ## Items\n\n",
     );
     for entry in &catalog {
         let name = entry["name"].as_str().unwrap_or("");
         llms.push_str(&format!(
-            "- [{name}](docs/items/{name}.md): {}\n",
+            "- [{name}](/md/{name}.md): {}\n",
             entry["title"].as_str().unwrap_or(name)
         ));
     }
-    fs::write(root.join("llms.txt"), llms)?;
+    llms.push_str(
+        "\n## Registry JSON\n\n\
+         - [/r/catalog.json](/r/catalog.json)\n\
+         - [/r/button.json](/r/button.json)\n\
+         - [/r/kui-foundation.json](/r/kui-foundation.json)\n\n\
+         ## Never\n\n\
+         - Do not invent a second button package\n\
+         - Do not rebrand as Arc / gpui-kit\n\
+         - Do not enable test-support on wasm32\n\
+         - Do not paint everyday chrome with brand `#171717`\n",
+    );
+    fs::write(root.join("llms.txt"), &llms)?;
+    let site_llms = root.join("website/public/llms.txt");
+    if site_llms.parent().is_some_and(|p| p.exists()) {
+        fs::write(site_llms, &llms)?;
+    }
     println!("wrote llms.txt");
     Ok(())
 }

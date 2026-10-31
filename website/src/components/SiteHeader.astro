@@ -1,0 +1,198 @@
+---
+import ThemeLangControls from "./ThemeLangControls.astro";
+import { getLocale, localePath, stripLocale, useTranslations } from "../i18n/utils";
+
+interface Props {
+  mode?: "company" | "product";
+}
+const { mode = "company" } = Astro.props;
+const locale = getLocale(Astro.url.pathname);
+const path = stripLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+const onProducts = path.startsWith("/kui") || path.startsWith("/products");
+const onComponents = path.includes("/components");
+const onDocs = path.includes("/docs");
+const onAi = path === "/kui/ai" || path.endsWith("/ai");
+const homeHref = localePath(locale, "/");
+const kuiHref = localePath(locale, "/kui");
+---
+
+<header class:list={["header", mode]} transition:name="site-header" transition:animate={false}>
+  <div class="inner">
+    {
+      mode === "company" ? (
+        <a class="brand" href={homeHref} aria-label="Kense" data-astro-prefetch>
+          <span class="logo-swap">
+            <img class="light" src="/assets/logo-light.png" width="24" height="24" alt="" />
+            <img class="dark" src="/assets/logo-dark.png" width="24" height="24" alt="" />
+          </span>
+          <span class="name">Kense</span>
+        </a>
+      ) : (
+        <a class="brand" href={kuiHref} aria-label="KUI" data-astro-prefetch>
+          <span class="logo-swap">
+            <img class="light" src="/assets/logo-light.png" width="24" height="24" alt="" />
+            <img class="dark" src="/assets/logo-dark.png" width="24" height="24" alt="" />
+          </span>
+          <span class="name">KUI</span>
+          <span class="org">Kense</span>
+        </a>
+      )
+    }
+
+    {
+      mode === "company" ? (
+        <nav class="nav" aria-label="Primary">
+          <a href={`${homeHref}#products`} class:list={{ on: onProducts }}>
+            {t("nav.products")}
+          </a>
+          <a href={kuiHref} class:list={{ on: path.startsWith("/kui") }} data-astro-prefetch>
+            KUI
+          </a>
+        </nav>
+      ) : (
+        <nav class="nav" aria-label="Product">
+          <a
+            href={localePath(locale, "/kui/components/button")}
+            class:list={{ on: onComponents }}
+            data-astro-prefetch
+          >
+            {t("nav.components")}
+          </a>
+          <a
+            href={localePath(locale, "/kui/docs")}
+            class:list={{ on: onDocs && !onAi }}
+            data-astro-prefetch
+          >
+            {t("nav.docs")}
+          </a>
+          <a href={localePath(locale, "/kui/ai")} class:list={{ on: onAi }} data-astro-prefetch>
+            {t("nav.ai")}
+          </a>
+        </nav>
+      )
+    }
+
+    <div class="actions">
+      {
+        mode === "product" && (
+          <a class="ghost interactive" href={homeHref} data-astro-prefetch>
+            Kense
+          </a>
+        )
+      }
+      {
+        mode === "product" ? (
+          <a class="ghost interactive" href="/llms.txt">
+            llms.txt
+          </a>
+        ) : null
+      }
+      <ThemeLangControls locale={locale} t={t} />
+      <a
+        class="cta interactive"
+        href={mode === "product" ? "https://github.com/kense-labs/KUI" : "https://github.com/kense-labs"}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {t("nav.github")}
+      </a>
+    </div>
+  </div>
+</header>
+
+<style>
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-height: 3.5rem;
+    width: min(1120px, calc(100% - 2rem));
+    margin-inline: auto;
+  }
+  .header.product .inner {
+    width: min(1280px, calc(100% - 2rem));
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    margin-right: 0.35rem;
+  }
+  .name {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .org {
+    font-size: 0.75rem;
+    color: var(--brand);
+    padding-left: 0.5rem;
+    border-left: 1px solid var(--hairline);
+  }
+  .nav {
+    display: flex;
+    gap: 1.1rem;
+    font-size: 0.875rem;
+    flex: 1;
+  }
+  .nav a {
+    text-decoration: none;
+    color: var(--muted);
+    transition: color var(--duration-fast) var(--ease-standard);
+  }
+  .nav a.on,
+  .nav a:hover {
+    color: var(--ink);
+    opacity: 1;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: auto;
+  }
+  .ghost {
+    font-size: 0.8125rem;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .ghost:hover {
+    color: var(--ink);
+    opacity: 1;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font: 500 0.8125rem/1 var(--font);
+    text-decoration: none;
+  }
+  .cta:hover {
+    background: var(--surface-muted);
+    box-shadow: var(--shadow-resting);
+    opacity: 1;
+  }
+  @media (max-width: 720px) {
+    .org,
+    .ghost {
+      display: none;
+    }
+    .nav {
+      gap: 0.85rem;
+    }
+  }
+</style>

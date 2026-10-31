@@ -1,6 +1,6 @@
 # KUI
 
-**KUI** is a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
+**KUI** is a **Kense** product — a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
 
 This repository ships a **button MVP** — foundation tokens plus a finished `Button` — as the first registry item.
 
@@ -28,8 +28,8 @@ cargo run -p kui-story
 cargo run -p kui-story --features native
 
 # WASM web gallery
-./scripts/build-story-web.sh
-python3 -m http.server -d apps/story-web/www 8080
+./scripts/build-web.sh
+python3 -m http.server -d apps/web/www 8080
 
 # CLI
 cargo install --path tools/cli
@@ -60,7 +60,7 @@ The installed `ui/` source is host-agnostic. Your app Cargo.toml selects desktop
 ```text
 registry/           # authoritative KUI source (crate: kui)
 apps/story/         # shared gallery + desktop/smoke host
-apps/story-web/     # WASM web host + www/
+apps/web/     # WASM web host + www/
 tools/cli/          # kui init | add | doctor | sync-mod
 tools/registry-build/
 website/public/r/   # registry JSON
@@ -70,7 +70,7 @@ docs/               # contracts + per-item markdown
 
 ## Brand
 
-Use **KUI** in product copy and **`kui`** in crate names, CLI, modules, and paths. See [`website/public/assets/BRAND.md`](./website/public/assets/BRAND.md).
+**Kense** is the company (more products will follow). **KUI** is this product; use **`kui`** in crate names, CLI, modules, and paths. See [`website/public/assets/BRAND.md`](./website/public/assets/BRAND.md).
 
 ## Engineering
 

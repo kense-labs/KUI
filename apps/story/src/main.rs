@@ -2,7 +2,7 @@
 //!
 //! - Default: headless smoke via `TestApp`
 //! - `--features native`: desktop window through `gpui_platform`
-//! - WASM web host lives in `apps/story-web` (same gallery source)
+//! - WASM web host lives in `apps/web` (same gallery source)
 
 mod gallery;
 
@@ -51,7 +51,7 @@ fn main() {
     #[cfg(not(feature = "native"))]
     {
         eprintln!("kui-story: use --features native for a desktop window");
-        eprintln!("kui-story: use apps/story-web for WASM (see docs/PLATFORMS.md)");
+        eprintln!("kui-story: use apps/web for WASM (see docs/PLATFORMS.md)");
         run_smoke();
     }
 }

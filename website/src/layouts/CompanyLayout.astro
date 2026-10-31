@@ -1,0 +1,36 @@
+---
+import { fade } from "astro:transitions";
+import BaseLayout from "./BaseLayout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import Footer from "../components/Footer.astro";
+import { getLocale } from "../i18n/utils";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title = "Kense", description } = Astro.props;
+const locale = getLocale(Astro.url.pathname);
+const pageFade = fade({ duration: "180ms" });
+---
+
+<BaseLayout title={title} description={description} locale={locale}>
+  <div class="shell">
+    <SiteHeader mode="company" />
+    <main class="main" transition:name="page-main" transition:animate={pageFade}>
+      <slot />
+    </main>
+    <Footer tone="company" />
+  </div>
+</BaseLayout>
+
+<style>
+  .shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .main {
+    flex: 1;
+  }
+</style>

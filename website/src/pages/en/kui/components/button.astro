@@ -1,0 +1,173 @@
+---
+import ProductLayout from "../../../../layouts/ProductLayout.astro";
+import CodePanel from "../../../../components/CodePanel.astro";
+import { getLocale, useTranslations } from "../../../../i18n/utils";
+
+const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+---
+
+<ProductLayout title={t("button.title")} description={t("button.lead")}>
+  <article class="doc">
+    <p class="muted crumb">{t("button.crumb")}</p>
+    <h1>{t("button.title")}</h1>
+    <p class="muted lead">
+      {t("button.lead")} <a href="/md/button.md">/md/button.md</a>
+    </p>
+
+    <div class="preview" aria-label="Button">
+      <div class="row">
+        <button class="demo primary" type="button">Primary</button>
+        <button class="demo secondary" type="button">Secondary</button>
+        <button class="demo ghost" type="button">Ghost</button>
+        <button class="demo danger" type="button">Danger</button>
+      </div>
+      <div class="row">
+        <button class="demo primary sm" type="button">Small</button>
+        <button class="demo primary md" type="button">Medium</button>
+        <button class="demo primary lg" type="button">Large</button>
+      </div>
+    </div>
+
+    <h2>{t("button.when")}</h2>
+    <ul><li>{t("button.when.1")}</li></ul>
+    <h2>{t("button.not")}</h2>
+    <ul><li>{t("button.not.1")}</li></ul>
+    <h2>{t("button.install")}</h2>
+    <CodePanel title="shell" code={`kui add button`} />
+    <h2>{t("button.usage")}</h2>
+    <CodePanel
+      title="Rust"
+      code={`Button::new("save")
+    .primary()
+    .label("Save")
+    .into_themed(cx);`}
+    />
+    <h2>{t("button.motion")}</h2>
+    <ul>
+      <li>{t("button.motion.1")}</li>
+      <li>{t("button.motion.2")}</li>
+      <li>{t("button.motion.3")}</li>
+    </ul>
+    <h2>{t("button.ai")}</h2>
+    <ul>
+      <li>{t("button.ai.1")}</li>
+      <li>{t("button.ai.2")}</li>
+      <li>{t("button.ai.3")}</li>
+    </ul>
+  </article>
+</ProductLayout>
+
+<style>
+  .crumb {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+  }
+  h1 {
+    margin: 0 0 0.65rem;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  .lead {
+    margin: 0 0 1.25rem;
+  }
+  .preview {
+    margin: 0 0 0.5rem;
+    padding: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-muted);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .row + .row {
+    margin-top: 0.65rem;
+  }
+  h2 {
+    margin: 1.6rem 0 0.55rem;
+    font-size: 1.05rem;
+  }
+  ul {
+    color: var(--muted);
+    padding-left: 1.1rem;
+  }
+  a {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    color: var(--ink);
+  }
+  .demo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font: 500 0.875rem/1.4 inherit;
+    cursor: pointer;
+    transition:
+      color var(--duration-fast) var(--ease-standard),
+      background var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard),
+      opacity var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-fast) var(--ease-standard),
+      transform var(--duration-instant) var(--ease-standard);
+  }
+  .demo:active:not(:disabled) {
+    transform: scale(var(--press-scale));
+  }
+  .demo.sm {
+    min-height: 2.25rem;
+    padding-inline: 0.75rem;
+  }
+  .demo.md {
+    min-height: 2.75rem;
+  }
+  .demo.lg {
+    min-height: 3.125rem;
+    padding-inline: 1.25rem;
+  }
+  .demo.primary {
+    background: var(--ink);
+    color: var(--on-ink);
+    border-color: var(--ink);
+  }
+  .demo.secondary {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--border);
+  }
+  .demo.ghost {
+    background: transparent;
+    color: var(--muted);
+  }
+  .demo.danger {
+    background: var(--surface);
+    color: var(--danger);
+    border-color: var(--border);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .demo.primary:hover:not(:disabled) {
+      opacity: 0.91;
+      box-shadow: var(--shadow-resting);
+    }
+    .demo.secondary:hover:not(:disabled) {
+      background: var(--surface-muted);
+      box-shadow: var(--shadow-resting);
+    }
+    .demo.ghost:hover:not(:disabled) {
+      color: var(--ink);
+      background: var(--surface-muted);
+    }
+    .demo.danger:hover:not(:disabled) {
+      border-color: var(--danger);
+      background: var(--surface-muted);
+    }
+  }
+</style>

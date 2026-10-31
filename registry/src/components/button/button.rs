@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use gpui::{
-    div, px, App, ClickEvent, Div, ElementId, InteractiveElement, IntoElement, ParentElement,
-    SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
+    div, App, ClickEvent, Div, ElementId, FontWeight, InteractiveElement, IntoElement,
+    ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
 };
 
 use crate::foundation::{Theme, MOTION};
 use crate::primitives::Size;
 
-use super::style::chrome;
+use super::style::{chrome, disabled_chrome, ButtonChrome};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ButtonVariant {
@@ -19,7 +19,7 @@ pub enum ButtonVariant {
     Danger,
 }
 
-/// Finished KUI button with theme-aware chrome and press feedback.
+/// Finished KUI button with Arc-aligned control rhythm and theme-aware chrome.
 pub struct Button {
     id: ElementId,
     label: SharedString,
@@ -96,38 +96,7 @@ impl Button {
         let theme = Theme::global(cx);
         let look = chrome(self.variant, self.size, &theme.tokens.colors);
         let _press = MOTION.effective(MOTION.snappy, theme.reduced_motion);
-
-        let label = if self.loading {
-            SharedString::from("…")
-        } else {
-            self.label.clone()
-        };
-
-        let mut el = div()
-            .id(self.id)
-            .flex()
-            .items_center()
-            .justify_center()
-            .px(look.pad_x)
-            .py(look.pad_y)
-            .rounded(look.radius)
-            .text_size(look.text)
-            .line_height(px(20.))
-            .bg(look.bg)
-            .text_color(look.fg)
-            .child(label);
-
-        if let Some(border) = look.border {
-            el = el.border_1().border_color(border);
-        }
-
-        if self.disabled || self.loading {
-            el = el.opacity(0.5);
-        } else if let Some(on_click) = self.on_click.clone() {
-            el = el.on_click(move |event, window, cx| on_click(event, window, cx));
-        }
-
-        el
+        paint(self, look, &theme.tokens.colors)
     }
 }
 
@@ -135,39 +104,55 @@ impl IntoElement for Button {
     type Element = Stateful<Div>;
 
     fn into_element(self) -> Self::Element {
-        // Fallback light chrome when no App borrow is available (static builders).
         let colors = crate::foundation::ColorTokens::light();
         let look = chrome(self.variant, self.size, &colors);
-        let label = if self.loading {
-            SharedString::from("…")
-        } else {
-            self.label.clone()
-        };
-
-        let mut el = div()
-            .id(self.id)
-            .flex()
-            .items_center()
-            .justify_center()
-            .px(look.pad_x)
-            .py(look.pad_y)
-            .rounded(look.radius)
-            .text_size(look.text)
-            .line_height(px(20.))
-            .bg(look.bg)
-            .text_color(look.fg)
-            .child(label);
-
-        if let Some(border) = look.border {
-            el = el.border_1().border_color(border);
-        }
-
-        if self.disabled || self.loading {
-            el = el.opacity(0.5);
-        } else if let Some(on_click) = self.on_click {
-            el = el.on_click(move |event, window, cx| on_click(event, window, cx));
-        }
-
-        el
+        paint(self, look, &colors)
     }
+}
+
+fn paint(
+    button: Button,
+    look: ButtonChrome,
+    colors: &crate::foundation::ColorTokens,
+) -> Stateful<Div> {
+    let inert = button.disabled || button.loading;
+    let look = if inert && button.variant != ButtonVariant::Primary {
+        disabled_chrome(button.variant, colors, &look)
+    } else {
+        look
+    };
+
+    let label = if button.loading {
+        SharedString::from("…")
+    } else {
+        button.label.clone()
+    };
+
+    let mut el = div()
+        .id(button.id)
+        .flex()
+        .items_center()
+        .justify_center()
+        .px(look.pad_x)
+        .min_h(look.min_h)
+        .rounded(look.radius)
+        .border_1()
+        .border_color(look.border)
+        .text_size(look.text)
+        .font_weight(FontWeight::MEDIUM)
+        .line_height(look.line_height)
+        .bg(look.bg)
+        .text_color(look.fg)
+        .child(label);
+
+    if inert {
+        // Arc primary disabled fades; outlined variants keep shape via disabled_chrome.
+        if button.variant == ButtonVariant::Primary {
+            el = el.opacity(0.52);
+        }
+    } else if let Some(on_click) = button.on_click.clone() {
+        el = el.on_click(move |event, window, cx| on_click(event, window, cx));
+    }
+
+    el
 }

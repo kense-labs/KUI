@@ -1,0 +1,37 @@
+---
+interface Props {
+  title?: string;
+  code: string;
+}
+const { title = "code", code } = Astro.props;
+---
+
+<figure class="code">
+  <figcaption>{title}</figcaption>
+  <pre><code>{code}</code></pre>
+</figure>
+
+<style>
+  .code {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  figcaption {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--hairline);
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  pre {
+    margin: 0;
+    padding: 0.9rem 0.85rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+</style>

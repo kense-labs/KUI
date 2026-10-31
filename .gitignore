@@ -6,4 +6,7 @@
 *.pdb
 .idea/
 .vscode/
-apps/story-web/www/pkg/
+apps/web/www/pkg/
+website/node_modules/
+website/.astro/
+website/dist/

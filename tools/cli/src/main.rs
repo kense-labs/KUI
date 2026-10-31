@@ -111,7 +111,7 @@ fn cmd_init(path: &Path, registry: Option<&Path>) -> Result<()> {
         gpui_version: "=0.3.10".into(),
         gpui_package: "gpui-pre".into(),
         ui_install_dir: "ui".into(),
-        registry_url: Some("https://kui.kense.dev/r/{name}.json".into()),
+        registry_url: Some("https://kense.ai/r/{name}.json".into()),
         local_registry: registry.map(|p| p.display().to_string()).or_else(|| {
             let candidate = path.join("../../registry");
             if candidate.exists() {

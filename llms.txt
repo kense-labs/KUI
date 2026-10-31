@@ -1,8 +1,32 @@
 # KUI
 
-> KUI is a copy-source Rust UI kit for GPUI. Button MVP.
+> KUI is copy-source Rust UI for GPUI (desktop + WASM). Button MVP. From Kense.
+
+Product: KUI. Crate/CLI: `kui`. License: MIT.
+Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.
+
+## For agents
+
+- AI guide: https://kense.ai/kui/ai (local: /kui/ai)
+- Install: `kui init` then `kui add button`
+- Rules: repository AGENTS.md (Microsoft Pragmatic Rust Guidelines)
+- Design: repository DESIGN.md
+- Platforms: repository docs/PLATFORMS.md
 
 ## Items
 
-- [kui-foundation](docs/items/kui-foundation.md): KUI foundation
-- [button](docs/items/button.md): Button
+- [kui-foundation](/md/kui-foundation.md): KUI foundation
+- [button](/md/button.md): Button
+
+## Registry JSON
+
+- [/r/catalog.json](/r/catalog.json)
+- [/r/button.json](/r/button.json)
+- [/r/kui-foundation.json](/r/kui-foundation.json)
+
+## Never
+
+- Do not invent a second button package
+- Do not rebrand as Arc / gpui-kit
+- Do not enable test-support on wasm32
+- Do not paint everyday chrome with brand `#171717`

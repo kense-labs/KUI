@@ -4,18 +4,24 @@ slug: kui
 name:
   zh: "KUI"
   en: "KUI"
+org:
+  zh: "氪锶科技"
+  en: "Kense"
 product: "KUI"
+license: "MIT"
 logos:
   light_surface: logo-light.png
   dark_surface: logo-dark.png
-brand: "#18181b"
+ink: "#000000"
+surface: "#FFFFFF"
+brand: "#171717"
 on_brand: "#FFFFFF"
 theme_color:
-  light: "#fafafa"
-  dark: "#09090b"
+  light: "#ffffff"
+  dark: "#000000"
 description:
-  zh: "KUI — 面向 GPUI 的拷源码 UI 工具包"
-  en: "KUI — copy-source UI kit for GPUI"
+  zh: "KUI — GPUI 拷源码 UI（桌面 + WASM）"
+  en: "KUI — copy-source GPUI UI kit (desktop + WASM)"
 ---
 
-KUI is the product name. Use `kui` in code.
+Use `kui` in this product’s code. Site copy should not explain org structure.

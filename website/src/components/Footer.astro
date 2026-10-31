@@ -1,0 +1,70 @@
+---
+import { getLocale, localePath } from "../i18n/utils";
+
+interface Props {
+  tone?: "company" | "product";
+}
+const { tone = "company" } = Astro.props;
+const locale = getLocale(Astro.url.pathname);
+---
+
+<footer class="footer">
+  <div class="inner">
+    <div class="mark">
+      <span class="logo-swap">
+        <img class="light" src="/assets/logo-light.png" width="20" height="20" alt="" />
+        <img class="dark" src="/assets/logo-dark.png" width="20" height="20" alt="" />
+      </span>
+      {tone === "company" ? <span>Kense</span> : <span>KUI</span>}
+    </div>
+    <p class="muted">
+      MIT
+      {
+        tone === "product" ? (
+          <>
+            {" "}
+            · <a href="/llms.txt">llms.txt</a> ·{" "}
+            <a href={localePath(locale, "/kui/docs")} data-astro-prefetch>Docs</a>
+          </>
+        ) : (
+          <>
+            {" "}
+            · <a href={localePath(locale, "/kui")} data-astro-prefetch>KUI</a>
+          </>
+        )
+      }
+    </p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--hairline);
+    background: var(--surface);
+    margin-top: 3rem;
+    padding: 1.25rem 0 2rem;
+  }
+  .inner {
+    width: min(1120px, calc(100% - 2rem));
+    margin-inline: auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.875rem;
+  }
+  p {
+    margin: 0;
+    font-size: 0.8125rem;
+  }
+  a {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+</style>

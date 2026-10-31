@@ -2,7 +2,9 @@
 
 Operating rules for humans and coding agents working in **KUI**.
 
-Product name is **KUI**. Crate names, CLI, modules, paths, and registry ids use **`kui`**. Do not reintroduce Arc, gpui-kit, a3s, or tenant-kit branding in this repository.
+**Kense** is the company; **KUI** is one Kense product (others will exist outside this repo). Crate names, CLI, modules, paths, and registry ids in this repository use **`kui`**. Do not reintroduce Arc, gpui-kit, a3s, or tenant-kit branding. Do not invent sibling product names here. License is **MIT**.
+
+Default chrome is pure black/white. Kense brand `#171717` is for important brand moments only (logo lockup, org attribution)—not everyday fills or primary buttons.
 
 ## Authority
 
@@ -22,7 +24,7 @@ Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is a
 | --- | --- |
 | `registry/` | Authoritative UI source; crate name `kui`. Preview and install share this tree. |
 | `apps/story/` | Shared gallery lib + desktop/smoke host (`kui-story`). |
-| `apps/story-web/` | WASM web host (`kui-story-web`) for the same gallery. |
+| `apps/web/` | WASM web host (`kui-web`) for the same gallery. |
 | `tools/cli/` | `kui` binary: `init`, `add`, `doctor`, `sync-mod`. |
 | `tools/registry-build/` | `kui-build`: registry JSON, docs stubs, preview hashes. |
 | `docs/` | Contracts and per-item Markdown. See `docs/PLATFORMS.md`. |
@@ -40,7 +42,7 @@ KUI targets **native desktop** and **WASM web** with one control source. Details
 - Do not enable `kui/test-support` on wasm32.
 - Do not fork chrome per platform. Use `cfg(target_family = "wasm")` only for host-only OS APIs.
 - Desktop story: `cargo run -p kui-story --features native`
-- Web story: `./scripts/build-story-web.sh`
+- Web story: `./scripts/build-web.sh`
 
 ## Toolchain and verification (M-STATIC-VERIFICATION)
 
@@ -54,7 +56,7 @@ cargo fmt --check
 cargo clippy -p kui -p kui-story -p kui-cli -p kui-build -- -D warnings
 cargo test -p kui-story
 cargo check -p kui --target wasm32-unknown-unknown --no-default-features
-cargo check -p kui-story-web --target wasm32-unknown-unknown
+cargo check -p kui-web --target wasm32-unknown-unknown
 cargo run -p kui-build -- build
 cargo run -p kui-build -- verify-preview
 ```
@@ -128,7 +130,7 @@ Builder methods on controls stay chainable and consume `self` by value unless GP
 
 - Keep changes scoped to the requested control or tool. Do not expand the MVP catalog casually.
 - Stage files deliberately. Do not commit secrets, `.env`, or unrelated worktrees.
-- Commit subjects are imperative and say why when useful.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` (e.g. `feat`, `fix`, `chore`, `docs`, `refactor`). Subjects are imperative and say why when useful.
 - Update `DESIGN.md` in the same change when chrome tokens, Button metrics, or interaction states change.
 
 ## Quick commands
@@ -138,7 +140,7 @@ cargo check -p kui
 cargo check -p kui --target wasm32-unknown-unknown --no-default-features
 cargo run -p kui-story
 cargo run -p kui-story --features native
-./scripts/build-story-web.sh
+./scripts/build-web.sh
 cargo install --path tools/cli
 kui init
 kui add button
