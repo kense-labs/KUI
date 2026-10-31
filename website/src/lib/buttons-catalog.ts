@@ -1,3 +1,4 @@
+import collections from "./collection-docs.json";
 import family from "./family-docs.json";
 /** Buttons family catalog — docs metadata for the website. Includes installable Rust stories and contract previews. */
 
@@ -12,7 +13,8 @@ export type ButtonDocId =
   | "action-swap"
   | "icon-morph"
   | "confirm-morph"
-  | "theme-switch";
+  | "theme-switch"
+  | "hold-to-confirm" | "swipe-actions" | "reactions" | "dropdown-menu" | "context-menu" | "user-menu";
 
 export type Locale = "zh" | "en";
 
@@ -22,6 +24,7 @@ export type ButtonDoc = {
   id: ButtonDocId;
   /** Localized nav / page title. */
   title: Record<Locale, string>;
+  group?: "buttons" | "gestures" | "menus";
   installable: boolean;
   story?: boolean;
   keyboard?: Record<Locale,string>;
@@ -136,8 +139,15 @@ kui add button`,
   }),
 ];
 
+export const COMPONENT_CATALOG: ButtonDoc[] = [...BUTTONS_CATALOG, ...collections.map(entry => {
+  const copy = (locale: Locale) => ({lead: entry.lead[locale], when: [entry.lead[locale]], not: [locale === 'zh' ? '直接执行的单一命令使用按钮。' : 'Use a button for a single immediate command.'],
+    apiLead: entry.api[locale], motion: [entry.motion[locale]], ai: [`kui add ${entry.id}`],
+    props: [{name:entry.method, type:entry.signature, description:entry.api[locale]}, {name:'event',type:entry.event,description:locale === 'zh' ? '订阅控件实体事件。' : 'Subscribe on the control entity.'}]});
+  return {id: entry.id as ButtonDocId,group:entry.group as 'gestures'|'menus',title:entry.title,installable:true,story:true,
+    rustType:entry.rustType,usageRust:entry.usageRust,installShell:`kui add ${entry.id}`,keyboard:entry.rule,copy:{en:copy('en'),zh:copy('zh')}};
+})];
 export function getButtonDoc(id: string): ButtonDoc | undefined {
-  return BUTTONS_CATALOG.find((doc) => doc.id === id);
+  return COMPONENT_CATALOG.find((doc) => doc.id === id);
 }
 
 export function buttonsNav(locale: Locale): { id: ButtonDocId; title: string }[] {

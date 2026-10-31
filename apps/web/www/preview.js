@@ -120,6 +120,7 @@ function setPageColor() {
 function show(story, lang) {
   if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; lastPicture = undefined; }
   selected = { story, lang };
+  document.documentElement.dataset.story = story.split(":")[0];
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   if (!running || (mounted?.story === story && mounted?.lang === lang)) return;
   if (frame && story.split(":")[0] === "theme-switch") set_icon_intent(dark);

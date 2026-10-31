@@ -10,7 +10,9 @@ pub struct StoryHost {
 }
 impl StoryHost {
     fn select(id: &str, w: &mut Window, cx: &mut Context<Self>) -> Option<gpui::AnyView> {
-        if FAMILY_IDS.contains(&id.split(':').next().unwrap_or(id)) {
+        if FAMILY_IDS.contains(&id.split(':').next().unwrap_or(id))
+            || crate::COLLECTION_IDS.contains(&id)
+        {
             Some(cx.new(|cx| FamilyStory::new(id, w, cx)).into())
         } else {
             None
@@ -46,7 +48,7 @@ impl Render for StoryHost {
                 .bg(c.surface)
                 .text_color(c.foreground)
                 .when(!self.embedded, |e| {
-                    e.child(action("back", "All buttons", cx, |v, _, cx| {
+                    e.child(action("back", "All components", cx, |v, _, cx| {
                         v.selected = None;
                         cx.notify();
                     }))
@@ -55,7 +57,7 @@ impl Render for StoryHost {
                 .into_any_element();
         }
         let mut row = div().flex().flex_wrap().gap_2().p_4();
-        for id in FAMILY_IDS.into_iter().chain([
+        for id in FAMILY_IDS.into_iter().chain(crate::COLLECTION_IDS).chain([
             "theme-switch:eclipse",
             "theme-switch:split",
             "theme-switch:rise",

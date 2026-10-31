@@ -86,6 +86,9 @@ mod web {
 
     // The host owns browser integration; neither the story nor installed controls depend on JS.
     #[wasm_bindgen(inline_js = "
+        export function compactHost(){try{return (window.frameElement?.ownerDocument.defaultView ?? window).matchMedia('(max-width:639px)').matches}catch{return innerWidth<640}}
+        export function storedAppearance(){try{return ({light:0,dark:1})[localStorage.getItem('theme')] ?? 2}catch{return 2}}
+        export function accountAppearance(mode){parent.postMessage({type:'kui:account-appearance',mode},location.origin)}
         export function previewStarted() { queueMicrotask(() => window.kuiPreviewStarted?.()); }
         export function reportThemeTarget(x,y,w,h,radius) { window.kuiThemeTarget?.(x,y,w,h,radius); }
         export function reportFrame(height, dark) {
@@ -101,6 +104,12 @@ mod web {
 
     ")]
     extern "C" {
+        #[wasm_bindgen(js_name=compactHost)]
+        fn compact_host() -> bool;
+        #[wasm_bindgen(js_name=storedAppearance)]
+        fn stored_appearance() -> u8;
+        #[wasm_bindgen(js_name=accountAppearance)]
+        fn account_appearance(mode: &str);
         #[wasm_bindgen(js_name=previewStarted)]
         fn preview_started();
         #[wasm_bindgen(js_name=reportThemeTarget)]
@@ -133,6 +142,25 @@ mod web {
                 UiLanguage::English
             });
             if embedded {
+                cx.set_global(kui_story::AccountHost {
+                    compact: || compact_host(),
+                    current: || {
+                        use kui::components::user_menu::Appearance::*;
+                        match stored_appearance() {
+                            0 => Light,
+                            1 => Dark,
+                            _ => System,
+                        }
+                    },
+                    preference: |mode| {
+                        use kui::components::user_menu::Appearance::*;
+                        account_appearance(match mode {
+                            Light => "light",
+                            Dark => "dark",
+                            System => "system",
+                        })
+                    },
+                });
                 cx.set_global(ThemeBridge(|r| {
                     button_theme(
                         r.next == ThemeMode::Dark,

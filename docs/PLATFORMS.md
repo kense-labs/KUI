@@ -13,8 +13,8 @@ GPUI pins stay exact: `gpui-pre` / `gpui-pre-platform` / `gpui-pre-web` at `=0.3
 ## Same source rule
 
 - Controls live under `registry/` (crate `kui`).
-- Story UI lives in `apps/story/src/gallery.rs`.
-- Desktop and web hosts only choose a platform bootstrap. They must not fork Button chrome.
+- Story UI lives in `apps/story/src/`; the gesture and menu examples share `family_story/collections.rs`.
+- Desktop and web hosts choose the platform bootstrap and provide system services; controls draw the same chrome on both.
 
 ## Native desktop
 
@@ -22,7 +22,11 @@ GPUI pins stay exact: `gpui-pre` / `gpui-pre-platform` / `gpui-pre-web` at `=0.3
 cargo run -p kui-story --features native
 ```
 
-Needs a working GPUI native stack (on macOS: Xcode Metal tooling).
+Pass a registry ID after `--` to open a single example. On macOS, the default build needs the Xcode Metal compiler. If only Command Line Tools are installed, GPUI can compile the shaders at runtime:
+
+```bash
+cargo run -p kui-story --no-default-features --features native,gpui_platform/runtime_shaders -- swipe-actions
+```
 
 ## WASM web
 

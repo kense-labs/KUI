@@ -94,5 +94,53 @@
     "kind": "component",
     "name": "theme-switch",
     "title": "ThemeSwitch"
+  },
+  {
+    "categories": [
+      "gestures"
+    ],
+    "kind": "component",
+    "name": "hold-to-confirm",
+    "title": "HoldToConfirm"
+  },
+  {
+    "categories": [
+      "gestures"
+    ],
+    "kind": "component",
+    "name": "swipe-actions",
+    "title": "SwipeActions"
+  },
+  {
+    "categories": [
+      "gestures"
+    ],
+    "kind": "component",
+    "name": "reactions",
+    "title": "Reactions"
+  },
+  {
+    "categories": [
+      "menus"
+    ],
+    "kind": "component",
+    "name": "dropdown-menu",
+    "title": "DropdownMenu"
+  },
+  {
+    "categories": [
+      "menus"
+    ],
+    "kind": "component",
+    "name": "context-menu",
+    "title": "ContextMenu"
+  },
+  {
+    "categories": [
+      "menus"
+    ],
+    "kind": "component",
+    "name": "user-menu",
+    "title": "UserMenu"
   }
 ]

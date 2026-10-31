@@ -27,6 +27,12 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [icon-morph](/md/icon-morph.md): IconMorph
 - [confirm-morph](/md/confirm-morph.md): ConfirmMorph
 - [theme-switch](/md/theme-switch.md): ThemeSwitch
+- [hold-to-confirm](/md/hold-to-confirm.md): HoldToConfirm
+- [swipe-actions](/md/swipe-actions.md): SwipeActions
+- [reactions](/md/reactions.md): Reactions
+- [dropdown-menu](/md/dropdown-menu.md): DropdownMenu
+- [context-menu](/md/context-menu.md): ContextMenu
+- [user-menu](/md/user-menu.md): UserMenu
 
 ## Registry JSON
 
@@ -43,3 +49,9 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [icon-morph](/r/icon-morph.json)
 - [confirm-morph](/r/confirm-morph.json)
 - [theme-switch](/r/theme-switch.json)
+- [hold-to-confirm](/r/hold-to-confirm.json)
+- [swipe-actions](/r/swipe-actions.json)
+- [reactions](/r/reactions.json)
+- [dropdown-menu](/r/dropdown-menu.json)
+- [context-menu](/r/context-menu.json)
+- [user-menu](/r/user-menu.json)

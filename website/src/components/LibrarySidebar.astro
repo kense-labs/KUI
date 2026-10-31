@@ -1,6 +1,6 @@
 ---
 import Icon from "./Icon.astro";
-import { buttonsNav } from "../lib/buttons-catalog";
+import { COMPONENT_CATALOG } from "../lib/buttons-catalog";
 import { getLocale, localePath, stripLocale, useTranslations } from "../i18n/utils";
 
 const locale = getLocale(Astro.url.pathname);
@@ -28,10 +28,10 @@ const docs: NavLink[] = [
   },
 ];
 
-const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
-  href: localePath(locale, `/kui/components/${item.id}`),
-  label: item.title,
-  match: slug === item.id,
+const groups = (["buttons","gestures","menus"] as const).map(id => ({
+  id, label:t(`sidebar.group.${id}`), items: COMPONENT_CATALOG.filter(doc => (doc.group ?? "buttons") === id).map(doc => ({
+    href: localePath(locale,`/kui/components/${doc.id}`), label:doc.title[locale], match:slug === doc.id
+  }))
 }));
 ---
 
@@ -100,22 +100,22 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
           <button type="button" class="section-head" data-section-toggle aria-expanded="true">
             <span class="section-icon"><Icon name="box" size={15} /></span>
             <span class="section-label">{t("sidebar.components")}</span>
-            <span class="section-count" data-section-count>{buttons.length}</span>
+            <span class="section-count" data-section-count>{COMPONENT_CATALOG.length}</span>
             <span class="chevron"><Icon name="chevron" size={14} /></span>
           </button>
           <div class="section-body" data-section-body>
             <div class="disclosure-clip">
-              <div class="group" data-group data-group-id="buttons" data-open="true">
+              {groups.map(group => <div class="group" data-group data-group-id={group.id} data-open="true">
                 <button type="button" class="group-head" data-group-toggle aria-expanded="true">
                   <span class="group-chevron"><Icon name="chevron" size={12} /></span>
-                  <span class="group-label">{t("sidebar.group.buttons")}</span>
-                  <span class="group-count" data-group-count><span>{buttons.length}</span></span>
+                  <span class="group-label">{group.label}</span>
+                  <span class="group-count" data-group-count><span>{group.items.length}</span></span>
                 </button>
-                <nav class="group-body" aria-label={t("sidebar.group.buttons")} data-group-body>
+                <nav class="group-body" aria-label={group.label} data-group-body>
                   <div class="disclosure-clip">
                     <div class="rows">
                       {
-                        buttons.map((item) => (
+                        group.items.map((item) => (
                           <a
                             href={item.href}
                             class="row"
@@ -131,7 +131,7 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
                     </div>
                   </div>
                 </nav>
-              </div>
+              </div>)}
             </div>
           </div>
         </section>

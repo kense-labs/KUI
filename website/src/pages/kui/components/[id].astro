@@ -1,11 +1,11 @@
 ---
 import ProductLayout from "../../../layouts/ProductLayout.astro";
 import ComponentDoc from "../../../components/ComponentDoc.astro";
-import { BUTTONS_CATALOG, buttonTitle, getButtonDoc } from "../../../lib/buttons-catalog";
+import { COMPONENT_CATALOG, buttonTitle, getButtonDoc } from "../../../lib/buttons-catalog";
 import { getLocale } from "../../../i18n/utils";
 
 export function getStaticPaths() {
-  return BUTTONS_CATALOG.map((doc) => ({ params: { id: doc.id } }));
+  return COMPONENT_CATALOG.map((doc) => ({ params: { id: doc.id } }));
 }
 
 const locale = getLocale(Astro.url.pathname);

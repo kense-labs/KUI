@@ -2,6 +2,7 @@
 /**
  * Shared Buttons-family doc page: stage, when/not, install, usage, API, motion, AI.
  */
+import RegistrySource from "./RegistrySource.astro";
 import CodePanel from "./CodePanel.astro";
 import ComponentStage from "./ComponentStage.astro";
 import PropsTable from "./PropsTable.astro";
@@ -24,7 +25,7 @@ const headers = {
   default: t("button.props.default"),
   description: t("button.props.desc"),
 };
-const crumb=t("button.crumb");
+const crumb = (locale === "zh" ? "组件 · " : "Components · ") + t(`sidebar.group.${doc.group ?? "buttons"}`);
 const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
 ---
 
@@ -53,6 +54,7 @@ const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
     </div>
     <div slot="code" class="code-stack">
       <CodePanel title={fileStem} lang="rust" code={doc.usageRust} />
+      {doc.group && <RegistrySource id={doc.id} locale={locale} />}
     </div>
   </ComponentStage>
   {doc.id==="theme-switch"&& <section><h2>{locale==="zh"?"其他过渡示例":"More transitions"}</h2>{["eclipse","split","rise"].map(mode=><details><summary>{mode[0].toUpperCase()+mode.slice(1)}</summary><iframe loading="lazy" data-src={`/stories/?story=theme-switch:${mode}&lang=${locale}`} class="rust-story family-story theme-preview" data-story="theme-switch" data-story-key={`theme-switch:${mode}`} data-lang={locale} aria-label={title + " · " + mode}></iframe></details>)}</section>}
@@ -89,14 +91,17 @@ const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
 
 <script>
   import "../lib/preview-navigation";
-  import { togglePreviewTheme, type RevealMode } from "../lib/apply-theme";
+  import { chooseTheme, togglePreviewTheme, type RevealMode } from "../lib/apply-theme";
   document.addEventListener("toggle",e=>{if(e.target instanceof HTMLDetailsElement && e.target.open){const f=e.target.querySelector<HTMLIFrameElement>("iframe[data-src]");if(f&&!f.hasAttribute("src"))f.src=f.dataset.src!}},true);
   window.addEventListener("message", (event) => {
     if (event.origin !== location.origin || !event.data) return;
     const frame = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe.rust-story")).find(f=>f.contentWindow===event.source);
     if (!frame || event.source !== frame.contentWindow) return;
     const {type, dark} = event.data;
-    if (type === "kui:story-leave" && typeof event.data.back === "boolean") {
+    if (type === "kui:account-appearance" && frame.dataset.story === "user-menu") {
+      const mode = event.data.mode;
+      if (["light", "dark", "system"].includes(mode)) chooseTheme(mode);
+    } else if (type === "kui:story-leave" && typeof event.data.back === "boolean") {
       const stops = [...document.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),iframe,[tabindex="0"]')]
         .filter(el => !el.closest("[inert]") && el.tabIndex >= 0 && el.getClientRects().length > 0);
       const index = stops.indexOf(frame);

@@ -2,7 +2,7 @@
 
 **KUI** is a **Kense** product — a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
 
-This repository ships foundation tokens and 11 installable buttons. Browse the Buttons family on the bilingual component site.
+This repository ships foundation tokens and 17 installable components: 11 buttons, three gestures and three menus. Browse the component families on the bilingual component site.
 
 ## Why KUI
 

@@ -91,6 +91,36 @@ pub const ITEMS: &[(&str, &str, &str)] = &[
         "ThemeSwitch",
         "Change appearance from the trigger. Compare Reveal, Eclipse, Split and Rise.",
     ),
+    (
+        "hold-to-confirm",
+        "HoldToConfirm",
+        "A deliberate hold fills the button before it commits.",
+    ),
+    (
+        "swipe-actions",
+        "SwipeActions",
+        "Triage the inbox by swiping a message or choosing the same command from its menu.",
+    ),
+    (
+        "reactions",
+        "Reactions",
+        "Add a reaction to a release note, change your vote, or pick another symbol.",
+    ),
+    (
+        "dropdown-menu",
+        "DropdownMenu",
+        "Keep a short list of project commands beside a labelled trigger.",
+    ),
+    (
+        "context-menu",
+        "ContextMenu",
+        "Right-click a project to open its commands at the pointer, or tap the project to open below it.",
+    ),
+    (
+        "user-menu",
+        "UserMenu",
+        "An account entry point with destinations, a theme preference and asynchronous sign-out.",
+    ),
 ];
 pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
     let (_, title, description) = ITEMS
@@ -128,7 +158,13 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         | "action-swap"
         | "icon-morph"
         | "confirm-morph"
-        | "theme-switch" => {
+        | "theme-switch"
+        | "hold-to-confirm"
+        | "swipe-actions"
+        | "reactions"
+        | "dropdown-menu"
+        | "context-menu"
+        | "user-menu" => {
             let mut files = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
             let mut primitives = vec!["control", "family", "glyph"];
             cargo.push("web-time@1".into());
@@ -145,6 +181,11 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
                 | "floating-button-group"
                 | "expanding-button-group" => primitives.push("strip"),
                 "action-swap" | "action-button" => primitives.push("commit"),
+                "hold-to-confirm" => primitives.push("direct_touch"),
+                "swipe-actions" => primitives.extend(["direct_touch", "menu"]),
+                "context-menu" | "dropdown-menu" | "user-menu" => {
+                    primitives.extend(["direct_touch", "menu"])
+                }
                 _ => {}
             }
             files.extend(
@@ -193,9 +234,19 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         kind: kind.into(),
         title: title.into(),
         description: description.into(),
-        categories: vec![if foundation { "foundation" } else { "actions" }.into()],
+        categories: vec![
+            match id {
+                "kui-foundation" => "foundation",
+                "hold-to-confirm" | "swipe-actions" | "reactions" => "gestures",
+                "dropdown-menu" | "context-menu" | "user-menu" => "menus",
+                _ => "actions",
+            }
+            .into(),
+        ],
         registry_dependencies: if foundation {
             vec![]
+        } else if id == "swipe-actions" {
+            vec!["kui-foundation".into(), "dropdown-menu".into()]
         } else {
             vec!["kui-foundation".into()]
         },

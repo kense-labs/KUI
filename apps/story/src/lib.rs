@@ -17,3 +17,5 @@ pub use host::StoryHost;
 
 mod family_story;
 pub use family_story::{FAMILY_IDS, FamilyStory, ThemeBridge};
+
+pub use family_story::collections::{AccountHost, IDS as COLLECTION_IDS};

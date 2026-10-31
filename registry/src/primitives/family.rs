@@ -193,6 +193,14 @@ impl Slide {
             (self.to + offset, vel, true)
         }
     }
+    /// Sample from an input handler without scheduling a frame outside paint.
+    pub fn value(&self, cx: &App) -> f32 {
+        if disabled_motion(cx) {
+            self.to
+        } else {
+            self.sample(cx.background_executor().now()).0
+        }
+    }
     pub fn get(&self, w: &Window, cx: &App) -> f32 {
         if disabled_motion(cx) {
             return self.to;

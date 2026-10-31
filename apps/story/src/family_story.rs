@@ -1,4 +1,5 @@
 //! Reference examples rendered with the same installed components on both platforms.
+pub mod collections;
 mod connection_switch;
 use connection_switch::ConnectionSwitch;
 use gpui::{prelude::*, *};
@@ -740,6 +741,10 @@ impl FamilyStory {
                 });
                 add!((e.into(), sub));
             }
+            id if collections::IDS.contains(&id) => s.views.push(
+                cx.new(|cx| collections::CollectionStory::new(id, w, cx))
+                    .into(),
+            ),
             _ => {}
         }
         s
@@ -993,6 +998,8 @@ impl Render for FamilyStory {
         let narrow = vw < 532.;
         let height = if self.id == "theme-switch" {
             220.
+        } else if self.id == "user-menu" {
+            626.
         } else if self.id == "icon-morph" && narrow {
             560.
         } else {

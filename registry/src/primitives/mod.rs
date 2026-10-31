@@ -11,6 +11,8 @@ pub use sizing::Size;
 pub mod clipboard;
 pub mod commit;
 pub mod control;
+pub mod direct_touch;
 pub mod family;
 pub mod glyph;
+pub mod menu;
 pub mod strip;

@@ -1,0 +1,176 @@
+[
+  {
+    "id": "hold-to-confirm",
+    "group": "gestures",
+    "title": {
+      "en": "Hold to confirm",
+      "zh": "长按确认"
+    },
+    "rustType": "HoldToConfirm",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::hold_to_confirm::HoldToConfirm;\n\nlet control = cx.new(|cx| HoldToConfirm::new(\"remove\", \"Hold to delete\", window, cx)\n    .with_done_label(\"Deleted\"));",
+    "lead": {
+      "en": "A deliberate hold fills the button before it commits.",
+      "zh": "按住时填充按钮，进度到达末端才提交。"
+    },
+    "rule": {
+      "en": "Hold Space or Enter for 1.2 seconds. Releasing early or leaving focus cancels. Restore resets the example.",
+      "zh": "按住空格或 Enter 1.2 秒；提前松开或移走焦点会取消。点击还原可再次体验。"
+    },
+    "api": {
+      "en": "The default duration is 1200ms. Holding(bool) starts and stops hints; Confirmed fires once until reset.",
+      "zh": "默认 1200ms；Holding(bool) 驱动提示，Confirmed 只触发一次，reset 后可再次提交。"
+    },
+    "motion": {
+      "en": "The advancing fill is linear. Release reverses the fill on a spring; a quick re-press continues from the visible edge. Reduced motion preserves the hold duration.",
+      "zh": "按住时进度匀速前进；松手后弹簧回退，快速重按从可见边缘继续。减少动效不缩短确认时间。"
+    },
+    "method": "with_duration",
+    "signature": "Duration",
+    "event": "HoldEvent"
+  },
+  {
+    "id": "swipe-actions",
+    "group": "gestures",
+    "title": {
+      "en": "Swipe actions",
+      "zh": "滑动操作"
+    },
+    "rustType": "SwipeActions",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::swipe_actions::{SwipeAction, SwipeActions, SwipeRow};\nuse crate::ui::primitives::glyph::Glyph;\n\nlet row = SwipeRow::new(\"draft\", \"Draft\", |_, _| gpui::div().child(\"Draft\").into_any_element())\n    .leading(vec![SwipeAction::new(\"archive\", \"Archive\", Glyph::Archive)]);\nlet control = cx.new(|cx| SwipeActions::new(\"inbox\", \"Inbox\", vec![row], cx));",
+    "lead": {
+      "en": "Triage the inbox by swiping a message or choosing the same command from its menu.",
+      "zh": "滑动消息，或从更多菜单中选择同一项操作来整理收件箱。"
+    },
+    "rule": {
+      "en": "Drag horizontally to reveal. Swipe farther to commit. Tab to More actions; use arrows and Enter. Undo restores the message in place.",
+      "zh": "横拖展开操作，继续滑动可提交。Tab 聚焦更多菜单，方向键选择，Enter 执行；撤销后消息回到原位。"
+    },
+    "api": {
+      "en": "Supply stable row and action IDs. Removing actions collapse the row; keep_row actions leave it visible. Restore by row ID.",
+      "zh": "提供稳定的行和操作 ID。移除操作折叠该行；keep_row 保留它；按行 ID 还原。"
+    },
+    "motion": {
+      "en": "The front follows the drag. Release projects velocity into a resting stop or full commit; dismissal slides out and closes the gap.",
+      "zh": "消息随指针横移。释放时根据距离和速度停靠或提交；移除时滑出，后续消息合拢。"
+    },
+    "method": "restore",
+    "signature": "(&str, &mut Context<Self>)",
+    "event": "SwipeSelection"
+  },
+  {
+    "id": "reactions",
+    "group": "gestures",
+    "title": {
+      "en": "Reactions",
+      "zh": "回应"
+    },
+    "rustType": "Reactions",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::reactions::{Reaction, ReactionOption, Reactions};\nuse crate::ui::primitives::glyph::Glyph;\n\nlet control = cx.new(|cx| Reactions::new(\"votes\",\n    vec![ReactionOption::new(\"like\", \"Like\", Glyph::Like)],\n    vec![Reaction::new(\"like\", 3, false)], cx));",
+    "lead": {
+      "en": "Add a reaction to a release note, change your vote, or pick another symbol.",
+      "zh": "为发布说明添加回应，再次点击可撤回，也可以从选择器添加其他回应。"
+    },
+    "rule": {
+      "en": "Enter or Space toggles a count. From Add reaction, use arrows, Home or End; Enter chooses and Escape returns to the add button.",
+      "zh": "Enter 或空格切换回应。展开添加面板后，方向键或 Home、End 定位，Enter 选择，Esc 回到添加按钮。"
+    },
+    "api": {
+      "en": "Supply picker options and initial counts. ReactionChanged supplies the changed ID, count and personal selection.",
+      "zh": "提供可选项和初始计数。ReactionChanged 返回改变项的 ID、计数及个人选中状态。"
+    },
+    "motion": {
+      "en": "Digits roll up or down with the count. New pills expand, and the picker highlight follows its active option. A thin ring marks your own reactions. The moving highlight only indicates the current option; its caption has a check when you have already reacted.",
+      "zh": "数字随增减上下滚动。新回应展开，选择器高亮跟随当前项。 细框标记你已添加的回应；移动的底色只标记当前项。当前项已选时，名称前显示勾。"
+    },
+    "method": "values",
+    "signature": "() → Vec<Reaction>",
+    "event": "ReactionChanged"
+  },
+  {
+    "id": "dropdown-menu",
+    "group": "menus",
+    "title": {
+      "en": "Dropdown menu",
+      "zh": "下拉菜单"
+    },
+    "rustType": "DropdownMenu",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::dropdown_menu::DropdownMenu;\nuse crate::ui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| DropdownMenu::new(\"actions\", \"Project actions\",\n    vec![MenuItem::new(\"edit\", \"Edit project\")], cx));",
+    "lead": {
+      "en": "Keep a short list of project commands beside a labelled trigger.",
+      "zh": "在按钮旁展开一组项目命令。"
+    },
+    "rule": {
+      "en": "Enter, Space or Down opens. Arrows wrap through enabled commands; Home, End and initial letters navigate. Escape returns focus.",
+      "zh": "Enter、空格或下方向键展开。方向键循环选择可用项；Home、End 或首字母定位。Esc 关闭并返回焦点。"
+    },
+    "api": {
+      "en": "Construct with a label and MenuItem list; subscribe to MenuSelection for the stable command ID.",
+      "zh": "使用标签和 MenuItem 列表构造，订阅 MenuSelection 接收稳定的命令 ID。"
+    },
+    "motion": {
+      "en": "A short stagger reveals the rows. One highlight glides between pointer targets and lands directly on keyboard targets.",
+      "zh": "各行依次显现；鼠标移动时共享高亮滑动，键盘选择时直接定位。"
+    },
+    "method": "set_label",
+    "signature": "(impl Into<SharedString>, &mut Context<Self>)",
+    "event": "MenuSelection"
+  },
+  {
+    "id": "context-menu",
+    "group": "menus",
+    "title": {
+      "en": "Context menu",
+      "zh": "上下文菜单"
+    },
+    "rustType": "ContextMenu",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::context_menu::ContextMenu;\nuse crate::ui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| ContextMenu::new(\"project\", \"Open actions\",\n    vec![MenuItem::new(\"edit\", \"Edit project\")],\n    |_, _| gpui::div().child(\"Quarterly launch\").into_any_element(), cx));",
+    "lead": {
+      "en": "Right-click a project to open its commands at the pointer, or tap the project to open below it.",
+      "zh": "右键在指针位置打开项目菜单，也可以轻点项目在下方展开。"
+    },
+    "rule": {
+      "en": "Right-click, tap, or press Shift+F10 on the target. Use arrows, Home and End to navigate; Enter selects, Escape dismisses.",
+      "zh": "右键、轻点或在目标上按 Shift+F10 打开；方向键、Home、End 定位，Enter 选择，Esc 关闭。"
+    },
+    "api": {
+      "en": "Provide a target renderer and MenuItem list. Pointer placement and keyboard navigation share the same selection event.",
+      "zh": "提供目标绘制函数和 MenuItem 列表。指针、键盘激活都发送同一选择事件。"
+    },
+    "motion": {
+      "en": "The panel opens at the pointer and stays inside the viewport. Destructive commands retain a distinct highlight.",
+      "zh": "面板从指针处展开，保持在视口内；危险命令拥有独立的高亮颜色。"
+    },
+    "method": "is_open",
+    "signature": "() → bool",
+    "event": "MenuSelection"
+  },
+  {
+    "id": "user-menu",
+    "group": "menus",
+    "title": {
+      "en": "User menu",
+      "zh": "用户菜单"
+    },
+    "rustType": "UserMenu",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::user_menu::{Account, UserMenu};\nuse crate::ui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| UserMenu::new(\"account\",\n    Account::new(\"Emma Collins\", \"emma@example.com\"),\n    vec![MenuItem::new(\"profile\", \"Profile\")], cx).show_name());",
+    "lead": {
+      "en": "An account entry point with destinations, a theme preference and asynchronous sign-out.",
+      "zh": "从头像进入账户菜单，打开个人资料、选择主题或退出登录。"
+    },
+    "rule": {
+      "en": "Enter opens the account menu. Up and Down move between rows; Left and Right change the active preference without closing. Escape dismisses.",
+      "zh": "Enter 打开账户菜单。上下键切换行；左右键更改当前偏好且保持菜单打开。Esc 关闭。"
+    },
+    "api": {
+      "en": "Handle Navigate, Appearance, Presence and SignOut in the host. After sign-out resolves call finish_sign_out; false leaves the menu ready to retry.",
+      "zh": "由宿主处理导航、主题、状态和退出请求。退出请求结束后调用 finish_sign_out，传 false 保留菜单供重试。"
+    },
+    "motion": {
+      "en": "The account panel opens from the avatar. On small screens the same commands rise in a bottom sheet.",
+      "zh": "账户面板从头像处展开；小屏下同一组命令从底部升起。"
+    },
+    "method": "finish_sign_out",
+    "signature": "(bool, &mut Window, &mut Context<Self>)",
+    "event": "AccountEvent"
+  }
+]

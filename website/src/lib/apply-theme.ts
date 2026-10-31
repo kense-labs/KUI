@@ -27,10 +27,13 @@ function warm() {
   });
   invalidation.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
 }
+const osTheme = matchMedia("(prefers-color-scheme: dark)");
+let followSystem = false;
+try { followSystem = localStorage.getItem("theme") === "system"; } catch { /* Optional storage. */ }
 function applyDocument(theme: Theme) {
   root.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
-  try { localStorage.setItem("theme", theme); } catch { /* Optional storage. */ }
+  try { localStorage.setItem("theme", followSystem ? "system" : theme); } catch { /* Optional storage. */ }
 }
 const previews = () => Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe.rust-story[src]"));
 function showIntent(theme: Theme) {
@@ -147,7 +150,14 @@ function moveTo(theme: Theme, mode: RevealMode, hole?: Opening) {
   watchEnd(active);
 }
 
+export function chooseTheme(preference: Theme | "system") {
+  followSystem = preference === "system";
+  try { localStorage.setItem("theme", preference); } catch { /* Optional storage. */ }
+  moveTo(preference === "system" ? (osTheme.matches ? "dark" : "light") : preference, "reveal");
+}
+osTheme.addEventListener("change", () => { if (followSystem) chooseTheme("system"); });
 export function toggleTheme(mode: RevealMode = "reveal", hole?: Opening) {
+  followSystem = false;
   moveTo(opposite(intent()), mode, hole);
 }
 export function togglePreviewTheme(frame: HTMLIFrameElement, bounds: DOMRectReadOnly, mode: RevealMode) {

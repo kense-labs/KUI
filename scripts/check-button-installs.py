@@ -23,8 +23,9 @@ def verify(work):
     assert ["button", *items] == [entry["name"] for entry in catalog if entry["kind"] == "component"] == [
         "button", "action-button", "split-button", "button-group", "floating-button-group",
         "expanding-button-group", "copy-button", "action-swap", "icon-morph", "confirm-morph", "theme-switch",
+        "hold-to-confirm", "swipe-actions", "reactions", "dropdown-menu", "context-menu", "user-menu",
     ]
-    manifests = ["button", *items, "all-buttons"]
+    manifests = ["button", *items, "all-components"]
     (work / "Cargo.toml").write_text('[workspace]\nresolver = "2"\nmembers = ' + json.dumps(manifests))
     shutil.copyfile(ROOT / "Cargo.lock", work / "Cargo.lock")
     for index, name in enumerate(manifests):
@@ -32,9 +33,9 @@ def verify(work):
         app.mkdir()
         (app / "Cargo.toml").write_text(f'[package]\nname = "{name}"\nversion = "0.0.0"\nedition = "2024"\n[lib]\npath = "lib.rs"\n')
         run(BINARY, "init", "--path", app, "--registry", ROOT / "registry", cwd=work)
-        if name == "all-buttons":
+        if name == "all-components":
             (app / "ui/foundation/mod.rs").write_text("pub mod init;\npub mod motion;\npub mod theme;\npub mod tokens;\n")
-        ids = ["button", *items] if name == "all-buttons" else [name]
+        ids = ["button", *items] if name == "all-components" else [name]
         # Exercise both registry entry points: packaged JSON and local source.
         run(BINARY, "add", *ids, "--path", app, cwd=ROOT if index % 2 == 0 else work)
         run(BINARY, "sync-mod", "--path", app, cwd=work)
