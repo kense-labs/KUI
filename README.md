@@ -57,7 +57,12 @@ docs/               # contracts + per-item markdown
 
 ## Brand
 
-Use **KUI** in product copy and **`kui`** in crate names, CLI, modules, and paths.
+Use **KUI** in product copy and **`kui`** in crate names, CLI, modules, and paths. See [`website/public/assets/BRAND.md`](./website/public/assets/BRAND.md).
+
+## Engineering
+
+- [`AGENTS.md`](./AGENTS.md) — agent and contributor rules (Microsoft Pragmatic Rust Guidelines)
+- [`DESIGN.md`](./DESIGN.md) — chrome tokens, Button metrics, interaction
 
 ## License
 
