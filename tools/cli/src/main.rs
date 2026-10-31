@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
@@ -61,33 +61,7 @@ fn default_ui_dir() -> String {
     "ui".into()
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct RegistryItem {
-    name: String,
-    kind: String,
-    #[serde(default)]
-    title: String,
-    #[serde(default)]
-    description: String,
-    #[serde(default)]
-    categories: Vec<String>,
-    #[serde(default)]
-    registry_dependencies: Vec<String>,
-    #[serde(default)]
-    cargo_dependencies: Vec<String>,
-    gpui_version: String,
-    #[serde(default)]
-    files: Vec<RegistryFile>,
-    #[serde(default)]
-    docs_url: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct RegistryFile {
-    path: String,
-    content: String,
-}
-
+use kui_catalog::{RegistryItem, materialize as materialize_from_source};
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -148,6 +122,17 @@ fn cmd_add(path: &Path, ids: &[String], force: bool) -> Result<()> {
     for id in planned {
         let is_foundation = id == "kui-foundation";
         if is_foundation && !force && path.join(&cfg.ui_install_dir).join("foundation").exists() {
+            // The original sync-mod generated this file without foundation's
+            // public re-exports. Recognize only that exact generated file.
+            let module = path.join(&cfg.ui_install_dir).join("foundation/mod.rs");
+            if fs::read_to_string(&module).ok().as_deref()
+                == Some("pub mod init;\npub mod motion;\npub mod theme;\npub mod tokens;\n")
+            {
+                let item = load_item(&cfg, path, &id)?;
+                if let Some(file) = item.files.iter().find(|f| f.path == "foundation/mod.rs") {
+                    fs::write(module, rewrite_paths(&file.content))?;
+                }
+            }
             println!("skip {id} (already installed)");
             continue;
         }
@@ -183,29 +168,25 @@ fn load_config(path: &Path) -> Result<KuiConfig> {
 
 fn ensure_cargo_gpui_pin(path: &Path, cfg: &KuiConfig) -> Result<()> {
     let cargo_path = path.join("Cargo.toml");
-    let mut cargo = if cargo_path.exists() {
+    let cargo = if cargo_path.exists() {
         fs::read_to_string(&cargo_path)?
     } else {
         "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n"
             .into()
     };
-    if !cargo.contains("gpui-pre") && !cargo.contains("package = \"gpui-pre\"") {
-        cargo.push_str(&format!(
-            "gpui = {{ package = \"{}\", version = \"{}\", default-features = false, features = [\"test-support\"] }}\n",
-            cfg.gpui_package, cfg.gpui_version
-        ));
-        fs::write(&cargo_path, cargo)?;
-        println!("pinned gpui in {}", cargo_path.display());
+    if !cargo.contains("gpui-pre") {
+        let mut doc = cargo.parse::<toml_edit::DocumentMut>()?;
+        let mut dep = toml_edit::InlineTable::new();
+        dep.insert("package", cfg.gpui_package.as_str().into());
+        dep.insert("version", cfg.gpui_version.as_str().into());
+        dep.insert("default-features", false.into());
+        doc["dependencies"]["gpui"] = toml_edit::value(dep);
+        fs::write(&cargo_path, doc.to_string())?;
     }
     Ok(())
 }
 
-fn collect_deps(
-    cfg: &KuiConfig,
-    path: &Path,
-    id: &str,
-    out: &mut BTreeSet<String>,
-) -> Result<()> {
+fn collect_deps(cfg: &KuiConfig, path: &Path, id: &str, out: &mut BTreeSet<String>) -> Result<()> {
     if out.contains(id) {
         return Ok(());
     }
@@ -242,10 +223,10 @@ fn load_item(cfg: &KuiConfig, app_path: &Path, id: &str) -> Result<RegistryItem>
         app_path.join("../../registry"),
         PathBuf::from("registry"),
     ] {
-        if root.exists() {
-            if let Ok(item) = materialize_from_source(&root, id) {
-                return Ok(item);
-            }
+        if root.exists()
+            && let Ok(item) = materialize_from_source(&root, id)
+        {
+            return Ok(item);
         }
     }
 
@@ -263,109 +244,23 @@ fn load_item(cfg: &KuiConfig, app_path: &Path, id: &str) -> Result<RegistryItem>
 
 fn resolve_local_registry(app_path: &Path, local: &str) -> PathBuf {
     let p = PathBuf::from(local);
-    if p.is_absolute() {
-        p
-    } else {
-        app_path.join(p)
-    }
-}
-
-fn materialize_from_source(registry_root: &Path, id: &str) -> Result<RegistryItem> {
-    let (kind, title, description, categories, deps, src_dirs): (
-        String,
-        String,
-        String,
-        Vec<String>,
-        Vec<String>,
-        Vec<String>,
-    ) = match id {
-        "kui-foundation" => (
-            "foundation".to_string(),
-            "KUI foundation".to_string(),
-            "Theme tokens, motion presets, and init.".to_string(),
-            vec!["foundation".to_string()],
-            Vec::new(),
-            vec!["src/foundation".to_string()],
-        ),
-        "button" => (
-            "component".to_string(),
-            "Button".to_string(),
-            "Finished KUI button with variants, sizes, loading, and disabled states.".to_string(),
-            vec!["actions".to_string()],
-            vec!["kui-foundation".to_string()],
-            vec![
-                "src/components/button".to_string(),
-                "src/primitives/button.rs".to_string(),
-                "src/primitives/sizing.rs".to_string(),
-                "src/primitives/mod.rs".to_string(),
-            ],
-        ),
-        other => bail!("unknown KUI id `{other}` (MVP supports: kui-foundation, button)"),
-    };
-
-    let mut files = Vec::new();
-    for rel in src_dirs {
-        let abs = registry_root.join(&rel);
-        if abs.is_file() {
-            files.push(RegistryFile {
-                path: install_path_for(id, &kind, &rel),
-                content: fs::read_to_string(&abs)?,
-            });
-        } else if abs.is_dir() {
-            for entry in WalkDir::new(&abs).into_iter().filter_map(|e| e.ok()) {
-                if !entry.file_type().is_file() {
-                    continue;
-                }
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("rs") {
-                    continue;
-                }
-                let rel_file = path.strip_prefix(registry_root)?.to_string_lossy().into_owned();
-                files.push(RegistryFile {
-                    path: install_path_for(id, &kind, &rel_file),
-                    content: fs::read_to_string(path)?,
-                });
-            }
-        }
-    }
-
-    if files.is_empty() {
-        bail!("no source files for `{id}`");
-    }
-
-    Ok(RegistryItem {
-        name: id.into(),
-        kind,
-        title,
-        description,
-        categories,
-        registry_dependencies: deps,
-        cargo_dependencies: Vec::new(),
-        gpui_version: "=0.3.10".into(),
-        files,
-        docs_url: Some(format!("docs/items/{id}.md")),
-    })
-}
-
-fn install_path_for(_id: &str, kind: &str, source_rel: &str) -> String {
-    let trimmed = source_rel
-        .trim_start_matches("src/")
-        .trim_start_matches("registry/src/");
-    if kind == "foundation" {
-        if let Some(rest) = trimmed.strip_prefix("foundation/") {
-            return format!("foundation/{rest}");
-        }
-        if trimmed == "foundation" || trimmed.starts_with("foundation/") {
-            return trimmed.to_string();
-        }
-        return format!("foundation/{trimmed}");
-    }
-    trimmed.to_string()
+    if p.is_absolute() { p } else { app_path.join(p) }
 }
 
 fn install_item(app_path: &Path, cfg: &KuiConfig, id: &str, force: bool) -> Result<()> {
     let item = load_item(cfg, app_path, id)?;
     let ui_root = app_path.join(&cfg.ui_install_dir);
+    if !item.cargo_dependencies.is_empty() {
+        let manifest = app_path.join("Cargo.toml");
+        let mut doc = fs::read_to_string(&manifest)?.parse::<toml_edit::DocumentMut>()?;
+        for spec in &item.cargo_dependencies {
+            let (name, version) = spec.split_once('@').context("expected package@version")?;
+            if doc.get("dependencies").and_then(|v| v.get(name)).is_none() {
+                doc["dependencies"][name] = toml_edit::value(version);
+            }
+        }
+        fs::write(manifest, doc.to_string())?;
+    }
     for file in &item.files {
         let dest = ui_root.join(&file.path);
         if dest.exists() && !force {
@@ -383,6 +278,7 @@ fn install_item(app_path: &Path, cfg: &KuiConfig, id: &str, force: bool) -> Resu
 
 fn rewrite_paths(content: &str) -> String {
     content
+        .replace("use crate::{", "use crate::ui::{")
         .replace("crate::foundation", "crate::ui::foundation")
         .replace("crate::primitives", "crate::ui::primitives")
         .replace("crate::components", "crate::ui::components")
@@ -397,12 +293,12 @@ fn sync_mod(ui_root: &Path) -> Result<()> {
         if path == ui_root {
             continue;
         }
-        if let Ok(rel) = path.strip_prefix(ui_root) {
-            if let Some(first) = rel.components().next() {
-                let name = first.as_os_str().to_string_lossy();
-                if name != "mod.rs" {
-                    tops.insert(name.trim_end_matches(".rs").to_string());
-                }
+        if let Ok(rel) = path.strip_prefix(ui_root)
+            && let Some(first) = rel.components().next()
+        {
+            let name = first.as_os_str().to_string_lossy();
+            if name != "mod.rs" {
+                tops.insert(name.trim_end_matches(".rs").to_string());
             }
         }
     }
@@ -421,7 +317,9 @@ fn sync_mod(ui_root: &Path) -> Result<()> {
         if !dir.is_dir() {
             continue;
         }
-        write_dir_mod(&dir)?;
+        if module == "components" || module == "primitives" || !dir.join("mod.rs").exists() {
+            write_dir_mod(&dir)?;
+        }
     }
     Ok(())
 }
@@ -435,33 +333,22 @@ fn write_dir_mod(dir: &Path) -> Result<()> {
         }
         if e.path().is_dir() {
             names.insert(name);
-            write_dir_mod(&e.path())?;
-        } else if e.path().extension().and_then(|s| s.to_str()) == Some("rs") {
-            if let Some(stem) = e.path().file_stem() {
-                names.insert(stem.to_string_lossy().into_owned());
-            }
+        } else if e.path().extension().and_then(|s| s.to_str()) == Some("rs")
+            && let Some(stem) = e.path().file_stem()
+        {
+            names.insert(stem.to_string_lossy().into_owned());
         }
     }
 
-    // Component folders: re-export leaf modules
-    let only_rs_leaves = names.iter().all(|n| dir.join(format!("{n}.rs")).is_file());
     let mut body = String::new();
-    if only_rs_leaves && !names.is_empty() && dir.join("button.rs").exists()
-        || dir.file_name().and_then(|s| s.to_str()) == Some("button")
-    {
-        for name in &names {
-            if name == "mod" {
-                continue;
+    for name in names {
+        body.push_str(&format!("pub mod {name};\n"));
+        if dir.ends_with("primitives") {
+            match name.as_str() {
+                "button" => body.push_str("pub use button::ButtonBehavior;\n"),
+                "sizing" => body.push_str("pub use sizing::Size;\n"),
+                _ => {}
             }
-            if dir.join(format!("{name}.rs")).is_file() {
-                body.push_str(&format!("mod {name};\npub use {name}::*;\n"));
-            } else {
-                body.push_str(&format!("pub mod {name};\n"));
-            }
-        }
-    } else {
-        for name in &names {
-            body.push_str(&format!("pub mod {name};\n"));
         }
     }
     fs::write(dir.join("mod.rs"), body)?;

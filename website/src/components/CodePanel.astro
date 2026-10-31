@@ -348,11 +348,13 @@ const bodyId = `code-body-${Math.random().toString(36).slice(2, 9)}`;
     transform: rotate(180deg);
   }
 
-  :global(html[data-theme="light"]) .body :global(.shiki span) {
+  :global(html[data-theme="light"]) .body :global(.shiki span),
+  :global([data-kui-surface][data-kui-surface="light"]) .body :global(.shiki span) {
     color: var(--shiki-light) !important;
     font-style: var(--shiki-light-font-style, inherit);
   }
-  :global(html[data-theme="dark"]) .body :global(.shiki span) {
+  :global(html[data-theme="dark"]) .body :global(.shiki span),
+  :global([data-kui-surface][data-kui-surface="dark"]) .body :global(.shiki span) {
     color: var(--shiki-dark) !important;
     font-style: var(--shiki-dark-font-style, inherit);
   }

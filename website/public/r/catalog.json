@@ -14,5 +14,85 @@
     "kind": "component",
     "name": "button",
     "title": "Button"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "action-button",
+    "title": "ActionButton"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "split-button",
+    "title": "SplitButton"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "button-group",
+    "title": "ButtonGroup"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "floating-button-group",
+    "title": "FloatingButtonGroup"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "expanding-button-group",
+    "title": "ExpandingButtonGroup"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "copy-button",
+    "title": "CopyButton"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "action-swap",
+    "title": "ActionSwap"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "icon-morph",
+    "title": "IconMorph"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "confirm-morph",
+    "title": "ConfirmMorph"
+  },
+  {
+    "categories": [
+      "actions"
+    ],
+    "kind": "component",
+    "name": "theme-switch",
+    "title": "ThemeSwitch"
   }
 ]

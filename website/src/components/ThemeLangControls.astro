@@ -51,16 +51,7 @@ const label = locale === "en" ? "English" : "中文";
 <script>
   import { navigate } from "astro:transitions/client";
 
-  function applyTheme(theme: "light" | "dark") {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem("theme", theme);
-    } catch {
-      /* ignore */
-    }
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
-  }
+  import { wireThemeKey } from "../lib/apply-theme";
 
   function stripLocalePath(pathname: string): string {
     if (pathname === "/en") return "/";
@@ -91,10 +82,7 @@ const label = locale === "en" ? "English" : "中文";
     document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]").forEach((btn) => {
       if (btn.dataset.wired === "1") return;
       btn.dataset.wired = "1";
-      btn.addEventListener("click", () => {
-        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-        applyTheme(next);
-      });
+      wireThemeKey(btn);
     });
   }
 
@@ -178,7 +166,7 @@ const label = locale === "en" ? "English" : "中文";
     gap: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-control);
     background: var(--surface);
   }
   .chip,
@@ -203,6 +191,8 @@ const label = locale === "en" ? "English" : "中文";
     background: transparent;
   }
   .controls.grouped .chip {
+    border-start-start-radius: calc(var(--radius-control) - 1px);
+    border-end-start-radius: calc(var(--radius-control) - 1px);
     border-right: 1px solid var(--border-subtle);
   }
   .chip {
@@ -265,16 +255,12 @@ const label = locale === "en" ? "English" : "中文";
   li[aria-selected="true"] .lang-option {
     background: var(--surface-muted);
   }
-  .sun,
-  .moon {
-    display: grid;
-    place-items: center;
-    line-height: 0;
+  .chip { display: inline-grid; place-items: center; }
+  .sun, .moon {
+    grid-area: 1/1; display: grid; place-items: center; line-height: 1;
+    transition: opacity 160ms var(--ease-enter), transform 260ms var(--ease-enter);
   }
-  :global(html[data-theme="dark"]) .sun {
-    display: none;
-  }
-  :global(html:not([data-theme="dark"])) .moon {
-    display: none;
-  }
+  .sun { opacity: var(--sun-opacity); transform: rotate(var(--sun-angle)) scale(var(--sun-scale)); }
+  .moon { opacity: var(--moon-opacity); transform: rotate(var(--moon-angle)) scale(var(--moon-scale)); }
+  [data-theme-toggle]:active { scale: .96; }
 </style>

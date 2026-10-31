@@ -4,17 +4,20 @@
 //! - `--features native`: desktop window through `gpui_platform`
 //! - WASM web host lives in `apps/web` (same gallery source)
 
-mod gallery;
-
-use gallery::ButtonGallery;
+#[cfg(any(test, not(feature = "native")))]
 use gpui::TestApp;
+#[cfg(any(test, not(feature = "native")))]
 use kui::components::button::Button;
-use kui::foundation::{init, Theme};
+#[cfg(not(feature = "native"))]
+use kui::foundation::Theme;
+use kui::foundation::init;
+#[cfg(any(test, not(feature = "native")))]
+use kui_story::ButtonGallery;
 
 #[cfg(feature = "native")]
 fn run_native() {
     use gpui::prelude::*;
-    use gpui::{px, size, App, Bounds, WindowBounds, WindowOptions};
+    use gpui::{App, Bounds, WindowBounds, WindowOptions, px, size};
 
     gpui_platform::application().run(|cx: &mut App| {
         init(cx);
@@ -24,13 +27,16 @@ fn run_native() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| ButtonGallery::new()),
+            |w, cx| {
+                cx.new(|cx| kui_story::StoryHost::new(std::env::args().nth(1).as_deref(), w, cx))
+            },
         )
         .expect("open KUI story window");
         cx.activate(true);
     });
 }
 
+#[cfg(not(feature = "native"))]
 fn run_smoke() {
     let mut cx = TestApp::new();
     cx.update(|cx| {

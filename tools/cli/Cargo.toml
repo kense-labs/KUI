@@ -18,3 +18,5 @@ serde_json.workspace = true
 toml.workspace = true
 walkdir.workspace = true
 ureq.workspace = true
+kui-catalog = { path = "../catalog" }
+toml_edit = "0.22"

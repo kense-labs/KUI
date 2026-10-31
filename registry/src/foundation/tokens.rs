@@ -1,4 +1,4 @@
-use gpui::{px, rgb, Hsla, Pixels};
+use gpui::{Hsla, Pixels, px, rgb};
 
 /// Semantic color tokens. KUI components must read these instead of hard-coded RGB
 /// when an `App` theme is available. Default chrome is pure black/white (DESIGN.md).

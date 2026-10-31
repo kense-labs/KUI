@@ -1,65 +1,29 @@
 # Button group
 
-Related actions on one surface with a shared highlight.
+Related commands share a continuous surface. Try the edit, zoom and save/preview rows.
 
-## When to use
-
-Use for a small set of peer actions or modes that read as one control: view toggles, alignment, range pickers.
-
-## When not to use
-
-Do not use for unrelated actions; use separate `button` values. Do not use for page navigation. Use `floating-button-group` when each button should stay visually separate.
-
-## Install
-
-```bash
-kui add button-group
-```
-
-Only `button` is in the MVP registry today. This item documents the Buttons family contract and lands next.
+`kui add button-group`
 
 ## Usage
 
 ```rust
-use crate::ui::components::button_group::{ButtonGroup, GroupItem};
+use gpui::prelude::*;
+use crate::ui::components::button_group::ButtonGroup;
+use crate::ui::primitives::glyph::Glyph;
+use crate::ui::primitives::strip::{Segment};
 
-ButtonGroup::new("view")
-    .item(GroupItem::new("list", "List"))
-    .item(GroupItem::new("grid", "Grid"))
-    .selected("list")
-    .on_change(|id, _window, _cx| set_view(id))
-    .into_themed(cx)
+let control = cx.new(|cx| ButtonGroup::new("editor", vec![Segment::new("save", "Save", Some(Glyph::Save), 93.), Segment::new("preview", "Preview", Some(Glyph::Eye), 104.)], cx));
 ```
 
-## API
+Mount the entity as a GPUI child. Each segment emits its own stable id. Zoom +/- changes the percentage; the middle segment resets it.
 
-| Builder | Default | Notes |
-| --- | --- | --- |
-| `new(id)` | required | Stable `ElementId` |
-| `item(GroupItem)` | none | `GroupItem::new(id, label)` |
-| `selected` | none | Controlled selected item id |
-| `selection(GroupSelection)` | `Single` | `Single` / `None` (plain actions) |
-| `with_size` | `Md` | `Sm` / `Md` / `Lg` |
-| `disabled` | `false` | Blocks the whole group |
-| `on_change` | none | Receives the activated item id |
-| `into_themed(cx)` | — | Applies KUI theme tokens |
+The rows are 44px high (36px for zoom) including their shared border. The highlight travels between adjacent segments.
 
-## Keyboard
+## Interface
 
-Tab enters the group once. Left and Right Arrow move focus between items. Enter and Space activate. Home and End jump to the first and last item.
+The control uses the theme’s `radius.md` (8px by default) and its nested actions or highlights use `radius.sm` (4px by default).
 
-## Accessibility
-
-Expose the group as a single toolbar or radio group depending on `selection`. Each item needs a visible label or an explicit accessible name. Disabled items stay in order and are skipped by arrows.
-
-## Motion
-
-The shared highlight slides between items with `MOTION.morph`. Outer corners keep the 8px radius; inner edges are square with 1px dividers. When `Theme.reduced_motion` is true, the highlight jumps without sliding.
-
-## Platforms
-
-Works on native desktop and WASM web. See `docs/PLATFORMS.md`.
-
-## Notes for AI
-
-This is a **KUI** registry item. Prefer `kui add button-group` over rows of independent buttons with hand-rolled borders. Keep item ids stable; the highlight tracks them. Use pure black/white tokens for the highlight.
+- Event: `Activated(SharedString)`.
+- API: `update_label(id, label, cx)`.
+- Implementation: `registry/src/components/button_group.rs`.
+- Preview: [English](/en/kui/components/button-group/) · [中文](/kui/components/button-group/).

@@ -1,0 +1,282 @@
+[
+  {
+    "id": "action-button",
+    "rustType": "ActionButton",
+    "title": {
+      "en": "Action button",
+      "zh": "操作按钮"
+    },
+    "lead": {
+      "en": "Save changes → Saving → Saved; the acknowledgement resets after 2.4 seconds.",
+      "zh": "保存更改后，按钮依次显示正在保存、已保存，2.4 秒后复位。"
+    },
+    "rule": {
+      "en": "Host completes the current ticket. Pending suppresses duplicate clicks; stale completions are ignored.",
+      "zh": "宿主回写当前请求结果；等待时忽略重复点击，过期结果不生效。"
+    },
+    "event": "Commit { ticket, next }",
+    "method": "complete(ticket, ok, cx)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::action_button::ActionButton;\n\nlet control = cx.new(|_| ActionButton::new(\"save\", [\"Save changes\", \"Saving\", \"Saved\", \"Retry\"]));\nuse crate::ui::primitives::commit::Commit;\ncx.subscribe(&control, |control, request: &Commit, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
+    "when": {
+      "zh": "保存、同步等需要就地反馈的异步命令",
+      "en": "Save or sync a change with an in-place acknowledgement."
+    },
+    "motion": {
+      "zh": "新文字上移 2px，在 160ms 内淡入。外壳跟随实际字宽，成功后 2.4 秒复位。",
+      "en": "The label rises 2px and fades in over 160ms. The shell follows its shaped width; success resets after 2.4s."
+    },
+    "signature": "fn(u64, bool, &mut Context<Self>)"
+  },
+  {
+    "id": "split-button",
+    "rustType": "SplitButton",
+    "title": {
+      "en": "Split button",
+      "zh": "分段按钮"
+    },
+    "lead": {
+      "en": "Publish immediately or open the adjacent menu for three alternatives.",
+      "zh": "点击发布执行主操作；箭头展开通知发布、保存草稿、删除草稿。"
+    },
+    "rule": {
+      "en": "Down opens the menu. Arrows move between enabled options; Enter selects, Escape returns focus to the arrow.",
+      "zh": "向下键展开，方向键只经过可用项；Enter 选择，Esc 关闭并将焦点还给箭头。"
+    },
+    "event": "Activated(SharedString)",
+    "method": "Segment::with_menu(Vec<Choice>)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::split_button::SplitButton;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment, Choice};\n\nlet control = cx.new(|cx| SplitButton::new(\"publish-control\", vec![\n    Segment::new(\"publish\", \"Publish\", Some(Glyph::Send), 103.),\n    Segment::new(\"options\", \"More actions\", Some(Glyph::Down), 38.).icon_only()\n        .with_menu(vec![Choice::new(\"draft\", \"Save as draft\")]),\n], cx));",
+    "when": {
+      "zh": "有默认命令，同时需要提供少量替代命令",
+      "en": "One frequent command and a few alternatives."
+    },
+    "motion": {
+      "zh": "主区随文案改变宽度，菜单展开时箭头位置保持稳定。",
+      "en": "The arrow stays still as the menu opens. The main segment follows the label width."
+    },
+    "signature": "fn(Vec<Choice>) -> Segment"
+  },
+  {
+    "id": "button-group",
+    "rustType": "ButtonGroup",
+    "title": {
+      "en": "Button group",
+      "zh": "按钮组"
+    },
+    "lead": {
+      "en": "Related commands share a continuous surface. Try the edit, zoom and save/preview rows.",
+      "zh": "连体表面承载相关命令，分别演示编辑、缩放、保存／预览。"
+    },
+    "rule": {
+      "en": "Each segment emits its own stable id. Zoom +/- changes the percentage; the middle segment resets it.",
+      "zh": "每段发出独立标识；中段将缩放重置到 100%。"
+    },
+    "event": "Activated(SharedString)",
+    "method": "update_label(id, label, cx)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::button_group::ButtonGroup;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| ButtonGroup::new(\"editor\", vec![Segment::new(\"save\", \"Save\", Some(Glyph::Save), 93.), Segment::new(\"preview\", \"Preview\", Some(Glyph::Eye), 104.)], cx));",
+    "when": {
+      "zh": "把共享选区或工具设置的命令排在一起",
+      "en": "Arrange commands that act on the same selection."
+    },
+    "motion": {
+      "zh": "含共享边框，操作组高 44px，缩放组高 36px。高亮随指针滑向相邻段。",
+      "en": "The rows are 44px high (36px for zoom) including their shared border. The highlight travels between adjacent segments."
+    },
+    "signature": "fn(&str, impl Into<SharedString>, &mut Context<Self>)"
+  },
+  {
+    "id": "floating-button-group",
+    "rustType": "FloatingButtonGroup",
+    "title": {
+      "en": "Floating button group",
+      "zh": "悬浮按钮组"
+    },
+    "lead": {
+      "en": "Spaced controls in a tray; examples include a vertical toolbar and a compact message toolbar.",
+      "zh": "托盘内按钮留有间隙，包含纵向画布工具和紧凑消息操作。"
+    },
+    "rule": {
+      "en": "Arrows skip disabled tools. Undo initially enables Redo. The highlight travels without moving the controls.",
+      "zh": "方向键跳过不可用操作；先撤销才能重做。高亮移动，按钮位置保持稳定。"
+    },
+    "event": "Activated(SharedString)",
+    "method": "vertical() / set_disabled(id, disabled, cx)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::floating_button_group::FloatingButtonGroup;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| FloatingButtonGroup::new(\"canvas\", vec![Segment::new(\"zoom\", \"Zoom in\", Some(Glyph::ZoomIn), 36.).icon_only(), Segment::new(\"lock\", \"Lock\", Some(Glyph::Lock), 36.).icon_only().divider()], cx).vertical());",
+    "when": {
+      "zh": "把画布工具或行内工具放进独立托盘",
+      "en": "Build a palette for a canvas or a message."
+    },
+    "motion": {
+      "zh": "常规按钮间距 4px，紧凑按钮间距 3px；分隔线前后留出空间。",
+      "en": "Regular tools have a 4px gap, compact tools a 3px gap. Dividers add space between sets."
+    },
+    "signature": "fn(self) -> Self; fn(&str, bool, &mut Context<Self>)"
+  },
+  {
+    "id": "expanding-button-group",
+    "rustType": "ExpandingButtonGroup",
+    "title": {
+      "en": "Expanding button group",
+      "zh": "展开按钮组"
+    },
+    "lead": {
+      "en": "Reveal a label in place. Mail, document and publishing actions have separate strips.",
+      "zh": "悬停或聚焦时就地展开文字。邮件、文档和发布操作各成一组。"
+    },
+    "rule": {
+      "en": "Hover or focus an icon to reveal its label. The neighbors slide; with reduced motion widths update immediately.",
+      "zh": "指针或键盘移入时文字展开，相邻按钮同步移动；减少动效时立即调整宽度。"
+    },
+    "event": "Activated(SharedString)",
+    "method": "Segment::width",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expanding_button_group::ExpandingButtonGroup;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| ExpandingButtonGroup::new(\"mail\", vec![Segment::new(\"reply\", \"Reply\", Some(Glyph::Undo), 96.), Segment::new(\"forward\", \"Forward\", Some(Glyph::Redo), 106.)], cx));",
+    "when": {
+      "zh": "工具空间有限，但每项仍需一个可读标签",
+      "en": "Fit named tools into a narrow strip."
+    },
+    "motion": {
+      "zh": "行内首次展开第一项；聚焦下一项时，新旧段宽同时过渡。",
+      "en": "The first label starts open. Neighboring segments resize together as focus moves."
+    },
+    "signature": "f32 (expanded width, px)"
+  },
+  {
+    "id": "copy-button",
+    "rustType": "CopyButton",
+    "title": {
+      "en": "Copy button",
+      "zh": "复制按钮"
+    },
+    "lead": {
+      "en": "Copy a link or an invite code using the system clipboard.",
+      "zh": "将链接或邀请码真正写入系统剪贴板。"
+    },
+    "rule": {
+      "en": "Copy feedback follows the platform write result. A denied write shows failure and permits a retry.",
+      "zh": "收到平台写入结果才显示反馈。浏览器拒绝时保留原文、提示失败，并允许重试。"
+    },
+    "event": "CopyResult(bool)",
+    "method": "icon_only()",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::copy_button::CopyButton;\n\nlet control = cx.new(|_| CopyButton::new(\"invite\", \"KUI-4821\", \"Copy invite code\").icon_only());",
+    "when": {
+      "zh": "复制调用者明确提供的文本",
+      "en": "Copy the exact string supplied by the host."
+    },
+    "motion": {
+      "zh": "写入成功后，旧词在 100ms 内淡出，新词在 160ms 内淡入，勾在第 40–260ms 画出，1.9 秒后复位。",
+      "en": "After a successful write, the old word fades out in 100ms, the new word enters in 160ms, and the check draws from 40–260ms. Feedback resets after 1.9s."
+    },
+    "signature": "fn(self) -> Self"
+  },
+  {
+    "id": "action-swap",
+    "rustType": "ActionSwap",
+    "title": {
+      "en": "Action swap",
+      "zh": "状态切换按钮"
+    },
+    "lead": {
+      "en": "Follow a person, save an article, or send an invitation and recover from a simulated network failure.",
+      "zh": "原位切换关注、加入资料库和发送邀请；可模拟邀请失败并重试。"
+    },
+    "rule": {
+      "en": "Keep selected state only after host acknowledgement. A failed invitation can be retried once the connection is restored.",
+      "zh": "只有宿主确认成功才改变选中状态；关闭模拟断网后可以重试邀请。"
+    },
+    "event": "Commit { ticket, next }",
+    "method": "complete(ticket, ok, cx)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::action_swap::ActionSwap;\n\nlet control = cx.new(|_| ActionSwap::new(\"follow\", [\"Follow\", \"Updating\", \"Following\", \"Retry\"]));\nuse crate::ui::primitives::commit::Commit;\ncx.subscribe(&control, |control, request: &Commit, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
+    "when": {
+      "zh": "关注、加入资料库和发送邀请",
+      "en": "Follow a profile, collect an article or send an invitation."
+    },
+    "motion": {
+      "zh": "只有变化的文字移动；没有等待文案时，等待按钮收窄为 8px 圆角的图标键。",
+      "en": "Only changed letters move. Without a working label, the pending button narrows to a square with control-radius corners."
+    },
+    "signature": "fn(u64, bool, &mut Context<Self>)"
+  },
+  {
+    "id": "icon-morph",
+    "rustType": "IconMorph",
+    "title": {
+      "en": "Icon morph",
+      "zh": "图标形变"
+    },
+    "lead": {
+      "en": "Eight reversible icon pairs, including playback, alerts, details and likes.",
+      "zh": "八种可反转的图标示例，包括播放、通知、展开详情和喜欢。"
+    },
+    "rule": {
+      "en": "Enter, Space or a tap toggles the pair. Fast reversals continue from the current stroke positions.",
+      "zh": "Enter、空格和轻点切换；中途反切从当前笔画位置继续。"
+    },
+    "event": "MorphChanged(bool)",
+    "method": "set(on, cx) / with_captions([S; 2])",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::icon_morph::IconMorph;\nuse crate::ui::primitives::glyph::Glyph;\n\nlet control = cx.new(|_| IconMorph::new(\"player\", [Glyph::Play, Glyph::Pause], [\"Play\", \"Pause\"]).with_captions([\"Paused\", \"Playing\"]));",
+    "when": {
+      "zh": "同一位置要表达相互关联的两种操作状态",
+      "en": "Show related actions in one stable icon slot."
+    },
+    "motion": {
+      "zh": "八对图标分别绘制线条或填充；反切从当前位置接续，窄屏改为两列。",
+      "en": "Each pair has its own stroke or fill motion. Rapid reversals continue from the current position; narrow screens use two columns."
+    },
+    "signature": "fn(bool, &mut Context<Self>); fn([S; 2]) -> Self"
+  },
+  {
+    "id": "confirm-morph",
+    "rustType": "ConfirmMorph",
+    "title": {
+      "en": "Confirm morph",
+      "zh": "就地二次确认"
+    },
+    "lead": {
+      "en": "Delete a sample project, cancel, retry or undo without opening a separate dialog.",
+      "zh": "就地确认删除样例项目、取消、失败重试或撤销。"
+    },
+    "rule": {
+      "en": "Click arms the action. Hold requires one second on the answer; Countdown gives a cancellable three-second grace period after the answer.",
+      "zh": "先展开确认，再按选择的模式执行。长按需持续一秒；倒计时在第二次确认后开始，三秒内可取消。"
+    },
+    "event": "ConfirmRequest { ticket, intent }",
+    "method": "set_mode(ConfirmMode, cx) / complete(ticket, ok, cx)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::confirm_morph::ConfirmMorph;\n\nlet control = cx.new(|cx| ConfirmMorph::new(\"remove\", \"Delete project\", \"Delete project?\", window, cx));\nuse crate::ui::components::confirm_morph::ConfirmRequest;\ncx.subscribe(&control, |control, request: &ConfirmRequest, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
+    "when": {
+      "zh": "需要让用户确认、取消或撤销的命令",
+      "en": "Offer a confirmation, cancellation and undo next to the affected object."
+    },
+    "motion": {
+      "zh": "外壳宽度变化，命中区可立即操作；长按或倒计时的真实时限不因减少动效而缩短。",
+      "en": "The face changes width while its answer remains actionable. Reduced motion preserves hold and countdown deadlines."
+    },
+    "signature": "fn(ConfirmMode, &mut Context<Self>); fn(u64, bool, &mut Context<Self>)"
+  },
+  {
+    "id": "theme-switch",
+    "rustType": "ThemeSwitch",
+    "title": {
+      "en": "Theme switcher",
+      "zh": "主题切换"
+    },
+    "lead": {
+      "en": "Switch the document theme. Compare Reveal, Eclipse, Split and Rise.",
+      "zh": "切换整页主题，分别体验 Reveal、Eclipse、Split、Rise。"
+    },
+    "rule": {
+      "en": "The host receives the next theme and trigger bounds in window coordinates. Skip the page animation when reduced motion is selected.",
+      "zh": "宿主接收下一主题、模式及窗口坐标中的触发范围；减少动效时直接应用主题。"
+    },
+    "event": "ThemeChange { next, mode, trigger }",
+    "method": "with_mode(Transition)",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::theme_switch::ThemeSwitch;\n\nlet control = cx.new(|_| ThemeSwitch::new(\"appearance\"));\nuse crate::ui::components::theme_switch::ThemeChange;\ncx.subscribe(&control, |_control, request: &ThemeChange, cx| {\n    crate::ui::foundation::Theme::global_mut(cx).set_mode(request.next);\n    cx.refresh_windows();\n}).detach();",
+    "when": {
+      "zh": "由工具栏切换整个文档或窗口的明暗外观",
+      "en": "Change the appearance of a document or window."
+    },
+    "motion": {
+      "zh": "Reveal 从左向右（380ms），Eclipse 从中心扩展（430ms），Split 从中线打开（390ms），Rise 从底部升起（360ms）。",
+      "en": "Reveal wipes from the left (380ms), Eclipse expands from the center (430ms), Split opens at the center seam (390ms), and Rise moves up from the bottom (360ms)."
+    },
+    "signature": "fn(Transition) -> Self"
+  }
+]

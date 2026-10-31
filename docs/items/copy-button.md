@@ -1,66 +1,27 @@
 # Copy button
 
-Clipboard copy with Copied or Failed shown in place.
+Copy a link or an invite code using the system clipboard.
 
-## When to use
-
-Use next to values users paste elsewhere: tokens, install commands, ids, code snippets.
-
-## When not to use
-
-Do not use for actions that are not clipboard writes; use `button` or `action-button`. Do not use to copy secrets without the user asking.
-
-## Install
-
-```bash
-kui add copy-button
-```
-
-Only `button` is in the MVP registry today. This item documents the Buttons family contract and lands next.
+`kui add copy-button`
 
 ## Usage
 
 ```rust
+use gpui::prelude::*;
 use crate::ui::components::copy_button::CopyButton;
 
-CopyButton::new("copy-install")
-    .text("kui add button")
-    .label("Copy")
-    .on_result(|result, _window, _cx| log_copy(result))
-    .into_themed(cx)
+let control = cx.new(|_| CopyButton::new("invite", "KUI-4821", "Copy invite code").icon_only());
 ```
 
-## API
+Mount the entity as a GPUI child. Copy feedback follows the platform write result. A denied write shows failure and permits a retry.
 
-| Builder | Default | Notes |
-| --- | --- | --- |
-| `new(id)` | required | Stable `ElementId` |
-| `text` | required | Value written to the clipboard |
-| `label` | `"Copy"` | Idle text |
-| `copied_label` / `failed_label` | `"Copied"` / `"Failed"` | In-place result text |
-| `icon_only` | `false` | Shows icon; keeps label as accessible name |
-| `primary` / `secondary` / `ghost` | `ghost` | Variant |
-| `with_size` | `Md` | `Sm` / `Md` / `Lg` |
-| `reset_after` | `1500ms` | Time before returning to idle |
-| `on_result` | none | Receives `Result<(), CopyError>` |
-| `into_themed(cx)` | — | Applies KUI theme tokens |
+After a successful write, the old word fades out in 100ms, the new word enters in 160ms, and the check draws from 40–260ms. Feedback resets after 1.9s.
 
-## Keyboard
+## Interface
 
-Enter and Space copy. Focus stays on the button; the new label is announced.
+The control uses the theme’s `radius.md` (8px by default).
 
-## Accessibility
-
-Announce "Copied" or "Failed" through a polite live region. Icon-only mode needs an accessible name from `label`. Do not move focus after copy.
-
-## Motion
-
-Icon and label swap with `MOTION.morph`. Press uses `MOTION.snappy`. When `Theme.reduced_motion` is true, the result state replaces idle instantly.
-
-## Platforms
-
-Uses the GPUI clipboard on native desktop. On WASM web, writes go through the browser clipboard and can fail without a user gesture or secure context; that path returns `CopyError`, shown as Failed. See `docs/PLATFORMS.md`.
-
-## Notes for AI
-
-This is a **KUI** registry item. Prefer `kui add copy-button` over custom clipboard wiring. Always handle `CopyError`; do not assume success. Keep the control width stable between states.
+- Event: `CopyResult(bool)`.
+- API: `icon_only()`.
+- Implementation: `registry/src/components/copy_button.rs`.
+- Preview: [English](/en/kui/components/copy-button/) · [中文](/kui/components/copy-button/).

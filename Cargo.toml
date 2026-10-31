@@ -5,6 +5,7 @@ members = [
     "apps/story",
     "apps/web",
     "tools/cli",
+    "tools/catalog",
     "tools/registry-build",
     "templates/app",
 ]

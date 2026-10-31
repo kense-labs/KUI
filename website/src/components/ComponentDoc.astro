@@ -5,7 +5,7 @@
 import CodePanel from "./CodePanel.astro";
 import ComponentStage from "./ComponentStage.astro";
 import PropsTable from "./PropsTable.astro";
-import ButtonsFamilyPreview from "./ButtonsFamilyPreview.astro";
+
 import { buttonTitle, type ButtonDoc } from "../lib/buttons-catalog";
 import type { Locale } from "../i18n/ui";
 import { useTranslations } from "../i18n/utils";
@@ -24,7 +24,7 @@ const headers = {
   default: t("button.props.default"),
   description: t("button.props.desc"),
 };
-const crumb = t("button.crumb");
+const crumb=t("button.crumb");
 const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
 ---
 
@@ -44,12 +44,20 @@ const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
   }
 
   <ComponentStage hint={t("stage.hint")}>
-    <ButtonsFamilyPreview slot="preview" id={doc.id} />
+    <div slot="preview">
+      <div data-preview-slot hidden={!doc.story}>
+        {doc.story && <iframe allow="clipboard-write" class:list={["rust-story", "family-story", {"theme-preview": doc.id === "theme-switch"}]}
+          data-story={doc.id} data-story-key={doc.id} data-lang={locale} aria-label={title} src={`/stories/?story=${doc.id}&lang=${locale}`}></iframe>}
+      </div>
+
+    </div>
     <div slot="code" class="code-stack">
       <CodePanel title={fileStem} lang="rust" code={doc.usageRust} />
     </div>
   </ComponentStage>
+  {doc.id==="theme-switch"&& <section><h2>{locale==="zh"?"其他过渡示例":"More transitions"}</h2>{["eclipse","split","rise"].map(mode=><details><summary>{mode[0].toUpperCase()+mode.slice(1)}</summary><iframe loading="lazy" data-src={`/stories/?story=theme-switch:${mode}&lang=${locale}`} class="rust-story family-story theme-preview" data-story="theme-switch" data-story-key={`theme-switch:${mode}`} data-lang={locale} aria-label={title + " · " + mode}></iframe></details>)}</section>}
 
+  {doc.keyboard && <><h2>{locale === "zh" ? "键盘与操作" : "Keyboard and interaction"}</h2><p>{doc.keyboard[locale]}</p></>}
   <h2>{t("button.when")}</h2>
   <ul>
     {copy.when.map((item) => <li>{item}</li>)}
@@ -79,7 +87,33 @@ const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
   </ul>
 </article>
 
+<script>
+  import "../lib/preview-navigation";
+  import { togglePreviewTheme, type RevealMode } from "../lib/apply-theme";
+  document.addEventListener("toggle",e=>{if(e.target instanceof HTMLDetailsElement && e.target.open){const f=e.target.querySelector<HTMLIFrameElement>("iframe[data-src]");if(f&&!f.hasAttribute("src"))f.src=f.dataset.src!}},true);
+  window.addEventListener("message", (event) => {
+    if (event.origin !== location.origin || !event.data) return;
+    const frame = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe.rust-story")).find(f=>f.contentWindow===event.source);
+    if (!frame || event.source !== frame.contentWindow) return;
+    const {type, dark} = event.data;
+    if (type === "kui:story-leave" && typeof event.data.back === "boolean") {
+      const stops = [...document.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),iframe,[tabindex="0"]')]
+        .filter(el => !el.closest("[inert]") && el.tabIndex >= 0 && el.getClientRects().length > 0);
+      const index = stops.indexOf(frame);
+      if (index >= 0) stops[index + (event.data.back ? -1 : 1)]?.focus();
+    } else if(type==="kui:family-theme" && frame.dataset.story==="theme-switch" && typeof dark==="boolean"){
+      const { x, y, w, h, mode } = event.data;
+      if (![x,y,w,h].every(Number.isFinite) || !["reveal","eclipse","split","rise"].includes(mode)) return;
+      togglePreviewTheme(frame, new DOMRectReadOnly(x,y,w,h), mode as RevealMode);
+    }
+  });
+</script>
 <style>
+  .rust-story { display:block; width:100%; border:0; background:var(--bg); color-scheme:inherit; }
+  .family-story {max-width:628px; margin-inline:auto; height:520px; border-radius:var(--radius-panel); background:var(--surface-muted); }
+  .family-story.theme-preview {height:220px}
+  details summary {cursor:pointer; padding:.65rem 0}
+  [data-preview-slot][hidden] {display:none;}
   .crumb {
     margin: 0 0 0.35rem;
     font-size: 0.8125rem;

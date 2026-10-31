@@ -18,7 +18,7 @@ default = ["test-support"]
 # Headless / CI. Not for wasm32 — use --no-default-features on that target.
 test-support = ["kui/test-support", "gpui/test-support"]
 # Desktop window host (macOS / Windows / Linux).
-native = ["kui/native", "dep:gpui_platform"]
+native = ["kui/native", "dep:gpui_platform", "gpui_platform/font-kit"]
 
 [dependencies]
 kui = { workspace = true, default-features = false }

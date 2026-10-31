@@ -1,6 +1,6 @@
 # KUI
 
-> KUI is copy-source Rust UI for GPUI (desktop + WASM). Button MVP. From Kense.
+> KUI is copy-source Rust UI for GPUI (desktop + WASM). From Kense.
 
 Product: KUI. Crate/CLI: `kui`. License: MIT.
 Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.
@@ -17,16 +17,29 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 
 - [kui-foundation](/md/kui-foundation.md): KUI foundation
 - [button](/md/button.md): Button
+- [action-button](/md/action-button.md): ActionButton
+- [split-button](/md/split-button.md): SplitButton
+- [button-group](/md/button-group.md): ButtonGroup
+- [floating-button-group](/md/floating-button-group.md): FloatingButtonGroup
+- [expanding-button-group](/md/expanding-button-group.md): ExpandingButtonGroup
+- [copy-button](/md/copy-button.md): CopyButton
+- [action-swap](/md/action-swap.md): ActionSwap
+- [icon-morph](/md/icon-morph.md): IconMorph
+- [confirm-morph](/md/confirm-morph.md): ConfirmMorph
+- [theme-switch](/md/theme-switch.md): ThemeSwitch
 
 ## Registry JSON
 
-- [/r/catalog.json](/r/catalog.json)
-- [/r/button.json](/r/button.json)
-- [/r/kui-foundation.json](/r/kui-foundation.json)
-
-## Never
-
-- Do not invent a second button package
-- Do not rebrand away from KUI / kui
-- Do not enable test-support on wasm32
-- Do not paint everyday chrome with brand `#171717`
+- [Catalog](/r/catalog.json)
+- [kui-foundation](/r/kui-foundation.json)
+- [button](/r/button.json)
+- [action-button](/r/action-button.json)
+- [split-button](/r/split-button.json)
+- [button-group](/r/button-group.json)
+- [floating-button-group](/r/floating-button-group.json)
+- [expanding-button-group](/r/expanding-button-group.json)
+- [copy-button](/r/copy-button.json)
+- [action-swap](/r/action-swap.json)
+- [icon-morph](/r/icon-morph.json)
+- [confirm-morph](/r/confirm-morph.json)
+- [theme-switch](/r/theme-switch.json)

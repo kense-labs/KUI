@@ -8,3 +8,9 @@ pub mod sizing;
 
 pub use button::ButtonBehavior;
 pub use sizing::Size;
+pub mod clipboard;
+pub mod commit;
+pub mod control;
+pub mod family;
+pub mod glyph;
+pub mod strip;

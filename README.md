@@ -2,7 +2,7 @@
 
 **KUI** is a **Kense** product — a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
 
-This repository ships a **button MVP** — foundation tokens plus a finished `Button` — as the first registry item.
+This repository ships foundation tokens and 11 installable buttons. Browse the Buttons family on the bilingual component site.
 
 ## Why KUI
 
@@ -39,6 +39,9 @@ kui doctor
 ```
 
 Platform details: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
+
+## Local component website
+From `website/`, run `bun install --frozen-lockfile` and `bun run dev`. Open `http://127.0.0.1:4321/kui/components/confirm-morph/` for the interactive story. Building or starting the website also builds its shared WASM preview bundle.
 
 ## Install a button into your app
 

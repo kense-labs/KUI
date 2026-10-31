@@ -1,6 +1,6 @@
 # Button
 
-Finished KUI button with clear control rhythm (44px md, 8px radius, medium weight, outlined danger) on pure black/white tokens.
+Small, medium and large buttons use the host theme’s radius.md (8px by default). The medium button is 44px high.
 
 ## When to use
 
@@ -39,7 +39,7 @@ Button::new("save").primary().label("Save").into_themed(cx)
 | `primary` / `secondary` / `ghost` / `danger` | `primary` | Variant |
 | `with_size` | `Md` | `Sm` / `Md` / `Lg` |
 | `disabled` | `false` | Blocks clicks |
-| `loading` | `false` | Shows `…`, blocks clicks (inert) |
+| `loading` | `false` | Spinner; retains focus and blocks activation |
 | `on_click` | none | Click handler |
 | `into_themed(cx)` | — | Applies KUI theme tokens |
 

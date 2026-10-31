@@ -5,9 +5,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 rustup target add wasm32-unknown-unknown >/dev/null
-if ! command -v wasm-bindgen >/dev/null 2>&1; then
+BINDGEN_VERSION=$(awk '/^name = "wasm-bindgen"$/ {getline; gsub(/"/,"",$3); print $3; exit}' Cargo.lock)
+if ! command -v wasm-bindgen >/dev/null 2>&1 || [[ "$(wasm-bindgen --version)" != "wasm-bindgen $BINDGEN_VERSION" ]]; then
   echo "installing wasm-bindgen-cli…"
-  cargo install wasm-bindgen-cli --locked
+  cargo install wasm-bindgen-cli --locked --version "=$BINDGEN_VERSION"
 fi
 
 cargo build -p kui-web --target wasm32-unknown-unknown --release
@@ -16,7 +17,12 @@ mkdir -p "$OUT"
 wasm-bindgen \
   --target web \
   --out-dir "$OUT" \
-  "$ROOT/target/wasm32-unknown-unknown/release/kui_web.wasm"
+  "${CARGO_TARGET_DIR:-$ROOT/target}/wasm32-unknown-unknown/release/kui_web.wasm"
 
+mkdir -p "$ROOT/website/public/stories"
+cp -R "$OUT" "$ROOT/website/public/stories/"
+cp "$ROOT/apps/web/www/index.html" "$ROOT/apps/web/www/preview.js" "$ROOT/website/public/stories/"
+cp "$ROOT/apps/web/www/fonts/KUIStorySans-OFL.txt" "$ROOT/apps/web/www/fonts/NotoSans-LICENSE" "$ROOT/website/public/stories/"
+cp "$ROOT/apps/story/assets/Inter-LICENSE" "$ROOT/website/public/stories/"
 echo "KUI WASM gallery ready: apps/web/www/"
 echo "Serve with: python3 -m http.server -d apps/web/www 8080"

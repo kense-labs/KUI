@@ -20,7 +20,7 @@
   --press-scale: 0.97;
 }
 
-html[data-theme="dark"] {
+html[data-theme="dark"], [data-kui-surface="dark"] {
   --shadow-resting: 0 1px 2px rgb(0 0 0 / 0.35);
   --shadow-raised: 0 8px 22px rgb(0 0 0 / 0.45);
 }

@@ -63,9 +63,15 @@ Installed `ui/` source is host-agnostic. The application Cargo.toml chooses the 
 ```toml
 # Desktop
 gpui = { package = "gpui-pre", version = "=0.3.10", default-features = false }
-gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", default-features = false }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", default-features = false, features = ["font-kit"] }
 
 # WASM cdylib also depends on gpui_platform (wasm cfg) + wasm-bindgen
 ```
 
 Call `kui::foundation::init(cx)` once after the host `application()` starts, before opening windows.
+
+Embedded action previews take their language from the documentation route. Hosts may set
+`kui::primitives::control::UiLanguage` as a GPUI global; English remains the default.
+The web host bundles a small OFL-licensed Noto Sans SC subset named KUI Story Sans
+for Chinese and Latin labels. Regenerate it with `scripts/subset-story-font.py` and
+the upstream variable TTF after changing the preview vocabulary. The web build checks the shipped font against the Chinese characters used in the Rust stories and controls.

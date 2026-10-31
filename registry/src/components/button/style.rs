@@ -1,9 +1,9 @@
 //! KUI Button presentation helpers.
 //! Metrics follow KUI control rhythm (height, radius, weight) with B/W tokens.
 
-use gpui::{px, Hsla, Pixels};
+use gpui::{Hsla, Pixels, px};
 
-use crate::foundation::ColorTokens;
+use crate::foundation::{ColorTokens, RadiusTokens};
 use crate::primitives::Size;
 
 use super::ButtonVariant;
@@ -20,7 +20,15 @@ pub struct ButtonChrome {
 }
 
 pub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> ButtonChrome {
-    // Heights/pads; KUI control radius is 8px (docs chrome uses larger panel radii).
+    chrome_with_radius(variant, size, colors, RadiusTokens::default().md)
+}
+
+pub(super) fn chrome_with_radius(
+    variant: ButtonVariant,
+    size: Size,
+    colors: &ColorTokens,
+    radius: Pixels,
+) -> ButtonChrome {
     let (pad_x, min_h) = match size {
         Size::Sm => (px(12.), px(36.)),
         Size::Md => (px(16.), px(44.)),
@@ -42,7 +50,7 @@ pub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> Butto
         min_h,
         text: px(14.),
         line_height: px(20.),
-        radius: px(8.),
+        radius,
         bg,
         fg,
         border,
@@ -50,14 +58,16 @@ pub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> Butto
 }
 
 /// Disabled chrome for secondary / danger / ghost (keep shape; mute label).
-pub fn disabled_chrome(variant: ButtonVariant, colors: &ColorTokens, look: &ButtonChrome) -> ButtonChrome {
+pub fn disabled_chrome(
+    variant: ButtonVariant,
+    colors: &ColorTokens,
+    look: &ButtonChrome,
+) -> ButtonChrome {
     match variant {
         ButtonVariant::Primary => look.clone_with(look.bg, look.fg, look.border),
-        ButtonVariant::Secondary | ButtonVariant::Danger => look.clone_with(
-            colors.surface_muted,
-            colors.text_muted,
-            colors.border,
-        ),
+        ButtonVariant::Secondary | ButtonVariant::Danger => {
+            look.clone_with(colors.surface_muted, colors.text_muted, colors.border)
+        }
         ButtonVariant::Ghost => look.clone_with(look.bg, colors.text_muted, look.border),
     }
 }

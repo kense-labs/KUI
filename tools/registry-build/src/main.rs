@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use serde::Serialize;
+use kui_catalog::{ITEMS, materialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
@@ -34,26 +34,6 @@ enum Commands {
     },
 }
 
-#[derive(Serialize)]
-struct RegistryItem {
-    name: String,
-    kind: String,
-    title: String,
-    description: String,
-    categories: Vec<String>,
-    registry_dependencies: Vec<String>,
-    cargo_dependencies: Vec<String>,
-    gpui_version: String,
-    files: Vec<RegistryFile>,
-    docs_url: String,
-}
-
-#[derive(Serialize)]
-struct RegistryFile {
-    path: String,
-    content: String,
-}
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -69,9 +49,15 @@ fn build(root: &Path) -> Result<()> {
     let out = root.join("website/public/r");
     fs::create_dir_all(&out)?;
 
+    let md = root.join("website/public/md");
+    fs::create_dir_all(&md)?;
     let mut catalog = Vec::new();
-    for id in ["kui-foundation", "button"] {
+    for &(id, _, _) in ITEMS {
         let item = materialize(&registry, id)?;
+        fs::copy(
+            root.join(format!("docs/items/{id}.md")),
+            md.join(format!("{id}.md")),
+        )?;
         let path = out.join(format!("{id}.json"));
         fs::write(&path, serde_json::to_string_pretty(&item)?)?;
         catalog.push(serde_json::json!({
@@ -89,7 +75,7 @@ fn build(root: &Path) -> Result<()> {
 
     let mut llms = String::from(
         "# KUI\n\n\
-         > KUI is copy-source Rust UI for GPUI (desktop + WASM). Button MVP. From Kense.\n\n\
+         > KUI is copy-source Rust UI for GPUI (desktop + WASM). From Kense.\n\n\
          Product: KUI. Crate/CLI: `kui`. License: MIT.\n\
          Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.\n\n\
          ## For agents\n\n\
@@ -107,17 +93,10 @@ fn build(root: &Path) -> Result<()> {
             entry["title"].as_str().unwrap_or(name)
         ));
     }
-    llms.push_str(
-        "\n## Registry JSON\n\n\
-         - [/r/catalog.json](/r/catalog.json)\n\
-         - [/r/button.json](/r/button.json)\n\
-         - [/r/kui-foundation.json](/r/kui-foundation.json)\n\n\
-         ## Never\n\n\
-         - Do not invent a second button package\n\
-         - Do not rebrand away from KUI / kui\n\
-         - Do not enable test-support on wasm32\n\
-         - Do not paint everyday chrome with brand `#171717`\n",
-    );
+    llms.push_str("\n## Registry JSON\n\n- [Catalog](/r/catalog.json)\n");
+    for &(id, _, _) in ITEMS {
+        llms.push_str(&format!("- [{id}](/r/{id}.json)\n"));
+    }
     fs::write(root.join("llms.txt"), &llms)?;
     let site_llms = root.join("website/public/llms.txt");
     if site_llms.parent().is_some_and(|p| p.exists()) {
@@ -131,6 +110,12 @@ fn verify_preview(root: &Path) -> Result<()> {
     let story = fs::read_to_string(root.join("apps/story/Cargo.toml"))?;
     if !story.contains("kui") {
         anyhow::bail!("kui-story must depend on kui (preview=source)");
+    }
+    for &(id, _, _) in ITEMS {
+        let expected = serde_json::to_value(materialize(&root.join("registry"), id)?)?;
+        let shipped: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(format!("website/public/r/{id}.json")))?)?;
+        anyhow::ensure!(expected == shipped, "stale registry item: {id}");
     }
     let registry = root.join("registry/src");
     let mut hashes = BTreeMap::new();
@@ -153,7 +138,7 @@ fn verify_preview(root: &Path) -> Result<()> {
 fn write_docs(root: &Path) -> Result<()> {
     let docs = root.join("docs/items");
     fs::create_dir_all(&docs)?;
-    for id in ["kui-foundation", "button"] {
+    for &(id, _, _) in ITEMS {
         let path = docs.join(format!("{id}.md"));
         if path.exists() {
             continue;
@@ -200,75 +185,4 @@ This is a **KUI** registry item. Prefer `kui add {name}` over rewriting the cont
         println!("wrote {}", path.display());
     }
     Ok(())
-}
-
-fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
-    let (kind, title, description, categories, deps, rels) = match id {
-        "kui-foundation" => (
-            "foundation",
-            "KUI foundation",
-            "Theme tokens, motion presets, and init for KUI.",
-            vec!["foundation".into()],
-            Vec::<String>::new(),
-            vec!["src/foundation".to_string()],
-        ),
-        "button" => (
-            "component",
-            "Button",
-            "Finished KUI button with variants, sizes, loading, and disabled states.",
-            vec!["actions".into()],
-            vec!["kui-foundation".into()],
-            vec![
-                "src/components/button".into(),
-                "src/primitives/button.rs".into(),
-                "src/primitives/sizing.rs".into(),
-                "src/primitives/mod.rs".into(),
-            ],
-        ),
-        other => anyhow::bail!("unknown id {other}"),
-    };
-
-    let mut files = Vec::new();
-    for rel in rels {
-        let abs = registry.join(&rel);
-        if abs.is_file() {
-            files.push(RegistryFile {
-                path: rel.trim_start_matches("src/").to_string(),
-                content: fs::read_to_string(&abs)?,
-            });
-        } else {
-            for entry in WalkDir::new(&abs).into_iter().filter_map(|e| e.ok()) {
-                if !entry.file_type().is_file() {
-                    continue;
-                }
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("rs") {
-                    continue;
-                }
-                let rel_file = path
-                    .strip_prefix(registry)
-                    .with_context(|| format!("strip {}", path.display()))?
-                    .to_string_lossy()
-                    .trim_start_matches("src/")
-                    .to_string();
-                files.push(RegistryFile {
-                    path: rel_file,
-                    content: fs::read_to_string(path)?,
-                });
-            }
-        }
-    }
-
-    Ok(RegistryItem {
-        name: id.into(),
-        kind: kind.into(),
-        title: title.into(),
-        description: description.into(),
-        categories,
-        registry_dependencies: deps,
-        cargo_dependencies: Vec::new(),
-        gpui_version: "=0.3.10".into(),
-        files,
-        docs_url: format!("docs/items/{id}.md"),
-    })
 }

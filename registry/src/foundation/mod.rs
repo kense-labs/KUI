@@ -9,6 +9,6 @@ mod theme;
 mod tokens;
 
 pub use init::init;
-pub use motion::{MotionPreset, MotionTokens, MOTION};
+pub use motion::{MOTION, MotionPreset, MotionTokens};
 pub use theme::{Theme, ThemeMode};
 pub use tokens::{ColorTokens, RadiusTokens, SpaceTokens, Tokens};

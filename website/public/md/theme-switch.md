@@ -1,63 +1,34 @@
 # Theme switcher
 
-Light and dark toggle for the host theme.
+Switch the document theme. Compare Reveal, Eclipse, Split and Rise.
 
-## When to use
-
-Use when users choose light or dark mode in app chrome: headers, settings, docs sites.
-
-## When not to use
-
-Do not use for custom palettes or brand themes; KUI chrome is black and white. Do not use as a general two-state toggle; use `icon-morph`.
-
-## Install
-
-```bash
-kui add theme-switch
-```
-
-Only `button` is in the MVP registry today. This item documents the Buttons family contract and lands next. It depends on `kui-foundation`.
+`kui add theme-switch`
 
 ## Usage
 
 ```rust
+use gpui::prelude::*;
 use crate::ui::components::theme_switch::ThemeSwitch;
-use crate::ui::theme::ThemeMode;
 
-ThemeSwitch::new("theme")
-    .mode(ThemeMode::Dark)
-    .on_change(|mode, _window, cx| apply_theme(mode, cx))
-    .into_themed(cx)
+let control = cx.new(|_| ThemeSwitch::new("appearance"));
+use crate::ui::components::theme_switch::ThemeChange;
+cx.subscribe(&control, |_control, request: &ThemeChange, cx| {
+    crate::ui::foundation::Theme::global_mut(cx).set_mode(request.next);
+    cx.refresh_windows();
+}).detach();
 ```
 
-## API
+The website begins the visual change on primary pointer-down. Releasing outside the control or cancelling the gesture restores the previous theme. Keyboard activation commits once.
 
-| Builder | Default | Notes |
-| --- | --- | --- |
-| `new(id)` | required | Stable `ElementId` |
-| `mode` | current `Theme` mode | Controlled `ThemeMode` |
-| `on_change` | foundation setter | Receives the next `ThemeMode` |
-| `label` | `"Toggle theme"` | Accessible name |
-| `with_size` | `Md` | `Sm` / `Md` / `Lg`; square hit target |
-| `disabled` | `false` | Blocks toggles |
-| `into_themed(cx)` | — | Applies KUI theme tokens |
+Mount the entity as a GPUI child. The host receives the next theme and trigger bounds in window coordinates. Skip the page animation when reduced motion is selected.
 
-## Keyboard
+Reveal wipes from the left (380ms), Eclipse expands from the center (430ms), Split opens at the center seam (390ms), and Rise moves up from the bottom (360ms).
 
-Enter and Space toggle between light and dark. Focus stays on the switch.
+## Interface
 
-## Accessibility
+The control uses the theme’s `radius.md` (8px by default).
 
-`label` is the accessible name. Expose the pressed state for dark. Keep both icons at AA contrast against their own background.
-
-## Motion
-
-Sun and moon glyphs morph with `MOTION.morph`; the theme change itself fades colors over a short interval. Press uses `MOTION.snappy`. When `Theme.reduced_motion` is true, the glyph swaps and colors change at once.
-
-## Platforms
-
-Works on native desktop and WASM web. On web, hosts may seed the initial mode from `prefers-color-scheme` behind `cfg(target_family = "wasm")` and pass it to `mode`. See `docs/PLATFORMS.md`.
-
-## Notes for AI
-
-This is a **KUI** registry item. Prefer `kui add theme-switch` over writing theme state yourself. Use `ThemeMode`, not strings or bools. Do not add a third mode here.
+- Event: `ThemeChange { next, mode, trigger }`.
+- API: `with_mode(Transition)`.
+- Implementation: `registry/src/components/theme_switch.rs`.
+- Preview: [English](/en/kui/components/theme-switch/) · [中文](/kui/components/theme-switch/).

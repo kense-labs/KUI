@@ -161,13 +161,14 @@ const { hint } = Astro.props;
       tab.addEventListener("click", () => select(tab.dataset.view || "preview"));
     });
 
-    window.addEventListener("resize", () => placeActive(false));
+
   }
 
   function boot() {
     document.querySelectorAll<HTMLElement>("[data-component-stage]").forEach(wireStage);
   }
   boot();
+  window.addEventListener("resize", boot);
   document.addEventListener("astro:page-load", boot);
 </script>
 

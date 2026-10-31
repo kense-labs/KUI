@@ -1,0 +1,10 @@
+[package]
+name = "kui-catalog"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+walkdir.workspace = true

@@ -1,70 +1,30 @@
 # Confirm morph
 
-Destructive button that morphs into a confirm, then into Undo.
+Delete a sample project, cancel, retry or undo without opening a separate dialog.
 
-## When to use
-
-Use for deletes and resets where one extra step is enough: remove item, clear history, revoke key.
-
-## When not to use
-
-Do not use for irreversible actions that need a typed confirmation; use a dialog. Do not use for non-destructive toggles; use `action-swap`.
-
-## Install
-
-```bash
-kui add confirm-morph
-```
-
-Only `button` is in the MVP registry today. This item documents the Buttons family contract and lands next.
+`kui add confirm-morph`
 
 ## Usage
 
 ```rust
+use gpui::prelude::*;
 use crate::ui::components::confirm_morph::ConfirmMorph;
 
-ConfirmMorph::new("delete")
-    .label("Delete")
-    .confirm_label("Confirm")
-    .undo_label("Undo")
-    .undo_for(Duration::from_secs(5))
-    .on_confirm(|_window, _cx| schedule_delete())
-    .on_undo(|_window, _cx| cancel_delete())
-    .into_themed(cx)
+let control = cx.new(|cx| ConfirmMorph::new("remove", "Delete project", "Delete project?", window, cx));
+use crate::ui::components::confirm_morph::ConfirmRequest;
+cx.subscribe(&control, |control, request: &ConfirmRequest, cx| {
+    // An in-memory success. Finish here only after the real operation returns.
+    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));
+}).detach();
 ```
 
-## API
+Mount the entity as a GPUI child. Click arms the action. Hold requires one second on the answer; Countdown gives a cancellable three-second grace period after the answer.
 
-| Builder | Default | Notes |
-| --- | --- | --- |
-| `new(id)` | required | Stable `ElementId`; owns `ConfirmPhase` |
-| `label` | `""` | Idle text |
-| `confirm_label` | `"Confirm"` | Armed text |
-| `undo_label` | `"Undo"` | Shown during the undo window |
-| `arm_timeout` | `3s` | Armed state reverts to idle |
-| `undo_for` | `5s` | Undo window after confirm |
-| `with_size` | `Md` | `Sm` / `Md` / `Lg` |
-| `disabled` | `false` | Blocks all phases |
-| `on_confirm` | required | Fires when the undo window ends, or immediately if `undo_for` is zero |
-| `on_undo` | none | Fires when Undo is chosen |
-| `into_themed(cx)` | — | Applies KUI theme tokens |
+## Interface
 
-## Keyboard
+The control uses the theme’s `radius.md` (8px by default) and its nested actions or highlights use `radius.sm` (4px by default).
 
-Enter and Space arm, then confirm. Escape cancels the armed state. Focus stays on the button through every phase.
-
-## Accessibility
-
-Announce each phase change through a polite live region. The armed and undo labels are the accessible name. Never use color alone to signal danger; keep the outlined danger shape and the text.
-
-## Motion
-
-The button morphs between phases with `MOTION.morph`, holding height and animating width. The undo window shows a thin countdown line. When `Theme.reduced_motion` is true, labels swap instantly and the countdown line is static.
-
-## Platforms
-
-Works on native desktop and WASM web. Timers use GPUI executors. See `docs/PLATFORMS.md`.
-
-## Notes for AI
-
-This is a **KUI** registry item. Prefer `kui add confirm-morph` over a modal for simple deletes. Run the real destructive work only from `on_confirm`. Use pure black/white tokens with the outlined danger style.
+- Event: `ConfirmRequest { ticket, intent }`.
+- API: `set_mode(ConfirmMode, cx) / complete(ticket, ok, cx)`.
+- Implementation: `registry/src/components/confirm_morph.rs`.
+- Preview: [English](/en/kui/components/confirm-morph/) · [中文](/kui/components/confirm-morph/).

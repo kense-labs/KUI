@@ -20,7 +20,7 @@ export const ui = {
     "home.lead": "专注的产品。源码由你拥有、可扩展。",
     "home.products": "产品",
     "home.kui.tag": "GPUI · 桌面 + WASM",
-    "home.kui.blurb": "拷源码 Rust UI 工具包。Foundation tokens 与 Button MVP。",
+    "home.kui.blurb": "拷源码 Rust UI 工具包。Foundation tokens 与 Button。",
     "home.kui.cta": "打开 KUI →",
     "kui.hero": "面向 GPUI 的 Rust UI。桌面与 WASM。源码归你。",
     "kui.lead":
@@ -31,7 +31,7 @@ export const ui = {
     "kui.card.docs": "文档",
     "kui.card.docs.blurb": "介绍、安装与平台说明。",
     "kui.card.components": "组件",
-    "kui.card.components.blurb": "Button MVP：节奏清晰、黑白 chrome。",
+    "kui.card.components.blurb": "11 个可安装的 Rust 按钮组件。",
     "kui.card.ai": "AI",
     "kui.card.ai.blurb": "Markdown、registry 与 Agent 规则。",
     "kui.install": "安装",
@@ -42,7 +42,7 @@ export const ui = {
       "KUI 是面向 GPUI 的拷源码 Rust UI，支持原生桌面与 WASM。人与 Agent 安装同一套 registry。",
     "docs.intro.what": "KUI 是什么",
     "docs.intro.what.body":
-      "你拥有的成品 chrome：foundation tokens、Button MVP、kui CLI、给 Agent 的 Markdown，以及 registry JSON。Story 预览与安装源码一致。",
+      "你拥有的成品 chrome：foundation tokens、Button、kui CLI、给 Agent 的 Markdown，以及 registry JSON。Story 预览与安装源码一致。",
     "docs.intro.org": "如何组织",
     "docs.intro.org.f": "Foundation — 主题 tokens、动效、init",
     "docs.intro.org.c": "Components — 成品控件（先做 Button）",
@@ -90,7 +90,7 @@ export const ui = {
     "preview.disabled": "Disabled",
     "preview.hint": "点 Copy 看图标与标签反馈；点 Upload 看短暂 loading。",
     "preview.family.hint": "预览演示交互契约；可安装项仍以 registry 为准。",
-    "buttons.planned": "尚未进入 MVP registry。本页给出 Buttons 家族契约与预览；目前可安装的是 kui add button。",
+    "buttons.planned": "此组件目前提供网页演示和拟议接口。",
     "button.crumb": "组件 · 按钮",
     "button.title": "按钮",
     "button.lead":
@@ -155,7 +155,7 @@ export const ui = {
     "home.lead": "Focused products. Source you can own and extend.",
     "home.products": "Products",
     "home.kui.tag": "GPUI · Desktop + WASM",
-    "home.kui.blurb": "Copy-source Rust UI kit. Foundation tokens and Button MVP.",
+    "home.kui.blurb": "Copy-source Rust UI kit. Foundation tokens and Button.",
     "home.kui.cta": "Open KUI →",
     "kui.hero": "Rust UI for GPUI. Desktop and WASM. Source you own.",
     "kui.lead":
@@ -166,7 +166,7 @@ export const ui = {
     "kui.card.docs": "Docs",
     "kui.card.docs.blurb": "Introduction, install, platforms.",
     "kui.card.components": "Components",
-    "kui.card.components.blurb": "Button MVP with clear control rhythm.",
+    "kui.card.components.blurb": "11 installable Rust button components.",
     "kui.card.ai": "AI",
     "kui.card.ai.blurb": "Markdown, registry, agent rules.",
     "kui.install": "Install",
@@ -177,7 +177,7 @@ export const ui = {
       "KUI is copy-source Rust UI for GPUI on native desktop and WASM. Agents and humans install the same registry items.",
     "docs.intro.what": "What KUI is",
     "docs.intro.what.body":
-      "Finished chrome as source you own: foundation tokens, a Button MVP, a kui CLI, Markdown for agents, and registry JSON. Preview in story is the same source you install.",
+      "Finished chrome as source you own: foundation tokens, button components, a kui CLI, Markdown for agents, and registry JSON. Preview in story is the same source you install.",
     "docs.intro.org": "How it is organized",
     "docs.intro.org.f": "Foundation — theme tokens, motion, init",
     "docs.intro.org.c": "Components — finished controls (Button first)",
@@ -225,7 +225,7 @@ export const ui = {
     "preview.disabled": "Disabled",
     "preview.hint": "Click Copy for icon and label feedback. Click Upload for a short loading state.",
     "preview.family.hint": "Preview demos the interaction contract; installability follows the registry.",
-    "buttons.planned": "Not in the MVP registry yet. This page documents the Buttons family contract and preview; install kui add button today.",
+    "buttons.planned": "This component offers a web demo and proposed API.",
     "button.crumb": "Components · Buttons",
     "button.title": "Button",
     "button.lead":

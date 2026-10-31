@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev --host 127.0.0.1 --port 4321",
-    "build": "astro build",
+    "dev": "bash ../scripts/build-web.sh && astro dev --host 127.0.0.1 --port 4321",
+    "build": "bash ../scripts/build-web.sh && astro build",
     "preview": "astro preview --host 127.0.0.1 --port 4321"
   },
   "dependencies": {

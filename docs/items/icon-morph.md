@@ -1,67 +1,28 @@
 # Icon morph
 
-Two-state icon button whose glyph morphs between on and off.
+Eight reversible icon pairs, including playback, alerts, details and likes.
 
-## When to use
-
-Use for compact toggles with a well-known glyph pair: bookmark, mute, play and pause, menu and close.
-
-## When not to use
-
-Do not use when the state needs a text label; use `action-swap`. Do not use for one-way actions; use `button`.
-
-## Install
-
-```bash
-kui add icon-morph
-```
-
-Only `button` is in the MVP registry today. This item documents the Buttons family contract and lands next.
+`kui add icon-morph`
 
 ## Usage
 
 ```rust
+use gpui::prelude::*;
 use crate::ui::components::icon_morph::IconMorph;
+use crate::ui::primitives::glyph::Glyph;
 
-IconMorph::new("bookmark")
-    .off(IconName::Bookmark)
-    .on(IconName::BookmarkFilled)
-    .label("Bookmark")
-    .active(is_saved)
-    .on_toggle(|next, _window, _cx| set_saved(next))
-    .into_themed(cx)
+let control = cx.new(|_| IconMorph::new("player", [Glyph::Play, Glyph::Pause], ["Play", "Pause"]).with_captions(["Paused", "Playing"]));
 ```
 
-## API
+Mount the entity as a GPUI child. Enter, Space or a tap toggles the pair. Fast reversals continue from the current stroke positions.
 
-| Builder | Default | Notes |
-| --- | --- | --- |
-| `new(id)` | required | Stable `ElementId` |
-| `off` / `on` | required | `IconName` for each state |
-| `label` | required | Accessible name; shown as tooltip |
-| `active` | `false` | Controlled on state |
-| `ghost` / `secondary` | `ghost` | Variant |
-| `with_size` | `Md` | `Sm` / `Md` / `Lg`; square hit target |
-| `disabled` | `false` | Blocks toggles |
-| `on_toggle` | none | Receives the next `bool` |
-| `into_themed(cx)` | — | Applies KUI theme tokens |
+Each pair has its own stroke or fill motion. Rapid reversals continue from the current position; narrow screens use two columns.
 
-## Keyboard
+## Interface
 
-Enter and Space toggle. Focus stays on the button.
+The control uses the theme’s `radius.md` (8px by default).
 
-## Accessibility
-
-`label` is the accessible name and does not change with state. Expose the pressed state so assistive tech reads on or off. The hit target stays at least 32px.
-
-## Motion
-
-Glyphs cross-morph with `MOTION.morph`: stroke fades and scale shift over a short interval. Press uses `MOTION.snappy`. When `Theme.reduced_motion` is true, the icon swaps with no morph.
-
-## Platforms
-
-Works on native desktop and WASM web. Icons render as vector paths on both. See `docs/PLATFORMS.md`.
-
-## Notes for AI
-
-This is a **KUI** registry item. Prefer `kui add icon-morph` over swapping two `Button` icons by hand. Pick icon pairs that share a bounding box so the morph stays stable. Never ship an icon-only control without `label`.
+- Event: `MorphChanged(bool)`.
+- API: `set(on, cx) / with_captions([S; 2])`.
+- Implementation: `registry/src/components/icon_morph.rs`.
+- Preview: [English](/en/kui/components/icon-morph/) · [中文](/kui/components/icon-morph/).

@@ -8,14 +8,14 @@ pub mod components;
 pub mod foundation;
 pub mod primitives;
 
-pub use foundation::{init, Theme, ThemeMode, Tokens};
+pub use foundation::{Theme, ThemeMode, Tokens, init};
 pub use gpui;
 
 pub mod prelude {
-    pub use crate::foundation::{init, Theme, ThemeMode, Tokens};
+    pub use crate::foundation::{Theme, ThemeMode, Tokens, init};
     pub use gpui::prelude::*;
     pub use gpui::{
-        div, px, rgb, App, Context, Div, ElementId, InteractiveElement, IntoElement,
-        ParentElement, Render, SharedString, Stateful, Styled, Window,
+        App, Context, Div, ElementId, InteractiveElement, IntoElement, ParentElement, Render,
+        SharedString, Stateful, Styled, Window, div, px, rgb,
     };
 }

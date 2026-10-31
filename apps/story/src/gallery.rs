@@ -1,6 +1,6 @@
 //! Shared KUI Button gallery view used by native, web, and smoke hosts.
 
-use gpui::{div, prelude::*, px, Context, Window};
+use gpui::{Context, Window, div, prelude::*, px};
 use kui::components::button::Button;
 use kui::foundation::Theme;
 use kui::primitives::Size;
@@ -46,7 +46,12 @@ impl gpui::Render for ButtonGallery {
                     .flex()
                     .gap_2()
                     .flex_wrap()
-                    .child(Button::new("primary").primary().label("Primary").into_themed(cx))
+                    .child(
+                        Button::new("primary")
+                            .primary()
+                            .label("Primary")
+                            .into_themed(cx),
+                    )
                     .child(
                         Button::new("secondary")
                             .secondary()
@@ -54,7 +59,12 @@ impl gpui::Render for ButtonGallery {
                             .into_themed(cx),
                     )
                     .child(Button::new("ghost").ghost().label("Ghost").into_themed(cx))
-                    .child(Button::new("danger").danger().label("Danger").into_themed(cx))
+                    .child(
+                        Button::new("danger")
+                            .danger()
+                            .label("Danger")
+                            .into_themed(cx),
+                    )
                     .child(
                         Button::new("sm")
                             .secondary()

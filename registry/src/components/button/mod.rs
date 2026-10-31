@@ -1,5 +1,6 @@
-mod button;
+#[path = "button.rs"]
+mod control;
 mod style;
 
-pub use button::*;
+pub use control::*;
 pub use style::*;

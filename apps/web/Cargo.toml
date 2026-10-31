@@ -22,3 +22,6 @@ gpui = { workspace = true, default-features = false }
 gpui_platform = { workspace = true }
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
+
+[build-dependencies]
+ttf-parser = "0.25.1"

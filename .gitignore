@@ -10,3 +10,4 @@ apps/web/www/pkg/
 website/node_modules/
 website/.astro/
 website/dist/
+website/public/stories/

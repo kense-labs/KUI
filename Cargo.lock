@@ -2660,6 +2660,10 @@ version = "0.1.0"
 dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]
@@ -2669,9 +2673,19 @@ dependencies = [
  "anyhow",
  "clap",
  "hex",
+ "kui-catalog",
  "serde",
  "serde_json",
  "sha2",
+ "walkdir",
+]
+
+[[package]]
+name = "kui-catalog"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
  "walkdir",
 ]
 
@@ -2681,9 +2695,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "kui-catalog",
  "serde",
  "serde_json",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "ureq",
  "walkdir",
 ]
@@ -2713,6 +2729,7 @@ dependencies = [
  "gpui-pre-platform",
  "kui",
  "kui-story",
+ "ttf-parser",
  "wasm-bindgen",
 ]
 

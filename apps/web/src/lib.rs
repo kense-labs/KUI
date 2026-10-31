@@ -8,30 +8,185 @@
 #[cfg(target_family = "wasm")]
 mod web {
     use gpui::prelude::*;
-    use gpui::{px, size, App, Bounds, WindowBounds, WindowOptions};
+    use gpui::{App, Bounds, WindowBounds, WindowHandle, WindowOptions, px, size};
+    use kui::components::theme_switch::Transition;
     use kui::foundation::init;
-    use kui_story::ButtonGallery;
+    use kui::foundation::{Theme, ThemeMode};
+    use kui::primitives::control::UiLanguage;
+    use kui_story::{StoryBridge, StoryHost, ThemeBridge};
+    use std::cell::RefCell;
+    use wasm_bindgen::prelude::wasm_bindgen;
+    struct Preview {
+        app: gpui::AsyncApp,
+        window: WindowHandle<StoryHost>,
+    }
+    thread_local! { static PREVIEW: RefCell<Option<Preview>> = const { RefCell::new(None) }; }
 
-    fn run_gallery() {
-        gpui_platform::application().run(|cx: &mut App| {
+    #[wasm_bindgen]
+    pub fn show_story(id: &str, chinese: bool) -> bool {
+        PREVIEW.with_borrow(|preview| {
+            let Some(preview) = preview else { return false };
+            preview.app.update(|cx| {
+                cx.set_global(if chinese {
+                    UiLanguage::Chinese
+                } else {
+                    UiLanguage::English
+                });
+                preview
+                    .window
+                    .update(cx, |host, w, cx| host.show_story(id, w, cx))
+                    .unwrap_or(false)
+            })
+        })
+    }
+    fn appearance(dark: bool, reduced: bool, cx: &mut App) {
+        let mode = if dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        };
+        let theme = Theme::global_mut(cx);
+        if theme.mode == mode && theme.reduced_motion == reduced {
+            return;
+        }
+        theme.set_mode(mode);
+        theme.reduced_motion = reduced;
+        cx.refresh_windows();
+    }
+    #[wasm_bindgen]
+    pub fn set_icon_intent(dark: bool) {
+        use kui::components::theme_switch::ThemeIconIntent;
+        PREVIEW.with_borrow(|preview| {
+            if let Some(preview) = preview {
+                preview.app.update(|cx| {
+                    let mode = if dark {
+                        ThemeMode::Dark
+                    } else {
+                        ThemeMode::Light
+                    };
+                    if cx
+                        .try_global::<ThemeIconIntent>()
+                        .is_none_or(|i| i.0 != mode)
+                    {
+                        cx.set_global(ThemeIconIntent(mode));
+                        cx.refresh_windows();
+                    }
+                });
+            }
+        });
+    }
+    #[wasm_bindgen]
+    pub fn set_preferences(dark: bool, reduced: bool) {
+        PREVIEW.with_borrow(|preview| {
+            if let Some(preview) = preview {
+                preview.app.update(|cx| appearance(dark, reduced, cx))
+            }
+        })
+    }
+
+    // The host owns browser integration; neither the story nor installed controls depend on JS.
+    #[wasm_bindgen(inline_js = "
+        export function previewStarted() { queueMicrotask(() => window.kuiPreviewStarted?.()); }
+        export function reportThemeTarget(x,y,w,h,radius) { window.kuiThemeTarget?.(x,y,w,h,radius); }
+        export function reportFrame(height, dark) {
+            window.kuiFramePainted?.(Math.ceil(height), dark);
+        }
+        export function leavePreview(back) {
+            parent.postMessage({type:'kui:story-leave',back},location.origin);
+        }
+        export function buttonTheme(dark,mode,x,y,w,h) {
+            if (window.kuiPointerActivated?.()) return;
+            if (window !== parent) parent.postMessage({type:'kui:family-theme',dark,mode,x,y,w,h},location.origin);
+        }
+
+    ")]
+    extern "C" {
+        #[wasm_bindgen(js_name=previewStarted)]
+        fn preview_started();
+        #[wasm_bindgen(js_name=reportThemeTarget)]
+        fn report_theme_target(x: f32, y: f32, w: f32, h: f32, radius: f32);
+        #[wasm_bindgen(js_name=reportFrame)]
+        fn report_frame(height: f32, dark: bool);
+        #[wasm_bindgen(js_name=buttonTheme)]
+        fn button_theme(dark: bool, mode: &str, x: f32, y: f32, w: f32, h: f32);
+
+        #[wasm_bindgen(js_name=leavePreview)]
+        fn leave_preview(back: bool);
+    }
+
+    fn run_gallery(id: String, dark: bool, reduced: bool, chinese: bool, embedded: bool) {
+        gpui_platform::application().run(move |cx: &mut App| {
+            // The web text system starts empty and cannot enumerate OS fonts.
+            cx.text_system()
+                .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
+                    "../www/fonts/NotoSans-Regular.ttf"
+                ))])
+                .expect("load bundled gallery font");
+            cx.text_system()
+                .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
+                    "../www/fonts/KUIStorySans.ttf"
+                ))])
+                .expect("load bilingual preview font");
+            cx.set_global(if chinese {
+                UiLanguage::Chinese
+            } else {
+                UiLanguage::English
+            });
+            if embedded {
+                cx.set_global(ThemeBridge(|r| {
+                    button_theme(
+                        r.next == ThemeMode::Dark,
+                        match r.mode {
+                            Transition::Reveal => "reveal",
+                            Transition::Eclipse => "eclipse",
+                            Transition::Split => "split",
+                            Transition::Rise => "rise",
+                        },
+                        r.trigger.origin.x.into(),
+                        r.trigger.origin.y.into(),
+                        r.trigger.size.width.into(),
+                        r.trigger.size.height.into(),
+                    )
+                }));
+                cx.set_global(StoryBridge {
+                    frame: |height, mode| report_frame(height, mode == ThemeMode::Dark),
+                    leave: leave_preview,
+                    theme_target: |b, radius| {
+                        report_theme_target(
+                            b.origin.x.into(),
+                            b.origin.y.into(),
+                            b.size.width.into(),
+                            b.size.height.into(),
+                            radius.into(),
+                        )
+                    },
+                });
+            }
             init(cx);
+            appearance(dark, reduced, cx);
             let bounds = Bounds::centered(None, size(px(960.), px(540.)), cx);
-            cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    ..Default::default()
-                },
-                |_, cx| cx.new(|_| ButtonGallery::new()),
-            )
-            .expect("open KUI web gallery");
+            let window = cx
+                .open_window(
+                    WindowOptions {
+                        window_bounds: Some(WindowBounds::Windowed(bounds)),
+                        ..Default::default()
+                    },
+                    move |w, cx| cx.new(|cx| StoryHost::new(Some(&id), w, cx)),
+                )
+                .expect("open KUI web gallery");
+            PREVIEW.set(Some(Preview {
+                app: cx.to_async(),
+                window,
+            }));
             cx.activate(true);
+            preview_started();
         });
     }
 
-    #[wasm_bindgen::prelude::wasm_bindgen(start)]
-    pub fn start() {
+    #[wasm_bindgen]
+    pub fn start(id: String, dark: bool, reduced: bool, chinese: bool, embedded: bool) {
         gpui_platform::web_init();
-        run_gallery();
+        run_gallery(id, dark, reduced, chinese, embedded);
     }
 }
 
