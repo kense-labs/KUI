@@ -1,10 +1,12 @@
 ---
 import Icon from "./Icon.astro";
+import { buttonsNav } from "../lib/buttons-catalog";
 import { getLocale, localePath, stripLocale, useTranslations } from "../i18n/utils";
 
 const locale = getLocale(Astro.url.pathname);
 const path = stripLocale(Astro.url.pathname);
 const t = useTranslations(locale);
+const slug = path.replace(/\/$/, "").split("/").pop() ?? "";
 
 type NavLink = { href: string; label: string; match: boolean };
 
@@ -26,17 +28,16 @@ const docs: NavLink[] = [
   },
 ];
 
-const buttons: NavLink[] = [
-  {
-    href: localePath(locale, "/kui/components/button"),
-    label: "Button",
-    match: path.startsWith("/kui/components/button"),
-  },
-];
+const buttons: NavLink[] = buttonsNav().map((item) => ({
+  href: localePath(locale, `/kui/components/${item.id}`),
+  label: item.title,
+  match: slug === item.id,
+}));
 
 const agents: NavLink[] = [
   { href: "/llms.txt", label: "llms.txt", match: false },
   { href: "/md/button.md", label: "button.md", match: false },
+  { href: "/md/action-button.md", label: "action-button.md", match: false },
   { href: "/r/catalog.json", label: "catalog.json", match: false },
 ];
 ---
@@ -199,6 +200,9 @@ const agents: NavLink[] = [
       pill.style.height = `${next.height}px`;
       pill.style.opacity = opts.soft ? "0.55" : "1";
       pill.dataset.soft = opts.soft ? "1" : "0";
+      // Nested Buttons rows: accent tick on the guide rail (only for solid current, not soft hover).
+      const nested = !!target?.closest(".rows:not(.flat)");
+      pill.dataset.guide = !opts.soft && nested ? "1" : "0";
     };
 
     if (!opts.animate || reducedMotion()) {
@@ -473,7 +477,7 @@ const agents: NavLink[] = [
     height: calc(100dvh - var(--header-h));
     min-height: 0;
     border-right: 1px solid var(--border-subtle);
-    padding: 0.85rem 0.75rem 0.85rem 0;
+    padding: 0.85rem 0.75rem;
     background: var(--sb-bg);
   }
   .panel {
@@ -486,7 +490,12 @@ const agents: NavLink[] = [
   .top {
     position: relative;
     z-index: 4;
+    display: flex;
+    justify-content: center;
     padding: 0 0 0.75rem;
+  }
+  .top .search {
+    width: 100%;
   }
 
   /* Search — quiet field, soft fill, clear focus. */
@@ -615,6 +624,18 @@ const agents: NavLink[] = [
   }
   .pill[data-soft="1"] {
     background: var(--sb-hover);
+  }
+  /* Nested group current: accent tick on the left guide. */
+  .pill[data-guide="1"]::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: calc(var(--sb-guide-x) - var(--sb-row-x));
+    width: 2px;
+    height: 16px;
+    border-radius: 1px;
+    background: var(--ink);
+    transform: translateY(-50%);
   }
 
   .section {
@@ -824,6 +845,17 @@ const agents: NavLink[] = [
     }
     .row[aria-current="page"] {
       background: var(--sb-active);
+    }
+    .rows:not(.flat) .row[aria-current="page"]::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: calc(var(--sb-guide-x) - var(--sb-row-x));
+      width: 2px;
+      height: 16px;
+      border-radius: 1px;
+      background: var(--ink);
+      transform: translateY(-50%);
     }
   }
 </style>

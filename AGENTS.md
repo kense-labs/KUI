@@ -32,7 +32,7 @@ Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is a
 | `templates/app/` | Blank app scaffold for `kui init`. |
 | `website/public/r/` | Generated registry items. |
 
-MVP catalog: `kui-foundation`, `button`. Do not add unrelated controls unless the user asks.
+MVP installable catalog: `kui-foundation`, `button`. The website Documents a Buttons family of 11 (Button plus Action / Split / Group / Floating / Expanding / Copy / Action swap / Icon morph / Confirm morph / Theme switcher); only `button` is installable via `kui add` until those registry items land. Do not invent sibling product names or rebrand.
 
 ## Platforms
 

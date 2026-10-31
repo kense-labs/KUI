@@ -89,6 +89,8 @@ export const ui = {
     "preview.upload": "Upload file",
     "preview.disabled": "Disabled",
     "preview.hint": "点 Copy 看图标与标签反馈；点 Upload 看短暂 loading。",
+    "preview.family.hint": "预览演示交互契约；可安装项仍以 registry 为准。",
+    "buttons.planned": "尚未进入 MVP registry。本页给出 Buttons 家族契约与预览；目前可安装的是 kui add button。",
     "button.crumb": "组件 · Buttons",
     "button.title": "Button",
     "button.lead":
@@ -221,6 +223,8 @@ export const ui = {
     "preview.upload": "Upload file",
     "preview.disabled": "Disabled",
     "preview.hint": "Click Copy for icon and label feedback. Click Upload for a short loading state.",
+    "preview.family.hint": "Preview demos the interaction contract; installability follows the registry.",
+    "buttons.planned": "Not in the MVP registry yet. This page documents the Buttons family contract and preview; install kui add button today.",
     "button.crumb": "Components · Buttons",
     "button.title": "Button",
     "button.lead":
