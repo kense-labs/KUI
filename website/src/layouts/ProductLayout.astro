@@ -25,9 +25,9 @@ const pageFade = fade({ duration: "180ms" });
           <slot />
         </main>
       ) : (
-        <div class="frame" transition:name="page-main" transition:animate={pageFade}>
+        <div class="frame">
           <LibrarySidebar />
-          <main class="content">
+          <main class="content" transition:name="page-main" transition:animate={pageFade}>
             <div class="pad">
               <slot />
             </div>
@@ -52,11 +52,12 @@ const pageFade = fade({ duration: "180ms" });
   .frame {
     display: flex;
     flex: 1;
+    align-items: stretch;
     width: min(1280px, 100%);
     margin-inline: auto;
     border-inline: 1px solid var(--hairline);
     background: var(--surface);
-    min-height: calc(100vh - 3.5rem);
+    min-height: calc(100dvh - 3.5rem);
   }
   .content {
     flex: 1;

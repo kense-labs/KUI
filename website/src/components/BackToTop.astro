@@ -1,0 +1,113 @@
+---
+import Icon from "./Icon.astro";
+import type { Locale } from "../i18n/ui";
+import { useTranslations } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<button
+  type="button"
+  class="back-top"
+  data-back-top
+  aria-label={t("ui.backTop")}
+  title={t("ui.backTop")}
+  aria-hidden="true"
+  tabindex="-1"
+>
+  <Icon name="arrowUp" size={18} />
+</button>
+
+<script>
+  const SHOW_AT = 420;
+
+  function bind() {
+    const btn = document.querySelector<HTMLButtonElement>("[data-back-top]");
+    if (!btn || btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+
+    const sync = () => {
+      const y = window.scrollY || document.documentElement.scrollTop;
+      const show = y > SHOW_AT;
+      btn.classList.toggle("is-visible", show);
+      btn.setAttribute("aria-hidden", show ? "false" : "true");
+      btn.tabIndex = show ? 0 : -1;
+    };
+
+    btn.addEventListener("click", () => {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    });
+
+    window.addEventListener("scroll", sync, { passive: true });
+    document.addEventListener("astro:after-swap", () => {
+      btn.classList.remove("is-visible");
+      sync();
+    });
+    sync();
+  }
+
+  bind();
+  document.addEventListener("astro:page-load", bind);
+</script>
+
+<style>
+  .back-top {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow-raised);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    pointer-events: none;
+    transition:
+      opacity var(--duration-fast) var(--ease-standard),
+      transform var(--duration-spring) var(--ease-snappy),
+      background var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard);
+  }
+  .back-top.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+  .back-top:hover {
+    background: var(--surface-muted);
+  }
+  .back-top.is-visible:active {
+    transform: scale(var(--press-scale));
+  }
+
+  @media (max-width: 600px) {
+    .back-top {
+      right: 1rem;
+      bottom: 1rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .back-top {
+      transition: opacity var(--duration-fast) linear;
+      transform: none;
+    }
+    .back-top.is-visible {
+      transform: none;
+    }
+  }
+</style>

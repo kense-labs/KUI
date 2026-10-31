@@ -11,10 +11,14 @@ const locale = getLocale(Astro.url.pathname);
 <footer class="footer">
   <div class="inner">
     <div class="mark">
-      <span class="logo-swap">
-        <img class="light" src="/assets/logo-light.png" width="20" height="20" alt="" />
-        <img class="dark" src="/assets/logo-dark.png" width="20" height="20" alt="" />
-      </span>
+      {
+        tone === "product" ? (
+          <span class="logo-swap" aria-hidden="true">
+            <img class="light" src="/assets/mark-light.png" width="20" height="20" alt="" />
+            <img class="dark" src="/assets/mark-dark.png" width="20" height="20" alt="" />
+          </span>
+        ) : null
+      }
       {tone === "company" ? <span>Kense</span> : <span>KUI</span>}
     </div>
     <p class="muted">

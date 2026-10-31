@@ -17,7 +17,7 @@ KUI chrome is **pure black and white** by default: white page, black ink, black 
 - Motion explains cause and effect. When `Theme.reduced_motion` is true, durations collapse to zero.
 - Sentence case for labels. Regular and medium weights only. No eyebrow labels, no emoji in chrome.
 - **Desktop and WASM share the same chrome.** Do not author a second web-only Button look. Platform notes live in [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
-- Brand lockups (site / story chrome) use a **flat parallel** row: Kense mark · KUI · optional org label.
+- Product site lockup is **Kense mark · KUI** only. Company site is **Kense mark · Kense**. Do not put both wordmarks in the product top bar.
 
 ## 2. Color
 
@@ -66,19 +66,20 @@ Line height for button labels: 20px (`leading-body` ≈ 1.4).
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Radius sm | 4px | Dense chips (future) |
-| Radius md | 4px | **Button** / control radius (tight, not soft) |
-| Radius lg | 8px | Cards / dialogs (future) |
+| Radius sm | 4px | Dense chips / nested highlights |
+| Radius md | 8px | **Button** / control radius |
+| Radius lg | 18px | Docs code panels, install shells |
+| Radius panel | 26px | Docs preview canvas / large surfaces |
 | Radius full | 9999px | Pill controls (future) |
 | Space 1–8 | 4 / 8 / 12 / 16 / 24 / 32px | Padding and gaps |
 
-Control heights (Arc): sm **36px**, md **44px**, lg **50px**.
+Control heights: sm **36px**, md **44px**, lg **50px**.
 
 Concentric radii: nested surfaces use the next smaller radius step when both are rounded.
 
 ## 5. Button (MVP)
 
-Visual rhythm matches ArcUI Button (taller control, medium weight, outlined danger) with a tight **4px** radius (not soft, not pill). Colors stay KUI pure black/white; brand `#171717` is not used on everyday buttons.
+Visual rhythm uses a taller control, medium weight, and outlined danger with an **8px** control radius — softer than 4px, still geometric rather than pill-like. Colors stay KUI pure black/white; brand `#171717` is not used on everyday buttons. Docs chrome (preview canvas, code panels) uses larger `lg` / `panel` radii, not the control radius.
 
 ### Variants
 
@@ -97,7 +98,7 @@ Visual rhythm matches ArcUI Button (taller control, medium weight, outlined dang
 | Md (default) | 44px | 16px | 14px medium |
 | Lg | 50px | 20px | 14px medium |
 
-Corner radius is always `radius.md` (**4px**) for every size.
+Corner radius is always `radius.md` (**8px**) for every size.
 
 ### States
 
@@ -158,7 +159,7 @@ When `Theme.reduced_motion` is true, effective duration is `0`.
 - Do not invent a second primary accent hue for navigation.
 - Do not use Kense brand `#171717` as the default accent fill; reserve it for brand moments.
 - License is MIT.
-- Do not add decorative gradients or glows on Button. A quiet resting shadow on hover (Arc-style) is allowed later; do not stack floating shadows.
+- Do not add decorative gradients or glows on Button. A quiet resting shadow on hover is allowed; do not stack floating shadows.
 - Do not ship Tailwind / CSS-module chrome; KUI paints through GPUI on desktop and canvas/WebGPU on web.
 - Do not copy Magic UI / marketing-effect patterns into application chrome.
 - Do not maintain a separate DOM React tree for KUI controls.

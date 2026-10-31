@@ -10,8 +10,8 @@ org:
 product: "KUI"
 license: "MIT"
 logos:
-  light_surface: logo-light.png
-  dark_surface: logo-dark.png
+  light_surface: mark-light.png
+  dark_surface: mark-dark.png
 ink: "#000000"
 surface: "#FFFFFF"
 brand: "#171717"

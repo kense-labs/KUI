@@ -1,5 +1,10 @@
 ---
+/**
+ * Site top bar.
+ * Company: Kense. Product: KUI. Keep the action cluster minimal.
+ */
 import ThemeLangControls from "./ThemeLangControls.astro";
+import Icon from "./Icon.astro";
 import { getLocale, localePath, stripLocale, useTranslations } from "../i18n/utils";
 
 interface Props {
@@ -9,33 +14,36 @@ const { mode = "company" } = Astro.props;
 const locale = getLocale(Astro.url.pathname);
 const path = stripLocale(Astro.url.pathname);
 const t = useTranslations(locale);
-const onProducts = path.startsWith("/kui") || path.startsWith("/products");
+
 const onComponents = path.includes("/components");
 const onDocs = path.includes("/docs");
-const onAi = path === "/kui/ai" || path.endsWith("/ai");
+const onAi =
+  path === "/kui/ai" ||
+  path.endsWith("/kui/ai") ||
+  (path.endsWith("/ai") && path.includes("kui"));
+
 const homeHref = localePath(locale, "/");
 const kuiHref = localePath(locale, "/kui");
 ---
 
-<header class:list={["header", mode]} transition:name="site-header" transition:animate={false}>
+<header class:list={["topbar", mode]} transition:name="site-header" transition:animate={false}>
   <div class="inner">
     {
       mode === "company" ? (
         <a class="brand" href={homeHref} aria-label="Kense" data-astro-prefetch>
-          <span class="logo-swap">
-            <img class="light" src="/assets/logo-light.png" width="24" height="24" alt="" />
-            <img class="dark" src="/assets/logo-dark.png" width="24" height="24" alt="" />
+          <span class="logo-swap mark" aria-hidden="true">
+            <img class="light" src="/assets/mark-light.png" width="22" height="22" alt="" />
+            <img class="dark" src="/assets/mark-dark.png" width="22" height="22" alt="" />
           </span>
-          <span class="name">Kense</span>
+          <span class="wordmark">Kense</span>
         </a>
       ) : (
         <a class="brand" href={kuiHref} aria-label="KUI" data-astro-prefetch>
-          <span class="logo-swap">
-            <img class="light" src="/assets/logo-light.png" width="24" height="24" alt="" />
-            <img class="dark" src="/assets/logo-dark.png" width="24" height="24" alt="" />
+          <span class="logo-swap mark" aria-hidden="true">
+            <img class="light" src="/assets/mark-light.png" width="22" height="22" alt="" />
+            <img class="dark" src="/assets/mark-dark.png" width="22" height="22" alt="" />
           </span>
-          <span class="name">KUI</span>
-          <span class="org">Kense</span>
+          <span class="wordmark">KUI</span>
         </a>
       )
     }
@@ -43,30 +51,29 @@ const kuiHref = localePath(locale, "/kui");
     {
       mode === "company" ? (
         <nav class="nav" aria-label="Primary">
-          <a href={`${homeHref}#products`} class:list={{ on: onProducts }}>
-            {t("nav.products")}
-          </a>
-          <a href={kuiHref} class:list={{ on: path.startsWith("/kui") }} data-astro-prefetch>
-            KUI
-          </a>
+          <a href={`${homeHref}#products`}>{t("nav.products")}</a>
         </nav>
       ) : (
         <nav class="nav" aria-label="Product">
           <a
             href={localePath(locale, "/kui/components/button")}
-            class:list={{ on: onComponents }}
+            aria-current={onComponents ? "page" : undefined}
             data-astro-prefetch
           >
             {t("nav.components")}
           </a>
           <a
             href={localePath(locale, "/kui/docs")}
-            class:list={{ on: onDocs && !onAi }}
+            aria-current={onDocs && !onAi ? "page" : undefined}
             data-astro-prefetch
           >
             {t("nav.docs")}
           </a>
-          <a href={localePath(locale, "/kui/ai")} class:list={{ on: onAi }} data-astro-prefetch>
+          <a
+            href={localePath(locale, "/kui/ai")}
+            aria-current={onAi ? "page" : undefined}
+            data-astro-prefetch
+          >
             {t("nav.ai")}
           </a>
         </nav>
@@ -74,125 +81,146 @@ const kuiHref = localePath(locale, "/kui");
     }
 
     <div class="actions">
-      {
-        mode === "product" && (
-          <a class="ghost interactive" href={homeHref} data-astro-prefetch>
-            Kense
-          </a>
-        )
-      }
-      {
-        mode === "product" ? (
-          <a class="ghost interactive" href="/llms.txt">
-            llms.txt
-          </a>
-        ) : null
-      }
       <ThemeLangControls locale={locale} t={t} />
       <a
-        class="cta interactive"
+        class="cta"
         href={mode === "product" ? "https://github.com/kense-labs/KUI" : "https://github.com/kense-labs"}
         target="_blank"
         rel="noreferrer"
       >
-        {t("nav.github")}
+        <Icon name="github" size={15} />
+        <span>{t("nav.github")}</span>
       </a>
     </div>
   </div>
 </header>
 
 <style>
-  .header {
+  .topbar {
     position: sticky;
     top: 0;
     z-index: 40;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--border-subtle);
+    background: color-mix(in oklab, var(--bg) 96%, transparent);
+    backdrop-filter: blur(18px);
   }
   .inner {
     display: flex;
+    width: min(calc(100% - 2rem), 80rem);
+    height: 3.5rem;
     align-items: center;
-    gap: 1rem;
-    min-height: 3.5rem;
-    width: min(1120px, calc(100% - 2rem));
+    gap: 1.5rem;
     margin-inline: auto;
   }
-  .header.product .inner {
-    width: min(1280px, calc(100% - 2rem));
+  .topbar.company .inner {
+    width: min(calc(100% - 2rem), 70rem);
   }
+
   .brand {
     display: inline-flex;
+    flex: none;
     align-items: center;
     gap: 0.5rem;
+    color: var(--ink);
     text-decoration: none;
-    margin-right: 0.35rem;
+    line-height: 1;
   }
-  .name {
+  .brand:hover {
+    opacity: 1;
+  }
+  .mark {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+  }
+  .mark :global(img) {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-size: 0.9375rem;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.035em;
   }
-  .org {
-    font-size: 0.75rem;
-    color: var(--brand);
-    padding-left: 0.5rem;
-    border-left: 1px solid var(--hairline);
-  }
+
   .nav {
     display: flex;
-    gap: 1.1rem;
-    font-size: 0.875rem;
-    flex: 1;
+    height: 100%;
+    align-items: center;
+    gap: 1.25rem;
+    min-width: 0;
   }
   .nav a {
-    text-decoration: none;
+    position: relative;
+    display: inline-flex;
+    height: 100%;
+    align-items: center;
     color: var(--muted);
-    transition: color var(--duration-fast) var(--ease-standard);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    transition: color 0.18s var(--ease-standard);
   }
-  .nav a.on,
-  .nav a:hover {
+  .nav a:hover,
+  .nav a[aria-current="page"] {
     color: var(--ink);
     opacity: 1;
   }
+  .nav a[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--ink);
+  }
+
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.5rem;
     margin-left: auto;
-  }
-  .ghost {
-    font-size: 0.8125rem;
-    color: var(--muted);
-    text-decoration: none;
-  }
-  .ghost:hover {
-    color: var(--ink);
-    opacity: 1;
   }
   .cta {
     display: inline-flex;
+    flex: none;
+    height: 2rem;
     align-items: center;
-    min-height: 2rem;
-    padding: 0 0.75rem;
-    border-radius: var(--radius);
+    gap: 0.4rem;
+    padding: 0 0.7rem;
     border: 1px solid var(--border);
+    border-radius: 8px;
     background: var(--surface);
     color: var(--ink);
     font: 500 0.8125rem/1 var(--font);
     text-decoration: none;
+    white-space: nowrap;
   }
   .cta:hover {
     background: var(--surface-muted);
-    box-shadow: var(--shadow-resting);
     opacity: 1;
   }
+
   @media (max-width: 720px) {
-    .org,
-    .ghost {
-      display: none;
+    .inner {
+      gap: 0.85rem;
     }
     .nav {
       gap: 0.85rem;
+    }
+    .cta span {
+      display: none;
+    }
+    .cta {
+      width: 2rem;
+      justify-content: center;
+      padding: 0;
     }
   }
 </style>

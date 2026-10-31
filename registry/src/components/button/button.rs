@@ -19,7 +19,7 @@ pub enum ButtonVariant {
     Danger,
 }
 
-/// Finished KUI button with Arc-aligned control rhythm and theme-aware chrome.
+/// Finished KUI button with clear control rhythm and theme-aware chrome.
 pub struct Button {
     id: ElementId,
     label: SharedString,
@@ -146,7 +146,7 @@ fn paint(
         .child(label);
 
     if inert {
-        // Arc primary disabled fades; outlined variants keep shape via disabled_chrome.
+        // Primary disabled fades; outlined variants keep shape via disabled_chrome.
         if button.variant == ButtonVariant::Primary {
             el = el.opacity(0.52);
         }

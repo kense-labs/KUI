@@ -71,6 +71,7 @@ pub struct RadiusTokens {
     pub sm: Pixels,
     pub md: Pixels,
     pub lg: Pixels,
+    pub panel: Pixels,
     pub full: Pixels,
 }
 
@@ -78,9 +79,10 @@ impl Default for RadiusTokens {
     fn default() -> Self {
         Self {
             sm: px(4.),
-            // Control radius — tight corners, not soft/pill.
-            md: px(4.),
-            lg: px(8.),
+            // Control radius — modest 8px (docs canvas/code use lg/panel).
+            md: px(8.),
+            lg: px(18.),
+            panel: px(26.),
             full: px(9999.),
         }
     }

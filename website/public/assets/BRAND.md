@@ -12,10 +12,13 @@ Do not treat KUI as the org name. Do not invent sibling product names here.
 
 | File | Surface |
 | --- | --- |
-| `logo-light.png` | Light backgrounds — black K (Kense mark) |
-| `logo-dark.png` | Dark backgrounds — white K |
-| `mark-light.png` / `mark-dark.png` | Transparent marks |
+| `mark-light.png` | Light backgrounds — dark K, transparent (site chrome) |
+| `mark-dark.png` | Dark backgrounds — light K, transparent (site chrome) |
+| `logo-light.png` | Framed black K on white plate (export / print) |
+| `logo-dark.png` | Framed white K for dark plates |
 | `icon.png` | App / favicon for **this** product |
+
+Site header, footer, and home lockup use **`mark-*`**, never the framed `logo-*` plates.
 
 ## Site IA
 
@@ -23,7 +26,7 @@ Do not treat KUI as the org name. Do not invent sibling product names here.
 - `/kui/*` — **KUI** product area (docs, components, AI)
 - Do not make the company homepage look like a component library
 
-Product chrome lockup: Kense mark · **KUI** · **Kense** (org). Company chrome: Kense mark · **Kense**.
+Product chrome (`/kui/*`): Kense mark · **KUI** only — one wordmark, like Arc’s product bar. Link back to the company as a quiet action (not beside the product name). Company chrome (`/`): Kense mark · **Kense**.
 
 ## Colors
 

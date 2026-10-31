@@ -1,0 +1,192 @@
+---
+import Icon from "./Icon.astro";
+import { useTranslations, getLocale } from "../i18n/utils";
+
+interface Props {
+  /** Optional status line on the right of the tab bar */
+  hint?: string;
+}
+const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+const { hint } = Astro.props;
+---
+
+<section class="stage" data-component-stage>
+  <div class="view-bar">
+    <div class="tabs" role="tablist" aria-label={t("stage.views")}>
+      <button
+        type="button"
+        class="tab"
+        role="tab"
+        data-view="preview"
+        aria-selected="true"
+        id="stage-tab-preview"
+      >
+        <Icon name="preview" size={15} />
+        <span>{t("stage.preview")}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        role="tab"
+        data-view="code"
+        aria-selected="false"
+        id="stage-tab-code"
+      >
+        <Icon name="code" size={15} />
+        <span>{t("stage.code")}</span>
+      </button>
+      <span class="indicator" data-view-indicator aria-hidden="true"></span>
+    </div>
+    {hint ? <p class="hint muted">{hint}</p> : null}
+  </div>
+
+  <div
+    class="panel is-active"
+    role="tabpanel"
+    data-panel="preview"
+    aria-labelledby="stage-tab-preview"
+  >
+    <slot name="preview" />
+  </div>
+  <div
+    class="panel"
+    role="tabpanel"
+    data-panel="code"
+    aria-labelledby="stage-tab-code"
+    hidden
+  >
+    <slot name="code" />
+  </div>
+</section>
+
+<script>
+  function placeIndicator(tabs: HTMLElement, indicator: HTMLElement, active: HTMLElement) {
+    const root = tabs.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    indicator.style.width = `${box.width}px`;
+    indicator.style.transform = `translate3d(${box.left - root.left}px, 0, 0)`;
+    indicator.style.opacity = "1";
+  }
+
+  function wireStage(root: HTMLElement) {
+    if (root.dataset.wired === "1") return;
+    root.dataset.wired = "1";
+
+    const tabs = root.querySelector<HTMLElement>(".tabs");
+    const indicator = root.querySelector<HTMLElement>("[data-view-indicator]");
+    if (!tabs || !indicator) return;
+
+    const select = (view: string) => {
+      root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((tab) => {
+        const on = tab.dataset.view === view;
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+        if (on) placeIndicator(tabs, indicator, tab);
+      });
+      root.querySelectorAll<HTMLElement>("[data-panel]").forEach((panel) => {
+        const on = panel.dataset.panel === view;
+        panel.hidden = !on;
+        panel.classList.toggle("is-active", on);
+      });
+    };
+
+    const initial = tabs.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (initial) {
+      requestAnimationFrame(() => placeIndicator(tabs, indicator, initial));
+    }
+
+    tabs.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((tab) => {
+      tab.addEventListener("click", () => select(tab.dataset.view || "preview"));
+    });
+
+    window.addEventListener("resize", () => {
+      const active = tabs.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (active) placeIndicator(tabs, indicator, active);
+    });
+  }
+
+  function boot() {
+    document.querySelectorAll<HTMLElement>("[data-component-stage]").forEach(wireStage);
+  }
+  boot();
+  document.addEventListener("astro:page-load", boot);
+</script>
+
+<style>
+  .stage {
+    margin: 0 0 0.5rem;
+  }
+  .view-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .tabs {
+    position: relative;
+    display: inline-flex;
+    gap: 1.125rem;
+  }
+  .tab {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    min-height: 2.125rem;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0 1px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: 500 0.8125rem/1 var(--font);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-standard);
+  }
+  .tab:hover,
+  .tab[aria-selected="true"] {
+    color: var(--ink);
+    opacity: 1;
+  }
+  .indicator {
+    position: absolute;
+    right: auto;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--ink);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform var(--duration-spring) var(--ease-morph),
+      width var(--duration-spring) var(--ease-morph),
+      opacity var(--duration-fast) var(--ease-standard);
+  }
+  .hint {
+    margin: 0;
+    font-size: 0.75rem;
+  }
+  .panel[hidden] {
+    display: none !important;
+  }
+  .panel[data-panel="code"] {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .panel[data-panel="code"][hidden] {
+    display: none !important;
+  }
+
+  @media (max-width: 720px) {
+    .hint {
+      display: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .indicator {
+      transition: none;
+    }
+  }
+</style>

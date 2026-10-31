@@ -1,6 +1,6 @@
 # Button
 
-Finished KUI button with Arc-aligned control rhythm (44px md, 4px radius, medium weight, outlined danger) on pure black/white tokens.
+Finished KUI button with clear control rhythm (44px md, 8px radius, medium weight, outlined danger) on pure black/white tokens.
 
 ## When to use
 

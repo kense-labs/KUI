@@ -1,5 +1,5 @@
 //! KUI Button presentation helpers.
-//! Metrics follow ArcUI control rhythm (height, radius, weight) while colors stay KUI B/W tokens.
+//! Metrics follow KUI control rhythm (height, radius, weight) with B/W tokens.
 
 use gpui::{px, Hsla, Pixels};
 
@@ -20,7 +20,7 @@ pub struct ButtonChrome {
 }
 
 pub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> ButtonChrome {
-    // Arc heights/pads; KUI radius is tight 4px (not Arc's softer control radius).
+    // Heights/pads; KUI control radius is 8px (docs chrome uses larger panel radii).
     let (pad_x, min_h) = match size {
         Size::Sm => (px(12.), px(36.)),
         Size::Md => (px(16.), px(44.)),
@@ -34,7 +34,7 @@ pub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> Butto
             colors.text_secondary,
             colors.background.opacity(0.),
         ),
-        // Arc danger is outlined, not filled.
+        // Danger is outlined, not filled.
         ButtonVariant::Danger => (colors.surface, colors.danger, colors.border),
     };
     ButtonChrome {
@@ -42,7 +42,7 @@ pub fn chrome(variant: ButtonVariant, size: Size, colors: &ColorTokens) -> Butto
         min_h,
         text: px(14.),
         line_height: px(20.),
-        radius: px(4.),
+        radius: px(8.),
         bg,
         fg,
         border,

@@ -1,30 +1,33 @@
 ---
+import Icon from "./Icon.astro";
 import type { Locale, UiKey } from "../i18n/ui";
 
 interface Props {
   locale: Locale;
   t: (key: UiKey) => string;
+  /** Arc-style single bordered control group. */
+  grouped?: boolean;
 }
-const { locale, t } = Astro.props;
+const { locale, t, grouped = false } = Astro.props;
 const label = locale === "en" ? "English" : "中文";
 ---
 
-<div class="controls">
+<div class:list={["controls", grouped && "grouped"]}>
   <button
     type="button"
-    class="chip interactive"
+    class="chip"
     data-theme-toggle
     aria-label={t("nav.theme")}
     title={t("nav.theme")}
   >
-    <span class="sun" aria-hidden="true">☀</span>
-    <span class="moon" aria-hidden="true">☾</span>
+    <span class="sun"><Icon name="sun" size={15} /></span>
+    <span class="moon"><Icon name="moon" size={15} /></span>
   </button>
 
   <div class="lang" data-lang>
     <button
       type="button"
-      class="lang-trigger interactive"
+      class="lang-trigger"
       data-lang-trigger
       aria-haspopup="listbox"
       aria-expanded="false"
@@ -59,7 +62,6 @@ const label = locale === "en" ? "English" : "中文";
     if (meta) meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
   }
 
-  /** Strip `/en` prefix; zh is unprefixed. */
   function stripLocalePath(pathname: string): string {
     if (pathname === "/en") return "/";
     if (pathname.startsWith("/en/")) {
@@ -153,6 +155,14 @@ const label = locale === "en" ? "English" : "中文";
     align-items: center;
     gap: 0.4rem;
   }
+  .controls.grouped {
+    height: 2.375rem;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
   .chip,
   .lang-trigger {
     display: inline-flex;
@@ -160,11 +170,22 @@ const label = locale === "en" ? "English" : "中文";
     justify-content: center;
     min-height: 2rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     background: var(--surface);
     color: var(--ink);
     font: 500 0.75rem/1 var(--font);
     cursor: pointer;
+  }
+  .controls.grouped .chip,
+  .controls.grouped .lang-trigger {
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .controls.grouped .chip {
+    border-right: 1px solid var(--border-subtle);
   }
   .chip {
     min-width: 2rem;
@@ -177,6 +198,8 @@ const label = locale === "en" ? "English" : "中文";
   }
   .lang {
     position: relative;
+    height: 100%;
+    display: flex;
   }
   .lang-trigger {
     gap: 0.35rem;
@@ -202,7 +225,7 @@ const label = locale === "en" ? "English" : "中文";
     list-style: none;
     min-width: 7.5rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     background: var(--surface);
     box-shadow: var(--shadow-raised);
   }
@@ -226,8 +249,9 @@ const label = locale === "en" ? "English" : "中文";
   }
   .sun,
   .moon {
-    font-size: 0.85rem;
-    line-height: 1;
+    display: grid;
+    place-items: center;
+    line-height: 0;
   }
   :global(html[data-theme="dark"]) .sun {
     display: none;

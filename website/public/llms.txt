@@ -27,6 +27,6 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 ## Never
 
 - Do not invent a second button package
-- Do not rebrand as Arc / gpui-kit
+- Do not rebrand away from KUI / kui
 - Do not enable test-support on wasm32
 - Do not paint everyday chrome with brand `#171717`

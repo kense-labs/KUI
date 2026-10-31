@@ -1,14 +1,20 @@
-/* Arc-aligned motion tokens for the Kense / KUI site. */
+/* Motion tokens for the Kense / KUI site (CSS twin of lib/motion-tokens.ts). */
 :root {
   --duration-instant: 120ms;
   --duration-fast: 160ms;
   --duration-exit: 180ms;
   --duration-standard: 240ms;
   --duration-considered: 480ms;
+  /* Spring visual durations — real springs live in motion/; CSS is fallback. */
+  --duration-spring: 260ms;
+  --duration-morph: 420ms;
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Critically damped (bounce: 0) — no CSS overshoot. */
+  --ease-snappy: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-morph: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-resting: 0 1px 2px rgb(0 0 0 / 0.035);
   --shadow-raised: 0 6px 18px rgb(0 0 0 / 0.065), 0 1px 3px rgb(0 0 0 / 0.035);
   --press-scale: 0.97;

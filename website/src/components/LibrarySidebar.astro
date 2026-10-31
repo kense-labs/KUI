@@ -1,11 +1,14 @@
 ---
+import Icon from "./Icon.astro";
 import { getLocale, localePath, stripLocale, useTranslations } from "../i18n/utils";
 
 const locale = getLocale(Astro.url.pathname);
 const path = stripLocale(Astro.url.pathname);
 const t = useTranslations(locale);
 
-const docs = [
+type NavLink = { href: string; label: string; match: boolean };
+
+const docs: NavLink[] = [
   {
     href: localePath(locale, "/kui/docs"),
     label: t("sidebar.intro"),
@@ -23,167 +26,804 @@ const docs = [
   },
 ];
 
-const components = [
+const buttons: NavLink[] = [
   {
     href: localePath(locale, "/kui/components/button"),
     label: "Button",
     match: path.startsWith("/kui/components/button"),
   },
 ];
+
+const agents: NavLink[] = [
+  { href: "/llms.txt", label: "llms.txt", match: false },
+  { href: "/md/button.md", label: "button.md", match: false },
+  { href: "/r/catalog.json", label: "catalog.json", match: false },
+];
 ---
 
-<aside class="aside">
+<aside class="aside" data-docs-sidebar aria-label="Library" transition:name="docs-sidebar" transition:animate={false}>
   <div class="panel">
-    <div class="search" aria-hidden="true">
-      <span class="search-label">{t("sidebar.search")}</span>
-      <kbd>/</kbd>
+    <div class="top">
+      <label class="search" data-search>
+        <span class="search-icon" aria-hidden="true">
+          <Icon name="search" size={15} />
+        </span>
+        <input
+          type="search"
+          data-sidebar-search
+          placeholder={t("sidebar.search.placeholder")}
+          aria-label={t("sidebar.search")}
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+          enterkeyhint="go"
+        />
+        <kbd data-search-kbd aria-hidden="true">⌘K</kbd>
+      </label>
+      <span class="sr-only" data-search-status role="status" aria-live="polite"></span>
     </div>
 
-    <nav class="scroll" aria-label="KUI">
-      <section class="section">
-        <p class="section-label">{t("sidebar.docs")}</p>
-        <ul class="rows">
-          {
-            docs.map((item) => (
-              <li>
-                <a
-                  href={item.href}
-                  class:list={{ row: true, interactive: true, on: item.match }}
-                  data-astro-prefetch
-                >
-                  {item.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-      </section>
+    <div class="scroll" data-nav-scroll>
+      <div class="content" data-nav-root>
+        <div class="pill" data-nav-pill aria-hidden="true"></div>
 
-      <section class="section">
-        <p class="section-label">{t("sidebar.components")}</p>
-        <ul class="rows">
-          {
-            components.map((item) => (
-              <li>
-                <a
-                  href={item.href}
-                  class:list={{ row: true, interactive: true, on: item.match }}
-                  data-astro-prefetch
-                >
-                  {item.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-      </section>
+        <section class="section" data-section data-section-id="docs" data-open="true">
+          <button type="button" class="section-head" data-section-toggle aria-expanded="true">
+            <span class="section-icon"><Icon name="book" size={15} /></span>
+            <span class="section-label">{t("sidebar.docs")}</span>
+            <span class="chevron"><Icon name="chevron" size={14} /></span>
+          </button>
+          <nav class="section-body" aria-label={t("sidebar.docs")} data-section-body>
+            <div class="rows flat">
+              {
+                docs.map((item) => (
+                  <a
+                    href={item.href}
+                    class="row"
+                    data-nav-item
+                    data-tip={item.label}
+                    data-astro-prefetch
+                    aria-current={item.match ? "page" : undefined}
+                  >
+                    <span class="row-label">{item.label}</span>
+                  </a>
+                ))
+              }
+            </div>
+          </nav>
+        </section>
 
-      <section class="section">
-        <p class="section-label">{t("sidebar.agents")}</p>
-        <ul class="rows">
-          <li><a class="row interactive" href="/llms.txt">llms.txt</a></li>
-          <li><a class="row interactive" href="/md/button.md">button.md</a></li>
-          <li><a class="row interactive" href="/r/catalog.json">catalog.json</a></li>
-        </ul>
-      </section>
-    </nav>
+        <section class="section" data-section data-section-id="components" data-open="true">
+          <button type="button" class="section-head" data-section-toggle aria-expanded="true">
+            <span class="section-icon"><Icon name="box" size={15} /></span>
+            <span class="section-label">{t("sidebar.components")}</span>
+            <span class="section-count" data-section-count>{buttons.length}</span>
+            <span class="chevron"><Icon name="chevron" size={14} /></span>
+          </button>
+          <div class="section-body" data-section-body>
+            <div class="group" data-group data-group-id="buttons" data-open="true">
+              <button type="button" class="group-head" data-group-toggle aria-expanded="true">
+                <span class="group-chevron"><Icon name="chevron" size={12} /></span>
+                <span class="group-label">{t("sidebar.group.buttons")}</span>
+                <span class="group-count" data-group-count><span>{buttons.length}</span></span>
+              </button>
+              <nav class="group-body" aria-label={t("sidebar.group.buttons")} data-group-body>
+                <div class="rows">
+                  {
+                    buttons.map((item) => (
+                      <a
+                        href={item.href}
+                        class="row"
+                        data-nav-item
+                        data-tip={item.label}
+                        data-astro-prefetch
+                        aria-current={item.match ? "page" : undefined}
+                      >
+                        <span class="row-label">{item.label}</span>
+                      </a>
+                    ))
+                  }
+                </div>
+              </nav>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" data-section data-section-id="agents" data-open="true">
+          <button type="button" class="section-head" data-section-toggle aria-expanded="true">
+            <span class="section-icon"><Icon name="spark" size={15} /></span>
+            <span class="section-label">{t("sidebar.agents")}</span>
+            <span class="chevron"><Icon name="chevron" size={14} /></span>
+          </button>
+          <nav class="section-body" aria-label={t("sidebar.agents")} data-section-body>
+            <div class="rows flat">
+              {
+                agents.map((item) => (
+                  <a
+                    href={item.href}
+                    class="row"
+                    data-nav-item
+                    data-tip={item.label}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <span class="row-label">{item.label}</span>
+                  </a>
+                ))
+              }
+            </div>
+          </nav>
+        </section>
+
+        <p class="empty" data-empty hidden>{t("sidebar.empty")}</p>
+      </div>
+    </div>
   </div>
 </aside>
 
+<script>
+  const STORAGE_KEY = "kui-nav-pill";
+
+  type PillBox = { top: number; left: number; width: number; height: number };
+
+  function reducedMotion(): boolean {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function finePointer(): boolean {
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  }
+
+  function placePill(
+    root: HTMLElement,
+    pill: HTMLElement,
+    target: HTMLElement | null,
+    opts: { animate: boolean; soft?: boolean },
+  ) {
+    if (!target || target.hidden) {
+      pill.style.opacity = "0";
+      return;
+    }
+    const rootBox = root.getBoundingClientRect();
+    const box = target.getBoundingClientRect();
+    const next: PillBox = {
+      top: box.top - rootBox.top + root.scrollTop,
+      left: box.left - rootBox.left + root.scrollLeft,
+      width: box.width,
+      height: box.height,
+    };
+
+    const run = () => {
+      pill.style.transform = `translate3d(${next.left}px, ${next.top}px, 0)`;
+      pill.style.width = `${next.width}px`;
+      pill.style.height = `${next.height}px`;
+      pill.style.opacity = opts.soft ? "0.55" : "1";
+      pill.dataset.soft = opts.soft ? "1" : "0";
+    };
+
+    if (!opts.animate || reducedMotion()) {
+      pill.style.transition = "none";
+      run();
+      void pill.offsetWidth;
+      pill.style.transition = "";
+      return;
+    }
+
+    pill.style.transition = "";
+    run();
+  }
+
+  function activeItem(root: HTMLElement): HTMLElement | null {
+    return root.querySelector<HTMLElement>('[data-nav-item][aria-current="page"]');
+  }
+
+  function rememberPill(root: HTMLElement, item: HTMLElement) {
+    const rootBox = root.getBoundingClientRect();
+    const box = item.getBoundingClientRect();
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          top: box.top - rootBox.top + root.scrollTop,
+          left: box.left - rootBox.left + root.scrollLeft,
+          width: box.width,
+          height: box.height,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function consumeStoredPill(): PillBox | null {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as PillBox;
+    } catch {
+      return null;
+    }
+  }
+
+  function wireSidebar(rootAside: HTMLElement) {
+    const navRoot = rootAside.querySelector<HTMLElement>("[data-nav-root]");
+    if (!navRoot) return;
+
+    const pill = navRoot.querySelector<HTMLElement>("[data-nav-pill]");
+    const search = rootAside.querySelector<HTMLInputElement>("[data-sidebar-search]");
+    const searchLabel = rootAside.querySelector<HTMLElement>("[data-search]");
+    const kbd = rootAside.querySelector<HTMLElement>("[data-search-kbd]");
+    const status = rootAside.querySelector<HTMLElement>("[data-search-status]");
+    const empty = rootAside.querySelector<HTMLElement>("[data-empty]");
+    const scroll = rootAside.querySelector<HTMLElement>("[data-nav-scroll]");
+
+    if (kbd) {
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform || "");
+      kbd.textContent = mac ? "⌘K" : "/";
+    }
+
+    // Re-entered after client nav on a reused tree — re-home the pill.
+    if (rootAside.dataset.wired === "1") {
+      if (pill) placePill(navRoot, pill, activeItem(navRoot), { animate: true });
+      return;
+    }
+    rootAside.dataset.wired = "1";
+
+    if (pill) {
+      const active = activeItem(navRoot);
+      const stored = consumeStoredPill();
+      if (stored && active && !reducedMotion()) {
+        pill.style.transition = "none";
+        pill.style.transform = `translate3d(${stored.left}px, ${stored.top}px, 0)`;
+        pill.style.width = `${stored.width}px`;
+        pill.style.height = `${stored.height}px`;
+        pill.style.opacity = "1";
+        void pill.offsetWidth;
+        requestAnimationFrame(() => placePill(navRoot, pill, active, { animate: true }));
+      } else {
+        placePill(navRoot, pill, active, { animate: false });
+      }
+
+      navRoot.querySelectorAll<HTMLAnchorElement>("[data-nav-item]").forEach((item) => {
+        item.addEventListener("click", () => {
+          const href = item.getAttribute("href") || "";
+          if (/\.(txt|md|json)$/.test(href)) return;
+          rememberPill(navRoot, item);
+          placePill(navRoot, pill, item, { animate: true });
+        });
+      });
+
+      if (finePointer()) {
+        navRoot.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((item) => {
+          item.addEventListener("pointerenter", () => {
+            placePill(navRoot, pill, item, {
+              animate: true,
+              soft: item.getAttribute("aria-current") !== "page",
+            });
+          });
+        });
+        navRoot.addEventListener("pointerleave", () => {
+          placePill(navRoot, pill, activeItem(navRoot), { animate: true });
+        });
+      }
+    }
+
+    rootAside.querySelectorAll<HTMLButtonElement>("[data-section-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const section = btn.closest<HTMLElement>("[data-section]");
+        if (!section) return;
+        const open = btn.getAttribute("aria-expanded") !== "true";
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        section.dataset.open = open ? "true" : "false";
+        if (pill) {
+          requestAnimationFrame(() =>
+            placePill(navRoot, pill, activeItem(navRoot), { animate: true }),
+          );
+        }
+      });
+    });
+
+    rootAside.querySelectorAll<HTMLButtonElement>("[data-group-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const group = btn.closest<HTMLElement>("[data-group]");
+        if (!group) return;
+        const open = btn.getAttribute("aria-expanded") !== "true";
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        group.dataset.open = open ? "true" : "false";
+        if (pill) {
+          requestAnimationFrame(() =>
+            placePill(navRoot, pill, activeItem(navRoot), { animate: true }),
+          );
+        }
+      });
+    });
+
+    const applyFilter = () => {
+      if (!search) return;
+      const q = search.value.trim().toLowerCase();
+      let visible = 0;
+
+      rootAside.querySelectorAll<HTMLElement>("[data-section]").forEach((section) => {
+        let sectionHits = 0;
+        section.querySelectorAll<HTMLElement>("[data-group]").forEach((group) => {
+          let groupHits = 0;
+          group.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((row) => {
+            const tip = (row.dataset.tip || row.textContent || "").toLowerCase();
+            const show = !q || tip.includes(q);
+            row.hidden = !show;
+            if (show) {
+              groupHits += 1;
+              visible += 1;
+            }
+          });
+          group.hidden = q !== "" && groupHits === 0;
+          const count = group.querySelector<HTMLElement>("[data-group-count] span");
+          if (count) {
+            count.textContent = String(
+              q ? groupHits : group.querySelectorAll("[data-nav-item]").length,
+            );
+          }
+          if (q && groupHits > 0) {
+            group.dataset.open = "true";
+            group.querySelector("[data-group-toggle]")?.setAttribute("aria-expanded", "true");
+          }
+          sectionHits += groupHits;
+        });
+
+        section
+          .querySelectorAll<HTMLElement>(":scope > [data-section-body] > .rows.flat > [data-nav-item]")
+          .forEach((row) => {
+            const tip = (row.dataset.tip || row.textContent || "").toLowerCase();
+            const show = !q || tip.includes(q);
+            row.hidden = !show;
+            if (show) {
+              sectionHits += 1;
+              visible += 1;
+            }
+          });
+
+        section.hidden = q !== "" && sectionHits === 0;
+        const sectionCount = section.querySelector<HTMLElement>("[data-section-count]");
+        if (sectionCount && section.dataset.sectionId === "components") {
+          sectionCount.textContent = String(
+            section.querySelectorAll<HTMLElement>("[data-nav-item]:not([hidden])").length,
+          );
+        }
+        if (q && sectionHits > 0) {
+          section.dataset.open = "true";
+          section.querySelector("[data-section-toggle]")?.setAttribute("aria-expanded", "true");
+        }
+      });
+
+      if (empty) empty.hidden = visible > 0 || !q;
+      if (status) status.textContent = q ? `${visible}` : "";
+      if (pill) placePill(navRoot, pill, activeItem(navRoot), { animate: true });
+    };
+
+    if (search && searchLabel) {
+      search.addEventListener("input", applyFilter);
+      search.addEventListener("focus", () => {
+        searchLabel.dataset.focused = "";
+        if (kbd) kbd.style.opacity = "0";
+      });
+      search.addEventListener("blur", () => {
+        delete searchLabel.dataset.focused;
+        if (kbd) kbd.style.opacity = search.value ? "0" : "1";
+      });
+    }
+
+    const focusSearch = (e: KeyboardEvent) => {
+      if (!search) return;
+      const meta = e.metaKey || e.ctrlKey;
+      if ((meta && e.key.toLowerCase() === "k") || (e.key === "/" && !meta)) {
+        const tag = (e.target as HTMLElement | null)?.tagName;
+        if (
+          e.key === "/" &&
+          (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        search.focus();
+        search.select();
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+
+    if (scroll) {
+      const onScroll = () => {
+        scroll.toggleAttribute("data-fade-top", scroll.scrollTop > 4);
+        const atBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 4;
+        scroll.toggleAttribute("data-fade-bottom", !atBottom);
+      };
+      scroll.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    }
+  }
+
+  function boot() {
+    document.querySelectorAll<HTMLElement>("[data-docs-sidebar]").forEach(wireSidebar);
+  }
+
+  boot();
+  document.addEventListener("astro:page-load", boot);
+</script>
+
 <style>
   .aside {
-    width: 15.5rem;
+    --sb-bg: var(--surface);
+    --sb-hover: color-mix(in oklab, var(--surface-muted) 82%, transparent);
+    --sb-active: color-mix(in oklab, var(--accent-subtle) 70%, var(--surface-muted));
+    --sb-icon-x: 8px;
+    --sb-guide-x: 15px;
+    --sb-row-x: 22px;
+    --sb-text: 30px;
+    --sb-section-h: 32px;
+    --sb-group-h: 28px;
+    --sb-row-h: 30px;
+    --sb-row-font: 13px;
+    --header-h: 3.5rem;
+    position: sticky;
+    z-index: 20;
+    top: var(--header-h);
+    align-self: start;
+    width: 15.75rem;
     flex: none;
-    border-right: 1px solid var(--hairline);
-    background: var(--surface);
+    height: calc(100dvh - var(--header-h));
+    min-height: 0;
+    border-right: 1px solid var(--border-subtle);
+    padding: 0.85rem 0.75rem 0.85rem 0;
+    background: var(--sb-bg);
   }
   .panel {
-    position: sticky;
-    top: 3.5rem;
-    height: calc(100vh - 3.5rem);
     display: flex;
+    height: 100%;
+    min-height: 0;
     flex-direction: column;
-    padding: 0.85rem 0.75rem 1.5rem;
+    color: var(--ink);
   }
+  .top {
+    position: relative;
+    z-index: 4;
+    padding: 0 0 0.75rem;
+  }
+
+  /* Search — quiet field, soft fill, clear focus. */
   .search {
     display: flex;
+    height: 2.25rem;
     align-items: center;
-    justify-content: space-between;
-    min-height: 2.25rem;
-    margin-bottom: 0.85rem;
-    padding: 0 0.7rem;
+    gap: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 0 0.45rem 0 0.7rem;
+    background: var(--surface-muted);
+    color: var(--muted);
+    cursor: text;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 70%, transparent);
+    transition:
+      border-color var(--duration-fast) var(--ease-standard),
+      background-color var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-fast) var(--ease-standard),
+      color var(--duration-fast) var(--ease-standard);
+  }
+  .search:hover {
+    color: var(--text-secondary);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .search[data-focused] {
+    color: var(--ink);
+    background: var(--surface);
+    border-color: var(--border-strong);
+    box-shadow:
+      0 0 0 3px color-mix(in oklab, var(--ink) 8%, transparent),
+      inset 0 0 0 1px var(--border-strong);
+  }
+  .search-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    opacity: 0.85;
+  }
+  .search input {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--ink);
+    font: 500 0.8125rem/1.2 var(--font);
+    letter-spacing: -0.01em;
+  }
+  .search input::placeholder {
+    color: var(--muted);
+    font-weight: 450;
+  }
+  .search input[type="search"]::-webkit-search-decoration,
+  .search input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+  kbd {
+    flex: none;
+    min-width: 1.35rem;
     border: 1px solid var(--border);
-    border-radius: 0.75rem;
+    border-radius: 6px;
+    padding: 0.15rem 0.35rem;
+    background: var(--surface);
+    color: var(--muted);
+    font: 500 0.625rem/1.2 var(--font);
+    text-align: center;
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .scroll {
+    --sb-fade-bottom: 1;
+    position: relative;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - 36px),
+      rgb(0 0 0 / var(--sb-fade-bottom)) 100%
+    );
+  }
+  .scroll[data-fade-bottom] {
+    --sb-fade-bottom: 0;
+  }
+  .scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .content {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 1.25rem;
+  }
+
+  /* Shared morphing highlight — springs between rows. */
+  .pill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    border-radius: 8px;
+    background: var(--sb-active);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform var(--duration-spring) var(--ease-morph),
+      width var(--duration-spring) var(--ease-morph),
+      height var(--duration-spring) var(--ease-morph),
+      opacity var(--duration-fast) var(--ease-standard),
+      background var(--duration-fast) var(--ease-standard);
+    will-change: transform, width, height, opacity;
+  }
+  .pill[data-soft="1"] {
+    background: var(--sb-hover);
+  }
+
+  .section {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .section + .section {
+    margin-top: 0.35rem;
+  }
+  .section[data-open="false"] .section-body {
+    display: none;
+  }
+  .section[hidden] {
+    display: none !important;
+  }
+  .section-head {
+    position: sticky;
+    z-index: 3;
+    top: 0;
+    display: flex;
+    width: 100%;
+    height: var(--sb-section-h);
+    align-items: center;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 0.4rem 0 var(--sb-icon-x);
+    background: var(--sb-bg);
+    color: var(--ink);
+    font: 500 0.8125rem/1 var(--font);
+    letter-spacing: -0.01em;
+    text-align: left;
+    cursor: pointer;
+  }
+  .section-icon {
+    display: grid;
+    width: 15px;
+    flex: 0 0 15px;
+    place-items: center;
+    margin-right: calc(var(--sb-text) - var(--sb-icon-x) - 15px);
+    color: var(--muted);
+  }
+  .section-label {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .section-count {
+    margin-right: 0.35rem;
+    color: var(--muted);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .chevron,
+  .group-chevron {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--muted);
+    opacity: 0.75;
+    transition: transform var(--duration-fast) var(--ease-standard);
+  }
+  .section-head[aria-expanded="false"] .chevron,
+  .group-head[aria-expanded="false"] .group-chevron {
+    transform: rotate(-90deg);
+  }
+
+  .group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .group[data-open="false"] .group-body {
+    display: none;
+  }
+  .group[hidden] {
+    display: none !important;
+  }
+  .group-head {
+    position: sticky;
+    z-index: 2;
+    top: var(--sb-section-h);
+    display: flex;
+    width: 100%;
+    height: var(--sb-group-h);
+    align-items: center;
+    gap: 0.45rem;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 0.5rem 0 var(--sb-icon-x);
+    background: var(--sb-bg);
+    color: var(--ink);
+    font: 500 0.75rem/1 var(--font);
+    letter-spacing: -0.005em;
+    text-align: left;
+    cursor: pointer;
+  }
+  .group-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .group-count {
+    display: inline-grid;
+    min-width: 1.125rem;
+    height: 1rem;
+    flex: none;
+    place-items: center;
+    margin-left: auto;
+    border-radius: 999px;
+    padding: 0 0.3rem;
+    background: var(--surface-muted);
+    color: var(--muted);
+    font-size: 0.625rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rows {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 1px 0 0.5rem var(--sb-row-x);
+  }
+  .rows:not(.flat)::before {
+    content: "";
+    position: absolute;
+    top: 1px;
+    bottom: 0.55rem;
+    left: var(--sb-guide-x);
+    width: 1px;
+    background: var(--border-subtle);
+  }
+  .row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    min-width: 0;
+    height: var(--sb-row-h);
+    align-items: center;
+    border-radius: 8px;
+    padding: 0 0.4rem 0 calc(var(--sb-text) - var(--sb-row-x));
+    color: var(--text-secondary);
+    font-size: var(--sb-row-font);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    text-decoration: none;
+    transition: color 0.14s var(--ease-standard);
+  }
+  /* Hover/active fill comes from the shared pill — no CSS background fight. */
+  .row:hover,
+  .row[aria-current="page"] {
+    color: var(--ink);
+    opacity: 1;
+  }
+  .row[aria-current="page"] {
+    font-weight: 500;
+  }
+  .row[hidden] {
+    display: none !important;
+  }
+  .row-label {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .empty {
+    margin: 0.75rem 0 0;
+    padding: 0 var(--sb-icon-x);
     color: var(--muted);
     font-size: 0.8125rem;
   }
-  kbd {
-    font: 500 0.7rem/1 var(--mono);
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.15rem 0.35rem;
+  .empty[hidden] {
+    display: none !important;
   }
-  .scroll {
-    overflow: auto;
-    min-height: 0;
-  }
-  .section {
-    margin-bottom: 1.25rem;
-  }
-  .section-label {
-    margin: 0 0 0.4rem;
-    padding: 0 0.45rem;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .rows {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.1rem;
-  }
-  .row {
-    display: block;
-    padding: 0.4rem 0.55rem;
-    border-radius: 0.55rem;
-    color: var(--muted);
-    text-decoration: none;
-    font-size: 0.875rem;
-  }
-  .row:hover {
-    color: var(--ink);
-    background: var(--surface-muted);
-    opacity: 1;
-  }
-  .row.on {
-    color: var(--ink);
-    background: var(--surface-muted);
-    font-weight: 500;
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill {
+      transition: none;
+    }
   }
   @media (max-width: 900px) {
     .aside {
-      width: 100%;
-      border-right: 0;
-      border-bottom: 1px solid var(--hairline);
-    }
-    .panel {
       position: static;
+      width: 100%;
       height: auto;
-      padding-bottom: 0.75rem;
+      border-right: 0;
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.85rem 0.75rem 0.75rem;
     }
     .scroll {
-      display: flex;
-      gap: 1rem;
-      overflow-x: auto;
+      max-height: 14rem;
+      mask-image: none;
     }
-    .section {
-      min-width: 10rem;
-      margin-bottom: 0;
+    .section-head,
+    .group-head {
+      position: static;
+    }
+    .pill {
+      display: none;
+    }
+    .row[aria-current="page"] {
+      background: var(--sb-active);
     }
   }
 </style>

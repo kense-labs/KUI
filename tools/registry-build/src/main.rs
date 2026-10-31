@@ -114,7 +114,7 @@ fn build(root: &Path) -> Result<()> {
          - [/r/kui-foundation.json](/r/kui-foundation.json)\n\n\
          ## Never\n\n\
          - Do not invent a second button package\n\
-         - Do not rebrand as Arc / gpui-kit\n\
+         - Do not rebrand away from KUI / kui\n\
          - Do not enable test-support on wasm32\n\
          - Do not paint everyday chrome with brand `#171717`\n",
     );
