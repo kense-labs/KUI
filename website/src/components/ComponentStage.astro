@@ -22,8 +22,10 @@ const { hint } = Astro.props;
         aria-selected="true"
         id="stage-tab-preview"
       >
-        <Icon name="preview" size={15} />
-        <span>{t("stage.preview")}</span>
+        <span class="tab-inner" data-tab-inner>
+          <Icon name="preview" size={15} />
+          <span data-tab-label>{t("stage.preview")}</span>
+        </span>
       </button>
       <button
         type="button"
@@ -33,8 +35,10 @@ const { hint } = Astro.props;
         aria-selected="false"
         id="stage-tab-code"
       >
-        <Icon name="code" size={15} />
-        <span>{t("stage.code")}</span>
+        <span class="tab-inner" data-tab-inner>
+          <Icon name="code" size={15} />
+          <span data-tab-label>{t("stage.code")}</span>
+        </span>
       </button>
       <span class="indicator" data-view-indicator aria-hidden="true"></span>
     </div>
@@ -61,27 +65,87 @@ const { hint } = Astro.props;
 </section>
 
 <script>
-  function placeIndicator(tabs: HTMLElement, indicator: HTMLElement, active: HTMLElement) {
+  import { animate } from "motion";
+  import { motionTokens } from "../lib/motion-tokens";
+
+  type Anim = ReturnType<typeof animate>;
+  const anims = new WeakMap<HTMLElement, Anim>();
+
+  function reducedMotion(): boolean {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function measure(tabs: HTMLElement, active: HTMLElement) {
+    const target =
+      active.querySelector<HTMLElement>("[data-tab-inner]") ||
+      active.querySelector<HTMLElement>("[data-tab-label]") ||
+      active;
     const root = tabs.getBoundingClientRect();
-    const box = active.getBoundingClientRect();
-    indicator.style.width = `${box.width}px`;
-    indicator.style.transform = `translate3d(${box.left - root.left}px, 0, 0)`;
+    const box = target.getBoundingClientRect();
+    return {
+      left: box.left - root.left + tabs.scrollLeft,
+      width: Math.max(box.width, 1),
+    };
+  }
+
+  function snapIndicator(indicator: HTMLElement, left: number, width: number) {
+    anims.get(indicator)?.stop();
+    indicator.style.transform = `translate3d(${left}px, 0, 0)`;
+    indicator.style.width = `${width}px`;
     indicator.style.opacity = "1";
   }
 
-  function wireStage(root: HTMLElement) {
-    if (root.dataset.wired === "1") return;
-    root.dataset.wired = "1";
+  /** Morph the underline under the active tab (spring, like the sidebar pill). */
+  function placeIndicator(
+    tabs: HTMLElement,
+    indicator: HTMLElement,
+    active: HTMLElement,
+    opts: { animate: boolean },
+  ) {
+    const { left, width } = measure(tabs, active);
+    const shown = indicator.dataset.ready === "1";
 
+    if (!opts.animate || !shown || reducedMotion()) {
+      snapIndicator(indicator, left, width);
+      indicator.dataset.ready = "1";
+      return;
+    }
+
+    anims.get(indicator)?.stop();
+    const anim = animate(
+      indicator,
+      {
+        transform: `translate3d(${left}px, 0, 0)`,
+        width: `${width}px`,
+        opacity: 1,
+      },
+      motionTokens.spring.morph,
+    );
+    anims.set(indicator, anim);
+    indicator.dataset.ready = "1";
+  }
+
+  function wireStage(root: HTMLElement) {
     const tabs = root.querySelector<HTMLElement>(".tabs");
     const indicator = root.querySelector<HTMLElement>("[data-view-indicator]");
     if (!tabs || !indicator) return;
+
+    const placeActive = (withAnim: boolean) => {
+      const active = tabs.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (active) placeIndicator(tabs, indicator, active, { animate: withAnim });
+    };
+
+    if (root.dataset.wired === "1") {
+      placeActive(false);
+      return;
+    }
+    root.dataset.wired = "1";
 
     const select = (view: string) => {
       root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((tab) => {
         const on = tab.dataset.view === view;
         tab.setAttribute("aria-selected", on ? "true" : "false");
-        if (on) placeIndicator(tabs, indicator, tab);
+        if (on) placeIndicator(tabs, indicator, tab, { animate: true });
       });
       root.querySelectorAll<HTMLElement>("[data-panel]").forEach((panel) => {
         const on = panel.dataset.panel === view;
@@ -90,19 +154,14 @@ const { hint } = Astro.props;
       });
     };
 
-    const initial = tabs.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (initial) {
-      requestAnimationFrame(() => placeIndicator(tabs, indicator, initial));
-    }
+    requestAnimationFrame(() => placeActive(false));
+    void document.fonts?.ready?.then(() => placeActive(false));
 
     tabs.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((tab) => {
       tab.addEventListener("click", () => select(tab.dataset.view || "preview"));
     });
 
-    window.addEventListener("resize", () => {
-      const active = tabs.querySelector<HTMLElement>('[aria-selected="true"]');
-      if (active) placeIndicator(tabs, indicator, active);
-    });
+    window.addEventListener("resize", () => placeActive(false));
   }
 
   function boot() {
@@ -127,6 +186,7 @@ const { hint } = Astro.props;
     position: relative;
     display: inline-flex;
     gap: 1.125rem;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .tab {
     position: relative;
@@ -134,14 +194,21 @@ const { hint } = Astro.props;
     display: inline-flex;
     min-height: 2.125rem;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0 1px;
+    justify-content: center;
+    margin-bottom: -1px;
+    padding: 0;
     border: 0;
     background: transparent;
     color: var(--muted);
     font: 500 0.8125rem/1 var(--font);
     cursor: pointer;
     transition: color var(--duration-fast) var(--ease-standard);
+  }
+  .tab-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
   }
   .tab:hover,
   .tab[aria-selected="true"] {
@@ -153,16 +220,14 @@ const { hint } = Astro.props;
     right: auto;
     bottom: -1px;
     left: 0;
+    width: 0;
     height: 2px;
-    border-radius: 2px;
+    border-radius: 2px 2px 0 0;
     background: var(--ink);
     opacity: 0;
     pointer-events: none;
     transform: translate3d(0, 0, 0);
-    transition:
-      transform var(--duration-spring) var(--ease-morph),
-      width var(--duration-spring) var(--ease-morph),
-      opacity var(--duration-fast) var(--ease-standard);
+    will-change: transform, width, opacity;
   }
   .hint {
     margin: 0;
@@ -182,11 +247,6 @@ const { hint } = Astro.props;
   @media (max-width: 720px) {
     .hint {
       display: none;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .indicator {
-      transition: none;
     }
   }
 </style>

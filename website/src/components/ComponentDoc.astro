@@ -6,7 +6,7 @@ import CodePanel from "./CodePanel.astro";
 import ComponentStage from "./ComponentStage.astro";
 import PropsTable from "./PropsTable.astro";
 import ButtonsFamilyPreview from "./ButtonsFamilyPreview.astro";
-import type { ButtonDoc } from "../lib/buttons-catalog";
+import { buttonTitle, type ButtonDoc } from "../lib/buttons-catalog";
 import type { Locale } from "../i18n/ui";
 import { useTranslations } from "../i18n/utils";
 
@@ -17,19 +17,20 @@ interface Props {
 const { doc, locale } = Astro.props;
 const t = useTranslations(locale);
 const copy = doc.copy[locale];
+const title = buttonTitle(doc, locale);
 const headers = {
   prop: t("button.props.prop"),
   type: t("button.props.type"),
   default: t("button.props.default"),
   description: t("button.props.desc"),
 };
-const crumb = locale === "zh" ? "组件 · Buttons" : "Components · Buttons";
+const crumb = t("button.crumb");
 const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
 ---
 
 <article class="doc">
   <p class="muted crumb">{crumb}</p>
-  <h1>{doc.title}</h1>
+  <h1>{title}</h1>
   <p class="muted lead">
     {copy.lead}
     {" "}

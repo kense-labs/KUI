@@ -19,7 +19,8 @@ export type PropRow = { name: string; type: string; default?: string; descriptio
 
 export type ButtonDoc = {
   id: ButtonDocId;
-  title: string; // English product title for nav
+  /** Localized nav / page title. */
+  title: Record<Locale, string>;
   installable: boolean;
   rustType: string; // e.g. ActionButton
   usageRust: string;
@@ -48,7 +49,7 @@ kui add ${id}`;
 export const BUTTONS_CATALOG: ButtonDoc[] = [
   {
     id: "button",
-    title: "Button",
+    title: { en: "Button", zh: "按钮" },
     installable: true,
     rustType: "Button",
     usageRust: `use kui::components::button::Button;
@@ -123,7 +124,7 @@ kui add button`,
   },
   {
     id: "action-button",
-    title: "Action button",
+    title: { en: "Action button", zh: "操作按钮" },
     installable: false,
     rustType: "ActionButton",
     usageRust: `use kui::components::action_button::{ActionButton, CommitError};
@@ -198,7 +199,7 @@ ActionButton::new("publish")
   },
   {
     id: "split-button",
-    title: "Split button",
+    title: { en: "Split button", zh: "分裂按钮" },
     installable: false,
     rustType: "SplitButton",
     usageRust: `use kui::components::split_button::{SplitButton, SplitItem};
@@ -272,7 +273,7 @@ SplitButton::new("merge")
   },
   {
     id: "button-group",
-    title: "Button group",
+    title: { en: "Button group", zh: "按钮组" },
     installable: false,
     rustType: "ButtonGroup",
     usageRust: `use kui::components::button_group::{ButtonGroup, GroupItem};
@@ -346,7 +347,7 @@ ButtonGroup::new("view")
   },
   {
     id: "floating-button-group",
-    title: "Floating button group",
+    title: { en: "Floating button group", zh: "浮动按钮组" },
     installable: false,
     rustType: "FloatingButtonGroup",
     usageRust: `use kui::components::floating_button_group::{FloatItem, FloatingButtonGroup};
@@ -420,7 +421,7 @@ FloatingButtonGroup::new("tools")
   },
   {
     id: "expanding-button-group",
-    title: "Expanding button group",
+    title: { en: "Expanding button group", zh: "展开按钮组" },
     installable: false,
     rustType: "ExpandingButtonGroup",
     usageRust: `use kui::components::expanding_button_group::{ExpandItem, ExpandingButtonGroup};
@@ -490,7 +491,7 @@ ExpandingButtonGroup::new("row-actions")
   },
   {
     id: "copy-button",
-    title: "Copy button",
+    title: { en: "Copy button", zh: "复制按钮" },
     installable: false,
     rustType: "CopyButton",
     usageRust: `use kui::components::copy_button::CopyButton;
@@ -561,7 +562,7 @@ CopyButton::new("copy-install")
   },
   {
     id: "action-swap",
-    title: "Action swap",
+    title: { en: "Action swap", zh: "操作切换" },
     installable: false,
     rustType: "ActionSwap",
     usageRust: `use kui::components::action_swap::{ActionSwap, SwapState};
@@ -636,7 +637,7 @@ ActionSwap::new("follow")
   },
   {
     id: "icon-morph",
-    title: "Icon morph",
+    title: { en: "Icon morph", zh: "图标变形" },
     installable: false,
     rustType: "IconMorph",
     usageRust: `use kui::components::icon_morph::IconMorph;
@@ -709,7 +710,7 @@ IconMorph::new("bookmark")
   },
   {
     id: "confirm-morph",
-    title: "Confirm morph",
+    title: { en: "Confirm morph", zh: "确认变形" },
     installable: false,
     rustType: "ConfirmMorph",
     usageRust: `use kui::components::confirm_morph::ConfirmMorph;
@@ -783,7 +784,7 @@ ConfirmMorph::new("delete")
   },
   {
     id: "theme-switch",
-    title: "Theme switcher",
+    title: { en: "Theme switcher", zh: "主题切换" },
     installable: false,
     rustType: "ThemeSwitch",
     usageRust: `use kui::components::theme_switch::ThemeSwitch;
@@ -856,6 +857,10 @@ export function getButtonDoc(id: string): ButtonDoc | undefined {
   return BUTTONS_CATALOG.find((doc) => doc.id === id);
 }
 
-export function buttonsNav(): { id: ButtonDocId; title: string }[] {
-  return BUTTONS_CATALOG.map(({ id, title }) => ({ id, title }));
+export function buttonsNav(locale: Locale): { id: ButtonDocId; title: string }[] {
+  return BUTTONS_CATALOG.map(({ id, title }) => ({ id, title: title[locale] }));
+}
+
+export function buttonTitle(doc: ButtonDoc, locale: Locale): string {
+  return doc.title[locale];
 }

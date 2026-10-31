@@ -1,14 +1,15 @@
 ---
-import { getLocale, localePath } from "../i18n/utils";
+import { getLocale, localePath, useTranslations } from "../i18n/utils";
 
 interface Props {
   tone?: "company" | "product";
 }
 const { tone = "company" } = Astro.props;
 const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
 ---
 
-<footer class="footer">
+<footer class="footer" transition:name={`site-footer-${locale}`}>
   <div class="inner">
     <div class="mark">
       {
@@ -28,7 +29,7 @@ const locale = getLocale(Astro.url.pathname);
           <>
             {" "}
             · <a href="/llms.txt">llms.txt</a> ·{" "}
-            <a href={localePath(locale, "/kui/docs")} data-astro-prefetch>Docs</a>
+            <a href={localePath(locale, "/kui/docs")} data-astro-prefetch>{t("footer.docs")}</a>
           </>
         ) : (
           <>

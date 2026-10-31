@@ -136,13 +136,31 @@ const label = locale === "en" ? "English" : "中文";
     });
   }
 
+  function syncLangLabels() {
+    const path = window.location.pathname;
+    const isEn = path === "/en" || path.startsWith("/en/");
+    document.querySelectorAll<HTMLElement>("[data-lang-label]").forEach((el) => {
+      el.textContent = isEn ? "English" : "中文";
+    });
+    document.querySelectorAll<HTMLElement>("[data-lang]").forEach((root) => {
+      root.querySelectorAll<HTMLElement>('[role="option"]').forEach((opt) => {
+        const btn = opt.querySelector<HTMLButtonElement>("[data-locale]");
+        if (!btn) return;
+        const selected = (btn.dataset.locale === "en") === isEn;
+        opt.setAttribute("aria-selected", selected ? "true" : "false");
+      });
+    });
+  }
+
   function onReady() {
     wireThemeButtons();
     wireLangMenus();
+    syncLangLabels();
   }
 
   onReady();
   document.addEventListener("astro:page-load", onReady);
+  document.addEventListener("astro:after-swap", syncLangLabels);
   document.addEventListener("click", () => closeAllLangMenus());
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeAllLangMenus();

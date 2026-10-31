@@ -17,16 +17,16 @@ const t = useTranslations(locale);
 
 const onComponents = path.includes("/components");
 const onDocs = path.includes("/docs");
-const onAi =
-  path === "/kui/ai" ||
-  path.endsWith("/kui/ai") ||
-  (path.endsWith("/ai") && path.includes("kui"));
 
 const homeHref = localePath(locale, "/");
 const kuiHref = localePath(locale, "/kui");
 ---
 
-<header class:list={["topbar", mode]} transition:name="site-header" transition:animate={false}>
+<header
+  class:list={["topbar", mode]}
+  transition:name={`site-header-${locale}`}
+  transition:animate={false}
+>
   <div class="inner">
     {
       mode === "company" ? (
@@ -64,17 +64,10 @@ const kuiHref = localePath(locale, "/kui");
           </a>
           <a
             href={localePath(locale, "/kui/docs")}
-            aria-current={onDocs && !onAi ? "page" : undefined}
+            aria-current={onDocs ? "page" : undefined}
             data-astro-prefetch
           >
             {t("nav.docs")}
-          </a>
-          <a
-            href={localePath(locale, "/kui/ai")}
-            aria-current={onAi ? "page" : undefined}
-            data-astro-prefetch
-          >
-            {t("nav.ai")}
           </a>
         </nav>
       )

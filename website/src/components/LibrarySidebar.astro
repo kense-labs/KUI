@@ -28,21 +28,20 @@ const docs: NavLink[] = [
   },
 ];
 
-const buttons: NavLink[] = buttonsNav().map((item) => ({
+const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
   href: localePath(locale, `/kui/components/${item.id}`),
   label: item.title,
   match: slug === item.id,
 }));
-
-const agents: NavLink[] = [
-  { href: "/llms.txt", label: "llms.txt", match: false },
-  { href: "/md/button.md", label: "button.md", match: false },
-  { href: "/md/action-button.md", label: "action-button.md", match: false },
-  { href: "/r/catalog.json", label: "catalog.json", match: false },
-];
 ---
 
-<aside class="aside" data-docs-sidebar aria-label="Library" transition:name="docs-sidebar" transition:animate={false}>
+<aside
+  class="aside"
+  data-docs-sidebar
+  aria-label="Library"
+  transition:name={`docs-sidebar-${locale}`}
+  transition:animate={false}
+>
   <div class="panel">
     <div class="top">
       <label class="search" data-search>
@@ -130,32 +129,6 @@ const agents: NavLink[] = [
           </div>
         </section>
 
-        <section class="section" data-section data-section-id="agents" data-open="true">
-          <button type="button" class="section-head" data-section-toggle aria-expanded="true">
-            <span class="section-icon"><Icon name="spark" size={15} /></span>
-            <span class="section-label">{t("sidebar.agents")}</span>
-            <span class="chevron"><Icon name="chevron" size={14} /></span>
-          </button>
-          <nav class="section-body" aria-label={t("sidebar.agents")} data-section-body>
-            <div class="rows flat">
-              {
-                agents.map((item) => (
-                  <a
-                    href={item.href}
-                    class="row"
-                    data-nav-item
-                    data-tip={item.label}
-                    target="_blank"
-                    rel="noopener"
-                  >
-                    <span class="row-label">{item.label}</span>
-                  </a>
-                ))
-              }
-            </div>
-          </nav>
-        </section>
-
         <p class="empty" data-empty hidden>{t("sidebar.empty")}</p>
       </div>
     </div>
@@ -163,9 +136,15 @@ const agents: NavLink[] = [
 </aside>
 
 <script>
+  import { animate } from "motion";
+  import { motionTokens } from "../lib/motion-tokens";
+
   const STORAGE_KEY = "kui-nav-pill";
 
   type PillBox = { top: number; left: number; width: number; height: number };
+  type Anim = ReturnType<typeof animate>;
+
+  const disclosureAnims = new WeakMap<HTMLElement, Anim>();
 
   function reducedMotion(): boolean {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -175,14 +154,117 @@ const agents: NavLink[] = [
     return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
   }
 
+  /** Instant open/close (search filter, reduced motion). */
+  function snapDisclosure(body: HTMLElement, open: boolean) {
+    disclosureAnims.get(body)?.stop();
+    if (open) {
+      body.hidden = false;
+      body.style.height = "auto";
+      body.style.opacity = "1";
+      body.style.overflow = "visible";
+      body.style.pointerEvents = "";
+    } else {
+      body.style.height = "0px";
+      body.style.opacity = "0";
+      body.style.overflow = "hidden";
+      body.style.pointerEvents = "none";
+      body.hidden = true;
+    }
+  }
+
+  /**
+   * Arc-style group/section body: height + opacity spring.
+   * Keeps overflow hidden while measuring so the rail collapses cleanly.
+   */
+  async function animateDisclosure(
+    body: HTMLElement,
+    open: boolean,
+    onTick?: () => void,
+  ) {
+    if (reducedMotion()) {
+      snapDisclosure(body, open);
+      onTick?.();
+      return;
+    }
+
+    disclosureAnims.get(body)?.stop();
+    body.hidden = false;
+    body.style.overflow = "hidden";
+    body.style.pointerEvents = "none";
+
+    if (open) {
+      body.style.height = "0px";
+      body.style.opacity = "0";
+      void body.offsetHeight;
+    } else {
+      const h = body.getBoundingClientRect().height || body.scrollHeight;
+      body.style.height = `${h}px`;
+      body.style.opacity = "1";
+      void body.offsetHeight;
+    }
+
+    const end = open ? body.scrollHeight : 0;
+    const anim = animate(
+      body,
+      { height: `${end}px`, opacity: open ? 1 : 0 },
+      {
+        ...motionTokens.spring.smooth,
+        onUpdate: () => onTick?.(),
+      },
+    );
+    disclosureAnims.set(body, anim);
+    await anim.finished.catch(() => undefined);
+
+    if (open) {
+      body.style.height = "auto";
+      body.style.opacity = "1";
+      body.style.overflow = "visible";
+      body.style.pointerEvents = "";
+    } else {
+      body.style.height = "0px";
+      body.style.opacity = "0";
+      body.style.overflow = "hidden";
+      body.hidden = true;
+    }
+    onTick?.();
+  }
+
+  /** Current row is only highlightable while its section/group disclosure is open. */
+  function isNavItemVisible(item: HTMLElement): boolean {
+    if (item.hidden) return false;
+    if (item.closest("[hidden]")) return false;
+    const group = item.closest<HTMLElement>("[data-group]");
+    if (group && group.getAttribute("data-open") !== "true") return false;
+    const section = item.closest<HTMLElement>("[data-section]");
+    if (section && section.getAttribute("data-open") !== "true") return false;
+    const body = item.closest<HTMLElement>("[data-group-body], [data-section-body]");
+    if (body) {
+      if (body.hidden) return false;
+      if (body.getBoundingClientRect().height < 1) return false;
+    }
+    const box = item.getBoundingClientRect();
+    return box.width >= 1 && box.height >= 1;
+  }
+
+  function hidePill(pill: HTMLElement) {
+    pill.style.transition = "none";
+    pill.style.opacity = "0";
+    pill.style.visibility = "hidden";
+    pill.dataset.guide = "0";
+    pill.dataset.soft = "0";
+    pill.dataset.hidden = "1";
+    void pill.offsetWidth;
+    pill.style.transition = "";
+  }
+
   function placePill(
     root: HTMLElement,
     pill: HTMLElement,
     target: HTMLElement | null,
     opts: { animate: boolean; soft?: boolean },
   ) {
-    if (!target || target.hidden) {
-      pill.style.opacity = "0";
+    if (!target || !isNavItemVisible(target)) {
+      hidePill(pill);
       return;
     }
     const rootBox = root.getBoundingClientRect();
@@ -195,13 +277,15 @@ const agents: NavLink[] = [
     };
 
     const run = () => {
+      pill.dataset.hidden = "0";
+      pill.style.visibility = "visible";
       pill.style.transform = `translate3d(${next.left}px, ${next.top}px, 0)`;
       pill.style.width = `${next.width}px`;
       pill.style.height = `${next.height}px`;
       pill.style.opacity = opts.soft ? "0.55" : "1";
       pill.dataset.soft = opts.soft ? "1" : "0";
       // Nested Buttons rows: accent tick on the guide rail (only for solid current, not soft hover).
-      const nested = !!target?.closest(".rows:not(.flat)");
+      const nested = !!target.closest(".rows:not(.flat)");
       pill.dataset.guide = !opts.soft && nested ? "1" : "0";
     };
 
@@ -218,7 +302,14 @@ const agents: NavLink[] = [
   }
 
   function activeItem(root: HTMLElement): HTMLElement | null {
-    return root.querySelector<HTMLElement>('[data-nav-item][aria-current="page"]');
+    const item = root.querySelector<HTMLElement>('[data-nav-item][aria-current="page"]');
+    if (!item || !isNavItemVisible(item)) return null;
+    return item;
+  }
+
+  function currentInside(container: HTMLElement): boolean {
+    const item = container.querySelector<HTMLElement>('[data-nav-item][aria-current="page"]');
+    return !!item;
   }
 
   function rememberPill(root: HTMLElement, item: HTMLElement) {
@@ -313,33 +404,49 @@ const agents: NavLink[] = [
       }
     }
 
+    const retickPill = () => {
+      if (!pill) return;
+      placePill(navRoot, pill, activeItem(navRoot), { animate: false });
+    };
+
+    const toggleDisclosure = (
+      shell: HTMLElement,
+      body: HTMLElement,
+      btn: HTMLButtonElement,
+    ) => {
+      const open = btn.getAttribute("aria-expanded") !== "true";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      shell.setAttribute("data-open", open ? "true" : "false");
+
+      // Pill lives outside the collapsing body — hide it immediately when the
+      // current page row is being collapsed away, otherwise it freezes in place.
+      if (!open && pill && currentInside(body)) {
+        hidePill(pill);
+      } else if (open) {
+        retickPill();
+      }
+
+      void animateDisclosure(body, open, () => {
+        if (open) retickPill();
+        else if (pill && currentInside(body)) hidePill(pill);
+      }).then(() => retickPill());
+    };
+
     rootAside.querySelectorAll<HTMLButtonElement>("[data-section-toggle]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const section = btn.closest<HTMLElement>("[data-section]");
-        if (!section) return;
-        const open = btn.getAttribute("aria-expanded") !== "true";
-        btn.setAttribute("aria-expanded", open ? "true" : "false");
-        section.dataset.open = open ? "true" : "false";
-        if (pill) {
-          requestAnimationFrame(() =>
-            placePill(navRoot, pill, activeItem(navRoot), { animate: true }),
-          );
-        }
+        const body = section?.querySelector<HTMLElement>(":scope > [data-section-body]");
+        if (!section || !body) return;
+        toggleDisclosure(section, body, btn);
       });
     });
 
     rootAside.querySelectorAll<HTMLButtonElement>("[data-group-toggle]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const group = btn.closest<HTMLElement>("[data-group]");
-        if (!group) return;
-        const open = btn.getAttribute("aria-expanded") !== "true";
-        btn.setAttribute("aria-expanded", open ? "true" : "false");
-        group.dataset.open = open ? "true" : "false";
-        if (pill) {
-          requestAnimationFrame(() =>
-            placePill(navRoot, pill, activeItem(navRoot), { animate: true }),
-          );
-        }
+        const body = group?.querySelector<HTMLElement>(":scope > [data-group-body]");
+        if (!group || !body) return;
+        toggleDisclosure(group, body, btn);
       });
     });
 
@@ -371,6 +478,8 @@ const agents: NavLink[] = [
           if (q && groupHits > 0) {
             group.dataset.open = "true";
             group.querySelector("[data-group-toggle]")?.setAttribute("aria-expanded", "true");
+            const body = group.querySelector<HTMLElement>(":scope > [data-group-body]");
+            if (body) snapDisclosure(body, true);
           }
           sectionHits += groupHits;
         });
@@ -397,6 +506,8 @@ const agents: NavLink[] = [
         if (q && sectionHits > 0) {
           section.dataset.open = "true";
           section.querySelector("[data-section-toggle]")?.setAttribute("aria-expanded", "true");
+          const body = section.querySelector<HTMLElement>(":scope > [data-section-body]");
+          if (body) snapDisclosure(body, true);
         }
       });
 
@@ -612,6 +723,7 @@ const agents: NavLink[] = [
     border-radius: 8px;
     background: var(--sb-active);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
     transform: translate3d(0, 0, 0);
     transition:
@@ -621,6 +733,10 @@ const agents: NavLink[] = [
       opacity var(--duration-fast) var(--ease-standard),
       background var(--duration-fast) var(--ease-standard);
     will-change: transform, width, height, opacity;
+  }
+  .pill[data-hidden="1"] {
+    opacity: 0 !important;
+    visibility: hidden !important;
   }
   .pill[data-soft="1"] {
     background: var(--sb-hover);
@@ -637,6 +753,10 @@ const agents: NavLink[] = [
     background: var(--ink);
     transform: translateY(-50%);
   }
+  .pill[data-hidden="1"]::before,
+  .pill[data-guide="0"]::before {
+    content: none;
+  }
 
   .section {
     position: relative;
@@ -647,11 +767,12 @@ const agents: NavLink[] = [
   .section + .section {
     margin-top: 0.35rem;
   }
-  .section[data-open="false"] .section-body {
-    display: none;
-  }
   .section[hidden] {
     display: none !important;
+  }
+  .section-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
   .section-head {
     position: sticky;
@@ -710,11 +831,12 @@ const agents: NavLink[] = [
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
-  .group[data-open="false"] .group-body {
-    display: none;
-  }
   .group[hidden] {
     display: none !important;
+  }
+  .group-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
   .group-head {
     position: sticky;
