@@ -114,6 +114,56 @@ struct Snapshot {
 pub struct EditorScrollRegion(pub fn(Bounds<Pixels>, bool, bool));
 impl Global for EditorScrollRegion {}
 
+// On the web the browser may send an ordinary, unflagged printable keydown
+// before compositionstart. Let its textarea deliver text via input/composition
+// instead of letting the GPUI keydown fallback insert the opening letter too.
+#[cfg(target_family = "wasm")]
+fn browser_text_input() -> Subscription {
+    use wasm_bindgen::prelude::*;
+    #[wasm_bindgen(inline_js = r#"
+        export function listenForEditorText() {
+            const controller = new AbortController();
+            const options = { capture: true, signal: controller.signal };
+            function attach(input) {
+                let composing = false;
+                input.addEventListener('compositionstart', () => { composing = true; }, options);
+                input.addEventListener('compositionend', () => { composing = false; }, options);
+                input.addEventListener('blur', () => { composing = false; }, options);
+                input.addEventListener('keydown', event => {
+                    if (input.readOnly) return;
+                    const shortcut = event.metaKey || (event.ctrlKey && !event.getModifierState('AltGraph'));
+                    const textKey = [...event.key].length === 1 || event.key === 'Dead';
+                    if (composing || event.isComposing || event.keyCode === 229 || (!shortcut && textKey)) {
+                        // Preserve the default action that drives the IME and regular typing.
+                        event.stopImmediatePropagation();
+                    }
+                }, options);
+            }
+            if (document.activeElement instanceof HTMLTextAreaElement) {
+                attach(document.activeElement);
+            } else {
+                // GPUI may assign editor focus just before it focuses the DOM mirror.
+                const onFocus = event => {
+                    if (!(event.target instanceof HTMLTextAreaElement)) return;
+                    document.removeEventListener('focusin', onFocus, true);
+                    attach(event.target);
+                };
+                document.addEventListener('focusin', onFocus, options);
+            }
+            return controller;
+        }
+        export function stopListeningForEditorText(controller) { controller.abort(); }
+    "#)]
+    extern "C" {
+        #[wasm_bindgen(js_name = listenForEditorText)]
+        fn listen() -> JsValue;
+        #[wasm_bindgen(js_name = stopListeningForEditorText)]
+        fn stop(controller: JsValue);
+    }
+    let controller = listen();
+    Subscription::new(move || stop(controller))
+}
+
 pub struct Editor {
     label: SharedString,
     placeholder: SharedString,
@@ -135,6 +185,8 @@ pub struct Editor {
     redo: Vec<Snapshot>,
     cursor: bool,
     blink: Option<Task<()>>,
+    #[cfg(target_family = "wasm")]
+    browser_keys: Option<Subscription>,
     _listeners: Vec<Subscription>,
 }
 impl EventEmitter<EditEvent> for Editor {}
@@ -162,6 +214,10 @@ impl Editor {
     ) -> Self {
         let focus = cx.focus_handle().tab_stop(true);
         let entered = cx.on_focus(&focus, w, |s: &mut Self, _, cx| {
+            #[cfg(target_family = "wasm")]
+            {
+                s.browser_keys = Some(browser_text_input());
+            }
             s.cursor = true;
             s.blink = Some(cx.spawn(async move |this, cx| {
                 loop {
@@ -183,6 +239,10 @@ impl Editor {
             cx.notify()
         });
         let left = cx.on_blur(&focus, w, |s: &mut Self, _, cx| {
+            #[cfg(target_family = "wasm")]
+            {
+                s.browser_keys = None;
+            }
             s.blink = None;
             s.dragging = false;
             s.marked = None;
@@ -210,6 +270,8 @@ impl Editor {
             redo: vec![],
             cursor: true,
             blink: None,
+            #[cfg(target_family = "wasm")]
+            browser_keys: None,
             _listeners: vec![entered, left],
         }
     }

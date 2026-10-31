@@ -37,7 +37,7 @@
   "primitives/commit.rs": "e2704f06f7fa36f58f25b1e2e0c93c8a5e5f0830e87da938d2d56027c39b2dfd",
   "primitives/control.rs": "c3b6ef3b6765d4ec85d92f4bf0da96d51ef32dab8eee2d758cb2cff9691d8b76",
   "primitives/direct_touch.rs": "eb48cd70160a31bcc772e8296b6798154e31cdcad7d12d4c67fe7dd685c794f4",
-  "primitives/editor.rs": "51ccae2a171417c10257b46b40b13100017dabca3b6c8dc58b5169dce36a70c0",
+  "primitives/editor.rs": "f03be260985c42f3019fbb3906b2895eb4223bc8dea2e87aede716737acb0e73",
   "primitives/family.rs": "9eacff672dce1796d0671ae701227254acc49aad539a4eb1093df00cfe1e2a6a",
   "primitives/field.rs": "b6ffe65c94e3fc9df1cb206dd0c20f80838462d76531c157a37a0d94665daf27",
   "primitives/glyph.rs": "b698a8f140ef1d78493bb62a0758a006f760a1eb43d05a4eb12c1b914bc0b973",

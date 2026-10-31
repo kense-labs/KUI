@@ -215,6 +215,7 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
                 | "expanding-search" | "inline-edit" => {
                     primitives.push("editor");
                     cargo.push("unicode-segmentation@1".to_owned());
+                    cargo.push("wasm-bindgen@0.2".to_owned());
                     if !matches!(id, "inline-edit" | "expanding-search") {
                         primitives.push("field");
                     }
