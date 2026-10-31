@@ -65,7 +65,8 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
 
     <div class="scroll" data-nav-scroll>
       <div class="content" data-nav-root>
-        <div class="pill" data-nav-pill aria-hidden="true"></div>
+        <!-- Selected-only morphing pill (hover is CSS on .row). -->
+        <div class="pill" data-nav-pill data-hidden="1" aria-hidden="true"></div>
 
         <section class="section" data-section data-section-id="docs" data-open="true">
           <button type="button" class="section-head" data-section-toggle aria-expanded="true">
@@ -74,21 +75,23 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
             <span class="chevron"><Icon name="chevron" size={14} /></span>
           </button>
           <nav class="section-body" aria-label={t("sidebar.docs")} data-section-body>
-            <div class="rows flat">
-              {
-                docs.map((item) => (
-                  <a
-                    href={item.href}
-                    class="row"
-                    data-nav-item
-                    data-tip={item.label}
-                    data-astro-prefetch
-                    aria-current={item.match ? "page" : undefined}
-                  >
-                    <span class="row-label">{item.label}</span>
-                  </a>
-                ))
-              }
+            <div class="disclosure-clip">
+              <div class="rows flat">
+                {
+                  docs.map((item) => (
+                    <a
+                      href={item.href}
+                      class="row"
+                      data-nav-item
+                      data-tip={item.label}
+                      data-astro-prefetch
+                      aria-current={item.match ? "page" : undefined}
+                    >
+                      <span class="row-label">{item.label}</span>
+                    </a>
+                  ))
+                }
+              </div>
             </div>
           </nav>
         </section>
@@ -101,30 +104,34 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
             <span class="chevron"><Icon name="chevron" size={14} /></span>
           </button>
           <div class="section-body" data-section-body>
-            <div class="group" data-group data-group-id="buttons" data-open="true">
-              <button type="button" class="group-head" data-group-toggle aria-expanded="true">
-                <span class="group-chevron"><Icon name="chevron" size={12} /></span>
-                <span class="group-label">{t("sidebar.group.buttons")}</span>
-                <span class="group-count" data-group-count><span>{buttons.length}</span></span>
-              </button>
-              <nav class="group-body" aria-label={t("sidebar.group.buttons")} data-group-body>
-                <div class="rows">
-                  {
-                    buttons.map((item) => (
-                      <a
-                        href={item.href}
-                        class="row"
-                        data-nav-item
-                        data-tip={item.label}
-                        data-astro-prefetch
-                        aria-current={item.match ? "page" : undefined}
-                      >
-                        <span class="row-label">{item.label}</span>
-                      </a>
-                    ))
-                  }
-                </div>
-              </nav>
+            <div class="disclosure-clip">
+              <div class="group" data-group data-group-id="buttons" data-open="true">
+                <button type="button" class="group-head" data-group-toggle aria-expanded="true">
+                  <span class="group-chevron"><Icon name="chevron" size={12} /></span>
+                  <span class="group-label">{t("sidebar.group.buttons")}</span>
+                  <span class="group-count" data-group-count><span>{buttons.length}</span></span>
+                </button>
+                <nav class="group-body" aria-label={t("sidebar.group.buttons")} data-group-body>
+                  <div class="disclosure-clip">
+                    <div class="rows">
+                      {
+                        buttons.map((item) => (
+                          <a
+                            href={item.href}
+                            class="row"
+                            data-nav-item
+                            data-tip={item.label}
+                            data-astro-prefetch
+                            aria-current={item.match ? "page" : undefined}
+                          >
+                            <span class="row-label">{item.label}</span>
+                          </a>
+                        ))
+                      }
+                    </div>
+                  </div>
+                </nav>
+              </div>
             </div>
           </div>
         </section>
@@ -144,89 +151,72 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
   type PillBox = { top: number; left: number; width: number; height: number };
   type Anim = ReturnType<typeof animate>;
 
-  const disclosureAnims = new WeakMap<HTMLElement, Anim>();
+  const pillAnims = new WeakMap<HTMLElement, Anim>();
 
   function reducedMotion(): boolean {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
-  function finePointer(): boolean {
-    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  function readPillBox(pill: HTMLElement): PillBox | null {
+    const x = pill.dataset.x;
+    const y = pill.dataset.y;
+    const w = pill.dataset.w;
+    const h = pill.dataset.h;
+    if (!x || !y || !w || !h) return null;
+    return {
+      left: Number(x),
+      top: Number(y),
+      width: Number(w),
+      height: Number(h),
+    };
   }
 
-  /** Instant open/close (search filter, reduced motion). */
-  function snapDisclosure(body: HTMLElement, open: boolean) {
-    disclosureAnims.get(body)?.stop();
-    if (open) {
-      body.hidden = false;
-      body.style.height = "auto";
-      body.style.opacity = "1";
-      body.style.overflow = "visible";
-      body.style.pointerEvents = "";
-    } else {
-      body.style.height = "0px";
-      body.style.opacity = "0";
-      body.style.overflow = "hidden";
-      body.style.pointerEvents = "none";
-      body.hidden = true;
-    }
+  function writePillBox(pill: HTMLElement, box: PillBox) {
+    pill.dataset.x = String(box.left);
+    pill.dataset.y = String(box.top);
+    pill.dataset.w = String(box.width);
+    pill.dataset.h = String(box.height);
   }
 
-  /**
-   * Arc-style group/section body: height + opacity spring.
-   * Keeps overflow hidden while measuring so the rail collapses cleanly.
-   */
-  async function animateDisclosure(
-    body: HTMLElement,
-    open: boolean,
-    onTick?: () => void,
-  ) {
+  function measureItem(root: HTMLElement, item: HTMLElement): PillBox {
+    const rootBox = root.getBoundingClientRect();
+    const box = item.getBoundingClientRect();
+    return {
+      top: box.top - rootBox.top + root.scrollTop,
+      left: box.left - rootBox.left + root.scrollLeft,
+      width: box.width,
+      height: box.height,
+    };
+  }
+
+  /** Clear leftover inline styles from older JS height tweens. */
+  function resetDisclosureBody(body: HTMLElement) {
+    body.hidden = false;
+    body.style.height = "";
+    body.style.opacity = "";
+    body.style.overflow = "";
+    body.style.pointerEvents = "";
+  }
+
+  function afterDisclosure(body: HTMLElement, done: () => void) {
     if (reducedMotion()) {
-      snapDisclosure(body, open);
-      onTick?.();
+      done();
       return;
     }
-
-    disclosureAnims.get(body)?.stop();
-    body.hidden = false;
-    body.style.overflow = "hidden";
-    body.style.pointerEvents = "none";
-
-    if (open) {
-      body.style.height = "0px";
-      body.style.opacity = "0";
-      void body.offsetHeight;
-    } else {
-      const h = body.getBoundingClientRect().height || body.scrollHeight;
-      body.style.height = `${h}px`;
-      body.style.opacity = "1";
-      void body.offsetHeight;
-    }
-
-    const end = open ? body.scrollHeight : 0;
-    const anim = animate(
-      body,
-      { height: `${end}px`, opacity: open ? 1 : 0 },
-      {
-        ...motionTokens.spring.smooth,
-        onUpdate: () => onTick?.(),
-      },
-    );
-    disclosureAnims.set(body, anim);
-    await anim.finished.catch(() => undefined);
-
-    if (open) {
-      body.style.height = "auto";
-      body.style.opacity = "1";
-      body.style.overflow = "visible";
-      body.style.pointerEvents = "";
-    } else {
-      body.style.height = "0px";
-      body.style.opacity = "0";
-      body.style.overflow = "hidden";
-      body.hidden = true;
-    }
-    onTick?.();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      body.removeEventListener("transitionend", onEnd);
+      done();
+    };
+    const onEnd = (event: TransitionEvent) => {
+      if (event.target !== body) return;
+      if (event.propertyName !== "grid-template-rows") return;
+      finish();
+    };
+    body.addEventListener("transitionend", onEnd);
+    window.setTimeout(finish, 340);
   }
 
   /** Current row is only highlightable while its section/group disclosure is open. */
@@ -237,68 +227,79 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     if (group && group.getAttribute("data-open") !== "true") return false;
     const section = item.closest<HTMLElement>("[data-section]");
     if (section && section.getAttribute("data-open") !== "true") return false;
-    const body = item.closest<HTMLElement>("[data-group-body], [data-section-body]");
-    if (body) {
-      if (body.hidden) return false;
-      if (body.getBoundingClientRect().height < 1) return false;
-    }
     const box = item.getBoundingClientRect();
     return box.width >= 1 && box.height >= 1;
   }
 
   function hidePill(pill: HTMLElement) {
-    pill.style.transition = "none";
+    pillAnims.get(pill)?.stop();
     pill.style.opacity = "0";
     pill.style.visibility = "hidden";
     pill.dataset.guide = "0";
-    pill.dataset.soft = "0";
     pill.dataset.hidden = "1";
-    void pill.offsetWidth;
-    pill.style.transition = "";
+    delete pill.dataset.ready;
   }
 
+  /**
+   * Selected-only highlight (Arc layoutId pill).
+   * Hover is CSS on `.row`. Morph uses transform-only FLIP (no width/height tween)
+   * so the compositor stays smooth.
+   */
   function placePill(
     root: HTMLElement,
     pill: HTMLElement,
     target: HTMLElement | null,
-    opts: { animate: boolean; soft?: boolean },
+    opts: { animate: boolean; from?: PillBox | null },
   ) {
     if (!target || !isNavItemVisible(target)) {
       hidePill(pill);
       return;
     }
-    const rootBox = root.getBoundingClientRect();
-    const box = target.getBoundingClientRect();
-    const next: PillBox = {
-      top: box.top - rootBox.top + root.scrollTop,
-      left: box.left - rootBox.left + root.scrollLeft,
-      width: box.width,
-      height: box.height,
-    };
 
-    const run = () => {
-      pill.dataset.hidden = "0";
-      pill.style.visibility = "visible";
-      pill.style.transform = `translate3d(${next.left}px, ${next.top}px, 0)`;
-      pill.style.width = `${next.width}px`;
-      pill.style.height = `${next.height}px`;
-      pill.style.opacity = opts.soft ? "0.55" : "1";
-      pill.dataset.soft = opts.soft ? "1" : "0";
-      // Nested Buttons rows: accent tick on the guide rail (only for solid current, not soft hover).
-      const nested = !!target.closest(".rows:not(.flat)");
-      pill.dataset.guide = !opts.soft && nested ? "1" : "0";
-    };
+    const next = measureItem(root, target);
+    const prev = opts.from ?? readPillBox(pill);
+    const canAnimate =
+      opts.animate &&
+      !reducedMotion() &&
+      pill.dataset.ready === "1" &&
+      prev &&
+      (Math.abs(prev.left - next.left) > 0.5 ||
+        Math.abs(prev.top - next.top) > 0.5 ||
+        Math.abs(prev.width - next.width) > 0.5 ||
+        Math.abs(prev.height - next.height) > 0.5);
 
-    if (!opts.animate || reducedMotion()) {
-      pill.style.transition = "none";
-      run();
-      void pill.offsetWidth;
-      pill.style.transition = "";
+    pillAnims.get(pill)?.stop();
+    pill.dataset.hidden = "0";
+    pill.style.visibility = "visible";
+    pill.style.opacity = "1";
+    pill.style.transformOrigin = "top left";
+    // Same selected chrome in every section: accent tick on the left guide.
+    pill.dataset.guide = "1";
+
+    // Final box size is committed immediately; only transform is springed.
+    pill.style.width = `${next.width}px`;
+    pill.style.height = `${next.height}px`;
+
+    if (!canAnimate || !prev) {
+      pill.style.transform = `translate3d(${next.left}px, ${next.top}px, 0) scale(1, 1)`;
+      writePillBox(pill, next);
+      pill.dataset.ready = "1";
       return;
     }
 
-    pill.style.transition = "";
-    run();
+    const sx = prev.width / Math.max(next.width, 1);
+    const sy = prev.height / Math.max(next.height, 1);
+    pill.style.transform = `translate3d(${prev.left}px, ${prev.top}px, 0) scale(${sx}, ${sy})`;
+    void pill.offsetWidth;
+
+    const anim = animate(
+      pill,
+      { transform: `translate3d(${next.left}px, ${next.top}px, 0) scale(1, 1)` },
+      motionTokens.spring.snappy,
+    );
+    pillAnims.set(pill, anim);
+    writePillBox(pill, next);
+    pill.dataset.ready = "1";
   }
 
   function activeItem(root: HTMLElement): HTMLElement | null {
@@ -313,18 +314,8 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
   }
 
   function rememberPill(root: HTMLElement, item: HTMLElement) {
-    const rootBox = root.getBoundingClientRect();
-    const box = item.getBoundingClientRect();
     try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          top: box.top - rootBox.top + root.scrollTop,
-          left: box.left - rootBox.left + root.scrollLeft,
-          width: box.width,
-          height: box.height,
-        }),
-      );
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(measureItem(root, item)));
     } catch {
       /* ignore */
     }
@@ -358,6 +349,10 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
       kbd.textContent = mac ? "⌘K" : "/";
     }
 
+    rootAside
+      .querySelectorAll<HTMLElement>("[data-section-body], [data-group-body]")
+      .forEach(resetDisclosureBody);
+
     // Re-entered after client nav on a reused tree — re-home the pill.
     if (rootAside.dataset.wired === "1") {
       if (pill) placePill(navRoot, pill, activeItem(navRoot), { animate: true });
@@ -369,39 +364,38 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
       const active = activeItem(navRoot);
       const stored = consumeStoredPill();
       if (stored && active && !reducedMotion()) {
-        pill.style.transition = "none";
-        pill.style.transform = `translate3d(${stored.left}px, ${stored.top}px, 0)`;
+        // Seed previous box, then spring to the new current (page-to-page morph).
+        writePillBox(pill, stored);
+        pill.dataset.ready = "1";
+        pill.style.visibility = "visible";
+        pill.style.opacity = "1";
         pill.style.width = `${stored.width}px`;
         pill.style.height = `${stored.height}px`;
-        pill.style.opacity = "1";
-        void pill.offsetWidth;
-        requestAnimationFrame(() => placePill(navRoot, pill, active, { animate: true }));
+        pill.style.transformOrigin = "top left";
+        pill.style.transform = `translate3d(${stored.left}px, ${stored.top}px, 0) scale(1, 1)`;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            placePill(navRoot, pill, active, { animate: true, from: stored });
+          });
+        });
       } else {
         placePill(navRoot, pill, active, { animate: false });
       }
 
+      // Click: remember WHERE we were, morph toward the destination.
+      // Hover: CSS only — do not move the selected pill.
       navRoot.querySelectorAll<HTMLAnchorElement>("[data-nav-item]").forEach((item) => {
         item.addEventListener("click", () => {
           const href = item.getAttribute("href") || "";
           if (/\.(txt|md|json)$/.test(href)) return;
-          rememberPill(navRoot, item);
-          placePill(navRoot, pill, item, { animate: true });
-        });
-      });
-
-      if (finePointer()) {
-        navRoot.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((item) => {
-          item.addEventListener("pointerenter", () => {
-            placePill(navRoot, pill, item, {
-              animate: true,
-              soft: item.getAttribute("aria-current") !== "page",
-            });
+          const from = activeItem(navRoot);
+          if (from) rememberPill(navRoot, from);
+          placePill(navRoot, pill, item, {
+            animate: true,
+            from: from ? measureItem(navRoot, from) : readPillBox(pill),
           });
         });
-        navRoot.addEventListener("pointerleave", () => {
-          placePill(navRoot, pill, activeItem(navRoot), { animate: true });
-        });
-      }
+      });
     }
 
     const retickPill = () => {
@@ -417,19 +411,14 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
       const open = btn.getAttribute("aria-expanded") !== "true";
       btn.setAttribute("aria-expanded", open ? "true" : "false");
       shell.setAttribute("data-open", open ? "true" : "false");
+      resetDisclosureBody(body);
 
-      // Pill lives outside the collapsing body — hide it immediately when the
-      // current page row is being collapsed away, otherwise it freezes in place.
+      // Pill lives outside the collapsing body — hide immediately when the
+      // current row is collapsed away; resettle after the CSS grid tween.
       if (!open && pill && currentInside(body)) {
         hidePill(pill);
-      } else if (open) {
-        retickPill();
       }
-
-      void animateDisclosure(body, open, () => {
-        if (open) retickPill();
-        else if (pill && currentInside(body)) hidePill(pill);
-      }).then(() => retickPill());
+      afterDisclosure(body, retickPill);
     };
 
     rootAside.querySelectorAll<HTMLButtonElement>("[data-section-toggle]").forEach((btn) => {
@@ -479,13 +468,15 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
             group.dataset.open = "true";
             group.querySelector("[data-group-toggle]")?.setAttribute("aria-expanded", "true");
             const body = group.querySelector<HTMLElement>(":scope > [data-group-body]");
-            if (body) snapDisclosure(body, true);
+            if (body) resetDisclosureBody(body);
           }
           sectionHits += groupHits;
         });
 
         section
-          .querySelectorAll<HTMLElement>(":scope > [data-section-body] > .rows.flat > [data-nav-item]")
+          .querySelectorAll<HTMLElement>(
+            ":scope > [data-section-body] .rows.flat > [data-nav-item]",
+          )
           .forEach((row) => {
             const tip = (row.dataset.tip || row.textContent || "").toLowerCase();
             const show = !q || tip.includes(q);
@@ -507,7 +498,7 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
           section.dataset.open = "true";
           section.querySelector("[data-section-toggle]")?.setAttribute("aria-expanded", "true");
           const body = section.querySelector<HTMLElement>(":scope > [data-section-body]");
-          if (body) snapDisclosure(body, true);
+          if (body) resetDisclosureBody(body);
         }
       });
 
@@ -714,7 +705,10 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     padding-bottom: 1.25rem;
   }
 
-  /* Shared morphing highlight — springs between rows. */
+  /*
+   * Selected pill — only tracks aria-current (morphes on navigation).
+   * Hover fill is on `.row:hover`, not this element.
+   */
   .pill {
     position: absolute;
     top: 0;
@@ -725,21 +719,14 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transform: translate3d(0, 0, 0);
-    transition:
-      transform var(--duration-spring) var(--ease-morph),
-      width var(--duration-spring) var(--ease-morph),
-      height var(--duration-spring) var(--ease-morph),
-      opacity var(--duration-fast) var(--ease-standard),
-      background var(--duration-fast) var(--ease-standard);
-    will-change: transform, width, height, opacity;
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    transform-origin: top left;
+    /* Motion owns transform — no CSS width/height tween (that was the jank). */
+    will-change: transform;
   }
   .pill[data-hidden="1"] {
     opacity: 0 !important;
     visibility: hidden !important;
-  }
-  .pill[data-soft="1"] {
-    background: var(--sb-hover);
   }
   /* Nested group current: accent tick on the left guide. */
   .pill[data-guide="1"]::before {
@@ -763,16 +750,39 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     z-index: 1;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    align-content: start;
   }
   .section + .section {
-    margin-top: 0.35rem;
+    margin-top: 0.25rem;
   }
   .section[hidden] {
     display: none !important;
   }
-  .section-body {
+  /*
+   * CSS grid 0fr→1fr disclosure — compositor-friendly, no JS height tween.
+   * align-content:start keeps 1fr from inventing empty space under content.
+   */
+  .section-body,
+  .group-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 0fr;
+    align-content: start;
+    transition: grid-template-rows 280ms var(--ease-snappy);
+  }
+  .section[data-open="true"] > .section-body,
+  .group[data-open="true"] > .group-body {
+    grid-template-rows: 1fr;
+  }
+  /*
+   * Clip for 0fr→1fr collapse. Must be `clip`, not `hidden`:
+   * `overflow: hidden` makes this a scrollport, so `.group-head`'s
+   * sticky `top: var(--sb-section-h)` applies against *this* box and
+   * invents a 32px gap under「组件」even when the sidebar isn't scrolled.
+   * `overflow: clip` still masks the collapse without trapping sticky.
+   */
+  .disclosure-clip {
+    min-height: 0;
+    overflow: clip;
   }
   .section-head {
     position: sticky;
@@ -782,6 +792,7 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     width: 100%;
     height: var(--sb-section-h);
     align-items: center;
+    margin: 0;
     border: 0;
     border-radius: 8px;
     padding: 0 0.4rem 0 var(--sb-icon-x);
@@ -830,13 +841,10 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
   .group {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    align-content: start;
   }
   .group[hidden] {
     display: none !important;
-  }
-  .group-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
   }
   .group-head {
     position: sticky;
@@ -847,6 +855,7 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     height: var(--sb-group-h);
     align-items: center;
     gap: 0.45rem;
+    margin: 0;
     border: 0;
     border-radius: 8px;
     padding: 0 0.5rem 0 var(--sb-icon-x);
@@ -883,9 +892,11 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    padding: 1px 0 0.5rem var(--sb-row-x);
+    /* Tight to the group/section head — no phantom gap above the first row. */
+    padding: 0 0 0.35rem var(--sb-row-x);
+    margin: 0;
   }
-  .rows:not(.flat)::before {
+  .rows::before {
     content: "";
     position: absolute;
     top: 1px;
@@ -897,6 +908,7 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
   .row {
     position: relative;
     z-index: 1;
+    isolation: isolate;
     display: flex;
     min-width: 0;
     height: var(--sb-row-h);
@@ -908,16 +920,30 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     letter-spacing: -0.01em;
     line-height: 1.3;
     text-decoration: none;
-    transition: color 0.14s var(--ease-standard);
+    outline: 0;
+    transition:
+      background-color 0.14s var(--ease-standard),
+      color 0.14s var(--ease-standard);
   }
-  /* Hover/active fill comes from the shared pill — no CSS background fight. */
-  .row:hover,
-  .row[aria-current="page"] {
+  /* Hover micro-interaction — independent from the selected pill. */
+  .row:hover {
+    background: var(--sb-hover);
     color: var(--ink);
     opacity: 1;
   }
+  .row:focus-visible {
+    background: var(--sb-hover);
+    color: var(--ink);
+  }
+  /* Current page: fill comes from the morphing pill; keep row bg clear. */
   .row[aria-current="page"] {
+    background: transparent;
+    color: var(--ink);
     font-weight: 500;
+  }
+  .row[aria-current="page"]:hover,
+  .row[aria-current="page"]:focus-visible {
+    background: transparent;
   }
   .row[hidden] {
     display: none !important;
@@ -944,6 +970,10 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     .pill {
       transition: none;
     }
+    .section-body,
+    .group-body {
+      transition: none;
+    }
   }
   @media (max-width: 900px) {
     .aside {
@@ -968,7 +998,7 @@ const buttons: NavLink[] = buttonsNav(locale).map((item) => ({
     .row[aria-current="page"] {
       background: var(--sb-active);
     }
-    .rows:not(.flat) .row[aria-current="page"]::before {
+    .row[aria-current="page"]::before {
       content: "";
       position: absolute;
       top: 50%;
