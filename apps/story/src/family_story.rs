@@ -1,8 +1,7 @@
 //! Reference examples rendered with the same installed components on both platforms.
 pub mod collections;
-mod connection_switch;
 pub mod fields;
-use connection_switch::ConnectionSwitch;
+pub mod workspace;
 use gpui::{prelude::*, *};
 use kui::{
     components::{
@@ -15,6 +14,7 @@ use kui::{
         floating_button_group::FloatingButtonGroup,
         icon_morph::{IconMorph, MorphChanged},
         split_button::SplitButton,
+        switch::Switch,
         theme_switch::{ThemeChange, ThemeSwitch, Transition},
     },
     foundation::Theme,
@@ -577,7 +577,15 @@ impl FamilyStory {
                     });
                     add!(async_demo(e, Some(i), cx));
                 }
-                let connection = cx.new(|cx| ConnectionSwitch::new(w, cx));
+                let connection = cx.new(|cx| {
+                    Switch::new(
+                        "connection",
+                        t("Simulate a lost connection", "模拟网络中断"),
+                        w,
+                        cx,
+                    )
+                    .with_track_radius(Theme::global(cx).tokens.radius.md)
+                });
                 let sub = cx.subscribe(&connection, |story, _, checked: &bool, _| {
                     story.failure = *checked;
                 });
@@ -742,6 +750,10 @@ impl FamilyStory {
                 });
                 add!((e.into(), sub));
             }
+            id if workspace::IDS.contains(&id) => s.views.push(
+                cx.new(|cx| workspace::WorkspaceStory::new(id, w, cx))
+                    .into(),
+            ),
             id if fields::IDS.contains(&id) => s
                 .views
                 .push(cx.new(|cx| fields::FieldStory::new(id, w, cx)).into()),
@@ -854,7 +866,9 @@ impl FamilyStory {
                             .child(view(i)),
                     )
                 }
-                stack.child(view(3)).into_any_element()
+                stack
+                    .child(div().relative().top(px(10.)).mt(px(8.)).child(view(3)))
+                    .into_any_element()
             }
             "icon-morph" => {
                 let n = if narrow { 2 } else { 4 };
@@ -1132,7 +1146,7 @@ impl Render for FamilyStory {
                 |e| e.font_family("KUI Story Sans"),
             )
             .when(
-                fields::IDS.contains(&self.id.as_str())
+                (fields::IDS.contains(&self.id.as_str()) || self.id == "combobox")
                     && cx.try_global::<crate::InputFontLoaded>().is_some(),
                 |mut s| {
                     if UiLanguage::current(cx) == UiLanguage::Chinese {

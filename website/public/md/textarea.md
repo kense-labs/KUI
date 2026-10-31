@@ -17,7 +17,7 @@ Textarea preserves line breaks. set_description can display a live count supplie
 
 ## Interaction
 
-Enter inserts a line. Shift with arrows extends the selection; drag the handle to change height. Helper and error feedback stay below the editable area while resizing.
+When using a Pinyin IME, the first `n` appears once as marked text. Choosing `你` replaces that text, and cancelling removes the unfinished syllable. Outside composition, Enter inserts a line. Shift with arrows extends the selection; drag the handle to change height. Helper and error feedback stay below the editable area while resizing.
 
 - Event: `FieldEvent`.
 - Preview: [English](/en/kui/components/textarea/) · [中文](/kui/components/textarea/).

@@ -1,4 +1,5 @@
 import { defineConfig } from "astro/config";
+import { readFileSync } from "node:fs";
 
 export default defineConfig({
   site: "https://kense.ai",
@@ -24,6 +25,11 @@ export default defineConfig({
     "/en/components/button": "/en/kui/components/button",
   },
   vite: {
+    define: {
+      "import.meta.env.PUBLIC_PREVIEW_REVISION": JSON.stringify(
+        readFileSync(new URL("./public/stories/revision.txt", import.meta.url), "utf8").trim(),
+      ),
+    },
     server: {
       fs: {
         allow: [".."],

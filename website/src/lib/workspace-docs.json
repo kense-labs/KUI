@@ -1,0 +1,234 @@
+[
+  {
+    "id": "dialog",
+    "group": "overlays",
+    "title": {
+      "en": "Dialog",
+      "zh": "对话框"
+    },
+    "rustType": "Dialog",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::dialog::Dialog;\n\nlet control = cx.new(|cx| Dialog::new(\"review\", \"Review changes\", \"Publish workspace\", cx)\n        .with_description(\"Your team will see these changes immediately.\")\n        .with_cancel(\"Keep editing\").with_confirm(\"Publish now\"));",
+    "method": "with_body",
+    "signature": "Fn(&mut Window, &mut App) → IntoElement",
+    "event": "SurfaceEvent",
+    "lead": {
+      "en": "Review and confirm an interrupting decision in a modal surface.",
+      "zh": "在模态面板里审阅并确认需要打断当前操作的决定。"
+    },
+    "rule": {
+      "en": "Open with Enter. Tab cycles through the dialog. Escape dismisses and restores trigger focus.",
+      "zh": "Enter 打开，Tab 在对话框内移动，Esc 关闭并返回触发按钮。"
+    },
+    "api": {
+      "en": "Subscribe to Opened, Closed and Confirmed. with_body accepts a custom view factory.",
+      "zh": "订阅打开、关闭和确认事件。with_body 可挂载自定义视图。"
+    },
+    "motion": {
+      "en": "The backdrop fades while the panel rises 8px. Closing reverses the current spring.",
+      "zh": "遮罩淡入，面板上移 8px。中途关闭时从当前位置回退。"
+    }
+  },
+  {
+    "id": "popover",
+    "group": "overlays",
+    "title": {
+      "en": "Popover",
+      "zh": "气泡面板"
+    },
+    "rustType": "Popover",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::popover::Popover;\n\nlet control = cx.new(|cx| Popover::new(\"checks\", \"Why this status?\", \"Ready for review\", cx)\n        .with_description(\"All required checks passed.\").with_cancel(\"Got it\"));",
+    "method": "with_cancel",
+    "signature": "impl Into<SharedString>",
+    "event": "SurfaceEvent",
+    "lead": {
+      "en": "Keep contextual information beside the control that opened it.",
+      "zh": "在触发控件旁显示可交互的补充说明。"
+    },
+    "rule": {
+      "en": "Enter opens the panel. Escape returns to the trigger. Clicking outside dismisses.",
+      "zh": "Enter 打开面板，Esc 关闭并返回按钮，点外部也可收起。"
+    },
+    "api": {
+      "en": "with_cancel adds a dismiss action. with_body mounts interactive host content.",
+      "zh": "with_cancel 添加关闭操作，with_body 挂载宿主的交互内容。"
+    },
+    "motion": {
+      "en": "The surface fades and travels 5px from its anchor. It flips above near the bottom edge.",
+      "zh": "面板沿锚点方向移动 5px 并淡入，底部空间不足时翻到上方。"
+    }
+  },
+  {
+    "id": "tabs",
+    "group": "navigation",
+    "title": {
+      "en": "Tabs",
+      "zh": "标签页"
+    },
+    "rustType": "Tabs",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tabs::{Tabs, TabPage};\n\nlet control = cx.new(|cx| Tabs::new(\"views\", \"Workspace views\", vec![\n        TabPage::new(\"overview\", \"Overview\", |_, _| gpui::div().child(\"Workspace overview\")),\n        TabPage::new(\"activity\", \"Activity\", |_, _| gpui::div().child(\"Recent activity\")),\n    ], cx));",
+    "method": "select",
+    "signature": "(&str, &mut Context<Self>)",
+    "event": "TabChanged",
+    "lead": {
+      "en": "Navigate peer views while preserving the application state of each panel.",
+      "zh": "在同级视图之间切换，保留各面板的应用状态。"
+    },
+    "rule": {
+      "en": "Left and Right move between enabled tabs. Home and End jump to the edges.",
+      "zh": "左右键切换可用标签，Home 和 End 前往首末标签。"
+    },
+    "api": {
+      "en": "Give each TabPage a stable value. Capture an existing Entity for a stateful panel.",
+      "zh": "每个 TabPage 使用稳定标识。在内容闭包中持有已有 Entity 可保留草稿和选区。"
+    },
+    "motion": {
+      "en": "One selection surface glides across the rail. Incoming content slides 8px in the direction of travel.",
+      "zh": "选中底片沿轨道滑动，内容沿切换方向移入 8px。"
+    }
+  },
+  {
+    "id": "combobox",
+    "group": "selects",
+    "title": {
+      "en": "Combobox",
+      "zh": "检索选择"
+    },
+    "rustType": "Combobox",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::combobox::Combobox;\nuse crate::ui::primitives::picker::PickerOption;\n\nlet control = cx.new(|cx| Combobox::new(\"model\", \"Model\", vec![\n        PickerOption::new(\"fast\", \"Fast\").with_keywords([\"quick\"]),\n        PickerOption::new(\"reasoning\", \"Reasoning\"),\n    ], window, cx).with_value(\"fast\"));",
+    "method": "with_value",
+    "signature": "&str",
+    "event": "SelectionChanged",
+    "lead": {
+      "en": "Filter single-choice options by name or keyword without losing the committed value.",
+      "zh": "按名称或别名筛选单选项，搜索期间保留已提交的值。"
+    },
+    "rule": {
+      "en": "Type to filter, use arrows to highlight and Enter to choose. Escape discards the query.",
+      "zh": "输入文字筛选，方向键高亮，Enter 提交，Esc 放弃查询。"
+    },
+    "api": {
+      "en": "PickerOption supports aliases and disabled rows. Clearing emits SelectionChanged(None).",
+      "zh": "PickerOption 支持别名和禁用项。清除选择时发送 SelectionChanged(None)。"
+    },
+    "motion": {
+      "en": "The caret rotates on open. The list springs to its filtered height.",
+      "zh": "展开时箭头旋转，列表随过滤结果平滑调整高度。"
+    }
+  },
+  {
+    "id": "select",
+    "group": "selects",
+    "title": {
+      "en": "Select",
+      "zh": "单项选择"
+    },
+    "rustType": "Select",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::select::Select;\nuse crate::ui::primitives::picker::PickerOption;\n\nlet control = cx.new(|cx| Select::new(\"team\", \"Team\", vec![\n        PickerOption::new(\"design\", \"Design\"), PickerOption::new(\"engineering\", \"Engineering\"),\n    ], window, cx).with_value(\"design\"));",
+    "method": "with_description",
+    "signature": "impl Into<SharedString>",
+    "event": "SelectionChanged",
+    "lead": {
+      "en": "Choose one value from a short list.",
+      "zh": "从简短的候选列表中选择一个值。"
+    },
+    "rule": {
+      "en": "Open with Enter, Space or Down. Arrow keys skip disabled rows. Escape retains the current value.",
+      "zh": "Enter、空格或下键打开。方向键跳过禁用项，Esc 保留当前值。"
+    },
+    "api": {
+      "en": "Option values are stable identifiers. Subscribe to SelectionChanged for user selections.",
+      "zh": "以稳定标识保存选项值，订阅 SelectionChanged 接收选择结果。"
+    },
+    "motion": {
+      "en": "The shown value rolls up or down according to the option order.",
+      "zh": "显示值根据选项的相对位置向上或向下滚入。"
+    }
+  },
+  {
+    "id": "switch",
+    "group": "toggles",
+    "title": {
+      "en": "Switch",
+      "zh": "开关"
+    },
+    "rustType": "Switch",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::switch::Switch;\n\nlet control = cx.new(|cx| Switch::new(\"digest\", \"Weekly digest\", window, cx).with_checked(true));",
+    "method": "set_checked",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "bool",
+    "lead": {
+      "en": "Toggle a setting that takes effect immediately.",
+      "zh": "切换立即生效的设置。"
+    },
+    "rule": {
+      "en": "Click the label or activate with Enter or Space. A disabled switch ignores input.",
+      "zh": "点击标签或按 Enter、空格切换。禁用时忽略输入。"
+    },
+    "api": {
+      "en": "with_checked sets the initial value. set_checked synchronizes host updates without echoing a change event.",
+      "zh": "with_checked 指定初值。set_checked 同步宿主值，不会重复发送变更事件。"
+    },
+    "motion": {
+      "en": "An 18px thumb stretches by 5px on press and glides across its 42 × 24px track.",
+      "zh": "18px 滑块按下时加宽 5px，释放后沿 42 × 24px 轨道滑动。"
+    }
+  },
+  {
+    "id": "resizable-panels",
+    "group": "expand",
+    "title": {
+      "en": "Resizable panels",
+      "zh": "可调面板"
+    },
+    "rustType": "ResizablePanels",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::resizable_panels::{ResizablePanels, Pane};\n\nlet control = cx.new(|cx| ResizablePanels::new(\"workspace\", \"Workspace\", vec![\n        Pane::new(\"files\", \"Files\", 30., |_, _, _| gpui::div().child(\"Files\")).collapsible(),\n        Pane::new(\"editor\", \"Editor\", 70., |_, _, _| gpui::div().child(\"Editor\")),\n    ], cx));",
+    "method": "Pane::with_limits",
+    "signature": "(f32, Option<f32>)",
+    "event": "LayoutChanged",
+    "lead": {
+      "en": "Distribute horizontal space between adjacent panes.",
+      "zh": "拖动分隔线，重新分配相邻面板的水平空间。"
+    },
+    "rule": {
+      "en": "Drag a divider or use Left and Right in 16px steps. Shift increases the step to 64px. Enter collapses or restores a collapsible neighbour.",
+      "zh": "拖动分隔线或用左右键每次移动 16px。按住 Shift 改为 64px，Enter 折叠或还原相邻的可折叠面板。"
+    },
+    "api": {
+      "en": "Give the group a definite height. Pane shares are relative weights. LayoutChanged contains settled percentages in pane order.",
+      "zh": "父容器需指定高度。Pane 权重决定初始比例，LayoutChanged 按顺序返回各栏最终百分比。"
+    },
+    "motion": {
+      "en": "Dragging follows the pointer. Limits resist and release springs the divider into place.",
+      "zh": "拖动紧跟指针，越过尺寸限制后产生阻力，松手时弹回。"
+    }
+  },
+  {
+    "id": "empty-state",
+    "group": "cards",
+    "title": {
+      "en": "Empty state",
+      "zh": "空状态"
+    },
+    "rustType": "EmptyState",
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::empty_state::{EmptyState, EmptyContent};\n\nlet control = cx.new(|_| EmptyState::new(\"saved\", EmptyContent::new(\"No saved views\", \"Save a view to reuse your filters.\").with_action(\"Create view\")));",
+    "method": "set_content",
+    "signature": "(EmptyContent, &mut Context<Self>)",
+    "event": "EmptyAction",
+    "lead": {
+      "en": "Explain an empty view and offer a next action.",
+      "zh": "说明视图为空的原因，提供下一步操作。"
+    },
+    "rule": {
+      "en": "Tab to the optional action. Enter or Space activates it.",
+      "zh": "Tab 聚焦可选操作按钮，Enter 或空格执行。"
+    },
+    "api": {
+      "en": "Keep the entity mounted and call set_content to change its message. Subscribe to EmptyAction to handle its optional button.",
+      "zh": "保留同一实体，使用 set_content 替换内容。订阅 EmptyAction 执行可选按钮的操作。"
+    },
+    "motion": {
+      "en": "The old copy rises out while the new copy and icon enter. The body height follows its content.",
+      "zh": "旧文案上移淡出，新文案与图标同时进入，区块高度跟随内容调整。"
+    }
+  }
+]

@@ -167,6 +167,9 @@ fn browser_text_input() -> Subscription {
 pub struct Editor {
     label: SharedString,
     placeholder: SharedString,
+    pub(crate) expanded: Option<bool>,
+    // A closed picker paints the committed option while keeping its query buffer empty.
+    pub(crate) committed_label: Option<SharedString>,
     pub mode: InputMode,
     value: String,
     anchor: usize,
@@ -252,6 +255,8 @@ impl Editor {
         Self {
             label: label.into(),
             placeholder: "".into(),
+            expanded: None,
+            committed_label: None,
             mode,
             value: String::new(),
             anchor: 0,
@@ -642,14 +647,16 @@ impl Editor {
             vec![]
         };
         let text: SharedString = if blank {
-            self.placeholder.clone()
+            self.committed_label
+                .clone()
+                .unwrap_or_else(|| self.placeholder.clone())
         } else if masked {
             "•".repeat(mask.len() - 1).into()
         } else {
             self.value.clone().into()
         };
         let mut run = w.text_style().to_run(text.len());
-        run.color = if blank || self.disabled {
+        run.color = if (blank && self.committed_label.is_none()) || self.disabled {
             p.secondary
         } else {
             p.ink
@@ -741,7 +748,11 @@ impl Editor {
                     ))
                 }
             }
-            if focused && self.cursor && self.selected().is_empty() {
+            if focused
+                && self.cursor
+                && self.selected().is_empty()
+                && self.committed_label.is_none()
+            {
                 let caret = layout.at(self.caret);
                 w.paint_quad(fill(
                     Bounds::new(caret + point(px(0.), px(2.)), size(px(1.), line - px(4.))),
@@ -775,8 +786,13 @@ impl Render for Editor {
             .aria_label(self.label.clone())
             .aria_description(self.description.clone())
             .aria_placeholder(self.placeholder.clone())
+            .when_some(self.expanded, |e, open| e.aria_expanded(open))
             .when(self.mode != InputMode::Password, |e| {
-                e.aria_value(self.value.clone())
+                e.aria_value(
+                    self.committed_label
+                        .clone()
+                        .unwrap_or_else(|| self.value.clone().into()),
+                )
             })
             .size_full()
             .min_w_0()

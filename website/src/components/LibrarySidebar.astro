@@ -28,9 +28,10 @@ const docs: NavLink[] = [
   },
 ];
 
-const groups = (["buttons","gestures","menus","text-fields"] as const).map(id => ({
+const groups = (["buttons","gestures","menus","text-fields","overlays","navigation","selects","toggles","expand","cards"] as const).map(id => ({
   id, label:t(`sidebar.group.${id}`), items: COMPONENT_CATALOG.filter(doc => (doc.group ?? "buttons") === id).map(doc => ({
-    href: localePath(locale,`/kui/components/${doc.id}`), label:doc.title[locale], match:slug === doc.id
+    href: localePath(locale,`/kui/components/${doc.id}`), label:doc.title[locale], match:slug === doc.id,
+    search: [doc.id, doc.rustType, doc.title.zh, doc.title.en].join(" ").toLowerCase()
   }))
 }));
 ---
@@ -121,6 +122,7 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
                             class="row"
                             data-nav-item
                             data-tip={item.label}
+                            data-search-terms={item.search}
                             data-astro-prefetch
                             aria-current={item.match ? "page" : undefined}
                           >
@@ -152,6 +154,20 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
   type Anim = ReturnType<typeof animate>;
 
   const pillAnims = new WeakMap<HTMLElement, Anim>();
+  let savedScroll: number | undefined;
+  const disclosureChoices = new Map<string, boolean>();
+  const keyFor = (shell: HTMLElement) => shell.dataset.groupId ?? shell.dataset.sectionId!;
+  function setDisclosure(shell: HTMLElement, open: boolean) {
+    shell.dataset.open = String(open);
+    shell.querySelector(":scope > button")?.setAttribute("aria-expanded", String(open));
+    const body = shell.querySelector<HTMLElement>(":scope > [data-section-body],:scope > [data-group-body]");
+    if (body) body.inert = !open;
+  }
+  document.addEventListener("astro:before-swap", () => {
+    const aside = document.querySelector<HTMLElement>("[data-docs-sidebar]");
+    savedScroll = aside?.querySelector<HTMLInputElement>("[data-sidebar-search]")?.value
+      ? undefined : aside?.querySelector<HTMLElement>("[data-nav-scroll]")?.scrollTop;
+  });
 
   function reducedMotion(): boolean {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -360,6 +376,24 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
     }
     rootAside.dataset.wired = "1";
 
+    for (const shell of rootAside.querySelectorAll<HTMLElement>("[data-group], [data-section]")) {
+      setDisclosure(shell, currentInside(shell) || (disclosureChoices.get(keyFor(shell)) ?? true));
+    }
+    if (scroll) {
+      if (savedScroll !== undefined) scroll.scrollTop = savedScroll;
+      const item = activeItem(navRoot);
+      if (item) {
+        const box = scroll.getBoundingClientRect(), row = item.getBoundingClientRect();
+        let top = box.top;
+        for (const selector of ["[data-group]", "[data-section]"]) {
+          const head = item.closest(selector)?.querySelector(":scope > button");
+          if (head && getComputedStyle(head).position === "sticky") top += head.getBoundingClientRect().height;
+        }
+        if (row.top < top) scroll.scrollTop += row.top - top;
+        else if (row.bottom > box.bottom - 24) scroll.scrollTop += row.bottom - box.bottom + 24;
+      }
+    }
+
     if (pill) {
       const active = activeItem(navRoot);
       const stored = consumeStoredPill();
@@ -409,8 +443,8 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
       btn: HTMLButtonElement,
     ) => {
       const open = btn.getAttribute("aria-expanded") !== "true";
-      btn.setAttribute("aria-expanded", open ? "true" : "false");
-      shell.setAttribute("data-open", open ? "true" : "false");
+      disclosureChoices.set(keyFor(shell), open);
+      setDisclosure(shell, open);
       resetDisclosureBody(body);
 
       // Pill lives outside the collapsing body — hide immediately when the
@@ -449,7 +483,7 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
         section.querySelectorAll<HTMLElement>("[data-group]").forEach((group) => {
           let groupHits = 0;
           group.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((row) => {
-            const tip = (row.dataset.tip || row.textContent || "").toLowerCase();
+            const tip = row.dataset.searchTerms || (row.dataset.tip || row.textContent || "").toLowerCase();
             const show = !q || tip.includes(q);
             row.hidden = !show;
             if (show) {
@@ -464,12 +498,7 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
               q ? groupHits : group.querySelectorAll("[data-nav-item]").length,
             );
           }
-          if (q && groupHits > 0) {
-            group.dataset.open = "true";
-            group.querySelector("[data-group-toggle]")?.setAttribute("aria-expanded", "true");
-            const body = group.querySelector<HTMLElement>(":scope > [data-group-body]");
-            if (body) resetDisclosureBody(body);
-          }
+          setDisclosure(group, q && groupHits > 0 ? true : disclosureChoices.get(keyFor(group)) ?? true);
           sectionHits += groupHits;
         });
 
@@ -494,12 +523,7 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
             section.querySelectorAll<HTMLElement>("[data-nav-item]:not([hidden])").length,
           );
         }
-        if (q && sectionHits > 0) {
-          section.dataset.open = "true";
-          section.querySelector("[data-section-toggle]")?.setAttribute("aria-expanded", "true");
-          const body = section.querySelector<HTMLElement>(":scope > [data-section-body]");
-          if (body) resetDisclosureBody(body);
-        }
+        setDisclosure(section, q && sectionHits > 0 ? true : disclosureChoices.get(keyFor(section)) ?? true);
       });
 
       if (empty) empty.hidden = visible > 0 || !q;
@@ -519,24 +543,6 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
       });
     }
 
-    const focusSearch = (e: KeyboardEvent) => {
-      if (!search) return;
-      const meta = e.metaKey || e.ctrlKey;
-      if ((meta && e.key.toLowerCase() === "k") || (e.key === "/" && !meta)) {
-        const tag = (e.target as HTMLElement | null)?.tagName;
-        if (
-          e.key === "/" &&
-          (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable)
-        ) {
-          return;
-        }
-        e.preventDefault();
-        search.focus();
-        search.select();
-      }
-    };
-    window.addEventListener("keydown", focusSearch);
-
     if (scroll) {
       const onScroll = () => {
         scroll.toggleAttribute("data-fade-top", scroll.scrollTop > 4);
@@ -547,6 +553,20 @@ const groups = (["buttons","gestures","menus","text-fields"] as const).map(id =>
       onScroll();
     }
   }
+
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    const search = document.querySelector<HTMLInputElement>("[data-docs-sidebar] [data-sidebar-search]");
+    if (!search) return;
+    const meta = e.metaKey || e.ctrlKey;
+    if ((meta && e.key.toLowerCase() === "k") || (e.key === "/" && !meta)) {
+      const target = e.target;
+      if (e.key === "/" && target instanceof HTMLElement &&
+          (target.matches("input,textarea") || target.isContentEditable)) return;
+      e.preventDefault();
+      search.focus();
+      search.select();
+    }
+  });
 
   function boot() {
     document.querySelectorAll<HTMLElement>("[data-docs-sidebar]").forEach(wireSidebar);

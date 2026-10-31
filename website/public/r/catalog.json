@@ -198,5 +198,69 @@
     "kind": "component",
     "name": "inline-edit",
     "title": "InlineEdit"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "dialog",
+    "title": "Dialog"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "popover",
+    "title": "Popover"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "tabs",
+    "title": "Tabs"
+  },
+  {
+    "categories": [
+      "selects"
+    ],
+    "kind": "component",
+    "name": "combobox",
+    "title": "Combobox"
+  },
+  {
+    "categories": [
+      "selects"
+    ],
+    "kind": "component",
+    "name": "select",
+    "title": "Select"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "switch",
+    "title": "Switch"
+  },
+  {
+    "categories": [
+      "expand"
+    ],
+    "kind": "component",
+    "name": "resizable-panels",
+    "title": "ResizablePanels"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "empty-state",
+    "title": "EmptyState"
   }
 ]

@@ -44,6 +44,10 @@ function mountStory(slot: HTMLElement, nextSlot: HTMLElement) {
     slot.append(next);
     return;
   }
+  if (!sameBuild(frame, next.src)) {
+    // Reconcile after the router has committed its destination URL.
+    return;
+  }
   frame.removeAttribute("title");
   frame.setAttribute("aria-label", next.getAttribute("aria-label") ?? "");
   frame.className = next.className;
@@ -53,6 +57,27 @@ function mountStory(slot: HTMLElement, nextSlot: HTMLElement) {
   // The live document reads these attributes itself if WASM is still starting.
   previewRuntime(frame)?.show(next.dataset.storyKey!, next.dataset.lang!);
 }
+
+function sameBuild(frame: HTMLIFrameElement, source: string) {
+  // The path identifies the complete runtime. The query only selects a story and locale.
+  return new URL(frame.src).pathname === new URL(source, document.baseURI).pathname;
+}
+
+let upgrading = false;
+function reconcileBuild() {
+  // An already-open tab can perform its first swap with the previous release's
+  // navigation code. The incoming slot is current even when that code kept its old iframe.
+  const slot = document.querySelector<HTMLElement>("[data-preview-slot]");
+  const src = slot?.dataset.previewSrc;
+  const frame = slot?.querySelector<HTMLIFrameElement>("iframe");
+  if (!upgrading && frame && src && !sameBuild(frame, src)) {
+    // Replace both the old renderer and the old document's router/listeners.
+    // On a fresh load the iframe comes directly from this slot's HTML.
+    upgrading = true;
+    location.reload();
+  }
+}
+document.addEventListener("astro:page-load", reconcileBuild);
 
 document.addEventListener("astro:before-swap", (event) => {
   const nextDoc = event.newDocument;

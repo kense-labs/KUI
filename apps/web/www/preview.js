@@ -17,17 +17,37 @@ let paintRevision = 0;
 const waiters = new Set();
 const status = document.getElementById("status");
 
-// Only a textarea with more content in the direction of travel consumes the wheel.
+// Only an editable area or choice list with more content in the direction of travel consumes the wheel.
 let editorScroll;
 window.kuiEditorScroll = (x,y,w,h,up,down) => { editorScroll = {x,y,w,h,up,down}; };
 if (frame?.matches("iframe.rust-story[data-story]")) {
   window.addEventListener("wheel", event => {
     const r = editorScroll;
-    if (selected.story === "textarea" && r && !event.ctrlKey && !event.metaKey &&
+    if (["textarea","select","combobox"].includes(selected.story) && r && !event.ctrlKey && !event.metaKey &&
         event.clientX >= r.x && event.clientX < r.x + r.w && event.clientY >= r.y &&
         event.clientY < r.y + r.h && (event.deltaY > 0 ? r.down : event.deltaY < 0 && r.up)) return;
     event.stopPropagation();
   }, {capture: true, passive: true});
+
+  // After a sidebar navigation the host has DOM focus. GPUI handles a touch
+  // tap on a button without focusing its DOM keyboard receiver (it only opens
+  // the software keyboard for text fields). Reconnect hardware keys on taps.
+  let tap;
+  window.addEventListener("pointerdown", e => {
+    tap = e.isPrimary && e.pointerType === "touch" && e.target instanceof HTMLCanvasElement
+      ? { id: e.pointerId, x: e.clientX, y: e.clientY } : undefined;
+  }, { passive: true });
+  window.addEventListener("pointermove", e => {
+    if (tap?.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8) tap = undefined;
+  }, { passive: true });
+  window.addEventListener("pointercancel", () => { tap = undefined; }, { passive: true });
+  window.addEventListener("pointerup", e => {
+    const completed = tap?.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) <= 8;
+    tap = undefined;
+    if (!completed) return;
+    const receiver = document.querySelector('body > textarea[inputmode="none"]');
+    if (receiver && document.activeElement !== receiver) receiver.focus({ preventScroll: true });
+  }, { passive: true });
 }
 
 // The GPU buffer may be discarded between frames. Keep the most recently
@@ -124,7 +144,7 @@ function setPageColor() {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 }
 
-const textFieldStories = new Set(["input","textarea","password-field","password-strength","search-field","expanding-search","inline-edit"]);
+const textFieldStories = new Set(["input","textarea","password-field","password-strength","search-field","expanding-search","inline-edit","combobox"]);
 let inputFont;
 function warmInputFont(story) {
   if (running && textFieldStories.has(story)) inputFont ??= fetch(new URL("./fonts/KUIInputSans.ttf", import.meta.url))
@@ -138,14 +158,25 @@ function show(story, lang) {
   selected = { story, lang };
   document.documentElement.dataset.story = story.split(":")[0];
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-  if (!running || (mounted?.story === story && mounted?.lang === lang)) return;
+  if (!running) return;
+  if (mounted?.story === story && mounted?.lang === lang) return;
   if (frame && story.split(":")[0] === "theme-switch") set_icon_intent(dark);
   if (show_story(story, lang === "zh")) {
+    delete document.documentElement.dataset.previewError;
     mounted = selected;
     const address = new URL(location.href);
     address.searchParams.set("story", story);
     address.searchParams.set("lang", lang);
     history.replaceState(null, "", address);
+  } else {
+    // Do not leave the last interactive control under an unrelated page title.
+    mounted = undefined;
+    paintedStory = undefined;
+    document.documentElement.dataset.previewError = "true";
+    finishWaiters();
+    if (frame) delete frame.dataset.renderedStory;
+    status.hidden = false;
+    status.textContent = lang === "zh" ? "此预览未能打开，请刷新页面重试。" : "This preview could not open. Reload the page to retry.";
   }
 }
 
@@ -171,6 +202,7 @@ function preferences(nextDark, nextReduced, waitForPaint = true) {
 // GPUI calls this during prepaint. The microtask runs after the draw and
 // presentation callback returns, before the browser composites the next frame.
 window.kuiFramePainted = (height, renderedDark) => {
+  if (document.documentElement.dataset.previewError) return;
   if (height > 0 && frame?.classList.contains("rust-story") && frame.style.height !== height + "px") {
     frame.style.height = height + "px";
   }
@@ -179,10 +211,10 @@ window.kuiFramePainted = (height, renderedDark) => {
   const revision = paintRevision;
   const story = mounted;
   queueMicrotask(() => {
-    if (revision !== paintRevision || renderedDark !== dark || story !== mounted) return;
+    if (revision !== paintRevision || renderedDark !== dark || story !== mounted || document.documentElement.dataset.previewError) return;
     paintedDark = renderedDark;
     paintedStory = story;
-    status?.remove();
+    status.hidden = true;
     if (frame) {
       frame.dataset.renderedTheme = renderedDark ? "dark" : "light";
       frame.dataset.renderedStory = story?.story ?? "";
@@ -195,7 +227,7 @@ window.kuiPreviewStarted = () => {
   running = true;
   show(selected.story, selected.lang);
   set_preferences(dark, reduced);
-  if (!embedded || !selected.story) status?.remove();
+  if (!embedded || !selected.story) status.hidden = true;
 };
 window.kuiPreview = { show, preferences, copyPicture, controlRadius: () => themeRadius, iconIntent: dark => { if (running) set_icon_intent(dark); } };
 motion.addEventListener("change", () => preferences(dark, motion.matches));

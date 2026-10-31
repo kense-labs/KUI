@@ -40,6 +40,14 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [search-field](/md/search-field.md): SearchField
 - [expanding-search](/md/expanding-search.md): ExpandingSearch
 - [inline-edit](/md/inline-edit.md): InlineEdit
+- [dialog](/md/dialog.md): Dialog
+- [popover](/md/popover.md): Popover
+- [tabs](/md/tabs.md): Tabs
+- [combobox](/md/combobox.md): Combobox
+- [select](/md/select.md): Select
+- [switch](/md/switch.md): Switch
+- [resizable-panels](/md/resizable-panels.md): ResizablePanels
+- [empty-state](/md/empty-state.md): EmptyState
 
 ## Registry JSON
 
@@ -69,3 +77,11 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [search-field](/r/search-field.json)
 - [expanding-search](/r/expanding-search.json)
 - [inline-edit](/r/inline-edit.json)
+- [dialog](/r/dialog.json)
+- [popover](/r/popover.json)
+- [tabs](/r/tabs.json)
+- [combobox](/r/combobox.json)
+- [select](/r/select.json)
+- [switch](/r/switch.json)
+- [resizable-panels](/r/resizable-panels.json)
+- [empty-state](/r/empty-state.json)

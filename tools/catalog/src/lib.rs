@@ -156,6 +156,42 @@ pub const ITEMS: &[(&str, &str, &str)] = &[
         "InlineEdit",
         "Rename a project or edit its description in place, with validation and retry.",
     ),
+    (
+        "dialog",
+        "Dialog",
+        "Review and confirm an interrupting decision in a modal surface.",
+    ),
+    (
+        "popover",
+        "Popover",
+        "Keep contextual information beside the control that opened it.",
+    ),
+    (
+        "tabs",
+        "Tabs",
+        "Navigate peer views while preserving the application state of each panel.",
+    ),
+    (
+        "combobox",
+        "Combobox",
+        "Filter single-choice options by name or keyword without losing the committed value.",
+    ),
+    ("select", "Select", "Choose one value from a short list."),
+    (
+        "switch",
+        "Switch",
+        "Toggle a setting that takes effect immediately.",
+    ),
+    (
+        "resizable-panels",
+        "ResizablePanels",
+        "Distribute horizontal space between adjacent panes.",
+    ),
+    (
+        "empty-state",
+        "EmptyState",
+        "Explain an empty view and offer a next action.",
+    ),
 ];
 pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
     let (_, title, description) = ITEMS
@@ -206,7 +242,15 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         | "password-strength"
         | "search-field"
         | "expanding-search"
-        | "inline-edit" => {
+        | "inline-edit"
+        | "dialog"
+        | "popover"
+        | "tabs"
+        | "combobox"
+        | "select"
+        | "switch"
+        | "resizable-panels"
+        | "empty-state" => {
             let mut files = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
             let mut primitives = vec!["control", "family", "glyph"];
             cargo.push("web-time@1".into());
@@ -220,6 +264,15 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
                         primitives.push("field");
                     }
                 }
+                "select" | "combobox" => {
+                    primitives.extend(["editor", "flyout", "picker"]);
+                    cargo.extend([
+                        "unicode-segmentation@1".to_owned(),
+                        "wasm-bindgen@0.2".to_owned(),
+                    ]);
+                }
+                "dialog" | "popover" => primitives.extend(["flyout", "disclosure"]),
+                "resizable-panels" => primitives.push("direct_touch"),
                 "copy-button" => {
                     primitives.push("clipboard");
                     cargo.extend(
@@ -292,6 +345,12 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
                 | "expanding-search" | "inline-edit" => "text-fields",
                 "hold-to-confirm" | "swipe-actions" | "reactions" => "gestures",
                 "dropdown-menu" | "context-menu" | "user-menu" => "menus",
+                "dialog" | "popover" => "overlays",
+                "tabs" => "navigation",
+                "combobox" | "select" => "selects",
+                "switch" => "toggles",
+                "resizable-panels" => "expand",
+                "empty-state" => "cards",
                 _ => "actions",
             }
             .into(),

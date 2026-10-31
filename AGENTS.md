@@ -32,7 +32,7 @@ Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is a
 | `templates/app/` | Blank app scaffold for `kui init`. |
 | `website/public/r/` | Generated registry items. |
 
-The website and CLI expose the same eleven Buttons, three Gestures, three Menus and seven Text fields in catalog order. Foundation is a shared dependency. The catalog in tools/catalog is authoritative for installable items.
+The website and CLI expose the same 32 installable components in catalog order. Foundation is a shared dependency. The catalog in tools/catalog is authoritative for installable items.
 
 ## Platforms
 

@@ -19,12 +19,6 @@ wasm-bindgen \
   --out-dir "$OUT" \
   "${CARGO_TARGET_DIR:-$ROOT/target}/wasm32-unknown-unknown/release/kui_web.wasm"
 
-mkdir -p "$ROOT/website/public/stories"
-mkdir -p "$ROOT/website/public/stories/fonts"
-cp "$ROOT/apps/web/www/fonts/KUIInputSans.ttf" "$ROOT/website/public/stories/fonts/"
-cp -R "$OUT" "$ROOT/website/public/stories/"
-cp "$ROOT/apps/web/www/index.html" "$ROOT/apps/web/www/preview.js" "$ROOT/website/public/stories/"
-cp "$ROOT/apps/web/www/fonts/KUIStorySans-OFL.txt" "$ROOT/apps/web/www/fonts/NotoSans-LICENSE" "$ROOT/website/public/stories/"
-cp "$ROOT/apps/story/assets/Inter-LICENSE" "$ROOT/website/public/stories/"
+python3 "$ROOT/scripts/package-web-preview.py"
 echo "KUI WASM gallery ready: apps/web/www/"
 echo "Serve with: python3 -m http.server -d apps/web/www 8080"

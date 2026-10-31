@@ -1,3 +1,4 @@
+import workspace from "./workspace-docs.json";
 import fields from "./text-field-docs.json";
 import collections from "./collection-docs.json";
 import family from "./family-docs.json";
@@ -15,7 +16,7 @@ export type ButtonDocId =
   | "icon-morph"
   | "confirm-morph"
   | "theme-switch"
-  | "hold-to-confirm" | "swipe-actions" | "reactions" | "dropdown-menu" | "context-menu" | "user-menu" | "input" | "textarea" | "password-field" | "password-strength" | "search-field" | "expanding-search" | "inline-edit";
+  | "hold-to-confirm" | "swipe-actions" | "reactions" | "dropdown-menu" | "context-menu" | "user-menu" | "input" | "textarea" | "password-field" | "password-strength" | "search-field" | "expanding-search" | "inline-edit" | "dialog" | "popover" | "tabs" | "combobox" | "select" | "switch" | "resizable-panels" | "empty-state";
 
 export type Locale = "zh" | "en";
 
@@ -25,7 +26,7 @@ export type ButtonDoc = {
   id: ButtonDocId;
   /** Localized nav / page title. */
   title: Record<Locale, string>;
-  group?: "buttons" | "gestures" | "menus" | "text-fields";
+  group?: "buttons" | "gestures" | "menus" | "text-fields" | "overlays" | "navigation" | "selects" | "toggles" | "expand" | "cards";
   installable: boolean;
   story?: boolean;
   keyboard?: Record<Locale,string>;
@@ -141,13 +142,13 @@ kui add button`,
 ];
 
 type CollectionEntry = (typeof collections)[number] & { avoid?: Record<Locale, string> };
-const collectionEntries: CollectionEntry[] = [...collections, ...fields];
+const collectionEntries: CollectionEntry[] = [...collections, ...fields, ...workspace];
 
 export const COMPONENT_CATALOG: ButtonDoc[] = [...BUTTONS_CATALOG, ...collectionEntries.map(entry => {
   const copy = (locale: Locale) => ({lead: entry.lead[locale], when: [entry.lead[locale]], not: [entry.avoid?.[locale] ?? (locale === 'zh' ? '直接执行的单一命令使用按钮。' : 'Use a button for a single immediate command.')],
     apiLead: entry.api[locale], motion: [entry.motion[locale]], ai: [`kui add ${entry.id}`],
     props: [{name:entry.method, type:entry.signature, description:entry.api[locale]}, {name:'event',type:entry.event,description:locale === 'zh' ? '订阅控件实体事件。' : 'Subscribe on the control entity.'}]});
-  return {id: entry.id as ButtonDocId,group:entry.group as 'gestures'|'menus'|'text-fields',title:entry.title,installable:true,story:true,
+  return {id: entry.id as ButtonDocId,group:entry.group as ButtonDoc['group'],title:entry.title,installable:true,story:true,
     rustType:entry.rustType,usageRust:entry.usageRust,installShell:`kui add ${entry.id}`,keyboard:entry.rule,copy:{en:copy('en'),zh:copy('zh')}};
 })];
 export function getButtonDoc(id: string): ButtonDoc | undefined {

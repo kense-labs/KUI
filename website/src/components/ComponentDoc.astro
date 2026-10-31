@@ -27,6 +27,7 @@ const headers = {
 };
 const crumb = (locale === "zh" ? "组件 · " : "Components · ") + t(`sidebar.group.${doc.group ?? "buttons"}`);
 const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
+const previewUrl = (story: string) => `/stories/v/${import.meta.env.PUBLIC_PREVIEW_REVISION}/?${new URLSearchParams({story, lang: locale})}`;
 ---
 
 <article class="doc">
@@ -46,9 +47,9 @@ const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
 
   <ComponentStage hint={t("stage.hint")}>
     <div slot="preview">
-      <div data-preview-slot hidden={!doc.story}>
+      <div data-preview-slot data-preview-src={doc.story ? previewUrl(doc.id) : undefined} hidden={!doc.story}>
         {doc.story && <iframe allow="clipboard-write" class:list={["rust-story", "family-story", {"theme-preview": doc.id === "theme-switch"}]}
-          data-story={doc.id} data-story-key={doc.id} data-lang={locale} aria-label={title} src={`/stories/?story=${doc.id}&lang=${locale}`}></iframe>}
+          data-story={doc.id} data-story-key={doc.id} data-lang={locale} aria-label={title} src={previewUrl(doc.id)}></iframe>}
       </div>
 
     </div>
@@ -57,7 +58,7 @@ const fileStem = `${doc.id.replace(/-/g, "_")}.rs`;
       {doc.group && <RegistrySource id={doc.id} locale={locale} />}
     </div>
   </ComponentStage>
-  {doc.id==="theme-switch"&& <section><h2>{locale==="zh"?"其他过渡示例":"More transitions"}</h2>{["eclipse","split","rise"].map(mode=><details><summary>{mode[0].toUpperCase()+mode.slice(1)}</summary><iframe loading="lazy" data-src={`/stories/?story=theme-switch:${mode}&lang=${locale}`} class="rust-story family-story theme-preview" data-story="theme-switch" data-story-key={`theme-switch:${mode}`} data-lang={locale} aria-label={title + " · " + mode}></iframe></details>)}</section>}
+  {doc.id==="theme-switch"&& <section><h2>{locale==="zh"?"其他过渡示例":"More transitions"}</h2>{["eclipse","split","rise"].map(mode=><details><summary>{mode[0].toUpperCase()+mode.slice(1)}</summary><iframe loading="lazy" data-src={previewUrl(`theme-switch:${mode}`)} class="rust-story family-story theme-preview" data-story="theme-switch" data-story-key={`theme-switch:${mode}`} data-lang={locale} aria-label={title + " · " + mode}></iframe></details>)}</section>}
 
   {doc.keyboard && <><h2>{locale === "zh" ? "键盘与操作" : "Keyboard and interaction"}</h2><p>{doc.keyboard[locale]}</p></>}
   <h2>{t("button.when")}</h2>

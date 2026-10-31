@@ -20,10 +20,18 @@ pub mod swipe_actions;
 pub mod theme_switch;
 pub mod user_menu;
 
+pub mod combobox;
+pub mod dialog;
+pub mod empty_state;
 pub mod expanding_search;
 pub mod inline_edit;
 pub mod input;
 pub mod password_field;
 pub mod password_strength;
+pub mod popover;
+pub mod resizable_panels;
 pub mod search_field;
+pub mod select;
+pub mod switch;
+pub mod tabs;
 pub mod textarea;
