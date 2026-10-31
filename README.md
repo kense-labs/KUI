@@ -80,4 +80,4 @@ Use **KUI** in product copy and **`kui`** in crate names, CLI, modules, and path
 
 ## License
 
-Apache-2.0.
+MIT.
