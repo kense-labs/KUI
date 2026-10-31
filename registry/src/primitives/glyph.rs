@@ -1,5 +1,6 @@
 //! Resolution-independent line icons and reversible stroke interpolation.
 use gpui::{Hsla, PathBuilder, canvas, point, prelude::*, px};
+use std::sync::LazyLock;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Glyph {
     More,
@@ -423,40 +424,20 @@ impl Glyph {
                     (17.00, 10.00),
                 ],
             ],
-            Self::Eye => &[
-                &[
-                    (2.00, 12.00),
-                    (5.00, 8.00),
-                    (9.00, 6.00),
-                    (15.00, 6.00),
-                    (19.00, 8.00),
-                    (22.00, 12.00),
-                    (19.00, 16.00),
-                    (15.00, 18.00),
-                    (9.00, 18.00),
-                    (5.00, 16.00),
-                    (2.00, 12.00),
-                ],
-                &[
-                    (15.00, 12.00),
-                    (14.77, 13.15),
-                    (14.12, 14.12),
-                    (13.15, 14.77),
-                    (12.00, 15.00),
-                    (10.85, 14.77),
-                    (9.88, 14.12),
-                    (9.23, 13.15),
-                    (9.00, 12.00),
-                    (9.23, 10.85),
-                    (9.88, 9.88),
-                    (10.85, 9.23),
-                    (12.00, 9.00),
-                    (13.15, 9.23),
-                    (14.12, 9.88),
-                    (14.77, 10.85),
-                    (15.00, 12.00),
-                ],
-            ],
+            Self::Eye => {
+                // Use the same 40 intervals as the stroke renderer, with a closed seam at the right.
+                static RINGS: LazyLock<[[(f32, f32); 41]; 2]> = LazyLock::new(|| {
+                    [(10., 6.), (3., 3.)].map(|(rx, ry)| {
+                        std::array::from_fn(|i| {
+                            let angle = std::f32::consts::TAU * (i % 40) as f32 / 40.;
+                            let (sin, cos) = angle.sin_cos();
+                            (12. + rx * cos, 12. + ry * sin)
+                        })
+                    })
+                });
+                static STROKES: LazyLock<[Stroke; 2]> = LazyLock::new(|| [&RINGS[0], &RINGS[1]]);
+                &*STROKES
+            }
             Self::Pin => &[
                 &[
                     (8.00, 3.00),
