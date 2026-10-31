@@ -1,4 +1,6 @@
 //! Reference examples rendered with the same installed components on both platforms.
+mod connection_switch;
+use connection_switch::ConnectionSwitch;
 use gpui::{prelude::*, *};
 use kui::{
     components::{
@@ -573,6 +575,11 @@ impl FamilyStory {
                     });
                     add!(async_demo(e, Some(i), cx));
                 }
+                let connection = cx.new(|cx| ConnectionSwitch::new(w, cx));
+                let sub = cx.subscribe(&connection, |story, _, checked: &bool, _| {
+                    story.failure = *checked;
+                });
+                add!((connection.into(), sub));
             }
             "icon-morph" => {
                 let pairs = [
@@ -838,39 +845,7 @@ impl FamilyStory {
                             .child(view(i)),
                     )
                 }
-                let label = t("Simulate a lost connection", "模拟网络中断");
-                let knob = div()
-                    .w(px(42.))
-                    .h(px(24.))
-                    .rounded(radii.md)
-                    .bg(if self.failure { p.bright } else { p.hover })
-                    .flex()
-                    .items_center()
-                    .px(px(3.))
-                    .when(self.failure, |e| e.justify_end())
-                    .child(div().size(px(16.)).rounded_full().bg(if self.failure {
-                        p.inverse
-                    } else {
-                        p.ink
-                    }));
-                stack
-                    .child(activate(
-                        face("connection", label, 44., radii.md.into(), Tone::Clear, cx)
-                            .relative()
-                            .top(px(10.))
-                            .justify_start()
-                            .mt(px(8.))
-                            .gap(px(10.))
-                            .aria_selected(self.failure)
-                            .child(knob)
-                            .child(label),
-                        cx,
-                        |v, _, cx| {
-                            v.failure = !v.failure;
-                            cx.notify()
-                        },
-                    ))
-                    .into_any_element()
+                stack.child(view(3)).into_any_element()
             }
             "icon-morph" => {
                 let n = if narrow { 2 } else { 4 };

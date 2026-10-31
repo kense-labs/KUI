@@ -9,7 +9,7 @@
   "components/copy_button.rs": "c5abfb1a018dce1d204f9a6a4a0ff67f31b0ed610ec25df9c0461e17e4025fcf",
   "components/expanding_button_group.rs": "447de729bbd6fc5cabba3d7334351ed1ebd77a3551a1809def634d29246df43f",
   "components/floating_button_group.rs": "a8d15782ed3fed9a5c3c33aaabd450b7f9596867c1d9f35897f038653256ba27",
-  "components/icon_morph.rs": "5dd00169aff308a407a4970e3909b8163aa15082654f07f21263f38075cff89a",
+  "components/icon_morph.rs": "f7bc64bad6c437b09a462ee5ebceb4cc7f122dd130feb8174347118e85cd8106",
   "components/mod.rs": "5a2a52f9dd50aa5388744ca7d50670cf5c7a8e6e322bf552b9fc7857d6f1d993",
   "components/split_button.rs": "d03dc6616e7da26cd7da677072715c685eea16ab1502018ddce2601260159c93",
   "components/theme_switch.rs": "2e8e211bdd17fd7db66749e233b889f12b69434cdc1f1fd53143d3cce9614a94",

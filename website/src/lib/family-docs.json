@@ -218,8 +218,8 @@
       "en": "Show related actions in one stable icon slot."
     },
     "motion": {
-      "zh": "日月按钮在 160ms 内切换卡片自身的底色、图标和文字颜色。中途反切从当前颜色继续，窄屏使用两列布局。",
-      "en": "The sun/moon tile inverts its own colors over 160ms. Rapid reversals continue from the current position; narrow screens use two columns."
+      "zh": "在任一页面主题下，日月按钮都在浅底太阳和深底月亮之间切换，过渡时长为 160ms。中途反切从当前颜色继续，窄屏使用两列布局。",
+      "en": "The sun/moon tile transitions between a light sun and a dark moon surface over 160ms in either page theme. Rapid reversals continue from the current position; narrow screens use two columns."
     },
     "signature": "fn(bool, &mut Context<Self>); fn([S; 2]) -> Self"
   },

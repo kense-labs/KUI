@@ -1,5 +1,5 @@
 //! An icon that interpolates its strokes when toggled.
-use crate::foundation::Theme;
+use crate::foundation::{Theme, ThemeMode};
 use crate::primitives::{
     control::activate,
     family::{Paint, PhaseClock, Slide, Tone, disabled_motion, face, standard_ease},
@@ -78,10 +78,14 @@ impl IconMorph {
 }
 impl Render for IconMorph {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = Paint::get(cx);
+        let theme_tile = self.pair == [Glyph::Sun, Glyph::Moon];
+        let p = if theme_tile {
+            Paint::for_mode(ThemeMode::Light)
+        } else {
+            Paint::get(cx)
+        };
         let i = usize::from(self.on);
         let t = self.slide.get(w, cx);
-        let theme_tile = self.pair == [Glyph::Sun, Glyph::Moon];
         let duration = if theme_tile {
             TILE_FADE_SECONDS
         } else if self.pair[0] == Glyph::Bell {
@@ -100,11 +104,12 @@ impl Render for IconMorph {
         let mut ink = p.ink;
         let mut caption = p.secondary;
         if theme_tile {
+            let dark = Paint::for_mode(ThemeMode::Dark);
             let tint = self.tile_tint(age);
-            border = surface.blend(border).blend(p.bright.opacity(tint));
-            surface = surface.blend(p.bright.opacity(tint));
+            border = surface.blend(border).blend(dark.line.opacity(tint));
+            surface = surface.blend(dark.panel.opacity(tint));
             caption =
-                (if self.hovered { p.ink } else { p.secondary }).blend(p.inverse.opacity(tint));
+                (if self.hovered { p.ink } else { p.secondary }).blend(dark.ink.opacity(tint));
             ink = caption;
         }
         let side = self

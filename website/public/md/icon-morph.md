@@ -1,6 +1,6 @@
 # Icon morph
 
-Eight reversible icon pairs, including playback, alerts, details and likes. The sun/moon button inverts its own surface and foreground over 160ms. The surrounding page keeps its theme.
+Eight reversible icon pairs, including playback, alerts, details and likes. The sun/moon button switches over 160ms between a light sun tile and a dark moon tile in either page theme.
 
 `kui add icon-morph`
 

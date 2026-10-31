@@ -191,6 +191,45 @@ fn same_arrow_and_outside_press_dismiss_menu() {
     assert!(w.debug_bounds("Save as draft").is_none());
 }
 #[test]
+fn connection_switch_stretches_on_press_and_glides_from_its_current_position() {
+    let mut app = app();
+    let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("action-swap", w, cx));
+    let hit = w.debug_bounds("Simulate a lost connection").unwrap();
+    let thumb = |w: &mut VisualTestContext| {
+        w.update(|window, _| {
+            let scale = window.scale_factor();
+            let area = hit.scale(scale);
+            let quad = window
+                .painted_quads()
+                .into_iter()
+                .find(|q| {
+                    area.contains(&q.bounds.center())
+                        && (q.bounds.size.height.0 / scale - 18.).abs() < 0.6
+                        && q.corner_radii.top_left.0 > 0.
+                })
+                .expect("visible switch thumb");
+            (
+                quad.bounds.left().0 / scale,
+                quad.bounds.size.width.0 / scale,
+            )
+        })
+    };
+    let (left, width) = thumb(w);
+    w.simulate_mouse_down(hit.center(), MouseButton::Left, Modifiers::default());
+    tick(w, 320);
+    let held = thumb(w);
+    assert!((held.0 - left).abs() < 1. && held.1 > width + 3.);
+    w.simulate_mouse_up(hit.center(), MouseButton::Left, Modifiers::default());
+    tick(w, 100);
+    let moving = thumb(w).0;
+    assert!(moving > left + 1. && moving < left + 17.);
+    click(w, "Simulate a lost connection");
+    assert!((thumb(w).0 - moving).abs() <= 1.);
+    tick(w, 800);
+    assert_eq!(thumb(w), (left, width));
+}
+
+#[test]
 fn invited_only_after_success_and_momentary_states_reset() {
     let mut app = app();
     let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("action-swap", w, cx));
@@ -339,31 +378,36 @@ fn painted_highlight_matches_the_laid_out_segment() {
 }
 
 #[test]
-fn sun_moon_inverts_the_tile_in_each_page_theme() {
+fn sun_moon_tile_colors_match_the_selected_mode_in_each_page_theme() {
     use kui::{foundation::ThemeMode, primitives::family::Paint};
 
     for mode in [ThemeMode::Light, ThemeMode::Dark] {
         let mut app = app();
         app.update(|cx| Theme::global_mut(cx).set_mode(mode));
         let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("icon-morph", w, cx));
-        click(w, "Switch tile to dark");
-        tick(w, 200);
-        let tile = w.debug_bounds("Switch tile to light").unwrap();
         let neighbor = w.debug_bounds("Open menu").unwrap();
-        w.update(|window, cx| {
-            assert_eq!(Theme::global(cx).mode, mode);
-            let palette = Paint::get(cx);
-            let scale = window.scale_factor();
-            for (bounds, color) in [(tile, palette.bright), (neighbor, palette.panel)] {
-                let expected = bounds.scale(scale);
-                let painted = window.painted_quads().iter().any(|quad| {
-                    quad.background == color.into()
-                        && quad.bounds.contains(&expected.center())
-                        && (quad.bounds.size.width - expected.size.width).0.abs() <= scale
-                });
-                assert!(painted, "unexpected tile background in {mode:?}");
-            }
-        });
+        for (label, tile_mode) in [
+            ("Switch tile to dark", ThemeMode::Light),
+            ("Switch tile to light", ThemeMode::Dark),
+        ] {
+            let tile = w.debug_bounds(label).unwrap();
+            w.update(|window, cx| {
+                assert_eq!(Theme::global(cx).mode, mode);
+                let scale = window.scale_factor();
+                for (bounds, palette_mode) in [(tile, tile_mode), (neighbor, mode)] {
+                    let color = Paint::for_mode(palette_mode).panel;
+                    let expected = bounds.scale(scale);
+                    let painted = window.painted_quads().iter().any(|quad| {
+                        quad.background == color.into()
+                            && quad.bounds.contains(&expected.center())
+                            && (quad.bounds.size.width - expected.size.width).0.abs() <= scale
+                    });
+                    assert!(painted, "{tile_mode:?} tile on a {mode:?} page");
+                }
+            });
+            click(w, label);
+            tick(w, 200);
+        }
     }
 }
 
