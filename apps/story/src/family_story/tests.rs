@@ -339,6 +339,35 @@ fn painted_highlight_matches_the_laid_out_segment() {
 }
 
 #[test]
+fn sun_moon_inverts_the_tile_in_each_page_theme() {
+    use kui::{foundation::ThemeMode, primitives::family::Paint};
+
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        let mut app = app();
+        app.update(|cx| Theme::global_mut(cx).set_mode(mode));
+        let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("icon-morph", w, cx));
+        click(w, "Switch tile to dark");
+        tick(w, 200);
+        let tile = w.debug_bounds("Switch tile to light").unwrap();
+        let neighbor = w.debug_bounds("Open menu").unwrap();
+        w.update(|window, cx| {
+            assert_eq!(Theme::global(cx).mode, mode);
+            let palette = Paint::get(cx);
+            let scale = window.scale_factor();
+            for (bounds, color) in [(tile, palette.bright), (neighbor, palette.panel)] {
+                let expected = bounds.scale(scale);
+                let painted = window.painted_quads().iter().any(|quad| {
+                    quad.background == color.into()
+                        && quad.bounds.contains(&expected.center())
+                        && (quad.bounds.size.width - expected.size.width).0.abs() <= scale
+                });
+                assert!(painted, "unexpected tile background in {mode:?}");
+            }
+        });
+    }
+}
+
+#[test]
 fn standalone_faces_follow_the_hosts_radius_token() {
     for outer_radius in [8., 11.] {
         for (id, labels) in [
