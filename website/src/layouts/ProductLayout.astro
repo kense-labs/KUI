@@ -18,7 +18,7 @@ const pageFade = fade({ duration: "180ms" });
 
 <BaseLayout title={title} description={description} locale={locale}>
   <div class="product">
-    <SiteHeader mode="product" landing={shell === "landing"} />
+    <SiteHeader mode="product" />
     {
       shell === "landing" ? (
         <main class="landing" transition:name="page-main" transition:animate={pageFade}>
