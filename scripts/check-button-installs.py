@@ -20,7 +20,7 @@ def verify(work):
     run("cargo", "build", "-p", "kui-cli", cwd=ROOT)
     catalog = json.loads((ROOT / "website/public/r/catalog.json").read_text())
     items = [item["name"] for item in catalog if item["kind"] == "component" and item["name"] != "button"]
-    lib = ROOT / "website/src/lib"
+    lib = ROOT / "website/site/docs"
     documents = ["button"]
     for name in ("family", "collection", "text-field", "workspace", "library"):
         documents.extend(x["id"] for x in json.loads((lib / f"{name}-docs.json").read_text()))

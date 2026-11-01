@@ -15,7 +15,7 @@ cargo build -p kui-web --target wasm32-unknown-unknown --release
 OUT="$ROOT/apps/web/www/pkg"
 mkdir -p "$OUT"
 wasm-bindgen \
-  --target web \
+  --target web --no-typescript \
   --out-dir "$OUT" \
   "${CARGO_TARGET_DIR:-$ROOT/target}/wasm32-unknown-unknown/release/kui_web.wasm"
 

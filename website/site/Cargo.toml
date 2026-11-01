@@ -1,0 +1,15 @@
+[package]
+name = "kui-site"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+kui = { workspace = true, features = ["web"] }
+kui-catalog = { path = "../../tools/catalog" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+walkdir.workspace = true

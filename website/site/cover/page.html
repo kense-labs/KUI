@@ -1,0 +1,47 @@
+<div class="kui-cover-page">
+  <section class="cover" aria-labelledby="cover-title">
+    <div class="optics" aria-hidden="true"><div class="plate"><div class="light-field">
+      <img src="/assets/cover-refraction.webp" alt="" width="1200" height="640" draggable="false">
+      <canvas data-cover-flow width="600" height="320" hidden></canvas>
+    </div></div></div>
+    <div class="hero-copy">
+      <h1 id="cover-title" aria-label="{title}"><span class="title-prefix">{prefix}</span>{reel}</h1>
+      <p class="lead">{description}</p>
+      <div class="cta-row">
+        <a class="cover-btn primary" data-guide-hint="{try_one}" href="{base}/kui/components/button/">{explore} {arrow}</a>
+        <a class="cover-btn secondary" data-guide-hint="{docs_hint}" href="{base}/kui/docs/">{book} {docs}</a>
+      </div>
+    </div>
+    <div class="agent-row">
+      <div class="guide-dock" data-guide-home aria-hidden="true"></div>
+      <div class="copy-options">{hero_prompt}{hero_command}</div>
+    </div>
+    <div class="rail"><div class="playback">
+      <fieldset class="modes">
+        <legend class="sr-only">{platform_label}</legend><i class="mode-thumb" aria-hidden="true"></i>
+        <label><input type="radio" name="cover-target" id="cover-desktop" aria-label="{desktop}" value="desktop" checked><span>Desktop</span></label>
+        <label><input type="radio" name="cover-target" id="cover-web" aria-label="Web" value="web"><span>Web</span></label>
+      </fieldset>
+      {transport}
+    </div></div>
+  </section>
+  {guide}
+  <section class="collection bounds" aria-labelledby="collection-heading">
+    <p class="section-label">01 <i></i> COMPONENT INDEX</p>
+    <div class="section-head"><h2 id="collection-heading">{selected}</h2>
+      <a class="more" data-guide-hint="{all_hint}" href="{base}/kui/components/button/">{view_all} {arrow}</a></div>
+    <div class="samples">{cards}</div>
+    <p class="collection-tip">{tip}</p>
+  </section>
+  <section class="start bounds" aria-labelledby="start-heading">
+    <div class="start-copy"><p class="section-label">02 <i></i> QUICK START</p>
+      <h2 id="start-heading">{start}</h2><p>{intro}</p>
+      <div class="text-links"><a href="{base}/kui/docs/installation/">{install} {arrow}</a>
+        <a href="{base}/kui/ai/">{ai} {arrow}</a></div>
+    </div>
+    <div class="starter-prompt"><span class="serial">{task_label}</span>
+      <h3>{task}</h3><p>{behavior}</p>
+      <div class="copy-options">{start_prompt}{start_command}</div>
+    </div>
+  </section>
+</div>

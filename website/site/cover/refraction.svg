@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" fill="none">
+  <!-- The prefiltered caustics also supply the texture for the moving ribbon. -->
+  <defs>
+    <filter id="diffuse" x="-25%" y="-45%" width="150%" height="200%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="27"/></filter>
+    <filter id="focus" x="-20%" y="-40%" width="140%" height="180%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7"/></filter>
+    <linearGradient id="spectrum" x2="1" y2=".1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#9980e7" stop-opacity="0"/><stop offset=".22" stop-color="#b59ceb"/>
+      <stop offset=".45" stop-color="#81bae9"/><stop offset=".64" stop-color="#7bd9c3"/>
+      <stop offset=".83" stop-color="#b5a3ed"/><stop offset="1" stop-color="#edb5cc" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edge"><stop stop-color="black"/><stop offset=".16" stop-color="white"/><stop offset=".84" stop-color="white"/><stop offset="1" stop-color="black"/></linearGradient>
+    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="640"><rect width="1200" height="640" fill="url(#edge)"/></mask>
+  </defs>
+  <g mask="url(#fade)">
+  <g filter="url(#diffuse)">
+    <path d="M-80 118C145 84 159 464 456 524S811 358 1000 232 1199 187 1300 217" stroke="#ad92f0" stroke-width="64"/>
+    <path d="M-70 127C157 95 194 477 485 502S832 328 1018 223 1210 200 1314 194" stroke="#8bd5d9" stroke-width="40"/>
+    <path d="M-80 94C148 90 184 430 449 476S792 377 1000 262 1212 183 1308 226" stroke="#f8d4b6" stroke-width="29"/>
+  </g>
+  <path filter="url(#focus)" d="M-70 127C157 95 194 477 485 502S832 328 1018 223 1210 200 1314 194" stroke="url(#spectrum)" stroke-width="11" opacity=".5"/>
+  </g>
+</svg>

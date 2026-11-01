@@ -1,4 +1,4 @@
-name: Deploy website to GitHub Pages
+name: Build the Kense website
 
 on:
   push:
@@ -9,50 +9,50 @@ permissions:
   contents: read
 
 concurrency:
-  group: github-pages
+  group: kense-site-build
   cancel-in-progress: false
 
 jobs:
   build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: read
+    env:
+      # Host binaries only generate static files on this runner.
+      CARGO_PROFILE_DEV_DEBUG: "0"
     steps:
       - uses: actions/checkout@v6
-      - id: pages
-        uses: actions/configure-pages@v5
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - name: Cache the matching wasm-bindgen CLI
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/wasm-bindgen
-          key: wasm-bindgen-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
-      - uses: oven-sh/setup-bun@v2
-      - name: Install website dependencies
-        working-directory: website
-        run: bun install --frozen-lockfile
-      - name: Build the shared WASM preview and documentation
-        working-directory: website
-        env:
-          KUI_SITE_URL: ${{ steps.pages.outputs.base_url }}
-        run: bun run build
+      - uses: Swatinem/rust-cache@v2
+      - name: Materialize installable source from the preview checkout
+        run: |
+          cargo run --locked -p kui-build -- build
+          cargo run --locked -p kui-build -- verify-preview
+      - name: Build Rust website and shared GPUI runtime
+        run: ./scripts/build-site.sh
+      - name: Validate static routes and publish a verified release
+        run: |
+          python3 scripts/check-site.py website/dist
+          python3 scripts/legacy-pages.py website/dist "$RUNNER_TEMP/channel"
+          mkdir -p "$RUNNER_TEMP/channel/releases/$GITHUB_SHA"
+          tar -czf "$RUNNER_TEMP/channel/releases/$GITHUB_SHA/site.tar.gz" -C website/dist .
+          digest=$(sha256sum "$RUNNER_TEMP/channel/releases/$GITHUB_SHA/site.tar.gz" | cut -d ' ' -f 1)
+          jq -n --arg sha "$GITHUB_SHA" --arg digest "$digest" '{revision:$sha, sha256:$digest}' > "$RUNNER_TEMP/channel/release.json"
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: website/dist
+          path: ${{ runner.temp }}/channel
 
-  deploy:
+  publish-release:
     needs: build
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: https://kense-labs.github.io/kui/
     permissions:
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4

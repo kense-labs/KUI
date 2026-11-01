@@ -1,4 +1,4 @@
-import init, { start, show_story, install_input_font, set_preferences, set_icon_intent, set_accent } from "./pkg/kui_web.js";
+import init, { start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent } from "./pkg/kui_web.js";
 
 const params = new URLSearchParams(location.search);
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -97,28 +97,48 @@ if (frame?.matches("iframe.rust-story[data-story]")) {
   }, { passive: true });
 }
 
-// The GPU buffer may be discarded between frames. Keep the most recently
-// presented image on the GPU so pressing a theme key never reads pixels back.
+// Request a single bitmap when a theme button receives hover or focus. An
+// ordinary gallery frame never reads its GPU canvas into a second surface.
 let lastPicture;
-let pictureVersion = 0;
-const copies = new WeakMap();
-function rememberPicture() {
+let pictureRevision = 0;
+let pictureWanted = false;
+let picturePending = false;
+function discardPicture() {
+  ++pictureRevision;
+  picturePending = false;
+  lastPicture?.close();
+  lastPicture = undefined;
+}
+function preparePicture(wanted) {
+  pictureWanted = wanted;
+  if (!wanted) { discardPicture(); return; }
+  if (!running || picturePending || lastPicture || typeof createImageBitmap !== "function") return;
+  picturePending = true;
+  // A gesture can originate in a GPUI callback. Return to JS before requesting another draw.
+  queueMicrotask(() => { if (picturePending) request_snapshot(); });
+}
+function capturePicture() {
   const source = document.querySelector("canvas");
-  if (!frame || document.hidden || frame.closest("[hidden], details:not([open])") || !source?.width || !source.height) return;
-  if (!lastPicture) lastPicture = document.createElement("canvas");
-  if (lastPicture.width !== source.width) lastPicture.width = source.width;
-  if (lastPicture.height !== source.height) lastPicture.height = source.height;
-  const ctx = lastPicture.getContext("2d");
-  if (ctx) { ctx.globalCompositeOperation = "copy"; ctx.drawImage(source, 0, 0); ++pictureVersion; }
+  if (!source?.width || !source.height) return;
+  picturePending = false;
+  const revision = ++pictureRevision;
+  createImageBitmap(source).then(bitmap => {
+    if (pictureRevision !== revision || !pictureWanted) { bitmap.close(); return; }
+    lastPicture = bitmap;
+  }).catch(() => { /* The host can keep a booting or lost canvas live. */ });
 }
 function copyPicture(destination) {
   if (!lastPicture) return false;
-  if (copies.get(destination) === pictureVersion) return true;
-  destination.width = lastPicture.width;
-  destination.height = lastPicture.height;
-  destination.getContext("2d")?.drawImage(lastPicture,0,0);
-  copies.set(destination,pictureVersion);
-  return true;
+  const bitmap = lastPicture;
+  lastPicture = undefined;
+  destination.width = bitmap.width;
+  destination.height = bitmap.height;
+  const renderer = destination.getContext("bitmaprenderer");
+  if (renderer) { renderer.transferFromImageBitmap(bitmap); return true; }
+  const ctx = destination.getContext("2d");
+  if (ctx) ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return !!ctx;
 }
 
 let themeTarget;
@@ -201,7 +221,7 @@ function warmInputFont(story) {
 }
 function show(story, lang) {
   warmInputFont(story);
-  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = horizontalScroll = undefined; lastPicture = undefined; }
+  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = horizontalScroll = undefined; preparePicture(false); }
   selected = { story, lang };
   document.documentElement.dataset.story = story.split(":")[0];
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
@@ -234,6 +254,7 @@ function finishWaiters() {
 
 function preferences(nextDark, nextReduced, waitForPaint = true) {
   if (dark !== nextDark) {
+    discardPicture();
     ++paintRevision;
     paintedDark = undefined;
     finishWaiters();
@@ -250,15 +271,17 @@ function preferences(nextDark, nextReduced, waitForPaint = true) {
 // presentation callback returns, before the browser composites the next frame.
 window.kuiFramePainted = (height, renderedDark) => {
   if (document.documentElement.dataset.previewError) return;
-  if (height > 0 && frame?.classList.contains("rust-story") && frame.style.height !== height + "px") {
-    frame.style.height = height + "px";
-  }
-  if (frame) queueMicrotask(rememberPicture);
-  if (renderedDark === paintedDark && mounted === paintedStory && !waiters.size) return;
+  const nextHeight = frame && height > 0 && frame.classList.contains("rust-story") ? height + "px" : "";
+  const resize = nextHeight && frame.style.height !== nextHeight;
+  if (!picturePending && !resize && renderedDark === paintedDark && mounted === paintedStory && !waiters.size) return;
   const revision = paintRevision;
   const story = mounted;
   queueMicrotask(() => {
     if (revision !== paintRevision || renderedDark !== dark || story !== mounted || document.documentElement.dataset.previewError) return;
+    if (picturePending) capturePicture();
+    // Resize after presentation. Changing the iframe viewport during prepaint
+    // can invalidate WebKit's active GPU surface.
+    if (resize && frame.style.height !== nextHeight) frame.style.height = nextHeight;
     paintedDark = renderedDark;
     paintedStory = story;
     status.hidden = true;
@@ -277,9 +300,9 @@ window.kuiPreviewStarted = () => {
   set_preferences(dark, reduced);
   if (!embedded || !selected.story) status.hidden = true;
 };
-window.kuiPreview = { show, preferences, accent, copyPicture, controlRadius: () => themeRadius, iconIntent: dark => { if (running) set_icon_intent(dark); } };
+window.kuiPreview = { show, preferences, accent, preparePicture, copyPicture, controlRadius: () => themeRadius, iconIntent: dark => { if (running) set_icon_intent(dark); } };
 motion.addEventListener("change", () => preferences(dark, motion.matches));
-window.addEventListener("pagehide", finishWaiters, { once: true });
+window.addEventListener("pagehide", () => { preparePicture(false); finishWaiters(); }, { once: true });
 setPageColor();
 show(selected.story, selected.lang);
 status.textContent = selected.lang === "zh" ? "正在加载…" : "Loading…";

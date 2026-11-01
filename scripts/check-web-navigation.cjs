@@ -16,7 +16,7 @@ async function touchDialog(browser) {
   await page.goto(new URL("/kui/components/switch/", base).href);
   await page.waitForSelector("iframe[data-rendered-story=switch]");
   await page.locator("[data-sidebar-search]").fill("Dialog");
-  await page.locator('a[data-nav-item][href$="/dialog"]').tap();
+  await page.locator('a[data-nav-item][href$="/dialog/"]').tap();
   const frame = page.locator("iframe[data-rendered-story=dialog]");
   await frame.scrollIntoViewIfNeeded();
   const box = await frame.boundingBox();
@@ -87,7 +87,7 @@ async function check() {
         await route.fulfill({ path: file });
       });
     }
-    const nav = id => page.locator(`a[data-nav-item][href$="/${id}"]`);
+    const nav = id => page.locator(`a[data-nav-item][href$="/${id}/"], a[data-nav-item][href$="/${id}"]`);
     async function displayed(id) {
       // Check the mounted GPUI story, not just the new heading or iframe attributes.
       await page.waitForFunction(id => {
@@ -120,7 +120,7 @@ async function check() {
     await displayed(ids.at(-1));
     // Dispatch another navigation before the first page fetch can finish.
     await page.evaluate(() => {
-      for (const id of ["select", "popover", "dialog"]) document.querySelector(`a[data-nav-item][href$="/${id}"]`).click();
+      for (const id of ["select", "popover", "dialog"]) document.querySelector(`a[data-nav-item][href$="/${id}/"]`).click();
     });
     await displayed("dialog");
     const button = page.locator("[data-view=code]");

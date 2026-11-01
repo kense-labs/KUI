@@ -1,0 +1,45 @@
+.kui-cover-page {
+  .reel {
+    position: relative; display: inline-block; flex: none; width: 5.35em; height: 1.38em;
+    font-size: .84em; line-height: 1; letter-spacing: -.055em; color: var(--ink);
+  }
+  .aperture {
+    position:absolute; inset:-108% -5% -108%; display:grid; place-items:center;
+    pointer-events:none; perspective:650px;
+    mask-image:linear-gradient(transparent 0%,rgba(0,0,0,.45) 12%,#000 33%,#000 67%,rgba(0,0,0,.45) 88%,transparent);
+  }
+  .ticket {
+    --accent-light:#493f80; --tint-light:#e8e5f9; --accent-dark:#ded5ff; --tint-dark:#302d41;
+    --ink-ticket:var(--accent-light); --tint:var(--tint-light); --sheen:white;
+    grid-area:1/1; box-sizing:border-box; width:max-content; max-width:96%; padding:0 .24em; height:1.38em;
+    display:flex; align-items:center; justify-content:center; gap:.25em;
+    font-weight:600; white-space:nowrap; border-radius:var(--radius-control); color:var(--ink-ticket);
+    border:1px solid color-mix(in srgb,var(--ink-ticket) 22%,var(--bg));
+    background:linear-gradient(154deg,color-mix(in srgb,var(--tint) 65%,var(--bg)),var(--tint) 74%,color-mix(in srgb,var(--tint) 86%,var(--ink-ticket)));
+    box-shadow:inset 0 1px 0 color-mix(in srgb,white 45%,transparent), 0 1px 0 color-mix(in srgb,var(--ink-ticket) 26%,transparent),0 3px 6px color-mix(in srgb,var(--ink-ticket) 9%,transparent);
+    backface-visibility:hidden;
+    will-change:transform,opacity;
+  }
+  .ticket.web {--accent-light:#205e69; --tint-light:#dff1ee; --accent-dark:#b8eee5; --tint-dark:#203b3d;}
+  html[data-theme="dark"] & .ticket{--ink-ticket:var(--accent-dark);--tint:var(--tint-dark);--sheen:var(--tint-dark);}
+  .tile {
+    width:.97em;height:.97em; display:grid;place-items:center; flex:none;
+    border-radius:var(--radius-control);
+    background:linear-gradient(150deg,color-mix(in srgb,var(--tint) 40%,var(--sheen)),color-mix(in srgb,var(--ink-ticket) 20%,var(--tint)) 76%);
+    box-shadow:inset 0 1px 1px #fffa,inset 0 -1px 1px color-mix(in srgb,var(--ink-ticket) 15%,transparent);
+    color:var(--ink-ticket);
+  }
+  .tile svg {width:80%;height:80%;}
+  .ticket[data-slot="-1"] {transform:translateY(-105%) scale(.89) rotateX(14deg); opacity:.18}
+  .ticket[data-slot="1"] {transform:translateY(105%) scale(.89) rotateX(-14deg); opacity:.18}
+  .ticket[data-slot="2"] {opacity:0}
+  .hit { position:absolute;inset:0;z-index:2;cursor:pointer;border-radius:var(--radius-control); }
+  .web-face {display:none;}
+  .cover:has(input[value="web"]:checked) .web-face {display:block;}
+  .cover:has(input[value="web"]:checked) .native-face {display:none;}
+  /* The native radio controls also work before JS loads or with scripts disabled. */
+  .cover:has(input[value="web"]:checked):not([data-ready]) .ticket[data-slot="0"] {transform:translateY(-105%) scale(.89);opacity:.18;}
+  .cover:has(input[value="web"]:checked):not([data-ready]) .ticket[data-slot="1"] {transform:none;opacity:1;}
+  .cover:has(input[value="web"]:checked):not([data-ready]) .ticket[data-slot="2"] {transform:translateY(105%) scale(.89);opacity:.18;}
+  .cover:has(input[value="web"]:checked):not([data-ready]) .ticket[data-slot="-1"] {opacity:0;}
+}

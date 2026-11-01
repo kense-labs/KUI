@@ -40,12 +40,23 @@ kui doctor
 
 Platform details: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
 
-## Local component website
-From `website/`, run `bun install --frozen-lockfile` and `bun run dev`. Open `http://127.0.0.1:4321/kui/components/confirm-morph/` for the interactive story. Building or starting the website also builds its shared WASM preview bundle.
+## Website
+
+[Kense](https://kense-labs.github.io/) is the organization home; [KUI](https://kense-labs.github.io/kui/) is its component product. Both languages, all page templates, and the website client live in this repository. The Rust generator renders indexable HTML, KUI supplies semantic document controls, and live stories use the same GPUI code as installed components. The small Rust/WASM website client handles navigation separately from the GPU runtime.
+
+Build and serve locally:
+
+```sh
+./scripts/build-site.sh
+python3 scripts/check-site.py website/dist
+python3 -m http.server 4321 --bind 127.0.0.1 --directory website/dist
+```
+
+Open [the local site](http://127.0.0.1:4321/kui/). Building needs the Rust toolchain and wasm32 target, Python 3 and rsync; the build script installs the matching wasm-bindgen CLI if needed. No Node or TypeScript build is involved. On macOS, run `./scripts/check-webkit-navigation.sh` against the local server to check first navigation, canvas reuse and browser history in the system WebKit.
 
 ## GitHub Pages
 
-The [live library](https://kense-labs.github.io/KUI/kui/components/button/) is built from `main`. The **Deploy website to GitHub Pages** workflow builds the Rust/WASM previews and the Astro site on each push, then publishes the resulting artifact. Set **Settings → Pages → Source** to **GitHub Actions**. To republish the current revision, select `main` in the workflow's **Run workflow** menu.
+A push to `main` builds and checks the site once. The existing KUI project Pages deployment keeps old links working and hosts the release archive, its source commit and SHA-256 checksum at `/KUI/release.json`. The [organization publishing workflow](https://github.com/kense-labs/kense-labs.github.io/actions/workflows/publish.yml) checks for new releases every five minutes and deploys the verified archive to the organization root. GitHub may delay scheduled runs; **Run workflow** publishes on demand. Neither repository has credentials to write to the other. The canonical workflow for the hosting repository is in [ops/pages/publish.yml](ops/pages/publish.yml); select **GitHub Actions** as the Pages source in both repositories.
 
 ## Install a button into your app
 

@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[1]
 source = root / "apps/web/www"
 public = root / "website/public/stories"
 files = [source / name for name in ("index.html", "preview.js", "fonts/KUIInputSans.ttf")]
-files += sorted(path for path in (source / "pkg").rglob("*") if path.is_file())
+files += sorted(path for path in (source / "pkg").rglob("*") if path.is_file() and not path.name.endswith(".d.ts"))
 digest = hashlib.sha256()
 for path in files:
     digest.update(path.relative_to(source).as_posix().encode() + b"\0")

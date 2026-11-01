@@ -1,0 +1,70 @@
+name: Publish Kense
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '3-58/5 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kense-pages
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.release.outputs.changed }}
+    steps:
+      - id: release
+        name: Compare the published KUI main release with the organization site
+        env:
+          CHANNEL: https://kense-labs.github.io/KUI
+          SITE: https://kense-labs.github.io
+        run: |
+          set -euo pipefail
+          status=$(curl -sSL --retry 3 -w '%{http_code}' "$CHANNEL/release.json" -o release.json)
+          if [ "$status" = 404 ]; then
+            echo 'No organization release is available yet.'
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$status" = 200
+          sha=$(jq -er '.revision | select(test("^[0-9a-f]{40}$"))' release.json)
+          digest=$(jq -er '.sha256 | select(test("^[0-9a-f]{64}$"))' release.json)
+          current=$(curl -fsSL "$SITE/site-release.txt" || true)
+          if [ "$sha" = "$current" ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          curl -fsSL --retry 3 "$CHANNEL/releases/$sha/site.tar.gz" -o site.tar.gz
+          echo "$digest  site.tar.gz" | sha256sum --check
+          mkdir site
+          python3 - <<'PY'
+          import tarfile
+          with tarfile.open("site.tar.gz") as archive:
+              if any(not (f.isfile() or f.isdir()) for f in archive):
+                  raise ValueError("unexpected member in site release")
+              archive.extractall("site", filter="data")
+          PY
+          test "$(cat site/site-release.txt)" = "$sha"
+          test -f site/kui/index.html
+          test -f site/index.html
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+      - if: steps.release.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+  deploy:
+    needs: release
+    if: needs.release.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: https://kense-labs.github.io/
+    steps:
+      - uses: actions/deploy-pages@v4

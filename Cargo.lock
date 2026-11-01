@@ -2707,6 +2707,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "kui-site"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "kui",
+ "kui-catalog",
+ "serde",
+ "serde_json",
+ "sha2",
+ "walkdir",
+]
+
+[[package]]
+name = "kui-site-client"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "kui-story"
 version = "0.1.0"
 dependencies = [

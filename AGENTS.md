@@ -31,6 +31,8 @@ Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is a
 | `skills/kui/` | Agent skills for install and Button usage. |
 | `templates/app/` | Blank app scaffold for `kui init`. |
 | `website/public/r/` | Generated registry items. |
+| `website/site/` | Rust HTML generator for the Kense homepage and the bilingual KUI product. |
+| `website/client/` | Rust/WASM document interactions; component navigation reuses one live GPUI frame. |
 
 The website and CLI expose the same 108 installable components in catalog order. Foundation is a shared dependency. The catalog in tools/catalog is authoritative for installable items.
 
@@ -43,6 +45,7 @@ KUI targets **native desktop** and **WASM web** with one control source. Details
 - Do not fork chrome per platform. Use `cfg(target_family = "wasm")` only for host-only OS APIs.
 - Desktop story: `cargo run -p kui-story --features native`
 - Web story: `./scripts/build-web.sh`
+- Organization website: `./scripts/build-site.sh`, then `python3 scripts/check-site.py website/dist`. Keep document controls in the KUI HTML backend and previews on GPUI.
 
 ## Toolchain and verification (M-STATIC-VERIFICATION)
 

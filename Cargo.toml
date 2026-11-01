@@ -4,6 +4,8 @@ members = [
     "registry",
     "apps/story",
     "apps/web",
+    "website/site",
+    "website/client",
     "tools/cli",
     "tools/catalog",
     "tools/registry-build",

@@ -1,0 +1,20 @@
+<svg viewBox="0 0 300 120">
+      <rect x="69" y="13" width="162" height="97" rx="8" class="key"/>
+      <path class="specimen-rule" d="M69 41h162"/>
+      <text x="82" y="32" class="month">NOV</text>
+      <path d="m198 25-3 3 3 3m11-6 3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <g><text x="87" y="63" text-anchor="middle" class="number">1</text></g>
+      <g><text x="108" y="63" text-anchor="middle" class="number">2</text></g>
+      <g><text x="129" y="63" text-anchor="middle" class="number">3</text></g>
+      <g><text x="150" y="63" text-anchor="middle" class="number">4</text></g>
+      <g><text x="171" y="63" text-anchor="middle" class="number">5</text></g>
+      <g><text x="192" y="63" text-anchor="middle" class="number">6</text></g>
+      <g><text x="213" y="63" text-anchor="middle" class="number">7</text></g>
+      <g><text x="87" y="87" text-anchor="middle" class="number">8</text></g>
+      <g><text x="108" y="87" text-anchor="middle" class="number">9</text></g>
+      <g><rect x="120" y="75" width="18" height="18" rx="8" class="day"/><text x="129" y="87" text-anchor="middle" class="number chosen">10</text></g>
+      <g><text x="150" y="87" text-anchor="middle" class="number next">11</text></g>
+      <g><text x="171" y="87" text-anchor="middle" class="number">12</text></g>
+      <g><text x="192" y="87" text-anchor="middle" class="number">13</text></g>
+      <g><text x="213" y="87" text-anchor="middle" class="number">14</text></g>
+    </svg>

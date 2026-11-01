@@ -1,0 +1,302 @@
+{
+  "docs.crumb": {
+    "zh": "文档",
+    "en": "Docs"
+  },
+  "docs.intro.title": {
+    "zh": "介绍",
+    "en": "Introduction"
+  },
+  "docs.intro.lead": {
+    "zh": "KUI 是面向 GPUI 的拷源码 Rust UI，支持原生桌面与 WASM。人与 Agent 安装同一套 registry。",
+    "en": "KUI is copy-source Rust UI for GPUI on native desktop and WASM. Agents and humans install the same registry items."
+  },
+  "docs.intro.what": {
+    "zh": "KUI 是什么",
+    "en": "What KUI is"
+  },
+  "docs.intro.what.body": {
+    "zh": "你拥有的成品 chrome：foundation tokens、Button、kui CLI、给 Agent 的 Markdown，以及 registry JSON。Story 预览与安装源码一致。",
+    "en": "Finished chrome as source you own: foundation tokens, button components, a kui CLI, Markdown for agents, and registry JSON. Preview in story is the same source you install."
+  },
+  "docs.intro.org": {
+    "zh": "如何组织",
+    "en": "How it is organized"
+  },
+  "docs.intro.org.f": {
+    "zh": "Foundation — 主题 tokens、动效、init",
+    "en": "Foundation — theme tokens, motion, init"
+  },
+  "docs.intro.org.c": {
+    "zh": "Components — 成品控件（先做 Button）",
+    "en": "Components — finished controls (Button first)"
+  },
+  "docs.intro.org.p": {
+    "zh": "Primitives — 无 chrome 的行为层",
+    "en": "Primitives — behavior without chrome"
+  },
+  "docs.intro.read": {
+    "zh": "页面怎么读",
+    "en": "Reading a page"
+  },
+  "docs.intro.read.1": {
+    "zh": "预览与安装",
+    "en": "Preview and install"
+  },
+  "docs.intro.read.2": {
+    "zh": "用法与 API",
+    "en": "Usage and API"
+  },
+  "docs.intro.read.3": {
+    "zh": "键盘、无障碍、动效",
+    "en": "Keyboard, accessibility, motion"
+  },
+  "docs.intro.read.4": {
+    "zh": "给 AI 的说明 + Markdown",
+    "en": "Notes for AI + Markdown"
+  },
+  "docs.intro.next": {
+    "zh": "下一步",
+    "en": "Next steps"
+  },
+  "docs.install.title": {
+    "zh": "安装",
+    "en": "Installation"
+  },
+  "docs.install.lead": {
+    "zh": "先装一次 CLI，再把 foundation 与组件作为源码加入。",
+    "en": "Install the CLI once, then add foundation and components as source."
+  },
+  "docs.install.cli": {
+    "zh": "CLI",
+    "en": "CLI"
+  },
+  "docs.install.hosts": {
+    "zh": "运行宿主",
+    "en": "Hosts"
+  },
+  "docs.install.also": {
+    "zh": "也请阅读",
+    "en": "Also read"
+  },
+  "docs.install.host.desktop": {
+    "zh": "桌面：cargo run -p kui-story --features native",
+    "en": "Desktop: cargo run -p kui-story --features native"
+  },
+  "docs.install.host.wasm": {
+    "zh": "WASM：./scripts/build-web.sh，再托管 apps/web/www",
+    "en": "WASM: ./scripts/build-web.sh then serve apps/web/www"
+  },
+  "ai.title": {
+    "zh": "AI",
+    "en": "AI"
+  },
+  "ai.lead": {
+    "zh": "Agent 可检索、选型并安装 KUI，无需猜测。代码与 CLI：kui。许可 MIT。",
+    "en": "Agents can search, choose, and install KUI without guessing. Code and CLI: kui. License MIT."
+  },
+  "ai.start": {
+    "zh": "从这里开始",
+    "en": "Start here"
+  },
+  "ai.install": {
+    "zh": "安装命令",
+    "en": "Install command"
+  },
+  "ai.registry": {
+    "zh": "Registry",
+    "en": "Registry"
+  },
+  "ai.rules": {
+    "zh": "规则",
+    "en": "Rules"
+  },
+  "ai.rule.1": {
+    "zh": "优先用已有 registry 项，不要另造平行控件",
+    "en": "Prefer existing registry items over new controls"
+  },
+  "ai.rule.2": {
+    "zh": "钉死 gpui-pre =0.3.10",
+    "en": "Pin gpui-pre =0.3.10"
+  },
+  "ai.rule.3": {
+    "zh": "wasm32 不要开 test-support",
+    "en": "Do not enable test-support on wasm32"
+  },
+  "ai.rule.4": {
+    "zh": "日常 chrome 用纯黑白；品牌色 #171717 仅用于重要时刻",
+    "en": "Default chrome is pure black/white; brand #171717 only for important moments"
+  },
+  "stage.views": {
+    "zh": "视图",
+    "en": "Views"
+  },
+  "stage.preview": {
+    "zh": "预览",
+    "en": "Preview"
+  },
+  "stage.code": {
+    "zh": "代码",
+    "en": "Code"
+  },
+  "stage.hint": {
+    "zh": "可切换预览与源码",
+    "en": "Switch between preview and source"
+  },
+  "button.when": {
+    "zh": "适用",
+    "en": "When to use"
+  },
+  "button.not": {
+    "zh": "不适用",
+    "en": "When not to use"
+  },
+  "button.install": {
+    "zh": "安装",
+    "en": "Installation"
+  },
+  "button.usage": {
+    "zh": "用法",
+    "en": "Usage"
+  },
+  "button.usage.lead": {
+    "zh": "控件 API 在桌面与 WASM 上相同；宿主启动见安装页。",
+    "en": "The control API is the same on desktop and WASM; see Installation for hosts."
+  },
+  "button.api": {
+    "zh": "API",
+    "en": "API"
+  },
+  "button.props": {
+    "zh": "属性",
+    "en": "Props"
+  },
+  "button.props.prop": {
+    "zh": "属性",
+    "en": "Prop"
+  },
+  "button.props.type": {
+    "zh": "类型",
+    "en": "Type"
+  },
+  "button.props.default": {
+    "zh": "默认",
+    "en": "Default"
+  },
+  "button.props.desc": {
+    "zh": "说明",
+    "en": "Description"
+  },
+  "button.motion": {
+    "zh": "动效",
+    "en": "Motion"
+  },
+  "button.ai": {
+    "zh": "给 AI 的说明",
+    "en": "Notes for AI"
+  },
+  "sidebar.docs": {
+    "zh": "文档",
+    "en": "Docs"
+  },
+  "sidebar.components": {
+    "zh": "组件",
+    "en": "Components"
+  },
+  "sidebar.search.placeholder": {
+    "zh": "搜索",
+    "en": "Search"
+  },
+  "sidebar.group.buttons": {
+    "zh": "按钮",
+    "en": "Buttons"
+  },
+  "sidebar.group.gestures": {
+    "zh": "手势",
+    "en": "Gestures"
+  },
+  "sidebar.group.menus": {
+    "zh": "菜单",
+    "en": "Menus"
+  },
+  "sidebar.group.text-fields": {
+    "zh": "文本输入",
+    "en": "Text fields"
+  },
+  "sidebar.group.overlays": {
+    "zh": "弹层",
+    "en": "Overlays"
+  },
+  "sidebar.group.navigation": {
+    "zh": "导航",
+    "en": "Navigation"
+  },
+  "sidebar.group.selects": {
+    "zh": "选择输入",
+    "en": "Selects"
+  },
+  "sidebar.group.toggles": {
+    "zh": "切换",
+    "en": "Toggles"
+  },
+  "sidebar.group.expand": {
+    "zh": "伸缩布局",
+    "en": "Expand"
+  },
+  "sidebar.group.cards": {
+    "zh": "卡片",
+    "en": "Cards"
+  },
+  "sidebar.group.workspace": {
+    "zh": "工作空间",
+    "en": "Workspace"
+  },
+  "sidebar.group.intelligence": {
+    "zh": "智能助手",
+    "en": "AI controls"
+  },
+  "sidebar.group.activity": {
+    "zh": "会话与动态",
+    "en": "Conversations & activity"
+  },
+  "sidebar.group.tables": {
+    "zh": "列表与表格",
+    "en": "Lists & tables"
+  },
+  "sidebar.group.charts": {
+    "zh": "图表",
+    "en": "Charts"
+  },
+  "sidebar.group.avatars": {
+    "zh": "头像与标记",
+    "en": "Avatars & badges"
+  },
+  "sidebar.group.progress": {
+    "zh": "进度",
+    "en": "Progress"
+  },
+  "sidebar.group.messages": {
+    "zh": "提示与消息",
+    "en": "Messages"
+  },
+  "sidebar.group.editors": {
+    "zh": "编辑器",
+    "en": "Editors"
+  },
+  "sidebar.group.pickers": {
+    "zh": "选择器",
+    "en": "Pickers"
+  },
+  "sidebar.group.sliders": {
+    "zh": "滑块",
+    "en": "Sliders"
+  },
+  "sidebar.group.special-inputs": {
+    "zh": "专用输入",
+    "en": "Special inputs"
+  },
+  "sidebar.empty": {
+    "zh": "无匹配项",
+    "en": "No matches"
+  }
+}

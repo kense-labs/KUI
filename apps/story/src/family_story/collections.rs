@@ -326,7 +326,7 @@ impl CollectionStory {
                 let s = cx.subscribe(&c, move |v, _, e: &MenuSelection, cx| {
                     if e.0.as_ref() == "copy" {
                         let task = kui::primitives::clipboard::write(
-                            "https://kense.ai/kui/components/context-menu/",
+                            "https://kense-labs.github.io/kui/components/context-menu/",
                             cx,
                         );
                         cx.spawn(async move |v, cx| {

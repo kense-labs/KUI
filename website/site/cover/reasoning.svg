@@ -1,0 +1,10 @@
+<svg viewBox="0 0 300 120" fill="none">
+      <path class="specimen-rule" d="M70 29v64"/>
+      <circle cx="70" cy="29" r="5.5" class="track-dot"/><circle cx="70" cy="60" r="5.5" class="track-dot"/>
+      <circle cx="70" cy="91" r="9" class="track-wash"/><circle cx="70" cy="91" r="4" class="track-live"/>
+      <g stroke-linecap="round" stroke-width="4">
+        <path class="track-line" d="M88 27h97m9 0h22"/><path class="track-faint" d="M88 35h58"/>
+        <path class="track-line" d="M88 58h76m9 0h34"/><path class="track-faint" d="M88 66h85"/>
+        <path class="track-line" d="M88 91h48"/><path class="track-faint" d="M146 91h32"/><path class="track-line trace" d="M146 91h46" pathLength="1"/>
+      </g>
+    </svg>

@@ -114,6 +114,16 @@ mod web {
             }
         });
     }
+    /// Request one presented frame for an impending host theme transition.
+    #[wasm_bindgen]
+    pub fn request_snapshot() {
+        PREVIEW.with_borrow(|preview| {
+            if let Some(preview) = preview {
+                preview.app.update(|cx| cx.refresh_windows());
+            }
+        });
+    }
+
     #[wasm_bindgen]
     pub fn set_preferences(dark: bool, reduced: bool) {
         PREVIEW.with_borrow(|preview| {

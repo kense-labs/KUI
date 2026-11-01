@@ -1,0 +1,24 @@
+[package]
+name = "kui-site-client"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde.workspace = true
+serde_json.workspace = true
+web-sys = { version = "0.3", features = [
+  "AddEventListenerOptions","Animation","AnimationEvent","CanvasRenderingContext2d","Clipboard","CssStyleDeclaration","CustomEvent",
+  "Document","DocumentFragment","DomRect","DomRectReadOnly","DomTokenList","Element","Event","EventTarget","FillMode","FocusEvent",
+  "History","HtmlAnchorElement","HtmlButtonElement","HtmlCanvasElement","HtmlCollection","HtmlDetailsElement",
+  "HtmlDialogElement","HtmlElement","HtmlIFrameElement","HtmlImageElement","HtmlInputElement","HtmlSelectElement",
+  "HtmlTemplateElement","HtmlTextAreaElement","KeyboardEvent","KeyframeAnimationOptions","Location","MediaQueryList",
+  "MessageEvent","MouseEvent","NamedNodeMap","Attr","Navigator","Node","NodeList","Performance","PointerEvent",
+  "IntersectionObserver","IntersectionObserverEntry","ResizeObserver","FontFaceSet","PopStateEvent","DomParser","SupportedType","DocumentType","Request","RequestInit","Response","ScrollToOptions","ScrollBehavior","Storage","Url","VisibilityState","Window","console"
+] }

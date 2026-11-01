@@ -1,0 +1,79 @@
+.kui-cover-page {
+  .print {
+    display: grid;
+    place-items: center;
+    height: 145px;
+    overflow: hidden;
+    color: var(--sample-ink);
+    background: radial-gradient(ellipse at center, var(--sample-tint), transparent 75%),var(--surface-muted);
+  }
+  .print svg {
+    width: min(100%, 320px);
+    height: 122px;
+  }
+  .morph {
+    --sample-ink: #7761b6;
+    --sample-tint: #cfc3f14d;
+  }
+  .date {
+    --sample-ink: #447c86;
+    --sample-tint: #a3d5cd45;
+  }
+  .reasoning {
+    --sample-ink: #aa6b48;
+    --sample-tint: #f0c9aa45;
+  }
+  .key {
+    fill: var(--bg);
+    stroke: color-mix(in srgb,currentColor 28%,var(--bg));
+  }
+  .key.active,.track-wash {
+    fill: color-mix(in srgb,currentColor 15%,var(--bg));
+  }
+  .specimen-rule {
+    fill: none;
+    stroke: currentColor;
+    opacity: .32;
+  }
+  .month,.number {
+    font: 500 10px var(--mono);
+    fill: var(--text-secondary);
+  }
+  .month {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .day,.track-live {
+    fill: currentColor;
+  }
+  .chosen {
+    fill: white;
+  }
+  .track-dot {
+    fill: var(--surface);
+    stroke: currentColor;
+    stroke-width: 1.4;
+  }
+  .track-line,.track-faint {
+    stroke: currentColor;
+    opacity: .68;
+  }
+  .track-faint {
+    opacity: .22;
+  }
+  html[data-theme="dark"] & .print{
+    --sample-tint: transparent;
+  }
+  .trace {stroke-dasharray:1;stroke-dashoffset:1;}
+  @media(prefers-reduced-motion:no-preference) {
+    .upper,.lower,.middle {transition:transform 360ms var(--ease-standard) var(--beat),opacity 200ms;}
+    .day,.number,.trace {transition:transform 310ms var(--ease-standard),fill 230ms,stroke-dashoffset 420ms var(--ease-standard);}
+    .sample:is(:hover,:focus-within) .upper {transform:rotate(45deg);}
+    .sample:is(:hover,:focus-within) .middle {opacity:0;}
+    .sample:is(:hover,:focus-within) .lower {transform:rotate(-45deg);}
+    .sample:is(:hover,:focus-within) .day {transform:translateX(21px);}
+    .sample:is(:hover,:focus-within) .chosen {fill:var(--text-secondary);}
+    .sample:is(:hover,:focus-within) .next {fill:white;}
+    .sample:is(:hover,:focus-within) .trace {stroke-dashoffset:0;}
+  }
+}

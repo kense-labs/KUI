@@ -24,13 +24,13 @@ type ClickHandler = dyn Fn(&ClickEvent, &mut Window, &mut App);
 pub struct Button {
     id: ElementId,
     label: SharedString,
-    variant: ButtonVariant,
-    size: Size,
+    pub(crate) variant: ButtonVariant,
+    pub(crate) size: Size,
     glyph: Option<Glyph>,
     trailing: bool,
     only: bool,
-    disabled: bool,
-    loading: bool,
+    pub(crate) disabled: bool,
+    pub(crate) loading: bool,
     on_click: Option<Rc<ClickHandler>>,
 }
 

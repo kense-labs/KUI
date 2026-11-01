@@ -6,6 +6,8 @@
 
 pub mod components;
 pub mod foundation;
+#[cfg(feature = "web")]
+pub mod html;
 pub mod primitives;
 
 pub use foundation::{Theme, ThemeMode, Tokens, init};
