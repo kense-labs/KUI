@@ -45,7 +45,7 @@ From `website/`, run `bun install --frozen-lockfile` and `bun run dev`. Open `ht
 
 ## GitHub Pages
 
-The [live library](https://kense-labs.github.io/KUI/kui/components/button/) is served from the root of the `gh-pages` branch. To publish an update, run `KUI_SITE_URL=https://kense-labs.github.io/KUI/ bun run build` from `website/` on `main`. Copy the contents of the fresh `dist/` into a checkout of `gh-pages`, keep its `.nojekyll` file, and commit and push the build there.
+The [live library](https://kense-labs.github.io/KUI/kui/components/button/) is built from `main`. The **Deploy website to GitHub Pages** workflow builds the Rust/WASM previews and the Astro site on each push, then publishes the resulting artifact. Set **Settings → Pages → Source** to **GitHub Actions**. To republish the current revision, select `main` in the workflow's **Run workflow** menu.
 
 ## Install a button into your app
 
