@@ -31,7 +31,7 @@ use kui::components::theme_switch::ThemeSwitch;
 let control = cx.new(|_| ThemeSwitch::new("appearance"));
 use kui::components::theme_switch::ThemeChange;
 cx.subscribe(&control, |_control, request: &ThemeChange, cx| {
-    crate::ui::foundation::Theme::global_mut(cx).set_mode(request.next);
+    kui::foundation::Theme::global_mut(cx).set_mode(request.next);
     cx.refresh_windows();
 }).detach();
 ```
