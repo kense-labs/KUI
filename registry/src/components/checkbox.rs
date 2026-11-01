@@ -62,7 +62,7 @@ impl Render for Checkbox {
             .justify_center()
             .border_1()
             .border_color(p.faint.blend(p.bright.opacity(t)))
-            .bg(p.panel)
+            .bg(p.panel.blend(p.bright.opacity(t)))
             .child(
                 div()
                     .relative()
@@ -70,8 +70,6 @@ impl Render for Checkbox {
                     .items_center()
                     .justify_center()
                     .size(px(20. * (0.6 + 0.4 * t)))
-                    .rounded(crate::foundation::surface_radius(cx))
-                    .bg(p.bright.opacity(t))
                     .child(check_stroke(
                         t,
                         self.mixed.get(w, cx),

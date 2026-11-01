@@ -81,7 +81,6 @@ impl Render for ExpandableText {
                 d.child(
                     button("more", if self.expanded { less } else { more }, cx)
                         .justify_start()
-                        .px_0()
                         .aria_expanded(self.expanded)
                         .child(if self.expanded { less } else { more })
                         .child(transformed(
