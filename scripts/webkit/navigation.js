@@ -15,6 +15,11 @@
     const painted = id => frame()?.dataset.renderedStory === id;
     await wait(() => painted('button') && document.documentElement.dataset.client === 'ready',
       'initial GPUI preview failed', 30000);
+    let motionObserved = false;
+    document.addEventListener('kui:navigated', () => {
+      const heading = document.querySelector('article.doc > h1');
+      if (heading && getComputedStyle(heading).animationName === 'doc-enter') motionObserved = true;
+    });
     const original = frame().contentDocument;
     const check = async (id, action) => {
       const start = performance.now();
@@ -30,6 +35,9 @@
     }
     await check('popover', () => history.back());
     await check('button', () => history.forward());
+    if (matchMedia('(prefers-reduced-motion: no-preference)').matches && !motionObserved) {
+      throw Error('document entrance animation missing after navigation');
+    }
     if (!original.querySelector('#status')?.hidden || original.body.hasAttribute('aria-busy')) {
       throw Error('preview loading state did not clear after paint');
     }

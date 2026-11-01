@@ -21,7 +21,9 @@ for path in files:
 
 # Keep /stories/ usable as a standalone gallery, with the same versioned imports.
 html = (source / "index.html").read_text()
-(public / "index.html").write_text(html.replace('src="./preview.js"', f'src="./v/{revision}/preview.js"'))
+html = html.replace('src="./preview.js"', f'src="./v/{revision}/preview.js"')
+html = html.replace('href="./pkg/', f'href="./v/{revision}/pkg/')
+(public / "index.html").write_text(html)
 for path in (source / "fonts/KUIStorySans-OFL.txt", source / "fonts/NotoSans-LICENSE",
              root / "apps/story/assets/Inter-LICENSE", root / "apps/story/assets/FiraCode-LICENSE"):
     shutil.copyfile(path, public / path.name)

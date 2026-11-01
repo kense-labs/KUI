@@ -1,3 +1,7 @@
+// Fetch in parallel with the module imports; pass the same response to the
+// WASM initializer so Safari never downloads the large binary twice.
+const wasmDownload = fetch(new URL("./pkg/kui_web_bg.wasm", import.meta.url));
+wasmDownload.catch(() => {}); // The startup handler below reports the failure.
 let start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent;
 
 const params = new URLSearchParams(location.search);
@@ -311,7 +315,7 @@ status.textContent = selected.lang === "zh" ? "正在加载预览…" : "Loading
 try {
   let init;
   ({ default: init, start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent } = await import("./pkg/kui_web.js"));
-  await init();
+  await init({ module_or_path: wasmDownload });
   mounted = selected;
   set_accent(...accentPair);
   start(mounted.story, dark, reduced, mounted.lang === "zh", embedded);

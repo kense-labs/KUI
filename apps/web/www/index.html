@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KUI — Component gallery (WASM)</title>
+    <link rel="modulepreload" href="./pkg/kui_web.js" />
     <script>
       try {
         document.documentElement.dataset.theme = window.frameElement?.ownerDocument.documentElement.dataset.theme
@@ -27,17 +28,20 @@
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 12px; padding: 24px; color: #737373; text-align: center;
         font-size: 13px; font-weight: 400;
+        animation: loading-appear 180ms ease-out 420ms both;
       }
       html[data-theme="dark"] #status { color: #a3a3a3; }
       #status[hidden] { display: none; }
       #status::before {
-        content: ""; width: 20px; height: 20px; box-sizing: border-box;
-        border: 2px solid currentColor; border-right-color: transparent;
-        border-radius: 50%; animation: loading-turn 800ms linear infinite;
+        content: ""; width: 26px; height: 8px;
+        background: radial-gradient(circle, currentColor 2px, transparent 2.5px) left center / 9px 8px repeat-x;
+        animation: loading-breathe 1100ms ease-in-out infinite alternate;
       }
+      html[data-preview-error] #status { animation: none; opacity: 1; }
       html[data-preview-error] #status::before { display: none; }
-      @keyframes loading-turn { to { transform: rotate(360deg); } }
-      @media (prefers-reduced-motion: reduce) { #status::before { animation: none; } }
+      @keyframes loading-appear { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes loading-breathe { from { opacity: .35; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { #status, #status::before { animation: none; } }
       canvas {
         display: block;
       }

@@ -19,6 +19,7 @@ wasm-bindgen \
   --out-dir "$OUT" \
   "${CARGO_TARGET_DIR:-$ROOT/target}/wasm32-unknown-unknown/release/kui_web.wasm"
 
+python3 "$ROOT/scripts/strip-wasm-names.py" "$OUT/kui_web_bg.wasm"
 python3 "$ROOT/scripts/package-web-preview.py"
 echo "KUI WASM gallery ready: apps/web/www/"
 echo "Serve with: python3 -m http.server -d apps/web/www 8080"
