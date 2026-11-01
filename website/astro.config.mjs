@@ -1,8 +1,13 @@
 import { defineConfig } from "astro/config";
 import { readFileSync } from "node:fs";
 
+const site = new URL(process.env.KUI_SITE_URL || "https://kense.ai");
+const base = site.pathname.replace(/\/$/, "");
+const redirect = (path) => base + path;
+
 export default defineConfig({
-  site: "https://kense.ai",
+  site: site.origin,
+  base: site.pathname,
   i18n: {
     defaultLocale: "zh",
     locales: ["zh", "en"],
@@ -15,14 +20,14 @@ export default defineConfig({
     port: 4321,
   },
   redirects: {
-    "/docs": "/kui/docs",
-    "/docs/installation": "/kui/docs/installation",
-    "/components": "/kui/components/button",
-    "/components/button": "/kui/components/button",
-    "/ai": "/kui/ai",
-    "/en/docs": "/en/kui/docs",
-    "/en/ai": "/en/kui/ai",
-    "/en/components/button": "/en/kui/components/button",
+    "/docs": redirect("/kui/docs/"),
+    "/docs/installation": redirect("/kui/docs/installation/"),
+    "/components": redirect("/kui/components/button/"),
+    "/components/button": redirect("/kui/components/button/"),
+    "/ai": redirect("/kui/ai/"),
+    "/en/docs": redirect("/en/kui/docs/"),
+    "/en/ai": redirect("/en/kui/ai/"),
+    "/en/components/button": redirect("/en/kui/components/button/"),
   },
   vite: {
     define: {

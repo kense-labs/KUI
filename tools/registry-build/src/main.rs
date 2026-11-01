@@ -79,7 +79,7 @@ fn build(root: &Path) -> Result<()> {
          Product: KUI. Crate/CLI: `kui`. License: MIT.\n\
          Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.\n\n\
          ## For agents\n\n\
-         - AI guide: https://kense.ai/kui/ai (local: /kui/ai)\n\
+         - [AI guide](./kui/ai/)\n\
          - Install: `kui init` then `kui add button`\n\
          - Rules: repository AGENTS.md (Microsoft Pragmatic Rust Guidelines)\n\
          - Design: repository DESIGN.md\n\
@@ -89,13 +89,13 @@ fn build(root: &Path) -> Result<()> {
     for entry in &catalog {
         let name = entry["name"].as_str().unwrap_or("");
         llms.push_str(&format!(
-            "- [{name}](/md/{name}.md): {}\n",
+            "- [{name}](./md/{name}.md): {}\n",
             entry["title"].as_str().unwrap_or(name)
         ));
     }
-    llms.push_str("\n## Registry JSON\n\n- [Catalog](/r/catalog.json)\n");
+    llms.push_str("\n## Registry JSON\n\n- [Catalog](./r/catalog.json)\n");
     for (id, _, _) in items() {
-        llms.push_str(&format!("- [{id}](/r/{id}.json)\n"));
+        llms.push_str(&format!("- [{id}](./r/{id}.json)\n"));
     }
     fs::write(root.join("llms.txt"), &llms)?;
     let site_llms = root.join("website/public/llms.txt");

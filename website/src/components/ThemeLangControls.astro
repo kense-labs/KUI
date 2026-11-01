@@ -97,24 +97,10 @@ const accentLabels: Record<AccentPreset, [string, string]> = {
 
 <script>
   import { navigate } from "astro:transitions/client";
+  import { getLocale, localePath, stripLocale } from "../i18n/utils";
 
   import { wireThemeKey } from "../lib/apply-theme";
   import { closeAccentPicker, wireAccentPickers } from "../lib/accent-picker";
-
-  function stripLocalePath(pathname: string): string {
-    if (pathname === "/en") return "/";
-    if (pathname.startsWith("/en/")) {
-      const rest = pathname.slice(3);
-      return rest || "/";
-    }
-    return pathname || "/";
-  }
-
-  function hrefForLocale(next: "zh" | "en"): string {
-    const base = stripLocalePath(window.location.pathname);
-    if (next === "zh") return base;
-    return base === "/" ? "/en" : `/en${base}`;
-  }
 
   function closeAllLangMenus(except?: HTMLElement) {
     document.querySelectorAll<HTMLElement>("[data-lang]").forEach((root) => {
@@ -165,7 +151,7 @@ const accentLabels: Record<AccentPreset, [string, string]> = {
           } catch {
             /* ignore */
           }
-          const href = hrefForLocale(next);
+          const href = localePath(next, stripLocale(window.location.pathname));
           if (href === window.location.pathname) return;
           void navigate(href);
         });
@@ -174,8 +160,7 @@ const accentLabels: Record<AccentPreset, [string, string]> = {
   }
 
   function syncLangLabels() {
-    const path = window.location.pathname;
-    const isEn = path === "/en" || path.startsWith("/en/");
+    const isEn = getLocale(window.location.pathname) === "en";
     document.querySelectorAll<HTMLElement>("[data-lang-label]").forEach((el) => {
       el.textContent = isEn ? "English" : "中文";
     });

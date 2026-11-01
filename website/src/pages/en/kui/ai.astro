@@ -1,7 +1,7 @@
 ---
 import ProductLayout from "../../../layouts/ProductLayout.astro";
 import CodePanel from "../../../components/CodePanel.astro";
-import { getLocale, useTranslations } from "../../../i18n/utils";
+import { getLocale, useTranslations, sitePath } from "../../../i18n/utils";
 
 const locale = getLocale(Astro.url.pathname);
 const t = useTranslations(locale);
@@ -15,8 +15,8 @@ const t = useTranslations(locale);
 
     <h2>{t("ai.start")}</h2>
     <ol>
-      <li><a href="/llms.txt"><code>/llms.txt</code></a></li>
-      <li><a href="/md/button.md"><code>/md/button.md</code></a></li>
+      <li><a href={sitePath("/llms.txt")}><code>/llms.txt</code></a></li>
+      <li><a href={sitePath("/md/button.md")}><code>/md/button.md</code></a></li>
       <li><code>kui init</code> · <code>kui add button</code></li>
       <li>AGENTS.md</li>
     </ol>
@@ -27,9 +27,9 @@ kui add button`} />
 
     <h2>{t("ai.registry")}</h2>
     <ul>
-      <li><a href="/r/catalog.json"><code>/r/catalog.json</code></a></li>
-      <li><a href="/r/button.json"><code>/r/button.json</code></a></li>
-      <li><a href="/r/kui-foundation.json"><code>/r/kui-foundation.json</code></a></li>
+      <li><a href={sitePath("/r/catalog.json")}><code>/r/catalog.json</code></a></li>
+      <li><a href={sitePath("/r/button.json")}><code>/r/button.json</code></a></li>
+      <li><a href={sitePath("/r/kui-foundation.json")}><code>/r/kui-foundation.json</code></a></li>
     </ul>
 
     <h2>{t("ai.rules")}</h2>

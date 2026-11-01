@@ -2,7 +2,7 @@
 import ProductLayout from "../../../../layouts/ProductLayout.astro";
 import ComponentDoc from "../../../../components/ComponentDoc.astro";
 import { COMPONENT_CATALOG, buttonTitle, getButtonDoc } from "../../../../lib/buttons-catalog";
-import { getLocale } from "../../../../i18n/utils";
+import { getLocale, localePath } from "../../../../i18n/utils";
 
 export function getStaticPaths() {
   return COMPONENT_CATALOG.map((doc) => ({ params: { id: doc.id } }));
@@ -12,7 +12,7 @@ const locale = getLocale(Astro.url.pathname);
 const id = Astro.params.id ?? "";
 const doc = getButtonDoc(id);
 if (!doc) {
-  return Astro.redirect("/en/kui/components/button");
+  return Astro.redirect(localePath(locale, "/kui/components/button"));
 }
 ---
 

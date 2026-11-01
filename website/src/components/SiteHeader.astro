@@ -5,7 +5,7 @@
  */
 import ThemeLangControls from "./ThemeLangControls.astro";
 import Icon from "./Icon.astro";
-import { getLocale, localePath, stripLocale, useTranslations } from "../i18n/utils";
+import { getLocale, localePath, stripLocale, useTranslations, sitePath } from "../i18n/utils";
 
 interface Props {
   mode?: "company" | "product";
@@ -32,16 +32,16 @@ const kuiHref = localePath(locale, "/kui");
       mode === "company" ? (
         <a class="brand" href={homeHref} aria-label="Kense" data-astro-prefetch>
           <span class="logo-swap mark" aria-hidden="true">
-            <img class="light" src="/assets/mark-light.png" width="22" height="22" alt="" />
-            <img class="dark" src="/assets/mark-dark.png" width="22" height="22" alt="" />
+            <img class="light" src={sitePath("/assets/mark-light.png")} width="22" height="22" alt="" />
+            <img class="dark" src={sitePath("/assets/mark-dark.png")} width="22" height="22" alt="" />
           </span>
           <span class="wordmark">Kense</span>
         </a>
       ) : (
         <a class="brand" href={kuiHref} aria-label="KUI" data-astro-prefetch>
           <span class="logo-swap mark" aria-hidden="true">
-            <img class="light" src="/assets/mark-light.png" width="22" height="22" alt="" />
-            <img class="dark" src="/assets/mark-dark.png" width="22" height="22" alt="" />
+            <img class="light" src={sitePath("/assets/mark-light.png")} width="22" height="22" alt="" />
+            <img class="dark" src={sitePath("/assets/mark-dark.png")} width="22" height="22" alt="" />
           </span>
           <span class="wordmark">KUI</span>
         </a>

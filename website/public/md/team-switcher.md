@@ -21,7 +21,7 @@ let control = cx.new(|cx| WorkspacePicker::new("team",vec![Workspace{id:"main".i
 
 The list starts with a search row whose underline gains contrast on focus. Use the arrows or Cmd/Ctrl+1–9 to choose a workspace. Create and Join have separate inputs. Escape returns to the list, clears a filter, then closes and restores trigger focus.
 
-The list holds six 48px rows. Longer lists scroll below the fixed search field and above the fixed actions. The highlighted row stays visible during keyboard navigation. With an empty query, Home and End jump to the ends of the menu. The embedded preview returns scrolling to the page at the list boundary.
+The list shows up to six 48px rows, with a shorter viewport in small windows. Longer lists scroll below the fixed search field and above the fixed actions. The highlighted row stays visible during keyboard navigation. With an empty query, Home and End jump to the ends of the menu. In the embedded preview, the next outward wheel event or new outward swipe at the boundary scrolls the page. A swipe that starts within the list stays there until release.
 
 ## API
 

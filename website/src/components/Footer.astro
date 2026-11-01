@@ -1,5 +1,5 @@
 ---
-import { getLocale, localePath, useTranslations } from "../i18n/utils";
+import { getLocale, localePath, useTranslations, sitePath } from "../i18n/utils";
 
 interface Props {
   tone?: "company" | "product";
@@ -15,8 +15,8 @@ const t = useTranslations(locale);
       {
         tone === "product" ? (
           <span class="logo-swap" aria-hidden="true">
-            <img class="light" src="/assets/mark-light.png" width="20" height="20" alt="" />
-            <img class="dark" src="/assets/mark-dark.png" width="20" height="20" alt="" />
+            <img class="light" src={sitePath("/assets/mark-light.png")} width="20" height="20" alt="" />
+            <img class="dark" src={sitePath("/assets/mark-dark.png")} width="20" height="20" alt="" />
           </span>
         ) : null
       }
@@ -28,7 +28,7 @@ const t = useTranslations(locale);
         tone === "product" ? (
           <>
             {" "}
-            · <a href="/llms.txt">llms.txt</a> ·{" "}
+            · <a href={sitePath("/llms.txt")}>llms.txt</a> ·{" "}
             <a href={localePath(locale, "/kui/docs")} data-astro-prefetch>{t("footer.docs")}</a>
           </>
         ) : (

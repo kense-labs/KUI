@@ -3,4 +3,4 @@ Allow: /
 
 # AI / LLM discovery
 # https://llmstxt.org/
-Llms-Txt: /llms.txt
+Llms-Txt: ./llms.txt

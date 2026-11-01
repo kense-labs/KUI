@@ -1,7 +1,7 @@
 ---
 import ProductLayout from "../../../../layouts/ProductLayout.astro";
 import CodePanel from "../../../../components/CodePanel.astro";
-import { getLocale, localePath, useTranslations } from "../../../../i18n/utils";
+import { getLocale, localePath, useTranslations, sitePath } from "../../../../i18n/utils";
 
 const locale = getLocale(Astro.url.pathname);
 const t = useTranslations(locale);
@@ -34,7 +34,7 @@ kui doctor`}
       <li>AGENTS.md · DESIGN.md · docs/PLATFORMS.md</li>
       <li>
         <a href={localePath(locale, "/kui/ai")} data-astro-prefetch>{t("ai.title")}</a> ·
-        <a href="/llms.txt">llms.txt</a>
+        <a href={sitePath("/llms.txt")}>llms.txt</a>
       </li>
     </ul>
   </article>

@@ -1,4 +1,5 @@
 ---
+import { sitePath } from "../i18n/utils";
 import { ClientRouter } from "astro:transitions";
 import "@fontsource-variable/geist/wght.css";
 import "@fontsource-variable/fira-code/wght.css";
@@ -28,9 +29,9 @@ const pageTitle = title === "Kense" || title === "KUI" ? `${title}` : `${title} 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="theme-color" content="#ffffff" />
-    <link rel="llms" href="/llms.txt" />
+    <link rel="llms" href={sitePath("/llms.txt")} />
     <title>{pageTitle}</title>
-    <link rel="icon" href="/assets/icon.png" type="image/png" />
+    <link rel="icon" href={sitePath("/assets/icon.png")} type="image/png" />
     <style is:inline set:html={accentCss} />
     <script is:inline data-astro-rerun define:vars={{ accentNames: Object.keys(accents) }}>
       (function () {

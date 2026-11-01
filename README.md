@@ -43,6 +43,10 @@ Platform details: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
 ## Local component website
 From `website/`, run `bun install --frozen-lockfile` and `bun run dev`. Open `http://127.0.0.1:4321/kui/components/confirm-morph/` for the interactive story. Building or starting the website also builds its shared WASM preview bundle.
 
+## GitHub Pages
+
+The [live library](https://kense-labs.github.io/KUI/kui/components/button/) is served from the root of the `gh-pages` branch. To publish an update, run `KUI_SITE_URL=https://kense-labs.github.io/KUI/ bun run build` from `website/` on `main`. Copy the contents of the fresh `dist/` into a checkout of `gh-pages`, keep its `.nojekyll` file, and commit and push the build there.
+
 ## Install a button into your app
 
 ```bash

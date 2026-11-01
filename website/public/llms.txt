@@ -7,7 +7,7 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 
 ## For agents
 
-- AI guide: https://kense.ai/kui/ai (local: /kui/ai)
+- [AI guide](./kui/ai/)
 - Install: `kui init` then `kui add button`
 - Rules: repository AGENTS.md (Microsoft Pragmatic Rust Guidelines)
 - Design: repository DESIGN.md
@@ -15,225 +15,225 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 
 ## Items
 
-- [kui-foundation](/md/kui-foundation.md): KUI foundation
-- [button](/md/button.md): Button
-- [action-button](/md/action-button.md): ActionButton
-- [split-button](/md/split-button.md): SplitButton
-- [button-group](/md/button-group.md): ButtonGroup
-- [floating-button-group](/md/floating-button-group.md): FloatingButtonGroup
-- [expanding-button-group](/md/expanding-button-group.md): ExpandingButtonGroup
-- [copy-button](/md/copy-button.md): CopyButton
-- [action-swap](/md/action-swap.md): ActionSwap
-- [icon-morph](/md/icon-morph.md): IconMorph
-- [confirm-morph](/md/confirm-morph.md): ConfirmMorph
-- [theme-switch](/md/theme-switch.md): ThemeSwitch
-- [hold-to-confirm](/md/hold-to-confirm.md): HoldToConfirm
-- [swipe-actions](/md/swipe-actions.md): SwipeActions
-- [reactions](/md/reactions.md): Reactions
-- [dropdown-menu](/md/dropdown-menu.md): DropdownMenu
-- [context-menu](/md/context-menu.md): ContextMenu
-- [user-menu](/md/user-menu.md): UserMenu
-- [input](/md/input.md): Input
-- [textarea](/md/textarea.md): Textarea
-- [password-field](/md/password-field.md): PasswordField
-- [password-strength](/md/password-strength.md): PasswordStrength
-- [search-field](/md/search-field.md): SearchField
-- [expanding-search](/md/expanding-search.md): ExpandingSearch
-- [inline-edit](/md/inline-edit.md): InlineEdit
-- [dialog](/md/dialog.md): Dialog
-- [popover](/md/popover.md): Popover
-- [tabs](/md/tabs.md): Tabs
-- [combobox](/md/combobox.md): Combobox
-- [select](/md/select.md): Select
-- [switch](/md/switch.md): Switch
-- [resizable-panels](/md/resizable-panels.md): ResizablePanels
-- [empty-state](/md/empty-state.md): EmptyState
-- [checkbox](/md/checkbox.md): Checkbox
-- [multi-select](/md/multi-select.md): MultiSelect
-- [number-field](/md/number-field.md): NumberField
-- [tag-input](/md/tag-input.md): TagInput
-- [radio-group](/md/radio-group.md): RadioGroup
-- [segmented-control](/md/segmented-control.md): SegmentedControl
-- [slider](/md/slider.md): Slider
-- [chip-group](/md/chip-group.md): ChipGroup
-- [mention-input](/md/mention-input.md): MentionInput
-- [emoji-picker](/md/emoji-picker.md): SymbolPicker
-- [color-picker](/md/color-picker.md): ColorPicker
-- [shortcut-recorder](/md/shortcut-recorder.md): ShortcutRecorder
-- [calendar](/md/calendar.md): Calendar
-- [date-picker](/md/date-picker.md): DatePicker
-- [time-picker](/md/time-picker.md): TimePicker
-- [date-range-picker](/md/date-range-picker.md): DateRangePicker
-- [phone-input](/md/phone-input.md): PhoneInput
-- [rich-text-editor](/md/rich-text-editor.md): RichTextEditor
-- [file-dropzone](/md/file-dropzone.md): FileDropzone
-- [avatar-upload](/md/avatar-upload.md): AvatarUpload
-- [chat-thread](/md/chat-thread.md): ChatThread
-- [starter-prompts](/md/starter-prompts.md): PromptShelf
-- [ai-translate](/md/ai-translate.md): MessageTranslation
-- [agent-timeline](/md/agent-timeline.md): RunLanes
-- [context-window](/md/context-window.md): CapacityBands
-- [agent-status](/md/agent-status.md): WorkBadge
-- [tool-call](/md/tool-call.md): InvocationInspector
-- [agent-plan](/md/agent-plan.md): TaskPlan
-- [reasoning-block](/md/reasoning-block.md): ExplanationNote
-- [source-cards](/md/source-cards.md): CitationShelf
-- [generation-stats](/md/generation-stats.md): GenerationReadout
-- [comment-thread](/md/comment-thread.md): CommentThread
-- [code-suggestion](/md/code-suggestion.md): PatchReview
-- [model-card](/md/model-card.md): ModelSheet
-- [provider-keys](/md/provider-keys.md): CredentialPanel
-- [connector-setup](/md/connector-setup.md): ConnectionWizard
-- [ai-command](/md/ai-command.md): CommandDesk
-- [share-access](/md/share-access.md): AccessEditor
-- [team-switcher](/md/team-switcher.md): WorkspacePicker
-- [tooltip](/md/tooltip.md): Tooltip
-- [scroll-area](/md/scroll-area.md): ScrollArea
-- [drawer](/md/drawer.md): Drawer
-- [accordion](/md/accordion.md): Accordion
-- [breadcrumb](/md/breadcrumb.md): Breadcrumb
-- [tree-view](/md/tree-view.md): TreeView
-- [confirm-popover](/md/confirm-popover.md): ConfirmPopover
-- [pagination](/md/pagination.md): Pagination
-- [filter-toolbar](/md/filter-toolbar.md): FilterToolbar
-- [sortable-data-table](/md/sortable-data-table.md): SortableTable
-- [reorderable-list](/md/reorderable-list.md): ReorderableList
-- [expandable-card](/md/expandable-card.md): DetailCard
-- [hover-card](/md/hover-card.md): PreviewCard
-- [expandable-text](/md/expandable-text.md): ExpandableText
-- [toc-progress](/md/toc-progress.md): ReadingOutline
-- [code-block](/md/code-block.md): CodeBlock
-- [json-viewer](/md/json-viewer.md): JsonViewer
-- [data-grid](/md/data-grid.md): DataGrid
-- [lightbox-gallery](/md/lightbox-gallery.md): PhotoExhibit
-- [alert](/md/alert.md): Alert
-- [toast](/md/toast.md): Toast
-- [progress](/md/progress.md): Progress
-- [skeleton](/md/skeleton.md): Skeleton
-- [badge](/md/badge.md): Badge
-- [card](/md/card.md): Card
-- [avatar](/md/avatar.md): Avatar
-- [usage-meter](/md/usage-meter.md): UsageMeter
-- [onboarding-checklist](/md/onboarding-checklist.md): SetupChecklist
-- [stepper](/md/stepper.md): Stepper
-- [avatar-group](/md/avatar-group.md): AvatarGroup
-- [timeline](/md/timeline.md): Timeline
-- [metric-card](/md/metric-card.md): MetricCard
-- [sparkline](/md/sparkline.md): Sparkline
-- [bar-chart](/md/bar-chart.md): BarChart
-- [activity-heatmap](/md/activity-heatmap.md): DailyActivity
-- [line-chart](/md/line-chart.md): LineChart
-- [donut-chart](/md/donut-chart.md): DonutChart
+- [kui-foundation](./md/kui-foundation.md): KUI foundation
+- [button](./md/button.md): Button
+- [action-button](./md/action-button.md): ActionButton
+- [split-button](./md/split-button.md): SplitButton
+- [button-group](./md/button-group.md): ButtonGroup
+- [floating-button-group](./md/floating-button-group.md): FloatingButtonGroup
+- [expanding-button-group](./md/expanding-button-group.md): ExpandingButtonGroup
+- [copy-button](./md/copy-button.md): CopyButton
+- [action-swap](./md/action-swap.md): ActionSwap
+- [icon-morph](./md/icon-morph.md): IconMorph
+- [confirm-morph](./md/confirm-morph.md): ConfirmMorph
+- [theme-switch](./md/theme-switch.md): ThemeSwitch
+- [hold-to-confirm](./md/hold-to-confirm.md): HoldToConfirm
+- [swipe-actions](./md/swipe-actions.md): SwipeActions
+- [reactions](./md/reactions.md): Reactions
+- [dropdown-menu](./md/dropdown-menu.md): DropdownMenu
+- [context-menu](./md/context-menu.md): ContextMenu
+- [user-menu](./md/user-menu.md): UserMenu
+- [input](./md/input.md): Input
+- [textarea](./md/textarea.md): Textarea
+- [password-field](./md/password-field.md): PasswordField
+- [password-strength](./md/password-strength.md): PasswordStrength
+- [search-field](./md/search-field.md): SearchField
+- [expanding-search](./md/expanding-search.md): ExpandingSearch
+- [inline-edit](./md/inline-edit.md): InlineEdit
+- [dialog](./md/dialog.md): Dialog
+- [popover](./md/popover.md): Popover
+- [tabs](./md/tabs.md): Tabs
+- [combobox](./md/combobox.md): Combobox
+- [select](./md/select.md): Select
+- [switch](./md/switch.md): Switch
+- [resizable-panels](./md/resizable-panels.md): ResizablePanels
+- [empty-state](./md/empty-state.md): EmptyState
+- [checkbox](./md/checkbox.md): Checkbox
+- [multi-select](./md/multi-select.md): MultiSelect
+- [number-field](./md/number-field.md): NumberField
+- [tag-input](./md/tag-input.md): TagInput
+- [radio-group](./md/radio-group.md): RadioGroup
+- [segmented-control](./md/segmented-control.md): SegmentedControl
+- [slider](./md/slider.md): Slider
+- [chip-group](./md/chip-group.md): ChipGroup
+- [mention-input](./md/mention-input.md): MentionInput
+- [emoji-picker](./md/emoji-picker.md): SymbolPicker
+- [color-picker](./md/color-picker.md): ColorPicker
+- [shortcut-recorder](./md/shortcut-recorder.md): ShortcutRecorder
+- [calendar](./md/calendar.md): Calendar
+- [date-picker](./md/date-picker.md): DatePicker
+- [time-picker](./md/time-picker.md): TimePicker
+- [date-range-picker](./md/date-range-picker.md): DateRangePicker
+- [phone-input](./md/phone-input.md): PhoneInput
+- [rich-text-editor](./md/rich-text-editor.md): RichTextEditor
+- [file-dropzone](./md/file-dropzone.md): FileDropzone
+- [avatar-upload](./md/avatar-upload.md): AvatarUpload
+- [chat-thread](./md/chat-thread.md): ChatThread
+- [starter-prompts](./md/starter-prompts.md): PromptShelf
+- [ai-translate](./md/ai-translate.md): MessageTranslation
+- [agent-timeline](./md/agent-timeline.md): RunLanes
+- [context-window](./md/context-window.md): CapacityBands
+- [agent-status](./md/agent-status.md): WorkBadge
+- [tool-call](./md/tool-call.md): InvocationInspector
+- [agent-plan](./md/agent-plan.md): TaskPlan
+- [reasoning-block](./md/reasoning-block.md): ExplanationNote
+- [source-cards](./md/source-cards.md): CitationShelf
+- [generation-stats](./md/generation-stats.md): GenerationReadout
+- [comment-thread](./md/comment-thread.md): CommentThread
+- [code-suggestion](./md/code-suggestion.md): PatchReview
+- [model-card](./md/model-card.md): ModelSheet
+- [provider-keys](./md/provider-keys.md): CredentialPanel
+- [connector-setup](./md/connector-setup.md): ConnectionWizard
+- [ai-command](./md/ai-command.md): CommandDesk
+- [share-access](./md/share-access.md): AccessEditor
+- [team-switcher](./md/team-switcher.md): WorkspacePicker
+- [tooltip](./md/tooltip.md): Tooltip
+- [scroll-area](./md/scroll-area.md): ScrollArea
+- [drawer](./md/drawer.md): Drawer
+- [accordion](./md/accordion.md): Accordion
+- [breadcrumb](./md/breadcrumb.md): Breadcrumb
+- [tree-view](./md/tree-view.md): TreeView
+- [confirm-popover](./md/confirm-popover.md): ConfirmPopover
+- [pagination](./md/pagination.md): Pagination
+- [filter-toolbar](./md/filter-toolbar.md): FilterToolbar
+- [sortable-data-table](./md/sortable-data-table.md): SortableTable
+- [reorderable-list](./md/reorderable-list.md): ReorderableList
+- [expandable-card](./md/expandable-card.md): DetailCard
+- [hover-card](./md/hover-card.md): PreviewCard
+- [expandable-text](./md/expandable-text.md): ExpandableText
+- [toc-progress](./md/toc-progress.md): ReadingOutline
+- [code-block](./md/code-block.md): CodeBlock
+- [json-viewer](./md/json-viewer.md): JsonViewer
+- [data-grid](./md/data-grid.md): DataGrid
+- [lightbox-gallery](./md/lightbox-gallery.md): PhotoExhibit
+- [alert](./md/alert.md): Alert
+- [toast](./md/toast.md): Toast
+- [progress](./md/progress.md): Progress
+- [skeleton](./md/skeleton.md): Skeleton
+- [badge](./md/badge.md): Badge
+- [card](./md/card.md): Card
+- [avatar](./md/avatar.md): Avatar
+- [usage-meter](./md/usage-meter.md): UsageMeter
+- [onboarding-checklist](./md/onboarding-checklist.md): SetupChecklist
+- [stepper](./md/stepper.md): Stepper
+- [avatar-group](./md/avatar-group.md): AvatarGroup
+- [timeline](./md/timeline.md): Timeline
+- [metric-card](./md/metric-card.md): MetricCard
+- [sparkline](./md/sparkline.md): Sparkline
+- [bar-chart](./md/bar-chart.md): BarChart
+- [activity-heatmap](./md/activity-heatmap.md): DailyActivity
+- [line-chart](./md/line-chart.md): LineChart
+- [donut-chart](./md/donut-chart.md): DonutChart
 
 ## Registry JSON
 
-- [Catalog](/r/catalog.json)
-- [kui-foundation](/r/kui-foundation.json)
-- [button](/r/button.json)
-- [action-button](/r/action-button.json)
-- [split-button](/r/split-button.json)
-- [button-group](/r/button-group.json)
-- [floating-button-group](/r/floating-button-group.json)
-- [expanding-button-group](/r/expanding-button-group.json)
-- [copy-button](/r/copy-button.json)
-- [action-swap](/r/action-swap.json)
-- [icon-morph](/r/icon-morph.json)
-- [confirm-morph](/r/confirm-morph.json)
-- [theme-switch](/r/theme-switch.json)
-- [hold-to-confirm](/r/hold-to-confirm.json)
-- [swipe-actions](/r/swipe-actions.json)
-- [reactions](/r/reactions.json)
-- [dropdown-menu](/r/dropdown-menu.json)
-- [context-menu](/r/context-menu.json)
-- [user-menu](/r/user-menu.json)
-- [input](/r/input.json)
-- [textarea](/r/textarea.json)
-- [password-field](/r/password-field.json)
-- [password-strength](/r/password-strength.json)
-- [search-field](/r/search-field.json)
-- [expanding-search](/r/expanding-search.json)
-- [inline-edit](/r/inline-edit.json)
-- [dialog](/r/dialog.json)
-- [popover](/r/popover.json)
-- [tabs](/r/tabs.json)
-- [combobox](/r/combobox.json)
-- [select](/r/select.json)
-- [switch](/r/switch.json)
-- [resizable-panels](/r/resizable-panels.json)
-- [empty-state](/r/empty-state.json)
-- [checkbox](/r/checkbox.json)
-- [multi-select](/r/multi-select.json)
-- [number-field](/r/number-field.json)
-- [tag-input](/r/tag-input.json)
-- [radio-group](/r/radio-group.json)
-- [segmented-control](/r/segmented-control.json)
-- [slider](/r/slider.json)
-- [chip-group](/r/chip-group.json)
-- [mention-input](/r/mention-input.json)
-- [emoji-picker](/r/emoji-picker.json)
-- [color-picker](/r/color-picker.json)
-- [shortcut-recorder](/r/shortcut-recorder.json)
-- [calendar](/r/calendar.json)
-- [date-picker](/r/date-picker.json)
-- [time-picker](/r/time-picker.json)
-- [date-range-picker](/r/date-range-picker.json)
-- [phone-input](/r/phone-input.json)
-- [rich-text-editor](/r/rich-text-editor.json)
-- [file-dropzone](/r/file-dropzone.json)
-- [avatar-upload](/r/avatar-upload.json)
-- [chat-thread](/r/chat-thread.json)
-- [starter-prompts](/r/starter-prompts.json)
-- [ai-translate](/r/ai-translate.json)
-- [agent-timeline](/r/agent-timeline.json)
-- [context-window](/r/context-window.json)
-- [agent-status](/r/agent-status.json)
-- [tool-call](/r/tool-call.json)
-- [agent-plan](/r/agent-plan.json)
-- [reasoning-block](/r/reasoning-block.json)
-- [source-cards](/r/source-cards.json)
-- [generation-stats](/r/generation-stats.json)
-- [comment-thread](/r/comment-thread.json)
-- [code-suggestion](/r/code-suggestion.json)
-- [model-card](/r/model-card.json)
-- [provider-keys](/r/provider-keys.json)
-- [connector-setup](/r/connector-setup.json)
-- [ai-command](/r/ai-command.json)
-- [share-access](/r/share-access.json)
-- [team-switcher](/r/team-switcher.json)
-- [tooltip](/r/tooltip.json)
-- [scroll-area](/r/scroll-area.json)
-- [drawer](/r/drawer.json)
-- [accordion](/r/accordion.json)
-- [breadcrumb](/r/breadcrumb.json)
-- [tree-view](/r/tree-view.json)
-- [confirm-popover](/r/confirm-popover.json)
-- [pagination](/r/pagination.json)
-- [filter-toolbar](/r/filter-toolbar.json)
-- [sortable-data-table](/r/sortable-data-table.json)
-- [reorderable-list](/r/reorderable-list.json)
-- [expandable-card](/r/expandable-card.json)
-- [hover-card](/r/hover-card.json)
-- [expandable-text](/r/expandable-text.json)
-- [toc-progress](/r/toc-progress.json)
-- [code-block](/r/code-block.json)
-- [json-viewer](/r/json-viewer.json)
-- [data-grid](/r/data-grid.json)
-- [lightbox-gallery](/r/lightbox-gallery.json)
-- [alert](/r/alert.json)
-- [toast](/r/toast.json)
-- [progress](/r/progress.json)
-- [skeleton](/r/skeleton.json)
-- [badge](/r/badge.json)
-- [card](/r/card.json)
-- [avatar](/r/avatar.json)
-- [usage-meter](/r/usage-meter.json)
-- [onboarding-checklist](/r/onboarding-checklist.json)
-- [stepper](/r/stepper.json)
-- [avatar-group](/r/avatar-group.json)
-- [timeline](/r/timeline.json)
-- [metric-card](/r/metric-card.json)
-- [sparkline](/r/sparkline.json)
-- [bar-chart](/r/bar-chart.json)
-- [activity-heatmap](/r/activity-heatmap.json)
-- [line-chart](/r/line-chart.json)
-- [donut-chart](/r/donut-chart.json)
+- [Catalog](./r/catalog.json)
+- [kui-foundation](./r/kui-foundation.json)
+- [button](./r/button.json)
+- [action-button](./r/action-button.json)
+- [split-button](./r/split-button.json)
+- [button-group](./r/button-group.json)
+- [floating-button-group](./r/floating-button-group.json)
+- [expanding-button-group](./r/expanding-button-group.json)
+- [copy-button](./r/copy-button.json)
+- [action-swap](./r/action-swap.json)
+- [icon-morph](./r/icon-morph.json)
+- [confirm-morph](./r/confirm-morph.json)
+- [theme-switch](./r/theme-switch.json)
+- [hold-to-confirm](./r/hold-to-confirm.json)
+- [swipe-actions](./r/swipe-actions.json)
+- [reactions](./r/reactions.json)
+- [dropdown-menu](./r/dropdown-menu.json)
+- [context-menu](./r/context-menu.json)
+- [user-menu](./r/user-menu.json)
+- [input](./r/input.json)
+- [textarea](./r/textarea.json)
+- [password-field](./r/password-field.json)
+- [password-strength](./r/password-strength.json)
+- [search-field](./r/search-field.json)
+- [expanding-search](./r/expanding-search.json)
+- [inline-edit](./r/inline-edit.json)
+- [dialog](./r/dialog.json)
+- [popover](./r/popover.json)
+- [tabs](./r/tabs.json)
+- [combobox](./r/combobox.json)
+- [select](./r/select.json)
+- [switch](./r/switch.json)
+- [resizable-panels](./r/resizable-panels.json)
+- [empty-state](./r/empty-state.json)
+- [checkbox](./r/checkbox.json)
+- [multi-select](./r/multi-select.json)
+- [number-field](./r/number-field.json)
+- [tag-input](./r/tag-input.json)
+- [radio-group](./r/radio-group.json)
+- [segmented-control](./r/segmented-control.json)
+- [slider](./r/slider.json)
+- [chip-group](./r/chip-group.json)
+- [mention-input](./r/mention-input.json)
+- [emoji-picker](./r/emoji-picker.json)
+- [color-picker](./r/color-picker.json)
+- [shortcut-recorder](./r/shortcut-recorder.json)
+- [calendar](./r/calendar.json)
+- [date-picker](./r/date-picker.json)
+- [time-picker](./r/time-picker.json)
+- [date-range-picker](./r/date-range-picker.json)
+- [phone-input](./r/phone-input.json)
+- [rich-text-editor](./r/rich-text-editor.json)
+- [file-dropzone](./r/file-dropzone.json)
+- [avatar-upload](./r/avatar-upload.json)
+- [chat-thread](./r/chat-thread.json)
+- [starter-prompts](./r/starter-prompts.json)
+- [ai-translate](./r/ai-translate.json)
+- [agent-timeline](./r/agent-timeline.json)
+- [context-window](./r/context-window.json)
+- [agent-status](./r/agent-status.json)
+- [tool-call](./r/tool-call.json)
+- [agent-plan](./r/agent-plan.json)
+- [reasoning-block](./r/reasoning-block.json)
+- [source-cards](./r/source-cards.json)
+- [generation-stats](./r/generation-stats.json)
+- [comment-thread](./r/comment-thread.json)
+- [code-suggestion](./r/code-suggestion.json)
+- [model-card](./r/model-card.json)
+- [provider-keys](./r/provider-keys.json)
+- [connector-setup](./r/connector-setup.json)
+- [ai-command](./r/ai-command.json)
+- [share-access](./r/share-access.json)
+- [team-switcher](./r/team-switcher.json)
+- [tooltip](./r/tooltip.json)
+- [scroll-area](./r/scroll-area.json)
+- [drawer](./r/drawer.json)
+- [accordion](./r/accordion.json)
+- [breadcrumb](./r/breadcrumb.json)
+- [tree-view](./r/tree-view.json)
+- [confirm-popover](./r/confirm-popover.json)
+- [pagination](./r/pagination.json)
+- [filter-toolbar](./r/filter-toolbar.json)
+- [sortable-data-table](./r/sortable-data-table.json)
+- [reorderable-list](./r/reorderable-list.json)
+- [expandable-card](./r/expandable-card.json)
+- [hover-card](./r/hover-card.json)
+- [expandable-text](./r/expandable-text.json)
+- [toc-progress](./r/toc-progress.json)
+- [code-block](./r/code-block.json)
+- [json-viewer](./r/json-viewer.json)
+- [data-grid](./r/data-grid.json)
+- [lightbox-gallery](./r/lightbox-gallery.json)
+- [alert](./r/alert.json)
+- [toast](./r/toast.json)
+- [progress](./r/progress.json)
+- [skeleton](./r/skeleton.json)
+- [badge](./r/badge.json)
+- [card](./r/card.json)
+- [avatar](./r/avatar.json)
+- [usage-meter](./r/usage-meter.json)
+- [onboarding-checklist](./r/onboarding-checklist.json)
+- [stepper](./r/stepper.json)
+- [avatar-group](./r/avatar-group.json)
+- [timeline](./r/timeline.json)
+- [metric-card](./r/metric-card.json)
+- [sparkline](./r/sparkline.json)
+- [bar-chart](./r/bar-chart.json)
+- [activity-heatmap](./r/activity-heatmap.json)
+- [line-chart](./r/line-chart.json)
+- [donut-chart](./r/donut-chart.json)
