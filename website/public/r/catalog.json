@@ -262,5 +262,613 @@
     "kind": "component",
     "name": "empty-state",
     "title": "EmptyState"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "checkbox",
+    "title": "Checkbox"
+  },
+  {
+    "categories": [
+      "selects"
+    ],
+    "kind": "component",
+    "name": "multi-select",
+    "title": "MultiSelect"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "number-field",
+    "title": "NumberField"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "tag-input",
+    "title": "TagInput"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "radio-group",
+    "title": "RadioGroup"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "segmented-control",
+    "title": "SegmentedControl"
+  },
+  {
+    "categories": [
+      "sliders"
+    ],
+    "kind": "component",
+    "name": "slider",
+    "title": "Slider"
+  },
+  {
+    "categories": [
+      "selects"
+    ],
+    "kind": "component",
+    "name": "chip-group",
+    "title": "ChipGroup"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "mention-input",
+    "title": "MentionInput"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "emoji-picker",
+    "title": "SymbolPicker"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "color-picker",
+    "title": "ColorPicker"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "shortcut-recorder",
+    "title": "ShortcutRecorder"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "calendar",
+    "title": "Calendar"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "date-picker",
+    "title": "DatePicker"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "time-picker",
+    "title": "TimePicker"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "date-range-picker",
+    "title": "DateRangePicker"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "phone-input",
+    "title": "PhoneInput"
+  },
+  {
+    "categories": [
+      "editors"
+    ],
+    "kind": "component",
+    "name": "rich-text-editor",
+    "title": "RichTextEditor"
+  },
+  {
+    "categories": [
+      "editors"
+    ],
+    "kind": "component",
+    "name": "file-dropzone",
+    "title": "FileDropzone"
+  },
+  {
+    "categories": [
+      "editors"
+    ],
+    "kind": "component",
+    "name": "avatar-upload",
+    "title": "AvatarUpload"
+  },
+  {
+    "categories": [
+      "activity"
+    ],
+    "kind": "component",
+    "name": "chat-thread",
+    "title": "ChatThread"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "starter-prompts",
+    "title": "PromptShelf"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ai-translate",
+    "title": "MessageTranslation"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "agent-timeline",
+    "title": "RunLanes"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "context-window",
+    "title": "CapacityBands"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "agent-status",
+    "title": "WorkBadge"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "tool-call",
+    "title": "InvocationInspector"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "agent-plan",
+    "title": "TaskPlan"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "reasoning-block",
+    "title": "ExplanationNote"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "source-cards",
+    "title": "CitationShelf"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "generation-stats",
+    "title": "GenerationReadout"
+  },
+  {
+    "categories": [
+      "activity"
+    ],
+    "kind": "component",
+    "name": "comment-thread",
+    "title": "CommentThread"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "code-suggestion",
+    "title": "PatchReview"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "model-card",
+    "title": "ModelSheet"
+  },
+  {
+    "categories": [
+      "workspace"
+    ],
+    "kind": "component",
+    "name": "provider-keys",
+    "title": "CredentialPanel"
+  },
+  {
+    "categories": [
+      "workspace"
+    ],
+    "kind": "component",
+    "name": "connector-setup",
+    "title": "ConnectionWizard"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ai-command",
+    "title": "CommandDesk"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "share-access",
+    "title": "AccessEditor"
+  },
+  {
+    "categories": [
+      "workspace"
+    ],
+    "kind": "component",
+    "name": "team-switcher",
+    "title": "WorkspacePicker"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "tooltip",
+    "title": "Tooltip"
+  },
+  {
+    "categories": [
+      "expand"
+    ],
+    "kind": "component",
+    "name": "scroll-area",
+    "title": "ScrollArea"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "drawer",
+    "title": "Drawer"
+  },
+  {
+    "categories": [
+      "expand"
+    ],
+    "kind": "component",
+    "name": "accordion",
+    "title": "Accordion"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "breadcrumb",
+    "title": "Breadcrumb"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "tree-view",
+    "title": "TreeView"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "confirm-popover",
+    "title": "ConfirmPopover"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "pagination",
+    "title": "Pagination"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "filter-toolbar",
+    "title": "FilterToolbar"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "sortable-data-table",
+    "title": "SortableTable"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "reorderable-list",
+    "title": "ReorderableList"
+  },
+  {
+    "categories": [
+      "expand"
+    ],
+    "kind": "component",
+    "name": "expandable-card",
+    "title": "DetailCard"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "hover-card",
+    "title": "PreviewCard"
+  },
+  {
+    "categories": [
+      "expand"
+    ],
+    "kind": "component",
+    "name": "expandable-text",
+    "title": "ExpandableText"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "toc-progress",
+    "title": "ReadingOutline"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "code-block",
+    "title": "CodeBlock"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "json-viewer",
+    "title": "JsonViewer"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "data-grid",
+    "title": "DataGrid"
+  },
+  {
+    "categories": [
+      "workspace"
+    ],
+    "kind": "component",
+    "name": "lightbox-gallery",
+    "title": "PhotoExhibit"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "alert",
+    "title": "Alert"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "toast",
+    "title": "Toast"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "progress",
+    "title": "Progress"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "skeleton",
+    "title": "Skeleton"
+  },
+  {
+    "categories": [
+      "avatars"
+    ],
+    "kind": "component",
+    "name": "badge",
+    "title": "Badge"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "card",
+    "title": "Card"
+  },
+  {
+    "categories": [
+      "avatars"
+    ],
+    "kind": "component",
+    "name": "avatar",
+    "title": "Avatar"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "usage-meter",
+    "title": "UsageMeter"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "onboarding-checklist",
+    "title": "SetupChecklist"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "stepper",
+    "title": "Stepper"
+  },
+  {
+    "categories": [
+      "avatars"
+    ],
+    "kind": "component",
+    "name": "avatar-group",
+    "title": "AvatarGroup"
+  },
+  {
+    "categories": [
+      "activity"
+    ],
+    "kind": "component",
+    "name": "timeline",
+    "title": "Timeline"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "metric-card",
+    "title": "MetricCard"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "sparkline",
+    "title": "Sparkline"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "bar-chart",
+    "title": "BarChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "activity-heatmap",
+    "title": "DailyActivity"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "line-chart",
+    "title": "LineChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "donut-chart",
+    "title": "DonutChart"
   }
 ]

@@ -240,7 +240,15 @@ impl Render for HoldToConfirm {
                     .h_full()
                     .w(px(sw * fill))
                     .overflow_hidden()
-                    .child(contents(p.inverse).rounded(r).bg(bg)),
+                    .child(
+                        contents(if self.danger {
+                            p.neutral_inverse
+                        } else {
+                            p.inverse
+                        })
+                        .rounded(r)
+                        .bg(bg),
+                    ),
             )
             .child(
                 div()

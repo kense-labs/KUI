@@ -8,6 +8,7 @@ pub use gallery::ButtonGallery;
 mod host;
 /// Focus and size integration for an embedded GPUI story.
 pub struct StoryBridge {
+    pub visible: fn() -> bool,
     pub frame: fn(f32, kui::foundation::ThemeMode),
     pub leave: fn(bool),
     pub theme_target: fn(gpui::Bounds<gpui::Pixels>, gpui::Pixels),
@@ -26,3 +27,4 @@ pub use family_story::workspace::IDS as WORKSPACE_IDS;
 /// The web host has loaded its optional user-input font.
 pub struct InputFontLoaded;
 impl gpui::Global for InputFontLoaded {}
+pub use family_story::LIBRARY_IDS;

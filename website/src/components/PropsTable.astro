@@ -52,7 +52,7 @@ const { label = "Props", rows, headers } = Astro.props;
     min-width: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius);
   }
   .row {
     display: grid;
@@ -87,7 +87,7 @@ const { label = "Props", rows, headers } = Astro.props;
   .type {
     display: inline;
     padding: 1px 5px;
-    border-radius: 5px;
+    border-radius: var(--radius);
     background: var(--surface-muted);
     color: var(--muted);
     font-family: var(--mono);

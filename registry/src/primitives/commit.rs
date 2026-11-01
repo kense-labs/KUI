@@ -292,7 +292,7 @@ pub fn render_action<T: CommitControl>(
         .w(px(wide * k))
         .h(px(h * k))
         .flex_none()
-        .rounded(radius * k)
+        .rounded(radius)
         .flex()
         .gap(px(8. * k))
         .items_center()

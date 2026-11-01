@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 pub enum Glyph {
     More,
     Arrow,
+    ArrowUp,
     Send,
     Down,
     Up,
@@ -301,6 +302,10 @@ impl Glyph {
             Self::Arrow => &[
                 &[(5.00, 12.00), (19.00, 12.00)],
                 &[(13.00, 6.00), (19.00, 12.00), (13.00, 18.00)],
+            ],
+            Self::ArrowUp => &[
+                &[(12., 19.), (12., 5.)],
+                &[(5., 12.), (12., 5.), (19., 12.)],
             ],
             Self::Send => &[
                 &[

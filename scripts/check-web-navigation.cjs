@@ -6,7 +6,9 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const base = new URL(process.argv[2] || "http://127.0.0.1:4321");
-const ids = ["dialog", "popover", "tabs", "combobox", "select", "switch", "resizable-panels", "empty-state"];
+const ids = process.env.KUI_CHECK_ALL_STORIES
+  ? require("../website/public/r/catalog.json").filter(item => item.kind === "component").map(item => item.name)
+  : ["dialog", "popover", "tabs", "combobox", "select", "switch", "resizable-panels", "empty-state"];
 
 async function touchDialog(browser) {
   const page = await browser.newPage({ viewport: { width: 320, height: 820 }, isMobile: true,
@@ -36,6 +38,35 @@ async function touchDialog(browser) {
   await page.close();
 }
 
+// The document can accept a wheel even while the pointer is inside a GPUI iframe.
+// Verify that only the workspace rows move until their scrollport reaches an edge.
+async function workspaceScroll(page) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const frame = page.locator("iframe[data-rendered-story=team-switcher]");
+  await frame.evaluate(el => el.scrollIntoView({ block: "center", behavior: "instant" }));
+  const box = await frame.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  const documentTop = await page.evaluate(() => scrollY);
+  const sample = () => page.screenshot({ clip: { x: x - 125, y: y - 45, width: 90, height: 90 } });
+  async function scrollRows(delta) {
+    const before = await sample();
+    await page.mouse.wheel(0, delta);
+    const deadline = Date.now() + 3000;
+    while ((await sample()).equals(before)) {
+      assert.ok(Date.now() < deadline, "workspace list did not repaint after scrolling");
+    }
+    assert.equal(await page.evaluate(() => scrollY), documentTop, "wheel inside the list scrolled the document");
+  }
+  await scrollRows(800);
+  await page.mouse.wheel(0, 110);
+  await page.waitForFunction(top => scrollY > top, documentTop);
+  await page.evaluate(top => scrollTo({ top, behavior: "instant" }), documentTop);
+  await scrollRows(-800);
+  await page.mouse.wheel(0, -110);
+  await page.waitForFunction(top => scrollY < top, documentTop);
+}
+
 async function check() {
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_EXECUTABLE_PATH,
@@ -61,7 +92,8 @@ async function check() {
       // Check the mounted GPUI story, not just the new heading or iframe attributes.
       await page.waitForFunction(id => {
         const slot = document.querySelector("[data-preview-slot]"), frame = slot?.querySelector("iframe");
-        return location.pathname.endsWith("/" + id + "/") && frame?.dataset.renderedStory === id &&
+        const component = location.pathname.split("/").filter(Boolean).at(-1);
+        return component === id && frame?.dataset.renderedStory === id &&
           (!slot.dataset.previewSrc || new URL(slot.dataset.previewSrc, document.baseURI).pathname === new URL(frame.src).pathname) &&
           new URL(frame.contentWindow.location.href).searchParams.get("story") === id &&
           frame.contentDocument.querySelector("canvas")?.width > 0;
@@ -83,9 +115,9 @@ async function check() {
       }), id + " should remain visible in the sidebar");
     }
     await page.goBack();
-    await displayed("resizable-panels");
+    await displayed(ids.at(-2));
     await page.goForward();
-    await displayed("empty-state");
+    await displayed(ids.at(-1));
     // Dispatch another navigation before the first page fetch can finish.
     await page.evaluate(() => {
       for (const id of ["select", "popover", "dialog"]) document.querySelector(`a[data-nav-item][href$="/${id}"]`).click();
@@ -100,11 +132,23 @@ async function check() {
     await search.fill("ResizablePanels");
     await nav("resizable-panels").click();
     await displayed("resizable-panels");
+    await search.fill("");
+    await nav("team-switcher").click();
+    await displayed("team-switcher");
+    await workspaceScroll(page);
+    await nav("button").click();
+    await displayed("button");
+    const plain = page.locator("iframe[data-rendered-story=button]");
+    await plain.evaluate(el => el.scrollIntoView({ block: "center", behavior: "instant" }));
+    await plain.hover();
+    const beforeWheel = await page.evaluate(() => scrollY);
+    await page.mouse.wheel(0, 110);
+    await page.waitForFunction(top => scrollY > top, beforeWheel);
     assert.equal(loads.length, upgraded ? 2 : 1, "only a change of build should restart WASM");
     assert.deepEqual(errors, []);
     await page.close();
     await touchDialog(browser);
-    console.log("Sidebar, eight live stories, rapid navigation, history, preview switching and touch/Escape passed.");
+    console.log(`Sidebar, ${ids.length} live stories, history, workspace scrolling, preview switching and touch/Escape passed.`);
   } finally {
     await browser.close();
   }

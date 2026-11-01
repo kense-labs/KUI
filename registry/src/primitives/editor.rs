@@ -164,7 +164,10 @@ fn browser_text_input() -> Subscription {
     Subscription::new(move || stop(controller))
 }
 
+/// Optional glyph runs for an attributed document. Text, IME and selection retain the normal input path.
+pub type RunStyler = std::rc::Rc<dyn Fn(&str, &TextRun) -> Vec<TextRun>>;
 pub struct Editor {
+    run_styler: Option<RunStyler>,
     label: SharedString,
     placeholder: SharedString,
     pub(crate) expanded: Option<bool>,
@@ -254,6 +257,7 @@ impl Editor {
         });
         Self {
             label: label.into(),
+            run_styler: None,
             placeholder: "".into(),
             expanded: None,
             committed_label: None,
@@ -279,6 +283,13 @@ impl Editor {
             browser_keys: None,
             _listeners: vec![entered, left],
         }
+    }
+    pub fn set_run_styler(&mut self, styler: RunStyler) {
+        self.run_styler = Some(styler)
+    }
+    /// The normalized byte range, including a collapsed caret.
+    pub fn selection(&self) -> Range<usize> {
+        self.selected()
     }
     pub fn value(&self) -> &str {
         &self.value
@@ -663,12 +674,17 @@ impl Editor {
         };
         let line = px(self.font_size + 7.);
         let multi = self.mode.multiline();
+        let styled = if !blank && !masked {
+            self.run_styler.as_ref().map(|f| f(&text, &run))
+        } else {
+            None
+        };
         let rows = w
             .text_system()
             .shape_text(
                 text,
                 px(self.font_size),
-                &[run],
+                styled.as_deref().unwrap_or(std::slice::from_ref(&run)),
                 multi.then_some(b.size.width.max(px(1.))),
                 None,
             )

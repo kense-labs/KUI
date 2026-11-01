@@ -42,6 +42,21 @@ Values below are the light theme unless noted. Dark counterparts live in `ColorT
 | Warning | `#d97706` | `#fbbf24` | Caution status |
 | Focus outline | `#000000` | `#ffffff` | Keyboard focus only |
 
+The palette in the website header offers six presets and a custom color. Primary actions, keyboard focus, selection markers and subtle washes use the accent. Body text and status colors retain their semantic values.
+
+| Palette | Light | Dark |
+| --- | --- | --- |
+| Neutral (default) | `#000000` | `#ffffff` |
+| Blue | `#245bc4` | `#8bb4ff` |
+| Violet | `#7142b6` | `#bc9cff` |
+| Teal | `#08776d` | `#68d4c4` |
+| Rose | `#b93c67` | `#ff94b3` |
+| Amber | `#955a08` | `#f4be69` |
+
+In the custom editor, drag the saturation/brightness pad, adjust the hue, or enter a three- or six-digit HEX color. The document and the mounted GPUI preview show the draft together. Apply stores the normalized `#rrggbb` under `kui-accent`; Cancel or Escape restores the saved selection. The last confirmed custom color remains available after choosing a preset. The custom fill uses the same HEX in both themes. Its foreground uses whichever of white or black has higher contrast.
+
+Accent transitions take 180ms with cubic ease-out. A new selection starts from the displayed color. Reduced motion applies the new pair immediately. Rust hosts set a pair with `Theme::set_accent(AccentPalette { light, dark })`. Each tint's alpha controls how much of the underlying KUI surface it replaces.
+
 Brand-only (not a default token in `ColorTokens`): Kense `#171717` / on-brand `#ffffff` — logo lockup and brand moments only.
 
 ### Focus policy
@@ -66,20 +81,18 @@ Line height for button labels: 20px (`leading-body` ≈ 1.4).
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Radius sm | 4px | Dense chips / nested highlights |
-| Radius md | 8px | **Button** / control radius |
-| Radius lg | 18px | Docs code panels, install shells |
-| Radius panel | 26px | Docs preview canvas / large surfaces |
-| Radius full | 9999px | Pill controls (future) |
+| Radius md | 8px | Shared corner for controls, nested highlights, menus, cards and docs surfaces |
+| Radius sm / lg / panel | 8px | Compatibility names for the default surface radius |
+| Radius full | 9999px | Circular geometry for avatars, radio marks and status dots |
 | Space 1–8 | 4 / 8 / 12 / 16 / 24 / 32px | Padding and gaps |
 
 Control heights: sm **36px**, md **44px**, lg **50px**.
 
-Concentric radii: nested surfaces use the next smaller radius step when both are rounded.
+Exposed corners of nested surfaces use the same 8px radius. Joined edges stay square. A circle is drawn from its diameter.
 
 ## 5. Button (MVP)
 
-Visual rhythm uses a taller control, medium weight, and outlined danger with an **8px** control radius — softer than 4px, still geometric rather than pill-like. Colors stay KUI pure black/white; brand `#171717` is not used on everyday buttons. Docs chrome (preview canvas, code panels) uses larger `lg` / `panel` radii, not the control radius.
+All rectangular button surfaces and their highlights use the shared **8px** control radius. The preview canvas, install panel and code panel use the same radius. Primary fills follow the active accent.
 
 ### Variants
 

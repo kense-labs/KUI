@@ -284,7 +284,7 @@ impl MenuControl for UserMenu {
                                 .when_some(self.account.plan.clone(), |e, s| {
                                     e.child(
                                         div()
-                                            .rounded(px(4.))
+                                            .rounded(crate::foundation::surface_radius(cx))
                                             .bg(p.hover)
                                             .px(px(5.))
                                             .text_size(px(10.))
@@ -361,7 +361,7 @@ impl MenuControl for UserMenu {
             .flex()
             .items_center()
             .p(px(2.))
-            .rounded(px(4.))
+            .rounded(crate::foundation::surface_radius(cx))
             .bg(p.hover)
             .child(
                 div()
@@ -370,7 +370,7 @@ impl MenuControl for UserMenu {
                     .top(px(2.))
                     .w(px(cell))
                     .h(px(cell_h))
-                    .rounded(px(4.))
+                    .rounded(crate::foundation::surface_radius(cx))
                     .bg(p.panel)
                     .shadow_sm(),
             );

@@ -381,7 +381,7 @@ impl<S: PickerStyle> Render for Picker<S> {
             .rounded(radius)
             .border_1()
             .border_color(if self.focus.is_focused(w) {
-                p.bright
+                p.focus
             } else {
                 p.line
             })
@@ -577,7 +577,7 @@ impl<S: PickerStyle> Render for Picker<S> {
                 .aria_selected(self.selected == Some(i))
                 .h(px(36.))
                 .px_3()
-                .rounded(Theme::global(cx).tokens.radius.sm)
+                .rounded(Theme::global(cx).tokens.radius.md)
                 .flex()
                 .items_center()
                 .justify_between()
@@ -628,7 +628,7 @@ impl<S: PickerStyle> Render for Picker<S> {
             .occlude()
             .w(b.size.width)
             .p(px(5.))
-            .rounded(radius + px(2.))
+            .rounded(radius)
             .border_1()
             .border_color(p.line)
             .bg(p.panel)

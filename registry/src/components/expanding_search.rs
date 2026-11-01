@@ -320,7 +320,7 @@ impl Render for ExpandingSearch {
                     "clear",
                     l.text("Clear search", "清除搜索"),
                     26.,
-                    r.sm.into(),
+                    r.md.into(),
                     Tone::Clear,
                     cx,
                 )
@@ -374,7 +374,7 @@ impl Render for ExpandingSearch {
                         .top(px(self.high.get(w, cx)))
                         .h(px(48.))
                         .bg(p.hover)
-                        .rounded(r.sm),
+                        .rounded(r.md),
                 )
             }
             let empty = query.trim().is_empty();

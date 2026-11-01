@@ -10,5 +10,11 @@ mod tokens;
 
 pub use init::init;
 pub use motion::{MOTION, MotionPreset, MotionTokens};
-pub use theme::{Theme, ThemeMode};
-pub use tokens::{ColorTokens, RadiusTokens, SpaceTokens, Tokens};
+pub use theme::{AccentPalette, Theme, ThemeMode};
+pub use tokens::{ColorTokens, RadiusTokens, SURFACE_RADIUS, SpaceTokens, Tokens};
+
+/// Radius shared by control chrome, panels, highlights, and focus outlines.
+pub fn surface_radius(cx: &gpui::App) -> gpui::Pixels {
+    cx.try_global::<Theme>()
+        .map_or(SURFACE_RADIUS, |theme| theme.tokens.radius.md)
+}

@@ -213,7 +213,7 @@ const { hint } = Astro.props;
   }
   .tab:hover,
   .tab[aria-selected="true"] {
-    color: var(--ink);
+    color: var(--accent-text);
     opacity: 1;
   }
   .indicator {
@@ -223,8 +223,8 @@ const { hint } = Astro.props;
     left: 0;
     width: 0;
     height: 2px;
-    border-radius: 2px 2px 0 0;
-    background: var(--ink);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--accent-text);
     opacity: 0;
     pointer-events: none;
     transform: translate3d(0, 0, 0);

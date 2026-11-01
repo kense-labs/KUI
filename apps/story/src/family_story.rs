@@ -277,6 +277,7 @@ impl FamilyStory {
             let _ = cx.text_system().add_fonts(vec![
                 std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinRegular.ttf")),
                 std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinMedium.ttf")),
+                std::borrow::Cow::Borrowed(include_bytes!("../assets/FiraCode-Regular.ttf")),
             ]);
             cx.set_global(StoryFonts);
         }
@@ -750,6 +751,10 @@ impl FamilyStory {
                 });
                 add!((e.into(), sub));
             }
+            id if FORMS_IDS.contains(&id) => s.views.push(forms::story(id, w, cx)),
+            id if OPERATIONS_IDS.contains(&id) => s.views.push(operations::story(id, w, cx)),
+            id if NAVIGATION_IDS.contains(&id) => s.views.push(navigation::story(id, w, cx)),
+            id if INSIGHTS_IDS.contains(&id) => s.views.push(insights::story(id, w, cx)),
             id if workspace::IDS.contains(&id) => s.views.push(
                 cx.new(|cx| workspace::WorkspaceStory::new(id, w, cx))
                     .into(),
@@ -905,7 +910,7 @@ impl FamilyStory {
                                 (if modes { "mode" } else { "result" }, i),
                                 label,
                                 36.,
-                                radii.sm.into(),
+                                radii.md.into(),
                                 if selected { Tone::Surface } else { Tone::Clear },
                                 cx,
                             )
@@ -974,7 +979,7 @@ impl FamilyStory {
                                         "restore",
                                         t("Restore", "还原示例"),
                                         36.,
-                                        14.,
+                                        kui::foundation::surface_radius(cx).into(),
                                         Tone::Surface,
                                         cx,
                                     )
@@ -1014,14 +1019,23 @@ impl Render for FamilyStory {
         let p = Paint::get(cx);
         let vw = f32::from(w.viewport_size().width);
         let narrow = vw < 532.;
-        let height = if self.id == "theme-switch" {
-            220.
-        } else if self.id == "user-menu" {
-            626.
-        } else if self.id == "icon-morph" && narrow {
-            560.
-        } else {
-            520.
+        // Anchor expanding pickers at the top of their reserved interaction area.
+        let (height, top) = match (self.id.as_str(), narrow) {
+            ("date-picker", true) => (539., Some(17.)),
+            ("date-picker", false) => (583., Some(33.)),
+            ("time-picker", true) => (481., Some(66.)),
+            ("time-picker", false) => (520., Some(94.)),
+            ("date-range-picker", true) => (571., Some(57.)),
+            ("date-range-picker", false) => (567., Some(109.)),
+            ("mention-input", true) => (481., Some(56.)),
+            ("mention-input", false) => (520., Some(101.)),
+            ("shortcut-recorder", _) => (1019., None),
+            ("reasoning-block", _) => (670., Some(52.)),
+            ("json-viewer", _) => (646., None),
+            ("theme-switch", _) => (220., None),
+            ("user-menu", _) => (626., None),
+            ("icon-morph", true) => (560., None),
+            _ => (520., None),
         };
         let embedded = cx.try_global::<crate::StoryBridge>().is_some();
         let edge = |i: usize| {
@@ -1041,7 +1055,24 @@ impl Render for FamilyStory {
             .flex_col()
             .items_center()
             .justify_center()
-            .bg(p.stage);
+            .bg(p.stage)
+            .when(LIBRARY_IDS.contains(&self.id.as_str()), |el| {
+                el.h_auto().min_h(px(height)).py(px(24.))
+            })
+            .when(
+                narrow && matches!(self.id.as_str(), "time-picker" | "date-picker"),
+                |el| el.px(px(17.)),
+            )
+            .when(narrow && self.id == "mention-input", |el| el.px(px(25.)))
+            .when_some(top, |el, inset| el.justify_start().pt(px(inset)))
+            .when(
+                matches!(self.id.as_str(), "provider-keys" | "shortcut-recorder"),
+                |el| el.p(px(if narrow { 25. } else { 53. })).justify_start(),
+            )
+            .when(self.id == "provider-keys", |el| {
+                // The editor expands below the active row. Keep the header anchored.
+                el.min_h(px(0.))
+            });
         if let Some((ev, old, slide)) = &self.transition {
             let duration = match ev.mode {
                 Transition::Reveal => 0.38,
@@ -1146,8 +1177,7 @@ impl Render for FamilyStory {
                 |e| e.font_family("KUI Story Sans"),
             )
             .when(
-                (fields::IDS.contains(&self.id.as_str()) || self.id == "combobox")
-                    && cx.try_global::<crate::InputFontLoaded>().is_some(),
+                cx.try_global::<crate::InputFontLoaded>().is_some(),
                 |mut s| {
                     if UiLanguage::current(cx) == UiLanguage::Chinese {
                         s = s.font_family("KUI Input Sans");
@@ -1184,5 +1214,171 @@ impl Render for FamilyStory {
             .child(scene)
     }
 }
+pub mod forms;
+pub mod insights;
+pub mod navigation;
+pub mod operations;
 #[cfg(test)]
 mod tests;
+pub const LIBRARY_IDS: [&str; 76] = [
+    "checkbox",
+    "multi-select",
+    "number-field",
+    "tag-input",
+    "radio-group",
+    "segmented-control",
+    "slider",
+    "chip-group",
+    "mention-input",
+    "emoji-picker",
+    "color-picker",
+    "shortcut-recorder",
+    "calendar",
+    "date-picker",
+    "time-picker",
+    "date-range-picker",
+    "phone-input",
+    "rich-text-editor",
+    "file-dropzone",
+    "avatar-upload",
+    "chat-thread",
+    "starter-prompts",
+    "ai-translate",
+    "agent-timeline",
+    "context-window",
+    "agent-status",
+    "tool-call",
+    "agent-plan",
+    "reasoning-block",
+    "source-cards",
+    "generation-stats",
+    "comment-thread",
+    "code-suggestion",
+    "model-card",
+    "provider-keys",
+    "connector-setup",
+    "ai-command",
+    "share-access",
+    "team-switcher",
+    "tooltip",
+    "scroll-area",
+    "drawer",
+    "accordion",
+    "breadcrumb",
+    "tree-view",
+    "confirm-popover",
+    "pagination",
+    "filter-toolbar",
+    "sortable-data-table",
+    "reorderable-list",
+    "expandable-card",
+    "hover-card",
+    "expandable-text",
+    "toc-progress",
+    "code-block",
+    "json-viewer",
+    "data-grid",
+    "lightbox-gallery",
+    "alert",
+    "toast",
+    "progress",
+    "skeleton",
+    "badge",
+    "card",
+    "avatar",
+    "usage-meter",
+    "onboarding-checklist",
+    "stepper",
+    "avatar-group",
+    "timeline",
+    "metric-card",
+    "sparkline",
+    "bar-chart",
+    "activity-heatmap",
+    "line-chart",
+    "donut-chart",
+];
+const FORMS_IDS: &[&str] = &[
+    "checkbox",
+    "multi-select",
+    "number-field",
+    "tag-input",
+    "radio-group",
+    "segmented-control",
+    "slider",
+    "chip-group",
+    "mention-input",
+    "emoji-picker",
+    "color-picker",
+    "shortcut-recorder",
+    "calendar",
+    "date-picker",
+    "time-picker",
+    "date-range-picker",
+    "phone-input",
+    "rich-text-editor",
+    "file-dropzone",
+    "avatar-upload",
+];
+const OPERATIONS_IDS: &[&str] = &[
+    "chat-thread",
+    "starter-prompts",
+    "ai-translate",
+    "agent-timeline",
+    "context-window",
+    "agent-status",
+    "tool-call",
+    "agent-plan",
+    "reasoning-block",
+    "source-cards",
+    "generation-stats",
+    "comment-thread",
+    "code-suggestion",
+    "model-card",
+    "provider-keys",
+    "connector-setup",
+    "ai-command",
+    "share-access",
+    "team-switcher",
+];
+const NAVIGATION_IDS: &[&str] = &[
+    "tooltip",
+    "scroll-area",
+    "drawer",
+    "accordion",
+    "breadcrumb",
+    "tree-view",
+    "confirm-popover",
+    "pagination",
+    "filter-toolbar",
+    "sortable-data-table",
+    "reorderable-list",
+    "expandable-card",
+    "hover-card",
+    "expandable-text",
+    "toc-progress",
+    "code-block",
+    "json-viewer",
+    "data-grid",
+    "lightbox-gallery",
+];
+const INSIGHTS_IDS: &[&str] = &[
+    "alert",
+    "toast",
+    "progress",
+    "skeleton",
+    "badge",
+    "card",
+    "avatar",
+    "usage-meter",
+    "onboarding-checklist",
+    "stepper",
+    "avatar-group",
+    "timeline",
+    "metric-card",
+    "sparkline",
+    "bar-chart",
+    "activity-heatmap",
+    "line-chart",
+    "donut-chart",
+];

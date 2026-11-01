@@ -66,6 +66,9 @@ impl ColorTokens {
     }
 }
 
+/// Default corner radius of every KUI surface. Circular artwork and tracks keep their own geometry.
+pub const SURFACE_RADIUS: Pixels = px(8.);
+
 #[derive(Clone, Debug)]
 pub struct RadiusTokens {
     pub sm: Pixels,
@@ -78,11 +81,10 @@ pub struct RadiusTokens {
 impl Default for RadiusTokens {
     fn default() -> Self {
         Self {
-            sm: px(4.),
-            // Control radius — modest 8px (docs canvas/code use lg/panel).
-            md: px(8.),
-            lg: px(18.),
-            panel: px(26.),
+            sm: SURFACE_RADIUS,
+            md: SURFACE_RADIUS,
+            lg: SURFACE_RADIUS,
+            panel: SURFACE_RADIUS,
             full: px(9999.),
         }
     }
@@ -128,5 +130,21 @@ impl Tokens {
             radius: RadiusTokens::default(),
             space: SpaceTokens::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn surface_radius_is_shared_by_all_rectangular_token_aliases() {
+        let radius = RadiusTokens::default();
+        assert_eq!(SURFACE_RADIUS, px(8.));
+        assert_eq!(
+            [radius.sm, radius.md, radius.lg, radius.panel],
+            [SURFACE_RADIUS; 4]
+        );
+        assert!(radius.full > radius.md);
     }
 }

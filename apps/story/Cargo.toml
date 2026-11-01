@@ -21,6 +21,7 @@ test-support = ["kui/test-support", "gpui/test-support"]
 native = ["kui/native", "dep:gpui_platform", "gpui_platform/font-kit"]
 
 [dependencies]
+serde_json = { workspace = true, features = ["preserve_order"] }
 kui = { workspace = true, default-features = false }
 gpui = { workspace = true }
 gpui_platform = { workspace = true, optional = true }

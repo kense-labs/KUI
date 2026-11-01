@@ -23,7 +23,7 @@ for path in files:
 html = (source / "index.html").read_text()
 (public / "index.html").write_text(html.replace('src="./preview.js"', f'src="./v/{revision}/preview.js"'))
 for path in (source / "fonts/KUIStorySans-OFL.txt", source / "fonts/NotoSans-LICENSE",
-             root / "apps/story/assets/Inter-LICENSE"):
+             root / "apps/story/assets/Inter-LICENSE", root / "apps/story/assets/FiraCode-LICENSE"):
     shutil.copyfile(path, public / path.name)
 (public / "revision.txt").write_text(revision + "\n")
 # Do not ship duplicate WASM binaries from earlier local builds.

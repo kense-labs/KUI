@@ -297,7 +297,7 @@ impl Render for InlineEdit {
                         id,
                         label,
                         28.,
-                        r.sm.into(),
+                        r.md.into(),
                         if save { Tone::Primary } else { Tone::Surface },
                         cx,
                     )
@@ -337,7 +337,7 @@ impl Render for InlineEdit {
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .rounded(r.sm)
+                .rounded(r.md)
                 .px(px(2.))
                 .hover(move |s| s.bg(p.hover))
                 .focus_visible(move |s| s.border_1().border_color(p.ink))
@@ -400,7 +400,7 @@ impl Render for InlineEdit {
                                 "retry",
                                 l.text("Retry", "重试"),
                                 24.,
-                                r.sm.into(),
+                                r.md.into(),
                                 Tone::Clear,
                                 cx,
                             )

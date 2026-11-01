@@ -1,6 +1,6 @@
 //! A labelled setting with a spring-driven thumb.
 use crate::{
-    foundation::{Theme, ThemeMode},
+    foundation::{ThemeMode, surface_radius},
     primitives::{
         control::activate,
         family::{Paint, PhaseClock, Slide, Tone, disabled_motion, face, press, standard_ease},
@@ -59,7 +59,7 @@ impl Switch {
         }
     }
 
-    /// Override the capsule radius when embedding the switch in an existing toolbar.
+    /// Override the track radius when embedding the switch in an existing toolbar.
     pub fn with_track_radius(mut self, radius: Pixels) -> Self {
         self.track_radius = Some(radius);
         self
@@ -99,7 +99,7 @@ impl Switch {
 impl Render for Switch {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let radius = Theme::global(cx).tokens.radius.md;
+        let radius = surface_radius(cx);
         let position = self.position.get(w, cx).clamp(0., 1.);
         let extra = if disabled_motion(cx) {
             0.
@@ -134,7 +134,7 @@ impl Render for Switch {
             .flex_none()
             .w(px(42.))
             .h(px(24.))
-            .rounded(self.track_radius.unwrap_or(px(12.)))
+            .rounded(self.track_radius.unwrap_or(radius))
             .bg(track_color)
             .child(thumb);
         let label = self.label.clone();

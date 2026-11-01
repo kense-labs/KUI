@@ -28,7 +28,7 @@ const docs: NavLink[] = [
   },
 ];
 
-const groups = (["buttons","gestures","menus","text-fields","overlays","navigation","selects","toggles","expand","cards"] as const).map(id => ({
+const groups = (["buttons","gestures","menus","text-fields","overlays","navigation","selects","toggles","expand","cards","special-inputs", "sliders", "pickers", "editors", "messages", "progress", "avatars", "charts", "tables", "activity", "intelligence", "workspace"] as const).map(id => ({
   id, label:t(`sidebar.group.${id}`), items: COMPONENT_CATALOG.filter(doc => (doc.group ?? "buttons") === id).map(doc => ({
     href: localePath(locale,`/kui/components/${doc.id}`), label:doc.title[locale], match:slug === doc.id,
     search: [doc.id, doc.rustType, doc.title.zh, doc.title.en].join(" ").toLowerCase()
@@ -627,7 +627,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     align-items: center;
     gap: 0.5rem;
     border: 1px solid transparent;
-    border-radius: 10px;
+    border-radius: var(--radius);
     padding: 0 0.45rem 0 0.7rem;
     background: var(--surface-muted);
     color: var(--muted);
@@ -681,7 +681,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     flex: none;
     min-width: 1.35rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     padding: 0.15rem 0.35rem;
     background: var(--surface);
     color: var(--muted);
@@ -734,7 +734,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     top: 0;
     left: 0;
     z-index: 0;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--sb-active);
     opacity: 0;
     visibility: hidden;
@@ -756,8 +756,8 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     left: calc(var(--sb-guide-x) - var(--sb-row-x));
     width: 2px;
     height: 16px;
-    border-radius: 1px;
-    background: var(--ink);
+    border-radius: var(--radius);
+    background: var(--accent-text);
     transform: translateY(-50%);
   }
   .pill[data-hidden="1"]::before,
@@ -814,7 +814,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     align-items: center;
     margin: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 0 0.4rem 0 var(--sb-icon-x);
     background: var(--sb-bg);
     color: var(--ink);
@@ -877,7 +877,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     gap: 0.45rem;
     margin: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 0 0.5rem 0 var(--sb-icon-x);
     background: var(--sb-bg);
     color: var(--ink);
@@ -899,7 +899,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     flex: none;
     place-items: center;
     margin-left: auto;
-    border-radius: 999px;
+    border-radius: var(--radius);
     padding: 0 0.3rem;
     background: var(--surface-muted);
     color: var(--muted);
@@ -933,7 +933,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
     min-width: 0;
     height: var(--sb-row-h);
     align-items: center;
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 0 0.4rem 0 calc(var(--sb-text) - var(--sb-row-x));
     color: var(--text-secondary);
     font-size: var(--sb-row-font);
@@ -958,7 +958,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
   /* Current page: fill comes from the morphing pill; keep row bg clear. */
   .row[aria-current="page"] {
     background: transparent;
-    color: var(--ink);
+    color: var(--accent-text);
     font-weight: 500;
   }
   .row[aria-current="page"]:hover,
@@ -1025,7 +1025,7 @@ const groups = (["buttons","gestures","menus","text-fields","overlays","navigati
       left: calc(var(--sb-guide-x) - var(--sb-row-x));
       width: 2px;
       height: 16px;
-      border-radius: 1px;
+      border-radius: var(--radius);
       background: var(--ink);
       transform: translateY(-50%);
     }

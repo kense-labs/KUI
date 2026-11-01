@@ -10,6 +10,40 @@ fn app() -> TestAppContext {
     app.update(kui::foundation::init);
     app
 }
+
+#[test]
+fn custom_accent_paints_the_saved_hex_on_the_mounted_primary_button() {
+    use kui::foundation::{AccentPalette, ThemeMode};
+    for (mode, hex) in [
+        (ThemeMode::Light, 0x000000),
+        (ThemeMode::Dark, 0xffffff),
+        (ThemeMode::Light, 0xf9ed6f),
+        (ThemeMode::Dark, 0x083142),
+    ] {
+        let mut app = app();
+        let fill = gpui::rgb(hex).into();
+        app.update(|cx| {
+            let theme = Theme::global_mut(cx);
+            theme.set_mode(mode);
+            theme.set_accent(AccentPalette {
+                light: fill,
+                dark: fill,
+            });
+        });
+        let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("button", w, cx));
+        let primary = w.debug_bounds("Save changes").expect("primary button");
+        w.update(|window, _| {
+            let bounds = primary.scale(window.scale_factor());
+            assert!(
+                window
+                    .painted_quads()
+                    .iter()
+                    .any(|q| q.bounds == bounds && q.background == gpui::Background::from(fill)),
+                "primary button in {mode:?} must paint #{hex:06x}"
+            );
+        });
+    }
+}
 fn click(w: &mut VisualTestContext, label: &'static str) {
     let p = w
         .debug_bounds(label)
@@ -93,6 +127,62 @@ fn confirm_countdown_cancel_retry_and_undo() {
     click(w, "Undo");
     tick(w, 850);
     assert!(w.debug_bounds("Delete project").is_some());
+}
+
+#[test]
+fn confirm_success_disc_stays_round_as_the_translated_face_opens() {
+    use kui::primitives::{control::UiLanguage, family::Paint};
+    for (width, lang, trigger, answer, undo) in [
+        (320., UiLanguage::Chinese, "删除项目", "删除", "撤销"),
+        (
+            700.,
+            UiLanguage::English,
+            "Delete project",
+            "Delete",
+            "Undo",
+        ),
+    ] {
+        let mut app = app();
+        app.update(|cx| cx.set_global(lang));
+        let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("confirm-morph", w, cx));
+        w.simulate_resize(size(px(width), px(520.)));
+        click(w, trigger);
+        tick(w, 500);
+        click(w, answer);
+        tick(w, 805);
+        let mut last = 0.;
+        for dt in [60, 110, 370] {
+            tick(w, dt);
+            let shell = w.debug_bounds("confirm-shell").expect("done face");
+            let restore = w.debug_bounds(undo).expect("translated undo button");
+            let diameter = w.update(|window, cx| {
+                let scale = window.scale_factor();
+                let success = Paint::get(cx).success;
+                let disc = window
+                    .painted_quads()
+                    .into_iter()
+                    .find(|q| {
+                        q.background
+                            .as_solid()
+                            .is_some_and(|c| (c.h - success.h).abs() < 0.005 && c.a > 0.)
+                            && shell.scale(scale).contains(&q.bounds.center())
+                    })
+                    .expect("green success disc");
+                let width = disc.bounds.size.width.0 / scale;
+                assert!((width - disc.bounds.size.height.0 / scale).abs() < 0.01);
+                assert!(
+                    (disc.bounds.center().y.0 / scale - f32::from(shell.center().y)).abs() < 0.6
+                );
+                width
+            });
+            assert!(diameter >= last);
+            last = diameter;
+            if dt == 370 {
+                assert!((diameter - 16.).abs() < 0.01);
+                assert!(restore.right() <= shell.right());
+            }
+        }
+    }
 }
 #[test]
 fn hold_requires_a_full_second() {
@@ -328,7 +418,8 @@ fn painted_highlight_matches_the_laid_out_segment() {
                         kui::foundation::ThemeMode::Dark
                     } else {
                         kui::foundation::ThemeMode::Light
-                    })
+                    });
+                    Theme::global_mut(cx).tokens.radius.sm = px(2.);
                 });
                 let (_, w) = app.add_window_view(|w, cx| FamilyStory::new(id, w, cx));
                 w.simulate_resize(size(px(width), px(520.)));
@@ -364,7 +455,7 @@ fn painted_highlight_matches_the_laid_out_segment() {
                             .unwrap_or_else(|| {
                                 panic!("{id} at {width}px, dark={dark}: {target} highlight bounds")
                             });
-                        let expected_radius = Theme::global(cx).tokens.radius.sm.scale(scale);
+                        let expected_radius = Theme::global(cx).tokens.radius.md.scale(scale);
                         assert_eq!(
                             fill.corner_radii,
                             gpui::Corners::all(expected_radius),
@@ -465,3 +556,5 @@ fn standalone_faces_follow_the_hosts_radius_token() {
 }
 
 mod workspace;
+
+mod insights;

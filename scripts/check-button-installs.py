@@ -20,13 +20,12 @@ def verify(work):
     run("cargo", "build", "-p", "kui-cli", cwd=ROOT)
     catalog = json.loads((ROOT / "website/public/r/catalog.json").read_text())
     items = [item["name"] for item in catalog if item["kind"] == "component" and item["name"] != "button"]
-    assert ["button", *items] == [entry["name"] for entry in catalog if entry["kind"] == "component"] == [
-        "button", "action-button", "split-button", "button-group", "floating-button-group",
-        "expanding-button-group", "copy-button", "action-swap", "icon-morph", "confirm-morph", "theme-switch",
-        "hold-to-confirm", "swipe-actions", "reactions", "dropdown-menu", "context-menu", "user-menu",
-        "input", "textarea", "password-field", "password-strength", "search-field", "expanding-search", "inline-edit",
-        "dialog", "popover", "tabs", "combobox", "select", "switch", "resizable-panels", "empty-state",
-    ]
+    lib = ROOT / "website/src/lib"
+    documents = ["button"]
+    for name in ("family", "collection", "text-field", "workspace", "library"):
+        documents.extend(x["id"] for x in json.loads((lib / f"{name}-docs.json").read_text()))
+    assert ["button", *items] == documents
+    assert len(documents) == len(set(documents))
     manifests = ["button", *items, "all-components"]
     (work / "Cargo.toml").write_text('[workspace]\nresolver = "2"\nmembers = ' + json.dumps(manifests))
     shutil.copyfile(ROOT / "Cargo.lock", work / "Cargo.lock")

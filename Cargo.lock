@@ -2661,6 +2661,7 @@ dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
  "js-sys",
+ "serde_json",
  "unicode-segmentation",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2712,6 +2713,7 @@ dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
  "kui",
+ "serde_json",
 ]
 
 [[package]]

@@ -185,7 +185,7 @@ impl<S: SurfaceStyle> Render for Surface<S> {
             .aria_expanded(self.open)
             .hover(move |e| {
                 e.bg(if S::MODAL {
-                    p.bright.blend(p.inverse.opacity(0.12))
+                    p.primary_hover(0.12)
                 } else {
                     p.hover
                 })
@@ -273,7 +273,7 @@ impl<S: SurfaceStyle> Render for Surface<S> {
             .flex()
             .flex_col()
             .when(!S::MODAL, |e| e.p_4().gap_3())
-            .rounded(Theme::global(cx).tokens.radius.lg)
+            .rounded(Theme::global(cx).tokens.radius.md)
             .bg(p.panel)
             .text_color(p.ink)
             .border_1()

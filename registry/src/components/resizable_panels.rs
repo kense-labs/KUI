@@ -448,7 +448,7 @@ impl Render for ResizablePanels {
                             .h(px(40.))
                             .border_1()
                             .border_color(p.line)
-                            .rounded_full()
+                            .rounded(crate::foundation::surface_radius(cx))
                             .bg(p.panel)
                             .flex()
                             .items_center()

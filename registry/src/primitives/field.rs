@@ -248,7 +248,7 @@ impl<S: FieldStyle> Render for Field<S> {
             };
             let mut slot = div().relative().size(px(30.)).flex_none();
             if secret || has_value || slide > 0.01 {
-                let action = face("trailing", name, 30., r.sm.into(), Tone::Clear, cx)
+                let action = face("trailing", name, 30., r.md.into(), Tone::Clear, cx)
                     .tab_stop(!disabled && (secret || has_value))
                     .w_full()
                     .hover(move |s| s.bg(p.hover))

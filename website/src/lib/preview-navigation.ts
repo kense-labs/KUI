@@ -50,6 +50,10 @@ function mountStory(slot: HTMLElement, nextSlot: HTMLElement) {
   }
   frame.removeAttribute("title");
   frame.setAttribute("aria-label", next.getAttribute("aria-label") ?? "");
+  // Drop the previous canvas measurement before applying the next preview's layout.
+  if (frame.dataset.story !== next.dataset.story) {
+    frame.style.removeProperty("height");
+  }
   frame.className = next.className;
   frame.dataset.story = next.dataset.story;
   frame.dataset.storyKey = next.dataset.storyKey;

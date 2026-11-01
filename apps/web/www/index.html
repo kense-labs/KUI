@@ -21,6 +21,7 @@
       }
       html[data-theme="dark"], html[data-theme="dark"] body { background: #242424; }
       html:is([data-story="swipe-actions"], [data-story="resizable-panels"]) canvas { touch-action: pan-y pinch-zoom !important; }
+      html[data-embedded-story][data-story="team-switcher"] canvas { touch-action: pan-y pinch-zoom !important; }
       #status {
         position: absolute; inset: 0 auto auto 0; pointer-events: none;
         padding: 1rem 1.25rem;

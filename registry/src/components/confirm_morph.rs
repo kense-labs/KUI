@@ -3,7 +3,7 @@ use crate::foundation::Theme;
 use crate::primitives::{
     control::{UiLanguage, activate},
     family::{Paint, PhaseClock, Slide, Tone, ease, face, lettering, measure},
-    glyph::{Glyph, icon, transformed},
+    glyph::{Glyph, icon},
 };
 use gpui::{prelude::*, *};
 use std::time::Duration;
@@ -34,6 +34,75 @@ enum State {
     Working(Intent),
     Done,
     Failed(Intent),
+}
+
+const RESULT_ICON: f32 = 18.;
+
+// A round-ended segment remains in fractional coordinates at every device scale.
+fn tick_segment(a: Point<Pixels>, b: Point<Pixels>, ink: Hsla, w: &mut Window) {
+    let delta = b - a;
+    let length = delta.magnitude() as f32;
+    if length <= f32::EPSILON {
+        return;
+    }
+    let radius = px(0.95);
+    let normal = point(-delta.y, delta.x) * (f32::from(radius) / length);
+    let arc = point(radius, radius);
+    let mut path = PathBuilder::fill();
+    path.move_to(a + normal);
+    path.line_to(b + normal);
+    path.arc_to(arc, px(0.), false, false, b - normal);
+    path.line_to(a - normal);
+    path.arc_to(arc, px(0.), false, false, a + normal);
+    path.close();
+    if let Ok(path) = path.build() {
+        w.paint_path(path, ink);
+    }
+}
+
+fn done_mark(age: f32, p: Paint) -> impl IntoElement {
+    // The face reveals a fixed 18px slot. Only the artwork inside it scales.
+    let t = age * (5.236 / 0.26);
+    let scale = if age >= 0.44 {
+        1.
+    } else {
+        1. - 0.5 * (1. + t) * (-t).exp()
+    };
+    let alpha = ease(age / 0.12);
+    let reveal = ease((age - 0.14) / 0.30);
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, w, _| {
+            let center = bounds.center();
+            let radius = px(8. * scale);
+            let disc = Bounds::centered_at(center, size(radius * 2., radius * 2.));
+            w.paint_quad(fill(disc, p.success.opacity(alpha)).corner_radii(radius));
+            if reveal <= 0. {
+                return;
+            }
+            let [a, b, c] =
+                [(-3.4, 0.3), (-1.2, 2.4), (3.4, -2.3)].map(|(x, y)| center + point(px(x), px(y)));
+            let first = (b - a).magnitude() as f32;
+            let second = (c - b).magnitude() as f32;
+            let length = (first + second) * reveal;
+            tick_segment(
+                a,
+                a + (b - a) * (length / first).min(1.),
+                p.neutral_inverse,
+                w,
+            );
+            if length > first {
+                tick_segment(
+                    b,
+                    b + (c - b) * ((length - first) / second),
+                    p.neutral_inverse,
+                    w,
+                );
+            }
+        },
+    )
+    .size(px(RESULT_ICON))
+    .flex_none()
 }
 pub struct ConfirmMorph {
     id: ElementId,
@@ -232,11 +301,28 @@ impl Render for ConfirmMorph {
         } else {
             text("Delete", "删除")
         };
+        let deleted = text("Deleted", "已删除");
+        let undo = text("Undo", "撤销");
         let target = match self.state {
             State::Idle => mw(&self.label) + 54.,
             State::Armed | State::Holding => mw(&self.prompt) + mw(cancel) + mw(answer) + 80.,
             State::Counting => mw(text("Deleting in 3", "即将删除 3")) + mw(cancel) + 78.,
-            State::Done => mw(text("Deleted", "已删除")) + mw(text("Undo", "撤销")) + 67.,
+            State::Done => {
+                // Labels in this face use GPUI's natural advance, without tracking.
+                let mut style = w.text_style();
+                style.font_weight = FontWeight::MEDIUM;
+                let status_width = [deleted, undo]
+                    .map(|s| {
+                        f32::from(
+                            w.text_system()
+                                .shape_line(s.into(), px(14.), &[style.to_run(s.len())], None)
+                                .width,
+                        )
+                    })
+                    .iter()
+                    .sum::<f32>();
+                status_width + RESULT_ICON + 2. * 4. + 12. + 8. + 10. + 2. + 2. * 12.
+            }
             State::Failed(_) => {
                 mw(text("Couldn’t finish", "操作失败")) + mw(text("Retry", "重试")) + 51.
             }
@@ -257,7 +343,15 @@ impl Render for ConfirmMorph {
         }
         self.natural = Some(target);
         let width = self.width.get(w, cx);
-        let age = self.parts.time(0.40, w, cx);
+        let age = self.parts.time(
+            if self.state == State::Done {
+                0.44
+            } else {
+                0.40
+            },
+            w,
+            cx,
+        );
         let shell = div()
             .id("clip")
             .debug_selector(|| "confirm-shell".into())
@@ -293,7 +387,7 @@ impl Render for ConfirmMorph {
         let small = |name: &'static str, label: &'static str| {
             let delay = if name == "answer" { 0.12 } else { 0.085 };
             let t = ease((age - delay) / 0.26);
-            face(name, label, 28., radii.sm.into(), Tone::Clear, cx)
+            face(name, label, 28., radii.md.into(), Tone::Clear, cx)
                 .px(px(12.))
                 .opacity(t)
                 .child(label)
@@ -343,7 +437,7 @@ impl Render for ConfirmMorph {
                 };
                 let label_width = mw(text);
                 let button_w = label_width + 24.;
-                let mut f = face("answer", text, 28., radii.sm.into(), Tone::Clear, cx)
+                let mut f = face("answer", text, 28., radii.md.into(), Tone::Clear, cx)
                     .track_focus(&self.answer)
                     .relative()
                     .w(px(button_w))
@@ -363,7 +457,7 @@ impl Render for ConfirmMorph {
                             .overflow_hidden()
                             .child(
                                 div()
-                                    .rounded(radii.sm)
+                                    .rounded(radii.md)
                                     .bg(p.danger)
                                     .w(px(button_w))
                                     .h_full()
@@ -371,7 +465,7 @@ impl Render for ConfirmMorph {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .text_color(p.inverse)
+                                    .text_color(p.neutral_inverse)
                                     .child(text),
                             ),
                     )
@@ -487,29 +581,19 @@ impl Render for ConfirmMorph {
             }
             State::Done => {
                 root = root
-                    .pl(px(12.))
-                    .gap(px(8.))
                     .child(
                         div()
-                            .size(px(16.))
-                            .rounded_full()
+                            .flex_none()
                             .flex()
                             .items_center()
-                            .justify_center()
-                            .bg(p.success)
-                            .child(transformed(
-                                Glyph::Check,
-                                11.,
-                                p.inverse,
-                                0.,
-                                1.,
-                                (0., 0.),
-                                ease((age - 0.035) / 0.22),
-                            )),
+                            .pl(px(12.))
+                            .pr(px(10.))
+                            .gap(px(8.))
+                            .child(done_mark(age, p))
+                            .child(deleted),
                     )
-                    .child(l.text("Deleted", "已删除"))
                     .child(activate(
-                        small("undo", l.text("Undo", "撤销")).track_focus(&self.focus),
+                        small("undo", undo).track_focus(&self.focus),
                         cx,
                         |v, _, cx| v.request(Intent::Undo, cx),
                     ))

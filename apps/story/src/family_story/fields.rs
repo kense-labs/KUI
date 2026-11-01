@@ -411,7 +411,7 @@ impl Render for FieldStory {
                 let label = |txt| div().text_size(px(13.)).text_color(p.secondary).child(txt);
                 container(440.)
                     .bg(p.panel)
-                    .rounded(Theme::global(cx).tokens.radius.lg)
+                    .rounded(Theme::global(cx).tokens.radius.md)
                     .border_1()
                     .border_color(p.line)
                     .p(px(24.))

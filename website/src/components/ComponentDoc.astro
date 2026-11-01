@@ -65,10 +65,10 @@ const previewUrl = (story: string) => `/stories/v/${import.meta.env.PUBLIC_PREVI
   <ul>
     {copy.when.map((item) => <li>{item}</li>)}
   </ul>
-  <h2>{t("button.not")}</h2>
+  {copy.not.length > 0 && <><h2>{t("button.not")}</h2>
   <ul>
     {copy.not.map((item) => <li>{item}</li>)}
-  </ul>
+  </ul></>}
   <h2>{t("button.install")}</h2>
   <CodePanel title="shell" lang="bash" code={doc.installShell} />
   <h2>{t("button.usage")}</h2>
@@ -118,6 +118,20 @@ const previewUrl = (story: string) => `/stories/v/${import.meta.env.PUBLIC_PREVI
   .rust-story { display:block; width:100%; border:0; background:var(--bg); color-scheme:inherit; }
   .family-story {max-width:628px; margin-inline:auto; height:520px; border-radius:var(--radius-panel); background:var(--surface-muted); }
   .family-story.theme-preview {height:220px}
+  .family-story[data-story="json-viewer"] {height:646px}
+  .family-story[data-story="reasoning-block"] {height:670px}
+  .family-story[data-story="provider-keys"] {height:776px}
+  .family-story[data-story="shortcut-recorder"] {height:1019px}
+  .family-story[data-story="date-picker"] {height:583px}
+  .family-story[data-story="date-range-picker"] {height:567px}
+  [data-preview-slot] {container-type:inline-size}
+  @container (max-width: 531px) {
+    .family-story[data-story="provider-keys"] {height:862px}
+    .family-story[data-story="date-picker"] {height:539px}
+    .family-story[data-story="date-range-picker"] {height:571px}
+    .family-story[data-story="time-picker"],
+    .family-story[data-story="mention-input"] {height:481px}
+  }
   details summary {cursor:pointer; padding:.65rem 0}
   [data-preview-slot][hidden] {display:none;}
   .crumb {

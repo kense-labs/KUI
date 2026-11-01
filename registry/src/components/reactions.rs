@@ -307,7 +307,7 @@ impl Render for Reactions {
                         .w(px(side))
                         .h(px(40.))
                         .bg(p.hover)
-                        .rounded(r.sm),
+                        .rounded(r.md),
                 );
             for (i, o) in opts.iter().enumerate() {
                 let label = o.label.clone();
@@ -326,7 +326,7 @@ impl Render for Reactions {
                         .justify_center()
                         .cursor_pointer()
                         .when(self.pills[i].mine, |e| {
-                            e.rounded(r.sm)
+                            e.rounded(r.md)
                                 .bg(p.ink.opacity(0.10))
                                 .border_1()
                                 .border_color(p.ink.opacity(0.45))

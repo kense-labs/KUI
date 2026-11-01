@@ -50,7 +50,7 @@ pub struct CollectionStory {
     done: bool,
     undo: Option<SharedString>,
 }
-fn portrait_image(seed: usize) -> std::sync::Arc<Image> {
+pub(super) fn portrait_image(seed: usize) -> std::sync::Arc<Image> {
     static IMAGES: std::sync::OnceLock<[std::sync::Arc<Image>; 4]> = std::sync::OnceLock::new();
     let data: [&[u8]; 4] = [
         include_bytes!("../../assets/portraits/emma.svg"),
@@ -491,19 +491,28 @@ impl Render for CollectionStory {
                         })
                         .when(self.done, |e| {
                             e.child(
-                                face("restore", t("Restore", "还原"), 24., 4., Tone::Clear, cx)
-                                    .gap(px(5.))
-                                    .text_color(p.secondary)
-                                    .text_size(px(13.))
-                                    .child(icon(Glyph::Undo, 14., p.secondary))
-                                    .child(t("Restore", "还原"))
-                                    .on_click(cx.listener(|v, _, _, cx| {
+                                face(
+                                    "restore",
+                                    t("Restore", "还原"),
+                                    24.,
+                                    kui::foundation::surface_radius(cx).into(),
+                                    Tone::Clear,
+                                    cx,
+                                )
+                                .gap(px(5.))
+                                .text_color(p.secondary)
+                                .text_size(px(13.))
+                                .child(icon(Glyph::Undo, 14., p.secondary))
+                                .child(t("Restore", "还原"))
+                                .on_click(cx.listener(
+                                    |v, _, _, cx| {
                                         if let Demo::Hold(c) = &v.demo {
                                             c.update(cx, |s, cx| s.reset(cx))
                                         }
                                         v.done = false;
                                         cx.notify()
-                                    })),
+                                    },
+                                )),
                             )
                         }),
                 )
@@ -549,10 +558,18 @@ impl Render for CollectionStory {
                             }))
                             .when(self.undo.is_some(), |e| {
                                 e.child(
-                                    face("undo", t("Undo", "撤销"), 28., 4., Tone::Clear, cx)
-                                        .text_size(px(13.))
-                                        .child(t("Undo", "撤销"))
-                                        .on_click(cx.listener(|v, _, _, cx| {
+                                    face(
+                                        "undo",
+                                        t("Undo", "撤销"),
+                                        28.,
+                                        kui::foundation::surface_radius(cx).into(),
+                                        Tone::Clear,
+                                        cx,
+                                    )
+                                    .text_size(px(13.))
+                                    .child(t("Undo", "撤销"))
+                                    .on_click(cx.listener(
+                                        |v, _, _, cx| {
                                             if let (Some(id), Demo::Inbox(c)) =
                                                 (v.undo.take(), &v.demo)
                                             {
@@ -560,7 +577,8 @@ impl Render for CollectionStory {
                                                 v.note = "".into();
                                                 cx.notify()
                                             }
-                                        })),
+                                        },
+                                    )),
                                 )
                             }),
                     )

@@ -214,9 +214,9 @@ impl Render for PasswordStrength {
                 div()
                     .flex_1()
                     .h(px(4.))
-                    .rounded(px(2.))
+                    .rounded_full()
                     .bg(p.line)
-                    .child(div().w(relative(v)).h_full().rounded(px(2.)).bg(tone)),
+                    .child(div().w(relative(v)).h_full().rounded_full().bg(tone)),
             )
         }
         let mut rules = div().flex().flex_col().gap(px(5.));

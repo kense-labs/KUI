@@ -422,7 +422,13 @@ impl Render for SwipeActions {
                     } else {
                         p.secondary
                     };
-                    let fg = if a.destructive { white() } else { p.inverse };
+                    let fg = if a.destructive {
+                        white()
+                    } else if leading {
+                        p.inverse
+                    } else {
+                        p.neutral_inverse
+                    };
                     rail = rail.child(
                         div()
                             .id(("rail", j))

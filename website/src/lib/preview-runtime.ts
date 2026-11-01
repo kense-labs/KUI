@@ -1,6 +1,7 @@
 interface PreviewWindow extends Window {
   kuiPreview?: {
     controlRadius(): number | undefined;
+    accent?(light: number, dark: number): void;
     iconIntent(dark: boolean): void;
     copyPicture(destination: HTMLCanvasElement): boolean;
     show(story: string, lang: string): void;

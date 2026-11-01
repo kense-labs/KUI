@@ -432,7 +432,7 @@ pub(crate) fn render_menu<T: MenuControl>(
                 .left(px(5.))
                 .right(px(5.))
                 .h(px(row_height))
-                .rounded(rad.sm)
+                .rounded(rad.md)
                 .bg(if rows[i].destructive {
                     p.danger.opacity(0.11)
                 } else {

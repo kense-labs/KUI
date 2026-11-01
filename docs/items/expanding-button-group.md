@@ -19,7 +19,7 @@ Mount the entity as a GPUI child. Hover or focus an icon to reveal its label. Th
 
 ## Interface
 
-The control uses the theme’s `radius.md` (8px by default) and its nested actions or highlights use `radius.sm` (4px by default).
+The control, its nested actions and their highlights use the theme’s `radius.md` (8px by default).
 
 - Event: `Activated(SharedString)`.
 - API: `Segment::width`.

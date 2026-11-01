@@ -1,3 +1,4 @@
+import library from "./library-docs.json";
 import workspace from "./workspace-docs.json";
 import fields from "./text-field-docs.json";
 import collections from "./collection-docs.json";
@@ -16,7 +17,26 @@ export type ButtonDocId =
   | "icon-morph"
   | "confirm-morph"
   | "theme-switch"
-  | "hold-to-confirm" | "swipe-actions" | "reactions" | "dropdown-menu" | "context-menu" | "user-menu" | "input" | "textarea" | "password-field" | "password-strength" | "search-field" | "expanding-search" | "inline-edit" | "dialog" | "popover" | "tabs" | "combobox" | "select" | "switch" | "resizable-panels" | "empty-state";
+  | "hold-to-confirm" | "swipe-actions" | "reactions" | "dropdown-menu" | "context-menu" | "user-menu" | "input" | "textarea" | "password-field" | "password-strength" | "search-field" | "expanding-search" | "inline-edit" | "dialog" | "popover" | "tabs" | "combobox" | "select" | "switch" | "resizable-panels" | "empty-state"
+  | "checkbox" | "multi-select" | "number-field" | "tag-input"
+  | "radio-group" | "segmented-control" | "slider" | "chip-group"
+  | "mention-input" | "emoji-picker" | "color-picker" | "shortcut-recorder"
+  | "calendar" | "date-picker" | "time-picker" | "date-range-picker"
+  | "phone-input" | "rich-text-editor" | "file-dropzone" | "avatar-upload"
+  | "chat-thread" | "starter-prompts" | "ai-translate" | "agent-timeline"
+  | "context-window" | "agent-status" | "tool-call" | "agent-plan"
+  | "reasoning-block" | "source-cards" | "generation-stats" | "comment-thread"
+  | "code-suggestion" | "model-card" | "provider-keys" | "connector-setup"
+  | "ai-command" | "share-access" | "team-switcher" | "tooltip"
+  | "scroll-area" | "drawer" | "accordion" | "breadcrumb"
+  | "tree-view" | "confirm-popover" | "pagination" | "filter-toolbar"
+  | "sortable-data-table" | "reorderable-list" | "expandable-card" | "hover-card"
+  | "expandable-text" | "toc-progress" | "code-block" | "json-viewer"
+  | "data-grid" | "lightbox-gallery" | "alert" | "toast"
+  | "progress" | "skeleton" | "badge" | "card"
+  | "avatar" | "usage-meter" | "onboarding-checklist" | "stepper"
+  | "avatar-group" | "timeline" | "metric-card" | "sparkline"
+  | "bar-chart" | "activity-heatmap" | "line-chart" | "donut-chart";
 
 export type Locale = "zh" | "en";
 
@@ -26,7 +46,7 @@ export type ButtonDoc = {
   id: ButtonDocId;
   /** Localized nav / page title. */
   title: Record<Locale, string>;
-  group?: "buttons" | "gestures" | "menus" | "text-fields" | "overlays" | "navigation" | "selects" | "toggles" | "expand" | "cards";
+  group?: "buttons" | "gestures" | "menus" | "text-fields" | "overlays" | "navigation" | "selects" | "toggles" | "expand" | "cards" | "special-inputs" | "sliders" | "pickers" | "editors" | "messages" | "progress" | "avatars" | "charts" | "tables" | "activity" | "intelligence" | "workspace";
   installable: boolean;
   story?: boolean;
   keyboard?: Record<Locale,string>;
@@ -130,7 +150,7 @@ kui add button`,
   ...family.map(entry => {
     const segmented = ["split-button", "button-group", "floating-button-group", "expanding-button-group", "confirm-morph"].includes(entry.id);
     const shape = segmented
-      ? { en: "The outer control uses radius.md (8px by default). Nested controls and highlights use radius.sm (4px by default).", zh: "外框使用 radius.md（默认 8px），内嵌控件与高亮使用 radius.sm（默认 4px）。" }
+      ? { en: "The outer control uses radius.md (8px by default). Nested controls and highlights use the same radius. Joined edges stay square.", zh: "外框使用 radius.md（默认 8px），内嵌控件与高亮使用相同圆角，拼接边保持直角。" }
       : { en: "The control uses the host theme’s radius.md (8px by default).", zh: "控件使用宿主主题的 radius.md，默认 8px。" };
     const copy = (locale: Locale) => ({
       lead:entry.lead[locale],when:[entry.when[locale]],not:[locale==="zh"?"单一同步命令可直接使用基础按钮。":"Use Button for a simple synchronous command."],
@@ -142,12 +162,12 @@ kui add button`,
 ];
 
 type CollectionEntry = (typeof collections)[number] & { avoid?: Record<Locale, string> };
-const collectionEntries: CollectionEntry[] = [...collections, ...fields, ...workspace];
+const collectionEntries: CollectionEntry[] = [...collections, ...fields, ...workspace, ...library];
 
 export const COMPONENT_CATALOG: ButtonDoc[] = [...BUTTONS_CATALOG, ...collectionEntries.map(entry => {
-  const copy = (locale: Locale) => ({lead: entry.lead[locale], when: [entry.lead[locale]], not: [entry.avoid?.[locale] ?? (locale === 'zh' ? '直接执行的单一命令使用按钮。' : 'Use a button for a single immediate command.')],
+  const copy = (locale: Locale) => ({lead: entry.lead[locale], when: [entry.lead[locale]], not: entry.avoid ? [entry.avoid[locale]] : [],
     apiLead: entry.api[locale], motion: [entry.motion[locale]], ai: [`kui add ${entry.id}`],
-    props: [{name:entry.method, type:entry.signature, description:entry.api[locale]}, {name:'event',type:entry.event,description:locale === 'zh' ? '订阅控件实体事件。' : 'Subscribe on the control entity.'}]});
+    props: [{name:entry.method, type:entry.signature, description:entry.api[locale]}, ...(entry.event ? [{name:'event',type:entry.event,description:locale === 'zh' ? '订阅控件实体事件。' : 'Subscribe on the control entity.'}] : [])]});
   return {id: entry.id as ButtonDocId,group:entry.group as ButtonDoc['group'],title:entry.title,installable:true,story:true,
     rustType:entry.rustType,usageRust:entry.usageRust,installShell:`kui add ${entry.id}`,keyboard:entry.rule,copy:{en:copy('en'),zh:copy('zh')}};
 })];

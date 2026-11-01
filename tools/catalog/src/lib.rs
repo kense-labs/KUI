@@ -1,5 +1,7 @@
 //! Registry definitions and deterministic source materialization.
+mod library;
 use anyhow::{Context, Result};
+use library::LIBRARY;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 use walkdir::WalkDir;
@@ -193,10 +195,16 @@ pub const ITEMS: &[(&str, &str, &str)] = &[
         "Explain an empty view and offer a next action.",
     ),
 ];
+pub fn items() -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
+    ITEMS.iter().copied().chain(
+        LIBRARY
+            .iter()
+            .map(|item| (item.id, item.title, item.description)),
+    )
+}
 pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
-    let (_, title, description) = ITEMS
-        .iter()
-        .copied()
+    let entry = LIBRARY.iter().find(|item| item.id == id);
+    let (_, title, description) = items()
         .find(|item| item.0 == id)
         .with_context(|| format!("unknown registry id: {id}"))?;
     let foundation = id == "kui-foundation";
@@ -299,7 +307,18 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
             );
             files
         }
-        _ => anyhow::bail!("missing source mapping for {id}"),
+        _ => {
+            let entry = entry.with_context(|| format!("missing source mapping for {id}"))?;
+            cargo.extend(entry.cargo.iter().map(|s| (*s).to_owned()));
+            let mut paths = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
+            paths.extend(
+                entry
+                    .primitives
+                    .iter()
+                    .map(|name| format!("src/primitives/{name}.rs")),
+            );
+            paths
+        }
     };
     let mut files = Vec::new();
     for rel in paths {
@@ -351,12 +370,17 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
                 "switch" => "toggles",
                 "resizable-panels" => "expand",
                 "empty-state" => "cards",
-                _ => "actions",
+                _ => entry.map_or("actions", |item| item.category),
             }
             .into(),
         ],
         registry_dependencies: if foundation {
             vec![]
+        } else if let Some(entry) = entry {
+            std::iter::once("kui-foundation")
+                .chain(entry.components.iter().copied())
+                .map(str::to_owned)
+                .collect()
         } else if id == "password-strength" {
             vec!["kui-foundation".into(), "password-field".into()]
         } else if id == "swipe-actions" {

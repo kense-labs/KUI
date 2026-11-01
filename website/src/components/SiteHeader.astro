@@ -165,7 +165,7 @@ const kuiHref = localePath(locale, "/kui");
     bottom: -1px;
     left: 0;
     height: 2px;
-    border-radius: 2px;
+    border-radius: var(--radius);
     background: var(--ink);
   }
 
@@ -183,7 +183,7 @@ const kuiHref = localePath(locale, "/kui");
     gap: 0.4rem;
     padding: 0 0.7rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--ink);
     font: 500 0.8125rem/1 var(--font);
@@ -210,5 +210,14 @@ const kuiHref = localePath(locale, "/kui");
       justify-content: center;
       padding: 0;
     }
+  }
+  @media (max-width: 440px) {
+    .inner, .topbar.company .inner { width: calc(100% - 1.25rem); gap: .5rem; }
+    .nav { gap: .5rem; }
+    .nav a { font-size: .75rem; }
+    .actions { gap: .25rem; }
+  }
+  @media (max-width: 355px) {
+    .topbar.product .wordmark { display: none; }
   }
 </style>

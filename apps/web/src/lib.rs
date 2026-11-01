@@ -11,16 +11,37 @@ mod web {
     use gpui::{App, Bounds, WindowBounds, WindowHandle, WindowOptions, px, size};
     use kui::components::theme_switch::Transition;
     use kui::foundation::init;
-    use kui::foundation::{Theme, ThemeMode};
+    use kui::foundation::{AccentPalette, Theme, ThemeMode};
     use kui::primitives::control::UiLanguage;
     use kui_story::{StoryBridge, StoryHost, ThemeBridge};
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use wasm_bindgen::prelude::wasm_bindgen;
     struct Preview {
         app: gpui::AsyncApp,
         window: WindowHandle<StoryHost>,
     }
     thread_local! { static PREVIEW: RefCell<Option<Preview>> = const { RefCell::new(None) }; }
+
+    thread_local! { static ACCENT: Cell<AccentPalette> = Cell::default(); }
+
+    #[wasm_bindgen]
+    pub fn set_accent(light: u32, dark: u32) {
+        let palette = AccentPalette {
+            light: gpui::rgba(light).into(),
+            dark: gpui::rgba(dark).into(),
+        };
+        if ACCENT.replace(palette) == palette {
+            return;
+        }
+        PREVIEW.with_borrow(|preview| {
+            if let Some(preview) = preview {
+                preview.app.update(|cx| {
+                    Theme::global_mut(cx).set_accent(palette);
+                    cx.refresh_windows();
+                });
+            }
+        });
+    }
 
     #[wasm_bindgen]
     pub fn show_story(id: &str, chinese: bool) -> bool {
@@ -109,10 +130,22 @@ mod web {
         export function accountAppearance(mode){parent.postMessage({type:'kui:account-appearance',mode},location.origin)}
         export function previewStarted() { queueMicrotask(() => window.kuiPreviewStarted?.()); }
         export function reportThemeTarget(x,y,w,h,radius) { window.kuiThemeTarget?.(x,y,w,h,radius); }
+        export function horizontalRegion(x,y,w,h,left,right) { window.kuiHorizontalScroll?.(x,y,w,h,left,right); }
         export function editorRegion(x,y,w,h,up,down) { window.kuiEditorScroll?.(x,y,w,h,up,down); }
+        export function downloadCsv(name, csv) {
+            const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = name;
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 30000);
+        }
         export function reportFrame(height, dark) {
             window.kuiFramePainted?.(Math.ceil(height), dark);
         }
+        export function previewVisible() { return !document.hidden && self.kuiStoryInViewport !== false; }
         export function leavePreview(back) {
             parent.postMessage({type:'kui:story-leave',back},location.origin);
         }
@@ -133,13 +166,19 @@ mod web {
         fn preview_started();
         #[wasm_bindgen(js_name=reportThemeTarget)]
         fn report_theme_target(x: f32, y: f32, w: f32, h: f32, radius: f32);
+        #[wasm_bindgen(js_name=horizontalRegion)]
+        fn horizontal_region(x: f32, y: f32, w: f32, h: f32, left: bool, right: bool);
         #[wasm_bindgen(js_name=editorRegion)]
         fn editor_region(x: f32, y: f32, w: f32, h: f32, up: bool, down: bool);
+        #[wasm_bindgen(js_name=downloadCsv)]
+        fn download_csv(name: &str, csv: &str);
         #[wasm_bindgen(js_name=reportFrame)]
         fn report_frame(height: f32, dark: bool);
         #[wasm_bindgen(js_name=buttonTheme)]
         fn button_theme(dark: bool, mode: &str, x: f32, y: f32, w: f32, h: f32);
 
+        #[wasm_bindgen(js_name=previewVisible)]
+        fn preview_visible() -> bool;
         #[wasm_bindgen(js_name=leavePreview)]
         fn leave_preview(back: bool);
     }
@@ -162,6 +201,7 @@ mod web {
             } else {
                 UiLanguage::English
             });
+            cx.set_global(kui::components::data_grid::CsvDownload(download_csv));
             if embedded {
                 cx.set_global(kui::primitives::editor::EditorScrollRegion(
                     |b, up, down| {
@@ -172,6 +212,18 @@ mod web {
                             b.size.height.into(),
                             up,
                             down,
+                        )
+                    },
+                ));
+                cx.set_global(kui::components::scroll_area::HorizontalScrollRegion(
+                    |b, left, right| {
+                        horizontal_region(
+                            b.left().into(),
+                            b.top().into(),
+                            b.size.width.into(),
+                            b.size.height.into(),
+                            left,
+                            right,
                         )
                     },
                 ));
@@ -210,6 +262,7 @@ mod web {
                     )
                 }));
                 cx.set_global(StoryBridge {
+                    visible: preview_visible,
                     frame: |height, mode| report_frame(height, mode == ThemeMode::Dark),
                     leave: leave_preview,
                     theme_target: |b, radius| {
@@ -224,6 +277,7 @@ mod web {
                 });
             }
             init(cx);
+            Theme::global_mut(cx).set_accent(ACCENT.get());
             appearance(dark, reduced, cx);
             let bounds = Bounds::centered(None, size(px(960.), px(540.)), cx);
             let window = cx

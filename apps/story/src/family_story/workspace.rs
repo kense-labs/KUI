@@ -11,7 +11,7 @@ use kui::{
         switch::Switch,
         tabs::{TabPage, Tabs},
     },
-    foundation::Theme,
+    foundation::surface_radius,
     primitives::{
         control::UiLanguage, disclosure::SurfaceEvent, family::Paint, glyph::Glyph,
         picker::PickerOption,
@@ -203,7 +203,8 @@ impl WorkspaceStory {
                             .flex_col()
                             .p_4()
                             .size_full()
-                            .when(i != 1, |e| e.bg(p.stage))
+                            .when(i == 0, |e| e.bg(p.stage).rounded_l(surface_radius(cx)))
+                            .when(i == 2, |e| e.bg(p.stage).rounded_r(surface_radius(cx)))
                             .text_size(px(14.))
                             .child(div().font_weight(FontWeight::MEDIUM).child(label))
                             .child(
@@ -218,7 +219,7 @@ impl WorkspaceStory {
                                 div()
                                     .w(relative(fraction))
                                     .h(px(8.))
-                                    .rounded_full()
+                                    .rounded(surface_radius(cx))
                                     .bg(p.ink.opacity(0.10)),
                             )
                         }
@@ -289,13 +290,13 @@ impl Render for WorkspaceStory {
                 .bg(p.panel)
                 .p(px(1.))
                 .overflow_hidden()
-                .rounded(Theme::global(cx).tokens.radius.panel)
+                .rounded(surface_radius(cx))
                 .child(v)
                 .child(
                     div()
                         .absolute()
                         .inset_0()
-                        .rounded(Theme::global(cx).tokens.radius.panel)
+                        .rounded(surface_radius(cx))
                         .border_1()
                         .border_color(p.line),
                 ),

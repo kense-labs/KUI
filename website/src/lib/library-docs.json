@@ -1,0 +1,2206 @@
+[
+  {
+    "id": "checkbox",
+    "group": "toggles",
+    "title": {
+      "en": "Checkbox",
+      "zh": "复选框"
+    },
+    "rustType": "Checkbox",
+    "lead": {
+      "en": "Mark one option as checked, unchecked or partially selected.",
+      "zh": "标记单个选项的选中、未选或部分选中状态。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::checkbox::{Checkbox, CheckValue};\n\nlet control = cx.new(|_| Checkbox::new(\"Archive\", CheckValue::Off));",
+    "method": "set_value",
+    "signature": "(CheckValue, &mut Context<Self>)",
+    "event": "CheckValue",
+    "rule": {
+      "en": "Mixed activates to On. A disabled box is inert.",
+      "zh": "混合态激活后进入已选，禁用时不可操作。"
+    },
+    "api": {
+      "en": "Mixed activates to On. A disabled box is inert.",
+      "zh": "混合态激活后进入已选，禁用时不可操作。"
+    },
+    "motion": {
+      "en": "The mark and fill retain spring position on reversal.",
+      "zh": "勾选时填充从六成放大并沿两段笔画描出勾。反选和不确定态从当前进度接续。"
+    }
+  },
+  {
+    "id": "multi-select",
+    "group": "selects",
+    "title": {
+      "en": "Multi-select",
+      "zh": "多项选择"
+    },
+    "rustType": "MultiSelect",
+    "lead": {
+      "en": "Choose several options while retaining each selection by its stable key.",
+      "zh": "按稳定标识保存多个选项。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::multi_select::{MultiSelect, FormOption};\n\nlet control = cx.new(|cx| MultiSelect::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "method": "selected",
+    "signature": "() -> Vec<SharedString>",
+    "event": "SelectionChanged",
+    "rule": {
+      "en": "Search options, toggle without closing, or clear all.",
+      "zh": "展开后可搜索、多选或清空。"
+    },
+    "api": {
+      "en": "Search options, toggle without closing, or clear all.",
+      "zh": "展开后可搜索、多选或清空。"
+    },
+    "motion": {
+      "en": "Selected labels are 24px high with 8px corners. Width animates around the measured text as labels enter and leave. Labels wrap inside the trigger.",
+      "zh": "已选标签高 24px，圆角 8px。增删标签时宽度按实测文字连续变化，空间不足时在触发框内换行。"
+    }
+  },
+  {
+    "id": "number-field",
+    "group": "special-inputs",
+    "title": {
+      "en": "Number field",
+      "zh": "数值步进"
+    },
+    "rustType": "NumberField",
+    "lead": {
+      "en": "Enter a quantity directly or move it by one permitted step.",
+      "zh": "直接输入数量，或按步长增减数值。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::number_field::NumberField;\n\nlet control = cx.new(|cx| NumberField::new(\"Seats\", 8.0, 1.0..=50.0, 1.0, window, cx));",
+    "method": "value",
+    "signature": "() -> f64",
+    "event": "f64",
+    "rule": {
+      "en": "Type a number and press Enter or leave the field to clamp and commit; arrows change one step.",
+      "zh": "输入后回车或离焦时校正并提交，方向键调整一个步长。"
+    },
+    "api": {
+      "en": "Type a number and press Enter or leave the field to clamp and commit; arrows change one step.",
+      "zh": "输入后回车或离焦时校正并提交，方向键调整一个步长。"
+    },
+    "motion": {
+      "en": "Direct typing remains an editor. The clipped number rolls during stepper changes, with a bounded-limit nudge.",
+      "zh": "步进数值按方向滚动有变化的数字。长按 400ms 后连步，最快每 40ms 一步。"
+    }
+  },
+  {
+    "id": "tag-input",
+    "group": "special-inputs",
+    "title": {
+      "en": "Tag input",
+      "zh": "标签输入"
+    },
+    "rustType": "TagInput",
+    "lead": {
+      "en": "Turn a draft into removable tokens as you type.",
+      "zh": "在输入时把草稿转换为可移除的标签。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tag_input::TagInput;\n\nlet control = cx.new(|cx| TagInput::new(\"Tags\", window, cx).with_tags(&[\"release\", \"web\"]));",
+    "method": "tags",
+    "signature": "() -> &[SharedString]",
+    "event": "TagsChanged",
+    "rule": {
+      "en": "Enter or comma commits unique tags. Empty Backspace arms then removes the last tag.",
+      "zh": "回车或逗号提交不重复的标签；空输入时两次退格删除末项。"
+    },
+    "api": {
+      "en": "Enter or comma commits unique tags. Empty Backspace arms then removes the last tag.",
+      "zh": "回车或逗号提交不重复的标签；空输入时两次退格删除末项。"
+    },
+    "motion": {
+      "en": "When tags are inserted or removed, each remaining tag springs in both axes to its measured slot, including across rows. Interrupted moves continue from the visible position.",
+      "zh": "新增或删除时，剩余标签沿两个方向移动到实际布局位置。跨行移动中再次改动，会从当前画面接续。"
+    }
+  },
+  {
+    "id": "radio-group",
+    "group": "toggles",
+    "title": {
+      "en": "Radio group",
+      "zh": "单选组"
+    },
+    "rustType": "RadioGroup",
+    "lead": {
+      "en": "Choose exactly one alternative in a labeled list.",
+      "zh": "从一组选项中选择一项。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::radio_group::{RadioGroup, FormOption};\n\nlet control = cx.new(|cx| RadioGroup::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "method": "selected",
+    "signature": "() -> Vec<SharedString>",
+    "event": "SelectionChanged",
+    "rule": {
+      "en": "Use one labelled choice for mutually exclusive options.",
+      "zh": "用带说明的互斥选项选择一项。"
+    },
+    "api": {
+      "en": "Use one labelled choice for mutually exclusive options.",
+      "zh": "用带说明的互斥选项选择一项。"
+    },
+    "motion": {
+      "en": "One plate follows continuous row position. Old/new dots have independent springs.",
+      "zh": "同一块选中背景在行间移动，新旧单选圆点各自缩放。快速反选保留位移和速度。"
+    }
+  },
+  {
+    "id": "segmented-control",
+    "group": "toggles",
+    "title": {
+      "en": "Segmented control",
+      "zh": "分段选择"
+    },
+    "rustType": "SegmentedControl",
+    "lead": {
+      "en": "Switch a setting among a few adjacent segments.",
+      "zh": "在相邻选项间切换一个设置。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::segmented_control::{SegmentedControl, FormOption};\n\nlet control = cx.new(|cx| SegmentedControl::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "method": "selected",
+    "signature": "() -> Vec<SharedString>",
+    "event": "SelectionChanged",
+    "rule": {
+      "en": "Select a single view using pointer or arrow keys.",
+      "zh": "点击或按方向键切换单一视图。"
+    },
+    "api": {
+      "en": "Select a single view using pointer or arrow keys.",
+      "zh": "点击或按方向键切换单一视图。"
+    },
+    "motion": {
+      "en": "Rapidly selecting a different segment keeps current position and velocity. GPUI regression samples 64ms and switchback.",
+      "zh": "共享选中底片在目标段之间移动。连续换段会保留当前速度，减少动效时直接定位。"
+    }
+  },
+  {
+    "id": "slider",
+    "group": "sliders",
+    "title": {
+      "en": "Slider",
+      "zh": "数值滑块"
+    },
+    "rustType": "Slider",
+    "lead": {
+      "en": "Adjust a number or the ends of a numeric interval along a track.",
+      "zh": "拖动滑块调整数值或区间的端点。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::slider::{Slider, SlideValue};\n\nlet control = cx.new(|cx| Slider::new(\"Budget\", 0.0..=100.0, 1.0, SlideValue { low: 20.0, high: Some(80.0) }, cx));",
+    "method": "value",
+    "signature": "() -> SlideValue",
+    "event": "SlideValue",
+    "rule": {
+      "en": "Drag the nearest stop. Two stops cannot cross; Shift + arrow moves ten steps.",
+      "zh": "拖动最近滑块；双滑块不可交叉，Shift 加方向键移动十个步长。"
+    },
+    "api": {
+      "en": "Drag the nearest stop. Two stops cannot cross; Shift + arrow moves ten steps.",
+      "zh": "拖动最近滑块；双滑块不可交叉，Shift 加方向键移动十个步长。"
+    },
+    "motion": {
+      "en": "Drag past either stop to feel up to 9px of resistance. Release carries the visible velocity into the return spring. Reduced motion clamps directly.",
+      "zh": "拖过端点时，手柄产生最多 9px 的弹性位移，数值停在范围内。松手保留可见速度并弹回。减少动效时直接停在端点。"
+    }
+  },
+  {
+    "id": "chip-group",
+    "group": "selects",
+    "title": {
+      "en": "Chip group",
+      "zh": "筛选标签组"
+    },
+    "rustType": "ChipGroup",
+    "lead": {
+      "en": "Toggle compact filter choices in place.",
+      "zh": "点击紧凑标签切换筛选条件。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::chip_group::{ChipGroup, FormOption};\n\nlet control = cx.new(|cx| ChipGroup::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "method": "selected",
+    "signature": "() -> Vec<SharedString>",
+    "event": "SelectionChanged",
+    "rule": {
+      "en": "Filter by stable option keys. Expand the overflow row for additional filters.",
+      "zh": "按稳定标识筛选，可展开其余选项。"
+    },
+    "api": {
+      "en": "Filter by stable option keys. Expand the overflow row for additional filters.",
+      "zh": "按稳定标识筛选，可展开其余选项。"
+    },
+    "motion": {
+      "en": "Independent per-chip spring controls the drawing, check width, and selected fill.",
+      "zh": "选择时先揭开图标槽并绘出勾，其他标签随宽度变化让位。再次选择会沿当前进度退回。"
+    }
+  },
+  {
+    "id": "mention-input",
+    "group": "special-inputs",
+    "title": {
+      "en": "Mention input",
+      "zh": "提及编辑框"
+    },
+    "rustType": "MentionInput",
+    "lead": {
+      "en": "Search people while composing and insert the chosen mention at the caret.",
+      "zh": "在撰写时搜索成员并在光标处插入提及。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::mention_input::{MentionInput, Mention};\n\nlet control = cx.new(|cx| MentionInput::new(\"Update\", vec![Mention { id: \"ava\".into(), label: \"Ava\".into(), trigger: '@' }], window, cx));",
+    "method": "new",
+    "signature": "(label, Vec<Mention>, window, cx)",
+    "event": "MentionEvent, MentionValue",
+    "rule": {
+      "en": "Type @ for people or # for channels. Up and Down move the highlight, Tab or Enter inserts a match, and Escape dismisses suggestions. Shift+Enter inserts a new line. Enter posts when the list is closed.",
+      "zh": "输入 @ 找成员，输入 # 找频道。上下键选择，Tab 或回车插入，Esc 收起候选。Shift+回车换行，候选关闭时回车发布。"
+    },
+    "api": {
+      "en": "new receives the host roster. with_details adds searchable descriptions keyed by ID. value returns the draft and tagged UTF-8 byte ranges. On post, the control emits MentionValue with those ranges and MentionEvent::Submitted with the plain text.",
+      "zh": "new 接收宿主提供的成员与频道。with_details 按 ID 补充可检索的说明。value 返回草稿和提及的 UTF-8 字节范围。发布时发出含范围的 MentionValue，同时保留纯文本事件 MentionEvent::Submitted。"
+    },
+    "motion": {
+      "en": "Preserves outgoing candidates and slides the active option plate on arrow navigation.",
+      "zh": "候选面板从 4px 偏移处淡入，退出时继续绘制。用方向键移动时高亮连续移到目标项。"
+    }
+  },
+  {
+    "id": "emoji-picker",
+    "group": "pickers",
+    "title": {
+      "en": "Emoji picker",
+      "zh": "表情选择器"
+    },
+    "rustType": "SymbolPicker",
+    "lead": {
+      "en": "Find a symbol by category or search and insert it into a host view.",
+      "zh": "按分类或搜索选择表情符号并插入宿主。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::emoji_picker::SymbolPicker;\n\nlet control = cx.new(|cx| SymbolPicker::standard(window, cx));",
+    "method": "standard",
+    "signature": "(window, cx)",
+    "event": "SymbolPicked, SymbolPreferences",
+    "rule": {
+      "en": "Search in English or Chinese, or move between categories. Arrow keys move the current emoji. Enter inserts it. Hold Shift while choosing to keep the picker open.",
+      "zh": "用中文、英文或分类找表情。方向键移动选中项，回车插入。按住 Shift 点击或按回车可以连续选择。"
+    },
+    "api": {
+      "en": "standard loads 1,870 emoji. new accepts a custom Vec<Symbol>. SymbolPicked contains the selected Unicode sequence including its tone. Save SymbolPreferences and pass it to with_preferences to restore the tone and up to 27 recent selections.",
+      "zh": "standard 加载 1,870 个基础表情，也可以用 new 传入自定义 Vec<Symbol>。SymbolPicked 包含所选肤色的 Unicode 序列。宿主可保存 SymbolPreferences，下次用 with_preferences 恢复肤色和最多 27 个最近使用的表情。"
+    },
+    "motion": {
+      "en": "Indicator uses measured tab positions, preview pops on active change, tone menu reverses through the same progress.",
+      "zh": "分类下划线按实测宽度和位置移动，肤色选项从右向左展开。悬停预览与按下图标各自缩放。"
+    }
+  },
+  {
+    "id": "color-picker",
+    "group": "pickers",
+    "title": {
+      "en": "Color picker",
+      "zh": "颜色选择"
+    },
+    "rustType": "ColorPicker",
+    "lead": {
+      "en": "Adjust a color visually or enter its precise hexadecimal value.",
+      "zh": "通过色板调整颜色，也可以输入十六进制色值。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::color_picker::{ColorPicker, ColorValue};\n\nlet control = cx.new(|cx| ColorPicker::new(\"Accent\", ColorValue(0x2F6BFF), window, cx));",
+    "method": "value",
+    "signature": "() -> ColorValue",
+    "event": "ColorValue",
+    "rule": {
+      "en": "Pointer and keyboard edit hue, saturation and brightness; valid hex input updates the same RGB value.",
+      "zh": "拖动或键盘调整色相、饱和度与亮度，十六进制输入同步同一个 RGB 值。"
+    },
+    "api": {
+      "en": "Pointer and keyboard edit hue, saturation and brightness; valid hex input updates the same RGB value.",
+      "zh": "拖动或键盘调整色相、饱和度与亮度，十六进制输入同步同一个 RGB 值。"
+    },
+    "motion": {
+      "en": "Height/width are spring-driven, the three color channels continuously retarget, and exit remains mounted.",
+      "zh": "色板从紧凑宽度扩展，关闭时可反向接续。色相和饱和度手柄以短弹簧跟随目标颜色。"
+    }
+  },
+  {
+    "id": "shortcut-recorder",
+    "group": "special-inputs",
+    "title": {
+      "en": "Shortcut recorder",
+      "zh": "快捷键录制"
+    },
+    "rustType": "ShortcutRecorder",
+    "lead": {
+      "en": "Capture a key combination, review conflicts and replace an existing binding.",
+      "zh": "录制组合键，检查冲突并替换已有快捷键。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::shortcut_recorder::ShortcutRecorder;\n\nlet control = cx.new(|cx| ShortcutRecorder::new(\"Search\", Some(\"Cmd+K\".into()), cx));",
+    "method": "value",
+    "signature": "() -> Option<&str>",
+    "event": "ShortcutChanged",
+    "rule": {
+      "en": "Capture only after activation. Escape cancels; resolve collisions before replacing a binding.",
+      "zh": "激活后才录制；Esc 取消，冲突须显式替换。"
+    },
+    "api": {
+      "en": "Capture only after activation. Escape cancels; resolve collisions before replacing a binding.",
+      "zh": "激活后才录制；Esc 取消，冲突须显式替换。"
+    },
+    "motion": {
+      "en": "Recording blinks; keycaps appear individually, validation region expands and collapses.",
+      "zh": "录制时显示呼吸状态点。键帽按顺序相隔 35ms 出现，冲突提示展开时内容位置同步变化。"
+    }
+  },
+  {
+    "id": "calendar",
+    "group": "pickers",
+    "title": {
+      "en": "Calendar",
+      "zh": "月历"
+    },
+    "rustType": "Calendar",
+    "lead": {
+      "en": "Browse months and choose a day in a Gregorian calendar grid.",
+      "zh": "浏览月份并在日历网格中选择日期。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::calendar::{Calendar, CivilDate};\n\nlet control = cx.new(|cx| Calendar::new(\"Review date\", CivilDate::today_utc(), cx));",
+    "method": "value",
+    "signature": "() -> Option<DateSpan>",
+    "event": "DateSpan",
+    "rule": {
+      "en": "Navigate dates with arrows or Page Up/Down. Enter selects the focused day.",
+      "zh": "方向键逐日或逐周移动，翻页键切月，回车选定。"
+    },
+    "api": {
+      "en": "Navigate dates with arrows or Page Up/Down. Enter selects the focused day.",
+      "zh": "方向键逐日或逐周移动，翻页键切月，回车选定。"
+    },
+    "motion": {
+      "en": "Adjacent months coexist during the slide, jumps skip intermediate months, and the selected plate retargets.",
+      "zh": "翻月时相邻月份一起滑动，六行网格保持同高。已选日期的底色在行列间连续移动。"
+    }
+  },
+  {
+    "id": "date-picker",
+    "group": "pickers",
+    "title": {
+      "en": "Date picker",
+      "zh": "日期字段"
+    },
+    "rustType": "DatePicker",
+    "lead": {
+      "en": "Choose a single calendar date from a compact field.",
+      "zh": "使用紧凑日期字段选择一天。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::date_picker::{DatePicker, CivilDate};\n\nlet control = cx.new(|cx| DatePicker::new(\"Review date\", CivilDate::today_utc(), cx));",
+    "method": "value",
+    "signature": "() -> Option<DateSpan>",
+    "event": "DateSpan, DateCleared",
+    "rule": {
+      "en": "Arrows move by day or week. Page Up and Page Down change months. Enter selects the focused day. Clear removes the current date.",
+      "zh": "方向键按天或按周移动，Page Up 和 Page Down 翻月，回车选定焦点日期，清除可移除已选日期。"
+    },
+    "api": {
+      "en": "with_bounds optionally limits selectable dates. Choosing a new day emits DateSpan. Clearing an existing date emits DateCleared.",
+      "zh": "with_bounds 可限定可选日期。更改日期会发出 DateSpan，清除已有日期会发出 DateCleared。"
+    },
+    "motion": {
+      "en": "The weekday header stays fixed while the month grid slides. A chosen day stays visible for 300ms before the popup closes. Reduced motion closes it immediately.",
+      "zh": "翻月时日期网格滑动，星期表头保持原位。选定日期后停留 300ms 再收起，减少动效时立即收起。"
+    }
+  },
+  {
+    "id": "time-picker",
+    "group": "pickers",
+    "title": {
+      "en": "Time picker",
+      "zh": "时刻选择"
+    },
+    "rustType": "TimePicker",
+    "lead": {
+      "en": "Select a time of day from a scrollable list.",
+      "zh": "从可滚动的列表中选择时刻。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::time_picker::{TimePicker, WallTime};\n\nlet control = cx.new(|cx| TimePicker::new(\"Review time\", WallTime::new(9, 30).unwrap(), cx).with_step(15));",
+    "method": "value",
+    "signature": "() -> WallTime",
+    "event": "WallTime",
+    "rule": {
+      "en": "Use Up and Down to browse, including across midnight. Enter commits the highlighted time. Escape keeps the current value and returns focus to the field.",
+      "zh": "用上下键浏览，可在午夜首尾循环。回车提交高亮时刻。Esc 保留原值并将焦点还给字段。"
+    },
+    "api": {
+      "en": "WallTime stores the hour and minute. with_step sets the slot interval. with_24h changes only the display format.",
+      "zh": "WallTime 保存小时和分钟。with_step 设置选项间隔。with_24h 调整显示格式。"
+    },
+    "motion": {
+      "en": "The list opens centered on the current time. Its fixed-height viewport scrolls the active row into view during keyboard navigation.",
+      "zh": "打开时列表将当前时刻居中。用键盘移动时，列表只滚动到足以显示高亮行的位置。"
+    }
+  },
+  {
+    "id": "date-range-picker",
+    "group": "pickers",
+    "title": {
+      "en": "Date range picker",
+      "zh": "日期区间"
+    },
+    "rustType": "DateRangePicker",
+    "lead": {
+      "en": "Set the start and end of a bounded calendar interval.",
+      "zh": "选择日期范围的起点与终点。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::date_range_picker::{DateRangePicker, CivilDate};\n\nlet control = cx.new(|cx| DateRangePicker::new(\"Review date\", CivilDate::today_utc(), cx));",
+    "method": "value",
+    "signature": "() -> Option<DateSpan>",
+    "event": "DateSpan",
+    "rule": {
+      "en": "Choose two endpoints or a preset, then Apply; Escape discards the draft.",
+      "zh": "选两个端点或预设，再点应用；Esc 放弃草稿。"
+    },
+    "api": {
+      "en": "with_bounds accepts optional inclusive start and end limits. Only Apply commits the draft and emits DateSpan when it changes.",
+      "zh": "with_bounds 可设置包含首尾的可选日期边界。应用才会提交草稿，并在值变化时发出 DateSpan。"
+    },
+    "motion": {
+      "en": "The date label moves between the field and the panel summary as the surface changes size. Reversing the transition keeps the label in motion. Reduced motion immediately places it in the active slot.",
+      "zh": "面板展开或收起时，日期文字在字段与摘要之间移动。中途反切时从当前位置继续，减少动效时直接显示在目标位置。"
+    }
+  },
+  {
+    "id": "phone-input",
+    "group": "special-inputs",
+    "title": {
+      "en": "Phone input",
+      "zh": "电话字段"
+    },
+    "rustType": "PhoneInput",
+    "lead": {
+      "en": "Edit a telephone number with a separate country dialing code.",
+      "zh": "选择国家区号并编辑电话号码。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::phone_input::PhoneInput;\n\nlet control = cx.new(|cx| PhoneInput::new(\"Mobile number\", \"US\", window, cx));",
+    "method": "value",
+    "signature": "(&App) -> PhoneValue",
+    "event": "PhoneValue",
+    "rule": {
+      "en": "Search calling codes or country names. Use international digits and possibility separately from verification.",
+      "zh": "搜索区号或国家名称；标准号码和格式检查均不代表号码已验证。"
+    },
+    "api": {
+      "en": "Search calling codes or country names. Use international digits and possibility separately from verification.",
+      "zh": "搜索区号或国家名称；标准号码和格式检查均不代表号码已验证。"
+    },
+    "motion": {
+      "en": "Measured height and animated width drive reveal. Roving selection glides down the list, dialing-code digits roll.",
+      "zh": "国家选择器从区号旁展开。方向键改变高亮行，切换国家时范围前缀中的不同数字滚动。"
+    }
+  },
+  {
+    "id": "rich-text-editor",
+    "group": "editors",
+    "title": {
+      "en": "Rich text editor",
+      "zh": "结构文本编辑器"
+    },
+    "rustType": "RichTextEditor",
+    "lead": {
+      "en": "Compose formatted text and apply toolbar commands to a selection.",
+      "zh": "撰写带格式的文本，并对选区应用工具栏命令。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::rich_text_editor::RichTextEditor;\n\nlet control = cx.new(|cx| RichTextEditor::new(\"Release notes\", \"# Notes\", window, cx));",
+    "method": "document",
+    "signature": "() -> &RichDocument",
+    "event": "RichDocument",
+    "rule": {
+      "en": "Edit formatted blocks directly. Select text for inline marks or links, type / for blocks, and undo edits in the document history.",
+      "zh": "直接编辑格式化内容。选区可设置样式与链接，输入 / 选择块类型，文档支持撤销和重做。"
+    },
+    "api": {
+      "en": "Edit formatted blocks directly. Select text for inline marks or links, type / for blocks, and undo edits in the document history.",
+      "zh": "直接编辑格式化内容。选区可设置样式与链接，输入 / 选择块类型，文档支持撤销和重做。"
+    },
+    "motion": {
+      "en": "Selection adds/removes the bar through a measured reveal. Both faces paint during transition.",
+      "zh": "选择文字后工具栏从 4px 偏移处进入。编辑链接时两个工具面板沿相反方向移动 18px。"
+    }
+  },
+  {
+    "id": "file-dropzone",
+    "group": "editors",
+    "title": {
+      "en": "File dropzone",
+      "zh": "文件接收区"
+    },
+    "rustType": "FileDropzone",
+    "lead": {
+      "en": "Select or drop local files and track each upload attempt.",
+      "zh": "选择或拖入本地文件，跟踪各次上传。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::file_dropzone::FileDropzone;\n\nlet control = cx.new(|cx| FileDropzone::new(\"Add files\", 10 * 1024 * 1024, 6, cx).with_extensions(&[\"pdf\", \"png\"]));",
+    "method": "report",
+    "signature": "(ticket: u64, state: UploadState, cx)",
+    "event": "FileEvent",
+    "rule": {
+      "en": "Consume the bytes from Upload and report progress, failure or success against its ticket. Retry gets a fresh ticket.",
+      "zh": "宿主接收真实文件字节并按票号报告进度或结果，重试生成新票号。"
+    },
+    "api": {
+      "en": "Consume the bytes from Upload and report progress, failure or success against its ticket. Retry gets a fresh ticket.",
+      "zh": "宿主接收真实文件字节并按票号报告进度或结果，重试生成新票号。"
+    },
+    "motion": {
+      "en": "Retains outgoing row until the spring ends and retargets file hover on the native and browser paths.",
+      "zh": "拖入文件时图标抬高 6px。新增行自上方 22px 淡入，移除时收起原行所占空间。"
+    }
+  },
+  {
+    "id": "avatar-upload",
+    "group": "editors",
+    "title": {
+      "en": "Avatar upload",
+      "zh": "头像裁剪"
+    },
+    "rustType": "AvatarUpload",
+    "lead": {
+      "en": "Choose a profile image and edit its crop before applying it.",
+      "zh": "选择头像图片，调整裁剪范围并应用。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::avatar_upload::AvatarUpload;\n\nlet control = cx.new(|cx| AvatarUpload::new(\"Jordan Reyes\", cx));",
+    "method": "finish",
+    "signature": "(ticket: u64, result: Result<(), String>, cx)",
+    "event": "AvatarEvent",
+    "rule": {
+      "en": "Choose or drop a valid photo, zoom and pan the crop, then handle Upload with bytes and normalized crop coordinates.",
+      "zh": "选择或拖入有效图片，缩放平移后保存；宿主接收源字节及归一化裁剪参数。"
+    },
+    "api": {
+      "en": "Choose or drop a valid photo, zoom and pan the crop, then handle Upload with bytes and normalized crop coordinates.",
+      "zh": "选择或拖入有效图片，缩放平移后保存；宿主接收源字节及归一化裁剪参数。"
+    },
+    "motion": {
+      "en": "Crop diameter springs in both directions, upload ring consumes real progress, and successful completion emits the expanding ring.",
+      "zh": "选择图片后头像从 88px 扩至 184px。保存时收回并显示 2px 进度环，成功后圆环扩散 480ms。"
+    }
+  },
+  {
+    "id": "chat-thread",
+    "group": "activity",
+    "title": {
+      "en": "Chat thread",
+      "zh": "会话消息流"
+    },
+    "rustType": "ChatThread",
+    "lead": {
+      "en": "Read a conversation and append a new message in sequence.",
+      "zh": "阅读会话并按时间顺序添加消息。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::chat_thread::{ChatThread, Message};\n\nlet control = cx.new(|cx| ChatThread::new(\"thread\", \"Release review\", vec![Message { author: \"Maya\".into(), time: \"09:18\".into(), text: \"Ready for review.\".into(), own: false, attachment: None, reactions: 0 }], window, cx));",
+    "method": "new",
+    "signature": "(id, topic, Vec<Message>, window, cx)",
+    "event": "ChatEvent",
+    "rule": {
+      "en": "Group adjacent messages by author. Sending requires a nonempty draft and online presence.",
+      "zh": "相邻同作者消息合并显示。上线且草稿非空时才能发送。"
+    },
+    "api": {
+      "en": "Message supplies author, time, body, ownership, an optional attachment and count. Handle Send, Attach, Download and React in the host.",
+      "zh": "Message 提供作者、时间、正文、归属、可选附件和回应数。宿主处理发送、附件、下载和回应事件。"
+    },
+    "motion": {
+      "en": "Counts crossfade their old and new values over 100/160ms. New messages enter from 4px and follow the bottom only if the reader is already there.",
+      "zh": "计数交叉淡变，新消息从 4px 处进入。阅读历史时保持当前滚动位置。"
+    }
+  },
+  {
+    "id": "starter-prompts",
+    "group": "intelligence",
+    "title": {
+      "en": "Starter prompts",
+      "zh": "起步问题架"
+    },
+    "rustType": "PromptShelf",
+    "lead": {
+      "en": "Start a new conversation from a short list of suggested questions.",
+      "zh": "从建议问题中选择一条开始对话。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::starter_prompts::{PromptShelf, Prompt};\n\nlet control = cx.new(|cx| PromptShelf::new(\"prompts\", \"What shall we do?\", vec![Prompt { group: \"Write\".into(), app: \"Mail\".into(), title: \"Draft a reply\".into(), detail: \"Confirm the release\".into(), text: \"Draft a release reply.\".into() }], window, cx));",
+    "method": "new",
+    "signature": "(id, greeting, Vec<Prompt>, window, cx)",
+    "event": "PromptSent",
+    "rule": {
+      "en": "Filter or shuffle prompts. Picking a card fills and focuses the editor.",
+      "zh": "筛选或轮换提示卡片，选择后填入文本并聚焦输入框。"
+    },
+    "api": {
+      "en": "Populate Prompt with its group, app, title, detail and draft text. PromptSent carries a trimmed draft.",
+      "zh": "Prompt 描述分类、应用、标题、说明及草稿文本，PromptSent 携带去除首尾空白后的草稿。"
+    },
+    "motion": {
+      "en": "App, title and helper copy crossfade inside each card. Consecutive card slots delay by 35ms, and a second shuffle retains the interrupted label mixture.",
+      "zh": "卡片内的应用名、标题和说明交叉淡变，各槽位错开 35ms，连按时从当前混合状态接续。"
+    }
+  },
+  {
+    "id": "ai-translate",
+    "group": "intelligence",
+    "title": {
+      "en": "AI translate",
+      "zh": "消息翻译"
+    },
+    "rustType": "MessageTranslation",
+    "lead": {
+      "en": "Request a translation and compare it with the original message.",
+      "zh": "请求翻译并与原消息对照。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::ai_translate::{MessageTranslation};\n\nlet control = cx.new(|_| MessageTranslation::new(\"translation\",\"Maya\",\"Bonjour !\",vec![\"English\".into()]));",
+    "method": "update_translation",
+    "signature": "(ticket, Result<String, ()>, finished, cx)",
+    "event": "TranslationRequest",
+    "rule": {
+      "en": "Keep the source available and apply only the current translation ticket.",
+      "zh": "保留原文，只应用当前翻译请求的结果。"
+    },
+    "api": {
+      "en": "TranslationRequest carries a ticket and selected language. Send cumulative text by ticket, then mark the final update.",
+      "zh": "TranslationRequest 包含请求标识和目标语言。按同一标识推送累积译文，最后一次更新标记完成。"
+    },
+    "motion": {
+      "en": "New text ranges fade for 140ms independently. Completed translations cache by source and language, and late chunks are rejected by ticket.",
+      "zh": "新增文本范围各自淡入 140ms。按原文及语言缓存结果，过期请求无法覆盖新译文。"
+    }
+  },
+  {
+    "id": "agent-timeline",
+    "group": "intelligence",
+    "title": {
+      "en": "Agent timeline",
+      "zh": "执行泳道"
+    },
+    "rustType": "RunLanes",
+    "lead": {
+      "en": "Follow the steps of an agent run and inspect individual results.",
+      "zh": "跟踪助手运行中的步骤并查看单项结果。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::agent_timeline::{RunLanes, Span};\n\nlet control = cx.new(|_| RunLanes::new(\"run\",\"Release review\",vec![\"Planner\".into()],vec![Span {lane:0,start:0.,end:4.,detail:\"Read changes\".into(),kind:0,parent:None}]));",
+    "method": "new",
+    "signature": "(id, title, lanes, Vec<Span>)",
+    "event": "SpanSelected",
+    "rule": {
+      "en": "Place work on a shared time axis. Selecting a span highlights its direct handoff.",
+      "zh": "各泳道共用时间轴，选中片段会高亮其直接交接来源。"
+    },
+    "api": {
+      "en": "Each Span specifies lane, start/end seconds, operation kind and an optional parent index. SpanSelected carries the activated index.",
+      "zh": "Span 包含泳道、起止秒数、类型及可选的上游索引。SpanSelected 携带被选片段的索引。"
+    },
+    "motion": {
+      "en": "Bars and the playhead share the elapsed time. Each dependency elbow draws into the next lane during the first 360ms of its destination span.",
+      "zh": "条带和播放头共用一个时间轴。目标片段开始后的 360ms 内绘出泳道间的交接连线。"
+    }
+  },
+  {
+    "id": "context-window",
+    "group": "intelligence",
+    "title": {
+      "en": "Context window",
+      "zh": "上下文用量条"
+    },
+    "rustType": "CapacityBands",
+    "lead": {
+      "en": "Inspect how different parts of a conversation consume its context budget.",
+      "zh": "查看会话中不同内容占用的上下文额度。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::context_window::{CapacityBands, Band};\n\nlet control = cx.new(|_| CapacityBands::new(\"context\", \"Assistant\", 128000, vec![Band { label: \"Messages\".into(), tokens: 24000, color: gpui::rgb(0x628995).into() }]));",
+    "method": "used",
+    "signature": "(&self) -> u64",
+    "event": "CapacityAction",
+    "rule": {
+      "en": "Allocate 200 cells across ordered token categories, free space and reserved output.",
+      "zh": "按顺序将 200 个单元分配给上下文类别、剩余空间和预留输出。"
+    },
+    "api": {
+      "en": "Supply ordered Band totals, capacity, reserve and threshold. In response to CapacityAction, apply the host result. After a successful compaction call did_compact(previous_used, cx) with the pre-commit total.",
+      "zh": "提供有序的 Band 用量、容量、预留和阈值。宿主收到 CapacityAction 后提交实际结果；压缩成功后，向 did_compact(previous_used, cx) 传入提交前总量。"
+    },
+    "motion": {
+      "en": "After the host commits a smaller allocation, the first affected grid cell dims immediately. Subsequent cells start 6ms apart; over 720ms each reaches 0.35 opacity at 55%, then lands on the new allocation. A fresh compaction keeps the currently painted alpha and colour. Reduced motion settles on the first frame.",
+      "zh": "宿主提交实际用量后，受影响单元按阅读顺序每隔 6ms 依次变淡，每格 720ms，55% 处透明度为 0.35。再次压缩从当前画面继续，减少动效时首帧到位。"
+    }
+  },
+  {
+    "id": "agent-status",
+    "group": "intelligence",
+    "title": {
+      "en": "Agent status",
+      "zh": "运行状态按钮"
+    },
+    "rustType": "WorkBadge",
+    "lead": {
+      "en": "Show the current activity of an assistant during a run.",
+      "zh": "在运行过程中显示助手当前的工作状态。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::agent_status::{WorkBadge, Step};\n\nlet control = cx.new(|_| WorkBadge::new(\"agent\",\"Assistant\",\"Ready\",vec![Step { label:\"Check files\".into(),result:String::new(),complete:false }]));",
+    "method": "new",
+    "signature": "(id, agent, activity, Vec<Step>)",
+    "event": "",
+    "rule": {
+      "en": "Keep the trigger compact. Display detailed progress only while expanded.",
+      "zh": "状态触发器保持紧凑，展开后查看步骤详情。"
+    },
+    "api": {
+      "en": "The host updates activity, elapsed seconds and step results. WorkBadge owns the disclosure state.",
+      "zh": "宿主更新活动文案、已用秒数和步骤结果，由 WorkBadge 维护展开状态。"
+    },
+    "motion": {
+      "en": "The active label crossfades with 2px travel and its measured single-line width retargets on a 240ms spring. A rotating arc marks unfinished steps; reduced motion leaves the arc still, and completing the run replaces the centre glyph with a check.",
+      "zh": "活动文本以 2px 位移交叉淡变，单行宽度按字形测量并在 240ms 内平滑调整。运行中的圆弧转动，减少动效时静止，完成后标记变为勾形。"
+    }
+  },
+  {
+    "id": "tool-call",
+    "group": "intelligence",
+    "title": {
+      "en": "Tool call",
+      "zh": "调用详情"
+    },
+    "rustType": "InvocationInspector",
+    "lead": {
+      "en": "Inspect a tool invocation, its arguments and its result.",
+      "zh": "展开工具调用以检查参数和结果。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tool_call::{InvocationInspector, Invocation, ToolState};\n\nlet control = cx.new(|_| InvocationInspector::new(\"calls\",vec![Invocation { name:\"Search\".into(),action:\"Find release issues\".into(),input:\"release\".into(),output:String::new(), state:ToolState::Approval }]));",
+    "method": "new",
+    "signature": "(id, Vec<Invocation>)",
+    "event": "ToolAction",
+    "rule": {
+      "en": "Approval, denial and retry target one invocation. A pending invocation rejects duplicate actions.",
+      "zh": "允许、拒绝和重试针对单次调用，等待期间不重复提交。"
+    },
+    "api": {
+      "en": "Invocation binds a tool name and description to input/output strings and ToolState. Use the ToolAction index to resolve approvals or retries.",
+      "zh": "Invocation 关联工具名称、操作说明、输入输出和 ToolState。宿主按 ToolAction 的索引处理批准及重试。"
+    },
+    "motion": {
+      "en": "The group and each call's input/output disclosure fold to measured height on a 240ms spring. Tool status transitions independently of the card.",
+      "zh": "调用组与单次调用详情按实测内容高度进行 240ms 弹簧收放，状态文案独立淡变。"
+    }
+  },
+  {
+    "id": "agent-plan",
+    "group": "intelligence",
+    "title": {
+      "en": "Agent plan",
+      "zh": "执行计划"
+    },
+    "rustType": "TaskPlan",
+    "lead": {
+      "en": "Review an ordered execution plan and change the sequence of its steps.",
+      "zh": "审阅执行计划并调整步骤顺序。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::agent_plan::{TaskPlan};\n\nlet control = cx.new(|cx| TaskPlan::new(\"plan\", \"Review release\", vec![\"Check changes\".into(),\"Run tests\".into()], window, cx));",
+    "method": "new",
+    "signature": "(id, goal, Vec<String>, window, cx)",
+    "event": "PlanEvent",
+    "rule": {
+      "en": "Rename, add and reorder steps in draft. Approval locks the plan for execution.",
+      "zh": "草稿允许重命名、添加和调整顺序，批准后锁定步骤。"
+    },
+    "api": {
+      "en": "TaskPlan takes a goal and ordered step titles. Subscribe to PlanEvent, then set completed as work advances.",
+      "zh": "TaskPlan 接收目标及有序步骤标题。订阅 PlanEvent，并在执行时更新 completed。"
+    },
+    "motion": {
+      "en": "Completion advances the overall progress spring. Each completed disc tints in while its two-stroke check draws over 220ms.",
+      "zh": "整体进度随已完成步骤平滑推进；每个完成圆点渐显，勾形在 220ms 内分段绘出。"
+    }
+  },
+  {
+    "id": "reasoning-block",
+    "group": "intelligence",
+    "title": {
+      "en": "Reasoning block",
+      "zh": "过程摘要"
+    },
+    "rustType": "ExplanationNote",
+    "lead": {
+      "en": "Disclose a reasoning summary beside the response it explains.",
+      "zh": "在回答旁展开对应的推理摘要。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::reasoning_block::{ExplanationNote};\n\nlet control = cx.new(|_| ExplanationNote::new(\"explanation\",vec![(\"Read sources\".into(),\"Checked release notes and public docs.\".into())]));",
+    "method": "set_state",
+    "signature": "(NoteState, cx)",
+    "event": "StopRequested, RetryRequested",
+    "rule": {
+      "en": "While streaming, the preview shows the newest two lines. Natural completion opens the full transcript for reading or copying. You can fold it again. Stop preserves the text received so far, and Retry starts a fresh stream. The live demo waits while the finished transcript is open.",
+      "zh": "进行中显示最新两行。自然结束时自动展开全部步骤，可阅读、复制或手动收起。停止会保留已收到的内容，中断后可重试。阅读已完成的步骤时，演示会保留这一轮内容。"
+    },
+    "api": {
+      "en": "Pass progress headings and paragraphs as notes, or supply cumulative plain text to set_transcript. NoteState supports Live, Finished, Stopped and Interrupted. Supply elapsed seconds and an optional error. plain() embeds the view in a message, and set_expanded controls its disclosure. Subscribe to StopRequested to cancel the producer and RetryRequested to restart it.",
+      "zh": "可传入标题和正文的 notes，也可用 set_transcript 传入累积文本。NoteState 包含 Live、Finished、Stopped、Interrupted，可传入耗时和错误说明。plain() 内嵌消息，set_expanded 控制展开。宿主收到 StopRequested 后停止数据源，收到 RetryRequested 后重新开始。"
+    },
+    "motion": {
+      "en": "The 44px header uses the light- or dark-surface Kense mark and stays in place. New chunks fade for 140ms. Wrapped preview lines glide upward on a 240ms spring. After two lines, the top 16px of the 40px preview fades the outgoing text into the surface. Measured disclosure height follows a reversible 260ms spring. Labels crossfade over 100/160ms, and the live label shimmers while seconds roll. Reduced motion renders the settled positions and omits shimmer and chunk fades.",
+      "zh": "头部高 44px，Kense 标志随主题切换。新增文字在 140ms 内淡入；换行时最新两行沿 240ms 弹簧向上移动。内容超出两行后，40px 摘要视窗顶部 16px 从透明过渡到清晰。正文按实测高度沿 260ms 弹簧收放，中途可反向。状态文字用 100/160ms 淡出、淡入；进行中显示微光和滚动秒数。减少动效时直接显示最终位置，关闭流光及分段淡入。"
+    }
+  },
+  {
+    "id": "source-cards",
+    "group": "intelligence",
+    "title": {
+      "en": "Source cards",
+      "zh": "引用资料架"
+    },
+    "rustType": "CitationShelf",
+    "lead": {
+      "en": "Browse references associated with an answer and inspect a source.",
+      "zh": "浏览回答引用的资料并查看来源。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::source_cards::{CitationShelf, Citation};\n\nlet control = cx.new(|_| CitationShelf::new(\"sources\",\"References\",vec![Citation {domain:\"docs.rs\".into(), title:\"Rust API\".into(), passage:\"Public module documentation\".into(),url:\"https://docs.rs/\".into()}]));",
+    "method": "cite",
+    "signature": "(index, cx)",
+    "event": "SourceEvent",
+    "rule": {
+      "en": "Inline citations reveal the corresponding source and overflow. Navigation is host-owned.",
+      "zh": "行内引用定位对应来源，必要时展开更多来源，由宿主负责导航。"
+    },
+    "api": {
+      "en": "Citation contains a domain, title, passage and URL. Use cite(index, cx) for inline references and SourceEvent to open or retry.",
+      "zh": "Citation 包含域名、标题、摘录和 URL。行内引用调用 cite(index, cx)，宿主处理打开或重试。"
+    },
+    "motion": {
+      "en": "The grid keeps its outgoing cards while it folds; hovering a source for 320ms reveals its passage and later cards can be inspected immediately.",
+      "zh": "收起时保留正在离开的来源卡片。悬停 320ms 后展示摘录，继续移动即可查看相邻卡片。"
+    }
+  },
+  {
+    "id": "generation-stats",
+    "group": "intelligence",
+    "title": {
+      "en": "Generation stats",
+      "zh": "生成统计"
+    },
+    "rustType": "GenerationReadout",
+    "lead": {
+      "en": "Inspect token usage and timing for a generated response.",
+      "zh": "查看生成回答所用的 Token 和时间。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::generation_stats::{GenerationReadout, Metrics};\n\nlet control = cx.new(|_| GenerationReadout::new(\"stats\",\"Assistant\",Metrics {first_token_ms:400,duration_ms:2400,input_tokens:800,output_tokens:120,input_rate:2.,output_rate:8.,..Metrics::default()}));",
+    "method": "set_metrics",
+    "signature": "(Metrics, cx)",
+    "event": "",
+    "rule": {
+      "en": "Compute speed after the first token and cost using the host’s per-million prices.",
+      "zh": "首个词元之后计算速度，用宿主提供的每百万价格计算费用。"
+    },
+    "api": {
+      "en": "Metrics accepts first-token and total milliseconds, input/output counts, rates per million and throughput samples.",
+      "zh": "Metrics 接收首词元和总耗时（毫秒）、输入输出数量、每百万费率与速度样本。"
+    },
+    "motion": {
+      "en": "The details use measured height and include parent spacing in the same spring. Output token drops snap to a new run; increases interpolate over 180ms.",
+      "zh": "详情面板将内容高度和父级间距纳入同一弹簧。新请求的计数下降直接复位，增加时在 180ms 内插值。"
+    }
+  },
+  {
+    "id": "comment-thread",
+    "group": "activity",
+    "title": {
+      "en": "Comment thread",
+      "zh": "评论讨论"
+    },
+    "rustType": "CommentThread",
+    "lead": {
+      "en": "Read, reply to and resolve a discussion in context.",
+      "zh": "阅读、回复和解决当前内容上的讨论。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::comment_thread::{CommentThread, Comment};\n\nlet control = cx.new(|cx| CommentThread::new(\"review\",\"Release notes\",vec![Comment{key:1,parent:None,author:\"Maya\".into(),text:\"Check the date.\".into(),age:\"2h\".into(),likes:0,mine:false}],window,cx));",
+    "method": "new",
+    "signature": "(id, subject, Vec<Comment>, window, cx)",
+    "event": "CommentEvent",
+    "rule": {
+      "en": "Use stable message keys for replies, edits and removals. Resolving closes the composer.",
+      "zh": "使用稳定标识回复、编辑和删除评论。解决后关闭编辑框。"
+    },
+    "api": {
+      "en": "Comment uses a stable key and optional parent key. Apply CommentEvent mutations to the host-owned conversation.",
+      "zh": "Comment 使用稳定标识及可选父标识。宿主接收 CommentEvent，更新当前会话。"
+    },
+    "motion": {
+      "en": "Each reply retains its content during exit and clips to its measured height. Rapid changes reverse from the displayed height and velocity.",
+      "zh": "每条回复退出时保留内容，按实测高度裁切。快速展开时从当前高度及速度反向。"
+    }
+  },
+  {
+    "id": "code-suggestion",
+    "group": "intelligence",
+    "title": {
+      "en": "Code suggestion",
+      "zh": "代码改动审阅"
+    },
+    "rustType": "PatchReview",
+    "lead": {
+      "en": "Review a proposed edit and accept or reject its changes.",
+      "zh": "审阅代码修改建议并接受或拒绝。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::code_suggestion::{PatchReview, Hunk, Decision};\n\nlet control = cx.new(|cx| PatchReview::new(\"patch\",\"release.rs\",vec![Hunk {line:4,before:vec![\"let n = 1;\".into()],after:vec![\"let n = 2;\".into()],decision:Decision::Pending}],cx));",
+    "method": "new",
+    "signature": "(id, file, Vec<Hunk>, cx)",
+    "event": "PatchEvent",
+    "rule": {
+      "en": "Accept or reject each pending hunk once. Cmd/Ctrl+Enter accepts remaining hunks.",
+      "zh": "同一待处理片段只决策一次。Cmd/Ctrl+Enter 接受剩余片段。"
+    },
+    "api": {
+      "en": "Each Hunk declares a starting line, before/after lines and a Decision. PatchEvent lists only newly decided indices.",
+      "zh": "Hunk 指定起始行、原文、修改后内容和 Decision。PatchEvent 只包含此次新决策的片段索引。"
+    },
+    "motion": {
+      "en": "Removed and new lines have separate clipping groups. Accept or reject folds the superseded lines over 260ms and new lines arrive in 38ms steps.",
+      "zh": "增删行独立裁切。接受或拒绝后，旧行以 260ms 收起；新增行错开 38ms 出现。"
+    }
+  },
+  {
+    "id": "model-card",
+    "group": "intelligence",
+    "title": {
+      "en": "Model card",
+      "zh": "模型资料卡"
+    },
+    "rustType": "ModelSheet",
+    "lead": {
+      "en": "Inspect a model’s capabilities and select it for a task.",
+      "zh": "查看模型能力并为任务选择模型。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::model_card::{ModelSheet, Model};\n\nlet control = cx.new(|_| ModelSheet::new(\"model\",vec![Model{name:\"Atlas\".into(),provider:\"Kense\".into(),description:\"Workspace assistant\".into(),features:vec![\"Text\".into()],context:128000,max_output:32000,input_rate:2.,output_rate:8.,scores:vec![(\"Code\".into(),0.82)]}]));",
+    "method": "choose",
+    "signature": "(index, cx)",
+    "event": "ModelChanged",
+    "rule": {
+      "en": "Compare model limits and prices using data from the host. Sample estimates use 80% input.",
+      "zh": "使用宿主数据比较模型上限和价格，样例估算按 80% 输入计算。"
+    },
+    "api": {
+      "en": "Model provides limits, input/output prices and normalized benchmark scores. ModelChanged reports the selected index.",
+      "zh": "Model 提供上限、输入输出费率和归一化的评测分数，ModelChanged 报告选中模型索引。"
+    },
+    "motion": {
+      "en": "The model name and description crossfade, while limits, input cost and normalized benchmark bars interpolate. The monthly volume slider updates the estimate synchronously.",
+      "zh": "模型名称与说明交叉淡变，上限、输入价格和评测条平滑插值，用量滑块实时更新估算。"
+    }
+  },
+  {
+    "id": "provider-keys",
+    "group": "workspace",
+    "title": {
+      "en": "Provider keys",
+      "zh": "凭据设置"
+    },
+    "rustType": "CredentialPanel",
+    "lead": {
+      "en": "Manage a provider credential with masked display and validation feedback.",
+      "zh": "管理服务密钥，默认遮蔽显示并反馈验证结果。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::provider_keys::{CredentialPanel, Provider};\n\nlet control = cx.new(|cx| CredentialPanel::new(\"keys\",vec![Provider{id:\"custom\".into(),name:\"Provider\".into(),masked:String::new(),last_used:String::new(),valid:false,prefix:\"sk-\".into()}],window,cx));",
+    "method": "tested",
+    "signature": "(ticket, Option<String>, window, cx)",
+    "event": "KeyAction",
+    "rule": {
+      "en": "The host owns key storage. A replacement is applied only after its own test passes. Remove hides that row immediately and emits Remove after an independent five-second undo window. Escape and Undo restore keyboard focus. The preview uses an in-memory vault.",
+      "zh": "由宿主管理密钥。更换时保留旧密钥，直到新密钥验证通过。每行移除后可独立撤销五秒，期限届满才发送 Remove。Esc 和撤销操作恢复键盘焦点。预览使用内存存储。"
+    },
+    "api": {
+      "en": "Test carries a draft and ticket. Check awaiting(ticket) before persisting, then call tested(ticket, masked, window, cx). RetestKey carries only provider and ticket; finish with retested. Complete Reveal with revealed and report Copy through copy_finished. with_mask_only disables access to a full secret.",
+      "zh": "Test 携带候选密钥与票据，持久化前检查 awaiting(ticket)，再调用 tested(ticket, masked, window, cx)。RetestKey 仅携带提供商和票据，以 retested 返回结果。revealed 和 copy_finished 分别完成显示与复制。with_mask_only 关闭明文操作。"
+    },
+    "motion": {
+      "en": "The inline form follows a measured 240ms spring. Status and last-used text fade out over 100ms and in over 160ms. Reveal remasks after five seconds. Reduced motion skips travel and the countdown ring.",
+      "zh": "行内表单按实测高度执行 240ms 弹簧过渡。状态与使用时间先在 100ms 淡出，新内容在 160ms 淡入。明文显示五秒后隐藏。减少动效时跳过位移与倒计时圆环。"
+    }
+  },
+  {
+    "id": "connector-setup",
+    "group": "workspace",
+    "title": {
+      "en": "Connector setup",
+      "zh": "服务连接向导"
+    },
+    "rustType": "ConnectionWizard",
+    "lead": {
+      "en": "Connect an external service and track the setup state.",
+      "zh": "连接外部服务并跟踪设置进度。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::connector_setup::{ConnectionWizard, Service, ConnectionState};\n\nlet control = cx.new(|_| ConnectionWizard::new(\"tools\",vec![Service{id:\"git\".into(),name:\"Git\".into(),description:\"Search commits\".into(),scopes:vec![\"read\".into()],state:ConnectionState::Offline}]));",
+    "method": "progress",
+    "signature": "(service, ticket, ConnectionState, cx)",
+    "event": "ConnectionAction",
+    "rule": {
+      "en": "Report authorization and sync progress using the active ticket; disconnect requires confirmation.",
+      "zh": "宿主按当前请求标识报告授权和同步，断开连接需确认。"
+    },
+    "api": {
+      "en": "Service carries granted scopes and ConnectionState. Return progress with its service ID and original request ticket.",
+      "zh": "Service 包含已授权范围和 ConnectionState。报告进度时带上服务标识及原请求标识。"
+    },
+    "motion": {
+      "en": "Scopes and disconnect confirmation expand on a 240ms spring. The 2px sync line follows real progress samples over 160ms.",
+      "zh": "授权范围和断开确认以 240ms 弹簧展开，2px 同步进度线在 160ms 内追随宿主样本。"
+    }
+  },
+  {
+    "id": "ai-command",
+    "group": "intelligence",
+    "title": {
+      "en": "AI command",
+      "zh": "命令与问答面板"
+    },
+    "rustType": "CommandDesk",
+    "lead": {
+      "en": "Choose and run an assistant command against a selection.",
+      "zh": "选择助手命令并对当前选区执行。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::ai_command::{CommandDesk, Command};\n\nlet control = cx.new(|cx| CommandDesk::new(\"desk\",vec![Command{id:\"inbox\".into(),label:\"Inbox\".into(),section:\"Pages\".into(),hint:\"G I\".into()}],window,cx));",
+    "method": "receive",
+    "signature": "(ticket, Result<String, ()>, done, cx)",
+    "event": "CommandEvent",
+    "rule": {
+      "en": "Filter host commands or submit a question. Changing mode invalidates the previous answer stream.",
+      "zh": "筛选宿主命令或提问，切换模式后忽略上一条回答流。"
+    },
+    "api": {
+      "en": "Command provides ID, name, group and shortcut hint. CommandEvent separates navigation, question submission and cancellation.",
+      "zh": "Command 提供标识、标签、分组及快捷键提示。CommandEvent 区分导航、提问及取消。"
+    },
+    "motion": {
+      "en": "Search and answer views share a fixed results area, crossfading with 2px travel. New streamed text ranges fade independently for 140ms.",
+      "zh": "搜索与问答共享固定结果区，伴随 2px 位移交叉淡变。流式新增片段各自淡入 140ms。"
+    }
+  },
+  {
+    "id": "share-access",
+    "group": "overlays",
+    "title": {
+      "en": "Share access",
+      "zh": "访问权限编辑"
+    },
+    "rustType": "AccessEditor",
+    "lead": {
+      "en": "Invite collaborators and manage access to a shared resource.",
+      "zh": "邀请协作者并管理共享资源的权限。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::share_access::{AccessEditor, Person, AccessRole};\n\nlet control = cx.new(|cx| AccessEditor::new(\"share\",\"Release plan\",\"https://workspace.example/release\",vec![Person{name:\"Maya\".into(),email:\"maya@example.com\".into(),role:AccessRole::Owner}],window,cx));",
+    "method": "new",
+    "signature": "(id, document, url, Vec<Person>, window, cx)",
+    "event": "AccessEvent",
+    "rule": {
+      "en": "Validate invitations and protect the owner row. Report copy success only after clipboard write.",
+      "zh": "校验邀请邮箱，保护所有者角色，剪贴板写入成功后才提示复制完成。"
+    },
+    "api": {
+      "en": "Pass a document name, share URL and people with typed AccessRole values. Persist invitation, role and link changes via AccessEvent.",
+      "zh": "传入文档名、分享链接及带 AccessRole 的成员。宿主通过 AccessEvent 保存邀请、角色与链接权限变更。"
+    },
+    "motion": {
+      "en": "The panel and role menu have separate measured disclosures. Their leading gaps shrink with their height instead of jumping on mount/unmount.",
+      "zh": "面板和角色菜单分别按实测高度收放，顶部间距随高度连续变化。"
+    }
+  },
+  {
+    "id": "team-switcher",
+    "group": "workspace",
+    "title": {
+      "en": "Team switcher",
+      "zh": "工作区选择器"
+    },
+    "rustType": "WorkspacePicker",
+    "lead": {
+      "en": "Find and activate a team without leaving the current workspace.",
+      "zh": "查找团队并在当前工作区切换。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::team_switcher::{WorkspacePicker, Workspace};\n\nlet control = cx.new(|cx| WorkspacePicker::new(\"team\",vec![Workspace{id:\"main\".into(),name:\"Product\".into(),plan:\"Team\".into(),members:12,role:\"Admin\".into()}],window,cx));",
+    "method": "new",
+    "signature": "(id, Vec<Workspace>, window, cx)",
+    "event": "WorkspaceEvent",
+    "rule": {
+      "zh": "可按名称、方案或角色筛选。搜索栏和底部操作固定，列表每屏六行，每行 48px。方向键会将高亮项滚入视野，空查询时 Home/End 跳到菜单首尾。",
+      "en": "Search by name, plan or role. Scroll six 48px rows between fixed search and action areas. Arrow keys keep the highlighted row in view. Home/End jump to the ends of an unfiltered menu."
+    },
+    "api": {
+      "en": "Workspace includes ID, plan, member count and role. Handle switch, create and join events separately.",
+      "zh": "Workspace 包含标识、套餐、人数及角色。宿主分别处理切换、创建和加入事件。"
+    },
+    "motion": {
+      "zh": "列表、创建和加入共用一个最宽 360px 的面板。外框、表单输入框和列表高亮均采用 8px 圆角。切换视图时内容沿进入或返回方向移动 6px 并在 160ms 内淡入。减少动效时只淡入。关闭列表时保留退场内容，切换工作区时名称交叉淡变。",
+      "en": "List, Create and Join share a panel up to 360px wide. The panel, form fields and row highlights share an 8px corner radius. On an internal route change the incoming content fades in over 160ms and travels 6px in the navigation direction. Reduced motion omits the travel. Closing retains outgoing rows, and switching workspaces crossfades the trigger name."
+    }
+  },
+  {
+    "id": "tooltip",
+    "group": "overlays",
+    "title": {
+      "en": "Tooltip",
+      "zh": "控件提示"
+    },
+    "rustType": "Tooltip",
+    "lead": {
+      "en": "Reveal a short explanation on hover or keyboard focus.",
+      "zh": "悬停或键盘聚焦时显示简短说明。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tooltip::Tooltip;\n\nlet control = cx.new(|cx| Tooltip::new(\"Project visibility\", \"Workspace members only\", cx));",
+    "method": "new",
+    "signature": "(name, text, &mut App) → Tooltip",
+    "event": "—",
+    "rule": {
+      "en": "Hover or focus the icon. Escape dismisses the hint.",
+      "zh": "悬停或聚焦图标查看说明，Esc 关闭。"
+    },
+    "motion": {
+      "en": "Waits 250ms on pointer intent. A 3px rise and separate opacity channel preserve reversal; reduced motion retains a 90ms fade.",
+      "zh": "悬停 250ms 后显示提示；淡入与 3px 位移独立，减少动效时只保留 90ms 淡入。"
+    },
+    "api": {
+      "en": "Supply both an accessible name and a short explanation.",
+      "zh": "分别传入无障碍名称和简短说明。"
+    }
+  },
+  {
+    "id": "scroll-area",
+    "group": "expand",
+    "title": {
+      "en": "Scroll area",
+      "zh": "独立滚动区"
+    },
+    "rustType": "ScrollArea",
+    "lead": {
+      "en": "Scroll an overflowing local region independently of the page.",
+      "zh": "独立滚动超出可视范围的局部内容。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::scroll_area::ScrollArea;\n\nlet control = cx.new(|_| ScrollArea::new(80., Box::new(|_, _| gpui::div().flex().flex_col().children((1..20).map(|n| gpui::div().child(n.to_string()))).into_any_element())));",
+    "method": "handle",
+    "signature": "(&self) → ScrollHandle",
+    "event": "ScrollHandle",
+    "rule": {
+      "en": "Scroll with the wheel, Page Up/Down, Home or End.",
+      "zh": "通过滚轮、Page Up/Down、Home 和 End 滚动。"
+    },
+    "motion": {
+      "en": "The thumb fades in during scroll or hover, waits 900ms after leaving and fades out. Pressing the track pages 90%; dragging moves the thumb.",
+      "zh": "滚动或悬停显示滑块，离开后延迟 900ms 隐藏。点轨道平移 90% 视口，也可拖动滑块。"
+    },
+    "api": {
+      "en": "Supply a fixed viewport height and a content factory. horizontal() changes the overflow axis.",
+      "zh": "传入视口高度和内容工厂，horizontal() 将溢出轴改成横向。"
+    }
+  },
+  {
+    "id": "drawer",
+    "group": "overlays",
+    "title": {
+      "en": "Drawer",
+      "zh": "侧边抽屉"
+    },
+    "rustType": "Drawer",
+    "lead": {
+      "en": "Open a side sheet for a focused task and return to the trigger.",
+      "zh": "从侧边打开任务面板，关闭后返回触发器。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::drawer::Drawer;\n\nlet control = cx.new(|cx| Drawer::new(\"Open details\", \"Project details\", Box::new(|_, _| gpui::div().child(\"Owner: Maya\").into_any_element()), cx));",
+    "method": "set_open",
+    "signature": "(&mut self, bool, &mut Window, &mut Context<Self>)",
+    "event": "DrawerEvent",
+    "rule": {
+      "en": "Open the side sheet, Tab within its contents, Escape to dismiss.",
+      "zh": "打开侧边抽屉后可在面板中 Tab，Esc 关闭。"
+    },
+    "motion": {
+      "en": "The sheet slides from its edge; the scrim fades separately. A header drag past one third or a quick flick closes it; reduced motion uses opacity.",
+      "zh": "抽屉从固定边缘滑出，遮罩独立淡入。拖过面板宽度三分之一或快速甩动可关闭；减少动效时只淡入淡出。"
+    },
+    "api": {
+      "en": "Provide a trigger, heading and body builder. Subscribe to Opened and Closed.",
+      "zh": "传入触发器文案、标题和内容构造器，可订阅打开与关闭。"
+    }
+  },
+  {
+    "id": "accordion",
+    "group": "expand",
+    "title": {
+      "en": "Accordion",
+      "zh": "折叠分组"
+    },
+    "rustType": "Accordion",
+    "lead": {
+      "en": "Expand sections in a compact stack of disclosures.",
+      "zh": "在紧凑列表中展开和收起不同章节。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::accordion::{Accordion, AccordionItem};\n\nlet control = cx.new(|cx| Accordion::new(vec![AccordionItem::new(\"Included\", \"All workspace members can review the draft.\")], Some(0), cx));",
+    "method": "multiple",
+    "signature": "(self, bool) → Self",
+    "event": "AccordionChanged",
+    "rule": {
+      "en": "Click a heading to toggle. Arrow keys, Home and End navigate headers.",
+      "zh": "点击标题展开或收起，用方向键、Home 和 End 在标题间导航。"
+    },
+    "motion": {
+      "en": "The measured panel height, content opacity, 6px content offset and chevron follow the disclosure. A reversal keeps the current height.",
+      "zh": "内容区按实测高度展开，文字淡入并移动 6px，箭头同步旋转；反切保留当前高度。"
+    },
+    "api": {
+      "en": "The selected initial index is optional. Event data contains index and expanded.",
+      "zh": "初始展开索引可选，事件携带索引及展开状态。"
+    }
+  },
+  {
+    "id": "breadcrumb",
+    "group": "navigation",
+    "title": {
+      "en": "Breadcrumb",
+      "zh": "路径导航"
+    },
+    "rustType": "Breadcrumb",
+    "lead": {
+      "en": "Follow the hierarchy of locations back to an ancestor.",
+      "zh": "沿当前位置的层级返回上级。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::breadcrumb::Breadcrumb;\n\nlet control = cx.new(|_| Breadcrumb::new(vec![\"Projects\".into(), \"Launch\".into(), \"Files\".into()]).limit(3));",
+    "method": "navigate",
+    "signature": "(&mut self, usize, &mut Context<Self>)",
+    "event": "Navigated",
+    "rule": {
+      "en": "Select an ancestor. When the trail exceeds its limit, open the ellipsis.",
+      "zh": "点击上级名称返回；路径超长时通过省略号选择隐藏项。"
+    },
+    "motion": {
+      "en": "An added crumb enters from 8px left. A leaving crumb stays until its opacity and offset settle. Initial navigation is immediate.",
+      "zh": "新增路径从左侧 8px 淡入，离开的路径保留到退场完成；首次显示直接定位。"
+    },
+    "api": {
+      "en": "Pass ordered labels, configure the visible limit and subscribe to the new index.",
+      "zh": "按层级传入名称，设置可见项上限，并订阅新索引。"
+    }
+  },
+  {
+    "id": "tree-view",
+    "group": "tables",
+    "title": {
+      "en": "Tree view",
+      "zh": "树导航"
+    },
+    "rustType": "TreeView",
+    "lead": {
+      "en": "Navigate nested items using their visible parent and child relationships.",
+      "zh": "展开层级并在可见父子节点之间导航。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tree_view::{TreeView, TreeNode};\n\nlet control = cx.new(|cx| TreeView::new(vec![TreeNode::new(\"src\",\"src\", vec![TreeNode::new(\"main\",\"main.rs\",vec![])])], cx).expanded(vec![\"src\".into()]));",
+    "method": "expanded",
+    "signature": "(self, Vec<SharedString>) → Self",
+    "event": "TreeSelected",
+    "rule": {
+      "en": "Up/Down traverse visible rows. Left folds or selects the parent. Right unfolds or enters a branch.",
+      "zh": "上下键逐行移动，左键收起或返回上级，右键展开或进入子节点。"
+    },
+    "motion": {
+      "en": "Branch height opens together. Labels and icons enter from 6px left at 35ms intervals (seven-step cap). New delay is cancelled on exit, and visible rows retain position on reversal.",
+      "zh": "分支同时腾出高度，文字和图标从左侧 6px 处按 35ms 间隔依次出现，最多延迟七档。收起会取消尚未触发的项。"
+    },
+    "api": {
+      "en": "Each node has a unique ID, a label and its children. Events carry the ID.",
+      "zh": "节点由唯一标识、名称和子项组成，选择事件携带标识。"
+    }
+  },
+  {
+    "id": "confirm-popover",
+    "group": "overlays",
+    "title": {
+      "en": "Confirm popover",
+      "zh": "锚点确认"
+    },
+    "rustType": "ConfirmPopover",
+    "lead": {
+      "en": "Ask for a deliberate confirmation near a consequential action.",
+      "zh": "在重要操作旁显示确认步骤。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::confirm_popover::ConfirmPopover;\n\nlet control = cx.new(|cx| ConfirmPopover::new(\"Delete\", \"Remove this project?\", Some(\"Atlas\".into()), window, cx));",
+    "method": "resolve",
+    "signature": "(&mut self, ticket: u64, ok: bool, &mut Context<Self>)",
+    "event": "ConfirmRequested",
+    "rule": {
+      "en": "The confirmation field has 12px of horizontal padding. Click anywhere in the field to focus it. Enter submits a fully matched phrase after composition ends. Retry a failed request in place.",
+      "zh": "确认输入框左右各留 12px，点击留白也能聚焦。输入法选词结束且短语完全匹配后，按 Enter 即可提交；失败可原位重试。"
+    },
+    "motion": {
+      "en": "Width and height grow from the trigger while the 8px radius stays fixed. The content keeps its expanded width and fades in after the surface starts opening.",
+      "zh": "宽高从触发键边缘连续变化，外框与触发键采用相同的 8px 圆角；内容保持展开宽度，外框扩开后淡入。"
+    },
+    "api": {
+      "en": "Subscribe to a request ticket and call resolve with that same ticket after the host operation completes.",
+      "zh": "订阅请求序号并执行宿主操作，完成后携带同一序号调用 resolve。"
+    }
+  },
+  {
+    "id": "pagination",
+    "group": "navigation",
+    "title": {
+      "en": "Pagination",
+      "zh": "分页导航"
+    },
+    "rustType": "Pagination",
+    "lead": {
+      "en": "Move through a bounded sequence of result pages.",
+      "zh": "在有总页数的结果集中翻页。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::pagination::Pagination;\n\nlet control = cx.new(|_| Pagination::new(12, 2));",
+    "method": "select",
+    "signature": "(&mut self, page: usize, &mut Context<Self>)",
+    "event": "PageChanged",
+    "rule": {
+      "en": "Choose a number or the adjacent navigation arrows. Pages are one-based.",
+      "zh": "通过页码或箭头换页，页码从 1 开始。"
+    },
+    "motion": {
+      "en": "Five consecutive page numbers roll on one coordinate; the 36px controls are 4px apart. Labels retain spacing and velocity through reversal; reduced motion swaps directly.",
+      "zh": "连续五个页码共用同一条运动轨迹；控件宽 36px、间距 4px，反向切换时保持页码间距和速度，减少动效时直接定位。"
+    },
+    "api": {
+      "en": "Set the page count and initial page. The active index stays within bounds.",
+      "zh": "传入总页数和初始页码，页码始终限制在有效范围内。"
+    }
+  },
+  {
+    "id": "filter-toolbar",
+    "group": "tables",
+    "title": {
+      "en": "Filter toolbar",
+      "zh": "集合筛选栏"
+    },
+    "rustType": "FilterToolbar",
+    "lead": {
+      "en": "Combine and remove facet filters above a result set.",
+      "zh": "为结果集组合和移除不同维度的筛选条件。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::filter_toolbar::{FilterToolbar, Facet};\n\nlet control = cx.new(|_| FilterToolbar::new(vec![Facet::new(\"Status\", vec![\"In review\".into(), \"Done\".into()])], vec![(0,0)]));",
+    "method": "set",
+    "signature": "(&mut self, facet: usize, value: Option<usize>, &mut Context<Self>)",
+    "event": "FiltersChanged",
+    "rule": {
+      "en": "Edit a chip, remove it, add a facet or clear all selections.",
+      "zh": "编辑或移除单个筛选条件，也可以添加条件或清除全部。"
+    },
+    "motion": {
+      "en": "Filter chips spring their widths. Add filter grows into an anchored chooser, and the contents slide when advancing to values.",
+      "zh": "条件标签宽度在进退场时连续变化；点添加展开，进入值选择时选项横向滑入。"
+    },
+    "api": {
+      "en": "Each facet accepts one option. Change events contain the complete selection map.",
+      "zh": "每个筛选维度可选一个值，事件携带完整的选中映射。"
+    }
+  },
+  {
+    "id": "sortable-data-table",
+    "group": "tables",
+    "title": {
+      "en": "Sortable data table",
+      "zh": "排序表格"
+    },
+    "rustType": "SortableTable",
+    "lead": {
+      "en": "Sort records by a column while keeping each row’s identity.",
+      "zh": "按列排序数据，保留行的稳定标识。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::sortable_data_table::{SortableTable, TableColumn};\n\nlet control = cx.new(|_| SortableTable::new(\"Scores\", vec![TableColumn::new(\"Score\",true)], vec![vec![\"92\".into()],vec![\"8\".into()]]));",
+    "method": "sort",
+    "signature": "(&mut self, column: usize, descending: bool, &mut Context<Self>)",
+    "event": "TableSorted",
+    "rule": {
+      "en": "Activate a column twice to reverse its order. Numeric columns compare parsed numbers.",
+      "zh": "重复点击列头反转排序，数值列按解析后的数字比较。"
+    },
+    "motion": {
+      "en": "Stable row identities carry the row-position spring across a second sort; the active heading arrow rotates.",
+      "zh": "排序保留行标识和当前位置；再次排序时连续换位，表头箭头同时转向。"
+    },
+    "api": {
+      "en": "Provide column definitions and ordered row values. Sorting announces the column and direction.",
+      "zh": "传入列定义及按列排列的数据，排序事件携带列索引与方向。"
+    }
+  },
+  {
+    "id": "reorderable-list",
+    "group": "tables",
+    "title": {
+      "en": "Reorderable list",
+      "zh": "手动排序列表"
+    },
+    "rustType": "ReorderableList",
+    "lead": {
+      "en": "Change list order with a pointer or keyboard.",
+      "zh": "用指针或键盘调整列表顺序。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::reorderable_list::{ReorderableList, OrderedItem};\n\nlet control = cx.new(|cx| ReorderableList::new(vec![OrderedItem::new(\"a\",\"Review changes\",\"Product brief\"),OrderedItem::new(\"b\",\"Ship\",\"Release\")],cx));",
+    "method": "move_to",
+    "signature": "(&mut self, from: usize, to: usize, &mut Context<Self>)",
+    "event": "OrderChanged",
+    "rule": {
+      "en": "Drag a handle onto a row or use Up/Down while focused.",
+      "zh": "可拖动手柄到目标行，也可聚焦后使用上下键。"
+    },
+    "motion": {
+      "en": "Crossing a slot shifts neighbors before release. Drop commits once; reversing or leaving restores the slot.",
+      "zh": "拖动越过相邻位置时其他行提前让位；落下后提交，反向拖动会回到原位。"
+    },
+    "api": {
+      "en": "Use unique row IDs. Subscribe to the complete new order.",
+      "zh": "每行使用唯一标识，变更事件包含完整的新顺序。"
+    }
+  },
+  {
+    "id": "expandable-card",
+    "group": "expand",
+    "title": {
+      "en": "Expandable card",
+      "zh": "展开详情卡"
+    },
+    "rustType": "DetailCard",
+    "lead": {
+      "en": "Open a summary card to inspect its additional detail.",
+      "zh": "展开摘要卡并查看详细内容。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expandable_card::DetailCard;\n\nlet control = cx.new(|_| DetailCard::new(\"Launch checklist\",\"4/6 complete\", Box::new(|_, _| gpui::div().child(\"Invite reviewers\").into_any_element())));",
+    "method": "set_expanded",
+    "signature": "(&mut self, bool, &mut Context<Self>)",
+    "event": "DetailsChanged",
+    "rule": {
+      "en": "Activate the summary to reveal or collapse details in place.",
+      "zh": "点击摘要就地展开或折叠详情。"
+    },
+    "motion": {
+      "en": "Width and measured height change on a shared spring. Details keep the open width and fade in after expansion starts; the arrow rotates.",
+      "zh": "宽度和实测高度共用一个弹簧；详情保持展开宽度，空间让出后渐显，箭头同步转动。"
+    },
+    "api": {
+      "en": "Pass the title, summary and a body builder. Subscribe to the expanded state.",
+      "zh": "传入标题、摘要、正文构造器，可订阅展开状态。"
+    }
+  },
+  {
+    "id": "hover-card",
+    "group": "overlays",
+    "title": {
+      "en": "Hover card",
+      "zh": "快速预览卡"
+    },
+    "rustType": "PreviewCard",
+    "lead": {
+      "en": "Inspect an identity or link without leaving the surrounding content.",
+      "zh": "在原内容旁预览成员或链接信息。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::hover_card::PreviewCard;\n\nlet control = cx.new(|cx| PreviewCard::new(\"Jasmine Brooks\",\"JB\",Box::new(|_, _| gpui::div().child(\"Product designer\").into_any_element()),cx));",
+    "method": "new",
+    "signature": "(name, badge, body, &mut App) → Self",
+    "event": "—",
+    "rule": {
+      "en": "Hover, focus or tap the identity. The panel stays available when the pointer crosses onto it.",
+      "zh": "悬停、聚焦或点按身份标签即可打开，移入面板后仍能阅读。"
+    },
+    "motion": {
+      "en": "Pointer intent opens after 500ms and closes after 140ms. The edge offset and opacity are independent; reduced motion uses a short fade.",
+      "zh": "悬停 500ms 显示，移出后等待 140ms；位置与透明度独立变化，减少动效时只淡入淡出。"
+    },
+    "api": {
+      "en": "Pass the identity and a body factory that can render rich content.",
+      "zh": "传入身份名称、头像缩写和可绘制丰富内容的正文工厂。"
+    }
+  },
+  {
+    "id": "expandable-text",
+    "group": "expand",
+    "title": {
+      "en": "Expandable text",
+      "zh": "长文折叠"
+    },
+    "rustType": "ExpandableText",
+    "lead": {
+      "en": "Reveal the rest of a long text and collapse it again.",
+      "zh": "展开截断的长文本并可重新收起。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expandable_text::ExpandableText;\n\nlet control = cx.new(|_| ExpandableText::new(\"A long release note that wraps across several lines in a narrow column.\", 2));",
+    "method": "new",
+    "signature": "(text, lines: usize) → Self",
+    "event": "TextExpanded",
+    "rule": {
+      "en": "Read more appears only when measured text exceeds the line clamp.",
+      "zh": "文本实际高度超过设定行数时才显示阅读全文。"
+    },
+    "motion": {
+      "en": "Measured overflow drives opening over 500–600ms and closing over 400–450ms, with a fading edge mask and rotating chevron.",
+      "zh": "根据溢出高度展开 500–600ms，收起 400–450ms，渐变遮罩和箭头同步切换。"
+    },
+    "api": {
+      "en": "The surrounding layout supplies the width; resizing remeasures the text.",
+      "zh": "由外层布局提供宽度，调整宽度会重新测量文本。"
+    }
+  },
+  {
+    "id": "toc-progress",
+    "group": "navigation",
+    "title": {
+      "en": "Table of contents progress",
+      "zh": "阅读目录"
+    },
+    "rustType": "ReadingOutline",
+    "lead": {
+      "en": "Navigate article sections and track reading progress.",
+      "zh": "定位文章章节并查看阅读进度。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::toc_progress::{ReadingOutline, ReadingSection};\n\nlet control = cx.new(|_| ReadingOutline::new(\"Release notes\",vec![ReadingSection::new(\"Overview\",\"Workspace changes\",0)], 4));",
+    "method": "new",
+    "signature": "(title, Vec<ReadingSection>, minutes: u32) → Self",
+    "event": "SectionChanged",
+    "rule": {
+      "en": "Scroll the article or jump to a heading. The active section and remaining minutes follow the viewport.",
+      "zh": "滚动正文或点击目录跳转，当前章节和剩余时间随视口更新。"
+    },
+    "motion": {
+      "en": "The reading marker tracks the fraction through the active section on a spring; jumping links scroll the article smoothly.",
+      "zh": "阅读标记按段内比例连续滑动，点击目录平滑滚动到目标段落。"
+    },
+    "api": {
+      "en": "Sections carry a heading, text and nesting depth. Events report a visible section index.",
+      "zh": "章节包含标题、内容和嵌套级别，事件报告可见章节索引。"
+    }
+  },
+  {
+    "id": "code-block",
+    "group": "tables",
+    "title": {
+      "en": "Code block",
+      "zh": "代码查看"
+    },
+    "rustType": "CodeBlock",
+    "lead": {
+      "en": "Read a labeled code excerpt and copy its source.",
+      "zh": "阅读带名称的代码片段并复制源码。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::code_block::CodeBlock;\n\nlet control = cx.new(|cx| CodeBlock::new(\"main.rs\",\"Rust\",\"fn main() {}\",cx));",
+    "method": "new",
+    "signature": "(filename, language, source, &mut App) → Self",
+    "event": "—",
+    "rule": {
+      "en": "Copy the complete source with the header action.",
+      "zh": "点击代码块头部的复制按钮可复制完整内容。"
+    },
+    "motion": {
+      "en": "Copy uses the host clipboard. Optional max_lines springs the source height and turns its chevron; short sources stay open.",
+      "zh": "复制等待宿主剪贴板确认。可选 max_lines 会在代码超出行数时提供展开，箭头随高度转动。"
+    },
+    "api": {
+      "en": "The file name and language label are independent of the source text.",
+      "zh": "文件名与语言标签独立于原始代码文本。"
+    }
+  },
+  {
+    "id": "json-viewer",
+    "group": "tables",
+    "title": {
+      "en": "JSON viewer",
+      "zh": "结构值浏览器"
+    },
+    "rustType": "JsonViewer",
+    "lead": {
+      "en": "Search, expand and inspect a parsed JSON value.",
+      "zh": "搜索和展开已解析的 JSON 数据。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::json_viewer::{JsonViewer, JsonValue};\n\nlet control = cx.new(|cx| JsonViewer::new(\"payload\", r#\"{\"status\":\"ok\",\"items\":[1,2]}\"#.parse::<JsonValue>().unwrap(),window,cx));",
+    "method": "new",
+    "signature": "(title, JsonValue, &mut Window, &mut Context<Self>) → Self",
+    "event": "JsonCopied",
+    "rule": {
+      "en": "Search keys and values without hiding their siblings. Enter and Shift+Enter move between matches, Escape restores prior branches, and Down moves from search into the tree. Arrow keys, Home and End navigate the rows. Cmd/Ctrl+C copies the value; add Shift to copy its display path. Expand all and Collapse all control the branches; long collections load 50 children per page.",
+      "zh": "搜索键和值时保留同级数据。Enter 和 Shift+Enter 切换匹配，Esc 恢复搜索前的分支，向下键从搜索框进入树。方向键、Home 和 End 定位节点；Cmd/Ctrl+C 复制值，加 Shift 复制可读路径。支持全部展开、全部收起，长集合每页增加 50 项。"
+    },
+    "motion": {
+      "en": "Rows unfold and fold through their measured position. The active row, chevron and scroll follow a reversible spring. Above 400 rows, height changes are immediate; only text near the viewport is painted. Reduced motion uses the settled geometry.",
+      "zh": "分支收放时保持行高连续，活动行底色、箭头和滚动位置采用可反向弹簧。超过 400 行直接更新高度，只绘制视口附近的文字；减少动效时直接定位。"
+    },
+    "api": {
+      "en": "Supply a parsed JsonValue. With serde_json’s preserve_order feature, object properties retain their source order. with_max_height controls the scroll viewport (420px by default). with_font_family uses a registered monospace font. selected_path returns a readable path; selected_pointer and JsonCopied.pointer use RFC 6901. String values copy without quotes; containers are copied as indented JSON.",
+      "zh": "传入已解析的 JsonValue。宿主启用 serde_json 的 preserve_order 特性可保留对象字段的原始顺序。with_max_height 设置滚动区域高度，默认 420px；with_font_family 可选择已注册的等宽字体。selected_path 返回可读路径，selected_pointer 和 JsonCopied.pointer 遵循 RFC 6901。复制字符串时去掉引号，复制对象或数组时保留缩进。"
+    }
+  },
+  {
+    "id": "data-grid",
+    "group": "tables",
+    "title": {
+      "en": "Data grid",
+      "zh": "数据表格"
+    },
+    "rustType": "DataGrid",
+    "lead": {
+      "en": "Inspect, sort and edit cells in a spreadsheet-like grid.",
+      "zh": "在数据网格中浏览、排序和编辑单元格。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::data_grid::DataGrid;\n\nlet control = cx.new(|cx| DataGrid::new(\"Renewals\", vec![\"Account\".into(),\"Seats\".into()], vec![vec![\"Northwind\".into(),\"40\".into()]],window,cx));",
+    "method": "csv",
+    "signature": "(&self) → String",
+    "event": "CellEdited, GridExport",
+    "rule": {
+      "en": "Search rows, apply column filters, and show, hide or reorder columns before exporting. Arrows and Shift select a range. Double-click or Enter edits, Escape cancels, and dragging the corner fills.",
+      "zh": "可搜索行、逐列筛选、显示、隐藏或调整列顺序后导出。方向键和 Shift 选区，双击或 Enter 编辑，Esc 取消，拖动角标填充。"
+    },
+    "motion": {
+      "en": "The visible region animates row identities after sorting and fades arriving rows. The range glides in scroll-content coordinates and written cells flash for 900ms.",
+      "zh": "排序时可见行连续换位，新进入的行淡入；选区使用内容坐标滑动，改写单元格高亮 900ms。"
+    },
+    "api": {
+      "en": "Subscribe to CellEdited for backing row/column updates. GridExport carries a file name and CSV in filtered row order and current visible column order. The host saves the CSV.",
+      "zh": "订阅 CellEdited 获取数据源行列及更新值。GridExport 提供文件名和 CSV，行按当前筛选、排序排列，列按可见顺序排列，由宿主保存。"
+    }
+  },
+  {
+    "id": "lightbox-gallery",
+    "group": "workspace",
+    "title": {
+      "en": "Lightbox gallery",
+      "zh": "图像展廊"
+    },
+    "rustType": "PhotoExhibit",
+    "lead": {
+      "en": "Open a larger image and navigate the rest of the gallery.",
+      "zh": "放大图片并在图库内切换。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::lightbox_gallery::{GalleryPhoto, PhotoExhibit};\n\nlet control = cx.new(|cx| PhotoExhibit::new(vec![GalleryPhoto::new(\"photos/harbor.jpg\",\"Harbor\",\"Dawn on the coast\",1.5)],cx));",
+    "method": "open",
+    "signature": "(&mut self, index: usize, &mut Window, &mut Context<Self>)",
+    "event": "GallerySelection",
+    "rule": {
+      "en": "Open a tile, use Left/Right, swipe or zoom. Escape and vertical drag close the viewer.",
+      "zh": "点开缩略图后可用方向键、滑动和缩放，Esc 或纵向拖动关闭。"
+    },
+    "motion": {
+      "en": "The photo flies from its current thumbnail with a stable corner radius. Directional changes slide through adjacent photos; reduced motion fades the viewer in place.",
+      "zh": "照片从缩略图位置展开，圆角保持稳定；切换照片按方向滑动，减少动效时使用原位淡入淡出。"
+    },
+    "api": {
+      "en": "Supply ImageSource, title, caption and thumbnail aspect ratio per photo.",
+      "zh": "每张照片提供 ImageSource、标题、说明和缩略图宽高比。"
+    }
+  },
+  {
+    "id": "alert",
+    "group": "messages",
+    "title": {
+      "en": "Alert",
+      "zh": "持续提醒"
+    },
+    "rustType": "Alert",
+    "lead": {
+      "en": "Keep a persistent status message and its recovery action together.",
+      "zh": "在状态信息旁提供相应恢复操作。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::alert::{Alert, Severity};\n\nlet control = cx.new(|_| Alert::new(\"Sync paused\", \"Reconnect to upload changes.\", Severity::Warning).with_action(\"Reconnect\"));",
+    "method": "replace",
+    "signature": "Alert",
+    "event": "AlertAction",
+    "api": {
+      "en": "Offer one recovery action for a persistent status.",
+      "zh": "持续显示状态，可提供恢复操作。"
+    },
+    "rule": {
+      "en": "Offer one recovery action for a persistent status.",
+      "zh": "持续显示状态，可提供恢复操作。"
+    },
+    "motion": {
+      "en": "Changing severity reveals the incoming symbol while the previous one recedes. Heading and detail rise and fade independently.",
+      "zh": "严重程度改变时，旧图标缩回、新图标展开；标题和说明分别上移并淡入。"
+    }
+  },
+  {
+    "id": "toast",
+    "group": "messages",
+    "title": {
+      "en": "Toast",
+      "zh": "操作回执"
+    },
+    "rustType": "Toast",
+    "lead": {
+      "en": "Acknowledge a short-lived outcome with an optional follow-up action.",
+      "zh": "短暂显示操作结果并可提供后续操作。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::toast::Toast;\n\nlet control = cx.new(|_| Toast::new());",
+    "method": "show",
+    "signature": "(message, Option<SharedString>, Duration)",
+    "event": "ToastEvent",
+    "api": {
+      "en": "Call show on the entity. Hover pauses dismissal. Undo and dismiss are distinct events.",
+      "zh": "在实体上调用 show；悬停暂停计时，撤销和关闭发出不同事件。"
+    },
+    "rule": {
+      "en": "Call show on the entity. Hover pauses dismissal. Undo and dismiss are distinct events.",
+      "zh": "在实体上调用 show；悬停暂停计时，撤销和关闭发出不同事件。"
+    },
+    "motion": {
+      "en": "The notification rises 16px, draws its check and fades out while dropping 8px. Drag can dismiss it and hover pauses its timeout.",
+      "zh": "消息上移 16px 并描出勾，离开时下移 8px 并淡出。拖动可关闭，悬停会暂停计时。"
+    }
+  },
+  {
+    "id": "progress",
+    "group": "progress",
+    "title": {
+      "en": "Progress",
+      "zh": "任务进度"
+    },
+    "rustType": "Progress",
+    "lead": {
+      "en": "Display measured completion or an indeterminate operation.",
+      "zh": "展示确定进度或正在进行的未定进度任务。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::progress::Progress;\n\nlet control = cx.new(|cx| Progress::new(\"Preparing workspace\", Some(0.68), cx));",
+    "method": "set_value",
+    "signature": "Option<f32>",
+    "event": "",
+    "api": {
+      "en": "Pass a fraction from zero to one, or None for indeterminate work.",
+      "zh": "传入 0 到 1 之间的进度，未确定时使用 None。"
+    },
+    "rule": {
+      "en": "Pass a fraction from zero to one, or None for indeterminate work.",
+      "zh": "传入 0 到 1 之间的进度，未确定时使用 None。"
+    },
+    "motion": {
+      "en": "The label follows the same spring as the fill. The completion color and check follow the advance.",
+      "zh": "百分比与填充共用同一个弹簧进度；完成后再换成功色、绘制勾。"
+    }
+  },
+  {
+    "id": "skeleton",
+    "group": "progress",
+    "title": {
+      "en": "Skeleton",
+      "zh": "加载占位"
+    },
+    "rustType": "Skeleton",
+    "lead": {
+      "en": "Reserve the shape of content while a view is loading.",
+      "zh": "加载期间为即将到来的内容保留形状和空间。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::skeleton::Skeleton;\n\nlet control = cx.new(|cx| Skeleton::new(\"Loading summary\", [0.8, 1.0, 0.6], cx).with_avatar());",
+    "method": "with_avatar",
+    "signature": "Self → Self",
+    "event": "",
+    "api": {
+      "en": "Provide an accessible loading label and relative line widths. Replace the placeholder when data arrives.",
+      "zh": "提供加载名称和每行相对宽度，获取数据后换成内容。"
+    },
+    "rule": {
+      "en": "Provide an accessible loading label and relative line widths. Replace the placeholder when data arrives.",
+      "zh": "提供加载名称和每行相对宽度，获取数据后换成内容。"
+    },
+    "motion": {
+      "en": "Placeholder blocks pulse in sequence every 1.8s, offset by 90ms. They stop after eleven cycles and remain static under reduced motion.",
+      "zh": "占位块以 1.8 秒为周期明暗变化，相邻块延迟 90ms，11 个周期后停止；减少动效时静止。"
+    }
+  },
+  {
+    "id": "badge",
+    "group": "avatars",
+    "title": {
+      "en": "Badge",
+      "zh": "状态徽记"
+    },
+    "rustType": "Badge",
+    "lead": {
+      "en": "Mark a status or category with a compact text label.",
+      "zh": "用紧凑文字标记状态或类别。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::badge::{Badge, BadgeTone};\n\nlet control = cx.new(|_| Badge::new(\"In review\", BadgeTone::Info));",
+    "method": "set",
+    "signature": "(label, BadgeTone)",
+    "event": "",
+    "api": {
+      "en": "Use a short label and tone to identify a status without relying solely on hue.",
+      "zh": "使用短标签和色调表示状态。"
+    },
+    "rule": {
+      "en": "Use a short label and tone to identify a status without relying solely on hue.",
+      "zh": "使用短标签和色调表示状态。"
+    },
+    "motion": {
+      "en": "Changed text crosses over in place with a short directional rise. The foreground, fill and border transition between severity colors.",
+      "zh": "标签原位交叠换字，旧字和新字沿同一方向错开；前景、背景与边线同步过渡。"
+    }
+  },
+  {
+    "id": "card",
+    "group": "cards",
+    "title": {
+      "en": "Card",
+      "zh": "内容卡"
+    },
+    "rustType": "Card",
+    "lead": {
+      "en": "Present related media, descriptive text and independent content actions.",
+      "zh": "组合媒体、介绍文字及针对内容的操作。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::card::Card;\n\nlet control = cx.new(|_| Card::new(\"Lobby lounge\", \"A quiet space by the window.\").with_byline(\"Updated today\"));",
+    "method": "with_cover",
+    "signature": "impl Into<ImageSource>",
+    "event": "CardEvent",
+    "api": {
+      "en": "The title opens content. Save toggles the bookmark independently.",
+      "zh": "点击标题打开内容；保存按钮独立切换收藏。"
+    },
+    "rule": {
+      "en": "The title opens content. Save toggles the bookmark independently.",
+      "zh": "点击标题打开内容；保存按钮独立切换收藏。"
+    },
+    "motion": {
+      "en": "Hover lifts the surface and eases the cover zoom. Opening expands from the measured card bounds. Escape or the close action retraces the expansion.",
+      "zh": "悬停微抬卡片并缓慢放大封面。打开时从卡片实际边界展开，关闭键和 Esc 沿原路径返回。"
+    }
+  },
+  {
+    "id": "avatar",
+    "group": "avatars",
+    "title": {
+      "en": "Avatar",
+      "zh": "用户头像"
+    },
+    "rustType": "Avatar",
+    "lead": {
+      "en": "Identify one person with a portrait or an initials fallback.",
+      "zh": "用头像或首字母标识成员。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::avatar::{Avatar, Person};\n\nlet control = cx.new(|_| Avatar::new(Person::new(\"Ari Singh\"), 36.0));",
+    "method": "new",
+    "signature": "(Person, f32)",
+    "event": "",
+    "api": {
+      "en": "Use a profile name for the accessible image label and fallback initials.",
+      "zh": "资料名称用于无障碍标签和首字母后备显示。"
+    },
+    "rule": {
+      "en": "Use a profile name for the accessible image label and fallback initials.",
+      "zh": "资料名称用于无障碍标签和首字母后备显示。"
+    },
+    "motion": {
+      "en": "An already decoded image appears directly. A newly decoded image fades in from soft focus over its initials. Presence appears with a short scale change.",
+      "zh": "已解码照片直接绘制，异步解码完成后才从模糊淡入，期间显示姓名首字母。状态点以缩放进出。"
+    }
+  },
+  {
+    "id": "usage-meter",
+    "group": "progress",
+    "title": {
+      "en": "Usage meter",
+      "zh": "配额用量"
+    },
+    "rustType": "UsageMeter",
+    "lead": {
+      "en": "Compare named allocations with a fixed capacity.",
+      "zh": "对照总额度显示各项占用。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::usage_meter::{UsageMeter, Allocation};\n\nlet control = cx.new(|_| UsageMeter::new(\"Storage\", \"GB\", 15.0, vec![Allocation::new(\"Photos\", 4.0, gpui::rgb(0x7195ca).into())]));",
+    "method": "set_usage",
+    "signature": "(f32, Vec<Allocation>)",
+    "event": "",
+    "api": {
+      "en": "Specify capacity, units and labeled allocations. Selecting a legend item emphasizes its segment.",
+      "zh": "传入容量、单位和占用明细，选择图例可突出对应区段。"
+    },
+    "rule": {
+      "en": "Specify capacity, units and labeled allocations. Selecting a legend item emphasizes its segment.",
+      "zh": "传入容量、单位和占用明细，选择图例可突出对应区段。"
+    },
+    "motion": {
+      "en": "On first paint the segments grow with 70ms offsets. Quota and amount changes retarget the displayed values and their widths together.",
+      "zh": "首次绘制各段依次增长，相邻段间隔 70ms；更改额度或用量时，数字和各段宽度一起过渡。"
+    }
+  },
+  {
+    "id": "onboarding-checklist",
+    "group": "progress",
+    "title": {
+      "en": "Onboarding checklist",
+      "zh": "设置清单"
+    },
+    "rustType": "SetupChecklist",
+    "lead": {
+      "en": "Track independent setup tasks and their instructions.",
+      "zh": "跟踪设置任务及各项操作说明。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::onboarding_checklist::{SetupChecklist, ChecklistItem};\n\nlet control = cx.new(|_| SetupChecklist::new(\"Set up workspace\", vec![ChecklistItem::new(\"Invite team\", \"Invite a collaborator.\", \"Send invite\")]));",
+    "method": "new",
+    "signature": "(heading, Vec<ChecklistItem>)",
+    "event": "TaskChanged",
+    "api": {
+      "en": "Expand a task to read instructions. Its separate completion control updates the count.",
+      "zh": "展开任务查看说明，独立完成按钮更新完成数。"
+    },
+    "rule": {
+      "en": "Expand a task to read instructions. Its separate completion control updates the count.",
+      "zh": "展开任务查看说明，独立完成按钮更新完成数。"
+    },
+    "motion": {
+      "en": "Task details, the completed group, and the whole list fold through their measured heights. A checked task stays in place for 720ms before joining the completed group.",
+      "zh": "任务详情、完成分组和清单本体按实际高度收放。勾选后原位保留 720ms，再移入完成分组。"
+    }
+  },
+  {
+    "id": "stepper",
+    "group": "progress",
+    "title": {
+      "en": "Stepper",
+      "zh": "步骤指示"
+    },
+    "rustType": "Stepper",
+    "lead": {
+      "en": "Guide a user through the stages of a sequential workflow.",
+      "zh": "引导用户依次完成工作流程。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::stepper::{Stepper, Step};\n\nlet control = cx.new(|_| Stepper::new(vec![Step::new(\"Profile\", \"Add your name\"), Step::new(\"Review\", \"Confirm the details\")], 0));",
+    "method": "select",
+    "signature": "usize",
+    "event": "StepEvent",
+    "api": {
+      "en": "Use select to change the current step. with_compact(true) gives a vertical rail beside the form when set_vertical(true, cx) is active. Completed steps can be revisited. The last action emits Finished.",
+      "zh": "select 切换当前步骤。启用 with_compact(true) 和 set_vertical(true, cx) 后，步骤轨显示在表单左侧。可返回已完成的步骤，最后一步发出 Finished。"
+    },
+    "rule": {
+      "en": "Continue advances; earlier steps remain available. The last action emits Finished.",
+      "zh": "继续按钮进入下一步，可以返回之前的步骤，最后一步发出 Finished。"
+    },
+    "motion": {
+      "en": "The active ring scales, completed markers draw their check, and connectors fill in sequence. Validation can hold a step in place and change the message.",
+      "zh": "当前步骤的圆环缩放，完成标记逐笔画勾，连接线依次填充。校验失败保留当前步骤并就地切换提示。"
+    }
+  },
+  {
+    "id": "avatar-group",
+    "group": "avatars",
+    "title": {
+      "en": "Avatar group",
+      "zh": "成员头像组"
+    },
+    "rustType": "AvatarGroup",
+    "lead": {
+      "en": "Show a compact group of people and reveal the remaining members.",
+      "zh": "紧凑呈现多人头像，并可查看其余成员。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::avatar_group::AvatarGroup;\nuse crate::ui::components::avatar::Person;\n\nlet control = cx.new(|_| AvatarGroup::new(vec![Person::new(\"Ari Singh\"), Person::new(\"Emma Collins\")], 1));",
+    "method": "set_people",
+    "signature": "Vec<Person>",
+    "event": "",
+    "api": {
+      "en": "Set the visible member limit. Activate the overflow count to inspect the roster.",
+      "zh": "设置可见人数，激活溢出计数可查看成员清单。"
+    },
+    "rule": {
+      "en": "Set the visible member limit. Activate the overflow count to inspect the roster.",
+      "zh": "设置可见人数，激活溢出计数可查看成员清单。"
+    },
+    "motion": {
+      "en": "Hover spreads nearby portraits and raises the active one. Membership changes resize keyed slots and roll the overflow count in the direction of change.",
+      "zh": "悬停时头像组展开，当前头像上移，邻近头像让位。成员变化时各槽位伸缩，溢出计数随增减方向滚动。"
+    }
+  },
+  {
+    "id": "timeline",
+    "group": "activity",
+    "title": {
+      "en": "Timeline",
+      "zh": "事件时间线"
+    },
+    "rustType": "Timeline",
+    "lead": {
+      "en": "Read chronological updates grouped by date.",
+      "zh": "按日期分组阅读动态。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::timeline::{Timeline, TimelineEntry};\n\nlet control = cx.new(|_| Timeline::new(vec![TimelineEntry::new(\"Today\", \"Deployment passed\", \"Build 1284\", \"11m\")]));",
+    "method": "prepend",
+    "signature": "TimelineEntry",
+    "event": "",
+    "api": {
+      "en": "Group consecutive entries by day. Activate an entry for its detail.",
+      "zh": "按日期分组相邻事件，点击某项显示明细。"
+    },
+    "rule": {
+      "en": "Group consecutive entries by day. Activate an entry for its detail.",
+      "zh": "按日期分组相邻事件，点击某项显示明细。"
+    },
+    "motion": {
+      "en": "New entries open measured space above their neighbors. The marker grows before its stem extends. Detail disclosures stay mounted during exit and reverse from their current height.",
+      "zh": "新增记录先撑开高度，标记出现后连接线延伸。详情收起期间保留内容，中途反切从当前高度继续。"
+    }
+  },
+  {
+    "id": "metric-card",
+    "group": "cards",
+    "title": {
+      "en": "Metric card",
+      "zh": "单指标卡"
+    },
+    "rustType": "MetricCard",
+    "lead": {
+      "en": "Read one metric in the context of its change and comparison period.",
+      "zh": "结合变化幅度和比较周期查看一个指标。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::metric_card::MetricCard;\n\nlet control = cx.new(|_| MetricCard::new(\"Active users\", 2486.0, 18.4, \"Previous 7 days\"));",
+    "method": "update_metric",
+    "signature": "(f32, f32, comparison)",
+    "event": "",
+    "api": {
+      "en": "Pass the absolute value, percentage change and the comparison period.",
+      "zh": "提供指标值、百分比变化和比较周期。"
+    },
+    "rule": {
+      "en": "Pass the absolute value, percentage change and the comparison period.",
+      "zh": "提供指标值、百分比变化和比较周期。"
+    },
+    "motion": {
+      "en": "Decimal places roll independently with a stagger on entry. Metric changes retarget the wheels, while the comparison and description crossfade.",
+      "zh": "各数位错峰滚入，更新数据时沿当前数位滚向目标；比较值和说明交叠切换。"
+    }
+  },
+  {
+    "id": "sparkline",
+    "group": "charts",
+    "title": {
+      "en": "Sparkline",
+      "zh": "迷你趋势线"
+    },
+    "rustType": "Sparkline",
+    "lead": {
+      "en": "Inspect the shape of a compact time series.",
+      "zh": "查看一组数据的紧凑趋势。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::sparkline::Sparkline;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| Sparkline::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "method": "set_samples",
+    "signature": "Vec<Sample>",
+    "event": "InspectSample",
+    "api": {
+      "en": "Inspect a compact series with the pointer or arrow keys.",
+      "zh": "用指针或方向键读取紧凑趋势线中的样本。"
+    },
+    "rule": {
+      "en": "Inspect a compact series with the pointer or arrow keys.",
+      "zh": "用指针或方向键读取紧凑趋势线中的样本。"
+    },
+    "motion": {
+      "en": "The line is revealed across the plot on entry. A new range interpolates the sampled shape; the inspection marker moves between neighboring points.",
+      "zh": "折线首次从左到右揭开，更改周期时对已显示的曲线采样并插值，检查点在相邻数据间移动。"
+    }
+  },
+  {
+    "id": "bar-chart",
+    "group": "charts",
+    "title": {
+      "en": "Bar chart",
+      "zh": "分类柱图"
+    },
+    "rustType": "BarChart",
+    "lead": {
+      "en": "Compare categorical measurements on the same scale.",
+      "zh": "用同一标尺比较不同分类的数值。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::bar_chart::BarChart;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| BarChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "method": "set_samples",
+    "signature": "Vec<Sample>",
+    "event": "InspectSample",
+    "api": {
+      "en": "Read or compare labeled categories with a shared vertical scale.",
+      "zh": "用统一纵轴比较各分类数值。"
+    },
+    "rule": {
+      "en": "Read or compare labeled categories with a shared vertical scale.",
+      "zh": "用统一纵轴比较各分类数值。"
+    },
+    "motion": {
+      "en": "Bars rise in a short stagger on entry. Keyed bars retain position and height through range changes; removed bars shrink away.",
+      "zh": "柱条首次错峰长高，切换周期时已有柱条从当前横坐标和高度移向新位置，离场柱条收窄变低。"
+    }
+  },
+  {
+    "id": "activity-heatmap",
+    "group": "charts",
+    "title": {
+      "en": "Activity heatmap",
+      "zh": "日历活动格"
+    },
+    "rustType": "DailyActivity",
+    "lead": {
+      "en": "Explore activity day by day over a longer interval.",
+      "zh": "按天查看较长周期内的活动分布。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::activity_heatmap::DailyActivity;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| DailyActivity::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "method": "set_samples",
+    "signature": "Vec<Sample>",
+    "event": "InspectSample",
+    "api": {
+      "en": "set_first_weekday aligns the first sample to a weekday (Sunday = 0). Left/Right move by week, Up/Down by day.",
+      "zh": "set_first_weekday 指定首个样本的星期（日为 0）。左右键切换周，上下键切换天。"
+    },
+    "rule": {
+      "en": "One column holds seven chronological days. Arrow keys move by day or week.",
+      "zh": "每列包含连续七天，用方向键按天或周移动。"
+    },
+    "motion": {
+      "en": "Cells appear diagonally across the calendar. Changes between years propagate by diagonal rank and retarget from the currently displayed intensity.",
+      "zh": "日期格沿对角线依次出现，更改年份时色阶按方向逐格传播，中途反切从当前明暗程度衔接。"
+    }
+  },
+  {
+    "id": "line-chart",
+    "group": "charts",
+    "title": {
+      "en": "Line chart",
+      "zh": "多系列折线"
+    },
+    "rustType": "LineChart",
+    "lead": {
+      "en": "Compare reported and prior values across the same sample positions.",
+      "zh": "比较同一组采样位置上的本期和上期数值。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::line_chart::LineChart;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| LineChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "method": "set_samples",
+    "signature": "Vec<Sample>",
+    "event": "InspectSample",
+    "api": {
+      "en": "Compare a primary series with optional comparison values. Toggle the comparison and inspect aligned samples.",
+      "zh": "主线可带对比值，支持切换对比线并读取同一位置的数据。"
+    },
+    "rule": {
+      "en": "Compare a primary series with optional comparison values. Toggle the comparison and inspect aligned samples.",
+      "zh": "主线可带对比值，支持切换对比线并读取同一位置的数据。"
+    },
+    "motion": {
+      "en": "The initial line is revealed from left to right. A new range morphs the curve, comparison data fades independently, and the inspection cursor follows the pointer.",
+      "zh": "折线首次从左向右揭开。切换周期时曲线逐点变化，对照线单独淡入淡出，检查游标跟随指针。"
+    }
+  },
+  {
+    "id": "donut-chart",
+    "group": "charts",
+    "title": {
+      "en": "Donut chart",
+      "zh": "份额环图"
+    },
+    "rustType": "DonutChart",
+    "lead": {
+      "en": "Inspect the contribution of each source to a whole.",
+      "zh": "查看不同来源占总量的份额。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::donut_chart::DonutChart;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| DonutChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "method": "set_samples",
+    "signature": "Vec<Sample>",
+    "event": "InspectSample",
+    "api": {
+      "en": "Inspect a slice or its legend entry to read its contribution.",
+      "zh": "选择扇区或图例读取占用份额。"
+    },
+    "rule": {
+      "en": "Inspect a slice or its legend entry to read its contribution.",
+      "zh": "选择扇区或图例读取占用份额。"
+    },
+    "motion": {
+      "en": "Segments sweep from twelve o’clock with delayed trailing edges. Range changes and toggling a legend row retarget live values, and inspecting a slice lifts it radially.",
+      "zh": "扇区从十二点方向扫出，尾边错峰跟进。切换周期和图例时扇区向目标重新分配，检查某段时沿半径向外移。"
+    }
+  }
+]

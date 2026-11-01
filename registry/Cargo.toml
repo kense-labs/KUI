@@ -21,6 +21,7 @@ gpui_platform = { workspace = true, optional = true }
 
 web-time = "1"
 unicode-segmentation = "1"
+serde_json.workspace = true
 
 
 [dev-dependencies]

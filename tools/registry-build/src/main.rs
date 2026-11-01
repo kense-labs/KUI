@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use kui_catalog::{ITEMS, materialize};
+use kui_catalog::{items, materialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
@@ -52,7 +52,7 @@ fn build(root: &Path) -> Result<()> {
     let md = root.join("website/public/md");
     fs::create_dir_all(&md)?;
     let mut catalog = Vec::new();
-    for &(id, _, _) in ITEMS {
+    for (id, _, _) in items() {
         let item = materialize(&registry, id)?;
         fs::copy(
             root.join(format!("docs/items/{id}.md")),
@@ -94,7 +94,7 @@ fn build(root: &Path) -> Result<()> {
         ));
     }
     llms.push_str("\n## Registry JSON\n\n- [Catalog](/r/catalog.json)\n");
-    for &(id, _, _) in ITEMS {
+    for (id, _, _) in items() {
         llms.push_str(&format!("- [{id}](/r/{id}.json)\n"));
     }
     fs::write(root.join("llms.txt"), &llms)?;
@@ -111,7 +111,7 @@ fn verify_preview(root: &Path) -> Result<()> {
     if !story.contains("kui") {
         anyhow::bail!("kui-story must depend on kui (preview=source)");
     }
-    for &(id, _, _) in ITEMS {
+    for (id, _, _) in items() {
         let expected = serde_json::to_value(materialize(&root.join("registry"), id)?)?;
         let shipped: serde_json::Value =
             serde_json::from_slice(&fs::read(root.join(format!("website/public/r/{id}.json")))?)?;
@@ -138,7 +138,7 @@ fn verify_preview(root: &Path) -> Result<()> {
 fn write_docs(root: &Path) -> Result<()> {
     let docs = root.join("docs/items");
     fs::create_dir_all(&docs)?;
-    for &(id, _, _) in ITEMS {
+    for (id, _, _) in items() {
         let path = docs.join(format!("{id}.md"));
         if path.exists() {
             continue;

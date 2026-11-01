@@ -14,6 +14,7 @@ impl StoryHost {
             || crate::COLLECTION_IDS.contains(&id)
             || crate::FIELD_IDS.contains(&id)
             || crate::WORKSPACE_IDS.contains(&id)
+            || crate::LIBRARY_IDS.contains(&id)
         {
             Some(cx.new(|cx| FamilyStory::new(id, w, cx)).into())
         } else {
@@ -64,6 +65,7 @@ impl Render for StoryHost {
             .chain(crate::COLLECTION_IDS)
             .chain(crate::FIELD_IDS)
             .chain(crate::WORKSPACE_IDS)
+            .chain(crate::LIBRARY_IDS)
             .chain([
                 "theme-switch:eclipse",
                 "theme-switch:split",

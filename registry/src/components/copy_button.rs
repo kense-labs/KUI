@@ -134,7 +134,7 @@ impl Render for CopyButton {
             self.id.clone(),
             self.label.clone(),
             36.,
-            (Theme::global(cx).tokens.radius.md * scale).into(),
+            Theme::global(cx).tokens.radius.md.into(),
             if self.icon_only {
                 Tone::Clear
             } else {

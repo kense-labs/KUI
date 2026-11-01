@@ -1,5 +1,5 @@
 //! Compact action surfaces scoped to the button family.
-use crate::foundation::{Theme, ThemeMode};
+use crate::foundation::{AccentPalette, Theme, ThemeMode};
 use gpui::{prelude::*, *};
 use web_time::Instant;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -23,13 +23,36 @@ pub struct Paint {
     pub faint: Hsla,
     pub line: Hsla,
     pub bright: Hsla,
+    pub(crate) focus: Hsla,
     pub inverse: Hsla,
+    pub(crate) neutral_inverse: Hsla,
+    accent: AccentPalette,
     pub danger: Hsla,
     pub success: Hsla,
 }
 impl Paint {
     pub fn get(cx: &App) -> Self {
-        Self::for_mode(Theme::global(cx).mode)
+        Self::for_theme(Theme::global(cx))
+    }
+    pub(crate) fn for_theme(theme: &Theme) -> Self {
+        let mut paint = Self::for_mode(theme.mode);
+        let tint = theme.accent.for_mode(theme.mode);
+        if tint.is_transparent() {
+            return paint;
+        }
+        paint.accent = theme.accent;
+        paint.bright = paint.bright.blend(tint);
+        paint.focus = theme.tokens.colors.focus_outline;
+        paint.inverse = paint.accent.on_fill(paint.bright, paint.neutral_inverse);
+        paint.hover = paint.hover.blend(tint.opacity(0.12));
+        paint
+    }
+    pub(crate) fn primary_hover(self, strength: f32) -> Hsla {
+        self.bright.blend(
+            self.accent
+                .hover_tint(self.bright, self.inverse, strength)
+                .opacity(strength),
+        )
     }
     pub fn for_mode(mode: ThemeMode) -> Self {
         let dark = mode == ThemeMode::Dark;
@@ -66,7 +89,10 @@ impl Paint {
             faint: rgb(faint).into(),
             line: rgb(line).into(),
             bright: rgb(bright).into(),
+            focus: rgb(bright).into(),
             inverse: rgb(inverse).into(),
+            neutral_inverse: rgb(inverse).into(),
+            accent: AccentPalette::default(),
             danger: rgb(danger).into(),
             success: rgb(if dark { 0x53d986 } else { 0x008039 }).into(),
         }
@@ -75,7 +101,7 @@ impl Paint {
         match t {
             Tone::Primary => (self.bright, self.inverse),
             Tone::Success => (self.panel.blend(self.success.opacity(0.10)), self.ink),
-            Tone::Muted => (self.secondary, self.inverse),
+            Tone::Muted => (self.secondary, self.neutral_inverse),
             Tone::Clear => (transparent_black(), self.ink),
             _ => (self.panel, self.ink),
         }
@@ -149,6 +175,11 @@ impl Slide {
             ..Self::new(v)
         }
     }
+    /// Re-express the same trajectory in a shifted coordinate system, preserving velocity.
+    pub fn translate(&mut self, delta: f32) {
+        self.from += delta;
+        self.to += delta;
+    }
     pub fn reset(&mut self, v: f32) {
         self.from = v;
         self.to = v;
@@ -160,6 +191,29 @@ impl Slide {
     }
     pub fn duration(&mut self, v: f32, visual_seconds: f32, cx: &App) {
         self.retarget(v, 5.236 / visual_seconds, cx)
+    }
+    /// Settle a directly manipulated value with the measured release speed (units per second).
+    pub(crate) fn release(&mut self, target: f32, velocity: f32, seconds: f32, cx: &App) {
+        if disabled_motion(cx) {
+            self.reset(target);
+            return;
+        }
+        let now = cx.background_executor().now();
+        self.from = self.sample(now).0;
+        self.to = target;
+        self.velocity = velocity;
+        self.omega = 5.236 / seconds;
+        self.start = Some(now);
+    }
+    /// Stagger a first reveal without advancing the value before its slot starts.
+    pub(crate) fn delayed(&mut self, target: f32, seconds: f32, delay: f32, cx: &App) {
+        if self.to == target {
+            return;
+        }
+        self.duration(target, seconds, cx);
+        if let Some(start) = self.start.as_mut() {
+            *start += std::time::Duration::from_secs_f32(delay.max(0.));
+        }
     }
     fn retarget(&mut self, v: f32, omega: f32, cx: &App) {
         if disabled_motion(cx) {
@@ -505,5 +559,80 @@ mod spring_tests {
             super::shared_glyphs(&glyphs("添加成员"), &glyphs("移除成员")),
             vec![None, None, Some(2), Some(3)]
         );
+    }
+}
+
+#[cfg(test)]
+mod accent_tests {
+    use super::{AccentPalette, Paint, Theme, ThemeMode};
+    use gpui::{Hsla, rgb};
+    #[test]
+    fn custom_accent_preserves_fill_and_picks_readable_ink_in_both_modes() {
+        // Color pairs include near-threshold grays and hues with high/low relative
+        // luminance despite identical HSL lightness (yellow and blue).
+        for (hex, expected) in [
+            (0xffffff, Hsla::black()),
+            (0x000000, Hsla::white()),
+            (0xffff00, Hsla::black()),
+            (0x0000ff, Hsla::white()),
+            (0x757575, Hsla::white()),
+            (0x767676, Hsla::black()),
+            (0xdfa4ef, Hsla::black()),
+            (0x221144, Hsla::white()),
+        ] {
+            let fill: Hsla = rgb(hex).into();
+            let accent = AccentPalette {
+                light: fill,
+                dark: fill,
+            };
+            let mut theme = Theme::default();
+            theme.set_accent(accent);
+            for mode in [ThemeMode::Light, ThemeMode::Dark] {
+                theme.set_mode(mode);
+                let colors = &theme.tokens.colors;
+                let p = Paint::for_theme(&theme);
+                assert_eq!(colors.accent, fill);
+                assert_eq!(p.bright, fill);
+                assert_eq!(colors.accent_foreground, expected, "#{hex:06x}");
+                assert_eq!(p.inverse, expected);
+                assert!(AccentPalette::contrast(p.inverse, p.bright) >= 4.5);
+                assert!(AccentPalette::contrast(p.inverse, p.primary_hover(0.12)) >= 4.5);
+                assert!(AccentPalette::contrast(colors.focus_outline, colors.surface_muted) >= 3.5);
+                assert!(AccentPalette::contrast(colors.focus_outline, p.stage) >= 3.);
+                // A tint applies to the primary fill, never to text on neutral/status surfaces.
+                assert_eq!(p.neutral_inverse, Paint::for_mode(mode).inverse);
+            }
+        }
+    }
+
+    #[test]
+    fn theme_presets_keep_their_authored_inks_and_focus_colors() {
+        for (light, dark) in [
+            (0x245bc4, 0x8bb4ff),
+            (0x7142b6, 0xbc9cff),
+            (0x08776d, 0x68d4c4),
+            (0xb93c67, 0xff94b3),
+            (0x955a08, 0xf4be69),
+        ] {
+            let mut theme = Theme::default();
+            let pair = AccentPalette {
+                light: rgb(light).into(),
+                dark: rgb(dark).into(),
+            };
+            theme.set_accent(pair);
+            for mode in [ThemeMode::Light, ThemeMode::Dark] {
+                theme.set_mode(mode);
+                let p = Paint::for_theme(&theme);
+                let neutral = Paint::for_mode(mode);
+                assert_eq!(p.bright, pair.for_mode(mode));
+                assert_eq!(p.inverse, neutral.inverse);
+                assert_eq!(theme.tokens.colors.focus_outline, pair.for_mode(mode));
+            }
+            theme.set_accent(AccentPalette::default());
+            let p = Paint::for_theme(&theme);
+            let neutral = Paint::for_mode(theme.mode);
+            assert_eq!(p.bright, neutral.bright);
+            assert_eq!(p.inverse, neutral.inverse);
+        }
     }
 }

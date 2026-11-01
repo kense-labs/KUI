@@ -11,19 +11,21 @@ html[data-theme="light"],
   --hairline: #f0f0f0;
   --border: #e5e5e5;
   --border-strong: #a3a3a3;
-  --accent: #000000;
-  --accent-subtle: #ececec;
+  --accent: var(--accent-light, #000000);
+  --accent-text: var(--accent-text-light, var(--accent));
+  --accent-ink: var(--ink-light, var(--custom-ink, #ffffff));
+  --accent-subtle: color-mix(in srgb, var(--accent) var(--accent-wash, 0%), #ececec);
   --danger: #b42318;
-  --focus: #000000;
+  --focus: var(--accent-text);
   --brand: #171717;
   --on-brand: #ffffff;
   --code-bg: #000000;
   --code-fg: #ffffff;
   --radius: 8px;
-  --radius-sm: 4px;
-  --radius-control: 8px;
-  --radius-lg: 18px;
-  --radius-panel: 26px;
+  --radius-sm: var(--radius);
+  --radius-control: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-panel: var(--radius);
   --border-subtle: var(--hairline);
   --font-display: "Geist Variable", "PingFang SC", "Noto Sans SC", sans-serif;
   --font: "Geist Variable", "PingFang SC", "Noto Sans SC", sans-serif;
@@ -45,10 +47,12 @@ html[data-theme="dark"],
   --hairline: #1a1a1a;
   --border: #2a2a2a;
   --border-strong: #525252;
-  --accent: #ffffff;
-  --accent-subtle: #262626;
+  --accent: var(--accent-dark, #ffffff);
+  --accent-text: var(--accent-text-dark, var(--accent));
+  --accent-ink: var(--ink-dark, var(--custom-ink, #000000));
+  --accent-subtle: color-mix(in srgb, var(--accent) var(--accent-wash, 0%), #262626);
   --danger: #f97066;
-  --focus: #ffffff;
+  --focus: var(--accent-text);
   --brand: #e8e8e8;
   --on-brand: #000000;
   --code-bg: #111111;
@@ -158,9 +162,9 @@ pre {
 }
 
 .btn-primary {
-  background: var(--ink);
-  color: var(--on-ink);
-  border-color: var(--ink);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
 }
 
 .btn-secondary {
@@ -233,7 +237,7 @@ pre {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms !important;
+    transition: none !important;
   }
 }
 

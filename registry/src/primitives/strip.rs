@@ -387,42 +387,6 @@ impl HighlightBox {
     }
 }
 
-fn highlight_corners(
-    rect: Bounds<Pixels>,
-    outer: Bounds<Pixels>,
-    outer_radius: f32,
-    inner_radius: f32,
-) -> Corners<Pixels> {
-    // A moving side may intersect either round end of the tray. Keep its arc
-    // inside that end, even during a spring reversal or viewport resize.
-    let r = px(outer_radius);
-    let at = |dx: Pixels, dy: Pixels| {
-        // Once even a square corner fits inside the outer arc, the inner
-        // surface can keep its own radius (including at either end of a row).
-        let x = f32::from((r - dx).max(px(0.)));
-        let y = f32::from((r - dy).max(px(0.)));
-        let min_for_clip = if x.hypot(y) <= outer_radius {
-            px(0.)
-        } else {
-            r - dx.max(dy)
-        };
-        px(inner_radius)
-            .max(min_for_clip)
-            .min(rect.size.width / 2.)
-            .min(rect.size.height / 2.)
-    };
-    let left = rect.left() - outer.left();
-    let right = outer.right() - rect.right();
-    let top = rect.top() - outer.top();
-    let bottom = outer.bottom() - rect.bottom();
-    Corners {
-        top_left: at(left, top),
-        top_right: at(right, top),
-        bottom_right: at(right, bottom),
-        bottom_left: at(left, bottom),
-    }
-}
-
 pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> impl IntoElement {
     let s = v.strip();
     let p = Paint::get(cx);
@@ -446,9 +410,7 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
         p.panel
     };
     let fg = if s.primary { p.inverse } else { p.ink };
-    let radii = Theme::global(cx).tokens.radius.clone();
-    let radius = f32::from(radii.md);
-    let inner_radius = f32::from(radii.sm);
+    let radius = Theme::global(cx).tokens.radius.md;
     let inset = if separated { 0. } else { 3. };
     let keyboard = s.focus.iter().position(|f| f.is_focused(w));
     if keyboard != s.last_focus {
@@ -528,7 +490,7 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
         .id(s.id.clone())
         .relative()
         .flex_none()
-        .rounded(px(radius))
+        .rounded(radius)
         .p(px(pad))
         .bg(bg)
         .when(!expanding, |e| {
@@ -591,7 +553,8 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
                     if rect.size.width <= px(0.) || rect.size.height <= px(0.) {
                         return;
                     }
-                    let corners = highlight_corners(rect, surface, radius, inner_radius);
+                    let corners =
+                        Corners::all(radius.min(rect.size.width / 2.).min(rect.size.height / 2.));
                     w.paint_quad(fill(rect, color.opacity(visible)).corner_radii(corners));
                 },
             )
@@ -661,26 +624,10 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
             it.id.clone(),
             it.label.clone(),
             h,
-            inner_radius,
+            radius.into(),
             Tone::Clear,
             cx,
         )
-        .when(!separated && i == 0, |el| {
-            let end = (radii.md - px(1.)).max(radii.sm);
-            if s.vertical {
-                el.rounded_t(end)
-            } else {
-                el.rounded_l(end)
-            }
-        })
-        .when(!separated && i + 1 == s.items.len(), |el| {
-            let end = (radii.md - px(1.)).max(radii.sm);
-            if s.vertical {
-                el.rounded_b(end)
-            } else {
-                el.rounded_r(end)
-            }
-        })
         .track_focus(&f)
         .tab_stop(!muted)
         .w(px(wide))
@@ -917,7 +864,7 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
                 })
                 .w(px(width))
                 .h(px(26.))
-                .rounded(radii.sm)
+                .rounded(radius)
                 .bg(p.bright)
                 .text_color(p.inverse)
                 .text_size(px(12.))
@@ -941,7 +888,7 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
             .flex_col()
             .p(px(5.))
             .w(px(190.))
-            .rounded(radii.md)
+            .rounded(radius)
             .border_1()
             .border_color(p.line)
             .bg(p.panel)
@@ -959,7 +906,7 @@ pub fn draw<T: StripControl>(v: &mut T, w: &mut Window, cx: &mut Context<T>) -> 
                 choice.id.clone(),
                 choice.label.clone(),
                 36.,
-                inner_radius,
+                radius.into(),
                 Tone::Clear,
                 cx,
             )

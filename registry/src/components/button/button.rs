@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::style::{chrome, chrome_with_radius, disabled_chrome};
-use crate::foundation::{ColorTokens, Theme};
+use crate::foundation::{AccentPalette, ColorTokens, Theme};
 use crate::primitives::{
     Size,
     family::{PhaseClock, Slide, disabled_motion, lettering, measure},
@@ -161,6 +161,10 @@ impl RenderOnce for Visual {
         let b = self.button;
         let inert = b.disabled || b.loading;
         let mut colors = self.colors.clone();
+        let accent = cx
+            .try_global::<Theme>()
+            .map(|t| t.accent)
+            .unwrap_or_default();
         if let Some(t) = cx.try_global::<Theme>() {
             let palette = crate::primitives::family::Paint::get(cx);
             let defaults = if t.mode == crate::foundation::ThemeMode::Dark {
@@ -174,7 +178,7 @@ impl RenderOnce for Visual {
             if colors.foreground == defaults.foreground {
                 colors.foreground = palette.ink
             }
-            if colors.accent == defaults.accent {
+            if colors.accent == defaults.accent && t.accent.for_mode(t.mode).is_transparent() {
                 colors.accent = palette.bright;
                 colors.accent_foreground = palette.inverse
             }
@@ -257,17 +261,26 @@ impl RenderOnce for Visual {
         .max(0.)
             * scale;
         let fg = look.fg;
-        let glyph_ink = if b.glyph == Some(Glyph::Check) {
+        let hover_tint = if b.variant == ButtonVariant::Primary {
+            accent.hover_tint(look.bg, fg, 0.065)
+        } else {
+            fg
+        };
+        let bg = look.bg.blend(hover_tint.opacity(0.065 * hov.clamp(0., 1.)));
+        let glyph_ink = if b.glyph == Some(Glyph::Check)
+            && !(b.variant == ButtonVariant::Primary
+                && accent.is_shared_color()
+                && AccentPalette::contrast(self.colors.success, bg) < 3.)
+        {
             self.colors.success
         } else {
             fg
         };
-        let bg = look.bg.blend(look.fg.opacity(0.065 * hov.clamp(0., 1.)));
         let mut face = div()
             .flex_none()
             .w(px(wide * scale))
             .h(px(h * scale))
-            .rounded(look.radius * scale)
+            .rounded(look.radius)
             .border_1()
             .border_color(look.border)
             .bg(bg)

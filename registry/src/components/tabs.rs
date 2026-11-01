@@ -1,6 +1,6 @@
 //! Peer views with a sliding selection and directional panel transitions.
 use crate::{
-    foundation::Theme,
+    foundation::surface_radius,
     primitives::{
         control::UiLanguage,
         family::{Paint, PhaseClock, Slide, ease, measure},
@@ -127,7 +127,7 @@ impl Tabs {
 impl Render for Tabs {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let r = Theme::global(cx).tokens.radius.clone();
+        let radius = surface_radius(cx);
         let Some(idx) = self.selected else {
             return div().id(self.id.clone());
         };
@@ -161,7 +161,7 @@ impl Render for Tabs {
                     .left(px(4. + self.left.get(w, cx)))
                     .w(px(self.width.get(w, cx)))
                     .h(px(36.))
-                    .rounded(r.sm)
+                    .rounded(radius)
                     .border_1()
                     .border_color(p.line)
                     .bg(p.panel)
@@ -190,7 +190,7 @@ impl Render for Tabs {
                 tab = tab
                     .track_focus(&self.focus)
                     .tab_stop(true)
-                    .rounded(r.sm)
+                    .rounded(radius)
                     .focus_visible(move |s| s.border_1().border_color(p.ink))
             }
             if page.disabled {
@@ -254,7 +254,7 @@ impl Render for Tabs {
             .aria_label(self.name.clone())
             .relative()
             .max_w_full()
-            .rounded(r.md)
+            .rounded(radius)
             .overflow_hidden()
             .border_1()
             .border_color(p.line)

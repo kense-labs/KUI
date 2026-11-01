@@ -1,6 +1,6 @@
 //! An actionable empty view with animated copy and icon replacement.
 use crate::{
-    foundation::Theme,
+    foundation::surface_radius,
     primitives::{
         control::activate,
         family::{Paint, PhaseClock, Slide, Tone, ease, face},
@@ -101,7 +101,7 @@ impl EmptyState {
 impl Render for EmptyState {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let r = Theme::global(cx).tokens.radius.clone();
+        let radius = surface_radius(cx);
         let age = self.clock.time(0.6, w, cx);
         let f = ease((age / 0.24).min(1.));
         let out = 1. - ease((age / 0.16).min(1.));
@@ -112,7 +112,7 @@ impl Render for EmptyState {
         let mut badge = div()
             .relative()
             .size(px(48.))
-            .rounded(r.lg)
+            .rounded(radius)
             .flex()
             .items_center()
             .justify_center()
@@ -191,7 +191,7 @@ impl Render for EmptyState {
                     "empty-action",
                     label.clone(),
                     36.,
-                    r.md.into(),
+                    radius.into(),
                     if self.content.secondary_action {
                         Tone::Surface
                     } else {

@@ -97,7 +97,7 @@ impl Render for ThemeSwitch {
             div()
                 .absolute()
                 .inset(px(depression))
-                .rounded((radius - px(depression)).max(px(0.)))
+                .rounded(radius)
                 .border_1()
                 .border_color(p.line)
                 .bg(p.panel.blend(p.ink.opacity(depression * 0.07)))
