@@ -7,7 +7,7 @@
       "zh": "对话框"
     },
     "rustType": "Dialog",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::dialog::Dialog;\n\nlet control = cx.new(|cx| Dialog::new(\"review\", \"Review changes\", \"Publish workspace\", cx)\n        .with_description(\"Your team will see these changes immediately.\")\n        .with_cancel(\"Keep editing\").with_confirm(\"Publish now\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::dialog::Dialog;\n\nlet control = cx.new(|cx| Dialog::new(\"review\", \"Review changes\", \"Publish workspace\", cx)\n        .with_description(\"Your team will see these changes immediately.\")\n        .with_cancel(\"Keep editing\").with_confirm(\"Publish now\"));",
     "method": "with_body",
     "signature": "Fn(&mut Window, &mut App) → IntoElement",
     "event": "SurfaceEvent",
@@ -36,7 +36,7 @@
       "zh": "气泡面板"
     },
     "rustType": "Popover",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::popover::Popover;\n\nlet control = cx.new(|cx| Popover::new(\"checks\", \"Why this status?\", \"Ready for review\", cx)\n        .with_description(\"All required checks passed.\").with_cancel(\"Got it\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::popover::Popover;\n\nlet control = cx.new(|cx| Popover::new(\"checks\", \"Why this status?\", \"Ready for review\", cx)\n        .with_description(\"All required checks passed.\").with_cancel(\"Got it\"));",
     "method": "with_cancel",
     "signature": "impl Into<SharedString>",
     "event": "SurfaceEvent",
@@ -65,7 +65,7 @@
       "zh": "标签页"
     },
     "rustType": "Tabs",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tabs::{Tabs, TabPage};\n\nlet control = cx.new(|cx| Tabs::new(\"views\", \"Workspace views\", vec![\n        TabPage::new(\"overview\", \"Overview\", |_, _| gpui::div().child(\"Workspace overview\")),\n        TabPage::new(\"activity\", \"Activity\", |_, _| gpui::div().child(\"Recent activity\")),\n    ], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tabs::{Tabs, TabPage};\n\nlet control = cx.new(|cx| Tabs::new(\"views\", \"Workspace views\", vec![\n        TabPage::new(\"overview\", \"Overview\", |_, _| gpui::div().child(\"Workspace overview\")),\n        TabPage::new(\"activity\", \"Activity\", |_, _| gpui::div().child(\"Recent activity\")),\n    ], cx));",
     "method": "select",
     "signature": "(&str, &mut Context<Self>)",
     "event": "TabChanged",
@@ -94,7 +94,7 @@
       "zh": "检索选择"
     },
     "rustType": "Combobox",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::combobox::Combobox;\nuse crate::ui::primitives::picker::PickerOption;\n\nlet control = cx.new(|cx| Combobox::new(\"model\", \"Model\", vec![\n        PickerOption::new(\"fast\", \"Fast\").with_keywords([\"quick\"]),\n        PickerOption::new(\"reasoning\", \"Reasoning\"),\n    ], window, cx).with_value(\"fast\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::combobox::Combobox;\nuse kui::primitives::picker::PickerOption;\n\nlet control = cx.new(|cx| Combobox::new(\"model\", \"Model\", vec![\n        PickerOption::new(\"fast\", \"Fast\").with_keywords([\"quick\"]),\n        PickerOption::new(\"reasoning\", \"Reasoning\"),\n    ], window, cx).with_value(\"fast\"));",
     "method": "with_value",
     "signature": "&str",
     "event": "SelectionChanged",
@@ -123,7 +123,7 @@
       "zh": "单项选择"
     },
     "rustType": "Select",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::select::Select;\nuse crate::ui::primitives::picker::PickerOption;\n\nlet control = cx.new(|cx| Select::new(\"team\", \"Team\", vec![\n        PickerOption::new(\"design\", \"Design\"), PickerOption::new(\"engineering\", \"Engineering\"),\n    ], window, cx).with_value(\"design\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::select::Select;\nuse kui::primitives::picker::PickerOption;\n\nlet control = cx.new(|cx| Select::new(\"team\", \"Team\", vec![\n        PickerOption::new(\"design\", \"Design\"), PickerOption::new(\"engineering\", \"Engineering\"),\n    ], window, cx).with_value(\"design\"));",
     "method": "with_description",
     "signature": "impl Into<SharedString>",
     "event": "SelectionChanged",
@@ -152,7 +152,7 @@
       "zh": "开关"
     },
     "rustType": "Switch",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::switch::Switch;\n\nlet control = cx.new(|cx| Switch::new(\"digest\", \"Weekly digest\", window, cx).with_checked(true));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::switch::Switch;\n\nlet control = cx.new(|cx| Switch::new(\"digest\", \"Weekly digest\", window, cx).with_checked(true));",
     "method": "set_checked",
     "signature": "(bool, &mut Context<Self>)",
     "event": "bool",
@@ -181,7 +181,7 @@
       "zh": "可调面板"
     },
     "rustType": "ResizablePanels",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::resizable_panels::{ResizablePanels, Pane};\n\nlet control = cx.new(|cx| ResizablePanels::new(\"workspace\", \"Workspace\", vec![\n        Pane::new(\"files\", \"Files\", 30., |_, _, _| gpui::div().child(\"Files\")).collapsible(),\n        Pane::new(\"editor\", \"Editor\", 70., |_, _, _| gpui::div().child(\"Editor\")),\n    ], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::resizable_panels::{ResizablePanels, Pane};\n\nlet control = cx.new(|cx| ResizablePanels::new(\"workspace\", \"Workspace\", vec![\n        Pane::new(\"files\", \"Files\", 30., |_, _, _| gpui::div().child(\"Files\")).collapsible(),\n        Pane::new(\"editor\", \"Editor\", 70., |_, _, _| gpui::div().child(\"Editor\")),\n    ], cx));",
     "method": "Pane::with_limits",
     "signature": "(f32, Option<f32>)",
     "event": "LayoutChanged",
@@ -210,7 +210,7 @@
       "zh": "空状态"
     },
     "rustType": "EmptyState",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::empty_state::{EmptyState, EmptyContent};\n\nlet control = cx.new(|_| EmptyState::new(\"saved\", EmptyContent::new(\"No saved views\", \"Save a view to reuse your filters.\").with_action(\"Create view\")));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::empty_state::{EmptyState, EmptyContent};\n\nlet control = cx.new(|_| EmptyState::new(\"saved\", EmptyContent::new(\"No saved views\", \"Save a view to reuse your filters.\").with_action(\"Create view\")));",
     "method": "set_content",
     "signature": "(EmptyContent, &mut Context<Self>)",
     "event": "EmptyAction",

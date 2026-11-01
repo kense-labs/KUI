@@ -11,7 +11,7 @@
       "en": "Mark one option as checked, unchecked or partially selected.",
       "zh": "标记单个选项的选中、未选或部分选中状态。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::checkbox::{Checkbox, CheckValue};\n\nlet control = cx.new(|_| Checkbox::new(\"Archive\", CheckValue::Off));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::checkbox::{Checkbox, CheckValue};\n\nlet control = cx.new(|_| Checkbox::new(\"Archive\", CheckValue::Off));",
     "method": "set_value",
     "signature": "(CheckValue, &mut Context<Self>)",
     "event": "CheckValue",
@@ -40,7 +40,7 @@
       "en": "Choose several options while retaining each selection by its stable key.",
       "zh": "按稳定标识保存多个选项。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::multi_select::{MultiSelect, FormOption};\n\nlet control = cx.new(|cx| MultiSelect::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::multi_select::{MultiSelect, FormOption};\n\nlet control = cx.new(|cx| MultiSelect::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
     "method": "selected",
     "signature": "() -> Vec<SharedString>",
     "event": "SelectionChanged",
@@ -69,7 +69,7 @@
       "en": "Enter a quantity directly or move it by one permitted step.",
       "zh": "直接输入数量，或按步长增减数值。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::number_field::NumberField;\n\nlet control = cx.new(|cx| NumberField::new(\"Seats\", 8.0, 1.0..=50.0, 1.0, window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::number_field::NumberField;\n\nlet control = cx.new(|cx| NumberField::new(\"Seats\", 8.0, 1.0..=50.0, 1.0, window, cx));",
     "method": "value",
     "signature": "() -> f64",
     "event": "f64",
@@ -98,7 +98,7 @@
       "en": "Turn a draft into removable tokens as you type.",
       "zh": "在输入时把草稿转换为可移除的标签。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tag_input::TagInput;\n\nlet control = cx.new(|cx| TagInput::new(\"Tags\", window, cx).with_tags(&[\"release\", \"web\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tag_input::TagInput;\n\nlet control = cx.new(|cx| TagInput::new(\"Tags\", window, cx).with_tags(&[\"release\", \"web\"]));",
     "method": "tags",
     "signature": "() -> &[SharedString]",
     "event": "TagsChanged",
@@ -127,7 +127,7 @@
       "en": "Choose exactly one alternative in a labeled list.",
       "zh": "从一组选项中选择一项。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::radio_group::{RadioGroup, FormOption};\n\nlet control = cx.new(|cx| RadioGroup::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::radio_group::{RadioGroup, FormOption};\n\nlet control = cx.new(|cx| RadioGroup::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
     "method": "selected",
     "signature": "() -> Vec<SharedString>",
     "event": "SelectionChanged",
@@ -156,7 +156,7 @@
       "en": "Switch a setting among a few adjacent segments.",
       "zh": "在相邻选项间切换一个设置。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::segmented_control::{SegmentedControl, FormOption};\n\nlet control = cx.new(|cx| SegmentedControl::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::segmented_control::{SegmentedControl, FormOption};\n\nlet control = cx.new(|cx| SegmentedControl::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
     "method": "selected",
     "signature": "() -> Vec<SharedString>",
     "event": "SelectionChanged",
@@ -185,7 +185,7 @@
       "en": "Adjust a number or the ends of a numeric interval along a track.",
       "zh": "拖动滑块调整数值或区间的端点。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::slider::{Slider, SlideValue};\n\nlet control = cx.new(|cx| Slider::new(\"Budget\", 0.0..=100.0, 1.0, SlideValue { low: 20.0, high: Some(80.0) }, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::slider::{Slider, SlideValue};\n\nlet control = cx.new(|cx| Slider::new(\"Budget\", 0.0..=100.0, 1.0, SlideValue { low: 20.0, high: Some(80.0) }, cx));",
     "method": "value",
     "signature": "() -> SlideValue",
     "event": "SlideValue",
@@ -214,7 +214,7 @@
       "en": "Toggle compact filter choices in place.",
       "zh": "点击紧凑标签切换筛选条件。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::chip_group::{ChipGroup, FormOption};\n\nlet control = cx.new(|cx| ChipGroup::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::chip_group::{ChipGroup, FormOption};\n\nlet control = cx.new(|cx| ChipGroup::new(\"Topics\", vec![FormOption::new(\"motion\", \"Motion\"), FormOption::new(\"color\", \"Color\")], window, cx).with_selected(&[\"motion\"]));",
     "method": "selected",
     "signature": "() -> Vec<SharedString>",
     "event": "SelectionChanged",
@@ -243,7 +243,7 @@
       "en": "Search people while composing and insert the chosen mention at the caret.",
       "zh": "在撰写时搜索成员并在光标处插入提及。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::mention_input::{MentionInput, Mention};\n\nlet control = cx.new(|cx| MentionInput::new(\"Update\", vec![Mention { id: \"ava\".into(), label: \"Ava\".into(), trigger: '@' }], window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::mention_input::{MentionInput, Mention};\n\nlet control = cx.new(|cx| MentionInput::new(\"Update\", vec![Mention { id: \"ava\".into(), label: \"Ava\".into(), trigger: '@' }], window, cx));",
     "method": "new",
     "signature": "(label, Vec<Mention>, window, cx)",
     "event": "MentionEvent, MentionValue",
@@ -272,7 +272,7 @@
       "en": "Find a symbol by category or search and insert it into a host view.",
       "zh": "按分类或搜索选择表情符号并插入宿主。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::emoji_picker::SymbolPicker;\n\nlet control = cx.new(|cx| SymbolPicker::standard(window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::emoji_picker::SymbolPicker;\n\nlet control = cx.new(|cx| SymbolPicker::standard(window, cx));",
     "method": "standard",
     "signature": "(window, cx)",
     "event": "SymbolPicked, SymbolPreferences",
@@ -301,7 +301,7 @@
       "en": "Adjust a color visually or enter its precise hexadecimal value.",
       "zh": "通过色板调整颜色，也可以输入十六进制色值。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::color_picker::{ColorPicker, ColorValue};\n\nlet control = cx.new(|cx| ColorPicker::new(\"Accent\", ColorValue(0x2F6BFF), window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::color_picker::{ColorPicker, ColorValue};\n\nlet control = cx.new(|cx| ColorPicker::new(\"Accent\", ColorValue(0x2F6BFF), window, cx));",
     "method": "value",
     "signature": "() -> ColorValue",
     "event": "ColorValue",
@@ -330,7 +330,7 @@
       "en": "Capture a key combination, review conflicts and replace an existing binding.",
       "zh": "录制组合键，检查冲突并替换已有快捷键。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::shortcut_recorder::ShortcutRecorder;\n\nlet control = cx.new(|cx| ShortcutRecorder::new(\"Search\", Some(\"Cmd+K\".into()), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::shortcut_recorder::ShortcutRecorder;\n\nlet control = cx.new(|cx| ShortcutRecorder::new(\"Search\", Some(\"Cmd+K\".into()), cx));",
     "method": "value",
     "signature": "() -> Option<&str>",
     "event": "ShortcutChanged",
@@ -359,7 +359,7 @@
       "en": "Browse months and choose a day in a Gregorian calendar grid.",
       "zh": "浏览月份并在日历网格中选择日期。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::calendar::{Calendar, CivilDate};\n\nlet control = cx.new(|cx| Calendar::new(\"Review date\", CivilDate::today_utc(), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::calendar::{Calendar, CivilDate};\n\nlet control = cx.new(|cx| Calendar::new(\"Review date\", CivilDate::today_utc(), cx));",
     "method": "value",
     "signature": "() -> Option<DateSpan>",
     "event": "DateSpan",
@@ -388,7 +388,7 @@
       "en": "Choose a single calendar date from a compact field.",
       "zh": "使用紧凑日期字段选择一天。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::date_picker::{DatePicker, CivilDate};\n\nlet control = cx.new(|cx| DatePicker::new(\"Review date\", CivilDate::today_utc(), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::date_picker::{DatePicker, CivilDate};\n\nlet control = cx.new(|cx| DatePicker::new(\"Review date\", CivilDate::today_utc(), cx));",
     "method": "value",
     "signature": "() -> Option<DateSpan>",
     "event": "DateSpan, DateCleared",
@@ -417,7 +417,7 @@
       "en": "Select a time of day from a scrollable list.",
       "zh": "从可滚动的列表中选择时刻。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::time_picker::{TimePicker, WallTime};\n\nlet control = cx.new(|cx| TimePicker::new(\"Review time\", WallTime::new(9, 30).unwrap(), cx).with_step(15));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::time_picker::{TimePicker, WallTime};\n\nlet control = cx.new(|cx| TimePicker::new(\"Review time\", WallTime::new(9, 30).unwrap(), cx).with_step(15));",
     "method": "value",
     "signature": "() -> WallTime",
     "event": "WallTime",
@@ -446,7 +446,7 @@
       "en": "Set the start and end of a bounded calendar interval.",
       "zh": "选择日期范围的起点与终点。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::date_range_picker::{DateRangePicker, CivilDate};\n\nlet control = cx.new(|cx| DateRangePicker::new(\"Review date\", CivilDate::today_utc(), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::date_range_picker::{DateRangePicker, CivilDate};\n\nlet control = cx.new(|cx| DateRangePicker::new(\"Review date\", CivilDate::today_utc(), cx));",
     "method": "value",
     "signature": "() -> Option<DateSpan>",
     "event": "DateSpan",
@@ -475,7 +475,7 @@
       "en": "Edit a telephone number with a separate country dialing code.",
       "zh": "选择国家区号并编辑电话号码。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::phone_input::PhoneInput;\n\nlet control = cx.new(|cx| PhoneInput::new(\"Mobile number\", \"US\", window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::phone_input::PhoneInput;\n\nlet control = cx.new(|cx| PhoneInput::new(\"Mobile number\", \"US\", window, cx));",
     "method": "value",
     "signature": "(&App) -> PhoneValue",
     "event": "PhoneValue",
@@ -504,7 +504,7 @@
       "en": "Compose formatted text and apply toolbar commands to a selection.",
       "zh": "撰写带格式的文本，并对选区应用工具栏命令。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::rich_text_editor::RichTextEditor;\n\nlet control = cx.new(|cx| RichTextEditor::new(\"Release notes\", \"# Notes\", window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::rich_text_editor::RichTextEditor;\n\nlet control = cx.new(|cx| RichTextEditor::new(\"Release notes\", \"# Notes\", window, cx));",
     "method": "document",
     "signature": "() -> &RichDocument",
     "event": "RichDocument",
@@ -533,7 +533,7 @@
       "en": "Select or drop local files and track each upload attempt.",
       "zh": "选择或拖入本地文件，跟踪各次上传。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::file_dropzone::FileDropzone;\n\nlet control = cx.new(|cx| FileDropzone::new(\"Add files\", 10 * 1024 * 1024, 6, cx).with_extensions(&[\"pdf\", \"png\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::file_dropzone::FileDropzone;\n\nlet control = cx.new(|cx| FileDropzone::new(\"Add files\", 10 * 1024 * 1024, 6, cx).with_extensions(&[\"pdf\", \"png\"]));",
     "method": "report",
     "signature": "(ticket: u64, state: UploadState, cx)",
     "event": "FileEvent",
@@ -562,7 +562,7 @@
       "en": "Choose a profile image and edit its crop before applying it.",
       "zh": "选择头像图片，调整裁剪范围并应用。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::avatar_upload::AvatarUpload;\n\nlet control = cx.new(|cx| AvatarUpload::new(\"Jordan Reyes\", cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::avatar_upload::AvatarUpload;\n\nlet control = cx.new(|cx| AvatarUpload::new(\"Jordan Reyes\", cx));",
     "method": "finish",
     "signature": "(ticket: u64, result: Result<(), String>, cx)",
     "event": "AvatarEvent",
@@ -591,7 +591,7 @@
       "en": "Read a conversation and append a new message in sequence.",
       "zh": "阅读会话并按时间顺序添加消息。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::chat_thread::{ChatThread, Message};\n\nlet control = cx.new(|cx| ChatThread::new(\"thread\", \"Release review\", vec![Message { author: \"Maya\".into(), time: \"09:18\".into(), text: \"Ready for review.\".into(), own: false, attachment: None, reactions: 0 }], window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::chat_thread::{ChatThread, Message};\n\nlet control = cx.new(|cx| ChatThread::new(\"thread\", \"Release review\", vec![Message { author: \"Maya\".into(), time: \"09:18\".into(), text: \"Ready for review.\".into(), own: false, attachment: None, reactions: 0 }], window, cx));",
     "method": "new",
     "signature": "(id, topic, Vec<Message>, window, cx)",
     "event": "ChatEvent",
@@ -620,7 +620,7 @@
       "en": "Start a new conversation from a short list of suggested questions.",
       "zh": "从建议问题中选择一条开始对话。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::starter_prompts::{PromptShelf, Prompt};\n\nlet control = cx.new(|cx| PromptShelf::new(\"prompts\", \"What shall we do?\", vec![Prompt { group: \"Write\".into(), app: \"Mail\".into(), title: \"Draft a reply\".into(), detail: \"Confirm the release\".into(), text: \"Draft a release reply.\".into() }], window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::starter_prompts::{PromptShelf, Prompt};\n\nlet control = cx.new(|cx| PromptShelf::new(\"prompts\", \"What shall we do?\", vec![Prompt { group: \"Write\".into(), app: \"Mail\".into(), title: \"Draft a reply\".into(), detail: \"Confirm the release\".into(), text: \"Draft a release reply.\".into() }], window, cx));",
     "method": "new",
     "signature": "(id, greeting, Vec<Prompt>, window, cx)",
     "event": "PromptSent",
@@ -649,7 +649,7 @@
       "en": "Request a translation and compare it with the original message.",
       "zh": "请求翻译并与原消息对照。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::ai_translate::{MessageTranslation};\n\nlet control = cx.new(|_| MessageTranslation::new(\"translation\",\"Maya\",\"Bonjour !\",vec![\"English\".into()]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ai_translate::{MessageTranslation};\n\nlet control = cx.new(|_| MessageTranslation::new(\"translation\",\"Maya\",\"Bonjour !\",vec![\"English\".into()]));",
     "method": "update_translation",
     "signature": "(ticket, Result<String, ()>, finished, cx)",
     "event": "TranslationRequest",
@@ -678,7 +678,7 @@
       "en": "Follow the steps of an agent run and inspect individual results.",
       "zh": "跟踪助手运行中的步骤并查看单项结果。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::agent_timeline::{RunLanes, Span};\n\nlet control = cx.new(|_| RunLanes::new(\"run\",\"Release review\",vec![\"Planner\".into()],vec![Span {lane:0,start:0.,end:4.,detail:\"Read changes\".into(),kind:0,parent:None}]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_timeline::{RunLanes, Span};\n\nlet control = cx.new(|_| RunLanes::new(\"run\",\"Release review\",vec![\"Planner\".into()],vec![Span {lane:0,start:0.,end:4.,detail:\"Read changes\".into(),kind:0,parent:None}]));",
     "method": "new",
     "signature": "(id, title, lanes, Vec<Span>)",
     "event": "SpanSelected",
@@ -707,7 +707,7 @@
       "en": "Inspect how different parts of a conversation consume its context budget.",
       "zh": "查看会话中不同内容占用的上下文额度。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::context_window::{CapacityBands, Band};\n\nlet control = cx.new(|_| CapacityBands::new(\"context\", \"Assistant\", 128000, vec![Band { label: \"Messages\".into(), tokens: 24000, color: gpui::rgb(0x628995).into() }]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::context_window::{CapacityBands, Band};\n\nlet control = cx.new(|_| CapacityBands::new(\"context\", \"Assistant\", 128000, vec![Band { label: \"Messages\".into(), tokens: 24000, color: gpui::rgb(0x628995).into() }]));",
     "method": "used",
     "signature": "(&self) -> u64",
     "event": "CapacityAction",
@@ -736,7 +736,7 @@
       "en": "Show the current activity of an assistant during a run.",
       "zh": "在运行过程中显示助手当前的工作状态。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::agent_status::{WorkBadge, Step};\n\nlet control = cx.new(|_| WorkBadge::new(\"agent\",\"Assistant\",\"Ready\",vec![Step { label:\"Check files\".into(),result:String::new(),complete:false }]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_status::{WorkBadge, Step};\n\nlet control = cx.new(|_| WorkBadge::new(\"agent\",\"Assistant\",\"Ready\",vec![Step { label:\"Check files\".into(),result:String::new(),complete:false }]));",
     "method": "new",
     "signature": "(id, agent, activity, Vec<Step>)",
     "event": "",
@@ -765,7 +765,7 @@
       "en": "Inspect a tool invocation, its arguments and its result.",
       "zh": "展开工具调用以检查参数和结果。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tool_call::{InvocationInspector, Invocation, ToolState};\n\nlet control = cx.new(|_| InvocationInspector::new(\"calls\",vec![Invocation { name:\"Search\".into(),action:\"Find release issues\".into(),input:\"release\".into(),output:String::new(), state:ToolState::Approval }]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tool_call::{InvocationInspector, Invocation, ToolState};\n\nlet control = cx.new(|_| InvocationInspector::new(\"calls\",vec![Invocation { name:\"Search\".into(),action:\"Find release issues\".into(),input:\"release\".into(),output:String::new(), state:ToolState::Approval }]));",
     "method": "new",
     "signature": "(id, Vec<Invocation>)",
     "event": "ToolAction",
@@ -794,7 +794,7 @@
       "en": "Review an ordered execution plan and change the sequence of its steps.",
       "zh": "审阅执行计划并调整步骤顺序。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::agent_plan::{TaskPlan};\n\nlet control = cx.new(|cx| TaskPlan::new(\"plan\", \"Review release\", vec![\"Check changes\".into(),\"Run tests\".into()], window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_plan::{TaskPlan};\n\nlet control = cx.new(|cx| TaskPlan::new(\"plan\", \"Review release\", vec![\"Check changes\".into(),\"Run tests\".into()], window, cx));",
     "method": "new",
     "signature": "(id, goal, Vec<String>, window, cx)",
     "event": "PlanEvent",
@@ -823,7 +823,7 @@
       "en": "Disclose a reasoning summary beside the response it explains.",
       "zh": "在回答旁展开对应的推理摘要。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::reasoning_block::{ExplanationNote};\n\nlet control = cx.new(|_| ExplanationNote::new(\"explanation\",vec![(\"Read sources\".into(),\"Checked release notes and public docs.\".into())]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::reasoning_block::{ExplanationNote};\n\nlet control = cx.new(|_| ExplanationNote::new(\"explanation\",vec![(\"Read sources\".into(),\"Checked release notes and public docs.\".into())]));",
     "method": "set_state",
     "signature": "(NoteState, cx)",
     "event": "StopRequested, RetryRequested",
@@ -852,7 +852,7 @@
       "en": "Browse references associated with an answer and inspect a source.",
       "zh": "浏览回答引用的资料并查看来源。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::source_cards::{CitationShelf, Citation};\n\nlet control = cx.new(|_| CitationShelf::new(\"sources\",\"References\",vec![Citation {domain:\"docs.rs\".into(), title:\"Rust API\".into(), passage:\"Public module documentation\".into(),url:\"https://docs.rs/\".into()}]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::source_cards::{CitationShelf, Citation};\n\nlet control = cx.new(|_| CitationShelf::new(\"sources\",\"References\",vec![Citation {domain:\"docs.rs\".into(), title:\"Rust API\".into(), passage:\"Public module documentation\".into(),url:\"https://docs.rs/\".into()}]));",
     "method": "cite",
     "signature": "(index, cx)",
     "event": "SourceEvent",
@@ -881,7 +881,7 @@
       "en": "Inspect token usage and timing for a generated response.",
       "zh": "查看生成回答所用的 Token 和时间。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::generation_stats::{GenerationReadout, Metrics};\n\nlet control = cx.new(|_| GenerationReadout::new(\"stats\",\"Assistant\",Metrics {first_token_ms:400,duration_ms:2400,input_tokens:800,output_tokens:120,input_rate:2.,output_rate:8.,..Metrics::default()}));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::generation_stats::{GenerationReadout, Metrics};\n\nlet control = cx.new(|_| GenerationReadout::new(\"stats\",\"Assistant\",Metrics {first_token_ms:400,duration_ms:2400,input_tokens:800,output_tokens:120,input_rate:2.,output_rate:8.,..Metrics::default()}));",
     "method": "set_metrics",
     "signature": "(Metrics, cx)",
     "event": "",
@@ -910,7 +910,7 @@
       "en": "Read, reply to and resolve a discussion in context.",
       "zh": "阅读、回复和解决当前内容上的讨论。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::comment_thread::{CommentThread, Comment};\n\nlet control = cx.new(|cx| CommentThread::new(\"review\",\"Release notes\",vec![Comment{key:1,parent:None,author:\"Maya\".into(),text:\"Check the date.\".into(),age:\"2h\".into(),likes:0,mine:false}],window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::comment_thread::{CommentThread, Comment};\n\nlet control = cx.new(|cx| CommentThread::new(\"review\",\"Release notes\",vec![Comment{key:1,parent:None,author:\"Maya\".into(),text:\"Check the date.\".into(),age:\"2h\".into(),likes:0,mine:false}],window,cx));",
     "method": "new",
     "signature": "(id, subject, Vec<Comment>, window, cx)",
     "event": "CommentEvent",
@@ -939,7 +939,7 @@
       "en": "Review a proposed edit and accept or reject its changes.",
       "zh": "审阅代码修改建议并接受或拒绝。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::code_suggestion::{PatchReview, Hunk, Decision};\n\nlet control = cx.new(|cx| PatchReview::new(\"patch\",\"release.rs\",vec![Hunk {line:4,before:vec![\"let n = 1;\".into()],after:vec![\"let n = 2;\".into()],decision:Decision::Pending}],cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::code_suggestion::{PatchReview, Hunk, Decision};\n\nlet control = cx.new(|cx| PatchReview::new(\"patch\",\"release.rs\",vec![Hunk {line:4,before:vec![\"let n = 1;\".into()],after:vec![\"let n = 2;\".into()],decision:Decision::Pending}],cx));",
     "method": "new",
     "signature": "(id, file, Vec<Hunk>, cx)",
     "event": "PatchEvent",
@@ -968,7 +968,7 @@
       "en": "Inspect a model’s capabilities and select it for a task.",
       "zh": "查看模型能力并为任务选择模型。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::model_card::{ModelSheet, Model};\n\nlet control = cx.new(|_| ModelSheet::new(\"model\",vec![Model{name:\"Atlas\".into(),provider:\"Kense\".into(),description:\"Workspace assistant\".into(),features:vec![\"Text\".into()],context:128000,max_output:32000,input_rate:2.,output_rate:8.,scores:vec![(\"Code\".into(),0.82)]}]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::model_card::{ModelSheet, Model};\n\nlet control = cx.new(|_| ModelSheet::new(\"model\",vec![Model{name:\"Atlas\".into(),provider:\"Kense\".into(),description:\"Workspace assistant\".into(),features:vec![\"Text\".into()],context:128000,max_output:32000,input_rate:2.,output_rate:8.,scores:vec![(\"Code\".into(),0.82)]}]));",
     "method": "choose",
     "signature": "(index, cx)",
     "event": "ModelChanged",
@@ -997,7 +997,7 @@
       "en": "Manage a provider credential with masked display and validation feedback.",
       "zh": "管理服务密钥，默认遮蔽显示并反馈验证结果。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::provider_keys::{CredentialPanel, Provider};\n\nlet control = cx.new(|cx| CredentialPanel::new(\"keys\",vec![Provider{id:\"custom\".into(),name:\"Provider\".into(),masked:String::new(),last_used:String::new(),valid:false,prefix:\"sk-\".into()}],window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::provider_keys::{CredentialPanel, Provider};\n\nlet control = cx.new(|cx| CredentialPanel::new(\"keys\",vec![Provider{id:\"custom\".into(),name:\"Provider\".into(),masked:String::new(),last_used:String::new(),valid:false,prefix:\"sk-\".into()}],window,cx));",
     "method": "tested",
     "signature": "(ticket, Option<String>, window, cx)",
     "event": "KeyAction",
@@ -1026,7 +1026,7 @@
       "en": "Connect an external service and track the setup state.",
       "zh": "连接外部服务并跟踪设置进度。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::connector_setup::{ConnectionWizard, Service, ConnectionState};\n\nlet control = cx.new(|_| ConnectionWizard::new(\"tools\",vec![Service{id:\"git\".into(),name:\"Git\".into(),description:\"Search commits\".into(),scopes:vec![\"read\".into()],state:ConnectionState::Offline}]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::connector_setup::{ConnectionWizard, Service, ConnectionState};\n\nlet control = cx.new(|_| ConnectionWizard::new(\"tools\",vec![Service{id:\"git\".into(),name:\"Git\".into(),description:\"Search commits\".into(),scopes:vec![\"read\".into()],state:ConnectionState::Offline}]));",
     "method": "progress",
     "signature": "(service, ticket, ConnectionState, cx)",
     "event": "ConnectionAction",
@@ -1055,7 +1055,7 @@
       "en": "Choose and run an assistant command against a selection.",
       "zh": "选择助手命令并对当前选区执行。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::ai_command::{CommandDesk, Command};\n\nlet control = cx.new(|cx| CommandDesk::new(\"desk\",vec![Command{id:\"inbox\".into(),label:\"Inbox\".into(),section:\"Pages\".into(),hint:\"G I\".into()}],window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ai_command::{CommandDesk, Command};\n\nlet control = cx.new(|cx| CommandDesk::new(\"desk\",vec![Command{id:\"inbox\".into(),label:\"Inbox\".into(),section:\"Pages\".into(),hint:\"G I\".into()}],window,cx));",
     "method": "receive",
     "signature": "(ticket, Result<String, ()>, done, cx)",
     "event": "CommandEvent",
@@ -1084,7 +1084,7 @@
       "en": "Invite collaborators and manage access to a shared resource.",
       "zh": "邀请协作者并管理共享资源的权限。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::share_access::{AccessEditor, Person, AccessRole};\n\nlet control = cx.new(|cx| AccessEditor::new(\"share\",\"Release plan\",\"https://workspace.example/release\",vec![Person{name:\"Maya\".into(),email:\"maya@example.com\".into(),role:AccessRole::Owner}],window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::share_access::{AccessEditor, Person, AccessRole};\n\nlet control = cx.new(|cx| AccessEditor::new(\"share\",\"Release plan\",\"https://workspace.example/release\",vec![Person{name:\"Maya\".into(),email:\"maya@example.com\".into(),role:AccessRole::Owner}],window,cx));",
     "method": "new",
     "signature": "(id, document, url, Vec<Person>, window, cx)",
     "event": "AccessEvent",
@@ -1113,7 +1113,7 @@
       "en": "Find and activate a team without leaving the current workspace.",
       "zh": "查找团队并在当前工作区切换。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::team_switcher::{WorkspacePicker, Workspace};\n\nlet control = cx.new(|cx| WorkspacePicker::new(\"team\",vec![Workspace{id:\"main\".into(),name:\"Product\".into(),plan:\"Team\".into(),members:12,role:\"Admin\".into()}],window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::team_switcher::{WorkspacePicker, Workspace};\n\nlet control = cx.new(|cx| WorkspacePicker::new(\"team\",vec![Workspace{id:\"main\".into(),name:\"Product\".into(),plan:\"Team\".into(),members:12,role:\"Admin\".into()}],window,cx));",
     "method": "new",
     "signature": "(id, Vec<Workspace>, window, cx)",
     "event": "WorkspaceEvent",
@@ -1142,7 +1142,7 @@
       "en": "Reveal a short explanation on hover or keyboard focus.",
       "zh": "悬停或键盘聚焦时显示简短说明。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tooltip::Tooltip;\n\nlet control = cx.new(|cx| Tooltip::new(\"Project visibility\", \"Workspace members only\", cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tooltip::Tooltip;\n\nlet control = cx.new(|cx| Tooltip::new(\"Project visibility\", \"Workspace members only\", cx));",
     "method": "new",
     "signature": "(name, text, &mut App) → Tooltip",
     "event": "—",
@@ -1171,7 +1171,7 @@
       "en": "Scroll an overflowing local region independently of the page.",
       "zh": "独立滚动超出可视范围的局部内容。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::scroll_area::ScrollArea;\n\nlet control = cx.new(|_| ScrollArea::new(80., Box::new(|_, _| gpui::div().flex().flex_col().children((1..20).map(|n| gpui::div().child(n.to_string()))).into_any_element())));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::scroll_area::ScrollArea;\n\nlet control = cx.new(|_| ScrollArea::new(80., Box::new(|_, _| gpui::div().flex().flex_col().children((1..20).map(|n| gpui::div().child(n.to_string()))).into_any_element())));",
     "method": "handle",
     "signature": "(&self) → ScrollHandle",
     "event": "ScrollHandle",
@@ -1200,7 +1200,7 @@
       "en": "Open a side sheet for a focused task and return to the trigger.",
       "zh": "从侧边打开任务面板，关闭后返回触发器。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::drawer::Drawer;\n\nlet control = cx.new(|cx| Drawer::new(\"Open details\", \"Project details\", Box::new(|_, _| gpui::div().child(\"Owner: Maya\").into_any_element()), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::drawer::Drawer;\n\nlet control = cx.new(|cx| Drawer::new(\"Open details\", \"Project details\", Box::new(|_, _| gpui::div().child(\"Owner: Maya\").into_any_element()), cx));",
     "method": "set_open",
     "signature": "(&mut self, bool, &mut Window, &mut Context<Self>)",
     "event": "DrawerEvent",
@@ -1229,7 +1229,7 @@
       "en": "Expand sections in a compact stack of disclosures.",
       "zh": "在紧凑列表中展开和收起不同章节。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::accordion::{Accordion, AccordionItem};\n\nlet control = cx.new(|cx| Accordion::new(vec![AccordionItem::new(\"Included\", \"All workspace members can review the draft.\")], Some(0), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::accordion::{Accordion, AccordionItem};\n\nlet control = cx.new(|cx| Accordion::new(vec![AccordionItem::new(\"Included\", \"All workspace members can review the draft.\")], Some(0), cx));",
     "method": "multiple",
     "signature": "(self, bool) → Self",
     "event": "AccordionChanged",
@@ -1258,7 +1258,7 @@
       "en": "Follow the hierarchy of locations back to an ancestor.",
       "zh": "沿当前位置的层级返回上级。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::breadcrumb::Breadcrumb;\n\nlet control = cx.new(|_| Breadcrumb::new(vec![\"Projects\".into(), \"Launch\".into(), \"Files\".into()]).limit(3));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::breadcrumb::Breadcrumb;\n\nlet control = cx.new(|_| Breadcrumb::new(vec![\"Projects\".into(), \"Launch\".into(), \"Files\".into()]).limit(3));",
     "method": "navigate",
     "signature": "(&mut self, usize, &mut Context<Self>)",
     "event": "Navigated",
@@ -1287,7 +1287,7 @@
       "en": "Navigate nested items using their visible parent and child relationships.",
       "zh": "展开层级并在可见父子节点之间导航。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::tree_view::{TreeView, TreeNode};\n\nlet control = cx.new(|cx| TreeView::new(vec![TreeNode::new(\"src\",\"src\", vec![TreeNode::new(\"main\",\"main.rs\",vec![])])], cx).expanded(vec![\"src\".into()]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tree_view::{TreeView, TreeNode};\n\nlet control = cx.new(|cx| TreeView::new(vec![TreeNode::new(\"src\",\"src\", vec![TreeNode::new(\"main\",\"main.rs\",vec![])])], cx).expanded(vec![\"src\".into()]));",
     "method": "expanded",
     "signature": "(self, Vec<SharedString>) → Self",
     "event": "TreeSelected",
@@ -1316,7 +1316,7 @@
       "en": "Ask for a deliberate confirmation near a consequential action.",
       "zh": "在重要操作旁显示确认步骤。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::confirm_popover::ConfirmPopover;\n\nlet control = cx.new(|cx| ConfirmPopover::new(\"Delete\", \"Remove this project?\", Some(\"Atlas\".into()), window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::confirm_popover::ConfirmPopover;\n\nlet control = cx.new(|cx| ConfirmPopover::new(\"Delete\", \"Remove this project?\", Some(\"Atlas\".into()), window, cx));",
     "method": "resolve",
     "signature": "(&mut self, ticket: u64, ok: bool, &mut Context<Self>)",
     "event": "ConfirmRequested",
@@ -1345,7 +1345,7 @@
       "en": "Move through a bounded sequence of result pages.",
       "zh": "在有总页数的结果集中翻页。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::pagination::Pagination;\n\nlet control = cx.new(|_| Pagination::new(12, 2));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::pagination::Pagination;\n\nlet control = cx.new(|_| Pagination::new(12, 2));",
     "method": "select",
     "signature": "(&mut self, page: usize, &mut Context<Self>)",
     "event": "PageChanged",
@@ -1374,7 +1374,7 @@
       "en": "Combine and remove facet filters above a result set.",
       "zh": "为结果集组合和移除不同维度的筛选条件。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::filter_toolbar::{FilterToolbar, Facet};\n\nlet control = cx.new(|_| FilterToolbar::new(vec![Facet::new(\"Status\", vec![\"In review\".into(), \"Done\".into()])], vec![(0,0)]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::filter_toolbar::{FilterToolbar, Facet};\n\nlet control = cx.new(|_| FilterToolbar::new(vec![Facet::new(\"Status\", vec![\"In review\".into(), \"Done\".into()])], vec![(0,0)]));",
     "method": "set",
     "signature": "(&mut self, facet: usize, value: Option<usize>, &mut Context<Self>)",
     "event": "FiltersChanged",
@@ -1403,7 +1403,7 @@
       "en": "Sort records by a column while keeping each row’s identity.",
       "zh": "按列排序数据，保留行的稳定标识。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::sortable_data_table::{SortableTable, TableColumn};\n\nlet control = cx.new(|_| SortableTable::new(\"Scores\", vec![TableColumn::new(\"Score\",true)], vec![vec![\"92\".into()],vec![\"8\".into()]]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::sortable_data_table::{SortableTable, TableColumn};\n\nlet control = cx.new(|_| SortableTable::new(\"Scores\", vec![TableColumn::new(\"Score\",true)], vec![vec![\"92\".into()],vec![\"8\".into()]]));",
     "method": "sort",
     "signature": "(&mut self, column: usize, descending: bool, &mut Context<Self>)",
     "event": "TableSorted",
@@ -1432,7 +1432,7 @@
       "en": "Change list order with a pointer or keyboard.",
       "zh": "用指针或键盘调整列表顺序。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::reorderable_list::{ReorderableList, OrderedItem};\n\nlet control = cx.new(|cx| ReorderableList::new(vec![OrderedItem::new(\"a\",\"Review changes\",\"Product brief\"),OrderedItem::new(\"b\",\"Ship\",\"Release\")],cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::reorderable_list::{ReorderableList, OrderedItem};\n\nlet control = cx.new(|cx| ReorderableList::new(vec![OrderedItem::new(\"a\",\"Review changes\",\"Product brief\"),OrderedItem::new(\"b\",\"Ship\",\"Release\")],cx));",
     "method": "move_to",
     "signature": "(&mut self, from: usize, to: usize, &mut Context<Self>)",
     "event": "OrderChanged",
@@ -1461,7 +1461,7 @@
       "en": "Open a summary card to inspect its additional detail.",
       "zh": "展开摘要卡并查看详细内容。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expandable_card::DetailCard;\n\nlet control = cx.new(|_| DetailCard::new(\"Launch checklist\",\"4/6 complete\", Box::new(|_, _| gpui::div().child(\"Invite reviewers\").into_any_element())));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::expandable_card::DetailCard;\n\nlet control = cx.new(|_| DetailCard::new(\"Launch checklist\",\"4/6 complete\", Box::new(|_, _| gpui::div().child(\"Invite reviewers\").into_any_element())));",
     "method": "set_expanded",
     "signature": "(&mut self, bool, &mut Context<Self>)",
     "event": "DetailsChanged",
@@ -1490,7 +1490,7 @@
       "en": "Inspect an identity or link without leaving the surrounding content.",
       "zh": "在原内容旁预览成员或链接信息。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::hover_card::PreviewCard;\n\nlet control = cx.new(|cx| PreviewCard::new(\"Jasmine Brooks\",\"JB\",Box::new(|_, _| gpui::div().child(\"Product designer\").into_any_element()),cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::hover_card::PreviewCard;\n\nlet control = cx.new(|cx| PreviewCard::new(\"Jasmine Brooks\",\"JB\",Box::new(|_, _| gpui::div().child(\"Product designer\").into_any_element()),cx));",
     "method": "new",
     "signature": "(name, badge, body, &mut App) → Self",
     "event": "—",
@@ -1519,7 +1519,7 @@
       "en": "Reveal the rest of a long text and collapse it again.",
       "zh": "展开截断的长文本并可重新收起。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expandable_text::ExpandableText;\n\nlet control = cx.new(|_| ExpandableText::new(\"A long release note that wraps across several lines in a narrow column.\", 2));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::expandable_text::ExpandableText;\n\nlet control = cx.new(|_| ExpandableText::new(\"A long release note that wraps across several lines in a narrow column.\", 2));",
     "method": "new",
     "signature": "(text, lines: usize) → Self",
     "event": "TextExpanded",
@@ -1548,7 +1548,7 @@
       "en": "Navigate article sections and track reading progress.",
       "zh": "定位文章章节并查看阅读进度。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::toc_progress::{ReadingOutline, ReadingSection};\n\nlet control = cx.new(|_| ReadingOutline::new(\"Release notes\",vec![ReadingSection::new(\"Overview\",\"Workspace changes\",0)], 4));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::toc_progress::{ReadingOutline, ReadingSection};\n\nlet control = cx.new(|_| ReadingOutline::new(\"Release notes\",vec![ReadingSection::new(\"Overview\",\"Workspace changes\",0)], 4));",
     "method": "new",
     "signature": "(title, Vec<ReadingSection>, minutes: u32) → Self",
     "event": "SectionChanged",
@@ -1577,7 +1577,7 @@
       "en": "Read a labeled code excerpt and copy its source.",
       "zh": "阅读带名称的代码片段并复制源码。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::code_block::CodeBlock;\n\nlet control = cx.new(|cx| CodeBlock::new(\"main.rs\",\"Rust\",\"fn main() {}\",cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::code_block::CodeBlock;\n\nlet control = cx.new(|cx| CodeBlock::new(\"main.rs\",\"Rust\",\"fn main() {}\",cx));",
     "method": "new",
     "signature": "(filename, language, source, &mut App) → Self",
     "event": "—",
@@ -1606,7 +1606,7 @@
       "en": "Search, expand and inspect a parsed JSON value.",
       "zh": "搜索和展开已解析的 JSON 数据。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::json_viewer::{JsonViewer, JsonValue};\n\nlet control = cx.new(|cx| JsonViewer::new(\"payload\", r#\"{\"status\":\"ok\",\"items\":[1,2]}\"#.parse::<JsonValue>().unwrap(),window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::json_viewer::{JsonViewer, JsonValue};\n\nlet control = cx.new(|cx| JsonViewer::new(\"payload\", r#\"{\"status\":\"ok\",\"items\":[1,2]}\"#.parse::<JsonValue>().unwrap(),window,cx));",
     "method": "new",
     "signature": "(title, JsonValue, &mut Window, &mut Context<Self>) → Self",
     "event": "JsonCopied",
@@ -1635,7 +1635,7 @@
       "en": "Inspect, sort and edit cells in a spreadsheet-like grid.",
       "zh": "在数据网格中浏览、排序和编辑单元格。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::data_grid::DataGrid;\n\nlet control = cx.new(|cx| DataGrid::new(\"Renewals\", vec![\"Account\".into(),\"Seats\".into()], vec![vec![\"Northwind\".into(),\"40\".into()]],window,cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::data_grid::DataGrid;\n\nlet control = cx.new(|cx| DataGrid::new(\"Renewals\", vec![\"Account\".into(),\"Seats\".into()], vec![vec![\"Northwind\".into(),\"40\".into()]],window,cx));",
     "method": "csv",
     "signature": "(&self) → String",
     "event": "CellEdited, GridExport",
@@ -1664,7 +1664,7 @@
       "en": "Open a larger image and navigate the rest of the gallery.",
       "zh": "放大图片并在图库内切换。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::lightbox_gallery::{GalleryPhoto, PhotoExhibit};\n\nlet control = cx.new(|cx| PhotoExhibit::new(vec![GalleryPhoto::new(\"photos/harbor.jpg\",\"Harbor\",\"Dawn on the coast\",1.5)],cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::lightbox_gallery::{GalleryPhoto, PhotoExhibit};\n\nlet control = cx.new(|cx| PhotoExhibit::new(vec![GalleryPhoto::new(\"photos/harbor.jpg\",\"Harbor\",\"Dawn on the coast\",1.5)],cx));",
     "method": "open",
     "signature": "(&mut self, index: usize, &mut Window, &mut Context<Self>)",
     "event": "GallerySelection",
@@ -1693,7 +1693,7 @@
       "en": "Keep a persistent status message and its recovery action together.",
       "zh": "在状态信息旁提供相应恢复操作。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::alert::{Alert, Severity};\n\nlet control = cx.new(|_| Alert::new(\"Sync paused\", \"Reconnect to upload changes.\", Severity::Warning).with_action(\"Reconnect\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::alert::{Alert, Severity};\n\nlet control = cx.new(|_| Alert::new(\"Sync paused\", \"Reconnect to upload changes.\", Severity::Warning).with_action(\"Reconnect\"));",
     "method": "replace",
     "signature": "Alert",
     "event": "AlertAction",
@@ -1722,7 +1722,7 @@
       "en": "Acknowledge a short-lived outcome with an optional follow-up action.",
       "zh": "短暂显示操作结果并可提供后续操作。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::toast::Toast;\n\nlet control = cx.new(|_| Toast::new());",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::toast::Toast;\n\nlet control = cx.new(|_| Toast::new());",
     "method": "show",
     "signature": "(message, Option<SharedString>, Duration)",
     "event": "ToastEvent",
@@ -1751,7 +1751,7 @@
       "en": "Display measured completion or an indeterminate operation.",
       "zh": "展示确定进度或正在进行的未定进度任务。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::progress::Progress;\n\nlet control = cx.new(|cx| Progress::new(\"Preparing workspace\", Some(0.68), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::progress::Progress;\n\nlet control = cx.new(|cx| Progress::new(\"Preparing workspace\", Some(0.68), cx));",
     "method": "set_value",
     "signature": "Option<f32>",
     "event": "",
@@ -1780,7 +1780,7 @@
       "en": "Reserve the shape of content while a view is loading.",
       "zh": "加载期间为即将到来的内容保留形状和空间。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::skeleton::Skeleton;\n\nlet control = cx.new(|cx| Skeleton::new(\"Loading summary\", [0.8, 1.0, 0.6], cx).with_avatar());",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::skeleton::Skeleton;\n\nlet control = cx.new(|cx| Skeleton::new(\"Loading summary\", [0.8, 1.0, 0.6], cx).with_avatar());",
     "method": "with_avatar",
     "signature": "Self → Self",
     "event": "",
@@ -1809,7 +1809,7 @@
       "en": "Mark a status or category with a compact text label.",
       "zh": "用紧凑文字标记状态或类别。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::badge::{Badge, BadgeTone};\n\nlet control = cx.new(|_| Badge::new(\"In review\", BadgeTone::Info));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::badge::{Badge, BadgeTone};\n\nlet control = cx.new(|_| Badge::new(\"In review\", BadgeTone::Info));",
     "method": "set",
     "signature": "(label, BadgeTone)",
     "event": "",
@@ -1838,7 +1838,7 @@
       "en": "Present related media, descriptive text and independent content actions.",
       "zh": "组合媒体、介绍文字及针对内容的操作。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::card::Card;\n\nlet control = cx.new(|_| Card::new(\"Lobby lounge\", \"A quiet space by the window.\").with_byline(\"Updated today\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::card::Card;\n\nlet control = cx.new(|_| Card::new(\"Lobby lounge\", \"A quiet space by the window.\").with_byline(\"Updated today\"));",
     "method": "with_cover",
     "signature": "impl Into<ImageSource>",
     "event": "CardEvent",
@@ -1867,7 +1867,7 @@
       "en": "Identify one person with a portrait or an initials fallback.",
       "zh": "用头像或首字母标识成员。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::avatar::{Avatar, Person};\n\nlet control = cx.new(|_| Avatar::new(Person::new(\"Ari Singh\"), 36.0));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::avatar::{Avatar, Person};\n\nlet control = cx.new(|_| Avatar::new(Person::new(\"Ari Singh\"), 36.0));",
     "method": "new",
     "signature": "(Person, f32)",
     "event": "",
@@ -1896,7 +1896,7 @@
       "en": "Compare named allocations with a fixed capacity.",
       "zh": "对照总额度显示各项占用。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::usage_meter::{UsageMeter, Allocation};\n\nlet control = cx.new(|_| UsageMeter::new(\"Storage\", \"GB\", 15.0, vec![Allocation::new(\"Photos\", 4.0, gpui::rgb(0x7195ca).into())]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::usage_meter::{UsageMeter, Allocation};\n\nlet control = cx.new(|_| UsageMeter::new(\"Storage\", \"GB\", 15.0, vec![Allocation::new(\"Photos\", 4.0, gpui::rgb(0x7195ca).into())]));",
     "method": "set_usage",
     "signature": "(f32, Vec<Allocation>)",
     "event": "",
@@ -1925,7 +1925,7 @@
       "en": "Track independent setup tasks and their instructions.",
       "zh": "跟踪设置任务及各项操作说明。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::onboarding_checklist::{SetupChecklist, ChecklistItem};\n\nlet control = cx.new(|_| SetupChecklist::new(\"Set up workspace\", vec![ChecklistItem::new(\"Invite team\", \"Invite a collaborator.\", \"Send invite\")]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::onboarding_checklist::{SetupChecklist, ChecklistItem};\n\nlet control = cx.new(|_| SetupChecklist::new(\"Set up workspace\", vec![ChecklistItem::new(\"Invite team\", \"Invite a collaborator.\", \"Send invite\")]));",
     "method": "new",
     "signature": "(heading, Vec<ChecklistItem>)",
     "event": "TaskChanged",
@@ -1954,7 +1954,7 @@
       "en": "Guide a user through the stages of a sequential workflow.",
       "zh": "引导用户依次完成工作流程。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::stepper::{Stepper, Step};\n\nlet control = cx.new(|_| Stepper::new(vec![Step::new(\"Profile\", \"Add your name\"), Step::new(\"Review\", \"Confirm the details\")], 0));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::stepper::{Stepper, Step};\n\nlet control = cx.new(|_| Stepper::new(vec![Step::new(\"Profile\", \"Add your name\"), Step::new(\"Review\", \"Confirm the details\")], 0));",
     "method": "select",
     "signature": "usize",
     "event": "StepEvent",
@@ -1983,7 +1983,7 @@
       "en": "Show a compact group of people and reveal the remaining members.",
       "zh": "紧凑呈现多人头像，并可查看其余成员。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::avatar_group::AvatarGroup;\nuse crate::ui::components::avatar::Person;\n\nlet control = cx.new(|_| AvatarGroup::new(vec![Person::new(\"Ari Singh\"), Person::new(\"Emma Collins\")], 1));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::avatar_group::AvatarGroup;\nuse kui::components::avatar::Person;\n\nlet control = cx.new(|_| AvatarGroup::new(vec![Person::new(\"Ari Singh\"), Person::new(\"Emma Collins\")], 1));",
     "method": "set_people",
     "signature": "Vec<Person>",
     "event": "",
@@ -2012,7 +2012,7 @@
       "en": "Read chronological updates grouped by date.",
       "zh": "按日期分组阅读动态。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::timeline::{Timeline, TimelineEntry};\n\nlet control = cx.new(|_| Timeline::new(vec![TimelineEntry::new(\"Today\", \"Deployment passed\", \"Build 1284\", \"11m\")]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::timeline::{Timeline, TimelineEntry};\n\nlet control = cx.new(|_| Timeline::new(vec![TimelineEntry::new(\"Today\", \"Deployment passed\", \"Build 1284\", \"11m\")]));",
     "method": "prepend",
     "signature": "TimelineEntry",
     "event": "",
@@ -2041,7 +2041,7 @@
       "en": "Read one metric in the context of its change and comparison period.",
       "zh": "结合变化幅度和比较周期查看一个指标。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::metric_card::MetricCard;\n\nlet control = cx.new(|_| MetricCard::new(\"Active users\", 2486.0, 18.4, \"Previous 7 days\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::metric_card::MetricCard;\n\nlet control = cx.new(|_| MetricCard::new(\"Active users\", 2486.0, 18.4, \"Previous 7 days\"));",
     "method": "update_metric",
     "signature": "(f32, f32, comparison)",
     "event": "",
@@ -2070,7 +2070,7 @@
       "en": "Inspect the shape of a compact time series.",
       "zh": "查看一组数据的紧凑趋势。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::sparkline::Sparkline;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| Sparkline::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::sparkline::Sparkline;\nuse kui::primitives::plot::Sample;\n\nlet control = cx.new(|_| Sparkline::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
     "method": "set_samples",
     "signature": "Vec<Sample>",
     "event": "InspectSample",
@@ -2099,7 +2099,7 @@
       "en": "Compare categorical measurements on the same scale.",
       "zh": "用同一标尺比较不同分类的数值。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::bar_chart::BarChart;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| BarChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::bar_chart::BarChart;\nuse kui::primitives::plot::Sample;\n\nlet control = cx.new(|_| BarChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
     "method": "set_samples",
     "signature": "Vec<Sample>",
     "event": "InspectSample",
@@ -2128,7 +2128,7 @@
       "en": "Explore activity day by day over a longer interval.",
       "zh": "按天查看较长周期内的活动分布。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::activity_heatmap::DailyActivity;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| DailyActivity::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::activity_heatmap::DailyActivity;\nuse kui::primitives::plot::Sample;\n\nlet control = cx.new(|_| DailyActivity::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
     "method": "set_samples",
     "signature": "Vec<Sample>",
     "event": "InspectSample",
@@ -2157,7 +2157,7 @@
       "en": "Compare reported and prior values across the same sample positions.",
       "zh": "比较同一组采样位置上的本期和上期数值。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::line_chart::LineChart;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| LineChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::line_chart::LineChart;\nuse kui::primitives::plot::Sample;\n\nlet control = cx.new(|_| LineChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
     "method": "set_samples",
     "signature": "Vec<Sample>",
     "event": "InspectSample",
@@ -2186,7 +2186,7 @@
       "en": "Inspect the contribution of each source to a whole.",
       "zh": "查看不同来源占总量的份额。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::donut_chart::DonutChart;\nuse crate::ui::primitives::plot::Sample;\n\nlet control = cx.new(|_| DonutChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::donut_chart::DonutChart;\nuse kui::primitives::plot::Sample;\n\nlet control = cx.new(|_| DonutChart::new(\"Activity\", vec![Sample::new(\"Mon\", 12.0), Sample::new(\"Tue\", 18.0)]));",
     "method": "set_samples",
     "signature": "Vec<Sample>",
     "event": "InspectSample",

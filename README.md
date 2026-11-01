@@ -74,7 +74,7 @@ python3 scripts/check-site.py website/dist
 python3 -m http.server 4321 --bind 127.0.0.1 --directory website/dist
 ```
 
-Open [the local site](http://127.0.0.1:4321/kui/). Building needs the Rust toolchain and wasm32 target, Python 3 and rsync; the build script installs the matching wasm-bindgen CLI if needed. No Node or TypeScript build is involved. On macOS, run `./scripts/check-webkit-navigation.sh` against the local server to check first navigation, canvas reuse and browser history in the system WebKit.
+Open [the local site](http://127.0.0.1:4321/kui/). Building needs the Rust toolchain and wasm32 target, Python 3 and rsync; the build script installs the matching wasm-bindgen CLI if needed. No Node or TypeScript build is involved. On macOS, run `./scripts/check-webkit-navigation.sh` against the local server to check first navigation, canvas reuse, browser history, loading completion, Shell highlighting, and installed source file switching in the system WebKit.
 
 ## GitHub Pages
 

@@ -23,17 +23,30 @@
       html:is([data-story="swipe-actions"], [data-story="resizable-panels"]) canvas { touch-action: pan-y pinch-zoom !important; }
       html[data-embedded-story][data-story="team-switcher"] canvas { touch-action: pan-y pinch-zoom !important; }
       #status {
-        position: absolute; inset: 0 auto auto 0; pointer-events: none;
-        padding: 1rem 1.25rem;
+        position: absolute; inset: 0; pointer-events: none;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; padding: 24px; color: #737373; text-align: center;
+        font-size: 13px; font-weight: 400;
       }
+      html[data-theme="dark"] #status { color: #a3a3a3; }
+      #status[hidden] { display: none; }
+      #status::before {
+        content: ""; width: 20px; height: 20px; box-sizing: border-box;
+        border: 2px solid currentColor; border-right-color: transparent;
+        border-radius: 50%; animation: loading-turn 800ms linear infinite;
+      }
+      html[data-preview-error] #status::before { display: none; }
+      @keyframes loading-turn { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #status::before { animation: none; } }
       canvas {
         display: block;
       }
       html[data-preview-error] canvas { visibility: hidden; }
     </style>
   </head>
-  <body>
-    <div id="status" role="status"></div>
+  <body aria-busy="true">
+    <!-- Boot feedback must render before the WASM module downloads. -->
+    <div id="status" role="status" aria-live="polite">Loading preview…</div>
     <script type="module" src="./preview.js"></script>
   </body>
 </html>

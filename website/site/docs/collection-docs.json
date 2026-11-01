@@ -7,7 +7,7 @@
       "zh": "长按确认"
     },
     "rustType": "HoldToConfirm",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::hold_to_confirm::HoldToConfirm;\n\nlet control = cx.new(|cx| HoldToConfirm::new(\"remove\", \"Hold to delete\", window, cx)\n    .with_done_label(\"Deleted\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::hold_to_confirm::HoldToConfirm;\n\nlet control = cx.new(|cx| HoldToConfirm::new(\"remove\", \"Hold to delete\", window, cx)\n    .with_done_label(\"Deleted\"));",
     "lead": {
       "en": "A deliberate hold fills the button before it commits.",
       "zh": "按住时填充按钮，进度到达末端才提交。"
@@ -36,7 +36,7 @@
       "zh": "滑动操作"
     },
     "rustType": "SwipeActions",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::swipe_actions::{SwipeAction, SwipeActions, SwipeRow};\nuse crate::ui::primitives::glyph::Glyph;\n\nlet row = SwipeRow::new(\"draft\", \"Draft\", |_, _| gpui::div().child(\"Draft\").into_any_element())\n    .leading(vec![SwipeAction::new(\"archive\", \"Archive\", Glyph::Archive)]);\nlet control = cx.new(|cx| SwipeActions::new(\"inbox\", \"Inbox\", vec![row], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::swipe_actions::{SwipeAction, SwipeActions, SwipeRow};\nuse kui::primitives::glyph::Glyph;\n\nlet row = SwipeRow::new(\"draft\", \"Draft\", |_, _| gpui::div().child(\"Draft\").into_any_element())\n    .leading(vec![SwipeAction::new(\"archive\", \"Archive\", Glyph::Archive)]);\nlet control = cx.new(|cx| SwipeActions::new(\"inbox\", \"Inbox\", vec![row], cx));",
     "lead": {
       "en": "Triage the inbox by swiping a message or choosing the same command from its menu.",
       "zh": "滑动消息，或从更多菜单中选择同一项操作来整理收件箱。"
@@ -65,7 +65,7 @@
       "zh": "回应"
     },
     "rustType": "Reactions",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::reactions::{Reaction, ReactionOption, Reactions};\nuse crate::ui::primitives::glyph::Glyph;\n\nlet control = cx.new(|cx| Reactions::new(\"votes\",\n    vec![ReactionOption::new(\"like\", \"Like\", Glyph::Like)],\n    vec![Reaction::new(\"like\", 3, false)], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::reactions::{Reaction, ReactionOption, Reactions};\nuse kui::primitives::glyph::Glyph;\n\nlet control = cx.new(|cx| Reactions::new(\"votes\",\n    vec![ReactionOption::new(\"like\", \"Like\", Glyph::Like)],\n    vec![Reaction::new(\"like\", 3, false)], cx));",
     "lead": {
       "en": "Add a reaction to a release note, change your vote, or pick another symbol.",
       "zh": "为发布说明添加回应，再次点击可撤回，也可以从选择器添加其他回应。"
@@ -94,7 +94,7 @@
       "zh": "下拉菜单"
     },
     "rustType": "DropdownMenu",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::dropdown_menu::DropdownMenu;\nuse crate::ui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| DropdownMenu::new(\"actions\", \"Project actions\",\n    vec![MenuItem::new(\"edit\", \"Edit project\")], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::dropdown_menu::DropdownMenu;\nuse kui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| DropdownMenu::new(\"actions\", \"Project actions\",\n    vec![MenuItem::new(\"edit\", \"Edit project\")], cx));",
     "lead": {
       "en": "Keep a short list of project commands beside a labelled trigger.",
       "zh": "在按钮旁展开一组项目命令。"
@@ -123,7 +123,7 @@
       "zh": "上下文菜单"
     },
     "rustType": "ContextMenu",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::context_menu::ContextMenu;\nuse crate::ui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| ContextMenu::new(\"project\", \"Open actions\",\n    vec![MenuItem::new(\"edit\", \"Edit project\")],\n    |_, _| gpui::div().child(\"Quarterly launch\").into_any_element(), cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::context_menu::ContextMenu;\nuse kui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| ContextMenu::new(\"project\", \"Open actions\",\n    vec![MenuItem::new(\"edit\", \"Edit project\")],\n    |_, _| gpui::div().child(\"Quarterly launch\").into_any_element(), cx));",
     "lead": {
       "en": "Right-click a project to open its commands at the pointer, or tap the project to open below it.",
       "zh": "右键在指针位置打开项目菜单，也可以轻点项目在下方展开。"
@@ -152,7 +152,7 @@
       "zh": "用户菜单"
     },
     "rustType": "UserMenu",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::user_menu::{Account, UserMenu};\nuse crate::ui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| UserMenu::new(\"account\",\n    Account::new(\"Emma Collins\", \"emma@example.com\"),\n    vec![MenuItem::new(\"profile\", \"Profile\")], cx).show_name());",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::user_menu::{Account, UserMenu};\nuse kui::primitives::menu::MenuItem;\n\nlet control = cx.new(|cx| UserMenu::new(\"account\",\n    Account::new(\"Emma Collins\", \"emma@example.com\"),\n    vec![MenuItem::new(\"profile\", \"Profile\")], cx).show_name());",
     "lead": {
       "en": "An account entry point with destinations, a theme preference and asynchronous sign-out.",
       "zh": "从头像进入账户菜单，打开个人资料、选择主题或退出登录。"

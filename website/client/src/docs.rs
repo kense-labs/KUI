@@ -345,7 +345,7 @@ fn paint_file(select: &HtmlSelectElement) -> Option<()> {
     let content = Reflect::get(&file, &"content".into()).ok()?.as_string()?;
     let source = select.closest("[data-item-source]").ok()??;
     let pre = child(&source, "pre")?;
-    child(&pre, "code")?.set_text_content(Some(&content));
+    child(&pre, "code")?.set_inner_html(&crate::syntax::highlight(&content, false));
     pre.set_scroll_top(0);
     Some(())
 }

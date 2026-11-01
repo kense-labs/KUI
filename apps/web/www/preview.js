@@ -1,4 +1,4 @@
-import init, { start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent } from "./pkg/kui_web.js";
+let start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent;
 
 const params = new URLSearchParams(location.search);
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -285,6 +285,7 @@ window.kuiFramePainted = (height, renderedDark) => {
     paintedDark = renderedDark;
     paintedStory = story;
     status.hidden = true;
+    document.body.removeAttribute("aria-busy");
     if (frame) {
       frame.dataset.renderedTheme = renderedDark ? "dark" : "light";
       frame.dataset.renderedStory = story?.story ?? "";
@@ -305,14 +306,18 @@ motion.addEventListener("change", () => preferences(dark, motion.matches));
 window.addEventListener("pagehide", () => { preparePicture(false); finishWaiters(); }, { once: true });
 setPageColor();
 show(selected.story, selected.lang);
-status.textContent = selected.lang === "zh" ? "正在加载…" : "Loading…";
+status.textContent = selected.lang === "zh" ? "正在加载预览…" : "Loading preview…";
 
 try {
+  let init;
+  ({ default: init, start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent } = await import("./pkg/kui_web.js"));
   await init();
   mounted = selected;
   set_accent(...accentPair);
   start(mounted.story, dark, reduced, mounted.lang === "zh", embedded);
 } catch (error) {
+  document.documentElement.dataset.previewError = "true";
+  document.body.removeAttribute("aria-busy");
   status.textContent = selected.lang === "zh" ? "预览未能加载，请刷新重试。" : "Preview could not load. Refresh to retry.";
   finishWaiters();
   console.error(error);

@@ -412,61 +412,9 @@ fn props(body: &Body, en: bool) -> String {
     html
 }
 
-fn highlighted_line(mut line: &str, shell: bool) -> String {
-    let mut result = String::new();
-    while let Some(ch) = line.chars().next() {
-        let (end, kind) = if (!shell && line.starts_with("//")) || (shell && ch == '#') {
-            (line.len(), "comment")
-        } else if ch == '"' {
-            let mut escaped = false;
-            let end = line[1..]
-                .char_indices()
-                .find_map(|(i, c)| {
-                    let close = c == '"' && !escaped;
-                    escaped = c == '\\' && !escaped;
-                    close.then_some(i + 2)
-                })
-                .unwrap_or(line.len());
-            (end, "string")
-        } else if ch.is_ascii_alphanumeric() || ch == '_' {
-            let end = line
-                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-                .unwrap_or(line.len());
-            let kind = match &line[..end] {
-                "use" | "let" | "mut" | "fn" | "pub" | "move" | "if" | "else" | "match"
-                | "impl" | "crate" | "self" => "keyword",
-                "true" | "false" => "number",
-                _ if ch.is_ascii_digit() => "number",
-                _ if ch.is_ascii_uppercase() || line[end..].starts_with('(') => "tag",
-                _ => "",
-            };
-            (end, kind)
-        } else {
-            (ch.len_utf8(), "")
-        };
-        let token = esc(&line[..end]);
-        if kind.is_empty() {
-            result.push_str(&token);
-        } else {
-            write!(result, r#"<span class="syn-{kind}">{token}</span>"#).unwrap();
-        }
-        line = &line[end..];
-    }
-    result
-}
-
 fn code_panel(title: &str, source: &str, en: bool) -> String {
     let shell = title == "shell";
-    let lines = source
-        .lines()
-        .map(|line| {
-            format!(
-                r#"<span class="line">{}</span>"#,
-                highlighted_line(line, shell)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let lines = crate::syntax::highlight(source, shell);
     let copy = controls::button(
         &format!(r#"class="copy" data-copy="{}""#, esc(source)),
         &format!(

@@ -46,7 +46,7 @@ def verify(work):
                 code.append('pub fn mount_button(cx: &gpui::App) { let _ = ui::components::button::Button::new("save").secondary().label("Save").with_icon(ui::primitives::glyph::Glyph::Check, false).loading(true).into_themed(cx); }')
                 continue
             doc = (ROOT / f"docs/items/{item}.md").read_text()
-            snippet = re.search(r'```rust\n(.*?)\n```', doc, re.S).group(1)
+            snippet = re.search(r'```rust\n(.*?)\n```', doc, re.S).group(1).replace("kui::", "crate::ui::")
             code.append(f'pub fn mount_{item.replace("-", "_")}(#[allow(unused_variables)] window: &mut gpui::Window, cx: &mut gpui::App) {{\n{snippet}\nlet _ = control;\n}}')
         (app / "lib.rs").write_text('\n'.join(code))
     for target in ([], ["--target", "wasm32-unknown-unknown"]):

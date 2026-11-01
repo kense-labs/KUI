@@ -876,11 +876,11 @@ html[data-theme="dark"],
   --doc-string: oklch(80% 0.12 160);
   --doc-tag: oklch(78% 0.12 250);
 }
-.code .syn-comment { color: var(--doc-comment); font-style: italic; }
-.code .syn-keyword { color: var(--doc-keyword); }
-.code .syn-number { color: var(--doc-number); }
-.code .syn-string { color: var(--doc-string); }
-.code .syn-tag { color: var(--doc-tag); }
+:is(.code, .source) .syn-comment { color: var(--doc-comment); font-style: italic; }
+:is(.code, .source) .syn-keyword { color: var(--doc-keyword); }
+:is(.code, .source) .syn-number { color: var(--doc-number); }
+:is(.code, .source) .syn-string { color: var(--doc-string); }
+:is(.code, .source) .syn-tag { color: var(--doc-tag); }
 @media (prefers-reduced-motion: no-preference) {
   .aside .pill { transition: transform 220ms var(--ease-snappy); }
   .stage .indicator { transition: transform 180ms var(--ease-snappy), width 180ms var(--ease-snappy); }

@@ -16,7 +16,7 @@
     },
     "event": "Commit { ticket, next }",
     "method": "complete(ticket, ok, cx)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::action_button::ActionButton;\n\nlet control = cx.new(|_| ActionButton::new(\"save\", [\"Save changes\", \"Saving\", \"Saved\", \"Retry\"]));\nuse crate::ui::primitives::commit::Commit;\ncx.subscribe(&control, |control, request: &Commit, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::action_button::ActionButton;\n\nlet control = cx.new(|_| ActionButton::new(\"save\", [\"Save changes\", \"Saving\", \"Saved\", \"Retry\"]));\nuse kui::primitives::commit::Commit;\ncx.subscribe(&control, |control, request: &Commit, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
     "when": {
       "zh": "保存、同步等需要就地反馈的异步命令",
       "en": "Save or sync a change with an in-place acknowledgement."
@@ -44,7 +44,7 @@
     },
     "event": "Activated(SharedString)",
     "method": "Segment::with_menu(Vec<Choice>)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::split_button::SplitButton;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment, Choice};\n\nlet control = cx.new(|cx| SplitButton::new(\"publish-control\", vec![\n    Segment::new(\"publish\", \"Publish\", Some(Glyph::Send), 103.),\n    Segment::new(\"options\", \"More actions\", Some(Glyph::Down), 38.).icon_only()\n        .with_menu(vec![Choice::new(\"draft\", \"Save as draft\")]),\n], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::split_button::SplitButton;\nuse kui::primitives::glyph::Glyph;\nuse kui::primitives::strip::{Segment, Choice};\n\nlet control = cx.new(|cx| SplitButton::new(\"publish-control\", vec![\n    Segment::new(\"publish\", \"Publish\", Some(Glyph::Send), 103.),\n    Segment::new(\"options\", \"More actions\", Some(Glyph::Down), 38.).icon_only()\n        .with_menu(vec![Choice::new(\"draft\", \"Save as draft\")]),\n], cx));",
     "when": {
       "zh": "有默认命令，同时需要提供少量替代命令",
       "en": "One frequent command and a few alternatives."
@@ -72,7 +72,7 @@
     },
     "event": "Activated(SharedString)",
     "method": "update_label(id, label, cx)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::button_group::ButtonGroup;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| ButtonGroup::new(\"editor\", vec![Segment::new(\"save\", \"Save\", Some(Glyph::Save), 93.), Segment::new(\"preview\", \"Preview\", Some(Glyph::Eye), 104.)], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::button_group::ButtonGroup;\nuse kui::primitives::glyph::Glyph;\nuse kui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| ButtonGroup::new(\"editor\", vec![Segment::new(\"save\", \"Save\", Some(Glyph::Save), 93.), Segment::new(\"preview\", \"Preview\", Some(Glyph::Eye), 104.)], cx));",
     "when": {
       "zh": "把共享选区或工具设置的命令排在一起",
       "en": "Arrange commands that act on the same selection."
@@ -100,7 +100,7 @@
     },
     "event": "Activated(SharedString)",
     "method": "vertical() / set_disabled(id, disabled, cx)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::floating_button_group::FloatingButtonGroup;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| FloatingButtonGroup::new(\"canvas\", vec![Segment::new(\"zoom\", \"Zoom in\", Some(Glyph::ZoomIn), 36.).icon_only(), Segment::new(\"lock\", \"Lock\", Some(Glyph::Lock), 36.).icon_only().divider()], cx).vertical());",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::floating_button_group::FloatingButtonGroup;\nuse kui::primitives::glyph::Glyph;\nuse kui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| FloatingButtonGroup::new(\"canvas\", vec![Segment::new(\"zoom\", \"Zoom in\", Some(Glyph::ZoomIn), 36.).icon_only(), Segment::new(\"lock\", \"Lock\", Some(Glyph::Lock), 36.).icon_only().divider()], cx).vertical());",
     "when": {
       "zh": "把画布工具或行内工具放进独立托盘",
       "en": "Build a palette for a canvas or a message."
@@ -128,7 +128,7 @@
     },
     "event": "Activated(SharedString)",
     "method": "Segment::width",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expanding_button_group::ExpandingButtonGroup;\nuse crate::ui::primitives::glyph::Glyph;\nuse crate::ui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| ExpandingButtonGroup::new(\"mail\", vec![Segment::new(\"reply\", \"Reply\", Some(Glyph::Undo), 96.), Segment::new(\"forward\", \"Forward\", Some(Glyph::Redo), 106.)], cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::expanding_button_group::ExpandingButtonGroup;\nuse kui::primitives::glyph::Glyph;\nuse kui::primitives::strip::{Segment};\n\nlet control = cx.new(|cx| ExpandingButtonGroup::new(\"mail\", vec![Segment::new(\"reply\", \"Reply\", Some(Glyph::Undo), 96.), Segment::new(\"forward\", \"Forward\", Some(Glyph::Redo), 106.)], cx));",
     "when": {
       "zh": "工具空间有限，但每项仍需一个可读标签",
       "en": "Fit named tools into a narrow strip."
@@ -156,7 +156,7 @@
     },
     "event": "CopyResult(bool)",
     "method": "icon_only()",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::copy_button::CopyButton;\n\nlet control = cx.new(|_| CopyButton::new(\"invite\", \"KUI-4821\", \"Copy invite code\").icon_only());",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::copy_button::CopyButton;\n\nlet control = cx.new(|_| CopyButton::new(\"invite\", \"KUI-4821\", \"Copy invite code\").icon_only());",
     "when": {
       "zh": "复制调用者明确提供的文本",
       "en": "Copy the exact string supplied by the host."
@@ -184,7 +184,7 @@
     },
     "event": "Commit { ticket, next }",
     "method": "complete(ticket, ok, cx)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::action_swap::ActionSwap;\n\nlet control = cx.new(|_| ActionSwap::new(\"follow\", [\"Follow\", \"Updating\", \"Following\", \"Retry\"]));\nuse crate::ui::primitives::commit::Commit;\ncx.subscribe(&control, |control, request: &Commit, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::action_swap::ActionSwap;\n\nlet control = cx.new(|_| ActionSwap::new(\"follow\", [\"Follow\", \"Updating\", \"Following\", \"Retry\"]));\nuse kui::primitives::commit::Commit;\ncx.subscribe(&control, |control, request: &Commit, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
     "when": {
       "zh": "关注、加入资料库和发送邀请",
       "en": "Follow a profile, collect an article or send an invitation."
@@ -212,7 +212,7 @@
     },
     "event": "MorphChanged(bool)",
     "method": "set(on, cx) / with_captions([S; 2])",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::icon_morph::IconMorph;\nuse crate::ui::primitives::glyph::Glyph;\n\nlet control = cx.new(|_| IconMorph::new(\"player\", [Glyph::Play, Glyph::Pause], [\"Play\", \"Pause\"]).with_captions([\"Paused\", \"Playing\"]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::icon_morph::IconMorph;\nuse kui::primitives::glyph::Glyph;\n\nlet control = cx.new(|_| IconMorph::new(\"player\", [Glyph::Play, Glyph::Pause], [\"Play\", \"Pause\"]).with_captions([\"Paused\", \"Playing\"]));",
     "when": {
       "zh": "同一位置要表达相互关联的两种操作状态",
       "en": "Show related actions in one stable icon slot."
@@ -240,7 +240,7 @@
     },
     "event": "ConfirmRequest { ticket, intent }",
     "method": "set_mode(ConfirmMode, cx) / complete(ticket, ok, cx)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::confirm_morph::ConfirmMorph;\n\nlet control = cx.new(|cx| ConfirmMorph::new(\"remove\", \"Delete project\", \"Delete project?\", window, cx));\nuse crate::ui::components::confirm_morph::ConfirmRequest;\ncx.subscribe(&control, |control, request: &ConfirmRequest, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::confirm_morph::ConfirmMorph;\n\nlet control = cx.new(|cx| ConfirmMorph::new(\"remove\", \"Delete project\", \"Delete project?\", window, cx));\nuse kui::components::confirm_morph::ConfirmRequest;\ncx.subscribe(&control, |control, request: &ConfirmRequest, cx| {\n    // An in-memory success. Finish here only after the real operation returns.\n    control.update(cx, |view, cx| view.complete(request.ticket, true, cx));\n}).detach();",
     "when": {
       "zh": "需要让用户确认、取消或撤销的命令",
       "en": "Offer a confirmation, cancellation and undo next to the affected object."
@@ -268,7 +268,7 @@
     },
     "event": "ThemeChange { next, mode, trigger }",
     "method": "with_mode(Transition)",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::theme_switch::ThemeSwitch;\n\nlet control = cx.new(|_| ThemeSwitch::new(\"appearance\"));\nuse crate::ui::components::theme_switch::ThemeChange;\ncx.subscribe(&control, |_control, request: &ThemeChange, cx| {\n    crate::ui::foundation::Theme::global_mut(cx).set_mode(request.next);\n    cx.refresh_windows();\n}).detach();",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::theme_switch::ThemeSwitch;\n\nlet control = cx.new(|_| ThemeSwitch::new(\"appearance\"));\nuse kui::components::theme_switch::ThemeChange;\ncx.subscribe(&control, |_control, request: &ThemeChange, cx| {\n    kui::foundation::Theme::global_mut(cx).set_mode(request.next);\n    cx.refresh_windows();\n}).detach();",
     "when": {
       "zh": "由工具栏切换整个文档或窗口的明暗外观",
       "en": "Change the appearance of a document or window."

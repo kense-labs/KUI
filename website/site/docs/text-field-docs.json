@@ -7,7 +7,7 @@
       "zh": "单行输入"
     },
     "rustType": "Input",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::input::Input;\n\nlet control = cx.new(|cx| Input::new(\"project\", \"Project name\", window, cx).with_description(\"A short descriptive name.\"));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::input::Input;\n\nlet control = cx.new(|cx| Input::new(\"project\", \"Project name\", window, cx).with_description(\"A short descriptive name.\"));",
     "method": "set_error",
     "signature": "(impl Into<SharedString>, &mut Context<Self>)",
     "event": "FieldEvent",
@@ -40,7 +40,7 @@
       "zh": "多行输入"
     },
     "rustType": "Textarea",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::textarea::Textarea;\n\nlet control = cx.new(|cx| Textarea::new(\"notes\", \"Project note\", window, cx).with_value(\"Ready for review.\", window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::textarea::Textarea;\n\nlet control = cx.new(|cx| Textarea::new(\"notes\", \"Project note\", window, cx).with_value(\"Ready for review.\", window, cx));",
     "method": "set_description",
     "signature": "(impl Into<SharedString>, &mut Context<Self>)",
     "event": "FieldEvent",
@@ -73,7 +73,7 @@
       "zh": "密码框"
     },
     "rustType": "PasswordField",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::password_field::PasswordField;\n\nlet control = cx.new(|cx| PasswordField::new(\"access\", \"Access key\", window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::password_field::PasswordField;\n\nlet control = cx.new(|cx| PasswordField::new(\"access\", \"Access key\", window, cx));",
     "method": "value",
     "signature": "(&App) → &str",
     "event": "FieldEvent",
@@ -106,7 +106,7 @@
       "zh": "密码强度"
     },
     "rustType": "PasswordStrength",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::password_strength::PasswordStrength;\n\nlet control = cx.new(|cx| PasswordStrength::new(\"password\", \"New password\", window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::password_strength::PasswordStrength;\n\nlet control = cx.new(|cx| PasswordStrength::new(\"password\", \"New password\", window, cx));",
     "method": "with_policy",
     "signature": "(Vec<PasswordRule>, usize, &mut Context<Self>)",
     "event": "StrengthEvent",
@@ -139,7 +139,7 @@
       "zh": "搜索框"
     },
     "rustType": "SearchField",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::search_field::SearchField;\n\nlet control = cx.new(|cx| SearchField::new(\"query\", \"Search projects\", window, cx).with_placeholder(\"Search by name\", cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::search_field::SearchField;\n\nlet control = cx.new(|cx| SearchField::new(\"query\", \"Search projects\", window, cx).with_placeholder(\"Search by name\", cx));",
     "method": "set_value",
     "signature": "(impl Into<String>, &Window, &mut Context<Self>)",
     "event": "FieldEvent",
@@ -172,7 +172,7 @@
       "zh": "展开搜索"
     },
     "rustType": "ExpandingSearch",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::expanding_search::{ExpandingSearch, SearchItem};\n\nlet control = cx.new(|cx| ExpandingSearch::new(\"find\", \"Search\", vec![SearchItem::new(\"notes\", \"Release notes\")], window, cx).with_suggestions(vec![\"notes\".into()]));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::expanding_search::{ExpandingSearch, SearchItem};\n\nlet control = cx.new(|cx| ExpandingSearch::new(\"find\", \"Search\", vec![SearchItem::new(\"notes\", \"Release notes\")], window, cx).with_suggestions(vec![\"notes\".into()]));",
     "method": "with_suggestions",
     "signature": "(Vec<SharedString>)",
     "event": "SearchEvent",
@@ -205,7 +205,7 @@
       "zh": "行内编辑"
     },
     "rustType": "InlineEdit",
-    "usageRust": "use gpui::prelude::*;\nuse crate::ui::components::inline_edit::InlineEdit;\n\nlet control = cx.new(|cx| InlineEdit::new(\"name\", \"Project name\", \"KUI project\", window, cx).with_validator(|s| s.is_empty().then(|| \"Enter a name.\".into())));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::inline_edit::InlineEdit;\n\nlet control = cx.new(|cx| InlineEdit::new(\"name\", \"Project name\", \"KUI project\", window, cx).with_validator(|s| s.is_empty().then(|| \"Enter a name.\".into())));",
     "method": "finish",
     "signature": "(u64, Result<(), SharedString>, &mut Context<Self>)",
     "event": "SaveRequest",

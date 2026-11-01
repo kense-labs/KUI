@@ -94,6 +94,14 @@ Exposed corners of nested surfaces use the same 8px radius. Joined edges stay sq
 
 All rectangular button surfaces and their highlights use the shared **8px** control radius. The preview canvas, install panel and code panel use the same radius. Primary fills follow the active accent.
 
+### Documentation preview and source
+
+- Before the first GPUI frame, center a 20px loading ring and a muted 13px status label inside the preview. Use a 2px ring stroke, a 12px gap, and an 800ms rotation. Keep the preview's existing dimensions while loading.
+- Respect reduced motion by keeping the loading ring static. Expose the loading message as a polite status and mark the preview body busy until it paints or reports an error.
+- Hide loading only after the first frame paints. On a module or runtime loading failure, stop the ring and show a localized retry instruction.
+- Usage examples, the Code tab, and every installed source file share the same escaped syntax markup and light/dark syntax colors. Preserve plain source in clipboard actions.
+- Shell blocks distinguish commands, flags, variables, paths, quoted values, and comments with the same syntax palette.
+
 ### Variants
 
 | Variant | Fill | Ink | Border |

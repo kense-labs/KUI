@@ -3,20 +3,16 @@ mod controls;
 mod cover;
 mod docs;
 mod shell;
+#[path = "../../syntax.rs"]
+mod syntax;
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::{
     env, fs,
     path::{Path, PathBuf},
 };
+use syntax::escape as esc;
 
-pub fn esc(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
 fn put(path: PathBuf, data: impl AsRef<[u8]>) -> Result<()> {
     fs::create_dir_all(path.parent().unwrap())?;
     fs::write(&path, data).with_context(|| format!("write {}", path.display()))

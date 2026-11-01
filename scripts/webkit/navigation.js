@@ -30,6 +30,31 @@
     }
     await check('popover', () => history.back());
     await check('button', () => history.forward());
+    if (!original.querySelector('#status')?.hidden || original.body.hasAttribute('aria-busy')) {
+      throw Error('preview loading state did not clear after paint');
+    }
+    const install = document.querySelector('[data-copy^="cargo add"]')?.closest('figure');
+    if (!install?.querySelector('.syn-tag') || !install.querySelector('.syn-keyword')) {
+      throw Error('Shell command or flag highlighting missing');
+    }
+    document.querySelector('[data-view=code]').click();
+    const panel = document.querySelector('[data-panel=code]');
+    if (panel.hidden || !panel.querySelector('.syn-keyword')) throw Error('example syntax highlighting missing');
+    const source = panel.querySelector('[data-item-source]');
+    source.open = true;
+    await wait(() => source.dataset.loaded === 'yes', 'installed source did not load', 10000);
+    const file = source.querySelector('select');
+    const code = source.querySelector('pre code');
+    if (!code.querySelector('.syn-keyword')) throw Error('installed source syntax highlighting missing');
+    const first = code.textContent;
+    if (file.options.length < 2) throw Error('expected multiple installed source files');
+    file.selectedIndex = 1;
+    file.dispatchEvent(new Event('change', { bubbles: true }));
+    if (code.textContent === first || !code.querySelector('.syn-keyword')) {
+      throw Error('switching installed source files lost syntax highlighting');
+    }
+    document.querySelector('[data-view=preview]').click();
+    report('loading completion, example highlighting and installed source switching: PASS');
     report('PASS');
   } catch (error) {
     report('FAIL: ' + error);

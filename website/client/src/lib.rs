@@ -3,6 +3,8 @@ mod cover;
 mod docs;
 mod navigation;
 mod shell;
+#[path = "../../syntax.rs"]
+mod syntax;
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{Element, HtmlDialogElement, HtmlElement, HtmlTextAreaElement};
