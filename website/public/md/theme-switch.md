@@ -2,16 +2,34 @@
 
 Switch the document theme. Compare Reveal, Eclipse, Split and Rise.
 
-`kui add theme-switch`
+## Install
+
+```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
+kui add theme-switch
+```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::theme_switch::ThemeSwitch;
+use kui::components::theme_switch::ThemeSwitch;
 
 let control = cx.new(|_| ThemeSwitch::new("appearance"));
-use crate::ui::components::theme_switch::ThemeChange;
+use kui::components::theme_switch::ThemeChange;
 cx.subscribe(&control, |_control, request: &ThemeChange, cx| {
     crate::ui::foundation::Theme::global_mut(cx).set_mode(request.next);
     cx.refresh_windows();

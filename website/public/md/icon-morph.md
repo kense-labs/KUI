@@ -2,14 +2,32 @@
 
 Eight reversible icon pairs, including playback, alerts, details and likes. The sun/moon button switches over 160ms between a light sun tile and a dark moon tile in either page theme.
 
-`kui add icon-morph`
+## Install
+
+```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
+kui add icon-morph
+```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::icon_morph::IconMorph;
-use crate::ui::primitives::glyph::Glyph;
+use kui::components::icon_morph::IconMorph;
+use kui::primitives::glyph::Glyph;
 
 let control = cx.new(|_| IconMorph::new("player", [Glyph::Play, Glyph::Pause], ["Play", "Pause"]).with_captions(["Paused", "Playing"]));
 ```

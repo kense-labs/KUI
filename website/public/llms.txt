@@ -1,14 +1,19 @@
 # KUI
 
-> KUI is copy-source Rust UI for GPUI (desktop + WASM). From Kense.
+> KUI is Rust UI for GPUI (desktop + WASM), as a library or copied source. From Kense.
 
-Product: KUI. Crate/CLI: `kui`. License: MIT.
+Product: KUI. crates.io package: `kense-kui`. Rust library/CLI: `kui`. License: MIT.
 Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.
 
 ## For agents
 
 - [AI guide](./kui/ai/)
-- Install: `kui init` then `kui add button`
+- Library: `cargo add kense-kui --rename kui --no-default-features`; use `kui::` imports
+- Initialize: call `kui::init(cx)` before opening windows; pin `gpui-pre =0.3.10`
+- Features: `native` for platform hooks, `web` for semantic HTML; never enable `test-support` on wasm32
+- Copy source: `cargo install --git https://github.com/kense-labs/KUI --locked kui-cli`, then `kui init` and `kui add button`; use `crate::ui::` imports
+- Only the component library is published to crates.io
+- [Rust API](https://docs.rs/kense-kui)
 - Rules: repository AGENTS.md (Microsoft Pragmatic Rust Guidelines)
 - Design: repository DESIGN.md
 - Platforms: repository docs/PLATFORMS.md

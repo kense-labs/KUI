@@ -5,15 +5,29 @@ Show a compact group of people and reveal the remaining members.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add avatar-group
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::avatar_group::AvatarGroup;
-use crate::ui::components::avatar::Person;
+use kui::components::avatar_group::AvatarGroup;
+use kui::components::avatar::Person;
 
 let control = cx.new(|_| AvatarGroup::new(vec![Person::new("Ari Singh"), Person::new("Emma Collins")], 1));
 ```

@@ -5,14 +5,28 @@ Inspect, sort and edit cells in a spreadsheet-like grid.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add data-grid
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::data_grid::DataGrid;
+use kui::components::data_grid::DataGrid;
 
 let control = cx.new(|cx| DataGrid::new("Renewals", vec!["Account".into(),"Seats".into()], vec![vec!["Northwind".into(),"40".into()]],window,cx));
 ```

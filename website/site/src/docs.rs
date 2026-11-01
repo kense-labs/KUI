@@ -29,7 +29,8 @@ const GROUPS: &[&str] = &[
     "intelligence",
     "workspace",
 ];
-const BUTTON_INSTALL: &str = "cargo install --path tools/cli\nkui init\nkui add button";
+const LIBRARY_INSTALL: &str = "cargo add kense-kui --rename kui --no-default-features";
+const BUTTON_INSTALL: &str = "cargo install --git https://github.com/kense-labs/KUI --locked kui-cli\nkui init\nkui add button";
 
 #[derive(Deserialize)]
 struct Localized<T = String> {
@@ -172,7 +173,7 @@ impl Entry {
             motion: motions,
             props,
             api_lead,
-            ai: vec![format!("kui add {}", self.id)],
+            ai: vec![LIBRARY_INSTALL.into(), format!("kui add {}", self.id)],
         }
     }
 }
@@ -575,7 +576,7 @@ fn component(doc: &Entry, en: bool, revision: &str) -> String {
     } else {
         format!("kui add {id}")
     };
-    write!(html,r#"<h2>{}</h2>{}<h2>{}</h2><p class="muted usage-lead">{}</p>{example}<h2>{}</h2><h3><code>{}</code></h3><p class="muted usage-lead">{}</p>{}"#,t("button.install",en),code_panel("shell",&install,en),t("button.usage",en),t("button.usage.lead",en),t("button.api",en),esc(&doc.rust_type),esc(&body.api_lead),props(&body,en)).unwrap();
+    write!(html,r#"<h2>{}</h2><h3>{}</h3>{}<p>{}</p><h3>{}</h3><p>{}</p>{}<h2>{}</h2><p class="muted usage-lead">{}</p>{example}<h2>{}</h2><h3><code>{}</code></h3><p class="muted usage-lead">{}</p>{}"#,t("button.install",en),t("docs.install.library",en),code_panel("shell",LIBRARY_INSTALL,en),esc(t("docs.install.library.body",en)),t("docs.install.cli",en),esc(t("docs.install.cli.body",en)),code_panel("shell",&install,en),t("button.usage",en),t("button.usage.lead",en),t("button.api",en),esc(&doc.rust_type),esc(&body.api_lead),props(&body,en)).unwrap();
     for (key, items) in [("button.motion", &body.motion), ("button.ai", &body.ai)] {
         write!(html, "<h2>{}</h2>{}", t(key, en), list(items)).unwrap();
     }
@@ -641,10 +642,10 @@ fn guide(id: &str, en: bool) -> String {
             .unwrap();
         }
         "installation" => {
-            write!(html,r#"{}{}{}{}{}<ul><li>AGENTS.md · DESIGN.md · docs/PLATFORMS.md</li><li>{} · <a href="/llms.txt">llms.txt</a></li></ul>"#,heading("docs.install.cli"),code_panel("shell",&format!("{BUTTON_INSTALL}\nkui doctor"),en),heading("docs.install.hosts"),items(&["docs.install.host.desktop","docs.install.host.wasm"]),heading("docs.install.also"),link("ai")).unwrap();
+            write!(html,r#"{}{}<p>{}</p>{}<p>{}</p>{}<p>{}</p>{}{}{}{}<ul><li>AGENTS.md · DESIGN.md · docs/PLATFORMS.md</li><li><a href="https://crates.io/crates/kense-kui">crates.io</a> · <a href="https://docs.rs/kense-kui">Rust API</a></li><li>{} · <a href="/llms.txt">llms.txt</a></li></ul>"#,heading("docs.install.library"),code_panel("shell",LIBRARY_INSTALL,en),esc(t("docs.install.library.body",en)),heading("docs.install.features"),esc(t("docs.install.features.body",en)),heading("docs.install.cli"),esc(t("docs.install.cli.body",en)),code_panel("shell",&format!("{BUTTON_INSTALL}\nkui doctor"),en),heading("docs.install.hosts"),items(&["docs.install.host.desktop","docs.install.host.wasm"]),heading("docs.install.also"),link("ai")).unwrap();
         }
         "ai" => {
-            write!(html,"{}<ol><li>{}</li><li>{}</li><li><code>kui init</code> · <code>kui add button</code></li><li>AGENTS.md</li></ol>{}{}{}<ul>",heading("ai.start"),link_file("/llms.txt"),link_file("/md/button.md"),heading("ai.install"),code_panel("shell","kui init\nkui add button",en),heading("ai.registry")).unwrap();
+            write!(html,"{}<ol><li>{}</li><li>{}</li><li>{}</li><li>AGENTS.md</li></ol>{}{}<p>{}</p><h3>{}</h3><p>{}</p>{}{}<ul>",heading("ai.start"),link_file("/llms.txt"),link_file("/md/button.md"),link("installation"),heading("ai.install"),code_panel("shell",LIBRARY_INSTALL,en),esc(t("docs.install.library.body",en)),t("docs.install.cli",en),esc(t("docs.install.cli.body",en)),code_panel("shell",BUTTON_INSTALL,en),heading("ai.registry")).unwrap();
             for path in [
                 "/r/catalog.json",
                 "/r/button.json",

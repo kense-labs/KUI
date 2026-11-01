@@ -2,16 +2,34 @@
 
 Delete a sample project, cancel, retry or undo without opening a separate dialog.
 
-`kui add confirm-morph`
+## Install
+
+```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
+kui add confirm-morph
+```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::confirm_morph::ConfirmMorph;
+use kui::components::confirm_morph::ConfirmMorph;
 
 let control = cx.new(|cx| ConfirmMorph::new("remove", "Delete project", "Delete project?", window, cx));
-use crate::ui::components::confirm_morph::ConfirmRequest;
+use kui::components::confirm_morph::ConfirmRequest;
 cx.subscribe(&control, |control, request: &ConfirmRequest, cx| {
     // An in-memory success. Finish here only after the real operation returns.
     control.update(cx, |view, cx| view.complete(request.ticket, true, cx));

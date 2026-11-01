@@ -30,7 +30,7 @@
         "Primary disabled uses 52% opacity; other variants keep shape and mute the label."
       ],
       "ai": [
-        "Prefer `kui add button` over rewriting the control.",
+        "Use Button from kense-kui or copy it with `kui add button` instead of rewriting it.",
         "Customize through theme tokens and public builders.",
         "Keep ElementId stable; changing it resets focus."
       ],
@@ -98,7 +98,7 @@
         "主要按钮禁用时为 52% 不透明度；其他变体保持形状并弱化文字。"
       ],
       "ai": [
-        "优先使用 `kui add button`，不要重写该控件。",
+        "使用 kense-kui 中的 Button，或通过 `kui add button` 复制源码，不要重写该控件。",
         "通过主题令牌和公开构建器定制。",
         "保持 ElementId 稳定；更改会重置焦点。"
       ],

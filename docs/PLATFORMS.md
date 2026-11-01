@@ -12,7 +12,7 @@ GPUI pins stay exact: `gpui-pre` / `gpui-pre-platform` / `gpui-pre-web` at `=0.3
 
 ## Same source rule
 
-- Controls live under `registry/` (crate `kui`).
+- Controls live under `registry/` (package `kense-kui`, Rust library `kui`).
 - Story UI lives in `apps/story/src/`; the gesture and menu examples share `family_story/collections.rs`.
 - Desktop and web hosts choose the platform bootstrap and provide system services; controls draw the same chrome on both.
 
@@ -40,7 +40,7 @@ Open `http://127.0.0.1:8080/`. The page loads `pkg/kui_web.js` produced by `wasm
 Library check without a full bindgen pass:
 
 ```bash
-cargo check -p kui --target wasm32-unknown-unknown --no-default-features
+cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features
 cargo check -p kui-web --target wasm32-unknown-unknown
 ```
 
@@ -48,7 +48,7 @@ cargo check -p kui-web --target wasm32-unknown-unknown
 
 | Crate | `test-support` | `native` | `web` |
 | --- | --- | --- | --- |
-| `kui` | default; **off** on wasm32 | optional | marker only |
+| `kense-kui` (lib `kui`) | default host smoke/CI; **off** for applications and wasm32 | optional platform hooks | semantic HTML controls |
 | `kui-story` | default smoke/CI | desktop window | — |
 | `kui-web` | never | — | wasm host |
 
@@ -62,7 +62,28 @@ cargo check -p kui-web --target wasm32-unknown-unknown
 
 ## App authors
 
-Installed `ui/` source is host-agnostic. The application Cargo.toml chooses the host:
+Install the published component library with a stable `kui` dependency name:
+
+```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+```toml
+kui = { package = "kense-kui", version = "0.1.0", default-features = false }
+```
+
+This dependency works for native and WASM applications. `native` enables optional
+GPUI platform hooks; `web` exposes KUI's semantic HTML backend. The shared GPUI
+controls compile without either feature. `test-support` is enabled by default
+for host smoke tests, so use `--no-default-features` in application dependencies
+and never enable it on wasm32.
+
+Alternatively, install the CLI with
+`cargo install --git https://github.com/kense-labs/KUI --locked kui-cli`, then run
+`kui init` and `kui add <id>` to own selected source. Only the component library is
+published to crates.io. Copied source uses `crate::ui::` imports in place of `kui::`.
+
+Both installation paths are host-agnostic. The application Cargo.toml chooses the host:
 
 ```toml
 # Desktop
@@ -72,7 +93,8 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", default-fe
 # WASM cdylib also depends on gpui_platform (wasm cfg) + wasm-bindgen
 ```
 
-Call `kui::foundation::init(cx)` once after the host `application()` starts, before opening windows.
+Call `kui::init(cx)` once after the host `application()` starts, before opening
+windows. With copied source, call `crate::ui::foundation::init(cx)` instead.
 
 Embedded action previews take their language from the documentation route. Hosts may set
 `kui::primitives::control::UiLanguage` as a GPUI global; English remains the default.

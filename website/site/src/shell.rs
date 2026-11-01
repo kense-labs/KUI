@@ -230,8 +230,8 @@ pub fn company(en: bool) -> String {
         tr(en, "GPUI · Desktop + WASM", "GPUI · 桌面 + WASM"),
         tr(
             en,
-            "Copy-source Rust UI kit for GPUI. Explore the components and install their source.",
-            "面向 GPUI 的 Rust UI 工具包。浏览组件，将源码安装到你的项目。"
+            "Rust UI kit for GPUI. Use the component library or own selected component source.",
+            "面向 GPUI 的 Rust UI 工具包。使用组件库，或将所需组件源码安装到项目中。"
         ),
         tr(en, "Open KUI →", "打开 KUI →")
     )

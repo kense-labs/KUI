@@ -5,14 +5,28 @@ Scroll an overflowing local region independently of the page.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add scroll-area
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::scroll_area::ScrollArea;
+use kui::components::scroll_area::ScrollArea;
 
 let control = cx.new(|_| ScrollArea::new(80., Box::new(|_, _| gpui::div().flex().flex_col().children((1..20).map(|n| gpui::div().child(n.to_string()))).into_any_element())));
 ```

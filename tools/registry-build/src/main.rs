@@ -75,12 +75,17 @@ fn build(root: &Path) -> Result<()> {
 
     let mut llms = String::from(
         "# KUI\n\n\
-         > KUI is copy-source Rust UI for GPUI (desktop + WASM). From Kense.\n\n\
-         Product: KUI. Crate/CLI: `kui`. License: MIT.\n\
+         > KUI is Rust UI for GPUI (desktop + WASM), as a library or copied source. From Kense.\n\n\
+         Product: KUI. crates.io package: `kense-kui`. Rust library/CLI: `kui`. License: MIT.\n\
          Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` only for important moments.\n\n\
          ## For agents\n\n\
          - [AI guide](./kui/ai/)\n\
-         - Install: `kui init` then `kui add button`\n\
+         - Library: `cargo add kense-kui --rename kui --no-default-features`; use `kui::` imports\n\
+         - Initialize: call `kui::init(cx)` before opening windows; pin `gpui-pre =0.3.10`\n\
+         - Features: `native` for platform hooks, `web` for semantic HTML; never enable `test-support` on wasm32\n\
+         - Copy source: `cargo install --git https://github.com/kense-labs/KUI --locked kui-cli`, then `kui init` and `kui add button`; use `crate::ui::` imports\n\
+         - Only the component library is published to crates.io\n\
+         - [Rust API](https://docs.rs/kense-kui)\n\
          - Rules: repository AGENTS.md (Microsoft Pragmatic Rust Guidelines)\n\
          - Design: repository DESIGN.md\n\
          - Platforms: repository docs/PLATFORMS.md\n\n\
@@ -158,8 +163,21 @@ Use `{name}` in a KUI / GPUI desktop app when this control fits the job.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Use `kui::` imports and call `kui::init(cx)` before opening windows.
+Never enable `test-support` on wasm32. See the repository platform guide for host setup.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add {name}
 ```
+
+Copied source uses `crate::ui::` imports in place of `kui::`.
 
 ## Keyboard
 
@@ -175,7 +193,7 @@ Respect `Theme.reduced_motion`. Prefer `foundation::MOTION.snappy` for press fee
 
 ## Notes for AI
 
-This is a **KUI** registry item. Prefer `kui add {name}` over rewriting the control.
+Use this control from `kense-kui` or copy it with `kui add {name}` instead of rewriting it.
 "#,
                 title = item.title,
                 description = item.description,

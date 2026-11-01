@@ -2638,6 +2638,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "kense-kui"
+version = "0.1.0"
+dependencies = [
+ "gpui-pre",
+ "gpui-pre-platform",
+ "js-sys",
+ "serde_json",
+ "unicode-segmentation",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-time",
+]
+
+[[package]]
 name = "khronos-egl"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2653,20 +2667,6 @@ name = "khronos_api"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
-
-[[package]]
-name = "kui"
-version = "0.1.0"
-dependencies = [
- "gpui-pre",
- "gpui-pre-platform",
- "js-sys",
- "serde_json",
- "unicode-segmentation",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-time",
-]
 
 [[package]]
 name = "kui-build"
@@ -2712,7 +2712,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hex",
- "kui",
+ "kense-kui",
  "kui-catalog",
  "serde",
  "serde_json",
@@ -2738,7 +2738,7 @@ version = "0.1.0"
 dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
- "kui",
+ "kense-kui",
  "serde_json",
 ]
 
@@ -2756,7 +2756,7 @@ dependencies = [
  "console_error_panic_hook",
  "gpui-pre",
  "gpui-pre-platform",
- "kui",
+ "kense-kui",
  "kui-story",
  "ttf-parser",
  "wasm-bindgen",

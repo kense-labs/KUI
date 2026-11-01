@@ -2,16 +2,34 @@
 
 Save changes → Saving → Saved; the acknowledgement resets after 2.4 seconds.
 
-`kui add action-button`
+## Install
+
+```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
+kui add action-button
+```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::action_button::ActionButton;
+use kui::components::action_button::ActionButton;
 
 let control = cx.new(|_| ActionButton::new("save", ["Save changes", "Saving", "Saved", "Retry"]));
-use crate::ui::primitives::commit::Commit;
+use kui::primitives::commit::Commit;
 cx.subscribe(&control, |control, request: &Commit, cx| {
     // An in-memory success. Finish here only after the real operation returns.
     control.update(cx, |view, cx| view.complete(request.ticket, true, cx));

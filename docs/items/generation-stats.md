@@ -5,14 +5,28 @@ Inspect token usage and timing for a generated response.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add generation-stats
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::generation_stats::{GenerationReadout, Metrics};
+use kui::components::generation_stats::{GenerationReadout, Metrics};
 
 let control = cx.new(|_| GenerationReadout::new("stats","Assistant",Metrics {first_token_ms:400,duration_ms:2400,input_tokens:800,output_tokens:120,input_rate:2.,output_rate:8.,..Metrics::default()}));
 ```

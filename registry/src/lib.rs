@@ -1,8 +1,18 @@
-//! KUI registry source.
+//! KUI components for GPUI on native desktop and WASM web.
 //!
-//! This crate is the authoritative tree that `kui add` copies into an
-//! application's `ui/` folder. The story gallery depends on it directly so
-//! preview and install source stay identical.
+//! Install the `kense-kui` package with the dependency name `kui`:
+//! `cargo add kense-kui --rename kui --no-default-features`.
+//! Call [`init`] before opening windows, then use controls from [`components`].
+//! Disable default features for WASM; `test-support` is for host smoke tests.
+//! The `kui` CLI copies this same source into an application's `ui/` folder.
+//!
+//! # Examples
+//!
+//! ```
+//! use kui::components::button::Button;
+//!
+//! let button = Button::new("save").primary().label("Save");
+//! ```
 
 pub mod components;
 pub mod foundation;

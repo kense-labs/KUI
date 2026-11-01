@@ -2,13 +2,31 @@
 
 Explain an empty view and offer a next action.
 
-`kui add empty-state`
+## Install
+
+```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
+kui add empty-state
+```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::empty_state::{EmptyState, EmptyContent};
+use kui::components::empty_state::{EmptyState, EmptyContent};
 
 let control = cx.new(|_| EmptyState::new("saved", EmptyContent::new("No saved views", "Save a view to reuse your filters.").with_action("Create view")));
 ```

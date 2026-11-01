@@ -14,9 +14,9 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - name: Check KUI library (host)
-        run: cargo check -p kui
+        run: cargo check -p kense-kui
       - name: Check KUI library (wasm32)
-        run: cargo check -p kui --target wasm32-unknown-unknown --no-default-features
+        run: cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features
       - name: Check web (wasm32)
         run: cargo check -p kui-web --target wasm32-unknown-unknown
       - name: Test KUI story

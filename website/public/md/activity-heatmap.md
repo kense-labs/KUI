@@ -5,15 +5,29 @@ Explore activity day by day over a longer interval.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add activity-heatmap
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::activity_heatmap::DailyActivity;
-use crate::ui::primitives::plot::Sample;
+use kui::components::activity_heatmap::DailyActivity;
+use kui::primitives::plot::Sample;
 
 let control = cx.new(|_| DailyActivity::new("Activity", vec![Sample::new("Mon", 12.0), Sample::new("Tue", 18.0)]));
 ```

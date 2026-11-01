@@ -5,14 +5,28 @@ Inspect a tool invocation, its arguments and its result.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add tool-call
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::tool_call::{InvocationInspector, Invocation, ToolState};
+use kui::components::tool_call::{InvocationInspector, Invocation, ToolState};
 
 let control = cx.new(|_| InvocationInspector::new("calls",vec![Invocation { name:"Search".into(),action:"Find release issues".into(),input:"release".into(),output:String::new(), state:ToolState::Approval }]));
 ```

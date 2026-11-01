@@ -5,14 +5,28 @@ Read one metric in the context of its change and comparison period.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add metric-card
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::metric_card::MetricCard;
+use kui::components::metric_card::MetricCard;
 
 let control = cx.new(|_| MetricCard::new("Active users", 2486.0, 18.4, "Previous 7 days"));
 ```

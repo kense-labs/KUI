@@ -5,14 +5,28 @@ Inspect how different parts of a conversation consume its context budget.
 ## Install
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+Library examples use `kui::` imports. Call `kui::init(cx)` before opening windows.
+See the [platform guide](https://github.com/kense-labs/KUI/blob/main/docs/PLATFORMS.md)
+for features and host setup. Never enable `test-support` on wasm32.
+
+To own this component's source instead:
+
+```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
+kui init
 kui add context-window
 ```
+
+For copied source, replace `kui::` imports with `crate::ui::`.
 
 ## Usage
 
 ```rust
 use gpui::prelude::*;
-use crate::ui::components::context_window::{CapacityBands, Band};
+use kui::components::context_window::{CapacityBands, Band};
 
 let control = cx.new(|_| CapacityBands::new("context", "Assistant", 128000, vec![Band { label: "Messages".into(), tokens: 24000, color: gpui::rgb(0x628995).into() }]));
 ```

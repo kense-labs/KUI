@@ -8,16 +8,16 @@
     "en": "Introduction"
   },
   "docs.intro.lead": {
-    "zh": "KUI 是面向 GPUI 的拷源码 Rust UI，支持原生桌面与 WASM。人与 Agent 安装同一套 registry。",
-    "en": "KUI is copy-source Rust UI for GPUI on native desktop and WASM. Agents and humans install the same registry items."
+    "zh": "KUI 是面向 GPUI 的 Rust UI 组件库，支持原生桌面与 WASM。可通过 crates.io 安装，也可复制所需组件源码。",
+    "en": "KUI is a Rust UI kit for GPUI on native desktop and WASM. Install the library from crates.io or copy selected component source."
   },
   "docs.intro.what": {
     "zh": "KUI 是什么",
     "en": "What KUI is"
   },
   "docs.intro.what.body": {
-    "zh": "你拥有的成品 chrome：foundation tokens、Button、kui CLI、给 Agent 的 Markdown，以及 registry JSON。Story 预览与安装源码一致。",
-    "en": "Finished chrome as source you own: foundation tokens, button components, a kui CLI, Markdown for agents, and registry JSON. Preview in story is the same source you install."
+    "zh": "共享的主题令牌、动效与 108 个组件。crates.io 包名为 kense-kui，Rust 库名为 kui。组件库、CLI 安装源码与 Story 预览使用同一套源码。",
+    "en": "Shared theme tokens, motion, and 108 components. The crates.io package is kense-kui and the Rust library is kui. The library, CLI-installed source, and story previews use the same source tree."
   },
   "docs.intro.org": {
     "zh": "如何组织",
@@ -28,8 +28,8 @@
     "en": "Foundation — theme tokens, motion, init"
   },
   "docs.intro.org.c": {
-    "zh": "Components — 成品控件（先做 Button）",
-    "en": "Components — finished controls (Button first)"
+    "zh": "Components — 108 个成品控件",
+    "en": "Components — 108 finished controls"
   },
   "docs.intro.org.p": {
     "zh": "Primitives — 无 chrome 的行为层",
@@ -64,12 +64,12 @@
     "en": "Installation"
   },
   "docs.install.lead": {
-    "zh": "先装一次 CLI，再把 foundation 与组件作为源码加入。",
-    "en": "Install the CLI once, then add foundation and components as source."
+    "zh": "通过 crates.io 安装 kense-kui，或用 CLI 将组件源码加入项目。两种方式共用同一套组件。",
+    "en": "Install kense-kui from crates.io, or use the CLI to copy component source into your project. Both paths use the same controls."
   },
   "docs.install.cli": {
-    "zh": "CLI",
-    "en": "CLI"
+    "zh": "复制组件源码 · CLI",
+    "en": "Copy component source · CLI"
   },
   "docs.install.hosts": {
     "zh": "运行宿主",
@@ -92,8 +92,8 @@
     "en": "AI"
   },
   "ai.lead": {
-    "zh": "Agent 可检索、选型并安装 KUI，无需猜测。代码与 CLI：kui。许可 MIT。",
-    "en": "Agents can search, choose, and install KUI without guessing. Code and CLI: kui. License MIT."
+    "zh": "Agent 可检索、选型并安装 KUI。crates.io 包名：kense-kui。Rust 库与 CLI：kui。许可：MIT。",
+    "en": "Agents can search, choose, and install KUI. crates.io package: kense-kui. Rust library and CLI: kui. License: MIT."
   },
   "ai.start": {
     "zh": "从这里开始",
@@ -112,8 +112,8 @@
     "en": "Rules"
   },
   "ai.rule.1": {
-    "zh": "优先用已有 registry 项，不要另造平行控件",
-    "en": "Prefer existing registry items over new controls"
+    "zh": "复用 kense-kui 中的控件或复制已有 registry 项，不要另造平行控件",
+    "en": "Reuse kense-kui controls or copy existing registry items instead of creating parallel controls"
   },
   "ai.rule.2": {
     "zh": "钉死 gpui-pre =0.3.10",
@@ -160,8 +160,8 @@
     "en": "Usage"
   },
   "button.usage.lead": {
-    "zh": "控件 API 在桌面与 WASM 上相同；宿主启动见安装页。",
-    "en": "The control API is the same on desktop and WASM; see Installation for hosts."
+    "zh": "示例使用组件库的 kui:: 导入；CLI 复制源码后改为 crate::ui::。桌面与 WASM 共用控件 API，宿主启动见安装页。",
+    "en": "Examples use kui:: imports from the library; use crate::ui:: for CLI-installed source. Desktop and WASM share the control API; see Installation for hosts."
   },
   "button.api": {
     "zh": "API",
@@ -298,5 +298,25 @@
   "sidebar.empty": {
     "zh": "无匹配项",
     "en": "No matches"
+  },
+  "docs.install.library": {
+    "zh": "组件库 · crates.io",
+    "en": "Component library · crates.io"
+  },
+  "docs.install.library.body": {
+    "zh": "包名为 kense-kui，依赖别名与 Rust 库名为 kui，示例使用 kui:: 导入。将 gpui-pre 钉死为 =0.3.10，并在打开窗口前调用 kui::init(cx)。",
+    "en": "The package is kense-kui; its dependency alias and Rust library name are kui. Examples use kui:: imports. Pin gpui-pre to =0.3.10 and call kui::init(cx) before opening windows."
+  },
+  "docs.install.features": {
+    "zh": "特性与平台",
+    "en": "Features and platforms"
+  },
+  "docs.install.features.body": {
+    "zh": "应用依赖应关闭默认特性。默认 test-support 用于宿主冒烟测试，wasm32 禁止启用。native 提供可选平台接口；web 提供语义 HTML 控件。共享 GPUI 控件无需启用这两个特性，应用自行提供桌面或 WASM 宿主。",
+    "en": "Disable default features in application dependencies. The default test-support feature is for host smoke tests and must stay off on wasm32. native provides optional platform hooks; web exposes semantic HTML controls. Shared GPUI controls need neither feature; applications supply their native or WASM host."
+  },
+  "docs.install.cli.body": {
+    "zh": "CLI 从 GitHub 安装，未发布到 crates.io。先运行 kui init，再运行 kui add <id>。复制源码后，将示例中的 kui:: 改为 crate::ui::。",
+    "en": "The CLI is installed from GitHub and is not published to crates.io. Run kui init, then kui add <id>. For copied source, replace kui:: imports in examples with crate::ui::."
   }
 }

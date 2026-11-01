@@ -1,10 +1,23 @@
 [package]
-name = "kui"
-description = "KUI registry source — the same tree the kui CLI copies into applications"
+name = "kense-kui"
+description = "KUI components for GPUI on native desktop and WASM web"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish = false
+repository.workspace = true
+homepage = "https://kense-labs.github.io/kui/"
+documentation = "https://docs.rs/kense-kui"
+readme = "README.md"
+keywords = ["gpui", "ui", "components", "desktop", "wasm"]
+categories = ["gui", "wasm"]
+publish = ["crates-io"]
+
+[lib]
+name = "kui"
+
+[package.metadata.docs.rs]
+no-default-features = true
+features = ["web"]
 
 [features]
 default = ["test-support"]
@@ -12,7 +25,7 @@ default = ["test-support"]
 test-support = ["gpui/test-support"]
 # Optional platform hooks for native hosts that embed kui helpers.
 native = ["dep:gpui_platform"]
-# Marker feature: same source compiles for wasm32; runtime is gpui_platform's wasm backend.
+# Semantic HTML controls; shared GPUI controls compile for wasm32 without this feature.
 web = []
 
 [dependencies]

@@ -1,6 +1,6 @@
 # KUI
 
-**KUI** is a **Kense** product — a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Applications own the source: install controls with the `kui` CLI into a local `ui/` tree.
+**KUI** is a **Kense** product — a Rust UI kit for [GPUI](https://gpui.rs) that runs on **native desktop** and **WASM web** from one control source. Install the [`kense-kui`](https://crates.io/crates/kense-kui) component library, or copy selected controls into a local `ui/` tree with the `kui` CLI.
 
 This repository ships foundation tokens and 108 installable components, covering input, navigation, overlays, data visualization, collaboration and AI workflows. Browse the component families on the bilingual component site.
 
@@ -8,18 +8,40 @@ This repository ships foundation tokens and 108 installable components, covering
 
 - **Dual runtime** — macOS / Windows / Linux desktop and `wasm32-unknown-unknown` web
 - **GPUI** — GPU UI, pinned `gpui-pre =0.3.10`
-- **Copy the source** — no runtime component crate lock-in for your chrome
+- **Two installation paths** — depend on the component library or own selected component source
 - **Behavior vs presentation** — primitives stay unstyled; components ship finished defaults
 - **Preview = install source** — story hosts depend on the same `registry/` tree
 
 ## Quick start
 
 ```bash
+cargo add kense-kui --rename kui --no-default-features
+```
+
+The crates.io package is `kense-kui`; the Rust library and dependency name remain `kui`:
+
+```rust
+use kui::components::button::Button;
+
+let button = Button::new("save").primary().label("Save");
+```
+
+Call `kui::init(cx)` once before opening windows and use `button.into_themed(cx)`
+in your GPUI render method. Keep `gpui-pre` pinned to `=0.3.10`.
+Default `test-support` is for host smoke tests; disable it for application builds
+and WASM. The optional `native` feature provides GPUI platform hooks, and `web`
+exposes semantic HTML document controls. Your app supplies its native or WASM host.
+See the [crate guide](registry/README.md), [Rust API](https://docs.rs/kense-kui),
+and [platform guide](docs/PLATFORMS.md).
+
+## Develop this repository
+
+```bash
 # Check the KUI registry library (host CI; no Xcode Metal required)
-cargo check -p kui
+cargo check -p kense-kui
 
 # Same library for WASM
-cargo check -p kui --target wasm32-unknown-unknown --no-default-features
+cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features
 
 # Story smoke (headless)
 cargo run -p kui-story
@@ -60,7 +82,11 @@ A push to `main` builds and checks the site once. The existing KUI project Pages
 
 ## Install a button into your app
 
+To own the source instead of depending on the component library, install the CLI
+from GitHub. The CLI is not published to crates.io.
+
 ```bash
+cargo install --git https://github.com/kense-labs/KUI --locked kui-cli
 kui init
 kui add button
 ```
@@ -71,12 +97,14 @@ use crate::ui::components::button::Button;
 Button::new("save").primary().label("Save")
 ```
 
-The installed `ui/` source is host-agnostic. Your app Cargo.toml selects desktop `gpui_platform` or a WASM cdylib host.
+The installed `ui/` source is host-agnostic. Use `crate::ui::` imports for copied
+source and `kui::` imports for the published library. Your app Cargo.toml selects
+desktop `gpui_platform` or a WASM cdylib host.
 
 ## Layout
 
 ```text
-registry/           # authoritative KUI source (crate: kui)
+registry/           # authoritative source (package: kense-kui, library: kui)
 apps/story/         # shared gallery + desktop/smoke host
 apps/web/     # WASM web host + www/
 tools/cli/          # kui init | add | doctor | sync-mod
@@ -88,13 +116,16 @@ docs/               # contracts + per-item markdown
 
 ## Brand
 
-**Kense** is the company (more products will follow). **KUI** is this product; use **`kui`** in crate names, CLI, modules, and paths. See [`website/public/assets/BRAND.md`](./website/public/assets/BRAND.md).
+**Kense** is the company (more products will follow). **KUI** is this product. Its
+crates.io package is **`kense-kui`**; the Rust library, CLI, modules, and paths use
+**`kui`**. See [`website/public/assets/BRAND.md`](./website/public/assets/BRAND.md).
 
 ## Engineering
 
 - [`AGENTS.md`](./AGENTS.md) — agent and contributor rules (Microsoft Pragmatic Rust Guidelines)
 - [`DESIGN.md`](./DESIGN.md) — chrome tokens, Button metrics, interaction
 - [`docs/PLATFORMS.md`](./docs/PLATFORMS.md) — native + WASM matrix
+- [`docs/PUBLISHING.md`](./docs/PUBLISHING.md) — crates.io release, organization ownership, and documentation checks
 
 ## License
 

@@ -1,7 +1,8 @@
 # Kense + KUI brand
 
 - Mark / site brand: **Kense** (氪锶科技)
-- This product: **KUI** (copy-source Rust UI for GPUI)
+- This product: **KUI** (Rust UI for GPUI, as a component library or copied source)
+- crates.io package: **`kense-kui`**; Rust library / dependency alias: **`kui`**
 - Code / CLI: **`kui`**
 - License: **MIT**
 
