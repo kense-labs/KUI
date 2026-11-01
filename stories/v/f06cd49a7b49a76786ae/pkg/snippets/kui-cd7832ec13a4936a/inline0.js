@@ -1,0 +1,1 @@
+export function kuiCopy(s){return navigator.clipboard ? navigator.clipboard.writeText(s) : Promise.reject(new Error('Clipboard unavailable'))}

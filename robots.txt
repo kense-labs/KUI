@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# AI / LLM discovery
+# https://llmstxt.org/
+Llms-Txt: ./llms.txt

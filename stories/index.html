@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KUI — Component gallery (WASM)</title>
+    <script>
+      try {
+        document.documentElement.dataset.theme = window.frameElement?.ownerDocument.documentElement.dataset.theme
+          || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      } catch {}
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #f5f5f5;
+        color: CanvasText;
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #242424; }
+      html:is([data-story="swipe-actions"], [data-story="resizable-panels"]) canvas { touch-action: pan-y pinch-zoom !important; }
+      html[data-embedded-story][data-story="team-switcher"] canvas { touch-action: pan-y pinch-zoom !important; }
+      #status {
+        position: absolute; inset: 0 auto auto 0; pointer-events: none;
+        padding: 1rem 1.25rem;
+      }
+      canvas {
+        display: block;
+      }
+      html[data-preview-error] canvas { visibility: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="status" role="status"></div>
+    <script type="module" src="./v/f06cd49a7b49a76786ae/preview.js"></script>
+  </body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="KUI — GPUI 拷源码 UI（桌面 + WASM）"><meta name="theme-color" content="#ffffff"><link rel="llms" href="/KUI/llms.txt"><title>KUI</title><link rel="icon" href="/KUI/assets/icon.png" type="image/png"><style>
+  :root,[data-kui-surface="light"] { --swatch-neutral: #000000; }
+  html[data-theme="dark"],[data-kui-surface="dark"] { --swatch-neutral: #ffffff; }
+  html[data-accent="neutral"] { --accent-light: #000000; --accent-dark: #ffffff; --accent-wash: 0%; }
+
+  :root,[data-kui-surface="light"] { --swatch-blue: #245bc4; }
+  html[data-theme="dark"],[data-kui-surface="dark"] { --swatch-blue: #8bb4ff; }
+  html[data-accent="blue"] { --accent-light: #245bc4; --accent-dark: #8bb4ff; --accent-wash: 16%; }
+
+  :root,[data-kui-surface="light"] { --swatch-violet: #7142b6; }
+  html[data-theme="dark"],[data-kui-surface="dark"] { --swatch-violet: #bc9cff; }
+  html[data-accent="violet"] { --accent-light: #7142b6; --accent-dark: #bc9cff; --accent-wash: 16%; }
+
+  :root,[data-kui-surface="light"] { --swatch-teal: #08776d; }
+  html[data-theme="dark"],[data-kui-surface="dark"] { --swatch-teal: #68d4c4; }
+  html[data-accent="teal"] { --accent-light: #08776d; --accent-dark: #68d4c4; --accent-wash: 16%; }
+
+  :root,[data-kui-surface="light"] { --swatch-rose: #b93c67; }
+  html[data-theme="dark"],[data-kui-surface="dark"] { --swatch-rose: #ff94b3; }
+  html[data-accent="rose"] { --accent-light: #b93c67; --accent-dark: #ff94b3; --accent-wash: 16%; }
+
+  :root,[data-kui-surface="light"] { --swatch-amber: #955a08; }
+  html[data-theme="dark"],[data-kui-surface="dark"] { --swatch-amber: #f4be69; }
+  html[data-accent="amber"] { --accent-light: #955a08; --accent-dark: #f4be69; --accent-wash: 16%; }
+
+  html[data-accent^="#"] {
+    --accent-light: var(--custom-accent);
+    --accent-dark: var(--custom-accent);
+    --accent-wash: 16%;
+    --accent-text-light: color-mix(in srgb, var(--accent-light) 43%, black);
+    --accent-text-dark: color-mix(in srgb, var(--accent-dark) 36%, white);
+  }
+</style><script data-astro-rerun>(function(){const accentNames = ["neutral","blue","violet","teal","rose","amber"];
+
+      (function () {
+        try {
+          if (!document.documentElement.dataset.accent) {
+            var accent = localStorage.getItem("kui-accent");
+            var root = document.documentElement;
+            var custom = /^#[a-f0-9]{6}$/.test(accent);
+            root.dataset.accent = custom || accentNames.includes(accent) ? accent : "neutral";
+            if (custom) {
+              root.style.setProperty("--custom-accent", accent);
+              var rgb = [1, 3, 5].map(function(i) {
+                var c = parseInt(accent.slice(i, i + 2), 16) / 255;
+                return c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4);
+              });
+              root.style.setProperty("--custom-ink", .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2] > .179129 ? "#000000" : "#ffffff");
+            }
+          }
+          var stored = localStorage.getItem("theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
+        } catch (_) {}
+      })();
+    })();</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/KUI/_astro/ClientRouter.astro_astro_type_script_index_0_lang.BdQIa43n.js"></script><script type="module">document.addEventListener("astro:after-swap",()=>{document.documentElement.classList.add("is-client-nav")});</script><style>.wrap[data-astro-cid-d4h6v5wb]{width:min(960px,calc(100% - 2rem));margin-inline:auto}.hero[data-astro-cid-d4h6v5wb]{padding:4.25rem 0 2.75rem}h1[data-astro-cid-d4h6v5wb]{margin:0 0 1rem;max-width:18ch;font-size:clamp(2rem,4.5vw,3rem);font-weight:500;letter-spacing:-.035em;line-height:1.1}.lead[data-astro-cid-d4h6v5wb]{margin:0;max-width:38rem;font-size:1.05rem}.actions[data-astro-cid-d4h6v5wb]{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:1.75rem}.band[data-astro-cid-d4h6v5wb]{border-block:1px solid var(--hairline);background:var(--surface-muted);padding:1.5rem 0}.cards[data-astro-cid-d4h6v5wb]{display:grid;gap:.75rem}.card[data-astro-cid-d4h6v5wb]{display:block;padding:1.15rem 1.2rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);text-decoration:none}.card[data-astro-cid-d4h6v5wb]:hover{opacity:1}.card[data-astro-cid-d4h6v5wb] h2[data-astro-cid-d4h6v5wb]{margin:0 0 .35rem;font-size:1rem;font-weight:600}.card[data-astro-cid-d4h6v5wb] p[data-astro-cid-d4h6v5wb]{margin:0;font-size:.9rem}.install[data-astro-cid-d4h6v5wb]{padding:2.5rem 0 1rem}.install[data-astro-cid-d4h6v5wb] h2[data-astro-cid-d4h6v5wb]{margin:0 0 .35rem;font-size:1.25rem}.install[data-astro-cid-d4h6v5wb] p[data-astro-cid-d4h6v5wb]{margin:0 0 1rem}@media(min-width:800px){.cards[data-astro-cid-d4h6v5wb]{grid-template-columns:repeat(3,1fr)}}
+</style>
+<link rel="stylesheet" href="/KUI/_astro/index.MtgfqJQM.css">
+<link rel="stylesheet" href="/KUI/_astro/_id_.Co3nolEs.css">
+<link rel="stylesheet" href="/KUI/_astro/ai.DZca_eT8.css"><style>[data-astro-transition-scope="astro-ytpmadow-1"] { view-transition-name: page-main; }@layer astro { ::view-transition-old(page-main) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }::view-transition-new(page-main) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }[data-astro-transition=back]::view-transition-old(page-main) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition=back]::view-transition-new(page-main) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; } }[data-astro-transition-fallback="old"] [data-astro-transition-scope="astro-ytpmadow-1"],
+			[data-astro-transition-fallback="old"][data-astro-transition-scope="astro-ytpmadow-1"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition-fallback="new"] [data-astro-transition-scope="astro-ytpmadow-1"],
+			[data-astro-transition-fallback="new"][data-astro-transition-scope="astro-ytpmadow-1"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }[data-astro-transition=back][data-astro-transition-fallback="old"] [data-astro-transition-scope="astro-ytpmadow-1"],
+			[data-astro-transition=back][data-astro-transition-fallback="old"][data-astro-transition-scope="astro-ytpmadow-1"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition=back][data-astro-transition-fallback="new"] [data-astro-transition-scope="astro-ytpmadow-1"],
+			[data-astro-transition=back][data-astro-transition-fallback="new"][data-astro-transition-scope="astro-ytpmadow-1"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }</style><style>[data-astro-transition-scope="astro-p33i7bco-2"] { view-transition-name: site-header-zh; }@layer astro { ::view-transition-old(site-header-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }::view-transition-new(site-header-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }[data-astro-transition=back]::view-transition-old(site-header-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition=back]::view-transition-new(site-header-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; } }[data-astro-transition-fallback="old"] [data-astro-transition-scope="astro-p33i7bco-2"],
+			[data-astro-transition-fallback="old"][data-astro-transition-scope="astro-p33i7bco-2"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition-fallback="new"] [data-astro-transition-scope="astro-p33i7bco-2"],
+			[data-astro-transition-fallback="new"][data-astro-transition-scope="astro-p33i7bco-2"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }[data-astro-transition=back][data-astro-transition-fallback="old"] [data-astro-transition-scope="astro-p33i7bco-2"],
+			[data-astro-transition=back][data-astro-transition-fallback="old"][data-astro-transition-scope="astro-p33i7bco-2"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition=back][data-astro-transition-fallback="new"] [data-astro-transition-scope="astro-p33i7bco-2"],
+			[data-astro-transition=back][data-astro-transition-fallback="new"][data-astro-transition-scope="astro-p33i7bco-2"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }</style><style>[data-astro-transition-scope="astro-tvayyljk-3"] { view-transition-name: site-footer-zh; }@layer astro { ::view-transition-old(site-footer-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }::view-transition-new(site-footer-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }[data-astro-transition=back]::view-transition-old(site-footer-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition=back]::view-transition-new(site-footer-zh) { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; } }[data-astro-transition-fallback="old"] [data-astro-transition-scope="astro-tvayyljk-3"],
+			[data-astro-transition-fallback="old"][data-astro-transition-scope="astro-tvayyljk-3"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition-fallback="new"] [data-astro-transition-scope="astro-tvayyljk-3"],
+			[data-astro-transition-fallback="new"][data-astro-transition-scope="astro-tvayyljk-3"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }[data-astro-transition=back][data-astro-transition-fallback="old"] [data-astro-transition-scope="astro-tvayyljk-3"],
+			[data-astro-transition=back][data-astro-transition-fallback="old"][data-astro-transition-scope="astro-tvayyljk-3"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeOut; }[data-astro-transition=back][data-astro-transition-fallback="new"] [data-astro-transition-scope="astro-tvayyljk-3"],
+			[data-astro-transition=back][data-astro-transition-fallback="new"][data-astro-transition-scope="astro-tvayyljk-3"] { 
+	animation-duration: 180ms;
+	animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1);
+	animation-fill-mode: both;
+	animation-name: astroFadeIn; }</style></head> <body>  <div class="product" data-astro-cid-rpzng3pu> <header class="topbar product" data-astro-cid-ctg3m53h data-astro-transition-scope="astro-p33i7bco-2"> <div class="inner" data-astro-cid-ctg3m53h> <a class="brand" href="/KUI/kui" aria-label="KUI" data-astro-prefetch data-astro-cid-ctg3m53h> <span class="logo-swap mark" aria-hidden="true" data-astro-cid-ctg3m53h> <img class="light" src="/KUI/assets/mark-light.png" width="22" height="22" alt="" data-astro-cid-ctg3m53h> <img class="dark" src="/KUI/assets/mark-dark.png" width="22" height="22" alt="" data-astro-cid-ctg3m53h> </span> <span class="wordmark" data-astro-cid-ctg3m53h>KUI</span> </a> <nav class="nav" aria-label="Product" data-astro-cid-ctg3m53h> <a href="/KUI/kui/components/button" data-astro-prefetch data-astro-cid-ctg3m53h> 组件 </a> <a href="/KUI/kui/docs" data-astro-prefetch data-astro-cid-ctg3m53h> 文档 </a> </nav> <div class="actions" data-astro-cid-ctg3m53h> <div class="controls" data-astro-cid-yadsprhe> <button type="button" class="chip" data-theme-toggle aria-label="切换主题" title="切换主题" data-astro-cid-yadsprhe> <span class="sun" data-astro-cid-yadsprhe><span class="icon icon-sun" style="--icon-size:15px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg> </span> </span> <span class="moon" data-astro-cid-yadsprhe><span class="icon icon-moon" style="--icon-size:15px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg> </span> </span> </button> <div class="accent-picker" data-accent-picker data-astro-cid-yadsprhe> <button type="button" class="chip accent-trigger" data-accent-trigger aria-label="主题色" title="主题色" aria-haspopup="menu" aria-expanded="false" aria-controls="site-accent-menu" data-astro-cid-yadsprhe> <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.65" data-astro-cid-yadsprhe> <path d="M12 3a9 9 0 1 0 0 18h.9a2.2 2.2 0 0 0 1.6-3.7 1.55 1.55 0 0 1 1.1-2.65h1.5A4 4 0 0 0 21 10.55C20.65 6.25 16.65 3 12 3Z" data-astro-cid-yadsprhe></path> <g fill="currentColor" stroke="none" data-astro-cid-yadsprhe><circle cx="7.6" cy="11" r="1.2" data-astro-cid-yadsprhe></circle><circle cx="10.7" cy="7.8" r="1.2" data-astro-cid-yadsprhe></circle><circle cx="15.1" cy="8.2" r="1.2" data-astro-cid-yadsprhe></circle></g> </svg> </button> <div class="accent-menu" id="site-accent-menu" data-accent-menu role="menu" aria-label="主题色" inert data-astro-cid-yadsprhe> <div class="accent-title" aria-hidden="true" data-astro-cid-yadsprhe>主题色</div> <button type="button" class="accent-option" role="menuitemradio" tabindex="-1" data-accent-value="neutral" aria-checked="true" data-astro-cid-yadsprhe> <span class="swatch" style="--swatch: var(--swatch-neutral)" aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>中性</span> <span class="check" aria-hidden="true" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> </button><button type="button" class="accent-option" role="menuitemradio" tabindex="-1" data-accent-value="blue" aria-checked="false" data-astro-cid-yadsprhe> <span class="swatch" style="--swatch: var(--swatch-blue)" aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>蓝色</span> <span class="check" aria-hidden="true" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> </button><button type="button" class="accent-option" role="menuitemradio" tabindex="-1" data-accent-value="violet" aria-checked="false" data-astro-cid-yadsprhe> <span class="swatch" style="--swatch: var(--swatch-violet)" aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>紫色</span> <span class="check" aria-hidden="true" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> </button><button type="button" class="accent-option" role="menuitemradio" tabindex="-1" data-accent-value="teal" aria-checked="false" data-astro-cid-yadsprhe> <span class="swatch" style="--swatch: var(--swatch-teal)" aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>青色</span> <span class="check" aria-hidden="true" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> </button><button type="button" class="accent-option" role="menuitemradio" tabindex="-1" data-accent-value="rose" aria-checked="false" data-astro-cid-yadsprhe> <span class="swatch" style="--swatch: var(--swatch-rose)" aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>玫瑰色</span> <span class="check" aria-hidden="true" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> </button><button type="button" class="accent-option" role="menuitemradio" tabindex="-1" data-accent-value="amber" aria-checked="false" data-astro-cid-yadsprhe> <span class="swatch" style="--swatch: var(--swatch-amber)" aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>琥珀色</span> <span class="check" aria-hidden="true" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> </button> <div class="accent-divider" role="separator" data-astro-cid-yadsprhe></div> <button type="button" class="accent-option custom-option" role="menuitemradio" tabindex="-1" data-accent-value="custom" aria-checked="false" aria-haspopup="dialog" aria-controls="site-custom-accent" data-astro-cid-yadsprhe> <span class="swatch" data-custom-swatch aria-hidden="true" data-astro-cid-yadsprhe></span> <span data-astro-cid-yadsprhe>自定义颜色</span> <span class="custom-end" aria-hidden="true" data-astro-cid-yadsprhe> <span class="check" data-astro-cid-yadsprhe><span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span> </span> <span class="forward" data-astro-cid-yadsprhe><span class="icon icon-chevron" style="--icon-size:13px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="m6 9 6 6 6-6"/></svg> </span> </span> </span> </button> </div> <div class="editor" data-custom-accent-editor id="site-custom-accent" role="dialog" aria-labelledby="custom-accent-heading" hidden data-astro-cid-zixv46we> <div class="heading" data-astro-cid-zixv46we> <button class="back" data-custom-back type="button" aria-label="返回主题色" data-astro-cid-zixv46we> <span class="icon icon-arrowRight" style="--icon-size:16px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12h14M13 5l7 7-7 7"/></svg> </span>  </button> <span id="custom-accent-heading" data-astro-cid-zixv46we>自定义颜色</span> </div> <div class="sv" data-sv-surface role="group" aria-label="颜色面板" data-astro-cid-zixv46we> <span class="marker" aria-hidden="true" data-astro-cid-zixv46we></span> <input class="sr-only" type="range" data-saturation min="0" max="100" value="50" aria-label="饱和度" aria-describedby="custom-sv-help" data-astro-cid-zixv46we> <input class="sr-only" type="range" data-brightness min="0" max="100" value="50" aria-label="亮度" aria-describedby="custom-sv-help" data-astro-cid-zixv46we> </div> <span class="sr-only" id="custom-sv-help" data-astro-cid-zixv46we> 左右键调整饱和度，上下键调整亮度。按住 Shift 每次调整 10%。 </span> <div class="values" aria-hidden="true" data-astro-cid-zixv46we> <span data-astro-cid-zixv46we>饱和度 <span data-saturation-text data-astro-cid-zixv46we></span></span> <span data-astro-cid-zixv46we>亮度 <span data-brightness-text data-astro-cid-zixv46we></span></span> </div> <label class="hue-label" for="custom-accent-hue" data-astro-cid-zixv46we> 色相 <span data-hue-text data-astro-cid-zixv46we></span> </label> <input class="hue" type="range" id="custom-accent-hue" data-hue min="0" max="360" step="1" value="0" data-astro-cid-zixv46we> <label class="hex-label" for="custom-accent-hex" data-astro-cid-zixv46we>HEX</label> <div class="hex-row" data-astro-cid-zixv46we> <span class="sample" aria-hidden="true" data-custom-sample data-astro-cid-zixv46we></span> <input id="custom-accent-hex" data-hex-input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="custom-accent-error" placeholder="#3366CC" data-astro-cid-zixv46we> </div> <span class="error" id="custom-accent-error" role="status" data-hex-error hidden data-astro-cid-zixv46we> 请输入 3 或 6 位十六进制色值。 </span> <div class="commands" data-astro-cid-zixv46we> <button type="button" class="cancel" data-custom-cancel data-astro-cid-zixv46we>取消</button> <button type="button" class="apply" data-custom-apply data-astro-cid-zixv46we>应用</button> </div> </div>  </div> <div class="lang" data-lang data-astro-cid-yadsprhe> <button type="button" class="lang-trigger" data-lang-trigger aria-haspopup="listbox" aria-expanded="false" aria-label="语言" title="语言" data-astro-cid-yadsprhe> <span data-lang-label data-astro-cid-yadsprhe>中文</span> <span class="lang-short" aria-hidden="true" data-astro-cid-yadsprhe>中</span> <span class="chev" aria-hidden="true" data-astro-cid-yadsprhe></span> </button> <ul class="lang-menu" data-lang-menu role="listbox" hidden data-astro-cid-yadsprhe> <li role="option" aria-selected="true" data-astro-cid-yadsprhe> <button type="button" class="lang-option" data-locale="zh" data-astro-cid-yadsprhe>中文</button> </li> <li role="option" aria-selected="false" data-astro-cid-yadsprhe> <button type="button" class="lang-option" data-locale="en" data-astro-cid-yadsprhe>English</button> </li> </ul> </div> </div> <script type="module" src="/KUI/_astro/ThemeLangControls.astro_astro_type_script_index_0_lang.D_1JD9Py.js"></script>  <a class="cta" href="https://github.com/kense-labs/KUI" target="_blank" rel="noreferrer" data-astro-cid-ctg3m53h> <span class="icon icon-github" style="--icon-size:15px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.2c3.2-.4 6.5-1.6 6.5-7a5.4 5.4 0 0 0-1.5-3.8 5 5 0 0 0-.1-3.8s-1.2-.4-4 1.5a13.4 13.4 0 0 0-7 0C4.3-.2 3.1.2 3.1.2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 1.5 8c0 5.4 3.3 6.6 6.5 7a4.8 4.8 0 0 0-1 3.2v4"/><path d="M9 18c-4.5 1.5-4.5-2.1-6-2.5"/></svg> </span>  <span data-astro-cid-ctg3m53h>GitHub</span> </a> </div> </div> </header>  <main class="landing" data-astro-cid-rpzng3pu data-astro-transition-scope="astro-ytpmadow-1">  <section class="hero wrap" data-astro-cid-d4h6v5wb> <h1 class="motion-fade-up" data-astro-cid-d4h6v5wb>面向 GPUI 的 Rust UI。桌面与 WASM。源码归你。</h1> <p class="muted lead motion-fade-up motion-fade-up-delay-1" data-astro-cid-d4h6v5wb> 给应用与 Agent 用的成品控件。从 foundation tokens 与 Button 开始。用 kui 安装，阅读 llms.txt。 </p> <div class="actions motion-fade-up motion-fade-up-delay-2" data-astro-cid-d4h6v5wb> <a class="btn btn-primary interactive" href="/KUI/kui/docs" data-astro-prefetch data-astro-cid-d4h6v5wb> 开始使用 </a> <a class="btn btn-secondary interactive" href="/KUI/kui/components/button" data-astro-prefetch data-astro-cid-d4h6v5wb> Button </a> <a class="btn btn-secondary interactive" href="/KUI/kui/ai" data-astro-prefetch data-astro-cid-d4h6v5wb> AI </a> </div> </section> <section class="band" data-astro-cid-d4h6v5wb> <div class="wrap cards" data-astro-cid-d4h6v5wb> <a class="card interactive lift" href="/KUI/kui/docs" data-astro-prefetch data-astro-cid-d4h6v5wb> <h2 data-astro-cid-d4h6v5wb>文档</h2> <p class="muted" data-astro-cid-d4h6v5wb>介绍、安装与平台说明。</p> </a> <a class="card interactive lift" href="/KUI/kui/components/button" data-astro-prefetch data-astro-cid-d4h6v5wb> <h2 data-astro-cid-d4h6v5wb>组件</h2> <p class="muted" data-astro-cid-d4h6v5wb>11 个按钮、3 个手势、3 个菜单和 7 个文本输入组件，均可单独安装。</p> </a> <a class="card interactive lift" href="/KUI/kui/ai" data-astro-prefetch data-astro-cid-d4h6v5wb> <h2 data-astro-cid-d4h6v5wb>AI</h2> <p class="muted" data-astro-cid-d4h6v5wb>Markdown、registry 与 Agent 规则。</p> </a> </div> </section> <section class="wrap install" data-astro-cid-d4h6v5wb> <h2 data-astro-cid-d4h6v5wb>安装</h2> <p class="muted" data-astro-cid-d4h6v5wb>一条 CLI，源码进你的项目。</p> <figure class="code with-lines" data-code-panel data-astro-cid-uh3pcbht> <figcaption class="head" data-astro-cid-uh3pcbht> <span class="file" data-astro-cid-uh3pcbht> <span class="icon icon-terminal" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M4 17 10 11 4 5M12 19h8"/></svg> </span>  <span data-astro-cid-uh3pcbht>shell</span> </span> <button type="button" class="copy" data-copy aria-label="Copy" data-astro-cid-uh3pcbht> <span class="state copy-idle" data-copy-idle data-astro-cid-uh3pcbht> <span class="icon icon-copy" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> </span>  <span data-astro-cid-uh3pcbht>Copy</span> </span> <span class="state copy-done" data-copy-done hidden data-astro-cid-uh3pcbht> <span class="icon icon-check" style="--icon-size:14px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M5 12.5 9.5 17 19 7.5"/></svg> </span>  <span data-astro-cid-uh3pcbht>Copied</span> </span> </button> </figcaption> <div class="body" id="code-body-8s66bxs" data-code-body data-astro-cid-uh3pcbht><pre class="shiki shiki-themes kui-docs-light kui-docs-dark" style="--shiki-light:#171717;--shiki-dark:#f5f5f5;--shiki-light-bg:#00000000;--shiki-dark-bg:#00000000" tabindex="0"><code><span class="line"><span style="--shiki-light:oklch(50% 0.15 255);--shiki-dark:oklch(78% 0.12 250)">cargo</span><span style="--shiki-light:oklch(48% 0.13 160);--shiki-dark:oklch(80% 0.12 160)"> install</span><span style="--shiki-light:oklch(53% 0.14 55);--shiki-dark:oklch(82% 0.12 70)"> --path</span><span style="--shiki-light:oklch(48% 0.13 160);--shiki-dark:oklch(80% 0.12 160)"> tools/cli</span></span>
+<span class="line"><span style="--shiki-light:oklch(50% 0.15 255);--shiki-dark:oklch(78% 0.12 250)">kui</span><span style="--shiki-light:oklch(48% 0.13 160);--shiki-dark:oklch(80% 0.12 160)"> init</span></span>
+<span class="line"><span style="--shiki-light:oklch(50% 0.15 255);--shiki-dark:oklch(78% 0.12 250)">kui</span><span style="--shiki-light:oklch(48% 0.13 160);--shiki-dark:oklch(80% 0.12 160)"> add</span><span style="--shiki-light:oklch(48% 0.13 160);--shiki-dark:oklch(80% 0.12 160)"> button</span></span></code></pre></div>  </figure> <script type="module">function s(){document.querySelectorAll("[data-code-panel]").forEach(e=>{const c=e.querySelector("[data-copy]"),r=e.querySelector("[data-code-body] code")||e.querySelector("code"),a=e.querySelector("[data-copy-idle]"),t=e.querySelector("[data-copy-done]");c&&r&&c.dataset.wired!=="1"&&(c.dataset.wired="1",c.addEventListener("click",async()=>{const o=r.textContent||"";try{await navigator.clipboard.writeText(o),a&&(a.hidden=!0),t&&(t.hidden=!1)}catch{if(t){t.hidden=!1;const n=t.querySelector("span:last-child");n&&(n.textContent="Failed")}a&&(a.hidden=!0)}window.setTimeout(()=>{if(a&&(a.hidden=!1),t){t.hidden=!0;const n=t.querySelector("span:last-child");n&&(n.textContent="Copied")}},1400)}));const d=e.querySelector("[data-expand]"),i=e.querySelector("[data-expand-label]");if(!d||d.dataset.wired==="1")return;d.dataset.wired="1";const l=d.dataset.labelExpand||"Expand",u=d.dataset.labelCollapse||"Collapse";d.addEventListener("click",()=>{const o=e.dataset.expanded!=="true";e.dataset.expanded=o?"true":"false",d.setAttribute("aria-expanded",o?"true":"false"),i&&(i.textContent=o?u:l)})})}s();document.addEventListener("astro:page-load",s);</script>  </section>  </main> <footer class="footer" data-astro-cid-sz7xmlte data-astro-transition-scope="astro-tvayyljk-3"> <div class="inner" data-astro-cid-sz7xmlte> <div class="mark" data-astro-cid-sz7xmlte> <span class="logo-swap" aria-hidden="true" data-astro-cid-sz7xmlte> <img class="light" src="/KUI/assets/mark-light.png" width="20" height="20" alt="" data-astro-cid-sz7xmlte> <img class="dark" src="/KUI/assets/mark-dark.png" width="20" height="20" alt="" data-astro-cid-sz7xmlte> </span> <span data-astro-cid-sz7xmlte>KUI</span> </div> <p class="muted" data-astro-cid-sz7xmlte>
+MIT
+ 
+· <a href="/KUI/llms.txt" data-astro-cid-sz7xmlte>llms.txt</a> · <a href="/KUI/kui/docs" data-astro-prefetch data-astro-cid-sz7xmlte>文档</a>  </p> </div> </footer>  </div>  <button type="button" class="back-top" data-back-top aria-label="回到顶部" title="回到顶部" aria-hidden="true" tabindex="-1" data-astro-cid-wlspcwf4> <span class="icon icon-arrowUp" style="--icon-size:18px" aria-hidden="true" data-astro-cid-patnjmll> <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-patnjmll><path d="M12 19V5M5 12l7-7 7 7"/></svg> </span>  </button> <script type="module">function n(){const e=document.querySelector("[data-back-top]");if(!e||e.dataset.wired==="1")return;e.dataset.wired="1";const t=()=>{const s=(window.scrollY||document.documentElement.scrollTop)>420;e.classList.toggle("is-visible",s),e.setAttribute("aria-hidden",s?"false":"true"),e.tabIndex=s?0:-1};e.addEventListener("click",()=>{const o=window.matchMedia("(prefers-reduced-motion: reduce)").matches;window.scrollTo({top:0,behavior:o?"auto":"smooth"})}),window.addEventListener("scroll",t,{passive:!0}),document.addEventListener("astro:after-swap",()=>{e.classList.remove("is-visible"),t()}),t()}n();document.addEventListener("astro:page-load",n);</script>  </body></html>  
