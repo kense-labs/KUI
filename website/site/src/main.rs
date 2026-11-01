@@ -126,16 +126,20 @@ fn main() -> Result<()> {
     }
     let stamp = hex::encode(digest.finalize());
     let stamp = &stamp[..16];
-    for (en, id, data) in fragments {
-        put(
-            assets.join(format!(
-                "pages/{stamp}/{}/{id}.json",
-                if en { "en" } else { "zh" }
-            )),
-            data,
-        )?;
-    }
     for en in [false, true] {
+        let lang = if en { "en" } else { "zh" };
+        let mut bundle = std::collections::BTreeMap::new();
+        for (_, id, data) in fragments.iter().filter(|(locale, _, _)| *locale == en) {
+            put(assets.join(format!("pages/{stamp}/{lang}/{id}.json")), data)?;
+            bundle.insert(id.as_str(), std::str::from_utf8(data)?);
+        }
+        put(
+            assets.join(format!("pages/{stamp}/{lang}.json")),
+            serde_json::to_vec(&bundle)?,
+        )?;
+        let docs_includes = format!(
+            r#"{includes}<link rel="preload" as="fetch" crossorigin="anonymous" fetchpriority="low" href="/assets/pages/{stamp}/{lang}.json">"#
+        );
         let base = if en { out.join("en") } else { out.clone() };
         let write = |path: &str, body: String, title: &str, description: &str, company: bool| {
             let origin = if en {
@@ -154,7 +158,11 @@ fn main() -> Result<()> {
                     shell::wrap(&body, title, description, &canonical, en, company),
                     en,
                     stamp,
-                    &includes,
+                    if path.starts_with("kui/components/") {
+                        &docs_includes
+                    } else {
+                        &includes
+                    },
                 ),
             )
         };

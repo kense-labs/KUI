@@ -67,6 +67,28 @@ async function workspaceScroll(page) {
   await page.waitForFunction(top => scrollY < top, documentTop);
 }
 
+// Navigate online without a locale bundle, and without any further document
+// requests once the locale bundle is available. Neither path may restart GPUI.
+async function checkDocumentFallback(browser, bundled) {
+  const page = await browser.newPage();
+  let single = 0;
+  await page.route(/\/assets\/pages\/[^/]+\/zh(\.json|\/date-picker\.json)$/, route => {
+    const isBundle = route.request().url().endsWith("/zh.json");
+    if (!isBundle) single++;
+    return isBundle === bundled ? route.continue() : route.abort();
+  });
+  const loaded = bundled && page.waitForResponse(r => r.url().endsWith("/zh.json")).then(r => r.finished());
+  await page.goto(new URL("/kui/components/button/", base).href);
+  await loaded;
+  await page.waitForSelector("iframe[data-rendered-story=button]");
+  await page.evaluate(() => window.initialCanvas = document.querySelector("[data-preview-slot] iframe").contentDocument);
+  await page.locator('a[data-nav-item][href$="/date-picker/"]').click();
+  await page.waitForSelector("iframe[data-rendered-story=date-picker]");
+  assert.equal(single, bundled ? 0 : 1, "expected document transport");
+  assert.ok(await page.evaluate(() => window.initialCanvas === document.querySelector("[data-preview-slot] iframe").contentDocument));
+  await page.close();
+}
+
 async function check() {
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_EXECUTABLE_PATH,
@@ -148,6 +170,8 @@ async function check() {
     assert.deepEqual(errors, []);
     await page.close();
     await touchDialog(browser);
+    await checkDocumentFallback(browser, true);
+    await checkDocumentFallback(browser, false);
     console.log(`Sidebar, ${ids.length} live stories, history, workspace scrolling, preview switching and touch/Escape passed.`);
   } finally {
     await browser.close();

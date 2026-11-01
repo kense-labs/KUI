@@ -26,6 +26,7 @@ struct Router {
     stamp: String,
     lang: String,
     cache: RefCell<VecDeque<(String, Promise)>>,
+    bundle: RefCell<Option<JsValue>>,
     request: Cell<u32>,
 }
 fn win() -> web_sys::Window {
@@ -155,7 +156,34 @@ fn mount(current: &Element, incoming: &Element, id: &str, lang: &str) -> Result<
     Ok(())
 }
 impl Router {
+    fn preload_locale(self: &Rc<Self>) {
+        let router = self.clone();
+        let request =
+            win().fetch_with_str(&format!("/assets/pages/{}/{}.json", self.stamp, self.lang));
+        spawn_local(async move {
+            // A failed/stale preload never blocks a click: per-page requests remain available.
+            let Ok(response) = JsFuture::from(request)
+                .await
+                .and_then(|v| v.dyn_into::<Response>())
+            else {
+                return;
+            };
+            if response.ok()
+                && let Ok(payload) = response.json()
+                && let Ok(index) = JsFuture::from(payload).await
+                && index.is_object()
+            {
+                router.bundle.replace(Some(index));
+            }
+        });
+    }
     fn load(&self, id: &str) -> Promise {
+        if let Some(index) = self.bundle.borrow().as_ref()
+            && let Ok(value) = Reflect::get(index, &id.into())
+            && value.is_string()
+        {
+            return Promise::resolve(&value);
+        }
         if let Some((_, p)) = self.cache.borrow().iter().find(|(key, _)| key == id) {
             return p.clone();
         }
@@ -292,8 +320,10 @@ pub fn init() -> Result<(), JsValue> {
         stamp,
         lang: lang.into(),
         cache: Default::default(),
+        bundle: Default::default(),
         request: Cell::new(0),
     });
+    router.preload_locale();
     let r = router.clone();
     let click = Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
         if e.default_prevented()

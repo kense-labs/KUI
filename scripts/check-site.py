@@ -27,6 +27,7 @@ catalog = json.loads((root / 'r/catalog.json').read_text())
 ids = {item['name'] for item in catalog if item['name'] != 'kui-foundation'}
 for en in (False, True):
     prefix = 'en/' if en else ''
+    bundle = None
     for sub in ('','kui','kui/docs','kui/docs/installation','kui/ai',*[f'kui/components/{id}' for id in ids]):
         path = root / prefix / sub / 'index.html'
         page = Page(path.read_text())
@@ -43,6 +44,10 @@ for en in (False, True):
         assert slot['src'].startswith('/stories/v/'), path
         lang = 'en' if en else 'zh'
         fragment=json.loads((root/f'assets/pages/{stamp}/{lang}/{id}.json').read_text())
+        if bundle is None:
+            bundle = json.loads((root / f'assets/pages/{stamp}/{lang}.json').read_text())
+            assert set(bundle) == ids
+        assert json.loads(bundle[id]) == fragment, path
         assert fragment['lang']==lang and fragment['id']==id and 'data-preview-slot' in fragment['html'], path
         assert any(a.get('data-kui-control')=='button' for t,a in page.elements), path
 assert not broken, broken[:20]
