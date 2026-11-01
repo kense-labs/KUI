@@ -9,8 +9,9 @@ import { getLocale, localePath, stripLocale, useTranslations, sitePath } from ".
 
 interface Props {
   mode?: "company" | "product";
+  landing?: boolean;
 }
-const { mode = "company" } = Astro.props;
+const { mode = "company", landing = false } = Astro.props;
 const locale = getLocale(Astro.url.pathname);
 const path = stripLocale(Astro.url.pathname);
 const t = useTranslations(locale);
@@ -23,7 +24,7 @@ const kuiHref = localePath(locale, "/kui");
 ---
 
 <header
-  class:list={["topbar", mode]}
+  class:list={["topbar", mode, { landing }]}
   transition:name={`site-header-${locale}`}
   transition:animate={false}
 >
@@ -104,6 +105,13 @@ const kuiHref = localePath(locale, "/kui");
     align-items: center;
     gap: 1.5rem;
     margin-inline: auto;
+  }
+  @media (min-width:721px) {
+    .topbar.landing .inner { width:min(calc(100% - 4rem),72rem); height:4rem; }
+    .landing .nav { margin-left:auto; }
+    .landing .actions { margin-left:0; }
+    .landing .mark { width:28px; height:28px; }
+    .landing .wordmark { font-size:1.15rem; }
   }
   .topbar.company .inner {
     width: min(calc(100% - 2rem), 70rem);

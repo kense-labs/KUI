@@ -1,0 +1,52 @@
+---
+/* Each stroke follows the same four Bézier spans across a twisted ribbon.
+   The crossings change the apparent density without a texture or an animation loop. */
+const strandCount = 34;
+const strands = Array.from({ length: strandCount }, (_, i) => {
+  const t = i / (strandCount - 1);
+  return [
+    `M -140 ${186 + 40*t}`,
+    `C 58 ${278 - 122*t}, ${118 + 84*t} ${-105 + 223*t}, ${310 + 77*t} ${83 + 43*t}`,
+    `S ${591 - 82*t} ${302 - 105*t}, ${842 - 95*t} ${180 - 50*t}`,
+    `S ${1104 + 67*t} ${-71 + 218*t}, ${1294 + 68*t} ${78 + 64*t}`,
+    `S 1535 ${199 - 182*t}, 1740 ${114 + 30*t}`,
+  ].join(" ");
+});
+---
+<svg class="wave" viewBox="0 0 1600 270" preserveAspectRatio="none" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="cover-spectrum" x1="0%" y1="60%" x2="100%" y2="40%">
+      <stop offset="0%" class="mist"/><stop offset="20%" class="iris"/>
+      <stop offset="42%" class="blue"/><stop offset="63%" class="ice"/>
+      <stop offset="83%" class="iris"/><stop offset="100%" class="mist"/>
+    </linearGradient>
+  </defs>
+  <g stroke="url(#cover-spectrum)" stroke-width="0.85" opacity="0.78">
+    {strands.map((d) => <path d={d} vector-effect="non-scaling-stroke" />)}
+  </g>
+</svg>
+<style>
+  .wave {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .mist {
+    stop-color: var(--wave-mist);
+  }
+  .iris {
+    stop-color: var(--wave-iris);
+  }
+  .blue {
+    stop-color: var(--wave-blue);
+  }
+  .ice {
+    stop-color: var(--wave-ice);
+  }
+  @media (prefers-reduced-motion:no-preference) {
+    stop {
+      transition: stop-color 420ms ease;
+    }
+  }
+</style>
