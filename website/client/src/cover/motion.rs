@@ -27,7 +27,7 @@ impl Ribbon {
             return;
         }
         let elapsed = self.previous.map(|last| now - last);
-        if elapsed.is_some_and(|ms| ms < 1000.0 / 30.0 - 1.0) {
+        if elapsed.is_some_and(|ms| ms < 1000.0 / 60.0 - 1.0) {
             return;
         }
         self.previous = Some(now);
@@ -43,10 +43,11 @@ impl Ribbon {
         ctx.clear_rect(0.0, 0.0, width, height);
         let mut source_left = 0.0;
         let mut lift_left = 0.0;
-        let step = width / 75.0;
+        const SLICES: u32 = 24;
+        let step = width / f64::from(SLICES);
         // Share each slice endpoint with its neighbour so the highlight stays continuous.
-        for i in 1..=75 {
-            let u = f64::from(i) / 75.0;
+        for i in 1..=SLICES {
+            let u = f64::from(i) / f64::from(SLICES);
             let envelope = strength * (PI * u).sin();
             let swell = (TAU * u - 2.0 * phase).sin();
             let ripple = (1.65 * TAU * u + phase + 0.7).sin();

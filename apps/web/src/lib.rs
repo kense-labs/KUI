@@ -294,6 +294,9 @@ mod web {
                 .open_window(
                     WindowOptions {
                         window_bounds: Some(WindowBounds::Windowed(bounds)),
+                        // An embedded preview can be visible without DOM focus.
+                        // Let the browser schedule frames at display cadence.
+                        inactive_frame_interval: None,
                         ..Default::default()
                     },
                     move |w, cx| cx.new(|cx| StoryHost::new(Some(&id), w, cx)),
