@@ -1,0 +1,785 @@
+[
+  {
+    "id": "rating",
+    "group": "toggles",
+    "title": {
+      "en": "Rating",
+      "zh": "评分"
+    },
+    "rustType": "Rating",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::rating::Rating;\n\nlet control = cx.new(|cx| Rating::new(\"Quality\", 5, 3.5, cx).with_half(true));",
+    "lead": {
+      "en": "Collect or display a score.",
+      "zh": "收集或展示评分。"
+    },
+    "rule": {
+      "en": "Hover to preview; release a mouse scrub to commit once. Arrows adjust by one step, Home selects the first step, End the maximum. Backspace/Delete clear only when allowed. Read-only and disabled modes block input.",
+      "zh": "悬停预览，鼠标拖选松开后提交一次。方向键按步长调整，Home 选第一步、End 选最大值；允许清除时 Backspace/Delete 归零。只读和禁用状态阻止输入。"
+    },
+    "api": {
+      "en": "new(label, max, value, cx) takes explicit maximum and initial value. Defaults: Md, whole stars, allowClear/showValue=true; readOnly/disabled/controlled=false. with_name/form_value adapt host forms; RatingChanged reports changed intent and controlled mode waits for set_value.",
+      "zh": "new(label, max, value, cx) 显式传最大值和初始值。默认 Md、整星、允许清除且显示读数；只读/禁用/受控默认 false。with_name/form_value 接入宿主表单；RatingChanged 发送变化意图，受控模式等待 set_value 确认。"
+    },
+    "motion": {
+      "en": "Fill: 0.26s spring, 35ms stagger; committed layer: 0.4s. Press scale 0.86; pop starts at velocity 9/s, rapid commits within 260ms pop only the chosen star. Changed words enter in 0.24s and exit in 0.12s. Native text blur remains pending; see the Markdown contract.",
+      "zh": "填充使用 0.26s 弹簧、35ms 逐星错开，已提交层 0.4s；按压缩至 0.86，弹跳初速度 9/s，260ms 内连续提交只弹所选星。变词入场 0.24s、退出 0.12s。原生文字模糊尚待实现，详见 Markdown 规格。"
+    },
+    "method": "with_half",
+    "signature": "(bool) -> Self",
+    "event": "RatingChanged"
+  },
+  {
+    "id": "billing-toggle",
+    "group": "toggles",
+    "title": {
+      "en": "Billing toggle",
+      "zh": "计费周期"
+    },
+    "rustType": "BillingToggle",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::billing_toggle::BillingToggle;\n\nlet control = cx.new(|cx| BillingToggle::new(\"Billing period\", cx).with_savings(\"Save 20%\"));",
+    "lead": {
+      "en": "Choose a monthly or yearly billing period.",
+      "zh": "选择按月或按年的计费周期。"
+    },
+    "rule": {
+      "en": "Use arrow keys to choose a period. Selecting the current period emits no event.",
+      "zh": "使用方向键切换周期；重复选择当前周期不触发事件。"
+    },
+    "api": {
+      "en": "Configure labels, the yearly savings note and the initial period. The host owns pricing and checkout.",
+      "zh": "可配置名称、年度优惠提示和初始周期。价格与结算由宿主管理。"
+    },
+    "motion": {
+      "en": "The capsule selection slides between periods and changes width continuously; track, options and savings badge use radius.full. Reduced motion jumps to the selection.",
+      "zh": "胶囊选中底片在两个周期之间滑动并连续变宽；轨道、选项与优惠标签使用 radius.full，不受矩形 8px 默认值限制。减少动效时直接切换。"
+    },
+    "method": "with_savings",
+    "signature": "(impl Into<SharedString>) -> Self",
+    "event": "BillingChanged"
+  },
+  {
+    "id": "toggle-group",
+    "group": "toggles",
+    "title": {
+      "en": "Toggle group",
+      "zh": "切换组"
+    },
+    "rustType": "ToggleGroup",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::toggle_group::{ToggleGroup, ToggleMode, ToggleOption};\n\nlet items = vec![ToggleOption::new(\"left\", \"Left\"), ToggleOption::new(\"center\", \"Center\")];\nlet control = cx.new(|cx| ToggleGroup::new(\"Alignment\", items, ToggleMode::Single, cx).with_selected(&[\"left\"]));",
+    "lead": {
+      "en": "Choose one or several compact toolbar options.",
+      "zh": "在工具栏中选择一个或多个选项。"
+    },
+    "rule": {
+      "en": "Single mode selects one item; multiple mode toggles items independently. Arrow keys move through enabled items.",
+      "zh": "单选模式选择一项；多选模式分别切换。方向键在可用选项间移动。"
+    },
+    "api": {
+      "en": "Supply stable keys and labels, optional icons and disabled states; ToggleChanged returns selected keys.",
+      "zh": "提供稳定标识、名称、可选图标与禁用状态；ToggleChanged 返回所选标识。"
+    },
+    "motion": {
+      "en": "The selected indicator moves in single mode; multiple fills transition independently.",
+      "zh": "单选底片在项目间移动，多选底色分别过渡。"
+    },
+    "method": "with_selected",
+    "signature": "(&[&str]) -> Self",
+    "event": "ToggleChanged"
+  },
+  {
+    "id": "radio-cards",
+    "group": "toggles",
+    "title": {
+      "en": "Radio cards",
+      "zh": "选项卡片"
+    },
+    "rustType": "RadioCards",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::radio_cards::{RadioCards, RadioCardOption};\n\nlet items = vec![RadioCardOption::new(\"starter\", \"Starter\").with_detail(\"For individuals\"), RadioCardOption::new(\"team\", \"Team\").with_price(\"$24\")];\nlet control = cx.new(|cx| RadioCards::new(\"Plan\", items, cx).with_selected(\"starter\"));",
+    "lead": {
+      "en": "Choose one option from cards with descriptions and prices.",
+      "zh": "从包含说明和价格的卡片中选择一项。"
+    },
+    "rule": {
+      "en": "Click or use arrows to select enabled cards, Home/End reach the first/last usable option. One roving Tab stop; repeating the current choice emits nothing. The host may preserve a selected disabled option.",
+      "zh": "点击或用方向键选择可用卡片，Home/End 到首个/最后一个可用项。组内只有一个 Tab 入口；重复选择不发事件。宿主可保留已选中但禁用的选项。"
+    },
+    "api": {
+      "en": "Defaults: Grid, minimum column width 180px, no selection, disabled/required/controlled=false. Options have stable key/label plus detail, price, icon and disabled reason. Controlled mode emits RadioCardChanged and waits for set_selected; form_value/is_valid support host forms.",
+      "zh": "默认 Grid、最小列宽 180px、无选择，禁用/必填/受控为 false。选项含稳定 key/label、说明、尾部信息、图标及禁用原因。受控模式发送 RadioCardChanged 后等待 set_selected；form_value/is_valid 支持宿主表单。"
+    },
+    "motion": {
+      "en": "The measured selection outline glides with a 0.42s zero-bounce spring; its first appearance only fades over 0.16s. Colors take 0.16s, indicator scale 0.26s. Resize snaps the outline; reduced motion applies immediately. Under RTL the host sets UiDirection, Left/Right reverse and grid rows mirror; Up/Down and Home/End do not change.",
+      "zh": "共享描边读取实际排版边界，以 0.42s 无回弹弹簧移动；首次仅 0.16s 淡入。颜色过渡 0.16s，圆点缩放 0.26s。变宽直接贴合，减少动效时立即应用。RTL 下由宿主写入 UiDirection，Left / Right 反转且网格逐行镜像；Up / Down 与 Home / End 不变。"
+    },
+    "method": "with_selected",
+    "signature": "(&str) -> Self",
+    "event": "RadioCardChanged"
+  },
+  {
+    "id": "money-input",
+    "group": "special-inputs",
+    "title": {
+      "en": "Money input",
+      "zh": "金额输入"
+    },
+    "rustType": "MoneyInput",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::money_input::MoneyInput;\n\nlet control = cx.new(|cx| MoneyInput::new(\"Amount\", 12500, 0..=1000000, window, cx).with_symbol(\"$\").with_quick_add(vec![1000, 5000]));",
+    "lead": {
+      "en": "Enter an amount with a fixed currency symbol and quick-add amounts.",
+      "zh": "输入金额，并使用固定货币符号与快速加额。"
+    },
+    "rule": {
+      "en": "Type an amount with up to two fractional digits and press Enter or blur to commit. Invalid or out-of-range drafts revert to the previous value.",
+      "zh": "输入最多两位小数，回车或失焦提交；无效或越界草稿会恢复先前数值。"
+    },
+    "api": {
+      "en": "Values, limits and quick-add increments are integer minor units. set_disabled disables editing and quick-add controls.",
+      "zh": "数值、范围和快捷增量以整数最小货币单位表示；set_disabled 禁用输入和快捷加额。"
+    },
+    "motion": {
+      "en": "Typing stays direct so the input caret remains stable.",
+      "zh": "输入直接更新编辑器，保持光标稳定。"
+    },
+    "method": "minor_units",
+    "signature": "() -> i64",
+    "event": "MoneyChanged"
+  },
+  {
+    "id": "countdown",
+    "group": "progress",
+    "title": {
+      "en": "Countdown",
+      "zh": "倒计时"
+    },
+    "rustType": "Countdown",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::countdown::Countdown;\nuse std::time::Duration;\n\nlet control = cx.new(|cx| Countdown::new(\"Launch\", Duration::from_secs(95), cx).with_complete_label(\"Live now\"));",
+    "lead": {
+      "en": "Show the remaining time until a deadline.",
+      "zh": "显示距离目标的剩余时间。"
+    },
+    "rule": {
+      "en": "The display updates until zero, then shows the completion label.",
+      "zh": "剩余时间持续更新，归零后显示完成状态。"
+    },
+    "api": {
+      "en": "Supply a duration and an optional completion label. CountdownFinished fires once; reset starts a new run.",
+      "zh": "提供时长和可选完成文案；归零时发送一次 CountdownFinished，reset 可重新开始。"
+    },
+    "motion": {
+      "en": "The completion indicator fades in; reduced motion skips the transition.",
+      "zh": "完成指示淡入；减少动效时直接显示。"
+    },
+    "method": "reset",
+    "signature": "(Duration, &mut Context<Self>)",
+    "event": "CountdownFinished"
+  },
+  {
+    "id": "elastic-slider",
+    "group": "sliders",
+    "title": {
+      "en": "Elastic slider",
+      "zh": "弹性滑块"
+    },
+    "rustType": "ElasticSlider",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::elastic_slider::ElasticSlider;\n\nlet control = cx.new(|cx| ElasticSlider::new(\"Volume\", 0.0..=100.0, 1.0, 50.0, \"%\", window, cx));",
+    "lead": {
+      "en": "Adjust one value using an elastic track and value bubble.",
+      "zh": "用弹性轨道和数值气泡调整单个数值。"
+    },
+    "rule": {
+      "en": "Drag, click the rail or use arrow keys to change the value.",
+      "zh": "拖动滑块、点击轨道或使用方向键调整数值。"
+    },
+    "api": {
+      "en": "Supply a range, step, starting value and suffix. ElasticChanged emits the current value.",
+      "zh": "提供范围、步长、初始值和后缀；ElasticChanged 发送当前数值。"
+    },
+    "motion": {
+      "en": "The thumb strains past a bound and springs back; reduced motion suppresses the stretch.",
+      "zh": "滑块越界时产生阻力并回弹；减少动效时取消拉伸。"
+    },
+    "method": "set_value",
+    "signature": "(f64, &mut Context<Self>)",
+    "event": "ElasticChanged"
+  },
+  {
+    "id": "range-histogram-slider",
+    "group": "sliders",
+    "title": {
+      "en": "Range histogram slider",
+      "zh": "区间分布滑块"
+    },
+    "rustType": "RangeHistogramSlider",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::range_histogram_slider::RangeHistogramSlider;\n\nlet data = vec![30.0, 80.0, 180.0, 260.0, 400.0];\nlet control = cx.new(|cx| RangeHistogramSlider::new(\"Price\", data, 0.0..=500.0, 5.0, (80.0, 260.0), 32, window, cx));",
+    "lead": {
+      "en": "Filter a numeric range against a distribution.",
+      "zh": "结合数据分布选择数值区间。"
+    },
+    "rule": {
+      "en": "Drag either thumb, click the histogram or rail, or focus a thumb and use arrow keys. The selected count updates as the range changes.",
+      "zh": "拖动滑块、点击柱形图或轨道，或聚焦滑块后用方向键调整；区间内数量随之更新。"
+    },
+    "api": {
+      "en": "Supply raw values, bounds, step, initial range and bin count. HistogramRangeChanged reports both bounds. Release and chart clicks snap to the nearest bin edge, rounded to the configured step.",
+      "zh": "提供原始数据、边界、步长、初始区间和分桶数；HistogramRangeChanged 返回两端数值。松手或点击柱形图时吸附至附近柱边，并按步长取整。"
+    },
+    "motion": {
+      "en": "The shared slider provides elastic dragging and reduced-motion behavior. Bars update as values change. The header directly updates right-aligned tabular numerals in a fixed 20px line box, without rolling character cells or a layout change at rest.",
+      "zh": "使用共享滑块的弹性拖动与减少动效支持；柱形高亮随数值更新。顶部区间使用等宽数字、固定20px行框并靠右对齐，直接更新读数，不使用逐字滚动，也不在停止时切换排版。"
+    },
+    "method": "value",
+    "signature": "(&App) -> (f64, f64)",
+    "event": "HistogramRangeChanged"
+  },
+  {
+    "id": "announcement-bar",
+    "group": "messages",
+    "title": {
+      "en": "Announcement bar",
+      "zh": "公告栏"
+    },
+    "rustType": "AnnouncementBar",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::announcement_bar::{Announcement, AnnouncementBar};\n\nlet messages = vec![Announcement::new(\"launch\", \"New components are available\").with_action(\"Learn more\")];\nlet control = cx.new(|cx| AnnouncementBar::new(messages, cx));",
+    "lead": {
+      "en": "Show dismissible announcements and actions.",
+      "zh": "显示可关闭的公告和操作。"
+    },
+    "rule": {
+      "en": "Messages rotate every seven seconds and pause while hovered or focused. Close the bar or activate its action.",
+      "zh": "多条消息每七秒轮换，鼠标悬停或键盘焦点在公告内时暂停；可关闭公告或执行操作。"
+    },
+    "api": {
+      "en": "Provide message IDs, optional action labels and countdown durations. AnnouncementEvent reports actions and dismissal. The host persists dismissal and handles navigation.",
+      "zh": "提供消息标识、可选操作文案和倒计时时长；AnnouncementEvent 报告操作与关闭。关闭状态持久化和跳转由宿主处理。"
+    },
+    "motion": {
+      "en": "Messages crossfade; dismissal collapses the bar. Reduced motion applies changes immediately.",
+      "zh": "消息交叉淡入淡出，关闭时公告栏收起；减少动效时立即切换。"
+    },
+    "method": "reopen",
+    "signature": "(&mut Context<Self>)",
+    "event": "AnnouncementEvent"
+  },
+  {
+    "id": "cookie-consent",
+    "group": "messages",
+    "title": {
+      "en": "Cookie consent",
+      "zh": "Cookie 同意设置"
+    },
+    "rustType": "CookieConsent",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::cookie_consent::{ConsentCategory, CookieConsent};\n\nlet categories = vec![ConsentCategory::new(\"essential\", \"Essential\").with_required(true), ConsentCategory::new(\"analytics\", \"Analytics\")];\nlet control = cx.new(|cx| CookieConsent::new(categories, window, cx));",
+    "lead": {
+      "en": "Let visitors choose optional cookie categories.",
+      "zh": "让访问者选择可选 Cookie 类别。"
+    },
+    "rule": {
+      "en": "Accept all, reject optional categories, or customize choices. Escape or Close discards unsaved changes. Essential categories remain enabled.",
+      "zh": "可全部接受、拒绝可选项或自定义并保存；Escape 或关闭会丢弃未保存的修改；必要类别始终开启。"
+    },
+    "api": {
+      "en": "Provide category IDs and labels. ConsentChanged reports choices; restore loads a previously saved decision. The host persists choices and applies them to integrations.",
+      "zh": "提供类别标识与名称；ConsentChanged 报告选择，restore 恢复已保存的决定。持久化和应用选择由宿主负责。"
+    },
+    "motion": {
+      "en": "The surface grows for preferences and folds to a reopen control after saving; reduced motion applies changes immediately.",
+      "zh": "偏好面板展开，保存后折叠为重开按钮；减少动效时立即切换。"
+    },
+    "method": "restore",
+    "signature": "(&[ConsentChoice], &mut Context<Self>)",
+    "event": "ConsentChanged"
+  },
+  {
+    "id": "ruler-slider",
+    "group": "sliders",
+    "title": {
+      "en": "Ruler slider",
+      "zh": "刻度滑块"
+    },
+    "rustType": "RulerSlider",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ruler_slider::RulerSlider;\n\nlet control = cx.new(|cx| RulerSlider::new(\"Height\", 120.0..=220.0, 1.0, 172.0, cx).with_unit(\"cm\"));",
+    "lead": {
+      "en": "Choose a precise value by moving a tape under a fixed needle.",
+      "zh": "拖动刻度尺，在固定指针下选择精确数值。"
+    },
+    "rule": {
+      "en": "Drag or tap the tape, use arrow keys, or scroll horizontally. Home and End go to the bounds.",
+      "zh": "可拖动、点按刻度，使用方向键或横向滚动；Home、End 到达边界。"
+    },
+    "api": {
+      "en": "Set bounds, step, initial value, unit, major tick spacing and disabled state. RulerChanged reports changes; RulerCommitted reports releases and key or scroll actions.",
+      "zh": "可配置范围、步长、初始值、单位、主刻度间隔和禁用状态。RulerChanged 报告数值变化，RulerCommitted 报告释放及键盘或滚动操作。"
+    },
+    "motion": {
+      "en": "The tape springs to a tick and changed digits roll. Persistent tabular columns keep the same 34px baseline in motion and at rest. Decimal precision follows the minimum and step (0.5 keeps 70.0); rapid updates retarget the current digit position, and only a new carry column changes width. Reduced motion removes the springs and digit animation.",
+      "zh": "刻度尺弹簧吸附，数字在固定等宽列内滚动，运动与静止共用34px行框及基线。小数位按最小值和步长固定（0.5步长保留70.0）；快速更新从当前位置接续，仅进位新增的列伸缩宽度。减少动效时直接更新。"
+    },
+    "method": "with_unit",
+    "signature": "(impl Into<SharedString>) -> Self",
+    "event": "RulerChanged / RulerCommitted"
+  },
+  {
+    "id": "signature-pad",
+    "group": "editors",
+    "title": {
+      "en": "Signature pad",
+      "zh": "签名板"
+    },
+    "rustType": "SignaturePad",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::signature_pad::SignaturePad;\n\nlet control = cx.new(|cx| SignaturePad::new(\"Sign here\", cx));",
+    "lead": {
+      "en": "Draw and edit a signature, then export its strokes as SVG.",
+      "zh": "绘制并编辑签名，支持将笔画导出为 SVG。"
+    },
+    "rule": {
+      "en": "Draw with a mouse or touch; undo, redo, replay, export PNG or clear. With the canvas focused, use Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z and Delete. The demo shows export status; the host supplies file saving.",
+      "zh": "可用鼠标或触屏绘制、撤销、重做、回放、导出 PNG 和清除；画布聚焦时支持 Cmd/Ctrl+Z、Shift+Cmd/Ctrl+Z 和 Delete。演示显示导出状态，文件保存由宿主实现。"
+    },
+    "api": {
+      "en": "strokes returns normalized points and pressure. to_svg and to_png produce SVG text and PNG bytes; saving the bytes is the host’s responsibility. GPUI mouse and touch input uses neutral pressure; host pen adapters can provide real pressure with begin_sample and append_sample.",
+      "zh": "strokes 返回归一化点和压力；to_svg 生成 SVG 文本，to_png 生成 PNG 字节，文件保存由宿主负责。GPUI 鼠标和触屏输入使用中性压力；宿主画笔适配器可通过 begin_sample 和 append_sample 提供真实压力。"
+    },
+    "motion": {
+      "en": "Ink follows input as pressure-scaled strokes. Replay reveals samples in order; reduced motion shows the complete signature immediately.",
+      "zh": "墨迹按压力调整粗细并跟随输入；回放按顺序显示笔画，减少动效时立即显示完整签名。"
+    },
+    "method": "to_svg",
+    "signature": "(u32, u32) -> String",
+    "event": "SignatureChanged / SignaturePngExported"
+  },
+  {
+    "id": "scrub-input",
+    "group": "special-inputs",
+    "title": {
+      "en": "Scrub input",
+      "zh": "拖动数值输入"
+    },
+    "rustType": "ScrubInput",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::scrub_input::ScrubInput;\n\nlet control = cx.new(|cx| ScrubInput::new(\"Width\", 0.0..=1000.0, 1.0, 176.0, \"px\", window, cx));",
+    "lead": {
+      "en": "Edit a numeric value or drag its label to adjust it.",
+      "zh": "直接输入数值，或拖动标签进行调整。"
+    },
+    "rule": {
+      "en": "Drag the label; Shift and Alt use coarse and fine steps. Type an arithmetic expression with an accepted suffix; click the unit to cycle available units. Vertical touch gestures are left for scrolling.",
+      "zh": "拖动标签，按住 Shift 或 Alt 使用粗、细步进；可输入四则运算及允许的单位后缀，点击单位可切换。竖向触摸手势留给页面滚动。"
+    },
+    "api": {
+      "en": "Set bounds, step, initial value, accepted units and optional wrapping. with_units supplies unit labels; changing units does not convert numeric values. ScrubChanged, ScrubCommitted and ScrubUnitChanged report user changes. Invalid expressions restore the previous value.",
+      "zh": "设置范围、步长、初始值、可选单位和环绕。with_units 配置单位，切换单位不会换算数值。ScrubChanged、ScrubCommitted、ScrubUnitChanged 分别报告数值、提交和单位变化；无效表达式恢复上次有效值。"
+    },
+    "motion": {
+      "en": "Dragging past a non-wrapping limit strains the field and springs back on release. Reduced motion skips the strain.",
+      "zh": "拖动超过非环绕边界时产生拉伸，释放后回弹；减少动效时取消拉伸。"
+    },
+    "method": "with_wrap",
+    "signature": "(bool) -> Self",
+    "event": "ScrubChanged / ScrubCommitted / ScrubUnitChanged"
+  },
+  {
+    "id": "morph-select",
+    "group": "selects",
+    "title": {
+      "en": "Morph select",
+      "zh": "形变选择器"
+    },
+    "rustType": "MorphSelect",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::morph_select::{MorphOption, MorphSelect};\n\nlet options = vec![MorphOption::new(\"todo\", \"To do\").with_group(\"Open\"), MorphOption::new(\"done\", \"Done\").with_group(\"Closed\")];\nlet control = cx.new(|cx| MorphSelect::new(\"Status\", options, window, cx).with_value(\"todo\").with_searchable(true));",
+    "lead": {
+      "en": "Choose one value from a surface that grows into an option list.",
+      "zh": "从展开为选项列表的表面中选择一个值。"
+    },
+    "rule": {
+      "en": "Open the control, search by label, group, detail or keyword, and use arrows or Page Up/Down to move among enabled results. Enter selects; Escape closes.",
+      "zh": "展开后可按名称、分组、说明或关键词搜索，用方向键或 Page Up/Down 移动到可用结果；Enter 选择，Escape 关闭。"
+    },
+    "api": {
+      "en": "Supply stable values and labels, optional group, detail, keywords and disabled states. with_searchable controls the search field; MorphSelectionChanged emits the chosen value.",
+      "zh": "提供稳定标识和名称，可设置分组、说明、关键词与禁用状态。with_searchable 控制搜索框；MorphSelectionChanged 发送所选值。"
+    },
+    "motion": {
+      "en": "The surface changes width and height on springs, the active highlight glides, and changed labels roll and fade. Reduced motion applies changes immediately.",
+      "zh": "表面的宽高以弹簧变化，高亮滑动，变化的名称滚动并淡入；减少动效时立即切换。"
+    },
+    "method": "with_searchable",
+    "signature": "(bool) -> Self",
+    "event": "MorphSelectionChanged"
+  },
+  {
+    "id": "undo-toast",
+    "group": "messages",
+    "title": {
+      "en": "Undo toast",
+      "zh": "撤销提示"
+    },
+    "rustType": "UndoToast",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::undo_toast::{UndoItem, UndoToast};\n\nlet items = vec![UndoItem::new(\"one\", \"Design review\"), UndoItem::new(\"two\", \"Project notes\")];\nlet control = cx.new(|cx| UndoToast::new(\"Inbox\", items, cx));",
+    "lead": {
+      "en": "Remove rows in a reversible batch and confirm the result with the host.",
+      "zh": "将移除操作合并为可撤销批次，并由宿主确认结果。"
+    },
+    "rule": {
+      "en": "Archive or delete items, then undo before the countdown expires. Repeated removals join the same batch. Hovering or focusing the notice pauses the timer.",
+      "zh": "归档或删除项目后可在倒计时内撤销；连续移除合并为同一批次。悬停提示或将焦点移入提示会暂停计时。"
+    },
+    "api": {
+      "en": "CommitRequested contains a batch ID and entries. The host must call resolve_commit with the matching ID; a failure restores rows in their original order. Pending operations stay local until the host commits.",
+      "zh": "CommitRequested 包含批次标识和条目；宿主须使用相同标识调用 resolve_commit。提交失败会按原顺序恢复项目；提交前操作保持本地可撤销。"
+    },
+    "motion": {
+      "en": "Rows collapse and reopen on a spring. Undo shows a brief confirmation. Reduced motion applies layout changes immediately.",
+      "zh": "行收合和恢复采用弹簧过渡，撤销后短暂显示确认；减少动效时立即更新布局。"
+    },
+    "method": "resolve_commit",
+    "signature": "(u64, bool, &mut Context<Self>)",
+    "event": "UndoToastEvent"
+  },
+  {
+    "id": "tree-table",
+    "group": "tables",
+    "title": {
+      "en": "Tree table",
+      "zh": "树形表格"
+    },
+    "rustType": "TreeTable",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tree_table::{TreeTable, TreeTableRow};\n\nlet rows = vec![TreeTableRow::new(\"team\", \"Team\").with_children(vec![TreeTableRow::new(\"project\", \"Project\")])];\nlet columns = vec![\"Name\".into(), \"Owner\".into()];\nlet control = cx.new(|cx| TreeTable::new(\"Projects\", columns, rows, cx).with_expanded(&[\"team\"]));",
+    "lead": {
+      "en": "Browse, sort and select hierarchical rows with columns.",
+      "zh": "浏览、排序和选择包含多列的层级数据。"
+    },
+    "rule": {
+      "en": "Expand a parent or use arrow keys to navigate. The header selects or expands all known rows. A failed lazy load can be retried by activating its row.",
+      "zh": "展开父行或用方向键浏览；表头可全选或展开已加载的节点。懒加载失败后可再次激活对应行重试。"
+    },
+    "api": {
+      "en": "Provide unique stable IDs and column names. LoadRequested asks the host for lazy children; call resolve_children with success or failure. SelectionChanged returns leaf IDs and ExpandedChanged returns expanded IDs. Visible rows are virtualized; very large trees should still load lazily.",
+      "zh": "提供唯一稳定标识与列名；LoadRequested 请求宿主加载子项，resolve_children 返回结果。SelectionChanged 返回叶节点标识，ExpandedChanged 返回展开项。表格虚拟渲染可见区域；极大层级仍应懒加载。"
+    },
+    "motion": {
+      "en": "Nested rows expand and collapse on a spring; reduced motion applies changes immediately.",
+      "zh": "嵌套行以弹簧展开和收起；减少动效时立即更新。"
+    },
+    "method": "resolve_children",
+    "signature": "(&str, Result<Vec<TreeTableRow>, ()>, &mut Context<Self>)",
+    "event": "TreeTableEvent"
+  },
+  {
+    "id": "mega-menu-morph",
+    "group": "navigation",
+    "title": {
+      "en": "Mega menu morph",
+      "zh": "形变导航菜单"
+    },
+    "rustType": "MegaMenuMorph",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::mega_menu_morph::{MegaMenuGroup, MegaMenuLink, MegaMenuMorph, MegaMenuSection};\n\nlet sections = vec![MegaMenuSection::new(\"products\", \"Products\").with_groups(vec![MegaMenuGroup::new(\"Build\", vec![MegaMenuLink::new(\"components\", \"Components\")])])];\nlet control = cx.new(|cx| MegaMenuMorph::new(\"Kense\", sections, cx).with_primary(\"start\", \"Get started\"));",
+    "lead": {
+      "en": "Navigate grouped destinations from a shared animated menu.",
+      "zh": "通过共享的动态菜单浏览分组目的地。"
+    },
+    "rule": {
+      "en": "Hover or activate a section; use arrow keys to navigate, Enter to choose and Escape to close. At narrow widths, the header folds into an accordion sheet.",
+      "zh": "悬停或激活栏目，使用方向键浏览、Enter 选择、Escape 关闭；窄屏时导航折叠为手风琴菜单。"
+    },
+    "api": {
+      "en": "Provide sections, groups and stable link IDs; optionally configure a brand destination, primary action and feature card. MegaMenuNavigate reports the chosen ID and the host performs navigation.",
+      "zh": "提供栏目、分组和稳定链接标识，可配置品牌目的地、主操作和特写卡。MegaMenuNavigate 返回所选标识，由宿主执行跳转。"
+    },
+    "motion": {
+      "en": "One panel moves and changes size on springs while menu contents crossfade; reduced motion suppresses movement.",
+      "zh": "共享浮层以弹簧移动并改变尺寸，菜单内容交叉淡入淡出；减少动效时取消位移。"
+    },
+    "method": "with_primary",
+    "signature": "(impl Into<SharedString>, impl Into<SharedString>) -> Self",
+    "event": "MegaMenuNavigate"
+  },
+  {
+    "id": "glass-segmented",
+    "group": "toggles",
+    "title": {
+      "en": "Glass segmented",
+      "zh": "玻璃分段选择"
+    },
+    "rustType": "GlassSegmented",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::glass_segmented::{GlassSegmentOption, GlassSegmented};\n\nlet options = vec![GlassSegmentOption::new(\"overview\", \"Overview\"), GlassSegmentOption::new(\"details\", \"Details\")];\nlet control = cx.new(|cx| GlassSegmented::new(\"View\", options, cx).with_value(\"overview\"));",
+    "lead": {
+      "en": "Switch a view on a translucent segmented surface.",
+      "zh": "在半透明分段控件中切换视图。"
+    },
+    "rule": {
+      "en": "Use arrows, Home and End to select; drag the selected segment or fling it to settle on another enabled item.",
+      "zh": "使用方向键、Home 和 End 选择；拖动当前分段并松开，可落在其他可用选项上。"
+    },
+    "api": {
+      "en": "Provide stable option values and optional icons or badges. Subscribe to GlassSegmentChanged to update the host. The surface is translucent; true background blur is not currently available.",
+      "zh": "提供稳定选项值，可设置图标与徽标；监听 GlassSegmentChanged 更新宿主。当前表面半透明，暂不支持真实背景模糊。"
+    },
+    "motion": {
+      "en": "The glass track, options and stretchable highlight retain capsule ends with radius.full. Leading and trailing edges move on independent springs and narrow while stretched. Reduced motion tracks directly and jumps on selection.",
+      "zh": "玻璃轨道、选项和伸缩高亮使用 radius.full 保留胶囊两端。前后边缘独立弹簧移动，拉伸时略微收窄。减少动效时直接跟随并定位。"
+    },
+    "method": "set_value",
+    "signature": "(&str, &mut Context<Self>)",
+    "event": "GlassSegmentChanged"
+  },
+  {
+    "id": "glass-menu",
+    "group": "menus",
+    "title": {
+      "en": "Glass menu",
+      "zh": "玻璃操作菜单"
+    },
+    "rustType": "GlassMenu",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::glass_menu::{GlassMenu, GlassMenuGroup, GlassMenuItem};\n\nlet items = vec![GlassMenuGroup::new(vec![GlassMenuItem::new(\"copy\", \"Copy\"), GlassMenuItem::new(\"move\", \"Move to\").with_children(vec![GlassMenuItem::new(\"archive\", \"Archive\")])])];\nlet control = cx.new(|cx| GlassMenu::new(\"photo-actions\", \"Photo actions\", items, cx));",
+    "lead": {
+      "en": "Show contextual actions on a translucent menu.",
+      "zh": "在半透明菜单中显示相关操作。"
+    },
+    "rule": {
+      "en": "Use arrows, Home and End to move. Right or Enter opens one submenu; Left returns. Escape closes and restores trigger focus.",
+      "zh": "使用方向键、Home 和 End 浏览；右方向键或 Enter 进入一层子菜单，左方向键返回；Escape 关闭并恢复触发器焦点。"
+    },
+    "api": {
+      "en": "Provide groups of actions with stable IDs. GlassMenuSelected reports the ID and a proposed checked value; use set_checked to reflect host state. The surface is translucent; true background blur is not available.",
+      "zh": "提供具有稳定标识的分组操作。GlassMenuSelected 返回标识和建议的选中值，宿主可通过 set_checked 同步状态。当前表面半透明，暂不支持真实背景模糊。"
+    },
+    "motion": {
+      "en": "The panel springs from the trigger while submenu rows slide in. Reduced motion removes movement.",
+      "zh": "面板从触发器位置以弹簧展开，子菜单内容滑入；减少动效时取消位移。"
+    },
+    "method": "set_checked",
+    "signature": "(&str, bool, &mut Context<Self>)",
+    "event": "GlassMenuSelected"
+  },
+  {
+    "id": "presence-stack",
+    "group": "avatars",
+    "title": {
+      "en": "Presence stack",
+      "zh": "在线成员"
+    },
+    "rustType": "PresenceStack",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::presence_stack::{PresencePerson, PresenceStack, PresenceStatus};\n\nlet people = vec![PresencePerson::new(\"me\", \"Alex\"), PresencePerson::new(\"emma\", \"Emma\").with_status(PresenceStatus::Typing)];\nlet control = cx.new(|cx| PresenceStack::new(\"people\", people, cx).with_self_id(\"me\", cx));",
+    "lead": {
+      "en": "Show who is present and open a roster of everyone.",
+      "zh": "显示当前在线成员，并打开完整成员名单。"
+    },
+    "rule": {
+      "en": "Hover or focus to fan the faces out; use Left or Right to inspect names. Activate the stack to open the roster, then select a person or use Escape to close.",
+      "zh": "悬停或聚焦时展开头像，使用左右方向键查看姓名；激活头像组打开名单，选择成员或按 Escape 关闭。"
+    },
+    "api": {
+      "en": "Provide stable IDs, names, optional image sources, status and activity detail. Call set_people with each host snapshot; PresenceSelected reports the selected person ID.",
+      "zh": "为每人提供稳定 ID、姓名、可选头像、状态和活动详情；宿主更新时调用 set_people，PresenceSelected 返回选择的成员 ID。"
+    },
+    "motion": {
+      "en": "Keyed entries and positions use interruptible springs; the overflow count rolls and typing dots animate. Reduced motion applies changes immediately.",
+      "zh": "成员入场和位置采用可中断弹簧，溢出人数滚动、输入状态点动态变化；减少动效时立即更新。"
+    },
+    "method": "set_people",
+    "signature": "(Vec<PresencePerson>, &mut Context<Self>)",
+    "event": "PresenceSelected"
+  },
+  {
+    "id": "tldr-toggle",
+    "group": "intelligence",
+    "title": {
+      "en": "TL;DR toggle",
+      "zh": "摘要切换"
+    },
+    "rustType": "TldrToggle",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::tldr_toggle::{TldrArticle, TldrParagraph, TldrToggle};\n\nlet article = TldrArticle::new(\"Project notes\", vec![TldrParagraph::new(\"intro\", \"The source paragraph.\")]);\nlet control = cx.new(|cx| TldrToggle::new(article, cx));",
+    "lead": {
+      "en": "Switch between an article, a host-generated summary and source-linked key points.",
+      "zh": "在全文、宿主生成的摘要和可追溯来源的要点之间切换。"
+    },
+    "rule": {
+      "en": "Select a view and length to request a summary. Stop or retry a run; activate a key point to focus its source paragraph. The preview uses sample data and sends nothing.",
+      "zh": "选择视图与长度后请求摘要；可停止、重试，或通过要点定位原文段落。预览使用样例数据，不会发送内容。"
+    },
+    "api": {
+      "en": "Handle TldrEvent::Requested and Cancelled in the host. Pass matching request IDs to append_text, append_point, finish or fail; late events from cancelled requests are ignored. Successful results are cached by mode and length.",
+      "zh": "由宿主处理 TldrEvent::Requested 和 Cancelled，并用对应请求 ID 调用 append_text、append_point、finish 或 fail；已取消请求的迟到结果会被忽略。成功结果按模式和长度缓存。"
+    },
+    "motion": {
+      "en": "Content height follows its measured content on a spring; the incoming view fades in and the source highlight fades away. Reduced motion applies the final state immediately.",
+      "zh": "内容高度随测量结果以弹簧变化，新视图淡入，来源高亮随后淡出；减少动效时直接显示最终状态。"
+    },
+    "method": "append_text",
+    "signature": "(u64, &str, &mut Context<Self>) -> bool",
+    "event": "TldrEvent"
+  },
+  {
+    "id": "smart-form-fill",
+    "group": "intelligence",
+    "title": {
+      "en": "Smart form fill",
+      "zh": "智能表单填写"
+    },
+    "rustType": "SmartFormFill",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::smart_form_fill::{SmartField, SmartFormFill};\n\nlet fields = vec![SmartField::new(\"name\", \"Name\"), SmartField::new(\"email\", \"Email\")];\nlet control = cx.new(|cx| SmartFormFill::new(fields, window, cx));",
+    "lead": {
+      "en": "Extract structured suggestions into editable fields with review and undo.",
+      "zh": "将文本中的结构化建议填写到可编辑字段，并支持核对与撤销。"
+    },
+    "rule": {
+      "en": "Paste source text, request suggestions, review low-confidence values and save. A value being edited is queued for explicit confirmation. The demonstration uses a local sample parser.",
+      "zh": "粘贴来源文本并请求建议，核对低可信度内容后保存。正在编辑的字段会保留原文，建议需明确确认。演示仅使用本地样例解析器。"
+    },
+    "api": {
+      "en": "Handle SmartFillEvent::Requested and Cancelled in the host; pass the request ID to apply, finish or fail. Submitted contains reviewed values; the host owns extraction and persistence.",
+      "zh": "由宿主处理 SmartFillEvent::Requested 和 Cancelled，并携请求 ID 调用 apply、finish 或 fail。Submitted 返回已核对的值，提取与保存由宿主负责。"
+    },
+    "motion": {
+      "en": "Accepted fields receive a brief tint; the matching source text is highlighted while filling or hovering. Reduced motion applies the final state immediately.",
+      "zh": "填写后的字段短暂着色；填写或悬停时高亮对应来源文本。减少动效时直接显示最终状态。"
+    },
+    "method": "apply",
+    "signature": "(u64, SmartSuggestion, &Window, &mut Context<Self>) -> bool",
+    "event": "SmartFillEvent"
+  },
+  {
+    "id": "enrich-column",
+    "group": "intelligence",
+    "title": {
+      "en": "Enrich column",
+      "zh": "数据补全列"
+    },
+    "rustType": "EnrichColumn",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::enrich_column::{EnrichColumn, EnrichRow};\n\nlet rows = vec![EnrichRow::new(\"one\", \"Northstar\").with_domain(\"northstar.example\")];\nlet control = cx.new(|cx| EnrichColumn::new(\"Accounts\", rows, \"Find a description\", window, cx));",
+    "lead": {
+      "en": "Run a host-provided enrichment task for each row in an editable table.",
+      "zh": "在可编辑表格中逐行运行宿主提供的数据补全任务。"
+    },
+    "rule": {
+      "en": "Edit the instruction, run all rows or one row, stop a run, and retry individual failures. Existing edits are protected; a result for a focused field waits for confirmation.",
+      "zh": "可编辑指令、全部运行或逐行运行、停止及重试失败项。已有手动修改会受到保护，焦点字段的新结果需要确认。"
+    },
+    "api": {
+      "en": "Handle EnrichEvent::Requested and Cancelled in the host. Deliver matching IDs to finish or fail, persist Changed events, and handle OpenSource in the host. Concurrency defaults to two.",
+      "zh": "由宿主处理 EnrichEvent::Requested 和 Cancelled，携请求 ID 调用 finish 或 fail；宿主持久化 Changed 并处理 OpenSource。默认并发数为 2。"
+    },
+    "motion": {
+      "en": "Cell states fade in and the instruction editor expands on a spring. Reduced motion suppresses movement.",
+      "zh": "单元格状态淡入，指令编辑区以弹簧展开；减少动效时取消位移。"
+    },
+    "method": "finish",
+    "signature": "(u64, EnrichResult, &Window, &mut Context<Self>) -> bool",
+    "event": "EnrichEvent"
+  },
+  {
+    "id": "ticket-router",
+    "group": "intelligence",
+    "title": {
+      "en": "Ticket router",
+      "zh": "工单分流"
+    },
+    "rustType": "TicketRouter",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ticket_router::{Ticket, TicketLane, TicketRouter};\n\nlet lanes = vec![TicketLane::new(\"support\", \"Support\"), TicketLane::new(\"billing\", \"Billing\")];\nlet tickets = vec![Ticket::new(\"one\", \"Invoice question\", \"Please check the invoice.\")];\nlet control = cx.new(|_| TicketRouter::new(\"Inbox\", lanes, tickets));",
+    "lead": {
+      "en": "Classify tickets, review uncertain decisions and assign them through the host.",
+      "zh": "对工单进行分类，复核不确定结果，并通过宿主完成分配。"
+    },
+    "rule": {
+      "en": "Start or pause processing; retry failures. Review uncertain suggestions and choose a destination. Assignment is shown only after host confirmation.",
+      "zh": "开始或暂停处理，逐项重试失败工单；复核不确定的建议并选择队列。宿主确认后才显示已分配。"
+    },
+    "api": {
+      "en": "Handle ClassifyRequested, RouteRequested and Cancelled events. Return matching request IDs through classified, routed or failed. set_ticket cancels work based on older content.",
+      "zh": "宿主处理 ClassifyRequested、RouteRequested 和 Cancelled，并携请求 ID 调用 classified、routed 或 failed。set_ticket 会取消基于旧内容的任务。"
+    },
+    "motion": {
+      "en": "Ticket state changes fade in; reduced motion removes the transition.",
+      "zh": "工单状态变化时淡入；减少动效时直接显示。"
+    },
+    "method": "classified",
+    "signature": "(u64, TicketDecision, &mut Context<Self>) -> bool",
+    "event": "TicketRouterEvent"
+  },
+  {
+    "id": "reply-draft",
+    "group": "intelligence",
+    "title": {
+      "en": "Reply draft",
+      "zh": "回复草稿"
+    },
+    "rustType": "ReplyDraft",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::reply_draft::{ReplyDraft, ReplyHint, ReplyMessage};\n\nlet message = ReplyMessage::new(\"Alex\", \"Review\", \"Can we meet next week?\");\nlet hints = vec![ReplyHint::new(\"yes\", \"Sounds good\")];\nlet control = cx.new(|cx| ReplyDraft::new(message, hints, window, cx));",
+    "lead": {
+      "en": "Generate and edit a reply before inserting it into a host composer.",
+      "zh": "生成并编辑回复草稿，再交给宿主输入框。"
+    },
+    "rule": {
+      "en": "Choose a quick reply, tone or length. Stop or retry generation, edit the draft, then insert it. A result arriving during editing requires a choice.",
+      "zh": "选择快捷回复、语气或长度；可停止、重试并编辑草稿，再执行插入。编辑过程中返回的新草稿需要用户确认。"
+    },
+    "api": {
+      "en": "Handle Requested and Cancelled in the host; pass the request ID to append, finish or fail. Insert reports the edited text; the host controls insertion and sending.",
+      "zh": "由宿主处理 Requested 和 Cancelled，携请求 ID 调用 append、finish 或 fail。Insert 返回编辑后的文本，插入和发送由宿主控制。"
+    },
+    "motion": {
+      "en": "Status fades in, while incoming text is displayed in a separate preview. Reduced motion shows the final state immediately.",
+      "zh": "状态淡入，生成中的文字显示在独立预览中；减少动效时直接显示最终状态。"
+    },
+    "method": "append",
+    "signature": "(u64, &str, &mut Context<Self>) -> bool",
+    "event": "ReplyDraftEvent"
+  },
+  {
+    "id": "ask-your-data",
+    "group": "intelligence",
+    "title": {
+      "en": "Ask your data",
+      "zh": "数据问答"
+    },
+    "rustType": "AskYourData",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ask_your_data::AskYourData;\n\nlet control = cx.new(|cx| AskYourData::new(\"Analytics\", window, cx));",
+    "lead": {
+      "en": "Ask a question and inspect a host-provided query and result.",
+      "zh": "输入问题，并查看宿主提供的查询和结果。"
+    },
+    "rule": {
+      "en": "Submit a question, inspect or copy the generated SQL, then switch between bars, lines and a table. Stop and retry are available. The preview uses fixed sample data.",
+      "zh": "提交问题，查看或复制生成的查询，再切换柱状图、折线图和表格；支持停止与重试。预览使用固定样例数据。"
+    },
+    "api": {
+      "en": "The host handles GenerateSql, RunQuery and Cancelled. Pass matching IDs to append_sql, finish_sql, progress, finish_query or fail. The component does not connect to a database.",
+      "zh": "宿主处理 GenerateSql、RunQuery 和 Cancelled，并携对应请求 ID 调用 append_sql、finish_sql、progress、finish_query 或 fail。组件不会自行连接数据库。"
+    },
+    "motion": {
+      "en": "Bars grow and lines are progressively drawn; reduced motion displays the final result immediately.",
+      "zh": "柱形逐渐生长，折线逐步绘制；减少动效时直接显示最终结果。"
+    },
+    "method": "finish_query",
+    "signature": "(u64, AskDataResult, &mut Context<Self>) -> bool",
+    "event": "AskDataEvent"
+  },
+  {
+    "id": "pii-redaction",
+    "group": "intelligence",
+    "title": {
+      "en": "PII redaction",
+      "zh": "敏感信息脱敏"
+    },
+    "rustType": "PiiRedaction",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::pii_redaction::PiiRedaction;\n\nlet control = cx.new(|cx| PiiRedaction::new(window, cx));",
+    "lead": {
+      "en": "Review and edit host-provided sensitive text ranges before copying a masked preview.",
+      "zh": "核对并编辑宿主提供的敏感文本范围，再复制脱敏预览。"
+    },
+    "rule": {
+      "en": "Select text to add ranges, remove or undo them, then explicitly review before copying. The preview only matches fixed fictional values and does not send text or detect real PII.",
+      "zh": "选择文本可添加范围，也可移除和撤销；核对后才能复制。预览只匹配固定虚构样例，不会传输文本，也不能识别真实敏感信息。"
+    },
+    "api": {
+      "en": "Handle ScanRequested and Cancelled in the host. Pass the matching ID and non-overlapping UTF-8 byte ranges aligned to Unicode graphemes to finish_scan, or call fail_scan. Edits and cancellation invalidate old results.",
+      "zh": "宿主处理 ScanRequested 和 Cancelled，携对应 ID 调用 finish_scan 或 fail_scan。范围使用 UTF-8 字节偏移，须与字素边界对齐且互不重叠；编辑或取消会使旧结果失效。"
+    },
+    "motion": {
+      "en": "The demo keeps feedback immediate and does not require motion.",
+      "zh": "演示即时反馈，操作不依赖动效。"
+    },
+    "method": "finish_scan",
+    "signature": "(u64, Vec<PiiSpan>, &mut Context<Self>) -> bool",
+    "event": "PiiEvent"
+  }
+]

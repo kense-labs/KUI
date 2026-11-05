@@ -439,7 +439,7 @@ impl Render for FieldStory {
                                         .relative()
                                         .w(px(42.))
                                         .h(px(24.))
-                                        .rounded(r)
+                                        .rounded(Theme::global(cx).tokens.radius.full)
                                         .bg(p.hover.blend(p.bright.opacity(progress)))
                                         .child(
                                             div()

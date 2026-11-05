@@ -1,0 +1,495 @@
+[
+  {
+    "id": "text-reveal",
+    "group": "text-effects",
+    "title": {
+      "en": "TextReveal",
+      "zh": "文字揭示"
+    },
+    "rustType": "TextReveal",
+    "lead": {
+      "en": "Show a sentence as a short sequence of rising words.",
+      "zh": "逐词展示一句文字。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::text_reveal::TextReveal;\n\nlet control = cx.new(|cx| TextReveal::new(\"A quieter way to work.\", cx));",
+    "method": "with_delay",
+    "signature": "(f32) -> Self",
+    "event": "—",
+    "rule": {
+      "en": "Set a delay or replay with new text.",
+      "zh": "可设置延时，替换文字可重新播放。"
+    },
+    "api": {
+      "en": "Set a delay or replay with new text.",
+      "zh": "可设置延时，替换文字可重新播放。"
+    },
+    "motion": {
+      "en": "Words rise with a capped stagger; reduced motion shows the text immediately.",
+      "zh": "词语依次升起，整体错峰时长受限；减少动效时直接显示。"
+    }
+  },
+  {
+    "id": "in-view-title",
+    "group": "text-effects",
+    "title": {
+      "en": "InViewTitle",
+      "zh": "视区标题"
+    },
+    "rustType": "InViewTitle",
+    "lead": {
+      "en": "Reveal a heading when at least 45% is visible.",
+      "zh": "标题至少 45% 进入窗口时展示。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::in_view_title::InViewTitle;\n\nlet control = cx.new(|_| InViewTitle::new(\"Make room for ideas\"));",
+    "method": "with_once",
+    "signature": "(bool) -> Self",
+    "event": "—",
+    "rule": {
+      "en": "Use once for a one-time entrance, or disable it to replay.",
+      "zh": "可设置仅出现一次，也可在移出后重新展示。"
+    },
+    "api": {
+      "en": "Use once for a one-time entrance, or disable it to replay.",
+      "zh": "可设置仅出现一次，也可在移出后重新展示。"
+    },
+    "motion": {
+      "en": "The title rises and fades in; reduced motion displays it immediately.",
+      "zh": "标题上移淡入；减少动效时立即显示。"
+    }
+  },
+  {
+    "id": "text-morph",
+    "group": "text-effects",
+    "title": {
+      "en": "TextMorph",
+      "zh": "文字形变"
+    },
+    "rustType": "TextMorph",
+    "lead": {
+      "en": "Transition a short changing label while matching repeated characters by occurrence.",
+      "zh": "按字符出现次序匹配，让短文案平滑切换。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::text_morph::TextMorph;\n\nlet control = cx.new(|_| TextMorph::new(\"Make it simple\"));",
+    "method": "set_text",
+    "signature": "(impl Into<SharedString>, &mut Context<Self>)",
+    "event": "—",
+    "rule": {
+      "en": "Call set_text with the next label; the width follows measured text.",
+      "zh": "调用 set_text 更新文案，宽度根据实际字形测量并变化。"
+    },
+    "api": {
+      "en": "Call set_text with the next label; the width follows measured text.",
+      "zh": "调用 set_text 更新文案，宽度根据实际字形测量并变化。"
+    },
+    "motion": {
+      "en": "Matched glyph positions and width use interruptible springs; reduced motion swaps immediately.",
+      "zh": "匹配文字与容器宽度使用可中断弹簧；减少动效时立即切换。"
+    }
+  },
+  {
+    "id": "text-shimmer",
+    "group": "text-effects",
+    "title": {
+      "en": "TextShimmer",
+      "zh": "文字微光"
+    },
+    "rustType": "TextShimmer",
+    "lead": {
+      "en": "Show a soft highlight sweeping over an active status label.",
+      "zh": "在进行中的状态文字上扫过柔和高光。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::text_shimmer::TextShimmer;\n\nlet control = cx.new(|cx| TextShimmer::new(\"Thinking…\", cx));",
+    "method": "set_active",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "—",
+    "rule": {
+      "en": "Pause with set_active or set_visible; defaults to a 1.8 second sweep.",
+      "zh": "用 set_active 或 set_visible 暂停；默认扫过时长 1.8 秒。"
+    },
+    "api": {
+      "en": "set_active and set_visible control playback. with_duration defaults to 1.8s; with_font_size defaults to 16px with a 2.2em band. with_active(false) starts as steady text without a settling animation.",
+      "zh": "set_active / set_visible 控制播放；with_duration 默认1.8s，with_font_size 默认16px，微光带按2.2em计算。with_active(false) 从静态文字开始，不播放停用过渡。"
+    },
+    "motion": {
+      "en": "The highlight passes across the label; reduced motion shows steady text.",
+      "zh": "高光扫过文字；减少动效时显示静态文字。"
+    }
+  },
+  {
+    "id": "slot-text",
+    "group": "text-effects",
+    "title": {
+      "en": "SlotText",
+      "zh": "数字滚轮文字"
+    },
+    "rustType": "SlotText",
+    "lead": {
+      "en": "Animate changes to a short numeric value with rolling digit cells.",
+      "zh": "用滚动数字展示短数值的变化。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::slot_text::SlotText;\n\nlet control = cx.new(|_| SlotText::new(\"12,480\"));",
+    "method": "set_value",
+    "signature": "(impl Into<SharedString>, &mut Context<Self>)",
+    "event": "—",
+    "rule": {
+      "en": "Change text with set_value; digits align from the right.",
+      "zh": "通过 set_value 更新，数字从右侧匹配。"
+    },
+    "api": {
+      "en": "Change text with set_value; digits align from the right.",
+      "zh": "通过 set_value 更新，数字从右侧匹配。"
+    },
+    "motion": {
+      "en": "Digit reels roll and settle with stagger; reduced motion jumps to the target.",
+      "zh": "数字逐列滚动并依次停下；减少动效时立即展示目标。"
+    }
+  },
+  {
+    "id": "image-compare",
+    "group": "media",
+    "title": {
+      "en": "Image compare",
+      "zh": "图片对比"
+    },
+    "rustType": "ImageCompare",
+    "lead": {
+      "en": "Compare two images using a movable divider.",
+      "zh": "拖动分隔线对比两张图片。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::image_compare::ImageCompare;\n\nlet control = cx.new(|cx| ImageCompare::new(\n    \"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee\",\n    \"https://images.unsplash.com/photo-1470770841072-f978cf4d019e\",\n    \"Compare images\", cx,\n));",
+    "method": "with_position",
+    "signature": "(f32) -> Self",
+    "event": "CompareChanged(f32)",
+    "rule": {
+      "en": "Drag the divider, or use arrows, Home and End. Shift changes in larger steps.",
+      "zh": "拖动分隔线，或用方向键、Home 和 End 调整；按住 Shift 使用更大步长。"
+    },
+    "api": {
+      "en": "Position is a fraction from 0 to 1; images are supplied by the host.",
+      "zh": "位置为 0 至 1 的比例；图片由宿主提供。"
+    },
+    "motion": {
+      "en": "Keyboard and host updates settle with a spring; pointer and touch track input.",
+      "zh": "键盘和宿主更新使用弹簧；鼠标和触控位置直接跟随输入。"
+    }
+  },
+  {
+    "id": "carousel",
+    "group": "media",
+    "title": {
+      "en": "Carousel",
+      "zh": "图片轮播"
+    },
+    "rustType": "Carousel",
+    "lead": {
+      "en": "Navigate a collection of images by dragging or using controls.",
+      "zh": "通过拖动或导航控件浏览图片。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::carousel::{Carousel, CarouselSlide};\n\nlet slides = vec![\n    CarouselSlide::new(\"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee\", \"Landscape\"),\n    CarouselSlide::new(\"https://images.unsplash.com/photo-1470770841072-f978cf4d019e\", \"Lake\"),\n];\nlet control = cx.new(|cx| Carousel::new(\"Gallery\", slides, cx));",
+    "method": "set_index",
+    "signature": "(usize, &mut Context<Self>)",
+    "event": "CarouselChanged(usize)",
+    "rule": {
+      "en": "Drag horizontally or use the arrow keys, Home, End and navigation buttons.",
+      "zh": "可横向拖动，也可使用方向键、Home、End 和导航按钮。"
+    },
+    "api": {
+      "en": "Supply images and labels as CarouselSlide values; with_action_labels localizes navigation.",
+      "zh": "通过 CarouselSlide 提供图片和标签；with_action_labels 设置导航文案。"
+    },
+    "motion": {
+      "en": "Dragging follows the pointer; release settles to a slide using a spring. Reduced motion changes immediately.",
+      "zh": "拖动时跟随指针，松手后以弹簧停靠；减少动效时立即切换。"
+    }
+  },
+  {
+    "id": "card-stack",
+    "group": "media",
+    "title": {
+      "en": "Card stack",
+      "zh": "卡片堆叠"
+    },
+    "rustType": "CardStack",
+    "lead": {
+      "en": "Review a sequence of cards and choose or skip each.",
+      "zh": "逐张浏览卡片并选择或跳过。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::card_stack::{CardStack, StackCard};\n\nlet cards = vec![StackCard::new(\"1\", \"Kyoto\", \"Morning walk\")];\nlet control = cx.new(|cx| CardStack::new(\"Destinations\", cards, cx));",
+    "method": "decide",
+    "signature": "(Decision, &mut Context<Self>)",
+    "event": "StackDecision, StackUndo",
+    "rule": {
+      "en": "Drag a card or use left and right arrow keys; Backspace undoes the last decision.",
+      "zh": "拖动卡片或用左右方向键选择；Backspace 撤销上一次选择。"
+    },
+    "api": {
+      "en": "StackDecision includes the card ID and decision. Undo emits StackUndo so the host can reverse its own change.",
+      "zh": "StackDecision 包含卡片 ID 和选择；撤销时发出 StackUndo，宿主负责撤回自身数据。"
+    },
+    "motion": {
+      "en": "The decided card exits to the side; an uncommitted drag springs back. Reduced motion updates immediately.",
+      "zh": "确认后卡片向侧面离开；未确认的拖动弹回。减少动效时立即更新。"
+    }
+  },
+  {
+    "id": "toast-stack",
+    "group": "messages",
+    "title": {
+      "en": "Toast stack",
+      "zh": "通知堆叠"
+    },
+    "rustType": "ToastStack",
+    "lead": {
+      "en": "Show a host-controlled collection of transient notifications.",
+      "zh": "展示由宿主控制的多条临时通知。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::toast_stack::ToastStack;\n\nlet control = cx.new(|_| ToastStack::new(\"Notifications\"));",
+    "method": "push",
+    "signature": "(message, action, Duration, &mut Context<Self>) -> ToastId",
+    "event": "StackToastEvent",
+    "rule": {
+      "en": "Push, update or dismiss notifications by ID. Hover pauses each timer.",
+      "zh": "通过 ID 添加、更新或关闭通知。悬停时暂停该条计时。"
+    },
+    "api": {
+      "en": "The queue holds 12 and shows 3 by default; hovering or focusing expands the stack and pauses its timers.",
+      "zh": "默认队列最多 12 条，展示 3 条；悬停或聚焦时展开并暂停计时。"
+    },
+    "motion": {
+      "en": "Notifications tuck behind the front toast and fan out with a spring; reduced motion changes immediately.",
+      "zh": "通知堆叠在前方通知之后，以弹簧展开；减少动效时立即切换。"
+    }
+  },
+  {
+    "id": "bottom-sheet",
+    "group": "overlays",
+    "title": {
+      "en": "Bottom sheet",
+      "zh": "底部面板"
+    },
+    "rustType": "BottomSheet",
+    "lead": {
+      "en": "Open a bottom panel with draggable snap heights.",
+      "zh": "打开可拖动并停靠在不同高度的底部面板。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::bottom_sheet::BottomSheet;\n\nlet body = Box::new(|_: &mut gpui::Window, _: &mut gpui::App| gpui::div().child(\"Flights, hotel, and bookings.\").into_any_element());\nlet control = cx.new(|cx| BottomSheet::new(\"Trip details\", \"Lisbon, 3 nights\", body, cx));",
+    "method": "with_detents",
+    "signature": "(Vec<f32>) -> Self",
+    "event": "BottomSheetEvent",
+    "rule": {
+      "en": "Drag the handle or use its arrow keys, Home, End, Enter and Space. Escape closes the sheet.",
+      "zh": "拖动把手，或使用方向键、Home、End、Enter 和空格调整高度；Esc 关闭。"
+    },
+    "api": {
+      "en": "Detents are fractions of the available height. The sheet emits open, close and snap events and returns focus on close.",
+      "zh": "停靠点是可用高度的比例；面板报告打开、关闭和停靠事件，关闭时归还焦点。"
+    },
+    "motion": {
+      "en": "The sheet follows touch, resists at the top and projects flick speed; reduced motion updates immediately.",
+      "zh": "面板跟随触摸，在顶部提供阻尼，并根据甩动速度停靠；减少动效时立即更新。"
+    }
+  },
+  {
+    "id": "sheet-stack",
+    "group": "overlays",
+    "title": {
+      "en": "Sheet stack",
+      "zh": "多层面板"
+    },
+    "rustType": "SheetStack",
+    "lead": {
+      "en": "Navigate a short stack of related sheets.",
+      "zh": "在多层相关面板中逐级导航。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::sheet_stack::{SheetStack, SheetPage, SheetLink};\n\nlet pages = vec![SheetPage::new(\"settings\", \"Settings\", \"Manage preferences\").with_links(vec![SheetLink::new(\"privacy\", \"Privacy\")]), SheetPage::new(\"privacy\", \"Privacy\", \"Review privacy settings\")];\nlet control = cx.new(|cx| SheetStack::new(\"Open settings\", pages, cx));",
+    "method": "push",
+    "signature": "(&str, &mut Window, &mut Context<Self>) -> bool",
+    "event": "SheetStackChanged",
+    "rule": {
+      "en": "Open pages with push; pop returns one level and Escape closes the top layer.",
+      "zh": "通过 push 打开下一层；pop 返回上一层，Esc 关闭最上层。"
+    },
+    "api": {
+      "en": "SheetStackChanged carries the currently open page IDs. Existing IDs return to that page.",
+      "zh": "SheetStackChanged 返回当前打开的页面 ID；再次打开已有页面会返回对应层。"
+    },
+    "motion": {
+      "en": "The top panel follows dragging; background layers move with depth. Reduced motion removes depth movement.",
+      "zh": "顶层面板跟随拖动，背景面板随层级移动；减少动效时去除层级位移。"
+    }
+  },
+  {
+    "id": "product-gallery",
+    "group": "media",
+    "title": {
+      "en": "Product gallery",
+      "zh": "商品图集"
+    },
+    "rustType": "ProductGallery",
+    "lead": {
+      "en": "Browse product photos and select a color and size.",
+      "zh": "浏览商品图片并选择颜色和尺码。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::product_gallery::{ProductGallery, ProductColor, ProductPhoto, ProductSize};\n\nlet colors = vec![ProductColor::new(\"natural\", \"Natural\", gpui::rgb(0xc9b99d).into(), vec![ProductPhoto::new(\"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee\", \"Front view\")])];\nlet sizes = vec![ProductSize::new(\"s\", \"S\"), ProductSize::new(\"m\", \"M\")];\nlet control = cx.new(|cx| ProductGallery::new(\"Product photos\", colors, sizes, cx));",
+    "method": "set_color",
+    "signature": "(&str, &mut Context<Self>)",
+    "event": "ProductGalleryEvent",
+    "rule": {
+      "en": "Select thumbnails, a color and an available size; open the image viewer for a closer look.",
+      "zh": "选择缩略图、颜色和可用尺码；打开图片查看器以放大查看。"
+    },
+    "api": {
+      "en": "Sizes can declare sold-out colors; changing color clears an unavailable size selection.",
+      "zh": "尺码可标记售罄颜色；更换颜色后如尺码不可用会清除选择。"
+    },
+    "motion": {
+      "en": "Photo changes crossfade and the magnifier follows the pointer; reduced motion updates immediately.",
+      "zh": "切换图片时交叉淡入淡出，放大镜跟随指针；减少动效时立即更新。"
+    }
+  },
+  {
+    "id": "voice-orb",
+    "group": "media",
+    "title": {
+      "en": "Voice orb",
+      "zh": "语音球"
+    },
+    "rustType": "VoiceOrb",
+    "lead": {
+      "en": "Voice orb with a host-controlled audio adapter.",
+      "zh": "展示由宿主控制的语音会话状态。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::voice_orb::VoiceOrb;\n\nlet control = cx.new(|cx| VoiceOrb::new(cx));",
+    "method": "set_state",
+    "signature": "(VoiceState, &mut Context<Self>)",
+    "event": "VoiceOrbEvent",
+    "rule": {
+      "en": "The host provides the device or audio playback adapter.",
+      "zh": "控件不会自动申请麦克风；宿主负责会话和音量。"
+    },
+    "api": {
+      "en": "Subscribe to requests and provide actual state from the host.",
+      "zh": "订阅请求，由宿主提供实际状态。"
+    },
+    "motion": {
+      "en": "The visual follows state and respects reduced motion.",
+      "zh": "视觉随状态变化，并遵循减少动效设置。"
+    }
+  },
+  {
+    "id": "now-playing",
+    "group": "media",
+    "title": {
+      "en": "Now playing",
+      "zh": "正在播放"
+    },
+    "rustType": "NowPlaying",
+    "lead": {
+      "en": "Now playing with a host-controlled audio adapter.",
+      "zh": "展开迷你播放器并请求播放或定位。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::now_playing::{NowPlaying, Track};\n\nlet tracks = vec![Track::new(\"one\", \"Morning light\", \"Kense\", 212., \"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee\")];\nlet control = cx.new(|_| NowPlaying::new(\"Player\", tracks));",
+    "method": "set_playing",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "PlayerEvent",
+    "rule": {
+      "en": "The host provides the device or audio playback adapter.",
+      "zh": "宿主负责播放音频，并提供当前曲目、进度和播放状态。"
+    },
+    "api": {
+      "en": "Subscribe to requests and provide actual state from the host.",
+      "zh": "订阅请求，由宿主提供实际状态。"
+    },
+    "motion": {
+      "en": "The visual follows state and respects reduced motion.",
+      "zh": "视觉随状态变化，并遵循减少动效设置。"
+    }
+  },
+  {
+    "id": "voice-recorder",
+    "group": "media",
+    "title": {
+      "en": "Voice recorder",
+      "zh": "语音录音"
+    },
+    "rustType": "VoiceRecorder",
+    "lead": {
+      "en": "Voice recorder with a host-controlled audio adapter.",
+      "zh": "通过宿主适配器录制、回听并发送语音。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::voice_recorder::VoiceRecorder;\n\nlet control = cx.new(|_| VoiceRecorder::new(\"Voice note\"));",
+    "method": "set_phase",
+    "signature": "(RecorderPhase, &mut Context<Self>)",
+    "event": "RecorderEvent",
+    "rule": {
+      "en": "The host provides the device or audio playback adapter.",
+      "zh": "宿主负责麦克风、采集及保存；失败保留草稿，可重试。"
+    },
+    "api": {
+      "en": "On Start, Stop, Send or Retry capture request_id; use set_phase_for, set_error_for and append_message_for with that ID. Capture session_id for set_audio_for and set_recording_error_for. Message IDs deduplicate confirmations. Legacy unscoped methods remain available but the host must filter stale callbacks itself. On Retry inspect failed_operation to retry Start, Stop or Send. Waveform data keeps the most recent 1000 peaks; message playback follows stable IDs when the list changes.",
+      "zh": "收到 Start、Stop、Send 或 Retry 后捕获 request_id，通过 set_phase_for、set_error_for、append_message_for 返回结果；以 session_id 调用 set_audio_for 和 set_recording_error_for。消息 ID 可去重。旧的无编号方法保留兼容，但宿主必须自行过滤过期回调。 收到 Retry 时读取 failed_operation，分别重试启动、停止或发送。波形保留最近 1000 个采样点；消息列表变化时按稳定 ID 保持播放标记。"
+    },
+    "motion": {
+      "en": "The visual follows state and respects reduced motion.",
+      "zh": "视觉随状态变化，并遵循减少动效设置。"
+    }
+  },
+  {
+    "id": "dictation-button",
+    "group": "intelligence",
+    "title": {
+      "en": "Dictation button",
+      "zh": "听写输入"
+    },
+    "rustType": "DictationButton",
+    "lead": {
+      "en": "Request dictation and insert a recognized draft.",
+      "zh": "发起听写并插入识别结果。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::dictation_button::DictationButton;\n\nlet control = cx.new(|_| DictationButton::new());",
+    "method": "set_transcript",
+    "signature": "(impl Into<SharedString>, impl Into<SharedString>, &mut Context<Self>)",
+    "event": "DictationEvent",
+    "rule": {
+      "en": "The host owns microphone permission, recognition and editor insertion. A changed insertion point requires confirmation.",
+      "zh": "麦克风授权、识别和插入由宿主负责；插入位置变化时先确认。"
+    },
+    "api": {
+      "en": "Capture session_id for recognition updates. On Insert capture insertion_id, then call confirm_insert_for or fail_insert_for with both IDs. A failed insertion retains the text and asks for the target again; the host must make insertion idempotent. Legacy unscoped methods require host-side stale-callback filtering.",
+      "zh": "识别更新使用 session_id。收到 Insert 后获取 insertion_id，再用两个编号调用 confirm_insert_for 或 fail_insert_for；插入失败保留文本并重新选择位置，宿主须保证插入幂等。旧无编号接口需宿主自行过滤过期回调。"
+    },
+    "motion": {
+      "en": "The control grows into a compact listening row; reduced motion updates immediately.",
+      "zh": "控件展开为紧凑听写栏；减少动效时立即更新。"
+    }
+  },
+  {
+    "id": "speech-player",
+    "group": "intelligence",
+    "title": {
+      "en": "Speech player",
+      "zh": "朗读播放器"
+    },
+    "rustType": "SpeechPlayer",
+    "lead": {
+      "en": "Control host-provided speech with synchronized text.",
+      "zh": "控制宿主提供的朗读音频并同步文字。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::speech_player::SpeechPlayer;\n\nlet control = cx.new(|_| SpeechPlayer::new(\"Read aloud\", \"A thoughtful interface.\"));",
+    "method": "set_progress",
+    "signature": "(Option<usize>, f32, f32, &mut Context<Self>)",
+    "event": "SpeechEvent",
+    "rule": {
+      "en": "The host performs synthesis and playback; the component sends requests and shows host-confirmed state. The progress track supports mouse, horizontal touch dragging and keyboard input; the host confirms the seek.",
+      "zh": "宿主负责合成与播放；控件发出请求并展示宿主确认的状态。 进度条支持鼠标、横向触屏拖动及键盘操作；位置由宿主确认。"
+    },
+    "api": {
+      "en": "Capture session_id and operation_id on Start, Pause, Resume or Retry; apply asynchronous playback state using set_phase_for_operation. Stop ends the session. The host cancels synthesis or playback; unscoped and session-only methods require the host to filter stale operation results.",
+      "zh": "收到 Start、Pause、Resume 或 Retry 时捕获 session_id 和 operation_id，异步播放状态使用 set_phase_for_operation。Stop 结束会话；宿主仍需取消实际合成或播放。旧无编号及仅会话编号方法需要宿主自行过滤过期操作结果。"
+    },
+    "motion": {
+      "en": "The word highlight travels on a line and jumps between lines; reduced motion skips movement.",
+      "zh": "高亮沿同一行滑动，跨行直接切换；减少动效时跳过移动。"
+    }
+  }
+]

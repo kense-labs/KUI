@@ -181,7 +181,33 @@ fn typing_gate_rejects_incorrect_confirmation_and_stale_resolutions() {
     c.update(w, |v, cx| v.resolve(ticket, false, cx));
     w.run_until_parked();
     click(w, "Retry");
-    assert_eq!(tickets.borrow().len(), 2)
+    assert_eq!(tickets.borrow().len(), 2);
+    let retry = tickets.borrow()[1];
+    c.update(w, |v, cx| v.resolve(retry, true, cx));
+    w.run_until_parked();
+    w.update(|win, cx| win.simulate_next_frame(cx));
+    let face = w.debug_bounds("confirm-fill-face").expect("success fill");
+    let button = w.debug_bounds("Done").expect("success button");
+    assert_eq!(face, button, "success fill covers the same button bounds");
+    w.update(|win, _| {
+        let scale = win.scale_factor();
+        let quads = win.painted_quads();
+        let fills: Vec<_> = quads
+            .iter()
+            .filter(|quad| quad.bounds == face.scale(scale))
+            .collect();
+        assert!(!fills.is_empty(), "success face is actually painted");
+        for quad in fills {
+            for corner in [
+                quad.corner_radii.top_left,
+                quad.corner_radii.top_right,
+                quad.corner_radii.bottom_left,
+                quad.corner_radii.bottom_right,
+            ] {
+                assert_eq!(corner.0 / scale, 8., "filled face covers rounded corners");
+            }
+        }
+    });
 }
 #[test]
 fn tree_and_page_keyboard_changes_use_visible_order() {

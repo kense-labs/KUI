@@ -1,0 +1,2025 @@
+//! Interactive examples of additional selection controls.
+use gpui::{prelude::*, *};
+use kui::{
+    components::{
+        announcement_bar::{Announcement, AnnouncementBar},
+        ask_your_data::{AskDataEvent, AskDataResult, AskDataSeries, AskYourData},
+        billing_toggle::BillingToggle,
+        cookie_consent::{ConsentCategory, CookieConsent},
+        countdown::Countdown,
+        elastic_slider::ElasticSlider,
+        enrich_column::{EnrichColumn, EnrichEvent, EnrichResult, EnrichRow, EnrichSource},
+        glass_menu::{GlassMenu, GlassMenuGroup, GlassMenuItem, GlassMenuSelected},
+        glass_segmented::{GlassSegmentChanged, GlassSegmentOption, GlassSegmented},
+        mega_menu_morph::{
+            MegaMenuFeature, MegaMenuGroup, MegaMenuLink, MegaMenuMorph, MegaMenuNavigate,
+            MegaMenuSection,
+        },
+        money_input::MoneyInput,
+        morph_select::{MorphOption, MorphSelect},
+        pii_redaction::{PiiEvent, PiiKind, PiiRedaction, PiiSpan},
+        presence_stack::{PresencePerson, PresenceSelected, PresenceStack, PresenceStatus},
+        range_histogram_slider::RangeHistogramSlider,
+        reply_draft::{
+            ReplyDraft, ReplyDraftEvent, ReplyHint, ReplyLength, ReplyMessage, ReplyTone,
+        },
+        ruler_slider::RulerSlider,
+        scrub_input::ScrubInput,
+        signature_pad::{SignaturePad, SignaturePngExported},
+        smart_form_fill::{SmartField, SmartFillEvent, SmartFormFill, SmartSuggestion},
+        ticket_router::{Ticket, TicketDecision, TicketLane, TicketRouter, TicketRouterEvent},
+        tldr_toggle::{TldrArticle, TldrEvent, TldrMode, TldrParagraph, TldrPoint, TldrToggle},
+        toggle_group::{ToggleGroup, ToggleMode, ToggleOption},
+        tree_table::{TreeTable, TreeTableEvent, TreeTableRow},
+        undo_toast::{UndoItem, UndoToast, UndoToastEvent},
+    },
+    primitives::{
+        control::UiLanguage,
+        family::{Paint, Tone, face},
+        glyph::{Glyph, icon},
+    },
+};
+
+pub const IDS: &[&str] = &[
+    "rating",
+    "billing-toggle",
+    "toggle-group",
+    "radio-cards",
+    "money-input",
+    "countdown",
+    "elastic-slider",
+    "range-histogram-slider",
+    "announcement-bar",
+    "cookie-consent",
+    "ruler-slider",
+    "signature-pad",
+    "scrub-input",
+    "morph-select",
+    "undo-toast",
+    "tree-table",
+    "mega-menu-morph",
+    "glass-segmented",
+    "glass-menu",
+    "presence-stack",
+    "tldr-toggle",
+    "smart-form-fill",
+    "enrich-column",
+    "ticket-router",
+    "reply-draft",
+    "ask-your-data",
+    "pii-redaction",
+];
+
+struct InputExamples {
+    views: Vec<AnyView>,
+    width: f32,
+}
+struct SmartFillExample {
+    control: Entity<SmartFormFill>,
+    fail_next: bool,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl SmartFillExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let fields = vec![
+            SmartField::new("name", l.text("Name", "姓名")),
+            SmartField::new("email", l.text("Email", "邮箱")),
+            SmartField::new("company", l.text("Company", "公司")),
+            SmartField::new("role", l.text("Role", "职位")),
+        ];
+        let control = cx.new(|cx| SmartFormFill::new(fields, w, cx));
+        let source = control.read(cx).source();
+        source.update(cx, |field, cx| field.set_value("Name: Alex Chen\nEmail: alex@example.com\nCompany: Northstar\nRole: Product designer", w, cx));
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &SmartFillEvent, w, cx| match event {
+                SmartFillEvent::Requested { id, text } => {
+                    let id = *id;
+                    let text = text.to_string();
+                    let entity = entity.clone();
+                    let fail = s.fail_next;
+                    s.fail_next = false;
+                    let lang = UiLanguage::current(cx);
+                    cx.spawn_in(w, async move |_, cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(600))
+                            .await;
+                        if fail {
+                            let _ = cx.update(|_, cx| {
+                                entity.update(cx, |form, cx| {
+                                    form.fail(
+                                        id,
+                                        lang.text(
+                                            "Sample extraction failed. Try again.",
+                                            "样例提取失败，请重试。",
+                                        ),
+                                        cx,
+                                    );
+                                })
+                            });
+                            return;
+                        }
+                        for (key, prefix) in [
+                            ("name", "Name:"),
+                            ("email", "Email:"),
+                            ("company", "Company:"),
+                            ("role", "Role:"),
+                        ] {
+                            let Some(line) = text
+                                .lines()
+                                .find(|line| line.trim_start().starts_with(prefix))
+                            else {
+                                continue;
+                            };
+                            let value = line.trim_start().strip_prefix(prefix).unwrap_or("").trim();
+                            if value.is_empty() {
+                                continue;
+                            }
+                            let confidence = if key == "role" { 0.72 } else { 0.96 };
+                            let suggestion =
+                                SmartSuggestion::new(key, value.to_owned(), confidence)
+                                    .with_source(value.to_owned());
+                            let applied = cx
+                                .update(|w, cx| {
+                                    entity.update(cx, |form, cx| form.apply(id, suggestion, w, cx))
+                                })
+                                .unwrap_or(false);
+                            if !applied {
+                                return;
+                            }
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(140))
+                                .await;
+                        }
+                        let _ = cx.update(|_, cx| {
+                            entity.update(cx, |form, cx| {
+                                form.finish(id, cx);
+                            })
+                        });
+                    })
+                    .detach();
+                }
+                SmartFillEvent::Submitted(_) => {
+                    s.note = UiLanguage::current(cx)
+                        .text("Example submitted; no data saved", "示例已提交，未保存数据")
+                        .into();
+                    cx.notify();
+                }
+                SmartFillEvent::Cancelled(_) => {}
+            },
+        );
+        Self {
+            control,
+            fail_next: false,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for SmartFillExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let failure = if self.fail_next {
+            l.text("Next request will fail", "下次请求将失败")
+        } else {
+            l.text("Simulate a failed request", "模拟一次请求失败")
+        };
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text(
+                "Sample parser runs locally; no text is sent.",
+                "样例解析仅在本地运行，不会发送文本。",
+            )))
+            .child(
+                div()
+                    .id("smart-example-fail")
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .child(failure)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        s.fail_next = !s.fail_next;
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                        if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                            s.fail_next = !s.fail_next;
+                            cx.notify();
+                            w.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    })),
+            )
+            .child(div().text_size(px(12.)).child(self.note.clone()))
+    }
+}
+struct AskDataExample {
+    control: Entity<AskYourData>,
+    fail_next: bool,
+    _subscription: Subscription,
+}
+impl AskDataExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let control = cx.new(|cx| AskYourData::new(l.text("Sample data", "样例数据"), w, cx));
+        let input = control.read(cx).question();
+        input.update(cx, |field, cx| {
+            field.set_value(
+                l.text("How did signups change?", "注册量有什么变化？"),
+                w,
+                cx,
+            )
+        });
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &AskDataEvent, _, cx| {
+                let language = UiLanguage::current(cx);
+                match event {
+                    AskDataEvent::GenerateSql { id, .. } => {
+                        let id = *id;
+                        let entity = entity.clone();
+                        cx.spawn(async move |_, cx| {
+                            for chunk in [
+                                "SELECT week, plan, ",
+                                "COUNT(*) AS signups ",
+                                "FROM sample_signups ",
+                                "GROUP BY week, plan",
+                            ] {
+                                let accepted =
+                                    entity.update(cx, |view, cx| view.append_sql(id, chunk, cx));
+                                if !accepted {
+                                    return;
+                                }
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_millis(150))
+                                    .await;
+                            }
+                            entity.update(cx, |view, cx| {
+                                view.finish_sql(id, cx);
+                            });
+                        })
+                        .detach();
+                    }
+                    AskDataEvent::RunQuery { id, .. } => {
+                        let id = *id;
+                        let entity = entity.clone();
+                        let fail = s.fail_next;
+                        s.fail_next = false;
+                        cx.spawn(async move |_, cx| {
+                            entity.update(cx, |view, cx| {
+                                view.progress(id, 12, Some(28), cx);
+                            });
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(500))
+                                .await;
+                            entity.update(cx, |view, cx| {
+                                if fail {
+                                    view.fail(
+                                        id,
+                                        language.text(
+                                            "Sample query failed. Try again.",
+                                            "样例查询失败，请重试。",
+                                        ),
+                                        cx,
+                                    );
+                                } else {
+                                    let categories = vec![
+                                        language.text("Week 1", "第 1 周").into(),
+                                        language.text("Week 2", "第 2 周").into(),
+                                        language.text("Week 3", "第 3 周").into(),
+                                    ];
+                                    let series = vec![
+                                        AskDataSeries::new(
+                                            language.text("Free", "免费"),
+                                            vec![6., 8., 9.],
+                                        ),
+                                        AskDataSeries::new(
+                                            language.text("Team", "团队"),
+                                            vec![3., 4., 5.],
+                                        ),
+                                    ];
+                                    let result = AskDataResult::new(
+                                        language.text("Weekly signups", "每周注册量"),
+                                        categories,
+                                        series,
+                                    )
+                                    .with_meta(28, 214)
+                                    .with_insight(language.text(
+                                        "Week 3 totals 14 signups.",
+                                        "第 3 周合计 14 次注册。",
+                                    ));
+                                    view.finish_query(id, result, cx);
+                                }
+                            });
+                        })
+                        .detach();
+                    }
+                    AskDataEvent::Cancelled(_) => {}
+                }
+            },
+        );
+        Self {
+            control,
+            fail_next: false,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for AskDataExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let failure = if self.fail_next {
+            l.text("Next sample query will fail", "下次样例查询将失败")
+        } else {
+            l.text("Simulate a failed query", "模拟一次查询失败")
+        };
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text(
+                "Example only: fixed SQL and sample data; no database is queried.",
+                "仅为示例：使用固定查询和样例数据，不会连接数据库。",
+            )))
+            .child(
+                div()
+                    .id("ask-example-fail")
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .child(failure)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        s.fail_next = !s.fail_next;
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                        if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                            s.fail_next = !s.fail_next;
+                            cx.notify();
+                            w.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    })),
+            )
+    }
+}
+
+struct PiiExample {
+    control: Entity<PiiRedaction>,
+    fail_next: bool,
+    _subscription: Subscription,
+}
+impl PiiExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let control = cx.new(|cx| PiiRedaction::new(w, cx));
+        let source = control.read(cx).source();
+        source.update(cx, |field, cx| {
+            field.set_value("Name: 林晓\nEmail: lin@example.com\nPhone: 555-0100", w, cx)
+        });
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &PiiEvent, _, cx| match event {
+                PiiEvent::ScanRequested { id, text } => {
+                    let id = *id;
+                    let text = text.to_string();
+                    let entity = entity.clone();
+                    let fail = s.fail_next;
+                    s.fail_next = false;
+                    let lang = UiLanguage::current(cx);
+                    cx.spawn(async move |_, cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(600))
+                            .await;
+                        let mut spans = Vec::new();
+                        for (needle, kind) in [
+                            ("林晓", PiiKind::Name),
+                            ("lin@example.com", PiiKind::Email),
+                            ("555-0100", PiiKind::Phone),
+                        ] {
+                            for (start, _) in text.match_indices(needle) {
+                                spans.push(PiiSpan::new(start, start + needle.len(), kind));
+                            }
+                        }
+                        entity.update(cx, |control, cx| {
+                            if fail {
+                                control.fail_scan(
+                                    id,
+                                    lang.text(
+                                        "Sample scan failed. Try again.",
+                                        "样例识别失败，请重试。",
+                                    ),
+                                    cx,
+                                );
+                            } else {
+                                control.finish_scan(id, spans, cx);
+                            }
+                        });
+                    })
+                    .detach();
+                }
+                PiiEvent::Cancelled(_) => {}
+            },
+        );
+        Self {
+            control,
+            fail_next: false,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for PiiExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let failure = if self.fail_next {
+            l.text("Next sample scan will fail", "下次样例识别将失败")
+        } else {
+            l.text("Simulate a failed scan", "模拟一次识别失败")
+        };
+        div().w_full().flex().flex_col().gap(px(10.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text(
+                "Simulated demo: matches only the three fixed example values. No text is transmitted. Do not use this demo as a real detector.",
+                "模拟演示：只匹配三个固定样例，不会传输文本；不能作为真实识别工具。",
+            )))
+            .child(div().id("pii-example-fail").role(Role::Button).tab_index(0).cursor_pointer().text_size(px(12.))
+                .child(failure)
+                .on_click(cx.listener(|s, _, _, cx| { s.fail_next = !s.fail_next; cx.notify(); }))
+                .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                    if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                        s.fail_next = !s.fail_next; cx.notify(); w.prevent_default(); cx.stop_propagation();
+                    }
+                })))
+    }
+}
+
+struct ReplyExample {
+    control: Entity<ReplyDraft>,
+    fail_next: bool,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl ReplyExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let message = ReplyMessage::new(
+            "Alex",
+            l.text("Planning our next review", "安排下一次评审"),
+            l.text(
+                "Could we meet next week to review the latest changes?",
+                "下周可以一起评审最新改动吗？",
+            ),
+        );
+        let hints = vec![
+            ReplyHint::new("yes", l.text("Sounds good", "可以")),
+            ReplyHint::new("later", l.text("Another time", "另约时间")),
+            ReplyHint::new("details", l.text("Ask details", "询问详情")),
+        ];
+        let control = cx.new(|cx| ReplyDraft::new(message, hints, w, cx));
+        let subscription = cx.subscribe_in(&control, w, |s: &mut Self, entity, event: &ReplyDraftEvent, w, cx| {
+            match event {
+                ReplyDraftEvent::Requested(request) => {
+                    let request = request.clone(); let entity = entity.clone(); let fail = s.fail_next; s.fail_next = false;
+                    let language = UiLanguage::current(cx);
+                    cx.spawn_in(w, async move |_, cx| {
+                        cx.background_executor().timer(std::time::Duration::from_millis(550)).await;
+                        if fail {
+                            let _ = cx.update(|_, cx| entity.update(cx, |draft, cx| { draft.fail(request.id, language.text("Sample draft failed. Try again.", "样例草稿生成失败，请重试。"), cx); }));
+                            return;
+                        }
+                        let kind = request.hint.as_ref().map(|hint| hint.id.as_ref()).unwrap_or("yes");
+                        let sentence = match (language, kind) {
+                            (UiLanguage::Chinese, "later") => "下周我有其他安排，我们可以另约时间。",
+                            (UiLanguage::Chinese, "details") => "可以先发我评审的议程和材料吗？",
+                            (UiLanguage::Chinese, _) => "下周一起评审很合适，我会提前准备好材料。",
+                            (_, "later") => "I have a conflict next week. Could we find another time?",
+                            (_, "details") => "Could you share the agenda and materials first?",
+                            _ => "Next week works well. I will prepare the materials in advance.",
+                        };
+                        let greeting = match (language, request.tone) {
+                            (UiLanguage::Chinese, ReplyTone::Formal) => "您好，\n\n",
+                            (UiLanguage::Chinese, ReplyTone::Warm) => "你好，很高兴收到你的消息。\n\n",
+                            (UiLanguage::Chinese, _) => "你好，\n\n",
+                            (_, ReplyTone::Formal) => "Dear Alex,\n\n",
+                            (_, ReplyTone::Warm) => "Hi Alex, great to hear from you.\n\n",
+                            _ => "Hi Alex,\n\n",
+                        };
+                        let extra = match (language, request.length) {
+                            (_, ReplyLength::Short) => "",
+                            (UiLanguage::Chinese, ReplyLength::Long) => "如果还有需要提前讨论的内容，欢迎随时告诉我。",
+                            (UiLanguage::Chinese, _) => "期待后续沟通。",
+                            (_, ReplyLength::Long) => " Please let me know if there is anything else we should discuss beforehand.",
+                            _ => " Looking forward to it.",
+                        };
+                        let closing = if language == UiLanguage::Chinese { "\n\n谢谢！" } else { "\n\nThank you!" };
+                        let chunks = vec![greeting, sentence, extra, closing];
+                        for chunk in chunks {
+                            let accepted = cx.update(|_, cx| entity.update(cx, |draft, cx| draft.append(request.id, chunk, cx))).unwrap_or(false);
+                            if !accepted { return; }
+                            cx.background_executor().timer(std::time::Duration::from_millis(180)).await;
+                        }
+                        let _ = cx.update(|w, cx| entity.update(cx, |draft, cx| { draft.finish(request.id, w, cx); }));
+                    }).detach();
+                }
+                ReplyDraftEvent::Cancelled(_) => {}
+                ReplyDraftEvent::Insert(_) => { s.note = UiLanguage::current(cx).text("Sample inserted; no message sent.", "已触发样例插入，未发送消息。").into(); cx.notify(); }
+            }
+        });
+        Self {
+            control,
+            fail_next: false,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for ReplyExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let failure = if self.fail_next {
+            l.text("Next request will fail", "下次请求将失败")
+        } else {
+            l.text("Simulate a failed request", "模拟一次请求失败")
+        };
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text(
+                "Sample text is generated locally. No message is sent.",
+                "样例文本在本地生成，不会发送消息。",
+            )))
+            .child(
+                div()
+                    .id("reply-example-fail")
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .child(failure)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        s.fail_next = !s.fail_next;
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                        if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                            s.fail_next = !s.fail_next;
+                            cx.notify();
+                            w.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    })),
+            )
+            .child(div().text_size(px(12.)).child(self.note.clone()))
+    }
+}
+
+struct TicketExample {
+    control: Entity<TicketRouter>,
+    fail_classification: bool,
+    fail_route: bool,
+    next: usize,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl TicketExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let lanes = vec![
+            TicketLane::new("support", l.text("Support", "支持")),
+            TicketLane::new("billing", l.text("Billing", "账务")),
+            TicketLane::new("product", l.text("Product", "产品")),
+        ];
+        let tickets = vec![
+            Ticket::new(
+                "invoice",
+                l.text("Invoice question", "账单咨询"),
+                l.text("Can you explain this invoice?", "请问这笔账单如何计算？"),
+            ),
+            Ticket::new(
+                "login",
+                l.text("Cannot sign in", "无法登录"),
+                l.text("I cannot access my account.", "我无法访问账户。"),
+            ),
+            Ticket::new(
+                "feature",
+                l.text("Feature request", "功能建议"),
+                l.text("Please add an export option.", "希望增加导出功能。"),
+            ),
+        ];
+        let control = cx.new(|_| {
+            TicketRouter::new(l.text("Ticket triage", "工单分流"), lanes, tickets)
+                .with_concurrency(2)
+        });
+        let weak = control.downgrade();
+        cx.spawn(async move |_, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(250))
+                    .await;
+                if weak
+                    .update(cx, |router, cx| {
+                        let visible = cx
+                            .try_global::<crate::StoryBridge>()
+                            .is_none_or(|bridge| (bridge.visible)());
+                        router.set_visible(visible, cx);
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &TicketRouterEvent, _, cx| {
+                let l = UiLanguage::current(cx);
+                match event {
+                    TicketRouterEvent::ClassifyRequested { request, ticket } => {
+                        let request = *request;
+                        let ticket = ticket.clone();
+                        let entity = entity.clone();
+                        let fail = ticket.id.as_ref() == "login" && s.fail_classification;
+                        if fail {
+                            s.fail_classification = false;
+                        }
+                        cx.spawn(async move |_, cx| {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(550))
+                                .await;
+                            entity.update(cx, |router, cx| {
+                                if fail {
+                                    router.failed(
+                                        request,
+                                        l.text("Example classification failed", "样例分类失败"),
+                                        cx,
+                                    );
+                                } else {
+                                    let lane = match ticket.id.as_ref() {
+                                        "invoice" => "billing",
+                                        "feature" => "product",
+                                        _ => "support",
+                                    };
+                                    let confidence = if ticket.id.as_ref() == "feature" {
+                                        0.63
+                                    } else {
+                                        0.92
+                                    };
+                                    router.classified(
+                                        request,
+                                        TicketDecision::new(lane, confidence)
+                                            .with_intent(l.text("Question", "咨询"))
+                                            .with_sentiment(l.text("Neutral", "中性"))
+                                            .with_assignee("Alex"),
+                                        cx,
+                                    );
+                                }
+                            });
+                        })
+                        .detach();
+                    }
+                    TicketRouterEvent::RouteRequested {
+                        request, ticket, ..
+                    } => {
+                        let request = *request;
+                        let entity = entity.clone();
+                        let fail = ticket.id.as_ref() == "invoice" && s.fail_route;
+                        if fail {
+                            s.fail_route = false;
+                        }
+                        cx.spawn(async move |_, cx| {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(350))
+                                .await;
+                            entity.update(cx, |router, cx| {
+                                let result = if fail {
+                                    Err(l.text("Example assignment failed", "样例分配失败").into())
+                                } else {
+                                    Ok(())
+                                };
+                                router.routed(request, result, cx);
+                            });
+                        })
+                        .detach();
+                    }
+                    TicketRouterEvent::Cancelled(_) => {
+                        s.note = l
+                            .text("Pending sample request cancelled", "已取消样例请求")
+                            .into();
+                        cx.notify();
+                    }
+                }
+            },
+        );
+        Self {
+            control,
+            fail_classification: true,
+            fail_route: true,
+            next: 1,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for TicketExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        div().w_full().flex().flex_col().gap(px(10.)).child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text("Sample only: no ticket is sent or assigned. Two requests fail once to demonstrate retry.", "仅为样例：不会发送或分配工单。两项请求首次失败以演示重试。")))
+            .child(div().id("ticket-add-example").role(Role::Button).tab_index(0).cursor_pointer().text_size(px(12.))
+                .child(l.text("Add sample ticket", "添加样例工单"))
+                .on_click(cx.listener(|s, _, _, cx| {
+                    let number = s.next; s.next += 1;
+                    let l = UiLanguage::current(cx);
+                    let ticket = Ticket::new(format!("sample-{number}"), format!("{} {number}", l.text("Sample ticket", "样例工单")), l.text("A sample request", "一条样例请求"));
+                    s.control.update(cx, |router, cx| router.set_ticket(ticket, cx));
+                }))
+                .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                    if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                        let number = s.next; s.next += 1; let l = UiLanguage::current(cx);
+                        let ticket = Ticket::new(format!("sample-{number}"), format!("{} {number}", l.text("Sample ticket", "样例工单")), l.text("A sample request", "一条样例请求"));
+                        s.control.update(cx, |router, cx| router.set_ticket(ticket, cx)); w.prevent_default(); cx.stop_propagation();
+                    }
+                })))
+            .child(div().text_size(px(12.)).child(self.note.clone()))
+    }
+}
+
+struct EnrichExample {
+    control: Entity<EnrichColumn>,
+    fail_once: bool,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl EnrichExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = UiLanguage::current(cx);
+        let rows = vec![
+            EnrichRow::new("northstar", "Northstar").with_domain("northstar.example"),
+            EnrichRow::new("orion", "Orion").with_domain("orion.example"),
+            EnrichRow::new("river", "River").with_domain("river.example"),
+        ];
+        let control = cx.new(|cx| {
+            EnrichColumn::new(
+                language.text("Accounts", "客户列表"),
+                rows,
+                language.text(
+                    "Find a short description for each company",
+                    "为每家公司整理简短描述",
+                ),
+                w,
+                cx,
+            )
+        });
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &EnrichEvent, w, cx| match event {
+                EnrichEvent::Requested { id, row, .. } => {
+                    let id = *id;
+                    let row = row.clone();
+                    let entity = entity.clone();
+                    let fail = row.id.as_ref() == "orion" && s.fail_once;
+                    if fail {
+                        s.fail_once = false;
+                    }
+                    let l = UiLanguage::current(cx);
+                    cx.spawn_in(w, async move |_, cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(500))
+                            .await;
+                        let _ = cx.update(|w, cx| {
+                            entity.update(cx, |column, cx| {
+                                if fail {
+                                    column.fail(
+                                        id,
+                                        l.text(
+                                            "Sample lookup failed; retry.",
+                                            "样例查询失败，请重试。",
+                                        ),
+                                        cx,
+                                    );
+                                } else {
+                                    let value = match row.id.as_ref() {
+                                        "northstar" => l.text("Design tools", "设计工具"),
+                                        "orion" => l.text("Analytics platform", "数据分析平台"),
+                                        _ => l.text("Collaboration software", "协作软件"),
+                                    };
+                                    column.finish(
+                                        id,
+                                        EnrichResult::new(value).with_source(EnrichSource::new(
+                                            l.text("Sample source", "样例来源"),
+                                            "https://example.com/",
+                                        )),
+                                        w,
+                                        cx,
+                                    );
+                                }
+                            })
+                        });
+                    })
+                    .detach();
+                }
+                EnrichEvent::OpenSource { .. } => {
+                    s.note = UiLanguage::current(cx)
+                        .text(
+                            "Sample source selected; no page was opened.",
+                            "已选择样例来源，未打开网页。",
+                        )
+                        .into();
+                    cx.notify();
+                }
+                EnrichEvent::Changed { .. } | EnrichEvent::Cancelled(_) => {}
+            },
+        );
+        Self {
+            control,
+            fail_once: true,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for EnrichExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text(
+                "Sample data only; no requests are sent. Orion fails once so retry can be tested.",
+                "仅使用样例数据，不发送请求；Orion 首次失败，可测试重试。",
+            )))
+            .child(div().text_size(px(12.)).child(self.note.clone()))
+    }
+}
+
+struct TldrExample {
+    control: Entity<TldrToggle>,
+    fail_next: bool,
+    _subscription: Subscription,
+}
+impl TldrExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let article = TldrArticle::new(l.text("A calmer way to ship", "更从容地交付"), vec![
+            TldrParagraph::new("context", l.text("A team can move faster when everyone understands the goal and the constraints before work begins.", "当团队在开始前理解目标和约束时，就能更从容地推进工作。")),
+            TldrParagraph::new("small", l.text("Small releases make feedback easier to collect and give the team a safe way to learn.", "小步发布更容易收集反馈，也让团队可以安全地学习和调整。")),
+            TldrParagraph::new("review", l.text("Regular reviews connect what was built to the outcomes that matter, so the next decision is clearer.", "定期回顾把已完成的工作与实际结果联系起来，让下一步决策更加清晰。")),
+        ]).with_source(l.text("Example article · Kense", "示例文章 · Kense"));
+        let control = cx.new(|cx| TldrToggle::new(article, cx));
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &TldrEvent, _, cx| {
+                if let TldrEvent::Requested(request) = event {
+                    let request = request.clone();
+                    let entity = entity.clone();
+                    let fail = s.fail_next;
+                    s.fail_next = false;
+                    let language = UiLanguage::current(cx);
+                    cx.spawn(async move |_, cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(700))
+                            .await;
+                        if fail {
+                            entity.update(cx, |control, cx| {
+                                control.fail(
+                                    request.id,
+                                    language.text(
+                                        "Example request failed. Try again.",
+                                        "示例请求失败，请重试。",
+                                    ),
+                                    cx,
+                                );
+                            });
+                            return;
+                        }
+                        if request.mode == TldrMode::Summary {
+                            let chunks = if language == UiLanguage::Chinese {
+                                vec![
+                                    "明确目标和约束，",
+                                    "通过小步发布收集反馈，",
+                                    "再用定期回顾指导下一步决策。",
+                                ]
+                            } else {
+                                vec![
+                                    "Clarify goals and constraints, ",
+                                    "ship in small steps to gather feedback, ",
+                                    "then use regular reviews to guide the next decision.",
+                                ]
+                            };
+                            for chunk in chunks {
+                                let accepted = entity.update(cx, |control, cx| {
+                                    control.append_text(request.id, chunk, cx)
+                                });
+                                if !accepted {
+                                    return;
+                                }
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_millis(180))
+                                    .await;
+                            }
+                        } else {
+                            let points = if language == UiLanguage::Chinese {
+                                vec![
+                                    ("先明确目标和约束。", "context"),
+                                    ("小步发布并收集反馈。", "small"),
+                                    ("定期回顾结果以指导决策。", "review"),
+                                ]
+                            } else {
+                                vec![
+                                    ("Clarify goals and constraints first.", "context"),
+                                    ("Release in small steps and gather feedback.", "small"),
+                                    ("Review outcomes to guide decisions.", "review"),
+                                ]
+                            };
+                            for (text, source) in points.into_iter().take(request.point_count) {
+                                let accepted = entity.update(cx, |control, cx| {
+                                    control.append_point(
+                                        request.id,
+                                        TldrPoint::new(text, source),
+                                        cx,
+                                    )
+                                });
+                                if !accepted {
+                                    return;
+                                }
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_millis(180))
+                                    .await;
+                            }
+                        }
+                        entity.update(cx, |control, cx| {
+                            control.finish(request.id, cx);
+                        });
+                    })
+                    .detach();
+                }
+            },
+        );
+        Self {
+            control,
+            fail_next: false,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for TldrExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let name = if self.fail_next {
+            l.text("Next request will fail", "下次请求将失败")
+        } else {
+            l.text("Simulate a failed request", "模拟一次请求失败")
+        };
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(l.text(
+                "Sample summary: no content is sent.",
+                "样例摘要：不会发送文章内容。",
+            )))
+            .child(
+                div()
+                    .id("tldr-fail-next")
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .child(name)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        s.fail_next = !s.fail_next;
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                        if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                            s.fail_next = !s.fail_next;
+                            cx.notify();
+                            w.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    })),
+            )
+    }
+}
+struct PresenceExample {
+    control: Entity<PresenceStack>,
+    people: Vec<PresencePerson>,
+    next: usize,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl PresenceExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let people = vec![
+            PresencePerson::new("me", "Alex Chen"),
+            PresencePerson::new("em", "Emma Lin").with_status(PresenceStatus::Typing),
+            PresencePerson::new("sam", "Sam Park").with_status(PresenceStatus::Idle),
+            PresencePerson::new("lee", "Lee Kim"),
+            PresencePerson::new("mia", "Mia Evans"),
+            PresencePerson::new("kai", "Kai Liu"),
+        ];
+        let control = cx.new(|cx| {
+            PresenceStack::new("presence-example", people.clone(), cx).with_self_id("me", cx)
+        });
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, _, event: &PresenceSelected, _, cx| {
+                s.note = format!(
+                    "{}: {}",
+                    UiLanguage::current(cx).text("Selected", "已选择"),
+                    event.0
+                )
+                .into();
+                cx.notify();
+            },
+        );
+        Self {
+            control,
+            people,
+            next: 1,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+    fn sync(&mut self, cx: &mut Context<Self>) {
+        let people = self.people.clone();
+        self.control
+            .update(cx, |control, cx| control.set_people(people, cx));
+        cx.notify();
+    }
+}
+impl Render for PresenceExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let p = kui::primitives::family::Paint::get(cx);
+        let button = |id: &'static str, text: &'static str| {
+            div()
+                .id(id)
+                .debug_selector(move || text.to_string())
+                .px(px(10.))
+                .h(px(32.))
+                .rounded(px(8.))
+                .border_1()
+                .border_color(p.line)
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(12.))
+                .text_color(p.ink)
+                .cursor_pointer()
+                .child(text)
+        };
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .child(
+                div()
+                    .text_color(p.ink)
+                    .child(l.text("Project plan", "项目计划")),
+            )
+            .child(self.control.clone())
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(8.))
+                    .child(
+                        button("presence-add", l.text("Someone joins", "有人加入")).on_click(
+                            cx.listener(|s, _, _, cx| {
+                                let id = format!("guest-{}", s.next);
+                                let name = format!(
+                                    "{} {}",
+                                    UiLanguage::current(cx).text("Guest", "访客"),
+                                    s.next
+                                );
+                                s.next += 1;
+                                s.people.push(PresencePerson::new(id, name));
+                                s.sync(cx);
+                            }),
+                        ),
+                    )
+                    .child(
+                        button("presence-remove", l.text("Someone leaves", "有人离开")).on_click(
+                            cx.listener(|s, _, _, cx| {
+                                if s.people.len() > 1 {
+                                    s.people.pop();
+                                    s.sync(cx);
+                                }
+                            }),
+                        ),
+                    )
+                    .child(
+                        button("presence-status", l.text("Change status", "切换状态")).on_click(
+                            cx.listener(|s, _, _, cx| {
+                                if let Some(person) = s.people.get_mut(1) {
+                                    person.status = match person.status {
+                                        PresenceStatus::Active => PresenceStatus::Typing,
+                                        PresenceStatus::Typing => PresenceStatus::Idle,
+                                        PresenceStatus::Idle => PresenceStatus::Active,
+                                    };
+                                    s.sync(cx);
+                                }
+                            }),
+                        ),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(p.secondary)
+                    .child(self.note.clone()),
+            )
+    }
+}
+struct GlassExample {
+    control: Entity<GlassSegmented>,
+    images: [ImageSource; 3],
+    current: usize,
+    previous: usize,
+    transition: kui::primitives::family::PhaseClock,
+    _subscription: Subscription,
+}
+impl GlassExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = UiLanguage::current(cx);
+        let control = cx.new(|cx| {
+            GlassSegmented::new(
+                language.text("Photo", "照片"),
+                vec![
+                    GlassSegmentOption::new("one", language.text("One", "照片一")),
+                    GlassSegmentOption::new("two", language.text("Two", "照片二")),
+                    GlassSegmentOption::new("three", language.text("Three", "照片三")),
+                ],
+                cx,
+            )
+        });
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, _, event: &GlassSegmentChanged, _, cx| {
+                let next = match event.0.as_ref() {
+                    "one" => 0,
+                    "two" => 1,
+                    "three" => 2,
+                    _ => return,
+                };
+                if next != s.current {
+                    s.previous = s.current;
+                    s.current = next;
+                    s.transition.restart(cx);
+                    cx.notify();
+                }
+            },
+        );
+        let image = |bytes: &'static [u8]| -> ImageSource {
+            std::sync::Arc::new(Image::from_bytes(ImageFormat::Jpeg, bytes.to_vec())).into()
+        };
+        Self {
+            control,
+            images: [
+                image(include_bytes!("../../assets/navigation/as17-134-20481.jpg")),
+                image(include_bytes!("../../assets/navigation/as17-134-20476.jpg")),
+                image(include_bytes!("../../assets/navigation/as17-137-20989.jpg")),
+            ],
+            current: 0,
+            previous: 0,
+            transition: Default::default(),
+            _subscription: subscription,
+        }
+    }
+}
+struct GlassMenuExample {
+    control: Entity<GlassMenu>,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl GlassMenuExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| language.text(en, zh);
+        let groups = vec![
+            GlassMenuGroup::new(vec![
+                GlassMenuItem::new("copy", t("Copy", "复制")),
+                GlassMenuItem::new("move", t("Move to", "移动到")).with_children(vec![
+                    GlassMenuItem::new("projects", t("Projects", "项目")),
+                    GlassMenuItem::new("archive", t("Archive", "归档")),
+                ]),
+                GlassMenuItem::new("favorite", t("Favorite", "收藏"))
+                    .with_checked(false)
+                    .with_keep_open(true),
+            ]),
+            GlassMenuGroup::new(vec![
+                GlassMenuItem::new("delete", t("Delete", "删除")).with_danger(true),
+            ]),
+        ];
+        let control = cx
+            .new(|cx| GlassMenu::new("glass-actions", t("Photo actions", "图片操作"), groups, cx));
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, control, event: &GlassMenuSelected, _, cx| {
+                if let Some(checked) = event.checked {
+                    control.update(cx, |menu, cx| {
+                        menu.set_checked(event.id.as_ref(), checked, cx)
+                    });
+                }
+                s.note = format!(
+                    "{}: {}",
+                    UiLanguage::current(cx).text("Selected", "已选择"),
+                    event.id
+                )
+                .into();
+                cx.notify();
+            },
+        );
+        Self {
+            control,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for GlassMenuExample {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .w_full()
+            .h(px(300.))
+            .rounded(px(8.))
+            .p(px(16.))
+            .bg(linear_gradient(
+                32.,
+                linear_color_stop(rgb(0x444b78), 0.),
+                linear_color_stop(rgb(0xb57870), 1.),
+            ))
+            .flex()
+            .flex_col()
+            .justify_between()
+            .items_start()
+            .child(self.control.clone())
+            .child(
+                div()
+                    .text_color(white())
+                    .text_size(px(13.))
+                    .child(self.note.clone()),
+            )
+    }
+}
+impl Render for GlassExample {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let alpha = kui::primitives::family::ease(self.transition.time(0.25, w, cx) / 0.25);
+        let ids = ["AS17-134-20481", "AS17-134-20476", "AS17-137-20989"];
+        div()
+            .relative()
+            .w_full()
+            .h(px(300.))
+            .rounded(px(8.))
+            .overflow_hidden()
+            .child(
+                img(self.images[self.previous].clone())
+                    .absolute()
+                    .inset_0()
+                    .size_full()
+                    .object_fit(ObjectFit::Cover),
+            )
+            .child(
+                img(self.images[self.current].clone())
+                    .absolute()
+                    .inset_0()
+                    .size_full()
+                    .object_fit(ObjectFit::Cover)
+                    .opacity(alpha),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .p(px(16.))
+                    .flex()
+                    .flex_col()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_color(white())
+                            .text_size(px(12.))
+                            .child(format!("NASA · Apollo 17 · {}", ids[self.current])),
+                    )
+                    .child(self.control.clone()),
+            )
+    }
+}
+
+struct MegaExample {
+    menu: Entity<MegaMenuMorph>,
+    note: SharedString,
+    _subscription: Subscription,
+}
+impl MegaExample {
+    fn new(sections: Vec<MegaMenuSection>, w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let lang = UiLanguage::current(cx);
+        let menu = cx.new(|cx| {
+            MegaMenuMorph::new("Kense", sections, cx)
+                .with_primary("start", lang.text("Get started", "开始使用"))
+        });
+        let subscription = cx.subscribe_in(
+            &menu,
+            w,
+            |s: &mut Self, _, event: &MegaMenuNavigate, _, cx| {
+                let lang = UiLanguage::current(cx);
+                s.note = format!(
+                    "{}: {}",
+                    lang.text("Selected destination", "已选择目的地"),
+                    event.0
+                )
+                .into();
+                cx.notify();
+            },
+        );
+        Self {
+            menu,
+            note: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for MegaExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let lang = UiLanguage::current(cx);
+        let note = if self.note.is_empty() {
+            lang.text(
+                "Choose a destination from the navigation",
+                "从导航中选择一个目的地",
+            )
+            .into()
+        } else {
+            self.note.clone()
+        };
+        div()
+            .relative()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(310.))
+            .child(self.menu.clone())
+            .child(div().text_size(px(13.)).child(note))
+    }
+}
+struct TreeExample {
+    control: Entity<TreeTable>,
+    fail_once: bool,
+    _subscription: Subscription,
+}
+impl TreeExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = UiLanguage::current(cx);
+        let rows = vec![
+            TreeTableRow::new("platform", language.text("Platform", "平台"))
+                .with_cells(vec!["48".into(), "$4,450".into()])
+                .with_children(vec![
+                    TreeTableRow::new("api", "API").with_cells(vec!["16".into(), "$2,150".into()]),
+                    TreeTableRow::new("auth", language.text("Authentication", "身份验证"))
+                        .with_cells(vec!["8".into(), "$1,180".into()]),
+                    TreeTableRow::new("database", language.text("Database", "数据库"))
+                        .with_cells(vec!["6".into(), "$420".into()]),
+                    TreeTableRow::new("storage", language.text("Storage", "存储"))
+                        .with_cells(vec!["4".into(), "$210".into()]),
+                    TreeTableRow::new("metrics", language.text("Metrics", "指标"))
+                        .with_cells(vec!["3".into(), "$180".into()]),
+                    TreeTableRow::new("preview", language.text("Preview", "预览"))
+                        .with_cells(vec!["2".into(), "$120".into()]),
+                    TreeTableRow::new("search", language.text("Search", "搜索"))
+                        .with_cells(vec!["2".into(), "$110".into()]),
+                    TreeTableRow::new("cache", language.text("Cache", "缓存"))
+                        .with_cells(vec!["2".into(), "$80".into()]),
+                ]),
+            TreeTableRow::new("growth", language.text("Growth", "增长"))
+                .with_cells(vec!["7".into(), "$600".into()])
+                .with_lazy_children(),
+            TreeTableRow::new("design", language.text("Design", "设计"))
+                .with_cells(vec!["4".into(), "$320".into()]),
+        ];
+        let columns = vec![
+            language.text("Name", "名称").into(),
+            language.text("Resources", "资源").into(),
+            language.text("Monthly", "每月").into(),
+        ];
+        let control = cx.new(|cx| {
+            TreeTable::new(language.text("Resources", "资源"), columns, rows, cx)
+                .with_expanded(&["platform"])
+        });
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &TreeTableEvent, _, cx| {
+                if let TreeTableEvent::LoadRequested(id) = event {
+                    let (id, fail, entity) = (id.clone(), s.fail_once, entity.clone());
+                    s.fail_once = false;
+                    let child_name = UiLanguage::current(cx).text("Campaign analytics", "活动分析");
+                    cx.spawn(async move |_, cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(300))
+                            .await;
+                        entity.update(cx, |tree, cx| {
+                            let result = if fail {
+                                Err(())
+                            } else {
+                                Ok(vec![
+                                    TreeTableRow::new("campaign", child_name)
+                                        .with_cells(vec!["7".into(), "$600".into()]),
+                                ])
+                            };
+                            tree.resolve_children(&id, result, cx);
+                        });
+                    })
+                    .detach();
+                }
+            },
+        );
+        Self {
+            control,
+            fail_once: true,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for TreeExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(self.control.clone())
+            .child(div().text_size(px(12.)).child(UiLanguage::current(cx).text(
+                "The first Growth load fails; click it again to retry.",
+                "首次加载增长项目会失败，再点击可重试。",
+            )))
+    }
+}
+struct UndoExample {
+    control: Entity<UndoToast>,
+    fail_next: bool,
+    _subscription: Subscription,
+}
+impl UndoExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| language.text(en, zh);
+        let items = vec![
+            UndoItem::new("one", t("Design systems deep dive", "设计系统深入探讨"))
+                .with_sender("Emma Collins")
+                .with_description(t(
+                    "Shared the slides and recording from Thursday.",
+                    "已分享周四的演示文稿与录像。",
+                ))
+                .with_meta("2m")
+                .with_unread(true),
+            UndoItem::new("two", t("Q4 roadmap sign-off", "Q4 路线图确认"))
+                .with_sender("Marcus Johnson")
+                .with_description(t(
+                    "Added the timeline for mobile offline sync.",
+                    "补充了移动端离线同步的时间表。",
+                ))
+                .with_meta("18m")
+                .with_unread(true),
+            UndoItem::new(
+                "three",
+                t("Checkout button stalls on Safari", "Safari 结账按钮卡顿"),
+            )
+            .with_sender("Sofia Rossi")
+            .with_description(t(
+                "Reproduced on iOS 17.4, patch is in review.",
+                "已在 iOS 17.4 复现，补丁正在审核。",
+            ))
+            .with_meta("1h"),
+            UndoItem::new("four", t("Updated invoice for October", "十月更新账单"))
+                .with_sender("Daniel Kim")
+                .with_description(t(
+                    "Attached the PDF with the new VAT number.",
+                    "已附上包含新税号的 PDF。",
+                ))
+                .with_meta("Yesterday"),
+        ];
+        let control = cx.new(|cx| UndoToast::new(language.text("Inbox", "收件箱"), items, cx));
+        let subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &UndoToastEvent, _, cx| {
+                if let UndoToastEvent::CommitRequested { batch, .. } = event {
+                    let (batch, succeed, entity) = (*batch, !s.fail_next, entity.clone());
+                    s.fail_next = false;
+                    cx.spawn(async move |_, cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(300))
+                            .await;
+                        entity.update(cx, |control, cx| control.resolve_commit(batch, succeed, cx));
+                    })
+                    .detach();
+                }
+            },
+        );
+        Self {
+            control,
+            fail_next: false,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for UndoExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let language = UiLanguage::current(cx);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let depleted = self.control.read(cx).is_depleted();
+        let label = if self.fail_next {
+            language.text("Next commit will fail", "下次提交将失败")
+        } else {
+            language.text("Simulate a failed commit", "模拟一次提交失败")
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(15.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(language.text("Inbox", "收件箱")),
+                    )
+                    .when(depleted, |h| {
+                        let refill = language.text("Refill inbox", "重置收件箱");
+                        h.child(
+                            face("undo-refill", refill, 30., radius.into(), Tone::Clear, cx)
+                                .px(px(8.))
+                                .gap(px(5.))
+                                .text_size(px(12.))
+                                .text_color(p.secondary)
+                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                                .child(icon(Glyph::Undo, 13., p.secondary))
+                                .child(refill)
+                                .on_click(cx.listener(|s, _, _, cx| {
+                                    s.control.update(cx, |c, cx| c.refill(cx));
+                                })),
+                        )
+                    }),
+            )
+            .child(self.control.clone())
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .text_size(px(12.))
+                    .text_color(p.faint)
+                    .child(language.text(
+                        "Archive a few in a row, then undo with the button or ⌘Z",
+                        "连续归档几条，然后点击撤销或按 ⌘Z",
+                    ))
+                    .child(
+                        div()
+                            .id("undo-fail-next")
+                            .role(Role::Button)
+                            .tab_index(0)
+                            .cursor_pointer()
+                            .text_color(p.secondary)
+                            .child(label)
+                            .on_click(cx.listener(|s, _, _, cx| {
+                                s.fail_next = !s.fail_next;
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                                if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                                    s.fail_next = !s.fail_next;
+                                    cx.notify();
+                                    cx.stop_propagation();
+                                    w.prevent_default();
+                                }
+                            })),
+                    ),
+            )
+    }
+}
+struct SignatureExample {
+    pad: Entity<SignaturePad>,
+    status: SharedString,
+    _subscription: Subscription,
+}
+impl SignatureExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = UiLanguage::current(cx);
+        let pad = cx.new(|cx| SignaturePad::new(language.text("Sign here", "请在这里签名"), cx));
+        let subscription = cx.subscribe_in(
+            &pad,
+            w,
+            |s: &mut Self, _, event: &SignaturePngExported, _, cx| {
+                let language = UiLanguage::current(cx);
+                s.status = match &event.0 {
+                    Ok(data) => format!(
+                        "{} · {} KB",
+                        language.text(
+                            "PNG prepared; host can save the bytes",
+                            "PNG 已生成；宿主可保存文件"
+                        ),
+                        data.len().div_ceil(1024)
+                    )
+                    .into(),
+                    Err(_) => language
+                        .text(
+                            "PNG export failed; your signature is unchanged",
+                            "PNG 导出失败，笔迹仍保留",
+                        )
+                        .into(),
+                };
+                cx.notify();
+            },
+        );
+        Self {
+            pad,
+            status: "".into(),
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for SignatureExample {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(self.pad.clone())
+            .child(div().text_size(px(12.)).child(self.status.clone()))
+    }
+}
+impl Render for InputExamples {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let mut stack = div()
+            .flex()
+            .flex_col()
+            .gap(px(28.))
+            .w(px(self.width))
+            .max_w_full()
+            .px(px(16.));
+        for view in &self.views {
+            stack = stack.child(view.clone());
+        }
+        div()
+            .size_full()
+            .flex()
+            .justify_center()
+            .when(self.width > 700., |d| d.items_start().pt(px(70.)))
+            .when(self.width <= 700., |d| d.items_center())
+            .child(stack)
+    }
+}
+pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
+    let l = UiLanguage::current(cx);
+    let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+    let mut views: Vec<AnyView> = Vec::new();
+    match id {
+        "ask-your-data" => views.push(cx.new(|cx| AskDataExample::new(w, cx)).into()),
+        "pii-redaction" => views.push(cx.new(|cx| PiiExample::new(w, cx)).into()),
+        "reply-draft" => views.push(cx.new(|cx| ReplyExample::new(w, cx)).into()),
+        "ticket-router" => views.push(cx.new(|cx| TicketExample::new(w, cx)).into()),
+        "enrich-column" => views.push(cx.new(|cx| EnrichExample::new(w, cx)).into()),
+        "smart-form-fill" => views.push(cx.new(|cx| SmartFillExample::new(w, cx)).into()),
+        "tldr-toggle" => views.push(cx.new(|cx| TldrExample::new(w, cx)).into()),
+        "presence-stack" => views.push(cx.new(|cx| PresenceExample::new(w, cx)).into()),
+        "glass-menu" => views.push(cx.new(|cx| GlassMenuExample::new(w, cx)).into()),
+        "glass-segmented" => views.push(cx.new(|cx| GlassExample::new(w, cx)).into()),
+        "mega-menu-morph" => {
+            let products = MegaMenuSection::new("products", t("Products", "产品"))
+                .with_groups(vec![MegaMenuGroup::new(
+                    t("Build", "开发"),
+                    vec![
+                        MegaMenuLink::new("components", t("Components", "组件"))
+                            .with_description(t("Explore the interface library", "探索界面组件库")),
+                        MegaMenuLink::new("themes", t("Themes", "主题"))
+                            .with_description(t("Adapt colors and appearance", "调整颜色和外观")),
+                    ],
+                )])
+                .with_feature(
+                    MegaMenuFeature::new(
+                        "updates",
+                        t("What's new", "最新动态"),
+                        t("Read updates", "查看更新"),
+                    )
+                    .with_description(t("See the latest improvements", "了解最新功能与改进")),
+                );
+            let resources =
+                MegaMenuSection::new("resources", t("Resources", "资源")).with_groups(vec![
+                    MegaMenuGroup::new(
+                        t("Learn", "学习"),
+                        vec![
+                            MegaMenuLink::new("docs", t("Documentation", "文档")).with_description(
+                                t("Start building with KUI", "开始使用 KUI 开发"),
+                            ),
+                            MegaMenuLink::new("examples", t("Examples", "示例"))
+                                .with_description(t("See common patterns", "查看常用交互")),
+                        ],
+                    ),
+                ]);
+            let sections = vec![
+                products,
+                resources,
+                MegaMenuSection::new("about", t("About", "关于")),
+            ];
+            views.push(cx.new(|cx| MegaExample::new(sections, w, cx)).into());
+        }
+        "tree-table" => views.push(cx.new(|cx| TreeExample::new(w, cx)).into()),
+        "undo-toast" => views.push(cx.new(|cx| UndoExample::new(w, cx)).into()),
+        "morph-select" => {
+            let options = vec![
+                MorphOption::new("backlog", t("Backlog", "待处理")).with_group(t("Open", "开放")),
+                MorphOption::new("todo", t("To do", "待办")).with_group(t("Open", "开放")),
+                MorphOption::new("progress", t("In progress", "进行中"))
+                    .with_group(t("Open", "开放")),
+                MorphOption::new("review", t("In review", "审核中")).with_group(t("Open", "开放")),
+                MorphOption::new("done", t("Done", "已完成")).with_group(t("Closed", "已关闭")),
+                MorphOption::new("cancelled", t("Cancelled", "已取消"))
+                    .with_group(t("Closed", "已关闭")),
+            ];
+            views.push(
+                cx.new(|cx| {
+                    MorphSelect::new(t("Status", "状态"), options, w, cx)
+                        .with_value("progress")
+                        .with_searchable(true)
+                })
+                .into(),
+            );
+        }
+
+        "scrub-input" => {
+            views.push(
+                cx.new(|cx| {
+                    ScrubInput::new(t("Width", "宽度"), 0.0..=1000.0, 1.0, 176.0, "px", w, cx)
+                        .with_units(vec!["px".into(), "%".into()])
+                })
+                .into(),
+            );
+            views.push(
+                cx.new(|cx| {
+                    ScrubInput::new(t("Rotation", "旋转"), 0.0..=360.0, 1.0, 45.0, "°", w, cx)
+                        .with_wrap(true)
+                })
+                .into(),
+            );
+        }
+        "signature-pad" => views.push(cx.new(|cx| SignatureExample::new(w, cx)).into()),
+        "ruler-slider" => {
+            views.push(
+                cx.new(|cx| {
+                    RulerSlider::new(t("Height", "身高"), 120.0..=220.0, 1.0, 172.0, cx)
+                        .with_unit("cm")
+                })
+                .into(),
+            );
+            views.push(
+                cx.new(|cx| {
+                    RulerSlider::new(t("Weight", "体重"), 35.0..=140.0, 0.5, 68.5, cx)
+                        .with_unit("kg")
+                })
+                .into(),
+            );
+        }
+        "cookie-consent" => {
+            let categories = vec![
+                ConsentCategory::new("essential", t("Essential", "必要"))
+                    .with_required(true)
+                    .with_description(t("Needed for basic site functions", "网站基础功能所需")),
+                ConsentCategory::new("analytics", t("Analytics", "分析"))
+                    .with_description(t("Help improve the experience", "帮助改善使用体验")),
+                ConsentCategory::new("personalization", t("Personalization", "个性化")),
+            ];
+            views.push(cx.new(|cx| CookieConsent::new(categories, w, cx)).into());
+        }
+        "announcement-bar" => {
+            let messages = vec![
+                Announcement::new(
+                    "launch",
+                    t("Meet the new KUI components", "发现全新的 KUI 组件"),
+                )
+                .with_action(t("Learn more", "了解更多"))
+                .with_countdown(std::time::Duration::from_secs(720)),
+                Announcement::new(
+                    "updates",
+                    t(
+                        "Build once for desktop and web",
+                        "一套代码，构建桌面与网页应用",
+                    ),
+                ),
+            ];
+            views.push(cx.new(|cx| AnnouncementBar::new(messages, cx)).into());
+        }
+        "range-histogram-slider" => {
+            let data: Vec<f64> = (0..480)
+                .map(|i| {
+                    let a = ((i * 37 % 149) as f64) / 149.;
+                    let b = ((i * 83 % 157) as f64) / 157.;
+                    ((a + b) * 210.).round()
+                })
+                .collect();
+            views.push(
+                cx.new(|cx| {
+                    RangeHistogramSlider::new(
+                        t("Price per night", "每晚价格"),
+                        data,
+                        0.0..=500.0,
+                        5.0,
+                        (80.0, 260.0),
+                        32,
+                        w,
+                        cx,
+                    )
+                })
+                .into(),
+            );
+        }
+        "elastic-slider" => views.push(
+            cx.new(|cx| {
+                ElasticSlider::new(t("Volume", "音量"), 0.0..=100.0, 1.0, 50.0, "%", w, cx)
+            })
+            .into(),
+        ),
+        "countdown" => views.push(
+            cx.new(|cx| {
+                Countdown::new(
+                    t("Launch", "发布倒计时"),
+                    std::time::Duration::from_secs(95),
+                    cx,
+                )
+                .with_complete_label(t("Live now", "现已发布"))
+            })
+            .into(),
+        ),
+        "money-input" => views.push(
+            cx.new(|cx| {
+                MoneyInput::new(t("Amount", "金额"), 12500, 0..=1000000, w, cx)
+                    .with_quick_add(vec![1000, 5000])
+            })
+            .into(),
+        ),
+        "billing-toggle" => views.push(
+            cx.new(|cx| {
+                BillingToggle::new(t("Billing period", "计费周期"), cx)
+                    .with_labels(t("Monthly", "按月"), t("Yearly", "按年"))
+                    .with_savings(t("Save 20%", "节省 20%"))
+            })
+            .into(),
+        ),
+        "toggle-group" => {
+            let options = vec![
+                ToggleOption::new("left", t("Left", "左对齐")),
+                ToggleOption::new("center", t("Center", "居中")),
+                ToggleOption::new("right", t("Right", "右对齐")),
+            ];
+            views.push(
+                cx.new(|cx| {
+                    ToggleGroup::new(t("Alignment", "对齐方式"), options, ToggleMode::Single, cx)
+                        .with_selected(&["left"])
+                })
+                .into(),
+            );
+            let options = vec![
+                ToggleOption::new("bold", t("Bold", "粗体")),
+                ToggleOption::new("italic", t("Italic", "斜体")),
+                ToggleOption::new("underline", t("Underline", "下划线")),
+            ];
+            views.push(
+                cx.new(|cx| {
+                    ToggleGroup::new(t("Formatting", "格式"), options, ToggleMode::Multiple, cx)
+                        .with_selected(&["bold"])
+                })
+                .into(),
+            );
+        }
+        _ => return None,
+    }
+    let width = if id == "mega-menu-morph" {
+        760.
+    } else if id == "tree-table"
+        || id == "tldr-toggle"
+        || id == "smart-form-fill"
+        || id == "enrich-column"
+        || id == "ticket-router"
+        || id == "reply-draft"
+        || id == "ask-your-data"
+        || id == "pii-redaction"
+    {
+        680.
+    } else {
+        390.
+    };
+    Some(cx.new(|_| InputExamples { views, width }).into())
+}
+
+#[cfg(test)]
+mod glass_menu_tests {
+    use super::{GlassExample, GlassMenuExample, PresenceExample};
+    use gpui::{Modifiers, TestAppContext, VisualTestContext};
+    use std::time::Duration;
+    fn tick(w: &mut VisualTestContext, ms: u64) {
+        w.executor().advance_clock(Duration::from_millis(ms));
+        w.run_until_parked();
+        w.update(|w, cx| {
+            w.simulate_next_frame(cx);
+            w.refresh();
+        });
+        w.run_until_parked();
+    }
+    #[test]
+    fn menu_keyboard_submenu_select_and_focus_restore() {
+        let mut app = TestAppContext::single();
+        app.update(kui::init);
+        let (view, w) = app.add_window_view(GlassMenuExample::new);
+        let trigger = w.debug_bounds("Photo actions").expect("trigger").center();
+        w.simulate_click(trigger, Modifiers::default());
+        tick(w, 600);
+        assert!(w.debug_bounds("Move to").is_some());
+        w.simulate_keystrokes("down down right");
+        tick(w, 300);
+        assert!(w.debug_bounds("Projects").is_some());
+        w.simulate_keystrokes("left");
+        tick(w, 300);
+        assert!(w.debug_bounds("Move to").is_some());
+        w.simulate_keystrokes("down right down enter");
+        tick(w, 500);
+        assert!(w.update(|_, cx| view.read(cx).note.contains("projects")));
+        assert!(w.debug_bounds("Projects").is_none());
+        w.simulate_keystrokes("down");
+        tick(w, 300);
+        assert!(w.debug_bounds("Move to").is_some());
+        w.simulate_keystrokes("escape");
+        tick(w, 500);
+        assert!(w.debug_bounds("Move to").is_none());
+    }
+
+    #[test]
+    fn segmented_selection_changes_the_displayed_photo() {
+        let mut app = TestAppContext::single();
+        app.update(kui::init);
+        let (view, w) = app.add_window_view(GlassExample::new);
+        assert_eq!(w.update(|_, cx| view.read(cx).current), 0);
+        let photo = w.debug_bounds("Two").expect("second photo").center();
+        w.simulate_click(photo, Modifiers::default());
+        tick(w, 300);
+        assert_eq!(w.update(|_, cx| view.read(cx).current), 1);
+        assert_eq!(w.update(|_, cx| view.read(cx).previous), 0);
+    }
+
+    #[test]
+    fn presence_overflow_roster_keyboard_selection_and_host_updates() {
+        let mut app = TestAppContext::single();
+        app.update(kui::init);
+        let (view, w) = app.add_window_view(PresenceExample::new);
+        let add = w.debug_bounds("Someone joins").expect("join").center();
+        w.simulate_click(add, Modifiers::default());
+        tick(w, 400);
+        assert_eq!(w.update(|_, cx| view.read(cx).people.len()), 7);
+        let stack = w.debug_bounds("Presence stack").expect("stack").center();
+        w.simulate_click(stack, Modifiers::default());
+        tick(w, 400);
+        assert!(w.debug_bounds("Alex Chen (you) · Active now").is_some());
+        w.simulate_keystrokes("end enter");
+        tick(w, 400);
+        assert!(w.update(|_, cx| view.read(cx).note.contains("guest-1")));
+        w.simulate_keystrokes("down");
+        tick(w, 400);
+        assert!(w.debug_bounds("Alex Chen (you) · Active now").is_some());
+        w.simulate_keystrokes("escape");
+        tick(w, 400);
+        assert!(w.debug_bounds("Alex Chen (you) · Active now").is_none());
+    }
+}

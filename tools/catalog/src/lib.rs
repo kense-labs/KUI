@@ -311,6 +311,9 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
             let entry = entry.with_context(|| format!("missing source mapping for {id}"))?;
             cargo.extend(entry.cargo.iter().map(|s| (*s).to_owned()));
             let mut paths = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
+            if id == "range-histogram-slider" {
+                paths.push("src/components/histogram_range_track.rs".into());
+            }
             paths.extend(
                 entry
                     .primitives

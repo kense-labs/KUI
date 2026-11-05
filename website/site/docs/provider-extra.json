@@ -1,0 +1,31 @@
+[
+  {
+    "id": "provider-status",
+    "group": "intelligence",
+    "title": {
+      "en": "Provider status",
+      "zh": "服务商状态"
+    },
+    "rustType": "ProviderStatus",
+    "lead": {
+      "en": "Show host-provided provider health and incident history.",
+      "zh": "展示宿主提供的服务状态和事件记录。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::provider_status::{ProviderHealth, ProviderStatus, ProviderStatusItem};\n\nlet providers = vec![ProviderStatusItem::new(\"main\", \"Main provider\", ProviderHealth::Operational)];\nlet control = cx.new(|_| ProviderStatus::new(\"AI providers\", providers));",
+    "method": "set_providers",
+    "signature": "(Vec<ProviderStatusItem>, &mut Context<Self>)",
+    "event": "ProviderStatusEvent",
+    "rule": {
+      "en": "The host owns data, polling, visibility and opening incident URLs. The example uses simulated data. Select a daily bar to focus it; arrow keys move between days, and the selected date, health, uptime and note are exposed as its accessible value.",
+      "zh": "宿主负责数据、轮询、可见性以及打开事件链接。预览使用模拟数据。 点击每日状态条会聚焦该条；方向键切换日期，所选日期、健康状态、可用率和备注作为无障碍值提供。"
+    },
+    "api": {
+      "en": "On Refresh capture current_request and return using set_providers_for or set_error_for; these ignore older and settled checks. Legacy unscoped setters require host-side stale-response filtering. The host drives set_remaining_seconds.",
+      "zh": "收到 Refresh 后捕获 current_request，通过 set_providers_for 或 set_error_for 返回结果；旧请求和已结束请求会被忽略。旧的无编号方法需宿主自行过滤过期响应。倒计时由宿主调用 set_remaining_seconds 更新。"
+    },
+    "motion": {
+      "en": "Incident details use a 240 ms spring and measured height; reduced motion shows the final state. Visual and touch verification are pending.",
+      "zh": "事件详情按实测内容高度使用 240ms 弹簧展开；减少动效时直接切换。视觉与触屏实测仍待完成。"
+    }
+  }
+]

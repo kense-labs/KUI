@@ -289,6 +289,7 @@ impl Render for ConfirmPopover {
         } else {
             p.danger
         };
+        let radius = crate::foundation::surface_radius(cx);
         let caption = |color| {
             row()
                 .w(accept_width)
@@ -308,15 +309,27 @@ impl Render for ConfirmPopover {
             .bg(tint.opacity(0.11))
             .child(caption(tint))
             .child(
-                row()
+                div()
                     .absolute()
                     .top_0()
                     .bottom_0()
                     .left_0()
                     .w(accept_width * shade)
                     .overflow_hidden()
-                    .bg(tint)
-                    .child(caption(white())),
+                    // GPUI overflow clips to a rectangle. Paint a full rounded face
+                    // behind that clip so the progress edge stays straight while
+                    // the exposed outer corners match the button in every state.
+                    .child(
+                        row()
+                            .id("confirm-fill-face")
+                            .debug_selector(|| "confirm-fill-face".into())
+                            .w(accept_width)
+                            .h_full()
+                            .flex_none()
+                            .rounded(radius)
+                            .bg(tint)
+                            .child(caption(white())),
+                    ),
             );
         if self.state == State::Pending && !disabled_motion(cx) {
             let t = (self.status.age(cx) / 1.15).fract();

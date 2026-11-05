@@ -1,0 +1,448 @@
+[
+  {
+    "id": "morph-loader",
+    "group": "progress",
+    "title": {
+      "en": "Morph loader",
+      "zh": "形变加载"
+    },
+    "rustType": "MorphLoader",
+    "usageRust": "use kui::components::morph_loader::{LoaderStatus, LoaderVariant, MorphLoader};\n\nlet loader = cx.new(|_| MorphLoader::new(\"publish-status\")\n    .with_size(24.)\n    .with_stroke_width(2.5)\n    .with_labels([\"Publishing\", \"Published\", \"Publish failed\"]));\nloader.update(cx, |view, cx| view.set_variant(LoaderVariant::Ring, cx));\nloader.update(cx, |view, cx| view.set_status(LoaderStatus::Success, cx));",
+    "lead": {
+      "en": "Display an operation as a loading shape that transitions into success or failure.",
+      "zh": "用加载图形展示操作状态，并过渡到成功或失败。"
+    },
+    "rule": {
+      "en": "Choose dots, bars, ring or square. The host reports completion or failure.",
+      "zh": "可选择圆点、竖条、圆环或方形；由宿主报告完成或失败。"
+    },
+    "copy": {
+      "en": {
+        "when": [
+          "Display an operation as a loading shape that transitions into success or failure."
+        ],
+        "not": [
+          "Use determinate progress when a percentage is known."
+        ],
+        "apiLead": "The host owns the operation. The footprint stays fixed; there is no completion event.",
+        "props": [
+          {
+            "name": "with_size",
+            "type": "f32",
+            "default": "24.",
+            "description": "Positive finite size in px, on a 24-unit grid."
+          },
+          {
+            "name": "with_stroke_width",
+            "type": "f32",
+            "default": "2.5",
+            "description": "Ring, square and result width. Dots use 4; bars use 3."
+          },
+          {
+            "name": "with_tone",
+            "type": "bool",
+            "default": "true",
+            "description": "Use theme success and danger colors for results."
+          },
+          {
+            "name": "with_labels",
+            "type": "[impl Into<SharedString>; 3]",
+            "default": "[\"Loading\", \"Done\", \"Failed\"]",
+            "description": "Loading, success and error accessible labels."
+          },
+          {
+            "name": "decorative",
+            "type": "bool",
+            "default": "false",
+            "description": "Suppress the status role and label when a parent announces state."
+          },
+          {
+            "name": "set_variant",
+            "type": "(LoaderVariant, &mut Context<Self>)",
+            "default": "Dots",
+            "description": "Dots, Bars, Ring or Square; retains the loop phase."
+          },
+          {
+            "name": "set_status",
+            "type": "(LoaderStatus, &mut Context<Self>)",
+            "default": "Loading",
+            "description": "Host sets Loading, Success or Error. Repeated state is a no-op."
+          },
+          {
+            "name": "set_visible",
+            "type": "(bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "Pause a mounted hidden view without accumulating hidden time."
+          },
+          {
+            "name": "variant / status",
+            "type": "()",
+            "default": "current value",
+            "description": "Read current state."
+          }
+        ],
+        "motion": [
+          "Four curved strokes preserve velocity on retarget. Shape/result/upright critical springs use 0.46/0.52/0.60s, with 35ms result staggering.",
+          "Result scale follows 1 → 1.14 → 1 over 420ms. Reduced motion uses static geometry and stops the frame loop.",
+          "The gallery uses 72px and returns to loading after 1700ms; the installable control has no automatic reset timer."
+        ],
+        "ai": [
+          "Use one stable ID and drive set_status from the actual request result.",
+          "Pause hidden mounted views with set_visible(false). Positive finite builder values preserve vector scaling."
+        ]
+      },
+      "zh": {
+        "when": [
+          "用加载图形展示操作状态，并过渡到成功或失败。"
+        ],
+        "not": [
+          "已知百分比时使用确定进度。"
+        ],
+        "apiLead": "宿主拥有操作状态。控件尺寸固定，不发出完成事件。",
+        "props": [
+          {
+            "name": "with_size",
+            "type": "f32",
+            "default": "24.",
+            "description": "正有限数，单位 px；绘图使用 24 单位网格。"
+          },
+          {
+            "name": "with_stroke_width",
+            "type": "f32",
+            "default": "2.5",
+            "description": "圆环、方形与结果线宽。圆点宽4，竖条宽3。"
+          },
+          {
+            "name": "with_tone",
+            "type": "bool",
+            "default": "true",
+            "description": "结果使用主题的成功色和危险色。"
+          },
+          {
+            "name": "with_labels",
+            "type": "[impl Into<SharedString>; 3]",
+            "default": "[\"Loading\", \"Done\", \"Failed\"]",
+            "description": "加载、成功、失败的无障碍标签。"
+          },
+          {
+            "name": "decorative",
+            "type": "bool",
+            "default": "false",
+            "description": "父控件已播报状态时，关闭本控件的状态语义和标签。"
+          },
+          {
+            "name": "set_variant",
+            "type": "(LoaderVariant, &mut Context<Self>)",
+            "default": "Dots",
+            "description": "Dots、Bars、Ring 或 Square；保留循环相位。"
+          },
+          {
+            "name": "set_status",
+            "type": "(LoaderStatus, &mut Context<Self>)",
+            "default": "Loading",
+            "description": "宿主设置 Loading、Success 或 Error；重复状态不重启动效。"
+          },
+          {
+            "name": "set_visible",
+            "type": "(bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "暂停已挂载的隐藏视图，隐藏期间不累计动画时间。"
+          },
+          {
+            "name": "variant / status",
+            "type": "()",
+            "default": "current value",
+            "description": "读取当前状态。"
+          }
+        ],
+        "motion": [
+          "四笔曲线在换目标时保留速度。形变／结果／回正的临界弹簧参数为 0.46／0.52／0.60s；结果逐笔错开 35ms。",
+          "结果在 420ms 内缩放 1 → 1.14 → 1。减少动效时显示静态几何并停止循环。",
+          "演示图形为 72px，1700ms 后复位；安装后的控件不包含自动复位计时器。"
+        ],
+        "ai": [
+          "保持稳定 ID，用实际请求结果驱动 set_status。",
+          "已挂载但隐藏的视图调用 set_visible(false)。尺寸和线宽接收正有限数。"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ai-spark",
+    "group": "intelligence",
+    "title": {
+      "en": "AI spark",
+      "zh": "智能状态光芒"
+    },
+    "rustType": "AiSpark",
+    "usageRust": "use kui::components::ai_spark::{AiSpark, SparkStatus, SparkVariant};\n\nlet mark = cx.new(|_| AiSpark::new(\"assistant\")\n    .with_status(SparkStatus::Thinking).with_size(24.));\nmark.update(cx, |mark, cx| mark.set_status(SparkStatus::Done, cx));\nlet label = cx.new(|_| AiSpark::new(\"activity\")\n    .with_variant(SparkVariant::Pill).with_status(SparkStatus::Writing));",
+    "lead": {
+      "en": "A small animated mark for an assistant’s activity.",
+      "zh": "用小型动画标记展示助手的当前状态。"
+    },
+    "rule": {
+      "en": "Supply task state, or omit it for a four-phase autoplay cycle.",
+      "zh": "提供实际任务状态；不提供时自动循环四个阶段。"
+    },
+    "copy": {
+      "en": {
+        "when": [
+          "Show the activity of an assistant."
+        ],
+        "not": [
+          "Use progress for known completion percentages."
+        ],
+        "apiLead": "One Rust/GPUI control on desktop and Web. No action callback.",
+        "props": [
+          {
+            "name": "with_status / set_status",
+            "type": "SparkStatus / (SparkStatus, &mut Context<Self>)",
+            "default": "unset → autoplay",
+            "description": "Explicit state disables autoplay. Writing is the generation phase."
+          },
+          {
+            "name": "with_variant",
+            "type": "SparkVariant",
+            "default": "Mark",
+            "description": "Mark, Pill or Avatar."
+          },
+          {
+            "name": "with_size",
+            "type": "f32",
+            "default": "24 / 16 / 32 px",
+            "description": "Positive finite px; avatar artwork is round(size × .56)."
+          },
+          {
+            "name": "with_em_size / with_rem_size",
+            "type": "f32",
+            "default": "unset",
+            "description": "Positive finite font-relative size; relative avatar artwork is size × .56."
+          },
+          {
+            "name": "with_tone",
+            "type": "SparkTone",
+            "default": "Accent",
+            "description": "Accent, Foreground, Muted or Inherit."
+          },
+          {
+            "name": "with_color",
+            "type": "Hsla",
+            "default": "None",
+            "description": "Overrides tone. Error keeps its semantic danger color."
+          },
+          {
+            "name": "with_speed / set_speed",
+            "type": "f64 / (f64, &mut Context<Self>)",
+            "default": "1.",
+            "description": "Finite loop speed; pose transitions and impulses use an independent clock."
+          },
+          {
+            "name": "with_twinkle / set_twinkle",
+            "type": "bool / (bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "Enable the idle twinkle."
+          },
+          {
+            "name": "with_paused / set_paused",
+            "type": "bool / (bool, &mut Context<Self>)",
+            "default": "false",
+            "description": "Freeze artwork and the built-in cycle. Pill shimmer is independent."
+          },
+          {
+            "name": "with_announce",
+            "type": "bool",
+            "default": "true",
+            "description": "Status role; false selects a named Image role."
+          },
+          {
+            "name": "with_aria_label",
+            "type": "impl Into<SharedString>",
+            "default": "None",
+            "description": "Override the accessible name."
+          },
+          {
+            "name": "with_label",
+            "type": "impl Into<SharedString>",
+            "default": "None",
+            "description": "Override visible Pill text."
+          },
+          {
+            "name": "with_labels",
+            "type": "[impl Into<SharedString>; 5]",
+            "default": "Ready / Thinking / Writing / Done / Couldn't finish",
+            "description": "Visible labels in state order."
+          },
+          {
+            "name": "with_aria_labels",
+            "type": "[impl Into<SharedString>; 5]",
+            "default": "AI ready / AI is thinking / AI is writing / AI finished / AI couldn't finish",
+            "description": "Nonvisual state descriptions; localization extension."
+          },
+          {
+            "name": "decorative",
+            "type": "bool",
+            "default": "false",
+            "description": "Suppress the root role and name; KUI extension."
+          },
+          {
+            "name": "set_auto_play",
+            "type": "(bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "Built-in dwell times: 1600 / 2800 / 3600 / 2000ms."
+          },
+          {
+            "name": "set_visible",
+            "type": "(bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "Freeze hidden artwork and text; state timers remain independent."
+          },
+          {
+            "name": "status / is_auto_playing",
+            "type": "()",
+            "default": "current value",
+            "description": "Read effective activity and cycle setting."
+          }
+        ],
+        "motion": [
+          "Pose mixes: Writing 420ms, Done 500ms, others 560ms, cubic-in-out. Interrupted mixtures keep moving and preserve angular velocity.",
+          "Idle 6.4s; Thinking 1.9s / 26°/s; Writing heartbeat 1.04s / 46°/s. Done gathers for 680ms; Error shakes for 460ms.",
+          "Pill: 28px high, text 13px / 18px, gap 8px, padding 7px / 12px. Label in 160ms, out 100ms; width spring 240ms.",
+          "Reduced: no loops, particles or impulses; pose mix 200ms, color fade 160ms, label fade 100ms. KUI rectangular radius stays 8px."
+        ],
+        "ai": [
+          "Keep a stable ID. set_status disables autoplay even when the value is unchanged.",
+          "Demo Pause stops the state cycle, not the artwork. GPUI 0.3.10 lacks independent public aria-busy/live builders; screen-reader parity needs separate verification."
+        ]
+      },
+      "zh": {
+        "when": [
+          "展示助手的当前活动状态。"
+        ],
+        "not": [
+          "已知完成百分比时使用进度组件。"
+        ],
+        "apiLead": "桌面与 Web 共用 Rust/GPUI 控件。Writing 表示生成阶段；没有动作回调。",
+        "props": [
+          {
+            "name": "with_status / set_status",
+            "type": "SparkStatus / (SparkStatus, &mut Context<Self>)",
+            "default": "未设置 → 自动轮播",
+            "description": "未设置；显式调用即进入受控状态，重复值也会停止自动循环，但不重新触发形变。"
+          },
+          {
+            "name": "with_variant",
+            "type": "SparkVariant",
+            "default": "Mark",
+            "description": "Mark；另有 Pill、Avatar。"
+          },
+          {
+            "name": "with_size",
+            "type": "f32",
+            "default": "24 / 16 / 32 px",
+            "description": "Mark 24px、Pill 16px、Avatar 32px。正有限数，不限制为12–128px。Avatar 图形为 round(size×.56)。"
+          },
+          {
+            "name": "with_em_size / with_rem_size",
+            "type": "f32",
+            "default": "未设置",
+            "description": "未设置；分别乘继承字号 / 根字号。相对尺寸的 Avatar 图形为 size×.56，光学提示使用实际图形像素的四舍五入值。"
+          },
+          {
+            "name": "with_tone",
+            "type": "SparkTone",
+            "default": "Accent",
+            "description": "Accent；另有 Foreground、Muted、Inherit。读取 KUI 语义色。"
+          },
+          {
+            "name": "with_color",
+            "type": "Hsla",
+            "default": "None",
+            "description": "未设置；覆盖 tone。Error 始终采用 danger72% + text_muted28% 的 Oklab 混色。"
+          },
+          {
+            "name": "with_speed / set_speed",
+            "type": "f64 / (f64, &mut Context<Self>)",
+            "default": "1.",
+            "description": "1；仅接受有限数；控制循环时间和旋转目标速度，不改变状态混合、成功收拢或失败抖动的时钟。"
+          },
+          {
+            "name": "with_twinkle / set_twinkle",
+            "type": "bool / (bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "true；控制 Idle 的缓慢闪烁。"
+          },
+          {
+            "name": "with_paused / set_paused",
+            "type": "bool / (bool, &mut Context<Self>)",
+            "default": "false",
+            "description": "false；暂停图形与内置状态轮播，恢复时从当前姿态继续。Pill 的独立文字微光不受此值控制。"
+          },
+          {
+            "name": "with_announce",
+            "type": "bool",
+            "default": "true",
+            "description": "true：Status 角色；false：具名 Image 角色。"
+          },
+          {
+            "name": "with_aria_label",
+            "type": "impl Into<SharedString>",
+            "default": "None",
+            "description": "未设置；覆盖可访问名称。"
+          },
+          {
+            "name": "with_label",
+            "type": "impl Into<SharedString>",
+            "default": "None",
+            "description": "未设置；覆盖 Pill 文字，Mark / Avatar 不显示此文字。"
+          },
+          {
+            "name": "with_labels",
+            "type": "[impl Into<SharedString>; 5]",
+            "default": "Ready / Thinking / Writing / Done / Couldn't finish",
+            "description": "Ready / Thinking / Writing / Done / Couldn't finish。"
+          },
+          {
+            "name": "with_aria_labels",
+            "type": "[impl Into<SharedString>; 5]",
+            "default": "AI ready / AI is thinking / AI is writing / AI finished / AI couldn't finish",
+            "description": "AI ready / AI is thinking / AI is writing / AI finished / AI couldn't finish；KUI 本地化扩展。"
+          },
+          {
+            "name": "decorative",
+            "type": "bool",
+            "default": "false",
+            "description": "false；true 移除根状态角色及名称，KUI 扩展。"
+          },
+          {
+            "name": "set_auto_play",
+            "type": "(bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "true；恢复时使用内置轮播的当前索引。"
+          },
+          {
+            "name": "set_visible",
+            "type": "(bool, &mut Context<Self>)",
+            "default": "true",
+            "description": "true；宿主隐藏时冻结图形和文字微光；内置状态计时独立。"
+          },
+          {
+            "name": "status / is_auto_playing",
+            "type": "()",
+            "default": "当前值",
+            "description": "读取有效状态 / 是否启用内置轮播。"
+          }
+        ],
+        "motion": [
+          "姿态混合：Writing 420ms、Done 500ms、其他560ms，cubic-in-out；反切保留运动中的混合状态和角速度。",
+          "Idle 6.4s；Thinking 1.9s / 26°/s；Writing 心跳1.04s / 46°/s。Done 收拢680ms；Error 抖动460ms。",
+          "Pill 高28px、字号13px / 行高18px、间距8px、左右留白7px / 12px；文字入场160ms、离场100ms、宽度弹簧240ms。",
+          "减少动效：停止循环、粒子和冲击；姿态混合200ms、颜色160ms、文字100ms。KUI 矩形圆角保持8px。"
+        ],
+        "ai": [
+          "保持稳定 ID。set_status 即使收到相同值，也退出自动轮播。",
+          "演示暂停只停止状态轮播。GPUI 0.3.10 没有独立 aria-busy/live 公开构建器，屏幕阅读器等价性需另验。"
+        ]
+      }
+    }
+  }
+]

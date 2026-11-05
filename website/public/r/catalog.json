@@ -870,5 +870,685 @@
     "kind": "component",
     "name": "donut-chart",
     "title": "DonutChart"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "rating",
+    "title": "Rating"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "billing-toggle",
+    "title": "BillingToggle"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "toggle-group",
+    "title": "ToggleGroup"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "radio-cards",
+    "title": "RadioCards"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "money-input",
+    "title": "MoneyInput"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "countdown",
+    "title": "Countdown"
+  },
+  {
+    "categories": [
+      "sliders"
+    ],
+    "kind": "component",
+    "name": "elastic-slider",
+    "title": "ElasticSlider"
+  },
+  {
+    "categories": [
+      "sliders"
+    ],
+    "kind": "component",
+    "name": "range-histogram-slider",
+    "title": "RangeHistogramSlider"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "announcement-bar",
+    "title": "AnnouncementBar"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "cookie-consent",
+    "title": "CookieConsent"
+  },
+  {
+    "categories": [
+      "sliders"
+    ],
+    "kind": "component",
+    "name": "ruler-slider",
+    "title": "RulerSlider"
+  },
+  {
+    "categories": [
+      "editors"
+    ],
+    "kind": "component",
+    "name": "signature-pad",
+    "title": "SignaturePad"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "scrub-input",
+    "title": "ScrubInput"
+  },
+  {
+    "categories": [
+      "selects"
+    ],
+    "kind": "component",
+    "name": "morph-select",
+    "title": "MorphSelect"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "undo-toast",
+    "title": "UndoToast"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "tree-table",
+    "title": "TreeTable"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "mega-menu-morph",
+    "title": "MegaMenuMorph"
+  },
+  {
+    "categories": [
+      "toggles"
+    ],
+    "kind": "component",
+    "name": "glass-segmented",
+    "title": "GlassSegmented"
+  },
+  {
+    "categories": [
+      "menus"
+    ],
+    "kind": "component",
+    "name": "glass-menu",
+    "title": "GlassMenu"
+  },
+  {
+    "categories": [
+      "avatars"
+    ],
+    "kind": "component",
+    "name": "presence-stack",
+    "title": "PresenceStack"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "tldr-toggle",
+    "title": "TldrToggle"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "smart-form-fill",
+    "title": "SmartFormFill"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "enrich-column",
+    "title": "EnrichColumn"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ticket-router",
+    "title": "TicketRouter"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "reply-draft",
+    "title": "ReplyDraft"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ask-your-data",
+    "title": "AskYourData"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "pii-redaction",
+    "title": "PiiRedaction"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "gauge",
+    "title": "Gauge"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "animated-counter",
+    "title": "AnimatedCounter"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "waffle-chart",
+    "title": "WaffleChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "slope-chart",
+    "title": "SlopeChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "radar-chart",
+    "title": "RadarChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "split-bar",
+    "title": "SplitBar"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "race-bar-chart",
+    "title": "RaceBarChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "funnel-chart",
+    "title": "FunnelChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "streamgraph",
+    "title": "Streamgraph"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "treemap",
+    "title": "Treemap"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "brush-chart",
+    "title": "BrushChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "ridgeline",
+    "title": "Ridgeline"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "realtime-stream",
+    "title": "RealtimeStream"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "sunburst",
+    "title": "Sunburst"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "sankey-flow",
+    "title": "SankeyFlow"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "metric-ticker",
+    "title": "MetricTicker"
+  },
+  {
+    "categories": [
+      "activity"
+    ],
+    "kind": "component",
+    "name": "activity-rings",
+    "title": "ActivityRings"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "model-training",
+    "title": "ModelTraining"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "multi-region-failover",
+    "title": "MultiRegionFailover"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "data-flow",
+    "title": "DataFlow"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "vector-search",
+    "title": "VectorSearch"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "text-reveal",
+    "title": "TextReveal"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "in-view-title",
+    "title": "InViewTitle"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "text-morph",
+    "title": "TextMorph"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "text-shimmer",
+    "title": "TextShimmer"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "slot-text",
+    "title": "SlotText"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "image-compare",
+    "title": "ImageCompare"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "carousel",
+    "title": "Carousel"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "card-stack",
+    "title": "CardStack"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "toast-stack",
+    "title": "ToastStack"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "bottom-sheet",
+    "title": "BottomSheet"
+  },
+  {
+    "categories": [
+      "overlays"
+    ],
+    "kind": "component",
+    "name": "sheet-stack",
+    "title": "SheetStack"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "product-gallery",
+    "title": "ProductGallery"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "voice-orb",
+    "title": "VoiceOrb"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "now-playing",
+    "title": "NowPlaying"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "voice-recorder",
+    "title": "VoiceRecorder"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "dictation-button",
+    "title": "DictationButton"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "speech-player",
+    "title": "SpeechPlayer"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "morph-loader",
+    "title": "MorphLoader"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ai-spark",
+    "title": "AiSpark"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "provider-status",
+    "title": "ProviderStatus"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ghost-text",
+    "title": "GhostText"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "response-feedback",
+    "title": "ResponseFeedback"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "agent-loop",
+    "title": "AgentLoop"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "reasoning-tree",
+    "title": "ReasoningTree"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "image-generation",
+    "title": "ImageGeneration"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "speculative-decoding",
+    "title": "SpeculativeDecoding"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "image-reveal",
+    "title": "ImageReveal"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "prompt-cache",
+    "title": "PromptCache"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "meeting-summary",
+    "title": "MeetingSummary"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ai-workflow",
+    "title": "AiWorkflow"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "training-run",
+    "title": "TrainingRun"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "mixture-of-experts",
+    "title": "MixtureOfExperts"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "agent-handoff",
+    "title": "AgentHandoff"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "llm-cost-calculator",
+    "title": "LlmCostCalculator"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "agent-cursor",
+    "title": "AgentCursor"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "link-unfurl",
+    "title": "LinkUnfurl"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "tone-tuner",
+    "title": "ToneTuner"
   }
 ]

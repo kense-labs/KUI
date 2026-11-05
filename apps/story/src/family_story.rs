@@ -585,7 +585,6 @@ impl FamilyStory {
                         w,
                         cx,
                     )
-                    .with_track_radius(Theme::global(cx).tokens.radius.md)
                 });
                 let sub = cx.subscribe(&connection, |story, _, checked: &bool, _| {
                     story.failure = *checked;

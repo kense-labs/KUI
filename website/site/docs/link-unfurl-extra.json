@@ -1,0 +1,16 @@
+[
+  {
+    "id": "link-unfurl",
+    "group": "intelligence",
+    "title": {"en": "Link unfurl", "zh": "链接预览"},
+    "rustType": "LinkUnfurl",
+    "lead": {"en": "Compose a message and show a host-resolved link preview before sending.", "zh": "撰写消息，并在发送前展示由宿主解析的链接预览。"},
+    "usageRust": "use kui::components::link_unfurl::LinkUnfurl;\n\nlet control = cx.new(|cx| LinkUnfurl::new(\"Message\", window, cx));",
+    "method": "resolve_preview",
+    "signature": "(u64, Result<Option<LinkPreview>, SharedString>, &mut Context<Self>)",
+    "event": "LinkUnfurlEvent",
+    "rule": {"en": "The component does not visit URLs. It emits Resolve, Cancel, Open and Send for the host to handle. Responses must match the request ID. A send failure preserves the draft; edits made while sending are not cleared by an older success.", "zh": "组件不会访问 URL。Resolve、Cancel、Open 和 Send 由宿主处理，响应必须匹配请求 ID。发送失败会保留草稿；发送期间新编辑的内容不会被旧请求的成功结果清空。"},
+    "api": {"en": "set_text updates the composer; resolve_preview returns a host-supplied preview or error; resolve_send confirms or fails sending. Images, when supplied, must be decoded RenderImage values. Removing a link or replacing it emits Cancel for its outstanding preview.", "zh": "set_text 更新文本；resolve_preview 返回宿主提供的预览或错误；resolve_send 确认发送或返回失败。图片须由宿主提供已解码的 RenderImage。移除或替换链接时会发出 Cancel。"},
+    "motion": {"en": "The card expands and collapses with a reduced-motion-aware transition; hidden previews do not request animation frames. Inline link morph, multiple link previews, Alt+Enter, drag-to-collapse, live announcements and real visual/accessibility acceptance remain pending.", "zh": "预览卡有支持减少动效的展开和收起过渡，隐藏时不请求动画帧。行内链接形变、多链接预览、Alt+Enter、拖动收起、状态播报及实际视觉和无障碍验收仍待完成。"}
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "agent-handoff",
+    "group": "intelligence",
+    "title": { "en": "Agent handoff", "zh": "人工转接" },
+    "rustType": "AgentHandoff",
+    "lead": { "en": "A host-controlled assistant-to-person support conversation.", "zh": "由宿主驱动的助手转人工支持会话。" },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_handoff::{AgentHandoff, HandoffSummary};\n\nlet summary = HandoffSummary::new(\"Customer needs help with an order\");\nlet control = cx.new(|cx| AgentHandoff::new(\"Support\", \"Order 1042\", summary, window, cx));",
+    "method": "connect",
+    "signature": "(u64, impl Into<SharedString>, &mut Context<Self>) -> bool",
+    "event": "AgentHandoffEvent",
+    "rule": { "en": "The host owns the conversation and transfer service. The preview simulates all transfers and sends; nothing is sent.", "zh": "宿主负责会话与转接服务。预览中的转接与发送均为模拟，不会发送数据。" },
+    "api": { "en": "Handle Request with connect or fail_transfer using its ticket; Cancel invalidates that request. Handle Send with finish_send using its ticket; failure preserves the draft, CancelSend invalidates it, and successful messages are appended by the host with unique IDs. Mark messages after_handoff to display them after the summary card.", "zh": "处理 Request 后以对应 ticket 调用 connect 或 fail_transfer；Cancel 会使该请求失效。处理 Send 后以 ticket 调用 finish_send；失败保留草稿，CancelSend 使请求失效，成功消息由宿主用唯一 ID 追加。转接后的消息使用 after_handoff 显示在摘要卡之后。" },
+    "motion": { "en": "The shared summary expands on a 240 ms spring, respecting reduced motion. Streaming, traveling timeline dot and complete visual comparison remain unimplemented or unverified.", "zh": "共享摘要以 240ms 弹簧展开，并遵循减少动效。流式文字、时间线行进点与完整视觉对照尚未实现或验收。" }
+  }
+]

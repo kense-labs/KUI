@@ -18,6 +18,8 @@ When a rule below cites an `M-*` or `C-*` id, that id is the source of truth. Pr
 
 Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is also summarized in [`website/public/assets/BRAND.md`](./website/public/assets/BRAND.md).
 
+Shape exception (user instruction, 2026-11-05): 8px is the default for rectangular surfaces, not a forced radius for every control. Preserve capsule switches and selectors with `radius.full`: Switch tracks/thumbs, BillingToggle tracks/highlights/badges, and GlassSegmented tracks/highlights/segments. See the explicit capsule rules in DESIGN.md. Do not reintroduce an 8px override in embedded switch demos.
+
 ## Repository map
 
 | Path | Role |
@@ -34,7 +36,7 @@ Visual chrome is specified only in [`DESIGN.md`](./DESIGN.md). Brand naming is a
 | `website/site/` | Rust HTML generator for the Kense homepage and the bilingual KUI product. |
 | `website/client/` | Rust/WASM document interactions; component navigation reuses one live GPUI frame. |
 
-The website and CLI expose the same 108 installable components in catalog order. Foundation is a shared dependency. The catalog in tools/catalog is authoritative for installable items.
+The website and CLI expose the same installable components in catalog order. Foundation is a shared dependency. The catalog in tools/catalog is authoritative for installable items.
 
 ## Platforms
 
@@ -138,6 +140,14 @@ Builder methods on controls stay chainable and consume `self` by value unless GP
 - Update `DESIGN.md` in the same change when chrome tokens, Button metrics, or interaction states change.
 
 ## Quick commands
+
+### Current component audit
+
+- The current round is defined by [the new 85-component re-audit table](docs/audits/new-components-re-audit-2026-11-05.md), requested on 2026-11-05 after Activity rings and Sankey flow failed the user's comparison. All 85 new components await this round; the original 108 remain accepted by user instruction and are excluded.
+- `docs/audits/component-audit-status.json` and its existing pass flags are historical evidence, not current acceptance. Do not copy old checkmarks into the new round. Local rendering, a few entrance frames or successful compilation do not establish reference parity.
+- Audit source/reference, Rust API equivalence, static visuals, interaction/recovery, continuous motion, platforms/accessibility, distribution and performance separately. Every completed stage needs component-specific evidence, including same-scenario official/local comparisons for visual and motion acceptance.
+- Update the target Markdown row and its evidence record after each completed stage, then mirror the complete document to the desktop `KUI 组件验收进度.md`. The old `scripts/update-audit-status.py` predates this round; do not use it to overwrite the new table or desktop mirror until explicitly adapted.
+- The current user task is documentation only. Do not start component changes, heavy builds, recordings or publishing merely because the re-audit table contains pending work. A later implementation request takes precedence.
 
 ```bash
 cargo check -p kense-kui

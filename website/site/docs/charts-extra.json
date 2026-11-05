@@ -1,0 +1,611 @@
+[
+  {
+    "id": "gauge",
+    "group": "charts",
+    "title": {
+      "en": "Gauge",
+      "zh": "仪表盘"
+    },
+    "rustType": "Gauge",
+    "lead": {
+      "en": "Show a value against a known range with a named status.",
+      "zh": "以圆弧显示数值在范围中的位置，并可标明状态。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::gauge::{Gauge, GaugeThreshold, GaugeTone};\n\nlet control = cx.new(|_| Gauge::new(\"Storage\", 68.0).with_range(0.0, 100.0).with_detail(\"Used capacity\").with_thresholds(vec![GaugeThreshold::new(80.0, \"High\", GaugeTone::Warning)]));",
+    "method": "set_value",
+    "signature": "(f32, &mut Context<Self>)",
+    "event": "—",
+    "rule": {
+      "en": "The host owns the value. The display clamps to the range; non-finite updates are ignored.",
+      "zh": "宿主持有数值；显示限制在范围内，非有限数值更新会被忽略。"
+    },
+    "api": {
+      "en": "Use with_range, with_detail, with_tone and with_thresholds to configure the meter.",
+      "zh": "使用 with_range、with_detail、with_tone 和 with_thresholds 配置仪表。"
+    },
+    "motion": {
+      "en": "The arc and displayed count follow one spring; reduced motion reaches the target immediately.",
+      "zh": "弧线和数字随同一弹簧变化；减少动效时直接显示目标值。"
+    }
+  },
+  {
+    "id": "animated-counter",
+    "group": "charts",
+    "title": {
+      "en": "Animated counter",
+      "zh": "动态数字"
+    },
+    "rustType": "AnimatedCounter",
+    "lead": {
+      "en": "Give a changing total a directional, place-keyed digit roll.",
+      "zh": "按数位和数值变化方向滚动数字。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::animated_counter::AnimatedCounter;\n\nlet control = cx.new(|_| AnimatedCounter::new(12540.25).with_label(\"Revenue\").with_prefix(\"$\").with_decimals(2));",
+    "method": "set_value",
+    "signature": "(f64, &mut Context<Self>)",
+    "event": "—",
+    "rule": {
+      "en": "The host supplies values. Non-finite updates are ignored; formatting uses comma grouping and up to six decimal places.",
+      "zh": "由宿主提供数值；忽略非有限值，使用逗号分组，最多保留六位小数。"
+    },
+    "api": {
+      "en": "Use with_label, with_prefix, with_suffix, with_decimals and with_size. Opt into a first reveal with with_animate_on_view(true); it starts at 60% visibility. Hosts call set_visible when hiding the control.",
+      "zh": "使用 with_label、with_prefix、with_suffix、with_decimals 和 with_size 配置格式；with_animate_on_view(true) 在首次可见面积达到 60% 后从零滚动。宿主隐藏控件时调用 set_visible。"
+    },
+    "motion": {
+      "en": "Digits retain their place and spring toward the updated value; reduced motion updates immediately.",
+      "zh": "每个数位保留位置并向新值弹动；减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "waffle-chart",
+    "group": "charts",
+    "title": {
+      "en": "Waffle chart",
+      "zh": "华夫图"
+    },
+    "rustType": "WaffleChart",
+    "lead": {
+      "en": "Compare category shares in a 100-cell grid.",
+      "zh": "以 100 个单元格比较各分类占比。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::waffle_chart::{WaffleCategory, WaffleChart};\n\nlet items = vec![WaffleCategory::new(\"search\", \"Search\", 42.0, gpui::rgb(0x578ce2).into()), WaffleCategory::new(\"direct\", \"Direct\", 58.0, gpui::rgb(0x47ab8b).into())];\nlet control = cx.new(|_| WaffleChart::new(\"Visitors\", items));",
+    "method": "set_categories",
+    "signature": "(Vec<WaffleCategory>, &mut Context<Self>)",
+    "event": "WaffleInspect",
+    "rule": {
+      "en": "Legend toggles filter categories; at least one remains visible. Arrow keys inspect grid cells.",
+      "zh": "图例可切换分类，至少保留一项；使用方向键查看单元格。"
+    },
+    "api": {
+      "en": "Supply stable category ids, labels, values and colors; subscribe to WaffleInspect for the active category.",
+      "zh": "提供稳定分类 ID、名称、数值和颜色；订阅 WaffleInspect 获取当前分类。"
+    },
+    "motion": {
+      "en": "Cells retain identity and spring to their new positions; reduced motion places them immediately.",
+      "zh": "单元格保留身份并弹动至新位置；减少动效时立即到位。"
+    }
+  },
+  {
+    "id": "slope-chart",
+    "group": "charts",
+    "title": {
+      "en": "Slope chart",
+      "zh": "斜率图"
+    },
+    "rustType": "SlopeChart",
+    "lead": {
+      "en": "Compare paired measurements across two points.",
+      "zh": "比较多个数据系列的前后变化。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::slope_chart::{SlopeChart, SlopeSeries};\n\nlet series = vec![SlopeSeries::new(\"design\", \"Design\", 40.0, 70.0, gpui::rgb(0x578ce2).into()), SlopeSeries::new(\"product\", \"Product\", 55.0, 45.0, gpui::rgb(0x47ab8b).into())];\nlet control = cx.new(|_| SlopeChart::new(\"Progress\", series));",
+    "method": "set_series",
+    "signature": "(Vec<SlopeSeries>, &mut Context<Self>)",
+    "event": "SlopeInspect",
+    "rule": {
+      "en": "Hover a line, select its legend item or use arrow keys to inspect a series.",
+      "zh": "悬停线条、选择图例或使用方向键查看数据。"
+    },
+    "api": {
+      "en": "Provide stable series ids, labels, paired values and colors; subscribe to SlopeInspect.",
+      "zh": "提供稳定系列 ID、名称、前后数值与颜色；可订阅 SlopeInspect。"
+    },
+    "motion": {
+      "en": "Existing series interpolate from their current positions when new values arrive.",
+      "zh": "数据更新时已有系列从当前位置弹动到新的位置。"
+    }
+  },
+  {
+    "id": "radar-chart",
+    "group": "charts",
+    "title": {
+      "en": "Radar chart",
+      "zh": "雷达图"
+    },
+    "rustType": "RadarChart",
+    "lead": {
+      "en": "Compare multiple profiles across shared dimensions.",
+      "zh": "在多个共同维度上比较数据系列。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::radar_chart::{RadarAxis, RadarChart, RadarProfile};\n\nlet axes = vec![RadarAxis::new(\"speed\", \"Speed\"), RadarAxis::new(\"quality\", \"Quality\"), RadarAxis::new(\"reach\", \"Reach\")];\nlet profiles = vec![RadarProfile::new(\"current\", \"Current\", vec![80.0, 65.0, 90.0], gpui::rgb(0x9d83e8).into())];\nlet control = cx.new(|_| RadarChart::new(\"Capabilities\", axes, profiles));",
+    "method": "set_profiles",
+    "signature": "(Vec<RadarProfile>, &mut Context<Self>)",
+    "event": "RadarInspect",
+    "rule": {
+      "en": "Use three to twelve axes. Missing and non-finite values render as zero; values are clamped to 0–100.",
+      "zh": "支持三至十二个维度；缺失或非有限值按零显示，数值限制在 0–100。"
+    },
+    "api": {
+      "en": "Set axes and profiles at construction; replace profiles with set_profiles. Arrows or axis buttons inspect values.",
+      "zh": "创建时设置维度与数据系列；使用 set_profiles 更新。方向键和维度按钮可查看数值。"
+    },
+    "motion": {
+      "en": "Matching profile IDs retain their current vertex positions as values change; reduced motion updates immediately.",
+      "zh": "同一系列 ID 的顶点从当前位置移动到新值；减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "split-bar",
+    "group": "charts",
+    "title": {
+      "en": "Split bar",
+      "zh": "占比条"
+    },
+    "rustType": "SplitBar",
+    "lead": {
+      "en": "Compare shares in one bar; inspect a segment to give its label space.",
+      "zh": "以单条图比较占比，查看某部分时为它的标签留出空间。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::split_bar::{SplitBar, SplitSegment};\n\nlet data = vec![SplitSegment::new(\"first\", \"First\", 68.0, gpui::rgb(0x9d83e8).into()), SplitSegment::new(\"second\", \"Second\", 32.0, gpui::rgb(0x62b5d0).into())];\nlet control = cx.new(|_| SplitBar::new(\"Values\", data));",
+    "method": "set_segments",
+    "signature": "(Vec<SplitSegment>, &mut Context<Self>)",
+    "event": "SplitInspect",
+    "rule": {
+      "en": "Use stable unique IDs. Non-finite and negative values are treated as zero.",
+      "zh": "使用稳定且唯一的 ID；无效或负数值按零处理。"
+    },
+    "api": {
+      "en": "Provide stable ids, labels, values and colors; with_description and with_unit configure the header. Call set_segments to update data and set_visible when the host hides the chart.",
+      "zh": "提供稳定 ID、名称、数值和颜色；with_description 和 with_unit 配置标题。set_segments 更新数据，宿主隐藏图表时调用 set_visible。"
+    },
+    "motion": {
+      "en": "Inspection expands a segment while the others give way proportionally. Edges and fitted labels retarget their current spring trajectories; hidden charts stop requesting animation frames.",
+      "zh": "查看某部分时它会展开，其余部分按比例让位；边缘及内外标签从当前弹簧轨迹接续，隐藏时停止请求动画帧。"
+    }
+  },
+  {
+    "id": "race-bar-chart",
+    "group": "charts",
+    "title": {
+      "en": "Race bar chart",
+      "zh": "动态排名条形图"
+    },
+    "rustType": "RaceBarChart",
+    "lead": {
+      "en": "Inspect and compare changing data.",
+      "zh": "查看和比较变化的数据。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::race_bar_chart::{RaceBarChart, RaceEntry, RaceFrame};\n\nlet entries = vec![RaceEntry::new(\"a\", \"First\", 0.0, gpui::rgb(0x9d83e8).into())];\nlet frames = vec![RaceFrame::new(\"January\", vec![(\"a\".into(), 68.0)]), RaceFrame::new(\"February\", vec![(\"a\".into(), 90.0)])];\nlet control = cx.new(|_| RaceBarChart::new(\"Values\", entries).with_frames(frames));",
+    "method": "set_entries",
+    "signature": "(Vec<RaceEntry>, &mut Context<Self>)",
+    "event": "RaceInspect",
+    "rule": {
+      "en": "Use stable unique IDs. Non-finite and negative values are treated as zero.",
+      "zh": "使用稳定且唯一的 ID；无效或负数值按零处理。"
+    },
+    "api": {
+      "en": "Provide stable RaceEntry IDs and ordered RaceFrame values; missing IDs count as zero. set_frame seeks, set_playing controls playback, set_visible stops offscreen updates. RaceFrameChanged and RacePlaybackChanged report interaction.",
+      "zh": "使用稳定的 RaceEntry 标识及有序 RaceFrame 数据，缺失标识按零处理；set_frame 切换时间段，set_playing 控制播放，set_visible 控制离屏更新。RaceFrameChanged 和 RacePlaybackChanged 报告交互。"
+    },
+    "motion": {
+      "en": "A host-supplied timeline interpolates values between periods; the default duration is 1400 ms per period. Playback pauses offscreen, and reduced motion disables autoplay and steps between periods. Real browser, touch, accessibility and frame-by-frame comparison are still pending.",
+      "zh": "时间轴在宿主提供的时间段间插值，默认每段 1400 毫秒；离屏暂停，减少动效时不自动播放并按时间段切换。真实浏览器、触屏、无障碍和逐帧对照仍待验收。"
+    }
+  },
+  {
+    "id": "funnel-chart",
+    "group": "charts",
+    "title": {
+      "en": "Funnel chart",
+      "zh": "转化漏斗"
+    },
+    "rustType": "FunnelChart",
+    "lead": {
+      "en": "Inspect conversion across ordered stages and compare two segments.",
+      "zh": "查看各阶段的转化率并对比两个细分组。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::funnel_chart::{FunnelChart, FunnelSegment, FunnelStage};\n\nlet segments = vec![FunnelSegment::new(\"mobile\", \"Mobile\"), FunnelSegment::new(\"desktop\", \"Desktop\")];\nlet stages = vec![FunnelStage::new(\"visit\", \"Visit\", vec![600.0, 400.0]), FunnelStage::new(\"buy\", \"Buy\", vec![120.0, 80.0])];\nlet control = cx.new(|_| FunnelChart::new(\"Checkout\", stages, segments));",
+    "method": "set_stages",
+    "signature": "(Vec<FunnelStage>, &mut Context<Self>)",
+    "event": "FunnelInspect",
+    "rule": {
+      "en": "Stages use stable IDs. Values follow segment order; invalid and negative values count as zero.",
+      "zh": "阶段使用稳定 ID，数值按细分组排列；无效值和负值按零处理。"
+    },
+    "api": {
+      "en": "Select a segment or compare two segments; inspect stages with pointer, touch or arrow keys. Call set_visible(false, cx) when the embedding host hides the chart; particle phase resumes without a catch-up jump. with_flow and set_flow control the optional particles.",
+      "zh": "可选择细分组或对比两组；用指针、触摸或方向键查看阶段。 宿主隐藏图表时调用 set_visible(false, cx)，粒子恢复时从原来的相位继续。 with_flow 和 set_flow 控制可选的粒子流。"
+    },
+    "motion": {
+      "en": "Bands morph from their current shape. Flow stops outside the viewport or under reduced motion.",
+      "zh": "带状图从当前形状过渡；离开视口和减少动效时粒子停止。"
+    }
+  },
+  {
+    "id": "streamgraph",
+    "group": "charts",
+    "title": {
+      "en": "Streamgraph",
+      "zh": "流图"
+    },
+    "rustType": "Streamgraph",
+    "lead": {
+      "en": "Compare layered time series and inspect individual points.",
+      "zh": "比较多个时间序列并查看数据点。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::streamgraph::{Streamgraph, StreamLayer, StreamPoint};\n\nlet layers = vec![StreamLayer::new(\"product\", \"Product\", gpui::rgb(0x8f7ad4).into()), StreamLayer::new(\"support\", \"Support\", gpui::rgb(0x58bd91).into())];\nlet points = vec![StreamPoint::new(\"Week 1\", vec![20.0, 12.0]), StreamPoint::new(\"Week 2\", vec![24.0, 16.0])];\nlet control = cx.new(|_| Streamgraph::new(\"Activity\", layers, points));",
+    "method": "set_points",
+    "signature": "(Vec<StreamPoint>, &mut Context<Self>)",
+    "event": "StreamInspect",
+    "rule": {
+      "en": "Each point contains values in layer order. Invalid or negative values count as zero.",
+      "zh": "数据点数值按图层顺序排列；无效值和负值按零处理。"
+    },
+    "api": {
+      "en": "Update points with set_points; toggle legend entries and use arrow keys or pointer to inspect.",
+      "zh": "使用 set_points 更新数据；点击图例筛选，用方向键或指针查看。"
+    },
+    "motion": {
+      "en": "Data ranges interpolate on a shared grid; reduced motion jumps to the target.",
+      "zh": "数据区间在共享网格上平滑过渡；减少动效时立即显示目标值。"
+    }
+  },
+  {
+    "id": "treemap",
+    "group": "charts",
+    "title": {
+      "en": "Treemap",
+      "zh": "矩形树图"
+    },
+    "rustType": "Treemap",
+    "lead": {
+      "en": "Explore hierarchical values with a responsive squarified layout.",
+      "zh": "在自适应的矩形排布中浏览层级数据。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::treemap::{TreeTile, Treemap};\n\nlet children = vec![TreeTile::new(\"basic\", \"Basic\", 40.0, gpui::rgb(0x8f7ad4).into()), TreeTile::new(\"team\", \"Team\", 60.0, gpui::rgb(0x62b5d0).into())];\nlet tiles = vec![TreeTile::new(\"north\", \"North\", 0.0, gpui::rgb(0x8f7ad4).into()).with_children(children)];\nlet control = cx.new(|_| Treemap::new(\"Business\", tiles));",
+    "method": "set_tiles",
+    "signature": "(Vec<TreeTile>, &mut Context<Self>)",
+    "event": "TreemapInspect",
+    "rule": {
+      "en": "IDs must be unique within each level. An empty parent value uses the sum of its children.",
+      "zh": "同一层级的 ID 必须唯一；父节点数值为零时使用子节点之和。"
+    },
+    "api": {
+      "en": "Use with_metrics for sizes and with_shades for explicit colors. For numeric shading, use with_shade_values and with_color_scales; with_branch_hues preserves each branch's hue.",
+      "zh": "使用 with_metrics 配置面积指标，或用 with_shades 指定颜色；数值着色使用 with_shade_values 与 with_color_scales，with_branch_hues 可保留各分支色相。"
+    },
+    "motion": {
+      "en": "Tiles zoom during drill-down, and matching IDs reflow when the metric changes; reduced motion updates directly.",
+      "zh": "钻取时区域缩放，指标改变时相同 ID 平滑重排；减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "brush-chart",
+    "group": "charts",
+    "title": {
+      "en": "Brush chart",
+      "zh": "区间趋势图"
+    },
+    "rustType": "BrushChart",
+    "lead": {
+      "en": "Inspect a time series and drag an overview window to zoom.",
+      "zh": "查看时间序列，通过概览区间缩放。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::brush_chart::{BrushChart, BrushPoint, BrushPreset};\n\nlet data = vec![BrushPoint::new(\"Day 1\", 24.0), BrushPoint::new(\"Day 2\", 32.0).with_event(\"Release\")];\nlet control = cx.new(|_| BrushChart::new(\"Activity\", data).with_presets(vec![BrushPreset::new(\"All\", None)]));",
+    "method": "set_window",
+    "signature": "(usize, usize, &mut Context<Self>)",
+    "event": "BrushChange, BrushInspect",
+    "rule": {
+      "en": "Points are ordered by time. Window endpoints are inclusive indices.",
+      "zh": "数据按时间排序，区间两端为包含端点的索引。"
+    },
+    "api": {
+      "en": "Drag the window or handles; keyboard users can pan and resize. Optional presets select the most recent points.",
+      "zh": "可拖动窗口或手柄，也可用键盘平移和缩放；预设可选择最近的数据。"
+    },
+    "motion": {
+      "en": "The line reveals on entry; controlled window changes and axis range use springs. Reduced motion updates directly.",
+      "zh": "折线进入视口时绘制；区间和数值轴平滑过渡。减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "ridgeline",
+    "group": "charts",
+    "title": {
+      "en": "Ridgeline",
+      "zh": "山脊分布图"
+    },
+    "rustType": "Ridgeline",
+    "lead": {
+      "en": "Compare distributions and inspect their quartiles.",
+      "zh": "比较多组分布，并查看四分位。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ridgeline::{Ridgeline, RidgeSeries};\n\nlet series = vec![RidgeSeries::new(\"jan\", \"January\", vec![1.0, 3.0, 5.0], gpui::rgb(0x609cd8).into())];\nlet control = cx.new(|_| Ridgeline::new(\"Temperatures\", series));",
+    "method": "set_series",
+    "signature": "(Vec<RidgeSeries>, &mut Context<Self>)",
+    "event": "RidgeInspect",
+    "rule": {
+      "en": "Non-finite samples are ignored; IDs stay stable between datasets.",
+      "zh": "忽略非有限样本；数据切换时保持 ID 稳定。"
+    },
+    "api": {
+      "en": "Use pointer, touch or arrow keys to inspect a ridge and its quartiles.",
+      "zh": "可用指针、触摸或方向键查看曲线及四分位。"
+    },
+    "motion": {
+      "en": "Curves interpolate on a shared grid and the selected ridge lifts. Reduced motion updates directly.",
+      "zh": "曲线在共享网格上过渡，选中曲线轻微上升；减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "realtime-stream",
+    "group": "charts",
+    "title": {
+      "en": "Realtime stream",
+      "zh": "实时数据流"
+    },
+    "rustType": "RealtimeStream",
+    "lead": {
+      "en": "Monitor a live series and pause it to inspect individual readings.",
+      "zh": "查看实时序列，暂停后检查具体数据。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::realtime_stream::RealtimeStream;\n\nlet control = cx.new(|_| RealtimeStream::new(\"Requests\").with_capacity(60).with_unit(\" req/s\"));",
+    "method": "push",
+    "signature": "(StreamReading, &mut Context<Self>)",
+    "event": "LiveInspect",
+    "rule": {
+      "en": "The host owns the data source and should set visibility when the chart leaves its viewport; non-finite values are ignored.",
+      "zh": "数据源由宿主管理；图表离开视口时应更新可见状态；非有限值会被忽略。"
+    },
+    "api": {
+      "en": "Use set_visible and set_paused to control rendering; an optional anomaly label identifies unusual readings.",
+      "zh": "使用 set_visible 与 set_paused 控制显示；异常数据可附加标签。"
+    },
+    "motion": {
+      "en": "New observations slide into a rescaling chart; hover freezes the display for inspection. Reduced motion updates directly.",
+      "zh": "新数据滑入，数值轴平滑调整；悬停时暂停画面便于查看。减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "sunburst",
+    "group": "charts",
+    "title": {
+      "en": "Sunburst",
+      "zh": "旭日图"
+    },
+    "rustType": "Sunburst",
+    "lead": {
+      "en": "Explore hierarchical values as nested rings.",
+      "zh": "通过多层圆环探索层级数据。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::sunburst::{Sunburst, SunburstNode};\n\nlet root = SunburstNode::new(\"all\", \"All teams\", 0.0, gpui::rgb(0x8f7ad4).into()).with_children(vec![SunburstNode::new(\"platform\", \"Platform\", 40.0, gpui::rgb(0x8f7ad4).into())]);\nlet control = cx.new(|_| Sunburst::new(\"Cloud spend\", root));",
+    "method": "set_root",
+    "signature": "(SunburstNode, &mut Context<Self>)",
+    "event": "SunburstFocus",
+    "rule": {
+      "en": "Node IDs must be unique. Branch values are sums of children; non-finite and negative leaf values contribute zero.",
+      "zh": "节点 ID 必须唯一；父节点数值由子节点求和，非有限值和负叶节点值按零计算。"
+    },
+    "api": {
+      "en": "Use arrow keys to select, Enter to focus, and Escape to return. Upright labels are positioned along arcs; the accessibility table has not yet been tested with a screen reader.",
+      "zh": "使用方向键选择、回车进入、Esc 返回。文字沿弧线排列但保持正立；辅助数据表的读屏效果尚待验证。"
+    },
+    "motion": {
+      "en": "Arc geometry and center digits transition between levels; reduced motion updates directly.",
+      "zh": "层级切换时扇区和中心数字过渡；减少动效时直接更新。"
+    }
+  },
+  {
+    "id": "sankey-flow",
+    "group": "charts",
+    "title": {
+      "en": "Sankey flow",
+      "zh": "桑基流向图"
+    },
+    "rustType": "SankeyFlow",
+    "lead": {
+      "en": "Follow quantities through stages that split and merge.",
+      "zh": "查看数据在各阶段的分流与汇合。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::sankey_flow::{FlowLink, FlowNode, SankeyFlow};\n\nlet nodes = vec![FlowNode::new(\"a\", \"Source\", gpui::rgb(0x6a9fe5).into()), FlowNode::new(\"b\", \"Activated\", gpui::rgb(0xa8acb4).into())];\nlet links = vec![FlowLink::new(\"a\", \"b\", 42.0)];\nlet control = cx.new(|_| SankeyFlow::new(\"Journey\", nodes, links));",
+    "method": "set_data",
+    "signature": "(Vec<FlowNode>, Vec<FlowLink>, &mut Context<Self>)",
+    "event": "FlowInspect, FlowPeriodChange",
+    "rule": {
+      "en": "Use unique node IDs and forward links. Non-finite, non-positive, missing-node and reverse links are ignored. Set visibility from the host to stop particle frames off screen.",
+      "zh": "节点 ID 须唯一，连接须向后续列前进；非有限值、非正值、缺失节点及逆向连接会被忽略。宿主应同步可见性以停止屏外粒子帧。"
+    },
+    "api": {
+      "en": "Hover, tap or use arrow keys to inspect; period selections emit FlowPeriodChange for the host to update data. Touch and screen-reader behavior still need real-device verification.",
+      "zh": "可通过悬停、点击或方向键查看；切换周期会向宿主发出 FlowPeriodChange。触屏和读屏行为仍待实机验收。"
+    },
+    "motion": {
+      "en": "Proportional ribbons and nodes transition between datasets, with optional particles; reduced motion removes particles. Frame-by-frame visual comparison is pending.",
+      "zh": "数据变化时按比例过渡流带和节点，并可开关粒子；减少动效时不播放粒子。逐帧视觉对照尚未完成。"
+    }
+  },
+  {
+    "id": "metric-ticker",
+    "group": "cards",
+    "title": {
+      "en": "Metric ticker",
+      "zh": "实时指标条"
+    },
+    "rustType": "MetricTicker",
+    "lead": {
+      "en": "Scan changing metrics and inspect their recent history.",
+      "zh": "浏览实时指标并查看近期变化。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::metric_ticker::{MetricTicker, TickerMetric};\n\nlet metrics = vec![TickerMetric::new(\"requests\", \"Requests\", 1234.0)];\nlet control = cx.new(|cx| MetricTicker::new(\"Live metrics\", metrics, cx));",
+    "method": "set_metrics",
+    "signature": "(Vec<TickerMetric>, &mut Context<Self>)",
+    "event": "TickerInspect",
+    "rule": {
+      "en": "Use unique stable IDs. The host owns updates and visibility; non-finite values are ignored, and a zero baseline has no percentage change.",
+      "zh": "使用稳定且唯一的 ID；数据更新与可见性由宿主管理。非有限值会被忽略，基线为零时不计算百分比变化。"
+    },
+    "api": {
+      "en": "Configure format, delta type, favorable direction and history per metric. Hover, focus or tap to inspect; use set_visible when outside the viewport. Touch and screen-reader behavior still require device testing.",
+      "zh": "每项可设置格式、变化方式、有利方向和历史数据。悬停、聚焦或点击可查看趋势；离开视口时应通过 set_visible 同步状态。触屏及读屏仍待实机验证。"
+    },
+    "motion": {
+      "en": "Digits roll and the overflow strip drifts while visible; reduced motion disables automatic drift. Frame-by-frame visual comparison remains pending.",
+      "zh": "数字逐位滚动，溢出时可见区域自动循环；减少动效时关闭自动滚动。逐帧视觉对照仍待完成。"
+    }
+  },
+  {
+    "id": "activity-rings",
+    "group": "activity",
+    "title": {
+      "en": "Activity rings",
+      "zh": "活动圆环"
+    },
+    "rustType": "ActivityRings",
+    "lead": {
+      "en": "Compare daily goals on concentric progress rings.",
+      "zh": "通过同心圆环比较每日目标进度。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::activity_rings::{ActivityDay, ActivityGoal, ActivityRings};\n\nlet goals = vec![ActivityGoal::new(\"move\", \"Move\", 500.0, \"kcal\", gpui::rgb(0xe96080).into())];\nlet days = vec![ActivityDay::new(\"today\", \"Today\", vec![(\"move\".into(), 420.0)])];\nlet control = cx.new(|_| ActivityRings::new(\"Daily activity\", goals, days));",
+    "method": "set_days",
+    "signature": "(Vec<ActivityDay>, &mut Context<Self>)",
+    "event": "ActivityDayChanged, ActivityGoalClosed",
+    "rule": {
+      "en": "Supply stable goal and day IDs. A non-positive goal reports zero progress; values above 100% draw a second lap up to 200%.",
+      "zh": "目标和日期应使用稳定 ID；无效或非正目标按零进度显示，超过 100% 的部分以第二圈显示，绘制上限为 200%。"
+    },
+    "api": {
+      "en": "Select a day with the radio group or set_day; legend buttons highlight a goal. Real-device touch, keyboard focus and screen-reader behavior remain to be checked.",
+      "zh": "通过日期选择组或 set_day 选择日期；图例按钮可突出目标。触屏、键盘焦点和读屏仍需实机检查。"
+    },
+    "motion": {
+      "en": "Rings and values retarget from their current state; reduced motion updates directly. Visual frame comparison is pending.",
+      "zh": "圆环与数字从当前位置过渡到新值；减少动效时直接更新。视觉逐帧对照尚未完成。"
+    }
+  },
+  {
+    "id": "model-training",
+    "group": "intelligence",
+    "title": {
+      "en": "Model training",
+      "zh": "模型训练示意"
+    },
+    "rustType": "ModelTraining",
+    "lead": {
+      "en": "Explain the stages of an illustrative model training run.",
+      "zh": "以示意动画解释模型训练的各个阶段。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::model_training::{ModelTraining, TrainingConfig};\n\nlet control = cx.new(|_| ModelTraining::new(TrainingConfig::default()));",
+    "method": "set_config",
+    "signature": "(TrainingConfig, &mut Context<Self>)",
+    "event": "TrainingStepChanged, TrainingPlaybackChanged",
+    "rule": {
+      "en": "Values are illustrative and must not be presented as actual training metrics. The host should synchronize visibility to stop animation off screen.",
+      "zh": "数值仅为示意，不应当作真实训练指标。宿主应同步可见性，以停止屏外动画。"
+    },
+    "api": {
+      "en": "Configure data counts, classes, epochs, loss and target through TrainingConfig. Use stage buttons or set_step to inspect and set_paused for playback.",
+      "zh": "使用 TrainingConfig 设置样本数、类别、轮次、损失及目标；通过阶段按钮或 set_step 查看，用 set_paused 控制播放。"
+    },
+    "motion": {
+      "en": "A 21-second sequence shows signal travel, learning, loss and evaluation; reduced motion shows a still frame. The stacks and fine-grained motion differ from the reference and visual, touch and screen-reader validation remain pending.",
+      "zh": "21 秒示意过程展示信号、训练、损失和评估；减少动效时显示静态画面。数据堆栈与细节动效仍有差异，视觉、触屏和读屏验收尚未完成。"
+    }
+  },
+  {
+    "id": "multi-region-failover",
+    "group": "intelligence",
+    "title": {
+      "en": "Multi-region failover",
+      "zh": "多区域故障切换"
+    },
+    "rustType": "MultiRegionFailover",
+    "lead": {
+      "en": "Visualize host-provided regional health and traffic shifts.",
+      "zh": "展示宿主提供的区域健康状态与流量切换。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::multi_region_failover::{FailoverSnapshot, MultiRegionFailover};\n\nlet snapshot = FailoverSnapshot::new(\"East\", \"West\");\nlet control = cx.new(|_| MultiRegionFailover::new(snapshot));",
+    "method": "resolve",
+    "signature": "(u64, Result<FailoverSnapshot, SharedString>, &mut Context<Self>)",
+    "event": "FailoverRequest",
+    "rule": {
+      "en": "The host owns health and requests. Only resolve a matching request ID; failure preserves the prior snapshot, and stale responses are ignored.",
+      "zh": "健康状态和切换请求由宿主管理。仅匹配请求 ID 的结果会生效；失败时保留原状态，过期响应被忽略。"
+    },
+    "api": {
+      "en": "Stage buttons request a phase; call resolve after the asynchronous operation, and set_visible to stop off-screen motion. The demo intentionally fails the first failover request to exercise retry.",
+      "zh": "阶段按钮发出切换请求；异步操作完成后调用 resolve，离开视口时调用 set_visible。示例首次切换会模拟失败，供验证重试。"
+    },
+    "motion": {
+      "en": "Confirmed weights interpolate, particles pause when hidden or reduced motion is enabled. The reference's detailed 2.5D scene is not yet reproduced, and visual, touch and screen-reader validation remain pending.",
+      "zh": "确认后的流量比例平滑过渡；隐藏或减少动效时暂停粒子。参考站的 2.5D 细节尚未完整实现，视觉、触屏和读屏仍待验收。"
+    }
+  },
+  {
+    "id": "data-flow",
+    "group": "intelligence",
+    "title": {
+      "en": "Data flow",
+      "zh": "数据流示意"
+    },
+    "rustType": "DataFlow",
+    "lead": {
+      "en": "Illustrate how host-provided sources feed a processing step and destinations.",
+      "zh": "以示意图展示宿主提供的来源、处理环节和目标。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::data_flow::{DataFlow, DataFlowNode, DataFlowSnapshot, DataFlowStatus};\n\nlet sources = vec![DataFlowNode::new(\"app\", \"App\")];\nlet destinations = vec![DataFlowNode::new(\"store\", \"Warehouse\")];\nlet snapshot = DataFlowSnapshot::new(42, DataFlowStatus::Running);\nlet control = cx.new(|_| DataFlow::new(sources, DataFlowNode::new(\"core\", \"Transform\"), destinations, snapshot));",
+    "method": "set_snapshot",
+    "signature": "(DataFlowSnapshot, &mut Context<Self>)",
+    "event": "DataFlowInspect, DataFlowPlaybackChanged",
+    "rule": {
+      "en": "The host supplies the processed count and service state; the illustration never generates real records. Use stable node IDs and destination shares between zero and one.",
+      "zh": "处理数与服务状态由宿主提供，插图本身不会生成真实记录；节点 ID 应稳定，目标分流比例限制在 0 到 1。"
+    },
+    "api": {
+      "en": "Use arrows, Home and End to inspect nodes; set_visible stops off-screen animation and set_paused controls illustration playback. The demo uses explicitly labelled sample data.",
+      "zh": "使用方向键、Home 和 End 查看节点；set_visible 用于停止屏外动画，set_paused 控制示意动画。示例明确标注为模拟数据。"
+    },
+    "motion": {
+      "en": "Hollow source markers become solid destination markers, with reduced motion showing a still frame. Detailed path motion, accessibility and device behavior still require verification.",
+      "zh": "空心来源标记经过处理后变为实心目标标记；减少动效时显示静态画面。路径动效、无障碍及设备体验仍待验收。"
+    }
+  },
+  {
+    "id": "vector-search",
+    "group": "intelligence",
+    "title": {
+      "en": "Vector search",
+      "zh": "向量检索示意"
+    },
+    "rustType": "VectorSearch",
+    "lead": {
+      "en": "Explain a host-supplied vector search result with an illustrative projection.",
+      "zh": "使用示意投影解释宿主提供的向量检索结果。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::vector_search::{VectorDocument, VectorMatch, VectorSearch, VectorSearchSnapshot};\n\nlet documents = vec![VectorDocument::new(\"doc\", \"Guide\", \"Access\", 0.1, 0.2, gpui::rgb(0x9b84d6).into())];\nlet matches = vec![VectorMatch::new(\"doc\", 0.9)];\nlet snapshot = VectorSearchSnapshot::new(\"Query\", documents, matches);\nlet control = cx.new(|_| VectorSearch::new(snapshot));",
+    "method": "set_snapshot",
+    "signature": "(VectorSearchSnapshot, &mut Context<Self>)",
+    "event": "VectorStageChanged, VectorPlaybackChanged",
+    "rule": {
+      "en": "The host supplies documents, projection coordinates, links, result order and scores. Coordinates are illustrative and do not calculate real similarity.",
+      "zh": "文档、投影坐标、索引连接、结果顺序与分数均由宿主提供；坐标仅作示意，不用于计算真实相似度。"
+    },
+    "api": {
+      "en": "Use stage buttons or set_stage to inspect, set_paused for playback, and set_visible to stop off-screen animation.",
+      "zh": "使用阶段按钮或 set_stage 查看流程，用 set_paused 控制播放，set_visible 用于停止屏外动画。"
+    },
+    "motion": {
+      "en": "The illustration progresses through embedding, indexing, query and results; reduced motion shows a still frame. The reference's 2.5D geometry and detailed transitions are not yet reproduced, and device/accessibility validation remains pending.",
+      "zh": "示意过程依次展示嵌入、索引、查询与结果；减少动效时显示静态画面。参考站的 2.5D 几何和细节动效尚未完整实现，设备及无障碍验收仍待完成。"
+    }
+  }
+]

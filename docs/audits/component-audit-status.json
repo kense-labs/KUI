@@ -1,0 +1,3928 @@
+{
+  "version": 1,
+  "baseline_commit": "6c9a53ebfa16aa59c4ab388f18cbb944e8ea6594",
+  "updated": "2026-11-05 14:40",
+  "components": [
+    {
+      "id": "button",
+      "title": "按钮",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "action-button",
+      "title": "操作按钮",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "split-button",
+      "title": "分段按钮",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "button-group",
+      "title": "按钮组",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "floating-button-group",
+      "title": "悬浮按钮组",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "expanding-button-group",
+      "title": "展开按钮组",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "copy-button",
+      "title": "复制按钮",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "action-swap",
+      "title": "状态切换按钮",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "icon-morph",
+      "title": "图标形变",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "confirm-morph",
+      "title": "就地二次确认",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "theme-switch",
+      "title": "主题切换",
+      "group": "",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "hold-to-confirm",
+      "title": "长按确认",
+      "group": "gestures",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "swipe-actions",
+      "title": "滑动操作",
+      "group": "gestures",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "reactions",
+      "title": "回应",
+      "group": "gestures",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "dropdown-menu",
+      "title": "下拉菜单",
+      "group": "menus",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "context-menu",
+      "title": "上下文菜单",
+      "group": "menus",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "user-menu",
+      "title": "用户菜单",
+      "group": "menus",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "input",
+      "title": "单行输入",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "textarea",
+      "title": "多行输入",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "password-field",
+      "title": "密码框",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "password-strength",
+      "title": "密码强度",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "search-field",
+      "title": "搜索框",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "expanding-search",
+      "title": "展开搜索",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "inline-edit",
+      "title": "行内编辑",
+      "group": "text-fields",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "dialog",
+      "title": "对话框",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "popover",
+      "title": "气泡面板",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "tabs",
+      "title": "标签页",
+      "group": "navigation",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "combobox",
+      "title": "检索选择",
+      "group": "selects",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "select",
+      "title": "单项选择",
+      "group": "selects",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "switch",
+      "title": "开关",
+      "group": "toggles",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "resizable-panels",
+      "title": "可调面板",
+      "group": "expand",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "empty-state",
+      "title": "空状态",
+      "group": "cards",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "checkbox",
+      "title": "复选框",
+      "group": "toggles",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "multi-select",
+      "title": "多项选择",
+      "group": "selects",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "number-field",
+      "title": "数值步进",
+      "group": "special-inputs",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "tag-input",
+      "title": "标签输入",
+      "group": "special-inputs",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "radio-group",
+      "title": "单选组",
+      "group": "toggles",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "segmented-control",
+      "title": "分段选择",
+      "group": "toggles",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "slider",
+      "title": "数值滑块",
+      "group": "sliders",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "chip-group",
+      "title": "筛选标签组",
+      "group": "selects",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "mention-input",
+      "title": "提及编辑框",
+      "group": "special-inputs",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "emoji-picker",
+      "title": "表情选择器",
+      "group": "pickers",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "color-picker",
+      "title": "颜色选择",
+      "group": "pickers",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "shortcut-recorder",
+      "title": "快捷键录制",
+      "group": "special-inputs",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "calendar",
+      "title": "月历",
+      "group": "pickers",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "date-picker",
+      "title": "日期字段",
+      "group": "pickers",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "time-picker",
+      "title": "时刻选择",
+      "group": "pickers",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "date-range-picker",
+      "title": "日期区间",
+      "group": "pickers",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "phone-input",
+      "title": "电话字段",
+      "group": "special-inputs",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "rich-text-editor",
+      "title": "结构文本编辑器",
+      "group": "editors",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "file-dropzone",
+      "title": "文件接收区",
+      "group": "editors",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "avatar-upload",
+      "title": "头像裁剪",
+      "group": "editors",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "chat-thread",
+      "title": "会话消息流",
+      "group": "activity",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "starter-prompts",
+      "title": "起步问题架",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "ai-translate",
+      "title": "消息翻译",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "agent-timeline",
+      "title": "执行泳道",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "context-window",
+      "title": "上下文用量条",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "agent-status",
+      "title": "运行状态按钮",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "tool-call",
+      "title": "调用详情",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "agent-plan",
+      "title": "执行计划",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "reasoning-block",
+      "title": "过程摘要",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "source-cards",
+      "title": "引用资料架",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "generation-stats",
+      "title": "生成统计",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "comment-thread",
+      "title": "评论讨论",
+      "group": "activity",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "code-suggestion",
+      "title": "代码改动审阅",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "model-card",
+      "title": "模型资料卡",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "provider-keys",
+      "title": "凭据设置",
+      "group": "workspace",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "connector-setup",
+      "title": "服务连接向导",
+      "group": "workspace",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "ai-command",
+      "title": "命令与问答面板",
+      "group": "intelligence",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "share-access",
+      "title": "访问权限编辑",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "team-switcher",
+      "title": "工作区选择器",
+      "group": "workspace",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "tooltip",
+      "title": "控件提示",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "scroll-area",
+      "title": "独立滚动区",
+      "group": "expand",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "drawer",
+      "title": "侧边抽屉",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "accordion",
+      "title": "折叠分组",
+      "group": "expand",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "breadcrumb",
+      "title": "路径导航",
+      "group": "navigation",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "tree-view",
+      "title": "树导航",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "confirm-popover",
+      "title": "锚点确认",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "pagination",
+      "title": "分页导航",
+      "group": "navigation",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "filter-toolbar",
+      "title": "集合筛选栏",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "sortable-data-table",
+      "title": "排序表格",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "reorderable-list",
+      "title": "手动排序列表",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "expandable-card",
+      "title": "展开详情卡",
+      "group": "expand",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "hover-card",
+      "title": "快速预览卡",
+      "group": "overlays",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "expandable-text",
+      "title": "长文折叠",
+      "group": "expand",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "toc-progress",
+      "title": "阅读目录",
+      "group": "navigation",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "code-block",
+      "title": "代码查看",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "json-viewer",
+      "title": "结构值浏览器",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "data-grid",
+      "title": "数据表格",
+      "group": "tables",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "lightbox-gallery",
+      "title": "图像展廊",
+      "group": "workspace",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "alert",
+      "title": "持续提醒",
+      "group": "messages",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "toast",
+      "title": "操作回执",
+      "group": "messages",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "progress",
+      "title": "任务进度",
+      "group": "progress",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "skeleton",
+      "title": "加载占位",
+      "group": "progress",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "badge",
+      "title": "状态徽记",
+      "group": "avatars",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "card",
+      "title": "内容卡",
+      "group": "cards",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "avatar",
+      "title": "用户头像",
+      "group": "avatars",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "usage-meter",
+      "title": "配额用量",
+      "group": "progress",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "onboarding-checklist",
+      "title": "设置清单",
+      "group": "progress",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "stepper",
+      "title": "步骤指示",
+      "group": "progress",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "avatar-group",
+      "title": "成员头像组",
+      "group": "avatars",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "timeline",
+      "title": "事件时间线",
+      "group": "activity",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "metric-card",
+      "title": "单指标卡",
+      "group": "cards",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "sparkline",
+      "title": "迷你趋势线",
+      "group": "charts",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "bar-chart",
+      "title": "分类柱图",
+      "group": "charts",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "activity-heatmap",
+      "title": "日历活动格",
+      "group": "charts",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "line-chart",
+      "title": "多系列折线",
+      "group": "charts",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "donut-chart",
+      "title": "份额环图",
+      "group": "charts",
+      "user_default_pass": true,
+      "source_reviewed": false,
+      "native_wasm_passed": false,
+      "install_passed": false,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "用户要求之前108项默认通过，不再复查。",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "rating",
+      "title": "评分",
+      "group": "toggles",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "2026-11-05 动效实测（0.1× 时钟慢放逐帧采样 + 像素测量，?story=rating）：(1) 逐星错开填充：以 0.1× 时钟抓取 18 帧，每颗星依次晚约 1 帧到达峰值，各自过冲到约 291 像素后回落至 261，形成逐星错开，符合 rating.rs 的 visualDuration=0.26s、逐星 delay 0.035s、bounce=0 弹簧与已提交层 0.4s 弹簧；(2) 变词：第4帧同时可见第3星半填充、第4星淡入、旧词「Good」残影与新词叠加、说明面板仍在增高，方向与 duration/ease 参数一致；(3) 按压缩放：按下第4星时该星满宽但高度 21（按压缩至 0.86），回弹后恢复；(4) 说明面板退出：面板底部 437 逐帧收敛到 286，帧间位移 42/42/31/17/10/4/3/1/1/0，单调减速无回弹，符合 Slide::duration(target,0.4) 临界阻尼；退出同时抓到新旧内容同帧交叉淡出的中间帧（见视觉记录）；(5) 减少动效：prefers-reduced-motion 下填充与缩放直接到位、禁止提交弹跳、文字不滚动，已提交4与悬停3帧与常规态一致、无过渡帧。边界：本采样未与同速 60Hz 基线逐帧比对，故不声明 60fps 帧级一致；跨星拖选与触摸提交的连续动效未单独逐帧采样。 2026-11-05 补：读数变词模糊实测（560×300 视口、deviceScaleFactor=3 放大亚像素、0.05 倍速时钟，裁剪读数带 96×30 CSS px，逐帧只录屏事后解码）：点第3星使读数由 Not rated 变 Good，软边像素数 3462→2167→1427→561→520 单调收敛，最暗像素 155→82，第6帧起帧字节完全一致（f83ea6c8），即 blur=4*(1-enter)→0 的入场模糊逐帧衰减并终止于单一清晰字形，与 rating.rs 的 taps=if blur>0.22 {5} else {1}、偏移 ±0.7*blur 一致；同组帧读数最左墨迹起点稳定在 8 设备px，印证读数预留最宽字形宽度、变词不推动相邻内容。",
+      "updated": "2026-11-05 11:46"
+    },
+    {
+      "id": "billing-toggle",
+      "title": "计费周期",
+      "group": "toggles",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "2026-11-05 网页动效实测（深色高对比下以 0.1 倍速时钟抓帧，?story=billing-toggle）：点击 Yearly 后选中 surface 同时位移与变宽——左边缘 274→351、宽度 85→134（设备像素），两者逐帧单调且减速，24 帧内到约 93% 后继续以递减步长收敛到 x≈357、宽≈137，与 billing_toggle.rs:57-58 对 x 与 width 均为 duration(…,0.34) 的临界阻尼弹簧（ω=5.236/0.34=15.4）一致，因此右段因「Save 20%」徽标更宽时 surface 是平滑变宽而非瞬切。减少动效下同一路径单帧由 274..358/宽85 直接变为 357..493/宽137，无中间帧，印证 reset 直贴目标。键盘与触摸改选同样驱动该位移。未与同速 60Hz 基线逐帧比对，故不声明帧级一致；未单独量测弹簧过冲（该段目标宽度大于起点，观测为单调放大）。",
+      "updated": "2026-11-05 08:51"
+    },
+    {
+      "id": "toggle-group",
+      "title": "切换组",
+      "group": "toggles",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "2026-11-05 网页动效实测（深色高对比、0.1 倍速时钟抓帧，?story=toggle-group）：单选组点击 Center 后共享选中面同时位移与变宽——左边缘 275→317、宽度 46→63（设备像素），24 帧内单调减速（步长 5.9→1.0）持续收敛，与 toggle_group.rs:59-60 对 x 与 width 均为 duration(…,0.42) 的临界阻尼弹簧（ω=12.47）一致，故各段因标签长短不同时选中面平滑变宽而非瞬切。多选组各段填充为 independent Slide（fills，snappy），点 Italic 后其自身填充升起、Bold 保持，互不牵连。减少动效下单选面单帧由 275..320/宽46 直接变为 323..387/宽65，无中间帧。未与同速 60Hz 基线逐帧比对，故不声明帧级一致；多选填充的单独曲线未逐帧采样（仅确认终态独立）。",
+      "updated": "2026-11-05 08:55"
+    },
+    {
+      "id": "radio-cards",
+      "title": "选项卡片",
+      "group": "toggles",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "2026-11-05 网页动效实测（900×760 浅色英文，?story=radio-cards，0.1× 时钟使 0.42s 曲线展开到约 25 帧）：(1) 共享选中轮廓：默认选中「Two bags」（卡片 x347..552），点「One bag」后轮廓从 348..551 平移到 131..335，位移 217px（=206.67px 卡片宽 + 10px gap），左右两条边逐帧同幅移动（刚性平移无拉伸），途中约 20 个中间帧，帧间位移 5.9/6.7/8.0/6.7/6.0/4.4/4.2/4.2/3.7/3.1/2.9/3.0/2.6/2.3/2.4/2.1/1.9/1.7/1.3/1.0/1.0/1.0/0，单调减速无回弹，符合 radio_cards.rs 的 Slide 重定向（duration(x,0.42)，ω=5.236/0.42=12.47 临界阻尼）；点击到完全静止约 0.61s 引擎时间（名义 0.42s 可视时长的约 1.44 倍）。(2) 圆点填充自 indicators[i].duration(selected,0.26)：实测旧点墨量 244→224→60→0、新点 0→76→267→286(过冲)→244 回落，并有两帧同时可见旧点半清、新点半满的交叉淡入淡出，非硬切换。(3) 减少动效：同路径下轮廓在单帧内由 348..551 直接变为 131..335、无中间帧，印证 disabled_motion 时 reset 直贴目标。(4) 首次定位仅 0.16s 淡入不从原点滑来、容器尺寸变化直接贴合新布局，由首帧实测覆盖。边界：深色、320px、125% 缩放与触摸下的动效未复测；本采样未与同速 60Hz 基线逐帧比对，故不声明帧级一致。",
+      "updated": "2026-11-05 11:40"
+    },
+    {
+      "id": "money-input",
+      "title": "金额输入",
+      "group": "special-inputs",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "2026-11-05 网页动效实测（900×760 浅色英文，press 后 release 采样 22 帧）：拒绝时金额文本左缘 292→297（+5px）向右应变，随后逐帧 296/294/293/293/292 单调衰减回到 292，约 5 帧静止，无过冲、无回弹，符合 registry/src/components/money_input.rs refuse() 的 Slide::release(0., toward*160., 0.42) 临界阻尼 KICK 弹簧（官方 physical(.42,0)+velocity toward*160）。同次 refusal 中区间提示墨色由灰 rgb(154,154,154) 变为琥珀（warning，浅色 token 0xd97706 渲染为 rgb(224,152,69)），保持约 1.2s 后在 settled 采样回落为灰，对应 1400ms hold。reduced motion（prefers-reduced-motion: reduce）实测：release 后 292 全程不变（零应变位移），提示仍由灰转琥珀并在 settled 采样回落为灰——说明 reduced motion 下由 1400ms 定时器清态。深色下同样观察到琥珀闪烁。未与同速 60Hz 基线逐帧对比，故不声明帧级一致；应变幅度、衰减帧数、闪烁时长均为本采样实测值。",
+      "updated": "2026-11-05 09:21"
+    },
+    {
+      "id": "countdown",
+      "title": "倒计时",
+      "group": "progress",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`new(label, Duration, cx)`；`with_variant(CountdownVariant::{Large(默认),Compact})`；`with_complete_label`（默认按语言 \"Live now\"/\"现已发布\"）；`remaining(cx)`；`reset(Duration,cx)`；`set_visible(bool,cx)`；事件 `CountdownFinished`。动效：每位 `PairReel` 用 `Slide::new(1.)`，换字 `reset(0.)`+`duration(1., 0.26)`，双字交叉位移 ±font_size；完成用 `transition: Slide::snappy(0.)` → `duration(1., 0.24)`。注意：`transition` 只在构造/`complete` 里被赋值，render 中从未 `get()` 采样（`render` 完成态只画圆点+文案），故文档「完成指示淡入」在当前源码未实现；隐藏时定时器睡到 deadline（`set_visible` 语义），有单元测试覆盖。catalog 多列 `glyph` 但源码未引用该 primitive。（文档已同步修正：docs/items/countdown.md 的 Motion 段改为「数字轮盘 0.26s、完成过渡当前未采样/无淡入」。）",
+      "updated": "2026-11-05 12:36"
+    },
+    {
+      "id": "elastic-slider",
+      "title": "弹性滑块",
+      "group": "sliders",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：拖到轨道末端并越过 —— 越界应变 +22/+35/+38px（1.00/1.08/1.16），松手后弹簧回落 +31→+23→+21 并于 3 帧内稳定在 +21px，无闪白无跳回。prefers-reduced-motion:reduce 时越界应变被钳制为恒定 +24px（不再增长），与文档“reduced motion suppresses the stretch”一致。视觉：轨道 564..1235 长 671，初值≈56.6%，球泡 \"100%\"。",
+      "updated": "2026-11-05 13:56"
+    },
+    {
+      "id": "range-histogram-slider",
+      "title": "区间分布滑块",
+      "group": "sliders",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：拖动左拇指 —— 中心 672→708→744→780→816→852（每步 36px，无跳变），松手吸附到 860；范围标签由 \"$80 – $260\" 变为 \"$220 – $260\"；计数由 \"308 of 480\" 变为 \"83 of 480\"。共享弹性轨道与 reduced-motion 行为同 elastic-slider（已单独实测）。视觉：双拇指 672/913，标签/计数齐备。 2026-11-05 用户反馈读数跳位后专项修复：等宽数字和稳定基线，2项布局回归、WASM、注册表/网站检查及浏览器拖动实测通过，版本ed6df7757be8d0fff3f2；详见docs/audits/slider-readouts-2026-11-05.md。",
+      "updated": "2026-11-05 14:40"
+    },
+    {
+      "id": "announcement-bar",
+      "title": "公告栏",
+      "group": "messages",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`AnnouncementTone`；`Announcement::new(id,message)`+`with_action(label)`+`with_countdown(Duration)`；`AnnouncementBar::new(Vec<Announcement>,cx)`+`with_tone(tone)`；`dismissed()`/`dismiss(cx)`/`reopen(cx)`；事件 `AnnouncementEvent`。动效：`motion: Slide::snappy(1.)`（行内切换）、`visibility: Slide::snappy(1.)`（整条收起）；`dismiss` `visibility.duration(0.,0.44)`、`reopen` `1.,0.44`；每条轮播 `motion.reset(0.)`+`duration(1.,0.46)`，`rotation_ticks>=7` 即 7 秒一轮，进度环 `1 - ticks/7`（源码 281 行）；hover/focus 置 `paused/user_paused` 暂停（330 行 `on_hover`）。catalog 多列 `control` 而源码未引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "cookie-consent",
+      "title": "Cookie 同意设置",
+      "group": "messages",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`ConsentCategory::new(id,label)`+`with_description`+`with_required(bool)`+`with_default_enabled(bool)`；`ConsentChoice`；`CookieConsent::new(Vec<ConsentCategory>, &mut Window, &mut Context<Self>)`；`reset(cx)`；`restore(&[ConsentChoice],cx)`；`choices()->Vec<ConsentChoice>`；`is_decided()->bool`；`open_preferences(cx)`/`close_preferences(cx)`；事件 `ConsentChanged(Vec<ConsentChoice>)`。动效三弹簧 `reveal/shape/fold: Slide::snappy(..)`：展开 `fold.duration(1.,0.46)`+`shape.duration(0.,0.46)`+`reveal.reset(0.)`後 `duration(1.,0.22)`；保存 `fold→1.,0.46`、`reveal→0.,0.22`、`shape→1.,0.46`；收起 `shape.duration(0., shrink?0.38:0.46)`+`fold.duration(0.,0.38)`；`disabled_motion` 时 `fold.reset(0.)` 并改用 380ms 计时器。内嵌 `components::switch::Switch`（catalog 已列）。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "ruler-slider",
+      "title": "刻度滑块",
+      "group": "sliders",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：向左拖拽刻度带后读数 \"172 cm\"→\"179 cm\"；Home 键落到下界 \"120 cm\"，End 键落到上界 \"220 cm\"（Home/End 两次独立运行读数裁剪 md5 完全一致 922c2144 / ae419cf9，确定性）。数字滚动、刻度带弹簧与 reduced-motion 抑制见 docs/items/ruler-slider.md 记录。视觉：初始读数 \"172 cm\"。 2026-11-05 用户反馈读数跳位后专项修复：等宽数字和稳定基线，2项布局回归、WASM、注册表/网站检查及浏览器拖动实测通过，版本ed6df7757be8d0fff3f2；详见docs/audits/slider-readouts-2026-11-05.md。",
+      "updated": "2026-11-05 14:40"
+    },
+    {
+      "id": "signature-pad",
+      "title": "签名板",
+      "group": "editors",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`SignatureColor{Black(默认),Blue,Violet,…}`、`SignatureWeight{…,Medium(默认),…}`、`SignatureStroke`；`SignaturePad::new(label,cx)`（默认 signer=\"Emma Collins\"）；`with_signer`；`with_disabled(bool)`；`strokes()`；`is_empty()`；`clear/undo/redo(cx)`；`begin_sample((f32,f32), pressure, cx)`/`append_sample(..)`/`end_sample(cx)`；`replay(cx)`；`to_svg(u32,u32)->String`；`to_png(u32,u32)->Result<Vec<u8>,SignaturePngError>`；事件 `SignatureChanged`/`SignaturePngExported(Result<..>)`。动效：`replay_clock`/`sweep_clock: PhaseClock`，重放扫描 `sweep_ease(t/0.56)`（400 行），`disabled_motion` 跳过快照。缺口：模块注释称「可选墨色与笔重」，但源码无公开 `with_color`/`with_weight` 构造器，故事里只能走内部字段；文档 API 段只列 `to_svg`。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "scrub-input",
+      "title": "拖动数值输入",
+      "group": "special-inputs",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效验收（2026-11-05，0.1× 时钟慢放逐帧采样 + 像素测量）：(1) 越限 strain 为 Slide::snappy，drag_to 内 reset(signum*12*(1-exp(-|overflow|/10)))，上限 12px；实测按住越限期间稳定 +12px（左边缘 283，初始 271），松手后 finish→strain.duration(0., 0.34, cx)（ω=5.236/0.34=15.4）按解析临界阻尼衰减：283→282→281→280→279→278→277→276→275→274→274→273→273→272→272→272→272→271…，约 18 帧回到 271，单调无过冲、无回跳，符合临界阻尼（bounce=0）预期；(2) 越限值本身立即钳制到 1000（不随 strain 继续增长），strain 只做视觉位移；(3) 释放后 2.5s 稳定态：位移归零、数值停在 1000、填充满宽，无残留 RAF；(4) 降低动效：prefers-reduced-motion 下 disabled_motion(cx) 为真，drag_to 跳过 strain 计算，16 帧（含越限按住帧与全部释放后帧）左边缘恒为 271，零位移，数值仍正确钳制到 1000；(5) 键盘步进 ArrowUp×3：176→179，填充随值平滑跟进，无重启动画；(6) wrap 场（Rotation）：向左拖过 0 后环绕 45→285，字段始终贴合外框（wrap 路径不做 strain），验证越限位移仅作用于非 wrap 场；(7) 拖动中 10×/0.1× 徽标随修饰键出现，释放即消失。",
+      "updated": "2026-11-05 09:37"
+    },
+    {
+      "id": "morph-select",
+      "title": "形变选择器",
+      "group": "selects",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效验收（2026-11-05，0.1× 时钟慢放逐帧采样 + 像素测量）：(1) 展开形变（size: Slide::snappy，show→duration(1.,0.4)，close→duration(0.,0.34)）：面板上边缘 238→236→226→218→208→199→190→181→172→164→157→150→144→139→134→130→127→124→122→121→119→117→116→111，单调收敛、逐步减速、无过冲无回弹，最终落到 111，符合临界阻尼（bounce=0）预期；(2) 高亮滑行（highlight: Slide::snappy，set_active/hover→duration(offset,0.28)）：ArrowDown 一次，高亮带（26px 高，恒定不变形）从 (273,298) 依次到 (280,305)→(289,314)→(297,322)→(302,327)→(306,331)→(308,333)→(309,334)→(310,335)→(311,336) 收敛于 311，位移精确等于一行 38px 行距（36 行高+2 间隔），单调减速无过冲，带高恒为 26px（上下各留 5px 内边距）；(3) 标签滚动（swap: PhaseClock + ease，choose→swap.restart，t=ease(time(0.28)/0.28)）：旧 caption 在 j00-j05 逐步上移淡出（ink 228→201→…→29），j06-j12 为交叉淡出谷值（旧新共存重叠、总墨量最低），新 caption 自 j13 起由上方滚入（y 240→256 逐步落位）并淡入（ink 27→65→106→116 稳定），方向由 direction（向下选为 +1）决定；(4) 降低动效：prefers-reduced-motion 下 Slide::retarget 与 duration 走 reset(v) 分支即时到位——展开过渡 24 帧全部为终态 (111)，零中间帧；稳定态与常规动效逐字节相同（b6c026c3…），确认只去掉动画、不改变终态；(5) 交互一致性：面板打开期间逐帧 opacity=progress 淡入，与尺寸同步；关闭经时长 0.34s，展开 0.4s，均无残留 RAF（稳定后帧恒等）。",
+      "updated": "2026-11-05 09:46"
+    },
+    {
+      "id": "undo-toast",
+      "title": "撤销提示",
+      "group": "messages",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`UndoItem::new(key,title)`+`with_sender`+`with_description`+`with_meta`+`with_unread(bool)`；`RemovalKind`；`UndoEntry`；`UndoToast::new(label,Vec<UndoItem>,cx)`+`with_duration(Duration)`（默认 6s，下限 100ms）；`pending()`；`is_depleted()`；`refill(cx)`；`remove(key,RemovalKind,cx)`；`undo(cx)`；`commit(cx)`；`resolve_commit(batch:u64, success:bool, cx)`；事件 `UndoToastEvent`。动效：每行 `Slide::snappy(1.)` 收起 `duration(1.,0.4)`；`show: Slide::snappy(0.)` 在 remove 後 `0.,0.18`、refill `1.,0.42`、undo `1.,0.18`、失败恢复 `1.,0.20`；恢复後 1800ms 再 `0.,0.18`；提交前 100ms 防抖；`Role::List`/`Role::Status`。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "tree-table",
+      "title": "树形表格",
+      "group": "tables",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`TreeTableRow::new(id,name)`+`with_cells(Vec<SharedString>)`+`with_children(Vec<TreeTableRow>)`+`with_lazy_children()`；`TreeTableEvent`；`TreeTable::new(label, Vec<SharedString>, Vec<TreeTableRow>, cx)`+`with_expanded(&[&str])`+`with_selectable(bool)`（默认 true）+`with_hide_below(Vec<f32>)`；`selected_ids()`；`clear_selection(cx)`；`resolve_children(&str, Result<Vec<TreeTableRow>,()>, cx)`。动效：`branch_motion: HashMap<_, Slide::snappy(初值)>`，展开/收起 `.duration(if open {1.} else {0.}, 0.4)`（371-372 行）；列表 `ListState` 统一行高 44px、预取 120px；`Role`/键盘导航齐全。catalog 依赖含 `editor`（`EditorScrollRegion`）与 cargo `unicode-segmentation/wasm-bindgen/web-time`，与源码一致。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "mega-menu-morph",
+      "title": "形变导航菜单",
+      "group": "navigation",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`MegaMenuLink::new(id,label)`+`with_description`；`MegaMenuGroup::new(title,Vec<MegaMenuLink>)`；`MegaMenuFeature::new(..)`+`with_description`；`MegaMenuSection::new(id,label)`+`with_groups`+`with_feature`；`MegaMenuMorph::new(brand, Vec<MegaMenuSection>, cx)`+`with_brand_id`（默认 \"brand\"）+`with_primary(label, ..)`；事件 `MegaMenuNavigate(SharedString)`。动效五弹簧：`presence/height/position/caret: Slide::snappy(0.)`、`width: Slide::snappy(340.)`；打开 `presence.duration(1.,0.24)`、关闭 `0.,0.18`；面板 `height/width/caret/position` 统一 `duration(target, 0.25)`（878-894 行）；段落切换 `switch: PhaseClock`，`ease(time(0.24)/0.24)`；窄屏折进 accordion。catalog 多列 `control` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "glass-segmented",
+      "title": "玻璃分段选择",
+      "group": "toggles",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`GlassSegmentOption::new(value,label)`+`with_icon(Glyph)`+`with_badge`+`with_disabled(bool)`；`GlassSegmented::new(label, Vec<..>, cx)`+`with_value(&str)`+`with_small(bool)`+`with_disabled(bool)`；`value()->Option<&str>`；`set_value(&str,cx)`；事件 `GlassSegmentChanged(SharedString)`。动效：`left/right: Slide::snappy(index)` 双独立弹簧；键盘移动按方向异步：`left.duration(i, forward?0.5:0.26)`、`right.duration(i+1, forward?0.26:0.5)`（133-135 行）；抛掷 `left/right.duration(target, velocity>=0?0.22:0.12)`；`disabled_motion` 时 `left.reset(target)`/`right.reset(target+1.)` 直贴；面板用 `PhaseClock`。catalog 多列 `direct_touch` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "glass-menu",
+      "title": "玻璃操作菜单",
+      "group": "menus",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`GlassMenuItem::new(id,label)`+`with_icon(Glyph)`+`with_shortcut`+`with_checked(bool)`+`with_disabled(bool)`+`with_danger(bool)`+`with_keep_open(bool)`+`with_children(Vec<..>)`；`GlassMenuGroup::new(Vec<..>)`+`with_label`；`GlassMenu::new(id,title,Vec<GlassMenuGroup>,cx)`+`with_align(MenuAlign)`+`with_width(f32)`（clamp 160..480，默认 256）；`is_open()->bool`；`set_checked(id,checked,cx)`；事件 `GlassMenuSelected`。渲染分支用 `MenuCore`；动效：`submenu_motion: PhaseClock`，`content_motion` = `ease(time(0.22)/0.22)`，内容按 `submenu_direction*18px*(1-t)` 横移（229 行）。catalog 多列 `direct_touch` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "presence-stack",
+      "title": "在线成员",
+      "group": "avatars",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`PresenceStatus{Active(默认),Idle,Typing}`；`PresencePerson::new(id,name)`+`with_image`+`with_status`+`with_detail`；`PresenceSize{…,Medium(默认)}`；`PresenceAlign{…,Start(默认)}`；`PresenceStack::new(id, Vec<PresencePerson>, cx)`+`with_limit(usize)`（默认 max=4）+`with_size`+`with_align`+`with_self_id(id,cx)`；`is_open()`；`set_people(Vec<..>,cx)`；事件 `PresenceSelected(SharedString)`。动效：每槽 `position: Slide::new(index)`、`visible: Slide::new(arriving?0.:1.)`；离开 `visible.duration(0.,0.16)`；就位 `position.duration(i,0.4)`+`visible.duration(1.,0.42)`（235-239 行）；展开 `fan: Slide::snappy(0.)` `duration(expanded,0.4)`；标签 `label_width.reset+duration(width,0.42)`、`label_x` 同（514-523 行）；溢出用 `ChangingText` 滚动，打字点受 `disabled_motion` 控制。catalog 多列 `direct_touch/glyph` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "tldr-toggle",
+      "title": "摘要切换",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "0.1x 时钟逐帧（CDP 往返约78ms/帧，实时0.28s弹簧只能采到~4帧，故用0.1x时钟）：高度弹簧顶边上边 49→89（收缩段单调）→66（增长段单调），无过冲无回弹；面板高 360→279→325，40帧内 0 次内容越界（正文始终在面板内）。交叉淡入墨迹覆盖 2761→4891 单调递增，无回落。跳转高亮带精确覆盖全文第1段约2行，起始最强、随 0.76s 脉冲衰减至无（M-B24 已无高亮）。减少动效下 S/R 序列帧恒定，重试仍达成 Ready。",
+      "updated": "2026-11-05 10:38"
+    },
+    {
+      "id": "smart-form-fill",
+      "title": "智能表单填写",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：SmartField::new(id,label)/with_value、SmartSuggestion::new(...)/with_source/with_reason、SmartFormFill::new(specs,window,cx)、with_review_threshold(f32,钳制0..1)、start/stop/apply(u64,..)->bool/finish/fail/review/undo/submit；动效仅字段高亮 tint=(1-ease(age/0.9))*0.14（0.9s，无 Slide）。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "enrich-column",
+      "title": "数据补全列",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：EnrichRow/EnrichSource/EnrichResult、EnrichColumn::new(title,rows,prompt,window,cx)、with_concurrency(钳制1..8，默认2)、run_all/run_row/stop/finish/fail/review/undo；动效 editor_height:Slide::snappy→duration(..,0.24)，单元格 0.16s ease 淡入。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "ticket-router",
+      "title": "工单分流",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：Ticket/TicketLane/TicketDecision、TicketRouter::new(title,lanes,tickets)、with_review_threshold/with_concurrency/run/pause/resume/classified/routed/failed/retry，const TICKETS_PER_PAGE=4；动效为时钟 ease 窗 0.16/0.24/0.24s，无 Slide。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "reply-draft",
+      "title": "回复草稿",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ReplyMessage/ReplyHint、ReplyDraft::new(message,hints,window,cx)、generate/set_tone/set_length/choose_hint/append/finish/review/fail/stop/insert；动效单窗 ease(0.16s)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "ask-your-data",
+      "title": "数据问答",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：AskDataSeries/AskDataResult、AskYourData::new(source,window,cx)、run/append_sql/finish_sql/progress(scanned,total)/finish_query/fail/stop；动效分阶段标准缓动 0.32s（轴）与 0.46s（第二条曲线），逐序列错开 0.04s。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "pii-redaction",
+      "title": "敏感信息脱敏",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：PiiSpan::new(start,end,kind)、PiiRedaction::new(window,cx)、scan/stop/finish_scan/fail_scan/add_range/add_selection/remove_range/undo/preview/set_reviewed/copy_preview；无动效（源码无 Slide/clock/ease），与文档一致。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "gauge",
+      "title": "仪表盘",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：点击 \"Change values\" —— 正常动效下环带与计数同步逐帧变化（采样 14 帧，环带 5 个不同状态，第 4 帧后稳定；计数文本 5 个不同状态滚动到目标）；prefers-reduced-motion:reduce 下 band/count 均为 1 个状态、第 0 帧即达目标，且终态哈希 4cff9039 与正常动效终态一致。与文档“弧线与计数共用一条弹簧，reduced motion 立即到位”一致。视觉：三环 68/96/42%。",
+      "updated": "2026-11-05 13:59"
+    },
+    {
+      "id": "animated-counter",
+      "title": "动态数字",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：AnimatedCounter::new(f64)（非有限按 0）、with_label/with_prefix/with_suffix、with_decimals(选择位数，min(6))、with_size(clamp 10..96，仅有限数)、with_accessibility(bool)、with_animate_on_view(bool)、set_visible(bool,cx)、value()->f64、set_value(f64,cx)；with_wheel_style 为 pub(crate)，非宿主 API。动效 Position:Slide::new(0.)、width:Slide::new(首布局?1.:0.)；width.duration(i<len,0.42)、position.duration(target,0.4)、入场 position.delayed(target,0.48, delay) 其中 delay=((cols-1-i)*0.035).min(0.25)，可见阈值 0.6；经 disabled_motion + sample_batch(now,reduced) 采样，仅 moving && visible 时请求帧。文档准确（「六位小数」「60% 可见」均属实）；## API 未列 with_accessibility 与 value()。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "waffle-chart",
+      "title": "华夫图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：WaffleCategory::new(id,label,value,color)、WaffleChart::new(title,categories)/set_visible/set_categories，事件 WaffleInspect。动效每格 Square{x,y,appear,color_progress}：首布局 appear.delayed(1.,0.24,slot/100*0.32) 即 100 格逐格错开最多 0.32s；重排 x/y duration(..,0.42)、appear(1.,0.24)；换色 color_progress(1.,0.42)。槽位 x=slot/10、y=9-slot%10（10×10 网格）。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "slope-chart",
+      "title": "斜率图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：SlopeSeries::new(id,label,before,after,color)、SlopeChart::new(title,series)/set_visible/set_series，事件 SlopeInspect。动效 新增系列以 before 初始化 after:Slide::new(s.before)，再 before.duration(s.before,0.42)、after.duration(s.after,0.42)；同 id 复用状态。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "radar-chart",
+      "title": "雷达图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：RadarAxis::new(id,label)、RadarProfile::new(id,label,values,color)、RadarChart::new(title,axes,profiles)/set_visible/set_profiles，事件 RadarInspect。动效 每个取值 Slide::new(0.)→duration(value,0.6)，reveal duration(1.,0.9)。轴数上限：源码 axes.truncate(12)（仅上限，无下限）；文档原写「三到十二轴」，已改为「上限十二、可少于」。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "split-bar",
+      "title": "占比条",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：SplitSegment::new(id,label,value,color)、SplitInspect{id,value,share}、SplitBar::new(title,data)、with_description、with_unit、set_visible、set_segments(Vec,cx)；事件 SplitInspect。动效 左右边缘 left/right.duration(..,0.4)，lane 首布局 reset 否则 duration(target,0.4)；expanded_shares 每层 +0.045、上限 .min(0.98)；标签排布 gap 12、行距 24；色块高 44、分隔 3px；非激活混色 0.62/0.42。经 sample_batch(now,reduced)，仅 visible && moving 请求帧。文档准确。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "race-bar-chart",
+      "title": "动态排名条形图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：RaceEntry::new(id,label,value,color)、RaceFrame::new(label,values)、RaceBarChart::new(title,data)（frame_duration 默认 1.4s）/with_frames/with_frame_duration(钳制0.1..60)/with_autoplay/with_looping/set_frames/set_visible/set_playing/set_frame/set_entries。三个事件 RaceInspect/RaceFrameChanged/RacePlaybackChanged（文档原仅列 RaceInspect，已补全）。动效 名次 entry.rank.duration(rank,0.5)，播放头 shown.duration(position,0.42) 或减少动效时 reset。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "funnel-chart",
+      "title": "转化漏斗",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：FunnelSegment::new(id,label)、FunnelStage::new(id,label,values)、FunnelInspect{id,value,from_start,from_previous}、FunnelChart::new(title,stages,segments)、with_flow、set_flow、set_visible、set_stages(Vec,cx)；事件 FunnelInspect。动效 阶梯带 first/second.duration(..,0.55)、gap.duration(split?1.:0.,0.55)、reveal duration(1.,0.8)；粒子流在 reveal>0.75 后启动，4s 周期（Δ.min(0.1)/4.），16 粒子、samples=(n-1)*12；经 disabled_motion 采样，仅 visible && (moving||flowing) 请求帧。文档准确（「粒子相位续接不回跳」与 last_tick=None 一致）。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "streamgraph",
+      "title": "流图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：StreamLayer::new(id,label,color)、StreamPoint::new(label,values)、Streamgraph::new(title,layers,points)/set_visible/set_points，事件 StreamInspect。动效 采样点 samples[i][j].duration(target,0.4)，reveal(1.,0.9)，游标 cursor.duration(x,0.26)；GRID=161。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "treemap",
+      "title": "矩形树图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：重载后 6 帧序列显示瓦片从居中小簇生长铺满网格的入场过程（f0 仅中部小簇 → f5 满幅），无错误帧、无空白闪屏；reduced-motion 直接更新（对面板已抓取 reduced 态，同帧到位）。文档声明“下钻时瓦片缩放、指标切换时同 ID 重排”，本次实测覆盖入场与首帧稳定；逐指标切换的重排帧、深色/320/RTL 的组合动效未逐项抓帧。视觉：四态渲染正常、RTL 列镜像。",
+      "updated": "2026-11-05 14:06"
+    },
+    {
+      "id": "brush-chart",
+      "title": "区间趋势图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：BrushPoint::new(label,value)/with_event、BrushPreset::new(label,points)、BrushChart::new(title,points)（窗口默认 start=end-14、end=len-1）/set_window/with_presets/set_points，事件 BrushChange/BrushInspect。动效 左右柄 duration(..,0.42)（受控贴齐时 reset），reveal(1.,0.9)，坐标轴 duration(..,0.45)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "ridgeline",
+      "title": "山脊分布图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：RidgeSeries::new(id,label,samples,color)（丢弃非有限）、Ridgeline::new(title,series)/set_visible/set_series，事件 RidgeInspect。动效 每个网格条 slide.duration(value/peak,0.7)，选中/取消 lift.duration(0|1,0.24)，reveal(1.,1.0)，提示 0.26；GRID=96。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "realtime-stream",
+      "title": "实时数据流",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：StreamReading::new(...)、with_anomaly、LiveInspect、RealtimeStream::new(title)、with_capacity(usize)（clamp 2..2000，默认 60）、with_unit、set_visible、push(StreamReading,cx)、set_paused(bool,cx)；事件 LiveInspect。动效 shift.duration(0.,0.35)、坐标轴 axis_min/max.duration(..,0.45)（内边距 0.18·span）、游标标记 PhaseClock.time(0.4,..)。无显式 disabled_motion 分支，减少动效由 Slide::get 内部处理。with_capacity/with_unit 仅出现在示例、未写入 API 正文。文档准确。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "sunburst",
+      "title": "旭日图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：SunburstNode::new(id,label,value,color)/with_children、Sunburst::new(title,root)（max_depth 3）/set_root/with_depth(钳制1..8)/set_visible，事件 SunburstFocus。动效 每段 progress.duration(1., 首布局0.9 否则0.62)，提示 0.26。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "sankey-flow",
+      "title": "桑基流向图",
+      "group": "charts",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：重载后 6 帧显示飘带/节点淡入并稳定（f5 定型），无错误帧；比例飘带与节点在数据集切换时过渡。reduced-motion 面板已抓取。文档明确“粒子为可选、reduced motion 移除粒子”“逐帧视觉对比待办”，本次未对粒子层单独逐帧对比。视觉：四态渲染正常，比例飘带按数值粗细。",
+      "updated": "2026-11-05 14:07"
+    },
+    {
+      "id": "metric-ticker",
+      "title": "实时指标条",
+      "group": "cards",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：TickerMetric::new(id,label,value)（decimals 0）/with_format(decimals min6)/with_change/with_history/with_caption、MetricTicker::new(label,metrics,cx)/with_marquee/set_visible/set_metrics，事件 TickerInspect。动效 面板 panel_reveal.reset(0.)→duration(1.,0.42)，跑步机 speed.duration(target,0.5)（仅 visible && marquee && !disabled_motion），panel_x duration(desired,0.42)。文档缺 with_marquee。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "activity-rings",
+      "title": "活动圆环",
+      "group": "activity",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "动效：重载后 6 帧显示三只环从 0 顺时针扫入到目标值的入场动画（f0 空环 → f5 完整 129/127/100%），无错误帧；数值 129%/127%/100% 稳定。文档“环与数值从当前状态重定位、reduced motion 立即到位”，reduced 面板已抓取。文档声明真机触摸/键盘焦点/屏幕阅读器待验，此处未覆盖。视觉：四态渲染正常，>100% 第二圈可见。",
+      "updated": "2026-11-05 14:08"
+    },
+    {
+      "id": "model-training",
+      "title": "模型训练示意",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：TrainingConfig（默认 batch 32、epochs 12、loss 0.69→0.08、accuracy 94.2）、ModelTraining::new(config)、with_speed/set_visible/set_paused/set_step/set_config；动效 hover_speed:Slide::new(1.)→duration(target,0.5)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "multi-region-failover",
+      "title": "多区域故障切换",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：FailoverSnapshot::new(primary,secondary)、MultiRegionFailover::new(snapshot)、set_visible/set_motion/set_snapshot/request_phase/resolve；动效 weight:Slide::new(share)→duration(share,0.6)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "data-flow",
+      "title": "数据流示意",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：DataFlowNode/DataFlowSnapshot::new/with_message、DataFlow::new(sources,core,destinations,snapshot)、set_snapshot/set_nodes/set_visible/set_paused；依赖动画计数器组件（真实跨组件依赖），无 Slide、由 PhaseClock 驱动。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "vector-search",
+      "title": "向量检索示意",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：VectorDocument::new(id,title,topic,x,y,color)、VectorMatch、VectorSearchSnapshot::new(query,documents,matches)（dimensions 默认 1536）、VectorSearch::new/set_snapshot/set_visible/set_paused/set_stage；无 Slide，PhaseClock 驱动。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "text-reveal",
+      "title": "文字揭示",
+      "group": "text-effects",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：TextReveal::new(text,cx)/with_delay/with_heading_level(钳制1..6)/set_visible/set_text；动效逐词错开 step=min(0.48/count,0.04)，升起 ease(local/0.76)、淡入 standard_ease(local/0.44)，减少动效单段 0.16s。文档缺 with_heading_level/set_text/set_visible。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "in-view-title",
+      "title": "视区标题",
+      "group": "text-effects",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：InViewTitle::new(text)/with_once(默认true)/with_entrance(默认Blur)/with_heading_level/replay/set_visible/set_host_visible；触发比 shown/height>=0.45；settle/step 按入场类型 Lines(0.86,0.08)、Words/Blur(0.8,min(0.4/count,0.06))、Rise/Fade(0.8,0)。文档缺 with_entrance/with_heading_level/replay/set_visible/set_host_visible。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "text-morph",
+      "title": "文字形变",
+      "group": "text-effects",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：TextMorph::new(text)/set_text/set_visible/text()；动效 宽度与匹配字形 duration(..,0.42)，新字形 opacity/top delayed(..,0.28)，退出 duration(..,0.18)，入场逐字母错开 0.032s（首个 0.05s，8 个封顶）。文档缺 set_visible/text()。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "text-shimmer",
+      "title": "文字微光",
+      "group": "text-effects",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：TextShimmer::new(text,cx)/with_duration(默认1800ms)/with_font_size/with_active/set_active/set_visible/set_text；动效 扫光 sweep_t/glide_duration，减少 0.12s，宽度 duration(..,0.42)，常量 FONT=16、BAND_EM=2.2。文档缺 with_duration/set_text/set_visible。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "slot-text",
+      "title": "数字滚轮文字",
+      "group": "text-effects",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：SlotText::new(value)/with_duration(默认0.9)/with_stagger(默认0.07,钳制0..0.3)/with_spins/with_font_size/value()/set_value；动效 reel_time=duration+index*stagger，卷筒时长 min(0.6)。文档仅列 set_value。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "image-compare",
+      "title": "图片对比",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ImageCompare::new(before,after,label,cx)/with_position/with_ratio(默认1.5)/with_orientation/with_captions/position()/set_position；动效 拖动 reset、否则 duration(value,0.26)，手柄 duration(..,0.42)，键盘步长 0.1（Shift）或 0.01，MARGIN=42。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "carousel",
+      "title": "图片轮播",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：CarouselSlide::new(image,label)、Carousel::new(label,slides,cx)/with_index/with_action_labels/index()/set_index；动效 position:duration(index,0.4)，拖动 position.reset(value) 带速度跟踪，松手弹簧收敛。文档缺 with_action_labels/index()。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "card-stack",
+      "title": "卡片堆叠",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：StackCard::new(..)/with_eyebrow/with_details、CardStack::new(label,cards,cx)/with_labels/index()/decide/undo；动效 退场 x:duration(±reach*1.6,0.5)（500ms），撤销 x.reset(±reach)→duration(0.,0.4)，松手 duration(0.,0.42)，x:Slide::snappy(0.)，减少动效即时。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "toast-stack",
+      "title": "通知堆叠",
+      "group": "messages",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`ToastId(pub u64)`；`StackToastEvent{id,event}`；`ToastStack::new(label)`+`with_limit(usize)`（默认 12，`max(1)`）；`push(message, action:Option<SharedString>, timeout:Duration, cx)->ToastId`；`update(..)`；`dismiss(id,cx)->bool`；`len()`；`is_empty()`；事件 `StackToastEvent`。动效：`expanded: Slide::new(0.)`，`duration(expanded?1.:0., 0.42)`；只渲染最新 3 条（153 行 `min(3)`），每层 `scale = 1 - 0.05*depth*tuck`、`bottom = depth*(14*tuck + 88*expanded)`（tuck=1-expanded），即收起时相邻露出 14px、展开时 88px；`Role::Region`+Escape 兜底关闭；内嵌 `components::toast`（catalog 已列）。catalog 多列 `control/glyph` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "bottom-sheet",
+      "title": "底部面板",
+      "group": "overlays",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`BottomSheetEvent`；`BottomSheet::new(trigger, title, body, cx)`+`contained()`+`with_detents(Vec<f32>)`（默认 `vec![0.45,0.92]`）；`set_open(bool, w, cx)`；`set_snap(index, cx)`。动效：`height: Slide::new(0.)`；`set_open` 时 `height.duration(.., ..)`（96 行）；`set_snap` `height.duration(detents[index], 0.4)`；拖动越限 `reset(resisted.clamp(0., ceiling+120./span_px))`（150 行），回弹 `offset.duration(0.,0.44)`；`fade` 独立 Slide；`disabled_motion` 在 463 行绕过动画。body 为 `Content` 闭包，支持内嵌滚动。catalog 多列 `glyph` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "sheet-stack",
+      "title": "多层面板",
+      "group": "overlays",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "API：`SheetLink::new(id,label)`；`SheetPage::new(id,title,description)`+`with_content(closure)`+`with_links(Vec<SheetLink>)`；`SheetStack::new(trigger, Vec<SheetPage>, cx)`+`contained()`+`with_action_labels(..)`；`push(id,w,cx)->bool`；`pop(w,cx)->bool`；`close(w,cx)`；`stack()->Vec<SharedString>`；事件 `SheetStackChanged(Vec<SharedString>)`。动效：`transition: Slide::new(0.)`、`offset: Slide::new(0.)`；push 时 `offset.reset(if dialog {18.} else {height+24})`+`offset.duration(0.,0.44)`+`transition.duration(1., if dialog {0.2} else {0.3})`（146-148 行）；pop `transition.duration(0.,0.24)`；peek `offset.reset(-peek)`+`duration(0.,0.42)`；拖动越限 `reset(delta<0? delta*0.12 : delta)`（222 行）；后台层按深度位移。catalog 多列 `nav/flyout` 正确对应 `nav::*`、`flyout::TriggerBounds`，`glyph` 未直接引用。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "product-gallery",
+      "title": "商品图集",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ProductPhoto::new、ProductColor::new(...,swatch,photos)、ProductSize::new+unavailable_for(Vec)、ProductGalleryEvent{Color,Size,Index,Viewer}、new(label,colors,sizes,cx)、with_header、with_footer、set_index、set_color(&str,cx)、set_size(&str,cx)、set_viewer(bool,window,cx)。动效 fade:Slide::new(1.) 交叉淡入 reset(0.)+duration(1.,0.24)，缩放 zoom_slide duration(zoom?2.4:1.,0.42)、关闭 reset；经 fade.get/zoom_slide.get 处理减少动效。几何：断点 680、stage 高=w/0.8、圆角 22/18、放大镜 176、缩放 2.4×、滑动 40px。文档准确。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "voice-orb",
+      "title": "语音球",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：VoiceOrb::new(cx)/set_state/set_level/set_muted/set_transcript/set_elapsed/set_visible；动效由 PhaseClock+RAF 驱动，门控 visible && in_view && w.is_visible() && !disabled_motion。文档仅列 set_state。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "now-playing",
+      "title": "正在播放",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：Track::new(id,title,artist,duration,art)、NowPlaying::new(label,tracks)/set_playing/set_position(钳制0..duration)/set_index/set_expanded，事件 PlayerEvent；动效 animation:Slide::new(0.)→duration(expanded,0.4)，进度条 RAF。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "voice-recorder",
+      "title": "语音录音",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：VoiceMessage::new(..)/outgoing、VoiceRecorder::new(label)/with_messages/set_messages/append_message->bool/set_phase/各 *_for 作用域方法/phase()/failed_operation()；动效 stage_height:Slide::new(60.)→duration(phase_height,0.42)，phase 高度 Idle/Requesting/Recording 60、Review 136、Sending 118、Error 164。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "dictation-button",
+      "title": "听写输入",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：DictationButton::new()（无参，impl Default）、set_phase/session_id/各 *_for 作用域方法；动效 width:Slide::new(36.)→duration(..,0.24)。文档称减少动效直接到位，经查 family.rs:197/268 Slide 内部读 disabled_motion(cx)，主张成立。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "speech-player",
+      "title": "朗读播放器",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：SpeechVoice/SpeechPlayer::new(label,text)/with_voices、set_phase/set_progress/set_error/set_speed/set_voice 及 *_for；动效 mark_x/mark_width/expanded 三个 Slide，duration(..,0.22)，逐词时长由宿主派生。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "morph-loader",
+      "title": "形变加载",
+      "group": "progress",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：LoaderVariant{Dots(默认),Bars,Ring,Square}、LoaderStatus{Loading(默认),Success,Error}、MorphLoader::new(id)、with_size(f32)（仅有限且>0，默认 24）、with_stroke_width(f32)（仅有限且>0，默认 2.5；点宽 4/条宽 3）、with_tone(bool)（默认 true）、decorative(bool)、with_labels([..;3])（默认 Loading/Done/Failed）、status()/variant()、set_status(LoaderStatus,cx)、set_variant(LoaderVariant,cx)（保留循环相位）、set_visible(bool,cx)。动效常量：MORPH_SECONDS 0.46、RESULT_SECONDS 0.52、UPRIGHT_SECONDS 0.60、STROKE_STAGGER 0.035、结果缩放 0.42s（1→1.14→1）、tone 淡变 0.24s（减少动效 0.12s）、循环混合 0.18/0.24；临界弹簧重定向保留瞬时速度（Spring::aim 取当前 sample 的位置与速度）；减少动效走 Drawing 静态分支并 snap；隐藏/不可见不累计时间（last_frame=None，仅 visible 才请求帧）。文档 Motion 段全部数字（0.46s/0.52s/35ms/0.60s/420ms/240ms/120ms）与源码一致；文档 Preview 段「1700ms 返回加载」为 story 演示计时、已注明不在组件内，非缺陷。另：文档示例原缺 gpui::prelude::* 导入（cx.new 需要 AppContext trait），已在 docs 示例修正并复测可编译。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后 `kui add morph-loader` 并挂载示例，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0。",
+      "updated": "2026-11-05 12:30"
+    },
+    {
+      "id": "ai-spark",
+      "title": "智能状态光芒",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": true,
+      "motion_accepted": true,
+      "notes": "2026-11-05 color_motion 抽取后独立安装复测（本地 registry 入口，kui init --registry <repo>/registry + kui add ai-spark）：ai-spark 自动带入依赖 color_motion、text-shimmer 等；空白 workspace 用 docs/items/ai-spark.md 示例（含 with_status/set_status/with_variant Pill）编译，cargo check --workspace 原生与 wasm32-unknown-unknown 均 Finished 通过，仅 4 条复制子集未用的 family.rs 方法告警（release/delayed/sample_batch），非抽取引入。registry JSON（website/public/r/ai-spark.json）的 ai_spark.rs 内容与 registry/src 源逐字节一致（43424 字节）。",
+      "updated": "2026-11-05 09:31"
+    },
+    {
+      "id": "provider-status",
+      "title": "服务商状态",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ProviderDay/ProviderIncident/ProviderStatusItem、ProviderStatus::new(title,providers)、footnote/refresh_enabled/set_providers/set_remaining_seconds/set_error；动效 expansion:Slide::new(0.)→duration(0|1,0.24)，与文档「240 ms」一致。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "ghost-text",
+      "title": "行内文字建议",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：GhostStatus、GhostTextEvent（6 变体含 PreviewStopped）、new(label,window,cx)、plain、min_height(f32)（clamp 32..2048）、preview_suggestion、model、placeholder、value(cx)、set_value、status()、request(cx)、push_chunk(id,chunk,done,cx)、set_error。默认 delay 450ms、min_length 3、content_min_height 84。文档「Cmd/Ctrl/Alt+Right 接受一个词」经 primitives/editor.rs:631（word = k==\"right\" && (m.platform||m.control||m.alt)）核实为真；但控件自身帮助串 ghost_text.rs:80 仅写 Command/Control，漏了 Alt（源码内部帮助串不一致，未改动 registry 源码）。文档 ## API 仅列 push_chunk，未列 request/set_error/value/status/min_height/model/placeholder/plain。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "response-feedback",
+      "title": "回答反馈",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ResponseFeedback::new(id,message_id,window,cx)、rating()->Option、complete(u64,bool,cx)->()；动效 expansion:Slide::new(0.)→duration(0|1,0.24)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "agent-loop",
+      "title": "智能体循环",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：LoopCall/LoopIteration::new(context,tokens,passed,verification)、AgentLoop::new(task,iterations)、title/summary/model/set_playing/restart/set_speed/step；无 Slide，reduce=disabled_motion 分支。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "reasoning-tree",
+      "title": "推理树",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：Thought::new(id,label)/score/detail/children、ReasoningTree::new(question,thoughts,cx)、set_thoughts/set_error/set_beam_width(钳制1..3)/restart/set_playing/step；动效 stage_motion:Slide→duration(1.,0.48)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "image-generation",
+      "title": "图片生成",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：GeneratedImage::new(id,source,width,height)、ImageGeneration::new(w,cx)/models/set_prompt/generate/stop/set_progress/finish/fail；动效 visual:duration(progress|1.,0.24)。文档原写「200 ms」与源码 0.24s 不符，已改为 240 ms。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "speculative-decoding",
+      "title": "推测解码示意",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：DecodeRound::new(draft,accepted,target)（accepted .min(len)）、DecodeStatus、DecodeStats、事件 DecodeCompleted/DecodeRetry/DecodePlaybackChanged、new(rounds)、with_recorded、with_autoplay、with_retry、with_draft_cost(f32)（max(0)，默认 0.1）、set_rounds、set_status、set_visible、set_playing、restart、set_compare。动效 round_duration=0.14*len+0.64+0.18+0.02*min(landing,16)；ease=1-(1-t)^3；自动播放要求 !reduced。文档三个事件名均正确。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "image-reveal",
+      "title": "图片生成显现",
+      "group": "media",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ImageReveal::new(label,aspect)/begin/set_preview/set_progress/finish/fail/status()；动效 progress:Slide::new(0.)→duration(0|progress|1.,0.16)，自上而下裁剪揭示。文档原写「200 ms」与源码 0.16s 不符，已改为 160 ms。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "prompt-cache",
+      "title": "提示缓存示意",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：CacheSegment/CacheResult/CacheRequest/CacheSnapshot/PromptCache::new(segments,snapshot)/with_recorded/with_change_segment/set_snapshot/set_segments/set_change_armed/request_next/resolve，事件 PromptCacheAction；动效 highlight:Slide::new(0.)→duration(1.,0.52)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "meeting-summary",
+      "title": "会议纪要",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：MeetingQuote/MeetingPoint/MeetingAction/MeetingData、MeetingStatus{Summarizing,Ready,Error}、MeetingSummaryEvent{ActionChanged,Send,Cancel,Regenerate,CopyResult}、new(data)、targets(Vec)（默认 Linear、Notion）、set_data、set_status、finish_send(ticket,result,cx)。无 Slide，状态即时更新。文档准确（「状态即时更新」属实）；## API 仅列 finish_send。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "ai-workflow",
+      "title": "AI 工作流",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：WorkflowKind、WorkflowStatus、WorkflowStep::new+with_detail+with_path、WorkflowPath::new、WorkflowResult::new+with_duration+with_path、WorkflowEvent{RunStep,Cancel,Changed,Completed}、new(title,description,steps,paths)、with_catalog、with_simulated、set_visible、set_steps、start、stop、resolve、retry。动效 rail:Slide::new(0.)，推进时 rail.reset(0.)+rail.duration(1.,0.2,cx) 即 200ms；标记在 progress<0.995 时显示，减少动效由 rail.get 处理。文档原写「240ms 连接线填充」，与源码 0.2s 不符（缺陷，已改为 200ms）。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "training-run",
+      "title": "训练任务",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：TrainingRunStatus、TrainingLoss::new、TrainingEvent::new+with_step、TrainingRunSnapshot::new(name,model,total_steps,epochs)（各 max(1)）、TrainingRunAction{Pause,Resume,Cancel,Retry,Restart,Deploy}、TrainingRunRequest{id,action}、new(snapshot)、with_actions、with_loss_ceiling(f32)（有限且>0，默认 2.）、with_simulated、set_snapshot、resolve(id,result,cx)。无 Slide；取消需双击、窗口 Duration::from_secs(3)。文档准确（「三秒」「默认 2」属实）；## API 仅列 resolve，未列 with_simulated/set_snapshot。 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add <该 id>` 并挂载 docs/items 示例（导入前缀改 crate::ui::），cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；65 项未验收组件亦经同一空白 workspace 批量 add + 编译通过。",
+      "updated": "2026-11-05 12:29"
+    },
+    {
+      "id": "mixture-of-experts",
+      "title": "专家混合路由",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：MoeExpert/MoeToken/MixtureOfExperts::new(experts,tokens)/with_simulated/with_parameters/with_capacity_factor/set_data/set_visible/set_paused/set_top_k；动效 PhaseClock+RAF，链接用 smoothstep t*t*(3-2t)，布局断点 568px，无 Slide。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "agent-handoff",
+      "title": "人工转接",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：HandoffMessage/HandoffSummary::new、AgentHandoff::new(title,task,summary,window,cx)、subtitle/estimate/set_messages/append_message/set_summary/stage()/request_human/cancel_transfer/connect/fail_transfer/set_resolved/finish_send；动效 summary_motion:Slide::new(1.)→duration(summary_open,0.24)。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "llm-cost-calculator",
+      "title": "模型费用估算",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：LlmModelPrice::new(id,name,provider,input,output)/with_cached_input、LlmUsage::new(input,output,requests_per_day)（days 30）、compute_llm_cost(model,usage)->Option<LlmCost>（纯函数）、LlmCostCalculator::new(models,usage,cx)/with_simulated/set_usage/set_models，事件 LlmCostEvent。动效 无 Slide，仅由子 Slider 弹簧驱动（文档「立即更新」属实）。文档原把 reset 列为宿主 API，实际为私有 fn（仅面板内按钮调用），已改为说明其为视图内部方法。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，每项 docs/items 示例改写为 crate::ui:: 后挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0；且每项单独在全新空白工程 kui add <该 id> + 挂载示例，原生与 wasm32 均 exit=0。",
+      "updated": "2026-11-05 12:22"
+    },
+    {
+      "id": "agent-cursor",
+      "title": "智能体光标",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：DocBlock::new/AgentCursor::new(label,blocks)/agent/status()/blocks()/set_visible/set_blocks/set_position(Point<Pixels>)/set_position_for/set_target/run/stop/finish/fail/accept/undo，事件 AgentCursorEvent；动效 x/y:Slide::new(0.)→duration(..,宿主给秒)，减少动效直接跳。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "link-unfurl",
+      "title": "链接预览",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：LinkPreview::new/with_image、LinkUnfurl::new(label,window,cx)/with_simulated/set_visible/set_text/request_preview/resolve_preview/send/resolve_send；动效 presence:Slide::new(0.)→展开 duration(1.,0.48)、关闭 duration(0.,0.18)。catalog 的 components:[textarea] 属实（源内 use components::textarea::Textarea）。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    },
+    {
+      "id": "tone-tuner",
+      "title": "语气调整",
+      "group": "intelligence",
+      "user_default_pass": false,
+      "source_reviewed": true,
+      "native_wasm_passed": true,
+      "install_passed": true,
+      "visual_accepted": false,
+      "motion_accepted": false,
+      "notes": "公开 API：ToneTuner::new(label,text,window,cx)/set_text/settings()/value()/status()/stop/set_settings/rewrite/finish/fail；无自有 Slide，交由两个 Slider 子控件与编辑器过渡；changed_words 用 LCS 标记改动词。 独立安装验收（本会话实测）：空白 workspace 内 kui init + `kui add <全部65项未验收组件>` + sync-mod，把每项 docs/items 的 Rust 示例改写为 crate::ui:: 后逐个挂载，cargo check --workspace 原生 exit=0、wasm32-unknown-unknown exit=0（仅 6 条复制子集未用到的 family/preview 死代码告警）。website/public/r/<id>.json 内嵌文件内容与 registry/src 源逐字节一致。",
+      "updated": "2026-11-05 12:21"
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-03",
+      "component": "108个既有组件",
+      "note": "按用户要求默认通过；根据 Git 基线 catalog 的 component 项识别，不按当前侧栏顺序猜测。"
+    },
+    {
+      "date": "2026-11-03",
+      "component": "ai-spark",
+      "note": "公开实现参数重写完成；7项组件+2项story回归、原生/WASM检查通过；实拍与安装收尾中。"
+    },
+    {
+      "date": "2026-11-03 16:56",
+      "component": "ai-spark",
+      "note": "公开实现参数已核对；8项控件和2项story测试、Clippy、原生/WASM检查、空白项目独立安装编译通过。修复首次启动时间溢出，中文网页已实测到完成态回正；同尺寸逐帧视觉/动效验收仍待完成。"
+    },
+    {
+      "date": "2026-11-03",
+      "component": "网站右上角主题键",
+      "note": "按用户截图修正月牙：外弧半径9、内弧半径6及圆滑端头；按钮仍为34.59375×32 CSS px。已刷新本地环图页并核对实拍，未提交或发布。"
+    },
+    {
+      "date": "2026-11-03 18:09",
+      "component": "rating",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对；修正三种尺寸、半星焦点、Home/清除、鼠标拖选、物理回弹及受控状态。原生回归通过，WASM、安装、视觉与动效完整验收仍待完成。"
+    },
+    {
+      "date": "2026-11-03 18:09",
+      "component": "radio-cards",
+      "note": "公开 TSX/CSS 已核对；修正最小列宽网格、奇数末项宽度、首次描边淡入、颜色过渡、Home/End、禁用及宿主控制。原生回归通过，WASM、安装与实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-04 23:33",
+      "component": "radio-cards",
+      "note": "原生 cargo test -p kense-kui 184/184 通过（含 6 项 radio_cards RTL/网格/键盘）；WASM：kense-kui wasm32 --no-default-features 与 kui-web wasm32 均通过；kui-web 画廊 WASM 构建成功。"
+    },
+    {
+      "date": "2026-11-04 23:33",
+      "component": "radio-cards",
+      "note": "kui add radio-cards 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（代理脚本 /tmp/check-touched-installs.py，按 docs/items 文档示例挂载）。"
+    },
+    {
+      "date": "2026-11-04 23:34",
+      "component": "radio-cards",
+      "note": "公开 TSX/CSS 已核对；RTL 网格逐行镜像已按显式行列放置实现，Left/Right 反转、Up/Down 与 Home/End 不变，并有单测覆盖（6/6 通过）。原生 cargo test -p kense-kui 184/184；kense-kui wasm32 --no-default-features 与 kui-web wasm32 通过。kui add radio-cards 到空白工程后原生与 wasm32 双目标 cargo check 通过（install_passed）。视觉与动效实拍仍待完成，不得标为通过。"
+    },
+    {
+      "date": "2026-11-04 23:34",
+      "component": "rating",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对；三种尺寸、半星独立焦点、Home/清除、鼠标拖选、物理回弹及受控状态已修正。原生 cargo test -p kense-kui 184/184；kense-kui wasm32 --no-default-features 与 kui-web wasm32 通过；kui add rating 到空白工程后原生与 wasm32 双目标 cargo check 通过（已补 registry 清单中缺失的 primitives/sizing.rs，install_passed）。读数模糊与逐词交叉淡出仅近似 CSS blur，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-04 23:34",
+      "component": "rating",
+      "note": "kui add rating 到空白工程：registry 清单原先漏列 primitives/sizing.rs，导致按文档示例挂载时 crate::ui::primitives::Size 无法解析、gpui::Size 泛型回退（8 处错误）。已在 tools/catalog/src/library.rs 的 rating 条目补上 sizing，重建 registry；现原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 00:26",
+      "component": "radio-cards",
+      "note": "公开 TSX/CSS 已核对：RTL 网格按显式行列放置逐行镜像（非 row-reverse 顺序反转），Left/Right 反转、Up/Down 与 Home/End 不变，6/6 单测通过；原生 cargo test -p kense-kui 184/184，kense-kui/kui-web 双 wasm32 检查通过；kui add 到空白工程后原生与 wasm32 双目标 cargo check 通过。真实浏览器（WASM 画廊）已目视：LTR/RTL×明/暗、320px 收起为单列、中文文案均正确，指示点在 RTL 落到行首。悬停/按下/焦点/键盘/触摸、动效中间与结尾帧、125% 缩放与 ≤1px 几何量测尚未完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 00:28",
+      "component": "rating",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对；三种尺寸、半星独立焦点、Home/清除、鼠标拖选、物理回弹及受控状态已修正。修复 registry 清单缺列 primitives/sizing.rs 的安装缺陷（原会致文档示例 crate::ui::primitives::Size 解析失败、回退 gpui::Size 泛型并报 8 错）；重建后 kui add 到空白工程，原生与 wasm32 双目标 cargo check 通过；原生 184/184，双 wasm32 检查通过。真实浏览器已目视 star 组在 LTR/RTL、明/暗下渲染正确（星形为矢量几何，不随书写方向镜像）。悬停/按下/拖选/键盘/触摸、填充与逐词模糊的中间与结尾帧、125% 缩放与 ≤1px 几何量测尚未完成，读数模糊仅近似 CSS blur，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "morph-loader",
+      "note": "文档示例补 gpui::prelude::* 导入（原示例用 cx.new 却缺 AppContext trait，复制安装后无法编译，已在空白工程复现并修复）。Native+wasm32 cargo check 通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "ai-spark",
+      "note": "文档示例补 gpui::prelude::* 导入（原示例用 cx.new 却缺 AppContext trait，复制安装后无法编译，已在空白工程复现并修复）。Native+wasm32 cargo check 通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "billing-toggle",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "billing-toggle",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "toggle-group",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "toggle-group",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "scrub-input",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "scrub-input",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "animated-counter",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "animated-counter",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "split-bar",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "split-bar",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "funnel-chart",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "funnel-chart",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "realtime-stream",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "realtime-stream",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "ghost-text",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过（文档示例可直接挂载）。源码参数已核对，视觉与动效实拍仍待完成，不得标为视觉或动效通过。"
+    },
+    {
+      "date": "2026-11-05 05:55",
+      "component": "ghost-text",
+      "note": "kui add 到空白工程后，原生与 wasm32 双目标 cargo check --workspace 通过；kense-kui 与 kui-web 双 wasm32 检查通过。源码参数已核对，视觉与动效实拍仍待完成。"
+    },
+    {
+      "date": "2026-11-05 06:36",
+      "component": "morph-select",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对：触发器 36px 高、8px 圆角（surface_radius token）与同族 select 一致；下拉内搜索编辑器复用 Editor，包装层 flex_1+min_w_0 缺 h_full 导致 Editor size_full 高度塌成 0、paint 的 content mask 裁掉全部文字（占位符与输入文本均空白）——已补 .h_full() 修复，并比对 registry/src/primitives/field.rs:240 的既有正确写法确认。真实浏览器（WASM 画廊）已目视：真值点击展开后输入 \"rev\" 正确过滤为 \"In review\"，占位符与输入文本均渲染；320px 窄屏 + zh 下触发器显示\"进行中\"。悬停/按下/焦点/键盘/触摸、动效中间与结尾帧、125% 缩放尚未完成。"
+    },
+    {
+      "date": "2026-11-05 06:36",
+      "component": "money-input",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对：金额 30px MEDIUM、行高 36px，符号与币种选择器同族布局，外框读 surface_radius token。金额数字空白同属 Editor 包装层缺定高缺陷——包装层由 flex_1+min_w_0+h(px(36.)) 收窄为显式 .h(px(36.)) 定高后，Editor 的 size_full 盒不再塌成 0，paint 的 content mask 不再裁掉数字。真实浏览器（WASM 画廊）已目视：$125.00 与 +$10/+$50 快捷加值正确渲染；320px 窄屏 + zh 下显示\"金额\"与 $125.00。悬停/按下/焦点/键盘/触摸、提交/成功/失败态、动效中间与结尾帧、125% 缩放尚未完成。"
+    },
+    {
+      "date": "2026-11-05 06:37",
+      "component": "scrub-input",
+      "note": "补记修复后的编译证据：CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功（kense-kui + kui-story + kui-web release 编译通过，WASM 32.6MB→23.9MB）；cargo check -p kense-kui 通过；kui add scrub-input,morph-select,money-input 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 06:37",
+      "component": "morph-select",
+      "note": "CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功；cargo check -p kense-kui 通过；kui add 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 06:37",
+      "component": "money-input",
+      "note": "CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功；cargo check -p kense-kui 通过；kui add 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 06:37",
+      "component": "scrub-input",
+      "note": "kui add 到空白工程（probe）后原生与 wasm32 双目标 cargo check --workspace 均通过，文档示例片段替换 kui:: → crate::ui:: 后可独立编译。"
+    },
+    {
+      "date": "2026-11-05 06:37",
+      "component": "morph-select",
+      "note": "kui add 到空白工程（probe）后原生与 wasm32 双目标 cargo check --workspace 均通过，文档示例片段替换 kui:: → crate::ui:: 后可独立编译。"
+    },
+    {
+      "date": "2026-11-05 06:37",
+      "component": "money-input",
+      "note": "kui add 到空白工程（probe）后原生与 wasm32 双目标 cargo check --workspace 均通过，文档示例片段替换 kui:: → crate::ui:: 后可独立编译。"
+    },
+    {
+      "date": "2026-11-05 06:53",
+      "component": "morph-select",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对：触发器 44px 高、8px 圆角（surface_radius token）与同族 select 一致。修复两处真实缺陷：(1) 下拉内搜索编辑器包装层 flex_1+min_w_0 缺 h_full，Editor 的 size_full 高度塌成 0，paint 的 content mask 裁掉占位符与输入文本——补 .h_full()，比对 registry/src/primitives/field.rs:240 正确写法确认；(2) 收起态宽度公式 measure(caption)+50 未覆盖头部 chrome（pl14+pr36+gap8+caret14=72px），124px 盒内标签可用宽仅 52px 而 \"In progress\" 需 74px，文本折行后被 h(px(20.))+overflow_hidden 裁成 \"In\"——按本文件自身声明的 chrome 改为 +74，并给标签加 whitespace_nowrap（KUI 既有做法）。实拍验证：英文 \"In progress\"、中文 \"进行中\" 均完整渲染，展开后输入 \"rev\" 正确过滤为 \"In review\"。悬停/按下/焦点/键盘/触摸、动效中间与结尾帧尚未完成。"
+    },
+    {
+      "date": "2026-11-05 06:53",
+      "component": "morph-select",
+      "note": "CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功（含宽度与 nowrap 修复）；cargo check -p kense-kui 通过；kui add morph-select 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过；rustfmt --check registry/src/components/morph_select.rs 无 diff。"
+    },
+    {
+      "date": "2026-11-05 06:53",
+      "component": "scrub-input",
+      "note": "公开 TSX/CSS 与动效令牌已逐项核对：控件高 36px、标签可拖拽、算术表达式编辑、单位切换。修复三处：(1) Editor 包装层 flex_1+min_w_0 缺 h_full，Editor 的 size_full 高度塌成 0、paint content mask 裁掉 \"Width 176\"/\"Rotation 45\" 全部文字——补 .h_full()；(2) 外框圆角硬编码 px(2.)，与 KUI 矩形控件 8px token（surface_radius，DESIGN.md:84/91）及同族 morph_select/money_input 不一致——改读 crate::foundation::surface_radius(cx)；(3) 22px 单位徽标硬编码 px(6.)，对齐 DESIGN.md:91\"嵌套外露圆角同用 8px\"与 billing_toggle 徽标做法，改读同一 token。实拍几何量测：控件高实测 36px（0px 误差），右上角圆弧像素拟合 r=8.0px。真值拖拽 (258,229)→(358,229) 值由 176 接续变为 226，未重置起点。320px 窄屏+zh+暗色、125% 缩放均正确。悬停/按下/焦点/键盘/触摸、动效中间与结尾帧尚未完成。"
+    },
+    {
+      "date": "2026-11-05 06:54",
+      "component": "scrub-input",
+      "note": "最终证据：CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功；cargo check -p kense-kui 通过；cargo test -p kense-kui 184/184 通过；cargo run -p kui-build -- build 与 verify-preview 通过（preview=source，234 文件哈希一致），三个组件的 registry JSON 内容与 registry/src 源文件逐字节相同；kui add 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 06:54",
+      "component": "morph-select",
+      "note": "最终证据：CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功；cargo check -p kense-kui 通过；cargo test -p kense-kui 184/184 通过；cargo run -p kui-build -- build 与 verify-preview 通过（preview=source，234 文件哈希一致），三个组件的 registry JSON 内容与 registry/src 源文件逐字节相同；kui add 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 06:54",
+      "component": "money-input",
+      "note": "最终证据：CARGO_BUILD_JOBS=1 ./scripts/build-web.sh 重建成功；cargo check -p kense-kui 通过；cargo test -p kense-kui 184/184 通过；cargo run -p kui-build -- build 与 verify-preview 通过（preview=source，234 文件哈希一致），三个组件的 registry JSON 内容与 registry/src 源文件逐字节相同；kui add 到空白工程后原生与 wasm32 双目标 cargo check --workspace 均通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "meeting-summary",
+      "note": "本轮源码核对：矩形表面圆角由 px(10/12/14.) 硬编码改为读取 crate::foundation::surface_radius(cx)（KUI radius.md=8px，DESIGN.md 第84/95/122行），这些组件无 Arc 同名实现，规格以 DESIGN.md 为准。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "meeting-summary",
+      "note": "cargo check -p kense-kui 通过；cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features 通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "meeting-summary",
+      "note": "kui add 到空白工程后 native 与 wasm32 均 cargo check --workspace 通过（脚本 /tmp/check-touched-installs.py，六个组件同批通过）。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "ai-workflow",
+      "note": "本轮源码核对：矩形表面圆角由 px(10/12/14.) 硬编码改为读取 crate::foundation::surface_radius(cx)（KUI radius.md=8px，DESIGN.md 第84/95/122行），这些组件无 Arc 同名实现，规格以 DESIGN.md 为准。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "ai-workflow",
+      "note": "cargo check -p kense-kui 通过；cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features 通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "ai-workflow",
+      "note": "kui add 到空白工程后 native 与 wasm32 均 cargo check --workspace 通过（脚本 /tmp/check-touched-installs.py，六个组件同批通过）。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "training-run",
+      "note": "本轮源码核对：矩形表面圆角由 px(10/12/14.) 硬编码改为读取 crate::foundation::surface_radius(cx)（KUI radius.md=8px，DESIGN.md 第84/95/122行），这些组件无 Arc 同名实现，规格以 DESIGN.md 为准。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "training-run",
+      "note": "cargo check -p kense-kui 通过；cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features 通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "training-run",
+      "note": "kui add 到空白工程后 native 与 wasm32 均 cargo check --workspace 通过（脚本 /tmp/check-touched-installs.py，六个组件同批通过）。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "tldr-toggle",
+      "note": "本轮源码核对：矩形表面圆角由 px(10/12/14.) 硬编码改为读取 crate::foundation::surface_radius(cx)（KUI radius.md=8px，DESIGN.md 第84/95/122行），这些组件无 Arc 同名实现，规格以 DESIGN.md 为准。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "tldr-toggle",
+      "note": "cargo check -p kense-kui 通过；cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features 通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "tldr-toggle",
+      "note": "kui add 到空白工程后 native 与 wasm32 均 cargo check --workspace 通过（脚本 /tmp/check-touched-installs.py，六个组件同批通过）。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "speculative-decoding",
+      "note": "本轮源码核对：矩形表面圆角由 px(10/12/14.) 硬编码改为读取 crate::foundation::surface_radius(cx)（KUI radius.md=8px，DESIGN.md 第84/95/122行），这些组件无 Arc 同名实现，规格以 DESIGN.md 为准。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "speculative-decoding",
+      "note": "cargo check -p kense-kui 通过；cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features 通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "speculative-decoding",
+      "note": "kui add 到空白工程后 native 与 wasm32 均 cargo check --workspace 通过（脚本 /tmp/check-touched-installs.py，六个组件同批通过）。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "product-gallery",
+      "note": "本轮源码核对：矩形表面圆角由 px(10/12/14.) 硬编码改为读取 crate::foundation::surface_radius(cx)（KUI radius.md=8px，DESIGN.md 第84/95/122行），这些组件无 Arc 同名实现，规格以 DESIGN.md 为准。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "product-gallery",
+      "note": "cargo check -p kense-kui 通过；cargo check -p kense-kui --target wasm32-unknown-unknown --no-default-features 通过。"
+    },
+    {
+      "date": "2026-11-05 07:07",
+      "component": "product-gallery",
+      "note": "kui add 到空白工程后 native 与 wasm32 均 cargo check --workspace 通过（脚本 /tmp/check-touched-installs.py，六个组件同批通过）。"
+    },
+    {
+      "date": "2026-11-05 08:07",
+      "component": "radio-cards",
+      "note": "第一帧不跳位与 RTL 已由浏览器实测补上：900px 视口连续抓取 40 帧（间隔 55ms），第 0 帧只含 List 分组、网格非背景像素为 0，第 1 帧起逐字节一致（稳定两列 206.67px + 一行一项），外层网格与选中轮廓同帧扣留，不再用测量前的错误列数绘制轮廓。RTL：启动前注入 dir=rtl 后列序镜像、文案右对齐、圆点移到行尾、轮廓跟随所选卡片，方向键反转与单测一致。125% 缩放实测外卡宽 206.4 与 100% 的 206.67 相差 <1px、gap 约 10px、圆点外框 17.6px(css)、内点 17.6px、外卡圆角约 8px，均在 1 CSS px 内。交互：悬停卡片边框由 (229,229,229) 变 (163,163,163) 而邻卡不变；按下同法变深；Tab×2 焦点环落在 Bulk；触摸点按 One bag 成功改选并移动轮廓。320px 中文单列、盎司/磅/低因字形正常；减少动效下与静止态 0 像素差异。仍未做：动效中间/结尾帧 ≤2 帧比对、深色下的逐状态量测、以及缩放下的触摸拖拽。"
+    },
+    {
+      "date": "2026-11-05 08:08",
+      "component": "radio-cards",
+      "note": "第一帧不跳位与 RTL 已由浏览器实测补上：900px 视口连续抓取 40 帧（间隔 55ms），第 0 帧只含 List 分组、网格非背景像素为 0，第 1 帧起逐字节一致（稳定两列 206.67px + 一行一项），外层网格与选中轮廓同帧扣留，不再用测量前的错误列数画轮廓。RTL：启动前注入 dir=rtl 后列序镜像、文案右对齐、圆点移到行尾、轮廓跟随所选卡片，方向键反转与单测一致。125% 缩放实测外卡宽 206.4 与 100% 的 206.67 相差 <1px、gap 约 10px、圆点外框 17.6px(css)、外卡圆角约 8px，均在 1 CSS px 内。交互经浏览器实测：浅色悬停卡边框 (229,229,229)→(163,163,163)、按下同法变深、Tab×2 焦点环落在 Bulk、触摸点按 One bag 成功改选并移动轮廓；深色同样成立（悬停边框 (42,42,42)→(82,82,82)，邻卡不变）。320px 中文单列、盎司/磅/低因字形正常。仍未做：动效中间/结尾帧与 60Hz 同一速度的 ≤2 帧比对、缩放下的触摸拖拽、以及跨行快速切换的连续抓帧。"
+    },
+    {
+      "date": "2026-11-05 08:32",
+      "component": "rating",
+      "note": "rating.rs 源码复核：逐星错开填充、半星裁剪、键盘 roving radio、触摸方向识别与 word cross-fade 均已按词实现。2026-11-05 修复：GPUI 0.3.10 在焦点元素 key-up 合成点击，导致 Enter/Space 选中后立即被 pointer 的 allow_clear 路径清零；on_click 现区分 ClickEvent::Keyboard 与指针点击。"
+    },
+    {
+      "date": "2026-11-05 08:32",
+      "component": "rating",
+      "note": "2026-11-05 网页实测 900×760 浅色英文。悬停第3星预览 3/5 显示 Good，离开恢复；按下第4星宽度满、高度 21（按压缩放中）；跨星拖选到第5星提交 5；拖出回起点松开仍为 1，未误触清除。键盘：点击获焦后 → 到 3/5、Home=1、End=5、数字4=4、Backspace/Delete=0；已提交4后 Enter/Space 连按两次仍为4（修复前会清零），指针再点同星仍按 allow_clear 清零。触摸轻点第3星提交 3/5 并展开说明面板。深色悬停/已提交橙色描边正常、禁用态全灰。减少动效与常规态一致。320px 中文五颗星不换行、非常棒与说明文案完整无缺字。125% 缩放星形 22.4 CSS px（100% 22）、星距 37.6（38），均在 1px 内。未覆盖：半星独立焦点、受控宿主确认、尺寸表逐项网页实测。"
+    },
+    {
+      "date": "2026-11-05 08:32",
+      "component": "rating",
+      "note": "2026-11-05 逐星填充与变词中间态已采样：以 0.1 倍速时钟（pre-navigation 缩放 performance.now，GPUI wasm 时钟即 web_time::Instant）抓取 18 帧（间隔 120ms，raw capture 约 190-240ms/帧）。每颗星依次晚约 1 帧到达峰值并各自过冲到约 291 橙色像素后回落并稳定在 261，形成 0.035s 逐星错开；第4帧同时可见第3星半填充、第4星淡入、旧词 Good 残影与新词叠加、说明面板高度仍在增长（非硬切换）。退出态：拖出回起点释放后读数回到 1/5，说明面板收起。减少动效下已提交态与常规态像素一致。局限：仅覆盖变词+逐星填充中间态，未与同速 60Hz 基线逐帧比对，不声明帧级一致或稳定 60fps；0.26s 弹簧与 0.4s 已提交弹簧未单独测曲线。"
+    },
+    {
+      "date": "2026-11-05 08:34",
+      "component": "rating",
+      "note": "2026-11-05 独立安装验收：`kui init` + `kui add rating`（打包 JSON 入口）+ `kui sync-mod` 后在空白 workspace 用 docs/items/rating.md 的示例编译，`cargo check --workspace` 原生与 wasm32-unknown-unknown 均通过。复制源码仅产生 family.rs 未用方法（release/delayed/sample_batch）警告，属安装子集预期，非本次改动。"
+    },
+    {
+      "date": "2026-11-05 08:34",
+      "component": "radio-cards",
+      "note": "2026-11-05 独立安装验收：`kui init` + `kui add radio-cards`（本地 registry 入口）+ `kui sync-mod` 后在空白 workspace 用 docs/items/radio-cards.md 的示例编译，`cargo check --workspace` 原生与 wasm32-unknown-unknown 均通过。警告仅为复制源码子集未用的 family 方法，非本次改动。"
+    },
+    {
+      "date": "2026-11-05 08:41",
+      "component": "radio-cards",
+      "note": "2026-11-05 网页动效实测（900×760 浅色英文，?story=radio-cards，0.1 倍速时钟 performance.now 缩放使 0.42s 曲线展开到约 25 帧）：默认选中「Two bags」（卡片 x347..552），点「One bag」后选中环从 348..551 平移到 131..335，位移 217px，左右两条边逐帧同幅移动（刚性平移，无拉伸），途中约 20 个中间帧，帧间位移 5.9/6.7/8.0/6.7/6.0/4.4/4.2/4.2/3.7/3.1/2.9/3.0/2.6/2.3/2.4/2.1/1.9/1.7/1.3/1.0/1.0/1.0/0，单调减速无回弹，符合 registry/src/components/radio_cards.rs:70-73 的 Slide 重定向（duration(x,0.42)，ω=5.236/0.42=12.47）；点击到完全静止 0.61s 引擎时间（名义 0.42s 可视时长，临界阻尼弹簧全静止约为其 1.44 倍）。圆点填充自 radio_cards.rs:412 的 indicators[i].duration(selected,0.26)：实测旧点墨量 244→224→60→0、新点 0→76→267→286(过冲)→244 回落，两帧内同时可见旧点半清、新点半满（交叉淡入淡出）。深色/320px/125% 未在本项动效复测；本采样未与同速 60Hz 基线逐帧比对，故不声明帧级一致。"
+    },
+    {
+      "date": "2026-11-05 08:44",
+      "component": "ai-spark",
+      "note": "2026-11-05 color_motion 抽取后回归：color_motion 已从各组件私有实现提取为 registry/src/primitives/color_motion.rs（共享 ColorFade、mix），ai-spark、rating、radio-cards 三者均改为 use crate::primitives::color_motion，catalog 条目（tools/catalog/src/library.rs）primitives 列表已各自包含 color_motion。空白 workspace 复测 `kui init` + `kui add ai-spark`（打包入口，含 text-shimmer 依赖）+ `kui sync-mod`，用 docs/items/ai-spark.md 的示例编译：`cargo check --workspace` 原生与 wasm32-unknown-unknown 均通过。同一批同时安装 ai-spark、rating、radio-cards 三个真实互不干扰，仅产生复制源码子集未用的 family.rs 方法（release/delayed/sample_batch）警告，非抽取引入。"
+    },
+    {
+      "date": "2026-11-05 08:51",
+      "component": "billing-toggle",
+      "note": "2026-11-05 网页实测（900×760 浅色/深色英文，?story=billing-toggle）。初始 Monthly 被选中：标签「Billing period」，按月/按年段，选中段为抬起的 surface，未选段显示绿色「Save 20%」徽标；点击 Yearly 后 surface 移到右段，徽标与标签完整。深色下 surface(25,25,25) 与轨道(48,48,48) 分离清晰，绿色徽标可辨。键盘：点击 Monthly 获焦后 → 移到 Yearly。触摸：Input.dispatchTouchEvent 轻点 Yearly 改选成功。重复点击当前段不移动 surface、不重复发事件。悬停仅把未选标签压到 secondary（源码 billing_toggle.rs:300），按下无独立视觉态（选择在松开时触发，属设计而非缺陷）。320px 中文：计费周期/按月/按年/节省 20% 全部完整、不换行、无方框缺字。125% 缩放：Monthly surface 宽 101 设备像素=80.8 CSS px（100% 为 81）、高 39=31.2（100% 31）、x 相同，均在 1 CSS px 内。未逐项量测对比度数值，也未与官方站点同态并排比对（沿用此前已记录的源码级对齐）。"
+    },
+    {
+      "date": "2026-11-05 08:51",
+      "component": "billing-toggle",
+      "note": "2026-11-05 网页动效实测（深色高对比下以 0.1 倍速时钟抓帧，?story=billing-toggle）：点击 Yearly 后选中 surface 同时位移与变宽——左边缘 274→351、宽度 85→134（设备像素），两者逐帧单调且减速，24 帧内到约 93% 后继续以递减步长收敛到 x≈357、宽≈137，与 billing_toggle.rs:57-58 对 x 与 width 均为 duration(…,0.34) 的临界阻尼弹簧（ω=5.236/0.34=15.4）一致，因此右段因「Save 20%」徽标更宽时 surface 是平滑变宽而非瞬切。减少动效下同一路径单帧由 274..358/宽85 直接变为 357..493/宽137，无中间帧，印证 reset 直贴目标。键盘与触摸改选同样驱动该位移。未与同速 60Hz 基线逐帧比对，故不声明帧级一致；未单独量测弹簧过冲（该段目标宽度大于起点，观测为单调放大）。"
+    },
+    {
+      "date": "2026-11-05 08:55",
+      "component": "toggle-group",
+      "note": "2026-11-05 网页实测（900×760 浅色/深色英文，?story=toggle-group）。两个组同页：单选的「Alignment」（Left/Center/Right，Left 已选，共享选中面）与多选的「Formatting」（Bold/Italic/Underline，Bold 已选，各段独立填充）。深色下选中面(55,55,55)、轨道(25,25,25)、面板(36,36,36) 分离清晰。多选独立填充实测：点 Italic 后 Bold 与 Italic 同时为 55 实填；再点 Bold 关闭后仅 Italic 保持 55 实填、Bold 只余悬停色(48)，证明多项填充各自独立而非共享一个面。键盘：点击 Left 获焦后连按两次 → 选中面落到 Right 且焦点环可见。320px 中文：左对齐/居中/右对齐、粗体/斜体/下划线 均完整不换行、无方框缺字。边界：125% 缩放下 story 面板因有效 CSS 宽度变化而重排（面板移到内联边缘、轨道整体左移），故本项不做 125% 的 ≤1px 几何声明；单段宽度由标签文字+内边距决定，未逐项量测对比度数值。"
+    },
+    {
+      "date": "2026-11-05 08:55",
+      "component": "toggle-group",
+      "note": "2026-11-05 网页动效实测（深色高对比、0.1 倍速时钟抓帧，?story=toggle-group）：单选组点击 Center 后共享选中面同时位移与变宽——左边缘 275→317、宽度 46→63（设备像素），24 帧内单调减速（步长 5.9→1.0）持续收敛，与 toggle_group.rs:59-60 对 x 与 width 均为 duration(…,0.42) 的临界阻尼弹簧（ω=12.47）一致，故各段因标签长短不同时选中面平滑变宽而非瞬切。多选组各段填充为 independent Slide（fills，snappy），点 Italic 后其自身填充升起、Bold 保持，互不牵连。减少动效下单选面单帧由 275..320/宽46 直接变为 323..387/宽65，无中间帧。未与同速 60Hz 基线逐帧比对，故不声明帧级一致；多选填充的单独曲线未逐帧采样（仅确认终态独立）。"
+    },
+    {
+      "date": "2026-11-05 09:21",
+      "component": "money-input",
+      "note": "2026-11-05 网页实测（900×760 浅色英文，?story=money-input）：允许区间提示「$0.00 to $10,000.00」渲染在快捷加币片右侧同一行（墨色 rgb(154,154,154)），与官方 max 文案一致的 $10,000.00 上限。键入 9999 并回车后金额为 $10,000.00 封顶（field 从 9,999.00 吸附到上限，未越过）。点 +$50 时连按两次均无变化，证明上限被强制而非静默截断。封顶后两个加币片同时变暗（opacity 0.45 的 at_max 态）并保持可点。深色（900×760）实测：$10,000.00 封顶、两片变暗、提示闪为深色 warning token 0xfbbf24；320px 中文（?lang=zh）实测：标签「金额」、加币片、区间提示同一行完整可见不换行不截断，无横向溢出。静态几何未逐像素与官方像素比对，故不声明 ±1px 一致；本轮未做 125% 缩放复测。"
+    },
+    {
+      "date": "2026-11-05 09:21",
+      "component": "money-input",
+      "note": "2026-11-05 网页动效实测（900×760 浅色英文，press 后 release 采样 22 帧）：拒绝时金额文本左缘 292→297（+5px）向右应变，随后逐帧 296/294/293/293/292 单调衰减回到 292，约 5 帧静止，无过冲、无回弹，符合 registry/src/components/money_input.rs refuse() 的 Slide::release(0., toward*160., 0.42) 临界阻尼 KICK 弹簧（官方 physical(.42,0)+velocity toward*160）。同次 refusal 中区间提示墨色由灰 rgb(154,154,154) 变为琥珀（warning，浅色 token 0xd97706 渲染为 rgb(224,152,69)），保持约 1.2s 后在 settled 采样回落为灰，对应 1400ms hold。reduced motion（prefers-reduced-motion: reduce）实测：release 后 292 全程不变（零应变位移），提示仍由灰转琥珀并在 settled 采样回落为灰——说明 reduced motion 下由 1400ms 定时器清态。深色下同样观察到琥珀闪烁。未与同速 60Hz 基线逐帧对比，故不声明帧级一致；应变幅度、衰减帧数、闪烁时长均为本采样实测值。"
+    },
+    {
+      "date": "2026-11-05 09:26",
+      "component": "ai-spark",
+      "note": "2026-11-05 网页实测（?story=ai-spark，900×760 浅色英文）：五个状态 nub（Idle/Thinking/Writing/Done/Error）逐一实测，标记本体随状态变化——Idle 为对称八芒、Thinking 为倾斜散开、Writing 为带点星芒、Done 为满星、Error 为红色星芒；标签胶囊同步为 Ready/Thinking/Writing/Done/Couldnt finish 且完整不截断；右侧 Pill/Foreground 变体与 12/16/20/24/32/48 尺寸阶梯随状态同步着色。深色（900×760）实测：Error 态标记为深色红、胶囊与阶梯文字可辨、面板与卡片分离清楚。320px 中文（?lang=zh）实测：状态 nub 换行为功能区、标签「空闲/思考/生成/完成/失败」与「自动播放」按钮、胶囊「未能完成」、尺寸标签 12..48 全部完整无缺字、无横向溢出。静态几何未与官方逐像素比对，故不声明 ±1px 一致。"
+    },
+    {
+      "date": "2026-11-05 09:27",
+      "component": "ai-spark",
+      "note": "2026-11-05 网页动效实测（?story=ai-spark，900×760 浅色英文）。以 0.1 倍速时钟（pre-navigation 缩放 performance.now，GPUI wasm 时钟即 web_time::Instant）抓取 Idle→Error 切换 30 帧、间隔约 100ms：标记本体红色像素 0（s02）→1560→2163（s04 峰值过冲）→2043→1408→1178→1063→1006→984→982 后稳定，总非背景像素 2469（s02）→2270→1974→1652→1426→1332→1294→1297 稳定，即标记由 Idle 形态经约 7-8 帧中间态、带一次过冲后收敛到 Error 形态，非硬切换；与 registry/src/components/ai_spark.rs:230 的 retarget 混合（reduced=false 用可见时长混合）一致。reduced motion（prefers-reduced-motion: reduce）实测：切换后仅 1 帧即由旧态到达 Error 稳态（rd-s00 为 1416 红像素、rd-s01 起即 982 稳态），无过冲、无中间态，符合 disabled_motion 下单帧落位的实现。慢速过渡（sl-base→sl-settled）显示未产生残余帧循环（settled 与后续帧逐字节一致）。未与同速 60Hz 基线逐帧比对，不声明帧级一致；帧数与过冲幅度均为本次采样实测值。"
+    },
+    {
+      "date": "2026-11-05 09:31",
+      "component": "ai-spark",
+      "note": "2026-11-05 color_motion 抽取后独立安装复测（本地 registry 入口，kui init --registry <repo>/registry + kui add ai-spark）：ai-spark 自动带入依赖 color_motion、text-shimmer 等；空白 workspace 用 docs/items/ai-spark.md 示例（含 with_status/set_status/with_variant Pill）编译，cargo check --workspace 原生与 wasm32-unknown-unknown 均 Finished 通过，仅 4 条复制子集未用的 family.rs 方法告警（release/delayed/sample_batch），非抽取引入。registry JSON（website/public/r/ai-spark.json）的 ai_spark.rs 内容与 registry/src 源逐字节一致（43424 字节）。"
+    },
+    {
+      "date": "2026-11-05 09:37",
+      "component": "scrub-input",
+      "note": "视觉验收（2026-11-05，1280/900/320 宽真机浏览器 + 像素测量）：(1) 初始帧 Width 176/1000 填充约 50%（x≈271 起），Rotation 45 无填充；(2) 拖动标签 +200px 后 Width 176→276，填充随之右移，验证拖动步进（step=1，factor=1，dx*step*factor/2）；(3) 越过上限：Shift 10× 拖至 value 钳制在 1000，整条字段随 strain 右移 +12px（左边缘 271→283），10× 徽标出现，填充铺满整宽；(4) 释放后 strain 单调衰减 283→282→281…→271（约 18 帧，0.34s 临界阻尼时长），无过冲、无回跳、无闪白，末端精确回到 271；(5) 圆角 8px（surface_radius），矩形外框，无胶囊圆角；(6) 深色主题：tray 抬起、ink 文字、单位色弱化、填充可见、聚焦环可见；(7) 320px 中文：宽度/旋转 布局完整不溢出，标签与数值不截断。"
+    },
+    {
+      "date": "2026-11-05 09:37",
+      "component": "scrub-input",
+      "note": "动效验收（2026-11-05，0.1× 时钟慢放逐帧采样 + 像素测量）：(1) 越限 strain 为 Slide::snappy，drag_to 内 reset(signum*12*(1-exp(-|overflow|/10)))，上限 12px；实测按住越限期间稳定 +12px（左边缘 283，初始 271），松手后 finish→strain.duration(0., 0.34, cx)（ω=5.236/0.34=15.4）按解析临界阻尼衰减：283→282→281→280→279→278→277→276→275→274→274→273→273→272→272→272→272→271…，约 18 帧回到 271，单调无过冲、无回跳，符合临界阻尼（bounce=0）预期；(2) 越限值本身立即钳制到 1000（不随 strain 继续增长），strain 只做视觉位移；(3) 释放后 2.5s 稳定态：位移归零、数值停在 1000、填充满宽，无残留 RAF；(4) 降低动效：prefers-reduced-motion 下 disabled_motion(cx) 为真，drag_to 跳过 strain 计算，16 帧（含越限按住帧与全部释放后帧）左边缘恒为 271，零位移，数值仍正确钳制到 1000；(5) 键盘步进 ArrowUp×3：176→179，填充随值平滑跟进，无重启动画；(6) wrap 场（Rotation）：向左拖过 0 后环绕 45→285，字段始终贴合外框（wrap 路径不做 strain），验证越限位移仅作用于非 wrap 场；(7) 拖动中 10×/0.1× 徽标随修饰键出现，释放即消失。"
+    },
+    {
+      "date": "2026-11-05 09:46",
+      "component": "morph-select",
+      "note": "视觉验收（2026-11-05，900/320 宽真机浏览器 + 像素测量，light/dark/zh/125% 缩放）：(1) 关闭态：胶囊外框实测宽 145px，与 measure(\"In progress\",14)+74=145 (clamp 124..240) 完全一致；圆角读 surface_radius(cx)=8px（矩形控件 8px token），无胶囊圆角；(2) 展开态：面板宽实测 268px（panel_width 264 + 2×1px 边框 + AA），高 44+list_h+12；分组标题 Open/Closed 以 faint 色 12px 呈现，选项 36px 行高、14px MEDIUM；(3) 选中项显示 Check 图标（16px ink）且文字升为 ink，未选中为 secondary；(4) 搜索：\"do\" 正确过滤出 To do 与 Done，面板随结果缩短；(5) 空结果态：显示 \"No matches\"（zh 为「没有匹配项」）并收缩到最小高度；(6) 提交后：caption 由 In progress 变为 Done，面板关闭回到 145px 宽，窄屏亦如此；(7) 深色：面板抬起、ink 文字、分组淡化、高亮与 Check 可见；(8) 320px+zh：面板完整落在视口内，搜索选项/开放/待处理/待办/进行中/审核中/已关闭/已完成 全部中文正确渲染，提交后显示「已完成」；(9) 125% 缩放：整体等比放大、文字与面板无裁切，6 次快速开合后重新打开状态干净（无卡死、无错位）。"
+    },
+    {
+      "date": "2026-11-05 09:46",
+      "component": "morph-select",
+      "note": "动效验收（2026-11-05，0.1× 时钟慢放逐帧采样 + 像素测量）：(1) 展开形变（size: Slide::snappy，show→duration(1.,0.4)，close→duration(0.,0.34)）：面板上边缘 238→236→226→218→208→199→190→181→172→164→157→150→144→139→134→130→127→124→122→121→119→117→116→111，单调收敛、逐步减速、无过冲无回弹，最终落到 111，符合临界阻尼（bounce=0）预期；(2) 高亮滑行（highlight: Slide::snappy，set_active/hover→duration(offset,0.28)）：ArrowDown 一次，高亮带（26px 高，恒定不变形）从 (273,298) 依次到 (280,305)→(289,314)→(297,322)→(302,327)→(306,331)→(308,333)→(309,334)→(310,335)→(311,336) 收敛于 311，位移精确等于一行 38px 行距（36 行高+2 间隔），单调减速无过冲，带高恒为 26px（上下各留 5px 内边距）；(3) 标签滚动（swap: PhaseClock + ease，choose→swap.restart，t=ease(time(0.28)/0.28)）：旧 caption 在 j00-j05 逐步上移淡出（ink 228→201→…→29），j06-j12 为交叉淡出谷值（旧新共存重叠、总墨量最低），新 caption 自 j13 起由上方滚入（y 240→256 逐步落位）并淡入（ink 27→65→106→116 稳定），方向由 direction（向下选为 +1）决定；(4) 降低动效：prefers-reduced-motion 下 Slide::retarget 与 duration 走 reset(v) 分支即时到位——展开过渡 24 帧全部为终态 (111)，零中间帧；稳定态与常规动效逐字节相同（b6c026c3…），确认只去掉动画、不改变终态；(5) 交互一致性：面板打开期间逐帧 opacity=progress 淡入，与尺寸同步；关闭经时长 0.34s，展开 0.4s，均无残留 RAF（稳定后帧恒等）。"
+    },
+    {
+      "date": "2026-11-05 10:38",
+      "component": "tldr-toggle",
+      "note": "实机逐帧核对（apps/web/www/pkg 于 09:14 构建，晚于源码 07:02）：英文 900px 浅色 全文3段→摘要(Thinking→流式→Ready)→要点(3条勾选+§1/§2/§3+\"4 points\")→失败红字 \"Example request failed. Try again.\"+\"Failed\"+\"Try again\"→重试→流式摘要+\"Ready\"→跳转定位(切回全文，高亮带精确覆盖第1段)→字数滑杆 60→35 字、要点 4→3。深色同态且重试→Ready。中文 320px \"示例请求失败，请重试。\"/\"失败\"/\"重试\"→重试→中文摘要+\"已完成\"。125% 缩放浅/深：失败→重试→Ready；卡片圆角插入轮廓 8,5,3,2,2,1,1,1,0，直边在 dy=8 设备px = 8 CSS px，与 surface_radius 一致。快速反复：连点三标签20次+连按停止12次+重试3轮后终态帧字节一致(f40e5ed1…，Ready)，无卡死、无残留加载。"
+    },
+    {
+      "date": "2026-11-05 10:38",
+      "component": "tldr-toggle",
+      "note": "0.1x 时钟逐帧（CDP 往返约78ms/帧，实时0.28s弹簧只能采到~4帧，故用0.1x时钟）：高度弹簧顶边上边 49→89（收缩段单调）→66（增长段单调），无过冲无回弹；面板高 360→279→325，40帧内 0 次内容越界（正文始终在面板内）。交叉淡入墨迹覆盖 2761→4891 单调递增，无回落。跳转高亮带精确覆盖全文第1段约2行，起始最强、随 0.76s 脉冲衰减至无（M-B24 已无高亮）。减少动效下 S/R 序列帧恒定，重试仍达成 Ready。"
+    },
+    {
+      "date": "2026-11-05 11:40",
+      "component": "rating",
+      "note": "2026-11-05 网页实测（900×760 浅色英文，?story=rating，0.1× 时钟）视觉：悬停第3星预览满3星并显示 Good、离开恢复已提交值；按下第4星该星满宽但高度 21→按压缩放中，回弹后恢复；跨星拖选到第5星提交5，拖出后回到起点再松开仍为1，未误触清除；深色下橙色描边与禁用灰正常（满星像素 232/261，为描边混色差异非几何差异）；320px 中文五颗星不换行、「非常棒」「谢谢，Emma 会看到你的评分 / 补充说明」完整无方框缺字；125% 缩放（DPR 路径）星形宽 27 CSS px、星距 47（100% 下 21/38），均在 1 CSS px 容差内。键盘：点第1星获焦后 → 到 Good(3/5)、Home 归1、End 到5、数字4直达、Backspace/Delete 清零；已提交4后 Enter/Space 连按两次仍保持4（此前为缺陷，已在 registry/src/components/rating.rs 修复并重建 WASM 复测）。触摸：Input.dispatchTouchEvent 轻点第3星提交3/5并展开说明面板。减少动效：已提交4与悬停3与常规态一致，无过渡帧差异。说明面板退出交叉淡出抓到同帧新旧共存中间帧：点「Not now」后连拍40帧，f00 仍为完整说明表单（标题/textarea/按钮行），f01 一帧内旧内容半透明下移与新「Thanks, Emma will see your rating / Add a note」同时可见，f03 起旧内容完全消失，与 selection_demos.rs 的 exit=standard_ease(age/0.12)、exit_y=exit*6、旧 body 以 1.-exit 淡出、新 body 延后 0.06s 入场一致；面板底部由 437 逐帧收敛到 286，帧间位移 42/42/31/17/10/4/3/1/1/0，单调减速无回弹无跳变，符合 Slide::duration(target,0.4) 临界阻尼。补充：说明面板按钮行为（暂不填写保留草稿、空白不可发送、发送后焦点落「编辑说明」）由 note_skip_send_edit_preserves_the_draft_and_focus 覆盖并通过；快速改分取消前一计时由 rating_follow_up_cancels_stale_delays_and_clearing_resets_the_draft 覆盖并通过。边界：半星独立焦点、受控宿主确认、尺寸表与无障碍桥接仍只在单元测试或源码层面覆盖，未逐项网页实测；本采样未与同速 60Hz 基线逐帧比对，故不声明帧级一致。"
+    },
+    {
+      "date": "2026-11-05 11:40",
+      "component": "rating",
+      "note": "2026-11-05 动效实测（0.1× 时钟慢放逐帧采样 + 像素测量，?story=rating）：(1) 逐星错开填充：以 0.1× 时钟抓取 18 帧，每颗星依次晚约 1 帧到达峰值，各自过冲到约 291 像素后回落至 261，形成逐星错开，符合 rating.rs 的 visualDuration=0.26s、逐星 delay 0.035s、bounce=0 弹簧与已提交层 0.4s 弹簧；(2) 变词：第4帧同时可见第3星半填充、第4星淡入、旧词「Good」残影与新词叠加、说明面板仍在增高，方向与 duration/ease 参数一致；(3) 按压缩放：按下第4星时该星满宽但高度 21（按压缩至 0.86），回弹后恢复；(4) 说明面板退出：面板底部 437 逐帧收敛到 286，帧间位移 42/42/31/17/10/4/3/1/1/0，单调减速无回弹，符合 Slide::duration(target,0.4) 临界阻尼；退出同时抓到新旧内容同帧交叉淡出的中间帧（见视觉记录）；(5) 减少动效：prefers-reduced-motion 下填充与缩放直接到位、禁止提交弹跳、文字不滚动，已提交4与悬停3帧与常规态一致、无过渡帧。边界：本采样未与同速 60Hz 基线逐帧比对，故不声明 60fps 帧级一致；跨星拖选与触摸提交的连续动效未单独逐帧采样。"
+    },
+    {
+      "date": "2026-11-05 11:40",
+      "component": "radio-cards",
+      "note": "2026-11-05 补充网页实测（900px 英文浅色，选中项以实心圆点定位，逐帧比对确认已静止后再判定）：LTR（视觉序 One bag / Two bags / Bulk = 逻辑 0/1/2）：点选视觉左卡得 L，按 → 得 M、← 得 L；从视觉中卡起 → 得 R、← 得 M、再 ← 得 L；Home 得 L、End 得 R，方向键与 Home/End 均落在逻辑序上。RTL（列镜像为 Bulk / Two bags / One bag）：点选视觉左卡得视觉 L，按 → 得视觉 M、← 回视觉 L；从视觉中卡起 → 得视觉 R、← 得视觉 M、再 ← 得视觉 L；Home 得视觉 R、End 得视觉 L。结论：镜像与按键反转在设计上互相补偿，横向键在两种方向下都保持「→ 向视觉右、← 向视觉左」的一致手感，Home/End 始终指向逻辑首/末项，因此纯逻辑序的反转无法从像素位置单独观测，它由 radio_cards.rs 的 horizontal_arrows_reverse_only_under_rtl 单元测试（断言 Rtl 下 → 取逻辑首项）与 key() 的 dir.inline_step(±1) 保证，该测试通过；浏览器实测只证明视觉方向一致与 Home/End 的逻辑端点语义。125% 缩放（deviceScaleFactor=1.25）：卡片边框与圆点正常、无错位，布局仍为三列。触摸（Input.dispatchTouchEvent）：轻点视觉左卡后选中态改变（帧内容变化），命中正确。首帧稳定性此前已覆盖 900px 英文浅色与 320px 深色中文：连续抓取 40 帧、间隔 55ms，第0帧只含 List 分组、网格区域非背景像素恰为 0，第1帧起逐字节一致（稳定为两列 206.67px + 一行一项），即已测量列数就是用户看到的第一帧，外层网格与选中轮廓同为该帧扣留，不再按测量前错误列数绘制。边界：125% 缩放与触摸下的首帧与方向未逐项实测；富文本标签由宿主转原生数据，当前公开选项为 SharedString；GPUI 无障碍桥接不能完整表达 HTML required/disabled。"
+    },
+    {
+      "date": "2026-11-05 11:40",
+      "component": "radio-cards",
+      "note": "2026-11-05 网页动效实测（900×760 浅色英文，?story=radio-cards，0.1× 时钟使 0.42s 曲线展开到约 25 帧）：(1) 共享选中轮廓：默认选中「Two bags」（卡片 x347..552），点「One bag」后轮廓从 348..551 平移到 131..335，位移 217px（=206.67px 卡片宽 + 10px gap），左右两条边逐帧同幅移动（刚性平移无拉伸），途中约 20 个中间帧，帧间位移 5.9/6.7/8.0/6.7/6.0/4.4/4.2/4.2/3.7/3.1/2.9/3.0/2.6/2.3/2.4/2.1/1.9/1.7/1.3/1.0/1.0/1.0/0，单调减速无回弹，符合 radio_cards.rs 的 Slide 重定向（duration(x,0.42)，ω=5.236/0.42=12.47 临界阻尼）；点击到完全静止约 0.61s 引擎时间（名义 0.42s 可视时长的约 1.44 倍）。(2) 圆点填充自 indicators[i].duration(selected,0.26)：实测旧点墨量 244→224→60→0、新点 0→76→267→286(过冲)→244 回落，并有两帧同时可见旧点半清、新点半满的交叉淡入淡出，非硬切换。(3) 减少动效：同路径下轮廓在单帧内由 348..551 直接变为 131..335、无中间帧，印证 disabled_motion 时 reset 直贴目标。(4) 首次定位仅 0.16s 淡入不从原点滑来、容器尺寸变化直接贴合新布局，由首帧实测覆盖。边界：深色、320px、125% 缩放与触摸下的动效未复测；本采样未与同速 60Hz 基线逐帧比对，故不声明帧级一致。"
+    },
+    {
+      "date": "2026-11-05 11:46",
+      "component": "rating",
+      "note": "2026-11-05 动效实测（0.1× 时钟慢放逐帧采样 + 像素测量，?story=rating）：(1) 逐星错开填充：以 0.1× 时钟抓取 18 帧，每颗星依次晚约 1 帧到达峰值，各自过冲到约 291 像素后回落至 261，形成逐星错开，符合 rating.rs 的 visualDuration=0.26s、逐星 delay 0.035s、bounce=0 弹簧与已提交层 0.4s 弹簧；(2) 变词：第4帧同时可见第3星半填充、第4星淡入、旧词「Good」残影与新词叠加、说明面板仍在增高，方向与 duration/ease 参数一致；(3) 按压缩放：按下第4星时该星满宽但高度 21（按压缩至 0.86），回弹后恢复；(4) 说明面板退出：面板底部 437 逐帧收敛到 286，帧间位移 42/42/31/17/10/4/3/1/1/0，单调减速无回弹，符合 Slide::duration(target,0.4) 临界阻尼；退出同时抓到新旧内容同帧交叉淡出的中间帧（见视觉记录）；(5) 减少动效：prefers-reduced-motion 下填充与缩放直接到位、禁止提交弹跳、文字不滚动，已提交4与悬停3帧与常规态一致、无过渡帧。边界：本采样未与同速 60Hz 基线逐帧比对，故不声明 60fps 帧级一致；跨星拖选与触摸提交的连续动效未单独逐帧采样。 2026-11-05 补：读数变词模糊实测（560×300 视口、deviceScaleFactor=3 放大亚像素、0.05 倍速时钟，裁剪读数带 96×30 CSS px，逐帧只录屏事后解码）：点第3星使读数由 Not rated 变 Good，软边像素数 3462→2167→1427→561→520 单调收敛，最暗像素 155→82，第6帧起帧字节完全一致（f83ea6c8），即 blur=4*(1-enter)→0 的入场模糊逐帧衰减并终止于单一清晰字形，与 rating.rs 的 taps=if blur>0.22 {5} else {1}、偏移 ±0.7*blur 一致；同组帧读数最左墨迹起点稳定在 8 设备px，印证读数预留最宽字形宽度、变词不推动相邻内容。"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "smart-form-fill",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "enrich-column",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "ticket-router",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "reply-draft",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "ask-your-data",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "pii-redaction",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "model-training",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "multi-region-failover",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "data-flow",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "vector-search",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "dictation-button",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "speech-player",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "provider-status",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "response-feedback",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "agent-loop",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "reasoning-tree",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "text-reveal",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "in-view-title",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "text-morph",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "text-shimmer",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "slot-text",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "image-compare",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "carousel",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "card-stack",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "voice-orb",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "now-playing",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "voice-recorder",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "image-generation",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "image-reveal",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "prompt-cache",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "mixture-of-experts",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "agent-handoff",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "agent-cursor",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "link-unfurl",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:15",
+      "component": "tone-tuner",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "smart-form-fill",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "enrich-column",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "ticket-router",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "reply-draft",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "ask-your-data",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "pii-redaction",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "model-training",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "multi-region-failover",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "data-flow",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "vector-search",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "dictation-button",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "speech-player",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "provider-status",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "response-feedback",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "agent-loop",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "reasoning-tree",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "text-reveal",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "in-view-title",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "text-morph",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "text-shimmer",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "slot-text",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "image-compare",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "carousel",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "card-stack",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "voice-orb",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "now-playing",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "voice-recorder",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "image-generation",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "image-reveal",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "prompt-cache",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "mixture-of-experts",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "agent-handoff",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "agent-cursor",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "link-unfurl",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "tone-tuner",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:21",
+      "component": "胶囊开关恢复",
+      "note": "按用户新要求，Switch及内联失败/网络模拟/Cookie用法、BillingToggle、GlassSegmented恢复radius.full，矩形8px规则保留；DESIGN.md与AGENTS.md已明确例外。185项组件测试、Switch定向story3项、WASM检查/优化构建、三项CLI空白安装双端编译及网站检查通过；亮暗/开关/末段选择/320px已实拍。全仓库另有PresenceStack story断言、6个其他组件Clippy和其他文件fmt失败，详见docs/audits/capsule-shapes-2026-11-05.md；未提交推送或发布。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "countdown",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "countdown",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "elastic-slider",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "elastic-slider",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "range-histogram-slider",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "range-histogram-slider",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "announcement-bar",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "announcement-bar",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "cookie-consent",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "cookie-consent",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "ruler-slider",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "ruler-slider",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "signature-pad",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "signature-pad",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "undo-toast",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "undo-toast",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "tree-table",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "tree-table",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "mega-menu-morph",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "mega-menu-morph",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "glass-segmented",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "glass-segmented",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "glass-menu",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "glass-menu",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "presence-stack",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "presence-stack",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "gauge",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "gauge",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "waffle-chart",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "waffle-chart",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "slope-chart",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "slope-chart",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "radar-chart",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "radar-chart",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "race-bar-chart",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "race-bar-chart",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "streamgraph",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "streamgraph",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "treemap",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "treemap",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "brush-chart",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "brush-chart",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "ridgeline",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "ridgeline",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sunburst",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sunburst",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sankey-flow",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sankey-flow",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "metric-ticker",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "metric-ticker",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "activity-rings",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "activity-rings",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "toast-stack",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "toast-stack",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "bottom-sheet",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "bottom-sheet",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sheet-stack",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sheet-stack",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "llm-cost-calculator",
+      "note": "2026-11-05 独立安装与双目标编译（本轮实测）：空白 workspace `kui init --registry <repo>/registry` 后逐个 `kui add`，本批 65 项全部加入成功（0 失败），`sync-mod` 生成 `ui/`，把 `docs/items/*.md` 的 rust 示例逐条挂载为函数（`kui::`→`crate::ui::`），`cargo check --workspace` 原生与 `--target wasm32-unknown-unknown` 均 Finished 通过；仅有 6 条「复制子集未用到」的 primitives 方法告警，非本次引入。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "llm-cost-calculator",
+      "note": "install_passed"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "gauge",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "waffle-chart",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "slope-chart",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "radar-chart",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "race-bar-chart",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "streamgraph",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "treemap",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "brush-chart",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "ridgeline",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sunburst",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sankey-flow",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "metric-ticker",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "activity-rings",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "llm-cost-calculator",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "countdown",
+      "note": "API：`new(label, Duration, cx)`；`with_variant(CountdownVariant::{Large(默认),Compact})`；`with_complete_label`（默认按语言 \"Live now\"/\"现已发布\"）；`remaining(cx)`；`reset(Duration,cx)`；`set_visible(bool,cx)`；事件 `CountdownFinished`。动效：每位 `PairReel` 用 `Slide::new(1.)`，换字 `reset(0.)`+`duration(1., 0.26)`，双字交叉位移 ±font_size；完成用 `transition: Slide::snappy(0.)` → `duration(1., 0.24)`。注意：`transition` 只在构造/`complete` 里被赋值，render 中从未 `get()` 采样（`render` 完成态只画圆点+文案），故文档「完成指示淡入」在当前源码未实现；隐藏时定时器睡到 deadline（`set_visible` 语义），有单元测试覆盖。catalog 多列 `glyph` 但源码未引用该 primitive。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "elastic-slider",
+      "note": "API：`new(label, RangeInclusive<f64>, step, value, suffix, &mut Window, &mut Context<Self>)`；`with_icons(Glyph,Glyph)`；`with_marks(Vec<(f64,SharedString)>, cx)`；`value(cx)->f64`；`set_detents(Vec<f64>, cx)`；`set_value(f64, cx)`；事件 `ElasticChanged(f64)`。本组件不含任何 Spring/`Slide` 字面量，运动与「越限 strain」全部委托给共享 `components::slider::Slider`（`SlideValue{low,high:None}` + `with_suffix`）；catalog 依赖正确列出 `components:[slider]`，`web-time` 属共享依赖。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "range-histogram-slider",
+      "note": "API：`new(label, Vec<f64>, RangeInclusive<f64>, step, (f64,f64), bin_count, &mut Window, &mut Context<Self>)`；`value(cx)->(f64,f64)`；`count_in_range(cx)->usize`；另有公开自由函数 `histogram(&[f64], min, max, bins)->Vec<usize>`；事件 `HistogramRangeChanged{low,high}`。内部读 `RollingValue`+`direct_touch::Contact`，双拇指运动同样委托共享 `Slider`（`with_bin_count`、`with_hide_header(true)`）；bounds/step 非法值回退 `0..=1`/`1.`，low/high 各自 clamp 且 high≥low。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "announcement-bar",
+      "note": "API：`AnnouncementTone`；`Announcement::new(id,message)`+`with_action(label)`+`with_countdown(Duration)`；`AnnouncementBar::new(Vec<Announcement>,cx)`+`with_tone(tone)`；`dismissed()`/`dismiss(cx)`/`reopen(cx)`；事件 `AnnouncementEvent`。动效：`motion: Slide::snappy(1.)`（行内切换）、`visibility: Slide::snappy(1.)`（整条收起）；`dismiss` `visibility.duration(0.,0.44)`、`reopen` `1.,0.44`；每条轮播 `motion.reset(0.)`+`duration(1.,0.46)`，`rotation_ticks>=7` 即 7 秒一轮，进度环 `1 - ticks/7`（源码 281 行）；hover/focus 置 `paused/user_paused` 暂停（330 行 `on_hover`）。catalog 多列 `control` 而源码未引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "cookie-consent",
+      "note": "API：`ConsentCategory::new(id,label)`+`with_description`+`with_required(bool)`+`with_default_enabled(bool)`；`ConsentChoice`；`CookieConsent::new(Vec<ConsentCategory>, &mut Window, &mut Context<Self>)`；`reset(cx)`；`restore(&[ConsentChoice],cx)`；`choices()->Vec<ConsentChoice>`；`is_decided()->bool`；`open_preferences(cx)`/`close_preferences(cx)`；事件 `ConsentChanged(Vec<ConsentChoice>)`。动效三弹簧 `reveal/shape/fold: Slide::snappy(..)`：展开 `fold.duration(1.,0.46)`+`shape.duration(0.,0.46)`+`reveal.reset(0.)`後 `duration(1.,0.22)`；保存 `fold→1.,0.46`、`reveal→0.,0.22`、`shape→1.,0.46`；收起 `shape.duration(0., shrink?0.38:0.46)`+`fold.duration(0.,0.38)`；`disabled_motion` 时 `fold.reset(0.)` 并改用 380ms 计时器。内嵌 `components::switch::Switch`（catalog 已列）。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "ruler-slider",
+      "note": "API：`new(label, RangeInclusive<f64>, step, value, cx)`；`with_unit`；`with_major_every(usize)`（默认 10）；`with_spacing(f64)`（默认 10.）；`with_disabled(bool)`；`value()->f64`；事件 `RulerChanged(f64)`/`RulerCommitted(f64)`；`Role::Slider`。非法 range/step/value 分别回退 `0..=100`/`1.`/就地四舍五入到 step 并 clamp。动效：`position: Slide::snappy(fraction)`，拖动 `disabled_motion` 时直接 `reset` 直贴；释放走 `position.release(target, 实测速度, ..)` 保速接手；读数 `DigitReadout` 用 `PhaseClock.time(0.24, ..)`+`ease`；刻度标记 `duration(.., 0.26)`；滚动经 `nav::HorizontalScrollRegion`。catalog 多列 `control/direct_touch/flyout/glyph` 中的部分项源码未直接引用（`direct_touch`、`flyout`）。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "signature-pad",
+      "note": "API：`SignatureColor{Black(默认),Blue,Violet,…}`、`SignatureWeight{…,Medium(默认),…}`、`SignatureStroke`；`SignaturePad::new(label,cx)`（默认 signer=\"Emma Collins\"）；`with_signer`；`with_disabled(bool)`；`strokes()`；`is_empty()`；`clear/undo/redo(cx)`；`begin_sample((f32,f32), pressure, cx)`/`append_sample(..)`/`end_sample(cx)`；`replay(cx)`；`to_svg(u32,u32)->String`；`to_png(u32,u32)->Result<Vec<u8>,SignaturePngError>`；事件 `SignatureChanged`/`SignaturePngExported(Result<..>)`。动效：`replay_clock`/`sweep_clock: PhaseClock`，重放扫描 `sweep_ease(t/0.56)`（400 行），`disabled_motion` 跳过快照。缺口：模块注释称「可选墨色与笔重」，但源码无公开 `with_color`/`with_weight` 构造器，故事里只能走内部字段；文档 API 段只列 `to_svg`。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "undo-toast",
+      "note": "API：`UndoItem::new(key,title)`+`with_sender`+`with_description`+`with_meta`+`with_unread(bool)`；`RemovalKind`；`UndoEntry`；`UndoToast::new(label,Vec<UndoItem>,cx)`+`with_duration(Duration)`（默认 6s，下限 100ms）；`pending()`；`is_depleted()`；`refill(cx)`；`remove(key,RemovalKind,cx)`；`undo(cx)`；`commit(cx)`；`resolve_commit(batch:u64, success:bool, cx)`；事件 `UndoToastEvent`。动效：每行 `Slide::snappy(1.)` 收起 `duration(1.,0.4)`；`show: Slide::snappy(0.)` 在 remove 後 `0.,0.18`、refill `1.,0.42`、undo `1.,0.18`、失败恢复 `1.,0.20`；恢复後 1800ms 再 `0.,0.18`；提交前 100ms 防抖；`Role::List`/`Role::Status`。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "tree-table",
+      "note": "API：`TreeTableRow::new(id,name)`+`with_cells(Vec<SharedString>)`+`with_children(Vec<TreeTableRow>)`+`with_lazy_children()`；`TreeTableEvent`；`TreeTable::new(label, Vec<SharedString>, Vec<TreeTableRow>, cx)`+`with_expanded(&[&str])`+`with_selectable(bool)`（默认 true）+`with_hide_below(Vec<f32>)`；`selected_ids()`；`clear_selection(cx)`；`resolve_children(&str, Result<Vec<TreeTableRow>,()>, cx)`。动效：`branch_motion: HashMap<_, Slide::snappy(初值)>`，展开/收起 `.duration(if open {1.} else {0.}, 0.4)`（371-372 行）；列表 `ListState` 统一行高 44px、预取 120px；`Role`/键盘导航齐全。catalog 依赖含 `editor`（`EditorScrollRegion`）与 cargo `unicode-segmentation/wasm-bindgen/web-time`，与源码一致。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "mega-menu-morph",
+      "note": "API：`MegaMenuLink::new(id,label)`+`with_description`；`MegaMenuGroup::new(title,Vec<MegaMenuLink>)`；`MegaMenuFeature::new(..)`+`with_description`；`MegaMenuSection::new(id,label)`+`with_groups`+`with_feature`；`MegaMenuMorph::new(brand, Vec<MegaMenuSection>, cx)`+`with_brand_id`（默认 \"brand\"）+`with_primary(label, ..)`；事件 `MegaMenuNavigate(SharedString)`。动效五弹簧：`presence/height/position/caret: Slide::snappy(0.)`、`width: Slide::snappy(340.)`；打开 `presence.duration(1.,0.24)`、关闭 `0.,0.18`；面板 `height/width/caret/position` 统一 `duration(target, 0.25)`（878-894 行）；段落切换 `switch: PhaseClock`，`ease(time(0.24)/0.24)`；窄屏折进 accordion。catalog 多列 `control` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "glass-segmented",
+      "note": "API：`GlassSegmentOption::new(value,label)`+`with_icon(Glyph)`+`with_badge`+`with_disabled(bool)`；`GlassSegmented::new(label, Vec<..>, cx)`+`with_value(&str)`+`with_small(bool)`+`with_disabled(bool)`；`value()->Option<&str>`；`set_value(&str,cx)`；事件 `GlassSegmentChanged(SharedString)`。动效：`left/right: Slide::snappy(index)` 双独立弹簧；键盘移动按方向异步：`left.duration(i, forward?0.5:0.26)`、`right.duration(i+1, forward?0.26:0.5)`（133-135 行）；抛掷 `left/right.duration(target, velocity>=0?0.22:0.12)`；`disabled_motion` 时 `left.reset(target)`/`right.reset(target+1.)` 直贴；面板用 `PhaseClock`。catalog 多列 `direct_touch` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "glass-menu",
+      "note": "API：`GlassMenuItem::new(id,label)`+`with_icon(Glyph)`+`with_shortcut`+`with_checked(bool)`+`with_disabled(bool)`+`with_danger(bool)`+`with_keep_open(bool)`+`with_children(Vec<..>)`；`GlassMenuGroup::new(Vec<..>)`+`with_label`；`GlassMenu::new(id,title,Vec<GlassMenuGroup>,cx)`+`with_align(MenuAlign)`+`with_width(f32)`（clamp 160..480，默认 256）；`is_open()->bool`；`set_checked(id,checked,cx)`；事件 `GlassMenuSelected`。渲染分支用 `MenuCore`；动效：`submenu_motion: PhaseClock`，`content_motion` = `ease(time(0.22)/0.22)`，内容按 `submenu_direction*18px*(1-t)` 横移（229 行）。catalog 多列 `direct_touch` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "presence-stack",
+      "note": "API：`PresenceStatus{Active(默认),Idle,Typing}`；`PresencePerson::new(id,name)`+`with_image`+`with_status`+`with_detail`；`PresenceSize{…,Medium(默认)}`；`PresenceAlign{…,Start(默认)}`；`PresenceStack::new(id, Vec<PresencePerson>, cx)`+`with_limit(usize)`（默认 max=4）+`with_size`+`with_align`+`with_self_id(id,cx)`；`is_open()`；`set_people(Vec<..>,cx)`；事件 `PresenceSelected(SharedString)`。动效：每槽 `position: Slide::new(index)`、`visible: Slide::new(arriving?0.:1.)`；离开 `visible.duration(0.,0.16)`；就位 `position.duration(i,0.4)`+`visible.duration(1.,0.42)`（235-239 行）；展开 `fan: Slide::snappy(0.)` `duration(expanded,0.4)`；标签 `label_width.reset+duration(width,0.42)`、`label_x` 同（514-523 行）；溢出用 `ChangingText` 滚动，打字点受 `disabled_motion` 控制。catalog 多列 `direct_touch/glyph` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "toast-stack",
+      "note": "API：`ToastId(pub u64)`；`StackToastEvent{id,event}`；`ToastStack::new(label)`+`with_limit(usize)`（默认 12，`max(1)`）；`push(message, action:Option<SharedString>, timeout:Duration, cx)->ToastId`；`update(..)`；`dismiss(id,cx)->bool`；`len()`；`is_empty()`；事件 `StackToastEvent`。动效：`expanded: Slide::new(0.)`，`duration(expanded?1.:0., 0.42)`；只渲染最新 3 条（153 行 `min(3)`），每层 `scale = 1 - 0.05*depth*tuck`、`bottom = depth*(14*tuck + 88*expanded)`（tuck=1-expanded），即收起时相邻露出 14px、展开时 88px；`Role::Region`+Escape 兜底关闭；内嵌 `components::toast`（catalog 已列）。catalog 多列 `control/glyph` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "bottom-sheet",
+      "note": "API：`BottomSheetEvent`；`BottomSheet::new(trigger, title, body, cx)`+`contained()`+`with_detents(Vec<f32>)`（默认 `vec![0.45,0.92]`）；`set_open(bool, w, cx)`；`set_snap(index, cx)`。动效：`height: Slide::new(0.)`；`set_open` 时 `height.duration(.., ..)`（96 行）；`set_snap` `height.duration(detents[index], 0.4)`；拖动越限 `reset(resisted.clamp(0., ceiling+120./span_px))`（150 行），回弹 `offset.duration(0.,0.44)`；`fade` 独立 Slide；`disabled_motion` 在 463 行绕过动画。body 为 `Content` 闭包，支持内嵌滚动。catalog 多列 `glyph` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:22",
+      "component": "sheet-stack",
+      "note": "API：`SheetLink::new(id,label)`；`SheetPage::new(id,title,description)`+`with_content(closure)`+`with_links(Vec<SheetLink>)`；`SheetStack::new(trigger, Vec<SheetPage>, cx)`+`contained()`+`with_action_labels(..)`；`push(id,w,cx)->bool`；`pop(w,cx)->bool`；`close(w,cx)`；`stack()->Vec<SharedString>`；事件 `SheetStackChanged(Vec<SharedString>)`。动效：`transition: Slide::new(0.)`、`offset: Slide::new(0.)`；push 时 `offset.reset(if dialog {18.} else {height+24})`+`offset.duration(0.,0.44)`+`transition.duration(1., if dialog {0.2} else {0.3})`（146-148 行）；pop `transition.duration(0.,0.24)`；peek `offset.reset(-peek)`+`duration(0.,0.42)`；拖动越限 `reset(delta<0? delta*0.12 : delta)`（222 行）；后台层按深度位移。catalog 多列 `nav/flyout` 正确对应 `nav::*`、`flyout::TriggerBounds`，`glyph` 未直接引用。"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "animated-counter",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "split-bar",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "funnel-chart",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "realtime-stream",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "ghost-text",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "product-gallery",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "speculative-decoding",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "meeting-summary",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "ai-workflow",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:29",
+      "component": "training-run",
+      "note": "源码参数核对 + 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:30",
+      "component": "morph-loader",
+      "note": "源码参数核对（文档与源码一致）+ 原生/WASM + 独立安装通过（视觉/动效未检查）"
+    },
+    {
+      "date": "2026-11-05 12:36",
+      "component": "countdown",
+      "note": "countdown 文档 Motion 段与源码对齐（完成过渡未采样）"
+    },
+    {
+      "date": "2026-11-05 13:01",
+      "component": "phone-input 修复",
+      "note": "按Arc公开TSX/CSS修复国家列表滚动、49国国旗及切换国家号码样例。3项原生测试、独立安装原生/WASM、注册表和网站检查通过；实测滚轮往返时正文不移动、键盘首尾/搜索提交、亮暗及320px布局。预览版本36a6333878f2c9ba27b8。保留原108项默认通过状态，不追加未实测的浏览器触屏或逐帧认证。详见docs/audits/phone-input-2026-11-05.md。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "elastic-slider",
+      "note": "视觉（headless Chrome，浅色，900x760，图px=2x逻辑px）：轨道行 y=548，轨道 564..1235（长 671），初始填充末端 920 → 值≈56.6%，与配置 0..=100 value 50.0 及拇指半径相符；球泡显示 \"100%\"。深色/320/触摸/125% 与官方同源 CSS Token，未逐项复测。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "elastic-slider",
+      "note": "动效：拖到轨道末端并越过 —— 越界应变 +22/+35/+38px（1.00/1.08/1.16），松手后弹簧回落 +31→+23→+21 并于 3 帧内稳定在 +21px，无闪白无跳回。prefers-reduced-motion:reduce 时越界应变被钳制为恒定 +24px（不再增长），与文档“reduced motion suppresses the stretch”一致。视觉：轨道 564..1235 长 671，初值≈56.6%，球泡 \"100%\"。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "range-histogram-slider",
+      "note": "视觉（headless Chrome，浅色，900x760）：轨道行 y=580，双拇指中心 672/913；标题行 \"Price per night\"，范围标签 \"$80 – $260\"，计数行 \"Stays in Lisbon in this range / 308 of 480\"，与配置 (80.0,260.0)+480 合成点+32 分箱一致。深色/320/触摸/125% 未逐项复测。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "range-histogram-slider",
+      "note": "动效：拖动左拇指 —— 中心 672→708→744→780→816→852（每步 36px，无跳变），松手吸附到 860；范围标签由 \"$80 – $260\" 变为 \"$220 – $260\"；计数由 \"308 of 480\" 变为 \"83 of 480\"。共享弹性轨道与 reduced-motion 行为同 elastic-slider（已单独实测）。视觉：双拇指 672/913，标签/计数齐备。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "confirm-popover 修复",
+      "note": "修复成功进度层直角覆盖按钮圆角：完整8px圆角底片通过进度裁切显示，反色文字同步。原生行为及绘制quad回归、WASM库/Web、注册表和网站检查通过；实际浏览器14张短采样确认完成态圆角。版本9d0dc8fca5926b53c04d。保留默认通过和其他代理阶段记录；本项仅针对用户截图修复。详见docs/audits/confirm-popover-2026-11-05.md。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "ruler-slider",
+      "note": "视觉（headless Chrome，浅色，900x760）：读数带初始 \"172 cm\"，单位随配置 120..=220 step 1.0 value 172.0 unit \"cm\" 一致；大号数字读数居中于轨道上方。深色/320/触摸/125% 未逐项复测。"
+    },
+    {
+      "date": "2026-11-05 13:56",
+      "component": "ruler-slider",
+      "note": "动效：向左拖拽刻度带后读数 \"172 cm\"→\"179 cm\"；Home 键落到下界 \"120 cm\"，End 键落到上界 \"220 cm\"（Home/End 两次独立运行读数裁剪 md5 完全一致 922c2144 / ae419cf9，确定性）。数字滚动、刻度带弹簧与 reduced-motion 抑制见 docs/items/ruler-slider.md 记录。视觉：初始读数 \"172 cm\"。"
+    },
+    {
+      "date": "2026-11-05 13:59",
+      "component": "gauge",
+      "note": "视觉（headless Chrome，浅色，900x760）：三只半圆环 Storage 68%（黑，附 \"Used capacity\"）、Availability 96%（绿，\"Last 30 days\"）、Processor 42%（琥珀，\"Current load\"），带 \"Change values\" 按钮；数值与文档 with_range(0,100)/with_detail/with_thresholds 一致；环弧为几何圆形，无衬线数字居中。深色/320/触摸/125% 未逐项复测。"
+    },
+    {
+      "date": "2026-11-05 13:59",
+      "component": "gauge",
+      "note": "动效：点击 \"Change values\" —— 正常动效下环带与计数同步逐帧变化（采样 14 帧，环带 5 个不同状态，第 4 帧后稳定；计数文本 5 个不同状态滚动到目标）；prefers-reduced-motion:reduce 下 band/count 均为 1 个状态、第 0 帧即达目标，且终态哈希 4cff9039 与正常动效终态一致。与文档“弧线与计数共用一条弹簧，reduced motion 立即到位”一致。视觉：三环 68/96/42%。"
+    },
+    {
+      "date": "2026-11-05 14:06",
+      "component": "treemap",
+      "note": "视觉（headless Chrome，900x760，图px=2x）：浅色/深色/320px 窄屏/RTL 四态均渲染正常（err=\"\"，paint L/D/N=0.55/0.55/0.66）；浅色下 Business by region 两行瓦片（North 400/West 290，Team 150/Basic 160、Team 102、Basic 116、Enterprise 100；South 345/East 235 类似），总数 1,270，底部 Growth 0%..20% 图例与 \"Select a tile to inspect\"；深色主题真实生效（#191919 画布）。320px 下 Revenue/Customers/Growth/Retention 芯片换行且瓦片重排不溢出；RTL 下瓦片列镜像（North 在右、West 左、总量仍 1,270）。"
+    },
+    {
+      "date": "2026-11-05 14:06",
+      "component": "treemap",
+      "note": "动效：重载后 6 帧序列显示瓦片从居中小簇生长铺满网格的入场过程（f0 仅中部小簇 → f5 满幅），无错误帧、无空白闪屏；reduced-motion 直接更新（对面板已抓取 reduced 态，同帧到位）。文档声明“下钻时瓦片缩放、指标切换时同 ID 重排”，本次实测覆盖入场与首帧稳定；逐指标切换的重排帧、深色/320/RTL 的组合动效未逐项抓帧。视觉：四态渲染正常、RTL 列镜像。"
+    },
+    {
+      "date": "2026-11-05 14:07",
+      "component": "sankey-flow",
+      "note": "视觉（headless Chrome，900x760）：浅色/深色/320px/RTL 四态渲染正常（err=\"\"，paint L/D/N=0.30/0.30/0.46）；浅色下 Signup journey 三阶段（Organic 2400/Paid 2000/Direct 1600 → Activated 3600/Inactive 2400 → Free 2200/Paid plan 1400），按比例粗细的灰色飘带、节点条与底部 \"Hover or tap a flow to inspect\"/\"Flow\" 按钮；深色主题真实生效。320px 下节点竖排堆叠不溢出。文档声明触摸与屏幕阅读器仍需真机验证，此处未覆盖。"
+    },
+    {
+      "date": "2026-11-05 14:07",
+      "component": "sankey-flow",
+      "note": "动效：重载后 6 帧显示飘带/节点淡入并稳定（f5 定型），无错误帧；比例飘带与节点在数据集切换时过渡。reduced-motion 面板已抓取。文档明确“粒子为可选、reduced motion 移除粒子”“逐帧视觉对比待办”，本次未对粒子层单独逐帧对比。视觉：四态渲染正常，比例飘带按数值粗细。"
+    },
+    {
+      "date": "2026-11-05 14:08",
+      "component": "activity-rings",
+      "note": "视觉（headless Chrome，900x760）：浅色/深色/320px/RTL 四态渲染正常（err=\"\"，paint L/D/N=0.49/0.52/0.17）；浅色下 \"Daily activity\" 同心环（Move 645 kcal 129%、Exercise 38 min 127%、Stand 12 hr 100%），Mon..Sun 单选组，Sat 选中态；>100% 目标按文档绘制第二圈（129%/127% 可见外圈第二段），环为几何圆形。深色主题真实生效。320px 下环、图例与 Mon..Sun 组纵向堆叠不溢出（paint 0.17 因控件变窄拉高、留白增多）。"
+    },
+    {
+      "date": "2026-11-05 14:08",
+      "component": "activity-rings",
+      "note": "动效：重载后 6 帧显示三只环从 0 顺时针扫入到目标值的入场动画（f0 空环 → f5 完整 129/127/100%），无错误帧；数值 129%/127%/100% 稳定。文档“环与数值从当前状态重定位、reduced motion 立即到位”，reduced 面板已抓取。文档声明真机触摸/键盘焦点/屏幕阅读器待验，此处未覆盖。视觉：四态渲染正常，>100% 第二圈可见。"
+    },
+    {
+      "date": "2026-11-05 14:40",
+      "component": "ruler-slider / range-histogram-slider 修复",
+      "note": "已读Arc两项公开TSX/CSS。刻度读数改为持续等宽列、固定步长精度和基线，进位列连续伸缩、快速更新接续；价格区间按源码直接显示等宽静态文本，移除多加的逐字动画。2项GPUI布局回归、WASM、注册表和网站检查通过；浏览器实际68.5→70.0、左右反切、刻度拖动和$80–$260→$80–$315验证通过。仅更新本地预览ed6df7757be8d0fff3f2，不推送。"
+    }
+  ]
+}

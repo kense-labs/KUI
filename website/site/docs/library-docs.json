@@ -480,16 +480,16 @@
     "signature": "(&App) -> PhoneValue",
     "event": "PhoneValue",
     "rule": {
-      "en": "Search calling codes or country names. Use international digits and possibility separately from verification.",
-      "zh": "搜索区号或国家名称；标准号码和格式检查均不代表号码已验证。"
+      "en": "Search names, ISO codes or calling codes. Wheel/touch scroll the inner country list; arrows, PageUp/PageDown and Home/End keep the active row visible. Enter selects; Escape restores trigger focus. Each country shows an offline color flag.",
+      "zh": "可搜索国家名称、ISO 代码或区号。滚轮和触摸滚动国家列表；方向键、PageUp/PageDown 和 Home/End 将高亮项滚入视野。Enter 选择、Esc 返回触发键。所有国家显示离线彩色国旗。"
     },
     "api": {
       "en": "Search calling codes or country names. Use international digits and possibility separately from verification.",
       "zh": "搜索区号或国家名称；标准号码和格式检查均不代表号码已验证。"
     },
     "motion": {
-      "en": "Measured height and animated width drive reveal. Roving selection glides down the list, dialing-code digits roll.",
-      "zh": "国家选择器从区号旁展开。方向键改变高亮行，切换国家时范围前缀中的不同数字滚动。"
+      "en": "Country rows are 36px high with 2px gaps in a viewport capped at 280px; flags use a 20px slot. The highlight uses a 0.28s spring, panel open/close 0.4s/0.32s. The same Rust view handles desktop and Web; reduced motion places the target directly.",
+      "zh": "国家列表最大高 280px，每行 36px、间隔 2px，国旗占位 20px。高亮弹簧 0.28s，面板展开/收起 0.4s/0.32s。桌面和网页共用 Rust 控件；减少动效时直接定位。"
     }
   },
   {
@@ -1325,8 +1325,8 @@
       "zh": "确认输入框左右各留 12px，点击留白也能聚焦。输入法选词结束且短语完全匹配后，按 Enter 即可提交；失败可原位重试。"
     },
     "motion": {
-      "en": "Width and height grow from the trigger while the 8px radius stays fixed. The content keeps its expanded width and fades in after the surface starts opening.",
-      "zh": "宽高从触发键边缘连续变化，外框与触发键采用相同的 8px 圆角；内容保持展开宽度，外框扩开后淡入。"
+      "en": "Width and height grow from the trigger while the 8px radius stays fixed. The content keeps its expanded width and fades in after the surface starts opening. The progress and success fills reveal a full-size rounded face through a straight-edged clip, so the fill and inverted label preserve the button's 8px corners.",
+      "zh": "宽高从触发键边缘连续变化，外框与触发键采用相同的 8px 圆角；内容保持展开宽度，外框扩开后淡入。进度与成功填充通过直边裁切揭开完整圆角底片，反色文字共用裁切区域，填满后仍保留按钮的 8px 圆角。"
     },
     "api": {
       "en": "Subscribe to a request ticket and call resolve with that same ticket after the host operation completes.",

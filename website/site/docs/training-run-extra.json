@@ -1,0 +1,16 @@
+[
+  {
+    "id": "training-run",
+    "group": "intelligence",
+    "title": {"en": "Training run", "zh": "训练任务"},
+    "rustType": "TrainingRun",
+    "lead": {"en": "Monitor a host-controlled training job and inspect train and validation loss.", "zh": "查看宿主控制的训练任务，检查训练和验证损失。"},
+    "usageRust": "use kui::components::training_run::{TrainingRun, TrainingRunSnapshot};\n\nlet job = TrainingRunSnapshot::new(\"Support classifier\", \"Example model\", 1200, 3);\nlet control = cx.new(|_| TrainingRun::new(job));",
+    "method": "resolve",
+    "signature": "(u64, Result<TrainingRunSnapshot, SharedString>, &mut Context<Self>)",
+    "event": "TrainingRunRequest",
+    "rule": {"en": "Status, metrics, events, errors and endpoint come from the host; the component does not train or deploy. Actions are opt-in and must be resolved by request ID. Cancel requires two presses within three seconds.", "zh": "状态、指标、事件、错误和端点均由宿主提供；组件不执行训练或部署。操作需显式启用并按请求 ID 返回结果。取消需在三秒内确认两次。"},
+    "api": {"en": "Provide a TrainingRunSnapshot, enable actions with with_actions, subscribe to TrainingRunRequest and call resolve. Supply a fixed positive loss ceiling when needed; the default is 2. Chart focus accepts arrows, Shift+arrows, Home, End and Escape.", "zh": "传入 TrainingRunSnapshot，通过 with_actions 启用操作，订阅 TrainingRunRequest 并调用 resolve。可设置固定的正数损失上限，默认为 2。聚焦图表后可用方向键、Shift+方向键、Home、End 和 Escape 查看样本。"},
+    "motion": {"en": "The demo is simulated and pauses its updates when hidden. Curves currently update directly without smoothing; pointer scrubbing, result-card transitions and real screen-reader, responsive, desktop and Web acceptance remain pending.", "zh": "演示数据为模拟，隐藏时暂停更新。曲线目前直接更新，平滑动效、指针拖动检查、结果卡片过渡以及读屏、响应式、桌面和 Web 验收仍待完成。"}
+  }
+]

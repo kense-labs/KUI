@@ -1,0 +1,31 @@
+[
+  {
+    "id": "reasoning-tree",
+    "group": "intelligence",
+    "title": {
+      "en": "Reasoning tree",
+      "zh": "推理树"
+    },
+    "rustType": "ReasoningTree",
+    "lead": {
+      "en": "Illustrate a beam search over host-supplied thoughts.",
+      "zh": "用宿主提供的候选思路演示束搜索。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::reasoning_tree::{ReasoningTree, Thought};\n\nlet thoughts = vec![Thought::new(\"first\", \"Reduce scope\").score(0.8)];\nlet control = cx.new(|cx| ReasoningTree::new(\"Choose a plan\", thoughts, cx));",
+    "method": "set_thoughts",
+    "signature": "(Vec<Thought>, &mut Context<Self>)",
+    "event": "ReasoningTreeEvent",
+    "rule": {
+      "en": "The host supplies unique stable IDs, thoughts and illustrative scores; no model is queried. Invalid or missing scores use a deterministic fallback.",
+      "zh": "宿主提供唯一稳定 ID、思路及示意分数；组件不调用模型。缺失或无效分数使用确定性回退值。"
+    },
+    "api": {
+      "en": "Use set_beam_width (1–3), set_playing, step and restart. set_error reports a host failure; Retry asks the host to recover. Arrow keys navigate and expand the visible tree.",
+      "zh": "使用 set_beam_width（1–3）、set_playing、step 和 restart；宿主可通过 set_error 显示失败，Retry 事件请求恢复。方向键导航并展开可见节点。"
+    },
+    "motion": {
+      "en": "Stages fade in with score growth; wide containers show connected tree nodes and narrow containers use an outline. Continuous-motion and input verification remain pending.",
+      "zh": "各阶段淡入并增长分数条；宽屏展示节点与连线，窄屏为纵向树。连续动画与输入实测仍待完成。"
+    }
+  }
+]

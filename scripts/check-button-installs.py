@@ -24,6 +24,8 @@ def verify(work):
     documents = ["button"]
     for name in ("family", "collection", "text-field", "workspace", "library"):
         documents.extend(x["id"] for x in json.loads((lib / f"{name}-docs.json").read_text()))
+    for name in ("inputs-extra", "charts-extra", "media-extra", "loader-extra", "provider-extra", "ghost-extra", "feedback-extra", "agent-loop-extra", "reasoning-tree-extra", "image-generation-extra", "speculative-extra", "image-reveal-extra", "prompt-cache-extra", "meeting-summary-extra", "ai-workflow-extra", "training-run-extra", "mixture-of-experts-extra", "agent-handoff-extra", "llm-cost-calculator-extra", "agent-cursor-extra", "link-unfurl-extra", "tone-tuner-extra"):
+        documents.extend(x["id"] for x in json.loads((lib / f"{name}.json").read_text()))
     assert ["button", *items] == documents
     assert len(documents) == len(set(documents))
     manifests = ["button", *items, "all-components"]

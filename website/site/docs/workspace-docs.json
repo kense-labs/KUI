@@ -169,8 +169,8 @@
       "zh": "with_checked 指定初值。set_checked 同步宿主值，不会重复发送变更事件。"
     },
     "motion": {
-      "en": "An 18px thumb stretches by 5px on press and glides across its 42 × 24px track.",
-      "zh": "18px 滑块按下时加宽 5px，释放后沿 42 × 24px 轨道滑动。"
+      "en": "An 18px circular thumb stretches by 5px on press and glides across its 42 × 24px capsule track. The track uses radius.full (12px semicircular ends), an explicit exception to the 8px rectangular default.",
+      "zh": "18px 圆形滑块按下时加宽 5px，释放后沿 42 × 24px 胶囊轨道滑动。轨道使用 radius.full，两端为 12px 半圆，是矩形默认 8px 之外的明确例外。"
     }
   },
   {

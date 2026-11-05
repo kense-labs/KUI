@@ -1,0 +1,16 @@
+[
+  {
+    "id": "image-reveal",
+    "group": "media",
+    "title": { "en": "Image reveal", "zh": "图片生成显现" },
+    "rustType": "ImageReveal",
+    "lead": { "en": "Show host-controlled image generation progress.", "zh": "展示宿主控制的图片生成进度。" },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::image_reveal::ImageReveal;\n\nlet control = cx.new(|_| ImageReveal::new(\"Quiet room\", 1.5));",
+    "method": "set_progress",
+    "signature": "(u64, f32, &mut Context<Self>)",
+    "event": "ImageRevealEvent",
+    "rule": { "en": "The host begins each run with a unique ID, optionally supplies a preview, and reports progress, completion or failure. The example is simulated.", "zh": "宿主为每次任务提供唯一 ID，可设置预览，并报告进度、完成或失败。示例为模拟数据。" },
+    "api": { "en": "begin, set_preview, set_progress, finish and fail ignore replies from older or finished runs. Retry is emitted to the host.", "zh": "begin、set_preview、set_progress、finish 和 fail 忽略旧任务或已结束任务的回调；重试事件交给宿主处理。" },
+    "motion": { "en": "Progress follows updates over 200 ms and reveals the preview from top to bottom. Image blur, grain and soft-edge effects are not yet implemented or visually verified.", "zh": "进度以 200ms 跟随更新，预览从上到下显现；模糊、颗粒与柔边效果尚未实现或完成视觉验收。" }
+  }
+]

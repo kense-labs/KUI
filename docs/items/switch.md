@@ -37,5 +37,9 @@ with_checked sets the initial value. set_checked synchronizes host updates witho
 
 Click the label or activate with Enter or Space. A disabled switch ignores input. An 18px thumb stretches by 5px on press and glides across its 42 × 24px track.
 
+## Shape
+
+The 42 × 24px track uses `Theme.tokens.radius.full`, giving semicircular 12px ends; the 18px thumb remains circular and becomes a capsule while stretched. This is an explicit exception to KUI's 8px rectangular surface rule (user instruction, 2026-11-05). Embedded examples, including simulated failures, network interruptions and Cookie settings, keep this default. `with_track_radius(Pixels)` remains an explicit host override; the examples do not force 8px.
+
 - Event: `bool`.
 - Preview: [English](/en/kui/components/switch/) · [中文](/kui/components/switch/).

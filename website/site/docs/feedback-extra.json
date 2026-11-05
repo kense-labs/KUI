@@ -1,0 +1,31 @@
+[
+  {
+    "id": "response-feedback",
+    "group": "intelligence",
+    "title": {
+      "en": "Response feedback",
+      "zh": "回答反馈"
+    },
+    "rustType": "ResponseFeedback",
+    "lead": {
+      "en": "Collect a rating, structured reasons and an optional note for a response.",
+      "zh": "收集回答评分、原因和可选补充说明。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::response_feedback::ResponseFeedback;\n\nlet control = cx.new(|cx| ResponseFeedback::new(\"feedback\", \"message-1\", window, cx));",
+    "method": "complete",
+    "signature": "(u64, bool, &mut Context<Self>)",
+    "event": "ResponseFeedbackEvent",
+    "rule": {
+      "en": "The host sends Submit events and reports the matching request ID through complete; failure preserves the draft for retry. The example simulates failure and recovery.",
+      "zh": "宿主处理 Submit 事件，并用请求编号调用 complete；失败时保留内容，可重试。预览模拟失败与恢复。"
+    },
+    "api": {
+      "en": "Choose a rating, toggle reasons, add an optional note and submit. Duplicate pending submissions and stale callbacks are ignored.",
+      "zh": "选择评分、切换原因、填写可选说明并提交。等待期间重复提交和过期回调会被忽略。"
+    },
+    "motion": {
+      "en": "The inline panel expands and folds with a spring and follows the reduced-motion preference. Fine-grained transitions and focus handoff still require visual and accessibility verification.",
+      "zh": "内联面板以弹簧展开和收起，遵循减少动态效果设置。细部过渡和焦点交接仍需视觉与无障碍验收。"
+    }
+  }
+]

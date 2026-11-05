@@ -1,0 +1,31 @@
+[
+  {
+    "id": "agent-cursor",
+    "group": "intelligence",
+    "title": {
+      "en": "Agent cursor",
+      "zh": "智能体光标"
+    },
+    "rustType": "AgentCursor",
+    "lead": {
+      "en": "A host-driven, read-only document and review cursor.",
+      "zh": "由宿主驱动的只读文档与审核光标。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_cursor::{AgentCursor, DocBlock, DocBlockKind};\n\nlet blocks = vec![DocBlock::new(\"body\", DocBlockKind::Paragraph, \"A short draft.\")];\nlet control = cx.new(|_| AgentCursor::new(\"Document\", blocks));",
+    "method": "set_target_for",
+    "signature": "(u64, impl Into<SharedString>, &mut Context<Self>) -> bool",
+    "event": "AgentCursorEvent",
+    "rule": {
+      "en": "The host supplies document blocks, target positions, run results and persistence. The preview simulates edits and saves nothing.",
+      "zh": "宿主负责文档、光标目标、运行结果和持久化。预览仅模拟修改，不会保存。"
+    },
+    "api": {
+      "en": "Handle Run using its ticket with set_target_for, set_position_for, set_status_for and set_blocks_for; finish or fail the same ticket. Stop invalidates it and restores the original. Review exposes Accept and Undo events. set_position uses local logical pixels; set_visible controls off-screen work.",
+      "zh": "处理 Run 时使用 ticket 调用 set_target_for、set_position_for、set_status_for 和 set_blocks_for，再对同一 ticket 调用 finish 或 fail。Stop 使 ticket 失效并恢复原文。审核阶段提供 Accept 与 Undo 事件；set_position 使用文档内逻辑像素，set_visible 控制离屏工作。"
+    },
+    "motion": {
+      "en": "The cursor follows measured block targets with a spring; reduced motion jumps to the target and off-screen animation stops. Word-by-word streaming, selection effects and full reference comparison remain unimplemented or unverified.",
+      "zh": "光标以弹簧跟随实测的文档块位置；减少动效时直接跳转，离屏停止动画。逐字流、选择效果及完整参考对照尚未实现或验收。"
+    }
+  }
+]

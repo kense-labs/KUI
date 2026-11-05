@@ -10,6 +10,14 @@ KUI ships **one component source tree** for two runtimes:
 
 GPUI pins stay exact: `gpui-pre` / `gpui-pre-platform` / `gpui-pre-web` at `=0.3.10`.
 
+The workspace patches `gpui-pre-web` through `vendor/gpui-pre-web`. It validates
+physical pixel boxes against CSS bounds and `devicePixelRatio`, so emulated
+viewports keep layout and pointer coordinates aligned. The version stays
+`0.3.10`; Safari's CSS fallback and consistent pixel boxes retain their existing
+behavior. See the vendored `KUI-PATCH.md` and its five regression cases.
+Dependency consumers do not inherit workspace patches; a custom Web host that
+needs the same emulation fix must apply it in its own root manifest.
+
 ## Same source rule
 
 - Controls live under `registry/` (package `kense-kui`, Rust library `kui`).

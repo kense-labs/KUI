@@ -3,6 +3,9 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
+python3 scripts/check-site-inputs.py
+cargo run --locked -p kui-build -- build
+cargo run --locked -p kui-build -- verify-preview
 ./scripts/build-web.sh
 staging="$(mktemp -d "${TMPDIR:-/tmp}/kui-site.XXXXXXXX")"
 trap 'rm -rf "$staging"' EXIT

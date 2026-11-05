@@ -634,10 +634,9 @@ impl NavDemo {
                 s._subs.push(cx.subscribe(&grid, |_: &mut Self, _, export: &GridExport, cx| {
                     if let Some(host) = cx.try_global::<CsvDownload>() {
                         (host.0)(&export.filename, &export.csv);
-                        return;
-                    }
-                    #[cfg(not(target_family = "wasm"))]
-                    {
+                    } else {
+                        #[cfg(not(target_family = "wasm"))]
+                        {
                         let dir = std::env::current_dir().unwrap_or_else(|_| ".".into());
                         let path = cx.prompt_for_new_path(&dir, Some(&export.filename));
                         let csv = export.csv.clone();
@@ -662,6 +661,7 @@ impl NavDemo {
                             });
                         })
                         .detach()
+                        }
                     }
                 }));
                 grid.into()

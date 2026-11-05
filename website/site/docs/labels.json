@@ -16,8 +16,8 @@
     "en": "What KUI is"
   },
   "docs.intro.what.body": {
-    "zh": "共享的主题令牌、动效与 108 个组件。crates.io 包名为 kense-kui，Rust 库名为 kui。组件库、CLI 安装源码与 Story 预览使用同一套源码。",
-    "en": "Shared theme tokens, motion, and 108 components. The crates.io package is kense-kui and the Rust library is kui. The library, CLI-installed source, and story previews use the same source tree."
+    "zh": "共享的主题令牌、动效与 组件。crates.io 包名为 kense-kui，Rust 库名为 kui。组件库、CLI 安装源码与 Story 预览使用同一套源码。",
+    "en": "Shared theme tokens, motion, and components. The crates.io package is kense-kui and the Rust library is kui. The library, CLI-installed source, and story previews use the same source tree."
   },
   "docs.intro.org": {
     "zh": "如何组织",
@@ -28,8 +28,8 @@
     "en": "Foundation — theme tokens, motion, init"
   },
   "docs.intro.org.c": {
-    "zh": "Components — 108 个成品控件",
-    "en": "Components — 108 finished controls"
+    "zh": "Components — 组件",
+    "en": "Components — components"
   },
   "docs.intro.org.p": {
     "zh": "Primitives — 无 chrome 的行为层",
@@ -318,5 +318,13 @@
   "docs.install.cli.body": {
     "zh": "CLI 从 GitHub 安装，未发布到 crates.io。先运行 kui init，再运行 kui add <id>。复制源码后，将示例中的 kui:: 改为 crate::ui::。",
     "en": "The CLI is installed from GitHub and is not published to crates.io. Run kui init, then kui add <id>. For copied source, replace kui:: imports in examples with crate::ui::."
+  },
+  "sidebar.group.text-effects": {
+    "zh": "文字动效",
+    "en": "Text effects"
+  },
+  "sidebar.group.media": {
+    "en": "Media",
+    "zh": "媒体"
   }
 }

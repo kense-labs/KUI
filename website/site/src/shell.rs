@@ -22,7 +22,10 @@ fn icon(name: &str, size: u8) -> String {
         "sun" => {
             r#"<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>"#
         }
-        "moon" => r#"<path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/>"#,
+        // Rounded Moon coordinates from Lucide; notice: public/assets/LUCIDE-LICENSE.txt.
+        "moon" => {
+            r#"<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>"#
+        }
         "palette" => {
             r#"<path d="M12 3a9 9 0 1 0 0 18h.9a2.2 2.2 0 0 0 1.6-3.7 1.55 1.55 0 0 1 1.1-2.65h1.5A4 4 0 0 0 21 10.55C20.65 6.25 16.65 3 12 3Z"/><g fill="currentColor" stroke="none"><circle cx="7.6" cy="11" r="1.2"/><circle cx="10.7" cy="7.8" r="1.2"/><circle cx="15.1" cy="8.2" r="1.2"/></g>"#
         }

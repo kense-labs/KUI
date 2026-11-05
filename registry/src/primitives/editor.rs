@@ -1,8 +1,9 @@
 //! Editable Unicode text, IME composition and selection shared by KUI fields.
-use crate::primitives::family::Paint;
+use crate::primitives::family::{Paint, disabled_motion, ease};
 use gpui::{prelude::*, *};
 use std::{ops::Range, time::Duration};
 use unicode_segmentation::UnicodeSegmentation;
+use web_time::Instant;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
@@ -26,6 +27,29 @@ pub enum EditEvent {
     Navigate(bool),
     Focused,
     Blurred,
+}
+/// Optional inline completion events, separate from ordinary edit events.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EditorCompletionEvent {
+    SelectionChanged,
+    CompositionEnded,
+    Accepted { text: SharedString, word: bool },
+    Dismissed,
+}
+/// Opt-in editor shortcuts, independent of normal text and composition events.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditorShortcutEvent {
+    CommandSubmit,
+}
+fn is_command_submit(
+    enabled: bool,
+    composing: bool,
+    key: &str,
+    command: bool,
+    shift: bool,
+    alt: bool,
+) -> bool {
+    enabled && !composing && key == "enter" && command && !shift && !alt
 }
 struct Layout {
     bounds: Bounds<Pixels>,
@@ -166,6 +190,12 @@ fn browser_text_input() -> Subscription {
 
 /// Optional glyph runs for an attributed document. Text, IME and selection retain the normal input path.
 pub type RunStyler = std::rc::Rc<dyn Fn(&str, &TextRun) -> Vec<TextRun>>;
+#[derive(Clone, Copy)]
+struct GhostChunk {
+    len: usize,
+    started: Instant,
+}
+
 pub struct Editor {
     run_styler: Option<RunStyler>,
     label: SharedString,
@@ -178,6 +208,11 @@ pub struct Editor {
     anchor: usize,
     caret: usize,
     marked: Option<Range<usize>>,
+    ghost: SharedString,
+    ghost_chunks: Vec<GhostChunk>,
+    ghost_fade_out: Option<Instant>,
+    ghost_preview: bool,
+    command_submit: bool,
     pub focus: FocusHandle,
     pub revealed: bool,
     pub disabled: bool,
@@ -196,6 +231,8 @@ pub struct Editor {
     _listeners: Vec<Subscription>,
 }
 impl EventEmitter<EditEvent> for Editor {}
+impl EventEmitter<EditorCompletionEvent> for Editor {}
+impl EventEmitter<EditorShortcutEvent> for Editor {}
 impl Focusable for Editor {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -266,6 +303,11 @@ impl Editor {
             anchor: 0,
             caret: 0,
             marked: None,
+            ghost: "".into(),
+            ghost_chunks: Vec::new(),
+            ghost_fade_out: None,
+            ghost_preview: false,
+            command_submit: false,
             focus,
             revealed: false,
             disabled: false,
@@ -291,6 +333,81 @@ impl Editor {
     pub fn selection(&self) -> Range<usize> {
         self.selected()
     }
+    /// Opt in to a Cmd/Ctrl+Enter event without changing ordinary Enter behavior.
+    pub fn set_command_submit(&mut self, enabled: bool) {
+        self.command_submit = enabled;
+    }
+    pub fn is_composing(&self) -> bool {
+        self.marked.is_some()
+    }
+    /// Show a visual suffix without altering the editable value or accessibility text.
+    pub fn set_ghost(&mut self, ghost: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let ghost = ghost.into();
+        if self.ghost == ghost && self.ghost_fade_out.is_none() {
+            return;
+        }
+        let old = self.ghost.as_ref();
+        if self.ghost_fade_out.take().is_some() || ghost.is_empty() {
+            self.ghost_chunks.clear();
+        } else if let Some(added) = ghost.strip_prefix(old) {
+            if !added.is_empty() {
+                self.ghost_chunks.push(GhostChunk {
+                    len: added.len(),
+                    started: Instant::now(),
+                });
+            }
+        } else if old.ends_with(ghost.as_ref()) {
+            let mut removed = old.len() - ghost.len();
+            while removed > 0 && !self.ghost_chunks.is_empty() {
+                let head = &mut self.ghost_chunks[0];
+                if removed < head.len {
+                    head.len -= removed;
+                    removed = 0;
+                } else {
+                    removed -= head.len;
+                    self.ghost_chunks.remove(0);
+                }
+            }
+        } else {
+            self.ghost_chunks.clear();
+            if !ghost.is_empty() {
+                self.ghost_chunks.push(GhostChunk {
+                    len: ghost.len(),
+                    started: Instant::now(),
+                });
+            }
+        }
+        // A replacement after a fade starts fresh, rather than flashing the old suffix.
+        if !ghost.is_empty() && self.ghost_chunks.is_empty() {
+            self.ghost_chunks.push(GhostChunk {
+                len: ghost.len(),
+                started: Instant::now(),
+            });
+        }
+        self.ghost = ghost;
+        cx.notify();
+    }
+    /// Fade only the visual suffix; it is immediately unavailable for acceptance.
+    pub fn dismiss_ghost(&mut self, cx: &mut Context<Self>) {
+        if self.ghost_fade_out.is_some() {
+            return;
+        }
+        if self.ghost.is_empty() || disabled_motion(cx) {
+            self.set_ghost("", cx);
+        } else {
+            self.ghost_fade_out = Some(Instant::now());
+            cx.notify();
+        }
+    }
+    /// Allow a visual-only example suffix while unfocused. The accessible value
+    /// and the editable buffer remain unchanged.
+    pub fn set_ghost_preview(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.ghost_preview == enabled {
+            return;
+        }
+        self.ghost_preview = enabled;
+        cx.notify();
+    }
     pub fn value(&self) -> &str {
         &self.value
     }
@@ -301,6 +418,9 @@ impl Editor {
         let value = self.normalize(&s.into());
         if self.value == value {
             return;
+        }
+        if self.ghost_fade_out.is_some() {
+            self.set_ghost("", cx);
         }
         self.value = value;
         self.caret = self.value.len();
@@ -338,6 +458,7 @@ impl Editor {
         self.value[..r.start].encode_utf16().count()..self.value[..r.end].encode_utf16().count()
     }
     fn select(&mut self, offset: usize, extend: bool, w: &Window, cx: &mut Context<Self>) {
+        let previous = self.selected();
         self.caret = offset.min(self.value.len());
         if !extend {
             self.anchor = self.caret
@@ -345,6 +466,9 @@ impl Editor {
         self.follow_caret = true;
         self.cursor = true;
         w.notify_text_selection_changed(&self.focus);
+        if previous != self.selected() {
+            cx.emit(EditorCompletionEvent::SelectionChanged);
+        }
         cx.notify()
     }
     fn changed(&mut self, w: &Window, cx: &mut Context<Self>) {
@@ -373,6 +497,9 @@ impl Editor {
     ) {
         if self.disabled {
             return;
+        }
+        if self.ghost_fade_out.is_some() {
+            self.set_ghost("", cx);
         }
         let range = range
             .map(|r| self.bytes(r))
@@ -441,6 +568,39 @@ impl Editor {
             }
         }
     }
+    /// Accept an available suggestion through the normal edit/undo path.
+    pub fn accept_ghost(&mut self, word: bool, w: &Window, cx: &mut Context<Self>) -> bool {
+        if self.disabled
+            || self.marked.is_some()
+            || self.ghost_preview
+            || self.ghost_fade_out.is_some()
+            || self.ghost.is_empty()
+            || !self.selected().is_empty()
+            || self.caret != self.value.len()
+        {
+            return false;
+        }
+        let text = if word {
+            let mut length = 0;
+            for part in self.ghost.split_word_bounds() {
+                length += part.len();
+                if !part.chars().all(char::is_whitespace) {
+                    break;
+                }
+            }
+            self.ghost[..length].to_owned()
+        } else {
+            self.ghost.to_string()
+        };
+        let remaining = self.ghost[text.len()..].to_owned();
+        self.set_ghost(remaining, cx);
+        cx.emit(EditorCompletionEvent::Accepted {
+            text: text.clone().into(),
+            word,
+        });
+        self.edit(None, &text, false, None, w, cx);
+        true
+    }
     fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         if self.disabled || self.marked.is_some() {
             return;
@@ -448,7 +608,41 @@ impl Editor {
         let m = e.keystroke.modifiers;
         let k = e.keystroke.key.as_str();
         let cmd = m.platform || m.control;
+        if is_command_submit(
+            self.command_submit,
+            self.marked.is_some(),
+            k,
+            cmd,
+            m.shift,
+            m.alt,
+        ) {
+            cx.emit(EditorShortcutEvent::CommandSubmit);
+            w.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
         let r = self.selected();
+        if !self.ghost_preview
+            && self.ghost_fade_out.is_none()
+            && !self.ghost.is_empty()
+            && r.is_empty()
+            && r.end == self.value.len()
+        {
+            let word = k == "right" && (m.platform || m.control || m.alt) && !m.shift;
+            if (k == "tab" && !m.shift && !m.alt && !m.control && !m.platform) || word {
+                self.accept_ghost(word, w, cx);
+                w.prevent_default();
+                cx.stop_propagation();
+                return;
+            }
+            if k == "escape" {
+                cx.emit(EditorCompletionEvent::Dismissed);
+                cx.notify();
+                w.prevent_default();
+                cx.stop_propagation();
+                return;
+            }
+        }
         match k {
             "a" if cmd => self.select_all(w, cx),
             "z" if cmd => self.undo(m.shift, w, cx),
@@ -566,8 +760,11 @@ impl EntityInputHandler for Editor {
         self.marked.clone().map(|r| self.units(r))
     }
     fn unmark_text(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        self.marked = None;
+        let had_composition = self.marked.take().is_some();
         w.notify_text_input_changed(&self.focus);
+        if had_composition {
+            cx.emit(EditorCompletionEvent::CompositionEnded);
+        }
         cx.notify()
     }
     fn replace_text_in_range(
@@ -645,6 +842,16 @@ impl EntityInputHandler for Editor {
 impl Editor {
     fn paint(&mut self, b: Bounds<Pixels>, w: &mut Window, cx: &mut Context<Self>) {
         let focused = self.focus.is_focused(w);
+        let reduced = disabled_motion(cx);
+        let now = Instant::now();
+        if self
+            .ghost_fade_out
+            .is_some_and(|started| reduced || now.duration_since(started).as_secs_f32() >= 0.11)
+        {
+            self.ghost = "".into();
+            self.ghost_chunks.clear();
+            self.ghost_fade_out = None;
+        }
         let p = Paint::get(cx);
         let blank = self.value.is_empty();
         let masked = self.mode == InputMode::Password && !self.revealed && !blank;
@@ -657,7 +864,16 @@ impl Editor {
         } else {
             vec![]
         };
-        let text: SharedString = if blank {
+        let show_ghost = (focused || self.ghost_preview || self.ghost_fade_out.is_some())
+            && !blank
+            && !masked
+            && self.marked.is_none()
+            && self.selected().is_empty()
+            && self.caret == self.value.len()
+            && !self.ghost.is_empty();
+        let text: SharedString = if show_ghost {
+            format!("{}{}", self.value, self.ghost).into()
+        } else if blank {
             self.committed_label
                 .clone()
                 .unwrap_or_else(|| self.placeholder.clone())
@@ -674,7 +890,44 @@ impl Editor {
         };
         let line = px(self.font_size + 7.);
         let multi = self.mode.multiline();
-        let styled = if !blank && !masked {
+        let styled = if show_ghost {
+            let mut base = run.clone();
+            base.len = self.value.len();
+            let mut runs = vec![base];
+            let fade = self.ghost_fade_out.map_or(1., |started| {
+                1. - ease((now.duration_since(started).as_secs_f32() / 0.11).clamp(0., 1.))
+            });
+            let mut animating = self.ghost_fade_out.is_some();
+            if self
+                .ghost_chunks
+                .iter()
+                .map(|chunk| chunk.len)
+                .sum::<usize>()
+                == self.ghost.len()
+            {
+                for chunk in &self.ghost_chunks {
+                    let progress = if reduced {
+                        1.
+                    } else {
+                        (now.duration_since(chunk.started).as_secs_f32() / 0.14).clamp(0., 1.)
+                    };
+                    animating |= progress < 1.;
+                    let mut suffix = run.clone();
+                    suffix.len = chunk.len;
+                    suffix.color = p.faint.opacity(ease(progress) * fade);
+                    runs.push(suffix);
+                }
+            } else {
+                let mut suffix = run.clone();
+                suffix.len = self.ghost.len();
+                suffix.color = p.faint.opacity(fade);
+                runs.push(suffix);
+            }
+            if animating && !reduced && w.is_visible() {
+                w.request_animation_frame();
+            }
+            Some(runs)
+        } else if !blank && !masked {
             self.run_styler.as_ref().map(|f| f(&text, &run))
         } else {
             None
@@ -888,5 +1141,53 @@ impl Render for Editor {
                 )
                 .size_full(),
             )
+    }
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::is_command_submit;
+    #[test]
+    fn shortcut_is_opt_in_and_never_intercepts_composition_or_normal_enter() {
+        assert!(is_command_submit(true, false, "enter", true, false, false));
+        assert!(!is_command_submit(
+            false, false, "enter", true, false, false
+        ));
+        assert!(!is_command_submit(true, true, "enter", true, false, false));
+        assert!(!is_command_submit(
+            true, false, "enter", false, false, false
+        ));
+        assert!(!is_command_submit(true, false, "enter", true, true, false));
+    }
+}
+
+#[cfg(test)]
+mod ghost_motion_tests {
+    use super::{Editor, InputMode};
+    use gpui::TestAppContext;
+
+    #[test]
+    fn chunks_keep_timing_when_a_word_is_accepted_and_dismissal_blocks_accept() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (view, w) = app.add_window_view(|w, cx| Editor::new("Text", InputMode::Multi, w, cx));
+        w.update(|w, cx| {
+            view.update(cx, |editor, cx| {
+                editor.set_value("Start", w, cx);
+                editor.set_ghost(" first", cx);
+                let started = editor.ghost_chunks[0].started;
+                editor.set_ghost(" first second", cx);
+                assert_eq!(editor.ghost_chunks.len(), 2);
+                assert_eq!(editor.ghost_chunks[0].started, started);
+                assert!(editor.accept_ghost(true, w, cx));
+                assert_eq!(editor.ghost.as_ref(), " second");
+                assert_eq!(editor.ghost_chunks.len(), 1);
+                editor.dismiss_ghost(cx);
+                assert!(!editor.accept_ghost(false, w, cx));
+                editor.set_value("New input", w, cx);
+                assert!(editor.ghost.is_empty());
+                assert!(editor.ghost_fade_out.is_none());
+            })
+        });
     }
 }

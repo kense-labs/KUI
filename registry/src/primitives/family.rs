@@ -247,6 +247,15 @@ impl Slide {
             (self.to + offset, vel, true)
         }
     }
+    /// Sample several springs at one instant and let the caller schedule a single frame.
+    pub(crate) fn sample_batch(&self, now: Instant, reduced: bool) -> (f32, bool) {
+        if reduced {
+            (self.to, false)
+        } else {
+            let (value, _, active) = self.sample(now);
+            (value, active)
+        }
+    }
     /// Sample from an input handler without scheduling a frame outside paint.
     pub fn value(&self, cx: &App) -> f32 {
         if disabled_motion(cx) {
@@ -527,6 +536,8 @@ mod spring_tests {
             ..a
         };
         assert_eq!(reversed.sample(mid), (x, v, true));
+        assert_eq!(reversed.sample_batch(mid, false), (x, true));
+        assert_eq!(reversed.sample_batch(mid, true), (0., false));
         assert!(reversed.sample(mid + Duration::from_millis(240)).0 < x);
         assert_eq!(
             reversed.sample(mid + Duration::from_secs(2)),

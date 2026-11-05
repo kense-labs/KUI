@@ -10,6 +10,9 @@ pub struct StoryHost {
 }
 impl StoryHost {
     fn select(id: &str, w: &mut Window, cx: &mut Context<Self>) -> Option<gpui::AnyView> {
+        if let Some(view) = crate::extra_story::story(id, w, cx) {
+            return Some(view);
+        }
         if FAMILY_IDS.contains(&id.split(':').next().unwrap_or(id))
             || crate::COLLECTION_IDS.contains(&id)
             || crate::FIELD_IDS.contains(&id)
@@ -66,6 +69,7 @@ impl Render for StoryHost {
             .chain(crate::FIELD_IDS)
             .chain(crate::WORKSPACE_IDS)
             .chain(crate::LIBRARY_IDS)
+            .chain(crate::extra_story::ids())
             .chain([
                 "theme-switch:eclipse",
                 "theme-switch:split",

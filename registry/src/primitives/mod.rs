@@ -16,6 +16,7 @@ pub mod family;
 pub mod glyph;
 pub(crate) mod kense_mark;
 pub mod menu;
+pub mod phone_flags;
 pub mod strip;
 
 pub mod disclosure;
@@ -33,3 +34,5 @@ pub mod plot;
 pub mod presentation;
 
 pub mod nav;
+
+pub mod color_motion;

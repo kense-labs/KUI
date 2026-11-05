@@ -47,4 +47,6 @@ Event: `ConfirmRequested`.
 
 Width and height grow from the trigger while the 8px radius stays fixed. The content keeps its expanded width and fades in after the surface starts opening.
 
+The progress and success fills use the same 8px rounded face as the confirmation button. Progress reveals that full-size face through a rectangular clip, keeping the moving fill edge straight and the outer corners rounded. The inverted label uses the same clip, so it stays aligned as the button widens.
+
 Desktop and web use the same GPUI view.

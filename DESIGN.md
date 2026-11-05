@@ -81,18 +81,32 @@ Line height for button labels: 20px (`leading-body` ≈ 1.4).
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Radius md | 8px | Shared corner for controls, nested highlights, menus, cards and docs surfaces |
+| Radius md | 8px | Default corner for rectangular controls, menus, cards and docs surfaces |
 | Radius sm / lg / panel | 8px | Compatibility names for the default surface radius |
-| Radius full | 9999px | Circular geometry for avatars, radio marks and status dots |
+| Radius full | 9999px | Capsule switches and period selectors; circular avatars, radio marks and status dots |
 | Space 1–8 | 4 / 8 / 12 / 16 / 24 / 32px | Padding and gaps |
 
 Control heights: sm **36px**, md **44px**, lg **50px**.
 
-Exposed corners of nested surfaces use the same 8px radius. Joined edges stay square. A circle is drawn from its diameter.
+Exposed corners of nested rectangular surfaces use the same 8px radius. Joined edges stay square. A circle is drawn from its diameter.
+
+### 胶囊开关例外 / Capsule controls
+
+2026-11-05 用户要求：原本采用胶囊形的按钮开关恢复胶囊外观，不受统一 8px 圆角限制。不要再把所有控件机械地设为 `radius.md`。
+
+- `Switch` 的 42×24px 轨道默认读取 `radius.full`，实际两端半径为 12px；18px 滑块保持圆形，按压加宽时保持胶囊。此规则同样适用于内联编辑的失败模拟、操作状态的网络模拟、设置页和 Cookie 设置中的开关。
+- `BillingToggle` 的外轨道、每段命中/焦点轮廓、移动高亮及优惠标签均使用 `radius.full`。移动高亮的圆角、边框和阴影由当前实际尺寸推导，最大为短边的一半，变宽时仍保持圆润。
+- `GlassSegmented` 的玻璃外轨道、每段命中/焦点轮廓及伸缩高亮使用 `radius.full`；36px / 44px 轨道和内部高亮保持胶囊两端，不受矩形 8px 默认值限制。
+- 其他已有规格明确为胶囊形的切换控件保留其原始形态，并在对应组件文档中记录；新增控件也先区分矩形、胶囊或圆形。`radius.md` 不是全局强制覆盖。
+- 普通矩形 Button、输入框、卡片、菜单，以及原本为矩形的 SegmentedControl / ToggleGroup 继续使用各自的 8px 默认外框；本例外不将它们批量改成胶囊。
+
+Capsules use the shared full-radius token and clamp painted corners to half the current shorter dimension. Their fills, borders, shadows and focus feedback follow the same geometry; interaction, dimensions and motion retain the component contract.
 
 ## 5. Button (MVP)
 
 All rectangular button surfaces and their highlights use the shared **8px** control radius. The preview canvas, install panel and code panel use the same radius. Primary fills follow the active accent.
+
+Progress and result overlays must preserve their owning button's outline. In GPUI, rectangular overflow clipping does not round child fills: paint a full-size rounded face beneath the progress clip. A completed fill must not cover an 8px button with a square-cornered rectangle.
 
 ### Documentation preview and source
 

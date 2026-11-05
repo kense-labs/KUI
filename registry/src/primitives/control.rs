@@ -190,3 +190,26 @@ impl UiLanguage {
         }
     }
 }
+
+/// Optional host writing direction; left-to-right is the default. GPUI has no
+/// direction property, so controls that place things on an inline axis read
+/// this the way the Web reads `getComputedStyle(...).direction`.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum UiDirection {
+    #[default]
+    Ltr,
+    Rtl,
+}
+impl gpui::Global for UiDirection {}
+impl UiDirection {
+    pub fn current(cx: &App) -> Self {
+        cx.try_global::<Self>().copied().unwrap_or_default()
+    }
+    pub fn is_rtl(self) -> bool {
+        matches!(self, Self::Rtl)
+    }
+    /// Reverse the inline step when the reading direction runs the other way.
+    pub fn inline_step(self, step: isize) -> isize {
+        if self.is_rtl() { -step } else { step }
+    }
+}

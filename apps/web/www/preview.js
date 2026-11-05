@@ -35,34 +35,46 @@ let paintedStory;
 let paintRevision = 0;
 const waiters = new Set();
 const status = document.getElementById("status");
+const bootRetryKey = "kui:preview-boot-retry:" + new URL(".", import.meta.url).pathname;
+function retryBootNetworkFailure(error) {
+  if (running || !(error instanceof TypeError) || !/fetch|import/i.test(error.message)) return false;
+  try {
+    if (sessionStorage.getItem(bootRetryKey) === "1") return false;
+    sessionStorage.setItem(bootRetryKey, "1");
+  } catch { return false; }
+  status.textContent = selected.lang === "zh" ? "正在重新连接预览…" : "Reconnecting preview…";
+  location.reload();
+  return true;
+}
 
 // Only send a wheel event to GPUI when an inner region can consume its dominant axis.
-let editorScroll, horizontalScroll;
-window.kuiEditorScroll = (x,y,w,h,up,down) => { editorScroll = w && h ? {x,y,w,h,before:up,after:down} : undefined; };
-window.kuiHorizontalScroll = (x,y,w,h,left,right) => { horizontalScroll = {x,y,w,h,before:left,after:right}; };
+let editorScroll = [], horizontalScroll = [];
+window.kuiEditorScroll = (x,y,w,h,up,down) => { if (w && h) editorScroll.push({x,y,w,h,before:up,after:down}); };
+window.kuiHorizontalScroll = (x,y,w,h,left,right) => { if (w && h) horizontalScroll.push({x,y,w,h,before:left,after:right}); };
 const containsScrollPoint = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 const canScroll = (r, delta) => r && (delta < 0 ? r.before : delta > 0 && r.after);
 if (frame?.matches("iframe.rust-story[data-story]")) {
   document.documentElement.dataset.embeddedStory = "";
   window.addEventListener("wheel", event => {
     const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
-    const r = horizontal ? horizontalScroll : editorScroll;
+    const regions = horizontal ? horizontalScroll : editorScroll;
     const delta = horizontal ? event.deltaX : event.deltaY;
-    if (!event.ctrlKey && !event.metaKey && containsScrollPoint(r, event.clientX, event.clientY) && canScroll(r, delta)) return;
+    if (!event.ctrlKey && !event.metaKey && regions.some(r => containsScrollPoint(r, event.clientX, event.clientY) && canScroll(r, delta))) return;
     event.stopPropagation();
   }, {capture:true, passive:true});
 
   // The browser owns gestures on the document and fixed menu chrome. A pan
   // starting on a scrollable row is handled by the GPUI touch recognizer.
   let listPan;
+  const listPanStories = new Set(["team-switcher", "phone-input"]);
   window.addEventListener("touchstart", e => {
     const t = e.touches[0];
-    listPan = selected.story === "team-switcher" && e.touches.length === 1
-      && containsScrollPoint(editorScroll, t.clientX, t.clientY)
-      ? { x: t.screenX, y: t.screenY, region: editorScroll, owned: false } : undefined;
+    const region = editorScroll.find(r => containsScrollPoint(r, t.clientX, t.clientY));
+    listPan = listPanStories.has(selected.story) && e.touches.length === 1 && region
+      ? { x: t.screenX, y: t.screenY, region, owned: false } : undefined;
   }, {capture: true, passive: true});
   window.addEventListener("touchmove", e => {
-    if (!listPan || e.touches.length !== 1 || selected.story !== "team-switcher") return;
+    if (!listPan || e.touches.length !== 1 || !listPanStories.has(selected.story)) return;
     const t = e.touches[0];
     const dy = listPan.y - t.screenY;
     if (!listPan.owned) {
@@ -215,7 +227,7 @@ function setPageColor() {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 }
 
-const textFieldStories = new Set(["input", "textarea", "password-field", "password-strength", "search-field", "expanding-search", "inline-edit", "combobox", "number-field", "tag-input", "multi-select", "mention-input", "emoji-picker", "color-picker", "phone-input", "rich-text-editor", "time-picker", "chat-thread", "ai-command", "agent-plan", "comment-thread", "provider-keys", "team-switcher", "share-access", "json-viewer", "data-grid", "confirm-popover", "stepper"]);
+const textFieldStories = new Set(["input", "textarea", "password-field", "password-strength", "search-field", "expanding-search", "inline-edit", "combobox", "morph-select", "scrub-input", "number-field", "tag-input", "multi-select", "mention-input", "emoji-picker", "color-picker", "phone-input", "rich-text-editor", "time-picker", "chat-thread", "ai-command", "agent-plan", "comment-thread", "provider-keys", "team-switcher", "share-access", "json-viewer", "data-grid", "confirm-popover", "stepper"]);
 let inputFont;
 function warmInputFont(story) {
   if (running && textFieldStories.has(story)) inputFont ??= fetch(new URL("./fonts/KUIInputSans.ttf", import.meta.url))
@@ -225,7 +237,7 @@ function warmInputFont(story) {
 }
 function show(story, lang) {
   warmInputFont(story);
-  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = horizontalScroll = undefined; preparePicture(false); }
+  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = []; horizontalScroll = []; preparePicture(false); }
   selected = { story, lang };
   document.documentElement.dataset.story = story.split(":")[0];
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
@@ -274,6 +286,10 @@ function preferences(nextDark, nextReduced, waitForPaint = true) {
 // GPUI calls this during prepaint. The microtask runs after the draw and
 // presentation callback returns, before the browser composites the next frame.
 window.kuiFramePainted = (height, renderedDark) => {
+  // This hook runs during scene prepaint; controls register their current regions
+  // during the following paint, so geometry from previous frames cannot linger.
+  editorScroll = [];
+  horizontalScroll = [];
   if (document.documentElement.dataset.previewError) return;
   const nextHeight = frame && height > 0 && frame.classList.contains("rust-story") ? height + "px" : "";
   const resize = nextHeight && frame.style.height !== nextHeight;
@@ -300,6 +316,7 @@ window.kuiFramePainted = (height, renderedDark) => {
 
 window.kuiPreviewStarted = () => {
   running = true;
+  try { sessionStorage.removeItem(bootRetryKey); } catch { /* Storage can be disabled. */ }
   set_accent(...accentPair);
   show(selected.story, selected.lang);
   set_preferences(dark, reduced);
@@ -307,7 +324,7 @@ window.kuiPreviewStarted = () => {
 };
 window.kuiPreview = { show, preferences, accent, preparePicture, copyPicture, controlRadius: () => themeRadius, iconIntent: dark => { if (running) set_icon_intent(dark); } };
 motion.addEventListener("change", () => preferences(dark, motion.matches));
-window.addEventListener("pagehide", () => { preparePicture(false); finishWaiters(); }, { once: true });
+window.addEventListener("pagehide", () => { editorScroll = []; horizontalScroll = []; preparePicture(false); finishWaiters(); }, { once: true });
 setPageColor();
 show(selected.story, selected.lang);
 status.textContent = selected.lang === "zh" ? "正在加载预览…" : "Loading preview…";
@@ -320,12 +337,43 @@ try {
   set_accent(...accentPair);
   start(mounted.story, dark, reduced, mounted.lang === "zh", embedded);
 } catch (error) {
-  document.documentElement.dataset.previewError = "true";
-  document.body.removeAttribute("aria-busy");
-  status.textContent = selected.lang === "zh" ? "预览未能加载，请刷新重试。" : "Preview could not load. Refresh to retry.";
-  finishWaiters();
-  console.error(error);
+  if (!retryBootNetworkFailure(error)) {
+    document.documentElement.dataset.previewError = "true";
+    document.body.removeAttribute("aria-busy");
+    status.textContent = selected.lang === "zh" ? "预览未能加载，请刷新重试。" : "Preview could not load. Refresh to retry.";
+    finishWaiters();
+    console.error(error);
+  }
 }
 
-// The story clock follows the viewport even when the canvas is inside a scrolling docs page.
-new IntersectionObserver(([entry]) => { self.kuiStoryInViewport = entry.isIntersecting; }).observe(document.documentElement);
+// Notify GPUI once per visibility edge; hidden previews must not keep a paint clock alive.
+let lastActivity;
+function syncPreviewActivity() {
+  const active = !document.hidden && self.kuiStoryInViewport !== false && self.kuiStoryPageActive !== false;
+  if (active === lastActivity || !running) return;
+  lastActivity = active;
+  request_snapshot();
+}
+document.addEventListener("visibilitychange", syncPreviewActivity);
+window.addEventListener("pagehide", () => { self.kuiStoryPageActive = false; syncPreviewActivity(); });
+window.addEventListener("pageshow", () => { self.kuiStoryPageActive = true; syncPreviewActivity(); });
+new IntersectionObserver(([entry]) => {
+  self.kuiStoryInViewport = entry.isIntersecting;
+  syncPreviewActivity();
+}).observe(document.documentElement);
+syncPreviewActivity();
+
+// WebKit may resize the GPU surface before GPUI has consumed the platform
+// callback. Reconcile logical bounds and scale after the resize observers run.
+// This only runs on geometry changes, never as an idle animation loop.
+let viewportSyncQueued = false;
+function syncPreviewViewport() {
+  if (!running || viewportSyncQueued) return;
+  viewportSyncQueued = true;
+  queueMicrotask(() => {
+    viewportSyncQueued = false;
+    if (running) request_snapshot();
+  });
+}
+new ResizeObserver(syncPreviewViewport).observe(document.documentElement);
+window.addEventListener("resize", syncPreviewViewport);

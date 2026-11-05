@@ -1,6 +1,6 @@
 //! Anchoring, dismissal and roving selection shared by command menus.
 use crate::{
-    foundation::Theme,
+    foundation::{Theme, ThemeMode},
     primitives::{
         direct_touch::Contact,
         family::{Paint, PhaseClock, Slide, ease},
@@ -20,6 +20,23 @@ pub struct MenuItem {
     pub separator_before: bool,
     pub shortcut: SharedString,
     pub checked: Option<bool>,
+    pub detail: SharedString,
+}
+fn first_enabled(items: &[MenuItem]) -> Option<usize> {
+    items.iter().position(|item| !item.disabled)
+}
+fn morph_geometry(
+    start: Bounds<Pixels>,
+    end: (f32, f32, f32, f32),
+    progress: f32,
+) -> (f32, f32, f32, f32) {
+    let t = progress.clamp(0., 1.);
+    (
+        f32::from(start.left()) * (1. - t) + end.0 * t,
+        f32::from(start.top()) * (1. - t) + end.1 * t,
+        f32::from(start.size.width) * (1. - t) + end.2 * t,
+        f32::from(start.size.height) * (1. - t) + end.3 * t,
+    )
 }
 impl MenuItem {
     pub fn new(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
@@ -32,7 +49,12 @@ impl MenuItem {
             separator_before: false,
             shortcut: "".into(),
             checked: None,
+            detail: "".into(),
         }
+    }
+    pub fn with_detail(mut self, detail: impl Into<SharedString>) -> Self {
+        self.detail = detail.into();
+        self
     }
     pub fn with_icon(mut self, g: Glyph) -> Self {
         self.glyph = Some(g);
@@ -62,6 +84,10 @@ impl MenuItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuSelection(pub SharedString);
 
+/// Optional web host bridge for wheel events over an open scrollable menu.
+pub struct MenuScrollRegion(pub fn(Bounds<Pixels>, bool, bool));
+impl Global for MenuScrollRegion {}
+
 /// Horizontal placement relative to an anchored trigger.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAlign {
@@ -88,8 +114,20 @@ pub(crate) struct MenuCore {
     row_height: f32,
     sheet_drag: Slide,
     sheet_touch: Contact,
+    scroll: ScrollHandle,
+    pending_reveal: Option<usize>,
 }
 impl MenuCore {
+    /// Replace a panel's rows while keeping its focus and resetting its active row.
+    /// This prevents a previous row index from addressing the new, shorter list.
+    pub(crate) fn replace_items(&mut self, items: Vec<MenuItem>) {
+        self.items = items;
+        self.active = first_enabled(&self.items);
+        self.pending_reveal = self.active;
+        if let Some(i) = self.active {
+            self.highlight.reset(self.top(i));
+        }
+    }
     pub fn new(id: ElementId, name: SharedString, items: Vec<MenuItem>, cx: &App) -> Self {
         Self {
             id,
@@ -109,6 +147,8 @@ impl MenuCore {
             row_height: 36.,
             sheet_drag: Slide::snappy(0.),
             sheet_touch: Default::default(),
+            scroll: ScrollHandle::new(),
+            pending_reveal: None,
         }
     }
     fn top(&self, i: usize) -> f32 {
@@ -129,6 +169,7 @@ impl MenuCore {
         cx: &mut App,
     ) {
         self.sheet_drag.reset(0.);
+        self.scroll.set_offset(gpui::point(px(0.), px(0.)));
         self.point = point;
         self.open = true;
         self.appear.set(1., cx);
@@ -137,9 +178,10 @@ impl MenuCore {
         self.active = if last {
             self.items.iter().rposition(|r| !r.disabled)
         } else {
-            self.items.iter().position(|r| !r.disabled)
+            first_enabled(&self.items)
         };
         self.visible_highlight(keyboard);
+        self.pending_reveal = if keyboard { self.active } else { None };
         self.focus.focus(w, cx)
     }
     fn visible_highlight(&mut self, show: bool) {
@@ -170,6 +212,38 @@ pub(crate) trait MenuControl: Sized + 'static {
     fn horizontal(&mut self, _: usize, _: bool, _: &mut Context<Self>) {}
     fn compact(&self, _: &Window) -> bool {
         false
+    }
+    /// Optional trigger-to-panel geometry transition for media overlays.
+    fn morph_panel(&self) -> bool {
+        false
+    }
+    /// Roster rows use a full-row muted hover instead of the compact menu highlight.
+    fn roster(&self) -> bool {
+        false
+    }
+    fn leading(&self, _: usize, _: bool, _: &Context<Self>) -> Option<AnyElement> {
+        None
+    }
+    /// In-panel content translation and opacity during a submenu transition.
+    fn content_motion(&mut self, _: &Window, _: &App) -> (f32, f32) {
+        (0., 1.)
+    }
+}
+fn open_panel<T: MenuControl>(
+    v: &mut T,
+    point: Option<Point<Pixels>>,
+    keyboard: bool,
+    last: bool,
+    w: &mut Window,
+    cx: &mut Context<T>,
+) {
+    let morph = v.morph_panel();
+    let m = v.core();
+    let was_open = m.open;
+    m.show(point, keyboard, last, w, cx);
+    if morph && !was_open {
+        m.appear.reset(0.);
+        m.appear.duration(1., 0.36, cx);
     }
 }
 fn key<T: MenuControl>(v: &mut T, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<T>) {
@@ -228,12 +302,65 @@ fn key<T: MenuControl>(v: &mut T, e: &KeyDownEvent, w: &mut Window, cx: &mut Con
             };
             m.active = Some(i);
             m.highlight.reset(m.top(i));
+            m.pending_reveal = Some(i);
         }
         _ => return,
     }
     w.prevent_default();
     cx.stop_propagation();
     cx.notify();
+}
+fn glass_panel_shadow(mode: ThemeMode) -> Vec<BoxShadow> {
+    let ink = black();
+    let dark = mode == ThemeMode::Dark;
+    vec![
+        BoxShadow {
+            color: white().opacity(if dark { 0.12 } else { 0.5 }),
+            offset: point(px(0.), px(1.)),
+            blur_radius: px(0.),
+            spread_radius: px(0.),
+            inset: true,
+        },
+        BoxShadow {
+            color: ink.opacity(if dark { 0.3 } else { 0.06 }),
+            offset: point(px(0.), px(1.)),
+            blur_radius: px(2.),
+            spread_radius: px(0.),
+            inset: false,
+        },
+        BoxShadow {
+            color: ink.opacity(if dark { 0.5 } else { 0.2 }),
+            offset: point(px(0.), px(if dark { 12. } else { 10. })),
+            blur_radius: px(if dark { 32. } else { 28. }),
+            spread_radius: px(0.),
+            inset: false,
+        },
+        BoxShadow {
+            color: ink.opacity(if dark { 0.55 } else { 0.24 }),
+            offset: point(px(0.), px(28.)),
+            blur_radius: px(if dark { 64. } else { 60. }),
+            spread_radius: px(0.),
+            inset: false,
+        },
+    ]
+}
+fn glass_hover_shadow(mode: ThemeMode) -> Vec<BoxShadow> {
+    vec![
+        BoxShadow {
+            color: white().opacity(if mode == ThemeMode::Dark { 0.14 } else { 0.7 }),
+            offset: point(px(0.), px(1.)),
+            blur_radius: px(0.),
+            spread_radius: px(0.),
+            inset: true,
+        },
+        BoxShadow {
+            color: black().opacity(0.06),
+            offset: point(px(0.), px(1.)),
+            blur_radius: px(2.),
+            spread_radius: px(0.),
+            inset: false,
+        },
+    ]
 }
 /// Add the trigger and an out-of-flow panel to the same stable element.
 pub(crate) fn render_menu<T: MenuControl>(
@@ -247,8 +374,18 @@ pub(crate) fn render_menu<T: MenuControl>(
     let p = Paint::get(cx);
     let rad = Theme::global(cx).tokens.radius.clone();
     let sheet = v.compact(w);
+    let morph = v.morph_panel() && !sheet;
+    let (content_x, content_alpha) = v.content_motion(w, cx);
+    let roster = v.roster();
     let header = v.header(cx);
-    let header_h = if header.is_some() { 62. } else { 0. };
+    let has_header = header.is_some();
+    let header_h = if !has_header {
+        0.
+    } else if roster {
+        34.
+    } else {
+        62.
+    };
     let m = v.core();
     let name = m.name.clone();
     let anchor = m.anchor.clone();
@@ -258,6 +395,8 @@ pub(crate) fn render_menu<T: MenuControl>(
     }
     let row_height = if sheet {
         46.
+    } else if roster {
+        48.
     } else if header.is_some() {
         32.
     } else {
@@ -270,11 +409,10 @@ pub(crate) fn render_menu<T: MenuControl>(
         .track_focus(&m.trigger)
         .aria_expanded(is_open)
         .on_click(cx.listener(|v, _, w, cx| {
-            let m = v.core();
-            if m.open {
-                m.close(w, cx)
+            if v.core().open {
+                v.core().close(w, cx);
             } else {
-                m.show(None, false, false, w, cx)
+                open_panel(v, None, false, false, w, cx);
             }
             cx.notify()
         }))
@@ -284,7 +422,7 @@ pub(crate) fn render_menu<T: MenuControl>(
                 || context && (k == "contextmenu" || k == "f10" && e.keystroke.modifiers.shift)
             {
                 if !e.is_held {
-                    v.core().show(None, true, k == "up", w, cx);
+                    open_panel(v, None, true, k == "up", w, cx);
                     cx.notify()
                 }
                 w.prevent_default();
@@ -295,7 +433,7 @@ pub(crate) fn render_menu<T: MenuControl>(
         btn = btn.on_mouse_down(
             MouseButton::Right,
             cx.listener(|v, e: &MouseDownEvent, w, cx| {
-                v.core().show(Some(e.position), false, false, w, cx);
+                open_panel(v, Some(e.position), false, false, w, cx);
                 cx.notify();
                 cx.stop_propagation()
             }),
@@ -317,11 +455,33 @@ pub(crate) fn render_menu<T: MenuControl>(
         }
         return root.into_any_element();
     }
+    // Rows follow an optional sheet handle, header, active highlight, and
+    // separators in the tracked element's direct child list.
+    if let Some(i) = m.pending_reveal
+        && is_open
+    {
+        if m.scroll.bounds().size.height > px(0.) && (!morph || anim >= 0.99) {
+            let prefix =
+                usize::from(sheet) + usize::from(has_header) + usize::from(m.active.is_some());
+            let separators = m
+                .items
+                .iter()
+                .take(i + 1)
+                .filter(|row| row.separator_before)
+                .count();
+            m.scroll.scroll_to_item(prefix + separators + i);
+            m.pending_reveal = None;
+        } else if w.is_visible() {
+            w.request_animation_frame();
+        }
+    }
     let size = w.viewport_size();
-    let height = (12.
+    let separator_span = if morph { 11. } else { 9. };
+    let pad = if morph || roster { 6. } else { 5. };
+    let height = (pad * 2.
         + m.items.len() as f32 * row_height
         + grip_h
-        + m.items.iter().filter(|r| r.separator_before).count() as f32 * 9.
+        + m.items.iter().filter(|r| r.separator_before).count() as f32 * separator_span
         + header_h)
         .min(f32::from(size.height) - 16.);
     let width = if sheet {
@@ -364,6 +524,11 @@ pub(crate) fn render_menu<T: MenuControl>(
     } else {
         y.clamp(8., (f32::from(size.height) - height - 8.).max(8.)) - (1. - anim) * 5.
     };
+    let (x, y, display_width, display_height) = if morph {
+        morph_geometry(bounds, (x, y, width, height), anim)
+    } else {
+        (x, y, width, height)
+    };
     let trigger = m.anchor.clone();
     let active = m.active;
     let high = m.highlight.get(w, cx);
@@ -371,6 +536,7 @@ pub(crate) fn render_menu<T: MenuControl>(
     let rows = m.items.clone();
     let sheet_touch = m.sheet_touch.clone();
     let focus = m.focus.clone();
+    let menu_scroll = m.scroll.clone();
     let mut panel = div()
         .id("menu-panel")
         .role(Role::Menu)
@@ -379,19 +545,33 @@ pub(crate) fn render_menu<T: MenuControl>(
         .tab_stop(false)
         .occlude()
         .relative()
-        .w(px(width))
+        .w(px(display_width))
         .max_h(size.height - px(16.))
-        .p(px(5.))
+        .p(px(pad))
         .rounded(rad.md)
         .when(sheet, |e| e.rounded_b(px(0.)))
         .border_1()
-        .border_color(p.line)
-        .bg(p.panel)
-        .shadow_lg()
+        .border_color(if morph { p.ink.opacity(0.1) } else { p.line })
+        .bg(if morph {
+            p.panel
+                .opacity(if Theme::global(cx).mode == ThemeMode::Dark {
+                    0.56
+                } else {
+                    0.62
+                })
+        } else {
+            p.panel
+        })
+        .when(morph, |e| {
+            e.shadow(glass_panel_shadow(Theme::global(cx).mode))
+        })
+        .when(!morph, |e| e.shadow_lg())
         .opacity(anim)
         .flex()
         .flex_col()
-        .overflow_y_scroll()
+        .when(morph, |v| v.h(px(display_height)).overflow_hidden())
+        .when(!morph || anim >= 0.99, |v| v.overflow_y_scroll())
+        .track_scroll(&menu_scroll)
         .on_key_down(cx.listener(key::<T>))
         .on_mouse_down_out(cx.listener(move |v, e: &MouseDownEvent, w, cx| {
             if v.core().open && !trigger.get().contains(&e.position) {
@@ -425,24 +605,46 @@ pub(crate) fn render_menu<T: MenuControl>(
         panel = panel.child(header)
     }
     if let Some(i) = active {
+        let mode = Theme::global(cx).mode;
+        let dark = mode == ThemeMode::Dark;
         panel = panel.child(
             div()
                 .absolute()
-                .top(px(5. + grip_h + header_h + high))
-                .left(px(5.))
-                .right(px(5.))
+                .top(px(pad + grip_h + header_h + high))
+                .left(px(pad))
+                .right(px(pad))
                 .h(px(row_height))
-                .rounded(rad.md)
-                .bg(if rows[i].destructive {
-                    p.danger.opacity(0.11)
+                .rounded(if roster { px(2.) } else { rad.md })
+                .bg(if roster && !rows[i].destructive {
+                    p.tray
+                } else if rows[i].destructive {
+                    p.danger.opacity(if morph && dark {
+                        0.24
+                    } else if morph {
+                        0.14
+                    } else {
+                        0.11
+                    })
+                } else if morph {
+                    p.bright.opacity(if dark { 0.26 } else { 0.16 })
                 } else {
                     p.hover
-                }),
+                })
+                .when(morph, |e| e.shadow(glass_hover_shadow(mode))),
         );
     }
     for (i, item) in rows.into_iter().enumerate() {
         if item.separator_before {
-            panel = panel.child(div().my(px(4.)).h(px(1.)).bg(p.line).flex_none())
+            panel = panel.child(if morph {
+                div()
+                    .mx(px(10.))
+                    .my(px(5.))
+                    .h(px(1.))
+                    .bg(p.ink.opacity(0.09))
+                    .flex_none()
+            } else {
+                div().my(px(4.)).h(px(1.)).bg(p.line).flex_none()
+            })
         }
         let ink = if item.destructive { p.danger } else { p.ink };
         let row_name = item.label.clone();
@@ -452,24 +654,31 @@ pub(crate) fn render_menu<T: MenuControl>(
             .role(Role::MenuItem)
             .aria_label(item.label.clone())
             .relative()
+            .left(px(content_x))
             .h(px(row_height))
             .flex_none()
             .flex()
             .items_center()
-            .gap(px(9.))
+            .gap(px(if morph || roster { 10. } else { 9. }))
             .px(px(10.))
             .text_size(px(14.))
             .text_color(ink)
-            .opacity(if item.disabled {
-                0.4
-            } else {
-                ease((age - i.min(4) as f32 * 0.024) / 0.16)
-            })
+            .opacity(
+                content_alpha
+                    * if item.disabled {
+                        0.4
+                    } else {
+                        ease((age - i.min(4) as f32 * 0.024) / 0.16)
+                    },
+            )
             .when(active == Some(i), |e| e.aria_active_descendant());
         if let Some(checked) = item.checked {
             row = row
                 .role(Role::MenuItemCheckBox)
                 .aria_toggled(checked.into());
+        }
+        if let Some(lead) = v.leading(i, active == Some(i), cx) {
+            row = row.child(lead);
         }
         if let Some(g) = item
             .glyph
@@ -481,11 +690,40 @@ pub(crate) fn render_menu<T: MenuControl>(
                 if item.destructive { ink } else { p.secondary },
             ))
         }
-        row = row.child(div().flex_1().truncate().child(item.label));
+        row = row.child(if item.detail.is_empty() {
+            div()
+                .flex_1()
+                .truncate()
+                .child(item.label)
+                .into_any_element()
+        } else {
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(14.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(item.label),
+                )
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(12.))
+                        .line_height(px(20.))
+                        .text_color(p.faint)
+                        .child(item.detail),
+                )
+                .into_any_element()
+        });
         if !sheet && !item.shortcut.is_empty() {
             row = row.child(
                 div()
-                    .text_size(px(11.))
+                    .text_size(px(if morph { 12. } else { 11. }))
                     .text_color(p.faint)
                     .child(item.shortcut),
             )
@@ -534,6 +772,193 @@ pub(crate) fn render_menu<T: MenuControl>(
             deferred(anchored().position(point(px(0.), px(0.))).child(scrim)).with_priority(2),
         );
     }
-    root.child(deferred(anchored().position(point(px(x), px(y))).child(panel)).with_priority(3))
+    let report_scroll = is_open && (!morph || anim >= 0.99);
+    let monitor = canvas(
+        |_, _, _| (),
+        move |bounds, _, _, cx| {
+            if report_scroll && let Some(host) = cx.try_global::<MenuScrollRegion>() {
+                let top = -menu_scroll.offset().y;
+                (host.0)(
+                    bounds,
+                    top > px(0.1),
+                    top + px(0.1) < menu_scroll.max_offset().y,
+                );
+            }
+        },
+    )
+    .absolute()
+    .inset_0();
+    let content = div()
+        .relative()
+        .w(px(display_width))
+        .h(px(display_height))
+        .child(panel)
+        .child(monitor);
+    root.child(deferred(anchored().position(point(px(x), px(y))).child(content)).with_priority(3))
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MenuControl, MenuCore, MenuItem, MenuScrollRegion, morph_geometry, render_menu};
+    use gpui::prelude::*;
+    use gpui::{
+        Bounds, Context, Modifiers, PlatformInput, Render, ScrollDelta, ScrollEvent,
+        TestAppContext, VisualTestContext, Window, point, px, size,
+    };
+    use std::{cell::Cell, time::Duration};
+
+    thread_local! {
+        static REGION: Cell<(Bounds<gpui::Pixels>, bool, bool, usize)> = Cell::new((Bounds::default(), false, false, 0));
+    }
+    struct LongMenu {
+        core: MenuCore,
+    }
+    impl MenuControl for LongMenu {
+        fn core(&mut self) -> &mut MenuCore {
+            &mut self.core
+        }
+        fn selected(&mut self, _: usize, w: &mut Window, cx: &mut Context<Self>) {
+            self.core.close(w, cx);
+            cx.notify();
+        }
+    }
+    impl Render for LongMenu {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let button = crate::primitives::family::face(
+                "long-trigger",
+                "Open actions",
+                36.,
+                8.,
+                crate::primitives::family::Tone::Surface,
+                cx,
+            )
+            .child("Open actions");
+            render_menu(self, button, false, 192., w, cx)
+        }
+    }
+    fn tick(w: &mut VisualTestContext, ms: u64) {
+        w.executor().advance_clock(Duration::from_millis(ms));
+        w.run_until_parked();
+        w.update(|w, cx| {
+            w.simulate_next_frame(cx);
+            w.refresh();
+        });
+        w.run_until_parked();
+    }
+
+    #[test]
+    fn long_menu_reports_scroll_boundaries_reveals_keyboard_selection_and_restores_focus() {
+        let mut app = TestAppContext::single();
+        app.update(|cx| {
+            crate::init(cx);
+            cx.set_global(MenuScrollRegion(|bounds, before, after| {
+                REGION.with(|cell| {
+                    let old = cell.get();
+                    cell.set((bounds, before, after, old.3 + 1));
+                });
+            }));
+        });
+        let (control, mut w) = app.add_window_view(|_, cx| {
+            let rows = (0..30)
+                .map(|i| {
+                    let row = MenuItem::new(format!("id-{i}"), format!("Action {i}"));
+                    if i == 10 { row.with_separator() } else { row }
+                })
+                .collect();
+            LongMenu {
+                core: MenuCore::new("long-menu".into(), "Actions".into(), rows, cx),
+            }
+        });
+        w.simulate_resize(size(px(320.), px(240.)));
+        tick(&mut w, 100);
+        let trigger = w.debug_bounds("Open actions").expect("trigger").center();
+        w.simulate_click(trigger, Modifiers::default());
+        tick(&mut w, 400);
+        let (region, before, after, _) = REGION.with(Cell::get);
+        assert!(!before && after, "the open menu initially scrolls down");
+        w.update(|win, cx| {
+            win.dispatch_event(
+                PlatformInput::Scroll(ScrollEvent {
+                    position: region.center(),
+                    delta: ScrollDelta::Pixels(point(px(0.), px(-100.))),
+                    ..Default::default()
+                }),
+                cx,
+            )
+        });
+        tick(&mut w, 80);
+        assert!(
+            REGION.with(|cell| cell.get().1),
+            "wheel scroll must reach the menu"
+        );
+        w.simulate_keystrokes("end");
+        tick(&mut w, 80);
+        tick(&mut w, 80);
+        w.update(|_, cx| {
+            let menu = control.read(cx);
+            assert!(menu.core.scroll.offset().y < -px(1.));
+            // The active highlight and one separator precede the final row.
+            let final_row = menu.core.scroll.bounds_for_item(31).expect("last action");
+            let viewport = menu.core.scroll.bounds();
+            let offset = menu.core.scroll.offset().y;
+            assert!(
+                final_row.top() + offset >= viewport.top() - px(1.)
+                    && final_row.bottom() + offset <= viewport.bottom() + px(1.),
+                "End reveals the final action"
+            );
+        });
+        w.simulate_keystrokes("escape");
+        tick(&mut w, 400);
+        let closed_count = REGION.with(|cell| cell.get().3);
+        tick(&mut w, 100);
+        assert_eq!(
+            REGION.with(|cell| cell.get().3),
+            closed_count,
+            "closed menus no longer register a wheel region"
+        );
+        w.update(|window, cx| assert!(control.read(cx).core.trigger.is_focused(window)));
+    }
+
+    #[test]
+    fn morph_geometry_starts_at_trigger_and_ends_at_panel() {
+        let trigger = Bounds {
+            origin: point(px(10.), px(20.)),
+            size: size(px(90.), px(40.)),
+        };
+        let panel = (15., 65., 256., 200.);
+        assert_eq!(morph_geometry(trigger, panel, 0.), (10., 20., 90., 40.));
+        assert_eq!(morph_geometry(trigger, panel, 1.), panel);
+        assert_eq!(
+            morph_geometry(trigger, panel, 0.5),
+            (12.5, 42.5, 173., 120.)
+        );
+    }
+
+    #[test]
+    fn replacing_rows_resets_out_of_range_highlight_and_skips_disabled() {
+        let app = TestAppContext::single();
+        app.update(|cx| {
+            let mut menu = MenuCore::new(
+                "actions".into(),
+                "Actions".into(),
+                (0..6)
+                    .map(|i| MenuItem::new(format!("{i}"), "Old"))
+                    .collect(),
+                cx,
+            );
+            menu.active = Some(5);
+            menu.highlight.reset(menu.top(5));
+            menu.replace_items(vec![
+                MenuItem::new("disabled", "Disabled").disabled(),
+                MenuItem::new("next", "Next"),
+            ]);
+            assert_eq!(menu.active, Some(1));
+            assert_eq!(menu.highlight.value(cx), 36.);
+            menu.replace_items(vec![MenuItem::new("disabled", "Disabled").disabled()]);
+            assert_eq!(menu.active, None);
+            menu.replace_items(Vec::new());
+            assert_eq!(menu.active, None);
+        });
+    }
 }

@@ -129,6 +129,91 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [activity-heatmap](./md/activity-heatmap.md): DailyActivity
 - [line-chart](./md/line-chart.md): LineChart
 - [donut-chart](./md/donut-chart.md): DonutChart
+- [rating](./md/rating.md): Rating
+- [billing-toggle](./md/billing-toggle.md): BillingToggle
+- [toggle-group](./md/toggle-group.md): ToggleGroup
+- [radio-cards](./md/radio-cards.md): RadioCards
+- [money-input](./md/money-input.md): MoneyInput
+- [countdown](./md/countdown.md): Countdown
+- [elastic-slider](./md/elastic-slider.md): ElasticSlider
+- [range-histogram-slider](./md/range-histogram-slider.md): RangeHistogramSlider
+- [announcement-bar](./md/announcement-bar.md): AnnouncementBar
+- [cookie-consent](./md/cookie-consent.md): CookieConsent
+- [ruler-slider](./md/ruler-slider.md): RulerSlider
+- [signature-pad](./md/signature-pad.md): SignaturePad
+- [scrub-input](./md/scrub-input.md): ScrubInput
+- [morph-select](./md/morph-select.md): MorphSelect
+- [undo-toast](./md/undo-toast.md): UndoToast
+- [tree-table](./md/tree-table.md): TreeTable
+- [mega-menu-morph](./md/mega-menu-morph.md): MegaMenuMorph
+- [glass-segmented](./md/glass-segmented.md): GlassSegmented
+- [glass-menu](./md/glass-menu.md): GlassMenu
+- [presence-stack](./md/presence-stack.md): PresenceStack
+- [tldr-toggle](./md/tldr-toggle.md): TldrToggle
+- [smart-form-fill](./md/smart-form-fill.md): SmartFormFill
+- [enrich-column](./md/enrich-column.md): EnrichColumn
+- [ticket-router](./md/ticket-router.md): TicketRouter
+- [reply-draft](./md/reply-draft.md): ReplyDraft
+- [ask-your-data](./md/ask-your-data.md): AskYourData
+- [pii-redaction](./md/pii-redaction.md): PiiRedaction
+- [gauge](./md/gauge.md): Gauge
+- [animated-counter](./md/animated-counter.md): AnimatedCounter
+- [waffle-chart](./md/waffle-chart.md): WaffleChart
+- [slope-chart](./md/slope-chart.md): SlopeChart
+- [radar-chart](./md/radar-chart.md): RadarChart
+- [split-bar](./md/split-bar.md): SplitBar
+- [race-bar-chart](./md/race-bar-chart.md): RaceBarChart
+- [funnel-chart](./md/funnel-chart.md): FunnelChart
+- [streamgraph](./md/streamgraph.md): Streamgraph
+- [treemap](./md/treemap.md): Treemap
+- [brush-chart](./md/brush-chart.md): BrushChart
+- [ridgeline](./md/ridgeline.md): Ridgeline
+- [realtime-stream](./md/realtime-stream.md): RealtimeStream
+- [sunburst](./md/sunburst.md): Sunburst
+- [sankey-flow](./md/sankey-flow.md): SankeyFlow
+- [metric-ticker](./md/metric-ticker.md): MetricTicker
+- [activity-rings](./md/activity-rings.md): ActivityRings
+- [model-training](./md/model-training.md): ModelTraining
+- [multi-region-failover](./md/multi-region-failover.md): MultiRegionFailover
+- [data-flow](./md/data-flow.md): DataFlow
+- [vector-search](./md/vector-search.md): VectorSearch
+- [text-reveal](./md/text-reveal.md): TextReveal
+- [in-view-title](./md/in-view-title.md): InViewTitle
+- [text-morph](./md/text-morph.md): TextMorph
+- [text-shimmer](./md/text-shimmer.md): TextShimmer
+- [slot-text](./md/slot-text.md): SlotText
+- [image-compare](./md/image-compare.md): ImageCompare
+- [carousel](./md/carousel.md): Carousel
+- [card-stack](./md/card-stack.md): CardStack
+- [toast-stack](./md/toast-stack.md): ToastStack
+- [bottom-sheet](./md/bottom-sheet.md): BottomSheet
+- [sheet-stack](./md/sheet-stack.md): SheetStack
+- [product-gallery](./md/product-gallery.md): ProductGallery
+- [voice-orb](./md/voice-orb.md): VoiceOrb
+- [now-playing](./md/now-playing.md): NowPlaying
+- [voice-recorder](./md/voice-recorder.md): VoiceRecorder
+- [dictation-button](./md/dictation-button.md): DictationButton
+- [speech-player](./md/speech-player.md): SpeechPlayer
+- [morph-loader](./md/morph-loader.md): MorphLoader
+- [ai-spark](./md/ai-spark.md): AiSpark
+- [provider-status](./md/provider-status.md): ProviderStatus
+- [ghost-text](./md/ghost-text.md): GhostText
+- [response-feedback](./md/response-feedback.md): ResponseFeedback
+- [agent-loop](./md/agent-loop.md): AgentLoop
+- [reasoning-tree](./md/reasoning-tree.md): ReasoningTree
+- [image-generation](./md/image-generation.md): ImageGeneration
+- [speculative-decoding](./md/speculative-decoding.md): SpeculativeDecoding
+- [image-reveal](./md/image-reveal.md): ImageReveal
+- [prompt-cache](./md/prompt-cache.md): PromptCache
+- [meeting-summary](./md/meeting-summary.md): MeetingSummary
+- [ai-workflow](./md/ai-workflow.md): AiWorkflow
+- [training-run](./md/training-run.md): TrainingRun
+- [mixture-of-experts](./md/mixture-of-experts.md): MixtureOfExperts
+- [agent-handoff](./md/agent-handoff.md): AgentHandoff
+- [llm-cost-calculator](./md/llm-cost-calculator.md): LlmCostCalculator
+- [agent-cursor](./md/agent-cursor.md): AgentCursor
+- [link-unfurl](./md/link-unfurl.md): LinkUnfurl
+- [tone-tuner](./md/tone-tuner.md): ToneTuner
 
 ## Registry JSON
 
@@ -242,3 +327,88 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [activity-heatmap](./r/activity-heatmap.json)
 - [line-chart](./r/line-chart.json)
 - [donut-chart](./r/donut-chart.json)
+- [rating](./r/rating.json)
+- [billing-toggle](./r/billing-toggle.json)
+- [toggle-group](./r/toggle-group.json)
+- [radio-cards](./r/radio-cards.json)
+- [money-input](./r/money-input.json)
+- [countdown](./r/countdown.json)
+- [elastic-slider](./r/elastic-slider.json)
+- [range-histogram-slider](./r/range-histogram-slider.json)
+- [announcement-bar](./r/announcement-bar.json)
+- [cookie-consent](./r/cookie-consent.json)
+- [ruler-slider](./r/ruler-slider.json)
+- [signature-pad](./r/signature-pad.json)
+- [scrub-input](./r/scrub-input.json)
+- [morph-select](./r/morph-select.json)
+- [undo-toast](./r/undo-toast.json)
+- [tree-table](./r/tree-table.json)
+- [mega-menu-morph](./r/mega-menu-morph.json)
+- [glass-segmented](./r/glass-segmented.json)
+- [glass-menu](./r/glass-menu.json)
+- [presence-stack](./r/presence-stack.json)
+- [tldr-toggle](./r/tldr-toggle.json)
+- [smart-form-fill](./r/smart-form-fill.json)
+- [enrich-column](./r/enrich-column.json)
+- [ticket-router](./r/ticket-router.json)
+- [reply-draft](./r/reply-draft.json)
+- [ask-your-data](./r/ask-your-data.json)
+- [pii-redaction](./r/pii-redaction.json)
+- [gauge](./r/gauge.json)
+- [animated-counter](./r/animated-counter.json)
+- [waffle-chart](./r/waffle-chart.json)
+- [slope-chart](./r/slope-chart.json)
+- [radar-chart](./r/radar-chart.json)
+- [split-bar](./r/split-bar.json)
+- [race-bar-chart](./r/race-bar-chart.json)
+- [funnel-chart](./r/funnel-chart.json)
+- [streamgraph](./r/streamgraph.json)
+- [treemap](./r/treemap.json)
+- [brush-chart](./r/brush-chart.json)
+- [ridgeline](./r/ridgeline.json)
+- [realtime-stream](./r/realtime-stream.json)
+- [sunburst](./r/sunburst.json)
+- [sankey-flow](./r/sankey-flow.json)
+- [metric-ticker](./r/metric-ticker.json)
+- [activity-rings](./r/activity-rings.json)
+- [model-training](./r/model-training.json)
+- [multi-region-failover](./r/multi-region-failover.json)
+- [data-flow](./r/data-flow.json)
+- [vector-search](./r/vector-search.json)
+- [text-reveal](./r/text-reveal.json)
+- [in-view-title](./r/in-view-title.json)
+- [text-morph](./r/text-morph.json)
+- [text-shimmer](./r/text-shimmer.json)
+- [slot-text](./r/slot-text.json)
+- [image-compare](./r/image-compare.json)
+- [carousel](./r/carousel.json)
+- [card-stack](./r/card-stack.json)
+- [toast-stack](./r/toast-stack.json)
+- [bottom-sheet](./r/bottom-sheet.json)
+- [sheet-stack](./r/sheet-stack.json)
+- [product-gallery](./r/product-gallery.json)
+- [voice-orb](./r/voice-orb.json)
+- [now-playing](./r/now-playing.json)
+- [voice-recorder](./r/voice-recorder.json)
+- [dictation-button](./r/dictation-button.json)
+- [speech-player](./r/speech-player.json)
+- [morph-loader](./r/morph-loader.json)
+- [ai-spark](./r/ai-spark.json)
+- [provider-status](./r/provider-status.json)
+- [ghost-text](./r/ghost-text.json)
+- [response-feedback](./r/response-feedback.json)
+- [agent-loop](./r/agent-loop.json)
+- [reasoning-tree](./r/reasoning-tree.json)
+- [image-generation](./r/image-generation.json)
+- [speculative-decoding](./r/speculative-decoding.json)
+- [image-reveal](./r/image-reveal.json)
+- [prompt-cache](./r/prompt-cache.json)
+- [meeting-summary](./r/meeting-summary.json)
+- [ai-workflow](./r/ai-workflow.json)
+- [training-run](./r/training-run.json)
+- [mixture-of-experts](./r/mixture-of-experts.json)
+- [agent-handoff](./r/agent-handoff.json)
+- [llm-cost-calculator](./r/llm-cost-calculator.json)
+- [agent-cursor](./r/agent-cursor.json)
+- [link-unfurl](./r/link-unfurl.json)
+- [tone-tuner](./r/tone-tuner.json)

@@ -5,6 +5,7 @@ pub mod gallery;
 
 pub use gallery::ButtonGallery;
 
+mod extra_story;
 mod host;
 /// Focus and size integration for an embedded GPUI story.
 pub struct StoryBridge {

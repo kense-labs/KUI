@@ -1,0 +1,31 @@
+[
+  {
+    "id": "image-generation",
+    "group": "intelligence",
+    "title": {
+      "en": "Image generation",
+      "zh": "图片生成"
+    },
+    "rustType": "ImageGeneration",
+    "lead": {
+      "en": "A host-driven four-image generation surface.",
+      "zh": "由宿主驱动的四图生成界面。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::image_generation::ImageGeneration;\n\nlet control = cx.new(|cx| ImageGeneration::new(window, cx));",
+    "method": "finish",
+    "signature": "(u64, GeneratedImage, &mut Context<Self>)",
+    "event": "ImageGenerationEvent",
+    "rule": {
+      "en": "The host performs generation, upscale and download. Respond to each ticket independently and cancel work when asked. The preview uses local simulated data.",
+      "zh": "宿主负责生成、放大和下载；按 ticket 分别返回结果，并在收到取消事件时中止工作。预览使用本地模拟数据。"
+    },
+    "api": {
+      "en": "Call set_progress, finish or fail with the ticket. Stale results after Stop are ignored. A failed or stopped variation keeps its original, and a failure can be retried or restored. Each completed image uses its own reported dimensions. Cmd/Ctrl+Enter starts a batch; plain Enter inserts a newline.",
+      "zh": "使用 ticket 调用 set_progress、finish 或 fail；停止后的旧结果会被忽略。变体失败或停止保留原图，失败后可重试或恢复；每张完成图片按其报告的尺寸显示比例。Cmd/Ctrl+Enter 开始一批生成，普通回车换行。"
+    },
+    "motion": {
+      "en": "Progress follows host updates with a 200 ms transition. The pixel mosaic, upscale sweep and full visual comparison are not yet implemented or verified.",
+      "zh": "进度以 200ms 过渡跟随宿主更新；像素马赛克、放大扫光及完整视觉对照尚未实现或验收。"
+    }
+  }
+]

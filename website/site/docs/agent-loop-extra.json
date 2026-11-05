@@ -1,0 +1,31 @@
+[
+  {
+    "id": "agent-loop",
+    "group": "intelligence",
+    "title": {
+      "en": "Agent loop",
+      "zh": "智能体循环"
+    },
+    "rustType": "AgentLoop",
+    "lead": {
+      "en": "An illustrative gather, act and verify timeline.",
+      "zh": "展示收集上下文、执行和验证的示意流程。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_loop::{AgentLoop, LoopIteration};\n\nlet iterations = vec![LoopIteration::new(\"Read logs\", 1200, true, \"Checks passed\")];\nlet control = cx.new(|_| AgentLoop::new(\"Verify the build\", iterations));",
+    "method": "set_playing",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "AgentLoopEvent",
+    "rule": {
+      "en": "The host supplies the whole illustrative timeline; this component makes no agent or tool calls.",
+      "zh": "宿主提供示意流程数据；组件不会调用真实智能体或工具。"
+    },
+    "api": {
+      "en": "Use set_playing, step, restart and set_speed. Events report station changes and completion.",
+      "zh": "可调用 set_playing、step、restart 和 set_speed；事件报告站点变化和结束状态。"
+    },
+    "motion": {
+      "en": "The head follows the ring during playback and stays at its current position when paused; off-screen playback pauses. Reduced motion skips travel. Detailed visual transitions remain to be verified.",
+      "zh": "播放时节点沿圆环移动，暂停时保持当前位置，离屏时暂停；减少动效时跳过中间轨迹。细节视觉过渡仍待验收。"
+    }
+  }
+]

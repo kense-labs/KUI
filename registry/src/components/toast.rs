@@ -24,6 +24,10 @@ pub struct Toast {
     remaining: Duration,
     since: Option<Instant>,
     timer: Option<Task<()>>,
+    hover_paused: bool,
+    stack_paused: bool,
+    in_stack: bool,
+    stack_front: bool,
     shown: bool,
     slide: Slide,
 }
@@ -47,6 +51,10 @@ impl Toast {
             remaining: Duration::ZERO,
             since: None,
             timer: None,
+            hover_paused: false,
+            stack_paused: false,
+            in_stack: false,
+            stack_front: false,
             shown: false,
             slide: Slide::snappy(0.),
         }
@@ -98,6 +106,9 @@ impl Toast {
         cx.notify()
     }
     fn arm(&mut self, cx: &mut Context<Self>) {
+        if self.hover_paused || self.stack_paused {
+            return;
+        }
         let wait = self.remaining;
         self.since = Some(cx.background_executor().now());
         self.timer = Some(cx.spawn(async move |entity, cx| {
@@ -138,10 +149,22 @@ impl Toast {
         }
     }
     fn pause(&mut self, inside: bool, cx: &mut Context<Self>) {
+        self.hover_paused = inside;
+        self.sync_pause(cx);
+    }
+    pub(crate) fn set_stack_chrome(&mut self, front: bool) {
+        self.in_stack = true;
+        self.stack_front = front;
+    }
+    pub(crate) fn set_stack_paused(&mut self, paused: bool, cx: &mut Context<Self>) {
+        self.stack_paused = paused;
+        self.sync_pause(cx);
+    }
+    fn sync_pause(&mut self, cx: &mut Context<Self>) {
         if !self.shown {
             return;
         }
-        if inside {
+        if self.hover_paused || self.stack_paused {
             if let Some(s) = self.since.take() {
                 self.remaining = self
                     .remaining
@@ -165,7 +188,7 @@ impl Render for Toast {
         };
         let x = self.x.get(w, cx);
         let check = ease((age - 0.12) / 0.24);
-        let mut el = column().w(px(380.)).max_w_full();
+        let mut el = column().w_full().max_w(px(360.));
         if self.shown || f > 0.001 {
             el = el.child(
                 row()
@@ -174,14 +197,21 @@ impl Render for Toast {
                     .role(Role::Status)
                     .gap_2()
                     .p_4()
-                    .w(px(380.))
+                    .w_full()
                     .min_h(px(76.))
                     .max_w_full()
                     .bg(p.panel)
                     .rounded(crate::foundation::surface_radius(cx))
                     .border_1()
                     .border_color(p.line)
-                    .shadow_sm()
+                    .when(self.in_stack, |row| {
+                        row.pt(px(12.))
+                            .pr(px(12.))
+                            .pb(px(12.))
+                            .pl(px(16.))
+                    })
+                    .when(self.in_stack && self.stack_front, |row| row.shadow_lg())
+                    .when(!self.in_stack || !self.stack_front, |row| row.shadow_sm())
                     .relative()
                     .top(px(offset))
                     .left(px(x))
@@ -250,6 +280,7 @@ impl Render for Toast {
                             cx,
                         )
                         .w(px(28.))
+                        .hover(|s| s.bg(p.tray).text_color(p.ink))
                         .child(icon(Glyph::Close, 14., p.secondary))
                         .on_click(cx.listener(|s, _, _, cx| s.close(ToastEvent::Dismissed, cx))),
                     ),

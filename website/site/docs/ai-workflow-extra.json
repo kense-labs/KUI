@@ -1,0 +1,31 @@
+[
+  {
+    "id": "ai-workflow",
+    "group": "intelligence",
+    "title": {
+      "en": "AI workflow",
+      "zh": "AI 工作流"
+    },
+    "rustType": "AiWorkflow",
+    "lead": {
+      "en": "Build and test a short host-driven automation with a branch.",
+      "zh": "创建并测试由宿主驱动、包含分支的短工作流。"
+    },
+    "usageRust": "use kui::components::ai_workflow::{AiWorkflow, WorkflowKind, WorkflowPath, WorkflowStep};\n\nlet steps = vec![WorkflowStep::new(\"trigger\", \"Receive request\", \"Inbox\", WorkflowKind::Trigger)];\nlet paths: Vec<WorkflowPath> = vec![];\nlet control = cx.new(|_| AiWorkflow::new(\"Request triage\", \"Review incoming requests\", steps, paths));",
+    "method": "resolve",
+    "signature": "(u64, Result<WorkflowResult, SharedString>, &mut Context<Self>)",
+    "event": "WorkflowEvent",
+    "rule": {
+      "en": "The host executes steps and resolves matching request IDs. Stop emits Cancel and rejects late responses; Retry resumes the failed step. Branch results must reference a supplied path. The example is simulated and sends nothing.",
+      "zh": "步骤由宿主执行，并按请求 ID 返回结果；停止会发出取消事件并忽略迟到的响应，重试从失败步骤继续。分支结果必须引用已提供的路径。示例为模拟，不发送任何内容。"
+    },
+    "api": {
+      "en": "Subscribe to RunStep (which contains Box<WorkflowStep>) and Cancel; call resolve with an output, duration and branch path when applicable. Changed reports editor updates. Provide stable unique step and path IDs.",
+      "zh": "订阅 RunStep（包含 Box<WorkflowStep>） 与 Cancel，通过 resolve 提供输出、耗时及分支路径；编辑时发出 Changed。步骤和分支须使用稳定且唯一的 ID。"
+    },
+    "motion": {
+      "en": "A 240 ms connector fill and marker indicate the active step; reduced motion shows the end state and hidden previews do not request animation frames. Path crossfades, measured-height expansion and searchable command menu remain unimplemented. Desktop, Web, screen-reader and visual acceptance are pending.",
+      "zh": "运行步骤的连线和标记以 240ms 填充；减少动效时直接显示终态，隐藏预览时不请求动画帧。分支淡入淡出、高度过渡和可搜索菜单仍未实现；桌面、网页、读屏与视觉验收待完成。"
+    }
+  }
+]

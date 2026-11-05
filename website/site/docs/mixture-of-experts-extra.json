@@ -1,0 +1,31 @@
+[
+  {
+    "id": "mixture-of-experts",
+    "group": "intelligence",
+    "title": {
+      "en": "Mixture of experts",
+      "zh": "专家混合路由"
+    },
+    "rustType": "MixtureOfExperts",
+    "lead": {
+      "en": "Illustrate token routing across sparse experts using host-supplied scores.",
+      "zh": "用宿主提供的分数展示 token 在稀疏专家间的路由。"
+    },
+    "usageRust": "use kui::components::mixture_of_experts::{MixtureOfExperts, MoeExpert, MoeToken};\n\nlet experts = vec![MoeExpert::new(\"language\", \"Language\", \"Words\"), MoeExpert::new(\"math\", \"Math\", \"Numbers\")];\nlet tokens = vec![MoeToken::new(\"42\", vec![0.2, 0.8])];\nlet control = cx.new(|_| MixtureOfExperts::new(experts, tokens));",
+    "method": "set_data",
+    "signature": "(Vec<MoeExpert>, Vec<MoeToken>, &mut Context<Self>)",
+    "event": "MoeEvent",
+    "rule": {
+      "en": "The host supplies scores and optional parameter counts; no model is executed. Positive finite scores are ranked with stable tie order. Capacity controls skipped choices. Unspecified or invalid scores do not fabricate a route.",
+      "zh": "分数和可选参数量由宿主提供，组件不执行模型。正数且有限的分数按高低排序，同分保持专家顺序；容量限制会跳过已满专家。缺失或无效分数不会生成虚构路由。"
+    },
+    "api": {
+      "en": "set_data replaces the illustration; set_top_k changes the number of choices, set_paused and set_visible control playback. MoeEvent reports routes and changes. Token and expert buttons support Enter, Space, arrows, Home, End and Escape.",
+      "zh": "set_data 更新数据，set_top_k 切换选择数量，set_paused 和 set_visible 控制播放；MoeEvent 报告路由与切换。token 和专家按钮支持 Enter、空格、方向键、Home、End 和 Escape。"
+    },
+    "motion": {
+      "en": "The sample uses a moving packet along curved links. The stage switches to a vertical layout below 568 px. Hidden, paused and pinned views stop animation; reduced motion renders static links. Live announcements and desktop, Web, visual and accessibility verification remain pending.",
+      "zh": "示例沿曲线移动数据标记，宽度小于 568px 时改为纵向排列。隐藏、暂停或固定时动画停止，减少动效时显示静态路径。状态播报、桌面、网页、视觉与无障碍实测仍待完成。"
+    }
+  }
+]

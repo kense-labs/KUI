@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ghost-text",
+    "group": "intelligence",
+    "title": { "en": "Ghost text", "zh": "行内文字建议" },
+    "rustType": "GhostText",
+    "lead": { "en": "Host-driven inline completion in an editable text field.", "zh": "由宿主提供文字续写建议，显示在真实输入光标后。" },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ghost_text::GhostText;\n\nlet control = cx.new(|cx| GhostText::new(\"Description\", window, cx));",
+    "method": "push_chunk",
+    "signature": "(u64, impl AsRef<str>, bool, &mut Context<Self>)",
+    "event": "GhostTextEvent",
+    "rule": { "en": "The host owns suggestion requests. Abort on Cancel and return chunks with their Request ID; old or composing responses are ignored. The example is simulated.", "zh": "宿主负责建议请求；收到 Cancel 时中止，并使用 Request 中的编号返回分段结果。旧请求或输入法组合中的结果会被忽略。预览为模拟数据。" },
+    "api": { "en": "Tab accepts all; Cmd/Ctrl/Alt+Right accepts a word; Escape dismisses. The action chip accepts on touch. Selection and IME composition suppress suggestions.", "zh": "Tab 接受全部建议；Cmd/Ctrl/Alt 加右方向键逐词接受；Esc 取消；触屏可点按钮接受。选择文本或输入法组合时不会显示建议。" },
+    "motion": { "en": "The current implementation places text without a fade; polished transitions and native IME/touch testing remain pending.", "zh": "当前建议文字直接显示，淡入动效及真实输入法和触屏验收仍待完成。" }
+  }
+]

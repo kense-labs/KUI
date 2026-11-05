@@ -16,6 +16,7 @@ pub struct Slider {
     min: f64,
     max: f64,
     step: f64,
+    detents: Vec<f64>,
     value: SlideValue,
     suffix: SharedString,
     prefix: SharedString,
@@ -53,6 +54,7 @@ impl Slider {
             min,
             max,
             step,
+            detents: Vec::new(),
             value: SlideValue {
                 low,
                 high: value.high.map(|h| h.clamp(low, max)),
@@ -112,6 +114,34 @@ impl Slider {
     pub fn set_low(&mut self, n: f64, cx: &mut Context<Self>) {
         self.set(n, false, cx)
     }
+    /// Optional drag detents, normalized to the existing step grid.
+    /// An empty list preserves the ordinary slider behavior.
+    pub fn set_detents(&mut self, values: Vec<f64>, cx: &mut Context<Self>) {
+        self.detents = values
+            .into_iter()
+            .filter(|v| v.is_finite() && *v >= self.min && *v <= self.max)
+            .map(|v| {
+                (self.min + ((v - self.min) / self.step).round() * self.step)
+                    .clamp(self.min, self.max)
+            })
+            .collect();
+        self.detents.sort_by(f64::total_cmp);
+        self.detents.dedup();
+        cx.notify();
+    }
+    fn detent(&self, n: f64) -> f64 {
+        let width = f64::from(f32::from(self.track.get().size.width));
+        if self.detents.is_empty() || width <= 0. || n < self.min || n > self.max {
+            return n;
+        }
+        let tolerance = (self.max - self.min) * 8. / width;
+        self.detents
+            .iter()
+            .copied()
+            .min_by(|a, b| (a - n).abs().total_cmp(&(b - n).abs()))
+            .filter(|value| (value - n).abs() <= tolerance)
+            .unwrap_or(n)
+    }
     fn val(&self, x: Pixels) -> f64 {
         let b = self.track.get();
         let f = (x - b.left()) / b.size.width.max(px(1.));
@@ -164,7 +194,7 @@ impl Slider {
         } else {
             0.
         };
-        self.pointer = n - self.grab;
+        self.pointer = self.detent(n - self.grab);
         self.place_drag(self.pointer, high, cx);
         self.samples
             .push_back((0., self.position[self.last_thumb].value(cx)));
@@ -175,7 +205,7 @@ impl Slider {
     }
     fn move_thumb(&mut self, n: f64, cx: &mut Context<Self>) {
         if let Some(high) = self.drag {
-            let n = n - self.grab;
+            let n = self.detent(n - self.grab);
             self.place_drag(n, high, cx);
             if self.samples.len() == 6 {
                 self.samples.pop_front();
@@ -205,12 +235,11 @@ impl Slider {
             };
             let span = self.max - self.min;
             if !cancelled && coarse {
-                self.set(
+                let projected = self.detent(
                     self.pointer
                         + (0.099 * f64::from(velocity) * span).clamp(-self.step, self.step),
-                    high,
-                    cx,
                 );
+                self.set(projected, high, cx);
             }
             let next = if high {
                 self.value.high.unwrap()
@@ -294,6 +323,17 @@ impl Render for Slider {
                     .bg(p.bright)
                     .rounded_full(),
             );
+        for &detent in &self.detents {
+            rail = rail.child(
+                div()
+                    .absolute()
+                    .left(relative(f(detent)))
+                    .top(px(12.))
+                    .w(px(2.))
+                    .h(px(9.))
+                    .bg(p.faint),
+            );
+        }
         for (i, &anchor) in fractions
             .iter()
             .enumerate()
@@ -341,7 +381,15 @@ impl Render for Slider {
                 .debug_selector(move || format!("Slider thumb {i}"))
                 .role(Role::Slider)
                 .aria_label(n)
-                .aria_value(value.to_string())
+                .aria_value(self.display(value))
+                .aria_numeric_value(value)
+                .aria_min_numeric_value(if high { self.value.low } else { self.min })
+                .aria_max_numeric_value(if high {
+                    self.max
+                } else {
+                    self.value.high.unwrap_or(self.max)
+                })
+                .aria_numeric_value_step(self.step)
                 .track_focus(&self.focus[i])
                 .absolute()
                 .top(px(16. - side * 0.5))
@@ -457,5 +505,41 @@ impl Render for Slider {
                         }
                     })),
             )
+    }
+}
+
+#[cfg(test)]
+mod detent_tests {
+    use super::{SlideValue, Slider};
+    use gpui::{Bounds, TestAppContext, point, px, size};
+
+    #[test]
+    fn detents_snap_only_near_valid_normalized_stops() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (view, w) = app.add_window_view(|_, cx| {
+            Slider::new(
+                "Value",
+                0.0..=100.0,
+                1.,
+                SlideValue {
+                    low: 0.,
+                    high: None,
+                },
+                cx,
+            )
+        });
+        w.update(|_, cx| {
+            view.update(cx, |s, cx| {
+                s.track
+                    .set(Bounds::new(point(px(0.), px(0.)), size(px(200.), px(20.))));
+                assert_eq!(s.detent(53.), 53.);
+                s.set_detents(vec![50.4, f64::NAN, -1., 200.], cx);
+                assert_eq!(s.detents, vec![50.]);
+                assert_eq!(s.detent(53.), 50.);
+                assert_eq!(s.detent(56.), 56.);
+                assert_eq!(s.detent(101.), 101.);
+            })
+        });
     }
 }

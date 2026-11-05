@@ -12,7 +12,7 @@ mod web {
     use kui::components::theme_switch::Transition;
     use kui::foundation::init;
     use kui::foundation::{AccentPalette, Theme, ThemeMode};
-    use kui::primitives::control::UiLanguage;
+    use kui::primitives::control::{UiDirection, UiLanguage};
     use kui_story::{StoryBridge, StoryHost, ThemeBridge};
     use std::cell::{Cell, RefCell};
     use wasm_bindgen::prelude::wasm_bindgen;
@@ -52,6 +52,11 @@ mod web {
                     UiLanguage::Chinese
                 } else {
                     UiLanguage::English
+                });
+                cx.set_global(if host_direction() {
+                    UiDirection::Rtl
+                } else {
+                    UiDirection::Ltr
                 });
                 preview
                     .window
@@ -114,12 +119,14 @@ mod web {
             }
         });
     }
-    /// Request one presented frame for an impending host theme transition.
+    /// Synchronize platform geometry and request a presented host frame.
     #[wasm_bindgen]
     pub fn request_snapshot() {
         PREVIEW.with_borrow(|preview| {
             if let Some(preview) = preview {
-                preview.app.update(|cx| cx.refresh_windows());
+                preview.app.update(|cx| {
+                    let _ = preview.window.update(cx, |_, w, cx| w.bounds_changed(cx));
+                });
             }
         });
     }
@@ -155,13 +162,18 @@ mod web {
         export function reportFrame(height, dark) {
             window.kuiFramePainted?.(Math.ceil(height), dark);
         }
-        export function previewVisible() { return !document.hidden && self.kuiStoryInViewport !== false; }
+        export function previewVisible() { return !document.hidden && self.kuiStoryInViewport !== false && self.kuiStoryPageActive !== false; }
         export function leavePreview(back) {
             parent.postMessage({type:'kui:story-leave',back},location.origin);
         }
         export function buttonTheme(dark,mode,x,y,w,h) {
             if (window.kuiPointerActivated?.()) return;
             if (window !== parent) parent.postMessage({type:'kui:family-theme',dark,mode,x,y,w,h},location.origin);
+        }
+        // The embedding document owns writing direction; a preview never sets it.
+        export function hostDirection() {
+            const doc = window.frameElement?.ownerDocument ?? document;
+            return doc.documentElement.dir === 'rtl' || doc.defaultView?.getComputedStyle(doc.documentElement).direction === 'rtl';
         }
 
     ")]
@@ -187,6 +199,9 @@ mod web {
         #[wasm_bindgen(js_name=buttonTheme)]
         fn button_theme(dark: bool, mode: &str, x: f32, y: f32, w: f32, h: f32);
 
+        #[wasm_bindgen(js_name=hostDirection)]
+        fn host_direction() -> bool;
+
         #[wasm_bindgen(js_name=previewVisible)]
         fn preview_visible() -> bool;
         #[wasm_bindgen(js_name=leavePreview)]
@@ -211,6 +226,11 @@ mod web {
             } else {
                 UiLanguage::English
             });
+            cx.set_global(if host_direction() {
+                UiDirection::Rtl
+            } else {
+                UiDirection::Ltr
+            });
             cx.set_global(kui::components::data_grid::CsvDownload(download_csv));
             if embedded {
                 cx.set_global(kui::primitives::editor::EditorScrollRegion(
@@ -225,6 +245,16 @@ mod web {
                         )
                     },
                 ));
+                cx.set_global(kui::primitives::menu::MenuScrollRegion(|b, up, down| {
+                    editor_region(
+                        b.left().into(),
+                        b.top().into(),
+                        b.size.width.into(),
+                        b.size.height.into(),
+                        up,
+                        down,
+                    )
+                }));
                 cx.set_global(kui::components::scroll_area::HorizontalScrollRegion(
                     |b, left, right| {
                         horizontal_region(

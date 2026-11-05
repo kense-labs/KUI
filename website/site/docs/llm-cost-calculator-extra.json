@@ -1,0 +1,16 @@
+[
+  {
+    "id": "llm-cost-calculator",
+    "group": "intelligence",
+    "title": {"en": "LLM cost calculator", "zh": "模型费用估算"},
+    "rustType": "LlmCostCalculator",
+    "lead": {"en": "Compare estimated token costs using rates and usage provided by your application.", "zh": "根据应用提供的费率和用量比较 token 费用估算。"},
+    "usageRust": "use kui::components::llm_cost_calculator::{LlmCostCalculator, LlmModelPrice, LlmUsage};\n\nlet prices = vec![LlmModelPrice::new(\"sample\", \"Sample model\", \"Example\", 1.0, 3.0)];\nlet usage = LlmUsage::new(8000.0, 500.0, 5000.0);\nlet control = cx.new(|cx| LlmCostCalculator::new(prices, usage, cx).with_simulated(true));",
+    "method": "set_usage",
+    "signature": "(LlmUsage, &mut Context<Self>)",
+    "event": "LlmCostEvent",
+    "rule": {"en": "All prices and usage are supplied by the host. Prices are USD per million tokens; the estimate is not a bill. Negative, non-finite or overflowing values return no estimate. Sample prices are explicitly labelled.", "zh": "全部价格和用量由宿主提供。价格单位为每百万 token 美元；结果为估算而非账单。负数、非有限值或溢出不会产生金额。样例价格会明确标注。"},
+    "api": {"en": "set_models updates rates; set_usage updates workload; reset restores the initial workload. Subscribe to LlmCostEvent for usage and selection changes. compute_llm_cost is a pure function returning Option<LlmCost>. Four sliders edit workload and cache hit rate; host values outside slider ranges still calculate exactly until edited.", "zh": "set_models 更新价格，set_usage 更新用量，重置恢复初始用量；订阅 LlmCostEvent 接收用量和选择变化。compute_llm_cost 是返回 Option<LlmCost> 的纯函数。四个滑块可调整用量与缓存命中率，超出滑块范围的宿主数据在编辑前仍按原值计算。"},
+    "motion": {"en": "Ranks and bars currently update immediately. Reordering springs, rolling totals, loading and error integration, and real desktop, Web, touch and screen-reader acceptance remain pending.", "zh": "排名和色条目前即时更新；排序弹簧、数字滚动、加载和错误接入，以及桌面、网页、触屏和读屏实测仍待完成。"}
+  }
+]

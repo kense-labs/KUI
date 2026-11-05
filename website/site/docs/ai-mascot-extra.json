@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ai-mascot",
+    "group": "intelligence",
+    "title": { "en": "AI mascot", "zh": "AI 吉祥物" },
+    "rustType": "AiMascot",
+    "lead": { "en": "A Kense-branded status mark for assistant activity.", "zh": "使用 Kense 标识展示助手活动状态。" },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ai_mascot::AiMascot;\n\nlet control = cx.new(|_| AiMascot::new(\"Kense\").with_size(96.));",
+    "method": "set_status",
+    "signature": "(MascotStatus, &mut Context<Self>)",
+    "event": "",
+    "rule": { "en": "The host sets activity and visibility; this visual does not request devices or perform AI work. The preview simulates activity.", "zh": "宿主设置活动状态和可见性；视觉本身不请求设备或执行 AI 任务。预览为模拟状态。" },
+    "api": { "en": "Set Idle, Listening, Thinking, Writing, Done or Error. with_size accepts 24–160 logical pixels; set_visible and set_paused suspend motion. follow_pointer controls pointer following.", "zh": "可设置 Idle、Listening、Thinking、Writing、Done 或 Error。with_size 支持 24–160 逻辑像素；set_visible 和 set_paused 暂停动效；follow_pointer 控制指针跟随。" },
+    "motion": { "en": "Kense mark poses blend over 420 ms with a companion dot, writing line, completion and error cues. Reduced motion holds a representative pose; hidden views stop frame requests and resume their clock. The artwork and motion are original Kense treatments and still need visual verification.", "zh": "Kense 标识的状态在 420ms 内过渡，并配有伴随点、书写线、完成及错误提示。减少动效时保持静态姿态；隐藏时停止请求帧并保留时间进度。画面和动作采用原创 Kense 处理，仍需视觉验收。" }
+  }
+]
