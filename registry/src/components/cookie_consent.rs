@@ -191,7 +191,8 @@ impl CookieConsent {
             Panel::Banner
         };
         let shrink = self.saved.is_some();
-        self.shape.duration(0., if shrink { 0.38 } else { 0.46 }, cx);
+        self.shape
+            .duration(0., if shrink { 0.38 } else { 0.46 }, cx);
         if shrink {
             self.fold.duration(0., 0.38, cx);
         }

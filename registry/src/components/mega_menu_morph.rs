@@ -414,8 +414,7 @@ impl Render for MegaMenuMorph {
                 }));
         }
         let p = Paint::get(cx);
-        let dark = crate::foundation::Theme::global(cx).mode
-            == crate::foundation::ThemeMode::Dark;
+        let dark = crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark;
         let radius = crate::foundation::surface_radius(cx);
         let viewport = if self.viewport_width > px(0.) {
             f32::from(self.viewport_width)

@@ -870,7 +870,8 @@ impl Render for AskYourData {
                             let mut pos = 0.;
                             let mut neg = 0.;
                             let step = 0.016_f32.min(0.18 / count.max(1) as f32);
-                            let grow = standard_ease(((age - i as f32 * step) / 0.32).clamp(0., 1.));
+                            let grow =
+                                standard_ease(((age - i as f32 * step) / 0.32).clamp(0., 1.));
                             for (j, s) in graph.series.iter().enumerate() {
                                 let v = s
                                     .values

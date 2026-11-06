@@ -167,31 +167,31 @@ impl Render for ResponseFeedback {
         ] {
             let active = self.rating == Some(rating);
             let button = face(key, label, 36., 8., Tone::Clear, cx)
-            .size(px(36.))
-            .rounded(px(8.))
-            .p_0()
-            .text_color(if active { p.ink } else { p.secondary })
-            .hover(|s| s.bg(p.tray).text_color(p.ink))
-            .aria_toggled(active.into())
-            .child(transformed(
-                Glyph::Like,
-                16.,
-                if active { p.ink } else { p.secondary },
-                if rating == FeedbackRating::Positive {
-                    0.
-                } else {
-                    std::f32::consts::PI
-                },
-                1.,
-                (0., 0.),
-                1.,
-            ))
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                this.choose(rating, cx);
-                if this.expanded && matches!(event, ClickEvent::Keyboard(_)) {
-                    this.first_reason_focus.focus(window, cx);
-                }
-            }));
+                .size(px(36.))
+                .rounded(px(8.))
+                .p_0()
+                .text_color(if active { p.ink } else { p.secondary })
+                .hover(|s| s.bg(p.tray).text_color(p.ink))
+                .aria_toggled(active.into())
+                .child(transformed(
+                    Glyph::Like,
+                    16.,
+                    if active { p.ink } else { p.secondary },
+                    if rating == FeedbackRating::Positive {
+                        0.
+                    } else {
+                        std::f32::consts::PI
+                    },
+                    1.,
+                    (0., 0.),
+                    1.,
+                ))
+                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    this.choose(rating, cx);
+                    if this.expanded && matches!(event, ClickEvent::Keyboard(_)) {
+                        this.first_reason_focus.focus(window, cx);
+                    }
+                }));
             actions = actions.child(button);
         }
         let mut panel = div()
@@ -200,11 +200,7 @@ impl Render for ResponseFeedback {
             .max_h(px(270. * height))
             .opacity(height);
         if height > 0. || self.expanded {
-            let mut body = div()
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .p(px(12.));
+            let mut body = div().flex().flex_col().gap(px(12.)).p(px(12.));
             if self.phase == FeedbackPhase::ThankYou {
                 body = body.child(
                     div()
@@ -246,42 +242,35 @@ impl Render for ResponseFeedback {
                     let selected = self.reasons.iter().any(|x| x.as_ref() == label);
                     let reason: SharedString = label.into();
                     chips = chips.child(
-                        face(
-                            ("feedback-reason", index),
-                            label,
-                            32.,
-                            8.,
-                            Tone::Clear,
-                            cx,
-                        )
-                        .h(px(32.))
-                        .px(px(12.))
-                        .rounded(px(8.))
-                        .border_1()
-                        .border_color(if selected { p.ink } else { p.line })
-                        .bg(if selected { p.ink } else { p.panel })
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(if selected { p.inverse } else { p.secondary })
-                        .when(!selected, |b| {
-                            b.hover(|s| s.bg(p.tray).border_color(p.faint).text_color(p.ink))
-                        })
-                        .aria_toggled(selected.into())
-                        .when(index == 0, |button| {
-                            button.track_focus(&self.first_reason_focus)
-                        })
-                        .child(label)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if this.phase == FeedbackPhase::Pending {
-                                return;
-                            }
-                            if let Some(i) = this.reasons.iter().position(|x| *x == reason) {
-                                this.reasons.remove(i);
-                            } else {
-                                this.reasons.push(reason.clone());
-                            }
-                            cx.notify();
-                        })),
+                        face(("feedback-reason", index), label, 32., 8., Tone::Clear, cx)
+                            .h(px(32.))
+                            .px(px(12.))
+                            .rounded(px(8.))
+                            .border_1()
+                            .border_color(if selected { p.ink } else { p.line })
+                            .bg(if selected { p.ink } else { p.panel })
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(if selected { p.inverse } else { p.secondary })
+                            .when(!selected, |b| {
+                                b.hover(|s| s.bg(p.tray).border_color(p.faint).text_color(p.ink))
+                            })
+                            .aria_toggled(selected.into())
+                            .when(index == 0, |button| {
+                                button.track_focus(&self.first_reason_focus)
+                            })
+                            .child(label)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if this.phase == FeedbackPhase::Pending {
+                                    return;
+                                }
+                                if let Some(i) = this.reasons.iter().position(|x| *x == reason) {
+                                    this.reasons.remove(i);
+                                } else {
+                                    this.reasons.push(reason.clone());
+                                }
+                                cx.notify();
+                            })),
                     );
                 }
                 body = body.child(chips).child(

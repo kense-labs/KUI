@@ -483,9 +483,7 @@ impl Render for SpeechPlayer {
                 SpeechPhase::Preparing => tr(cx, "Preparing…", "正在准备…"),
                 _ => tr(cx, "Play", "播放"),
             };
-            actions = actions
-                .pl(px(8.))
-                .child(
+            actions = actions.pl(px(8.)).child(
                 face("speech-play", label, 32., 16., Tone::Primary, cx)
                     .size(px(32.))
                     .rounded_full()

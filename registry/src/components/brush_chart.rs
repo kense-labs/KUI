@@ -547,19 +547,17 @@ impl Render for BrushChart {
                             if let Ok(path) = line.build() {
                                 w.paint_path(path, p.ink.opacity(0.45));
                             }
-                            w.paint_quad(
-                                quad(
-                                    Bounds {
-                                        origin: point(pt.x - px(5.), pt.y - px(5.)),
-                                        size: size(px(10.), px(10.)),
-                                    },
-                                    Corners::all(px(5.)),
-                                    p.bright,
-                                    Edges::all(px(2.)),
-                                    p.panel,
-                                    BorderStyle::Solid,
-                                ),
-                            );
+                            w.paint_quad(quad(
+                                Bounds {
+                                    origin: point(pt.x - px(5.), pt.y - px(5.)),
+                                    size: size(px(10.), px(10.)),
+                                },
+                                Corners::all(px(5.)),
+                                p.bright,
+                                Edges::all(px(2.)),
+                                p.panel,
+                                BorderStyle::Solid,
+                            ));
                         }
                     },
                 )
@@ -788,10 +786,7 @@ impl Render for BrushChart {
                             w.paint_path(path.clone(), p.secondary);
                         }
                         drop(cached);
-                        for (x, band_width) in [
-                            (0., l * width),
-                            (r * width, (1. - r) * width),
-                        ] {
+                        for (x, band_width) in [(0., l * width), (r * width, (1. - r) * width)] {
                             if band_width > 0. {
                                 w.paint_quad(fill(
                                     Bounds {
@@ -860,7 +855,11 @@ impl Render for BrushChart {
                             .child(
                                 div()
                                     .w(px(6.))
-                                    .h(px(if self.grip_hover == Some(i) { 24.6 } else { 22. }))
+                                    .h(px(if self.grip_hover == Some(i) {
+                                        24.6
+                                    } else {
+                                        22.
+                                    }))
                                     .rounded(px(3.))
                                     .bg(p.panel)
                                     .border_1()

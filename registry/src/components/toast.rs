@@ -205,10 +205,7 @@ impl Render for Toast {
                     .border_1()
                     .border_color(p.line)
                     .when(self.in_stack, |row| {
-                        row.pt(px(12.))
-                            .pr(px(12.))
-                            .pb(px(12.))
-                            .pl(px(16.))
+                        row.pt(px(12.)).pr(px(12.)).pb(px(12.)).pl(px(16.))
                     })
                     .when(self.in_stack && self.stack_front, |row| row.shadow_lg())
                     .when(!self.in_stack || !self.stack_front, |row| row.shadow_sm())

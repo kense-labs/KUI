@@ -938,7 +938,14 @@ impl Render for SankeyFlow {
                                 let x = f32::from(pos.x - b.origin.x).clamp(4., right);
                                 let origin = point(b.origin.x + px(x), pos.y);
                                 if short {
-                                    let _ = name_line.paint(origin, px(14.4), TextAlign::Left, None, w, cx);
+                                    let _ = name_line.paint(
+                                        origin,
+                                        px(14.4),
+                                        TextAlign::Left,
+                                        None,
+                                        w,
+                                        cx,
+                                    );
                                     let _ = value_line.paint(
                                         point(origin.x + name_line.width() + px(6.), origin.y),
                                         px(14.4),
@@ -948,7 +955,14 @@ impl Render for SankeyFlow {
                                         cx,
                                     );
                                 } else {
-                                    let _ = name_line.paint(origin, px(14.4), TextAlign::Left, None, w, cx);
+                                    let _ = name_line.paint(
+                                        origin,
+                                        px(14.4),
+                                        TextAlign::Left,
+                                        None,
+                                        w,
+                                        cx,
+                                    );
                                     let _ = value_line.paint(
                                         point(origin.x, origin.y + px(15.4)),
                                         px(16.8),

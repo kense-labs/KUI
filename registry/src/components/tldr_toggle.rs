@@ -551,13 +551,11 @@ impl Render for TldrToggle {
                                         }
                                     }))
                             })
-                            .child(
-                                div()
-                                    .mt(px(3.))
-                                    .size(px(16.))
-                                    .flex_none()
-                                    .child(icon(Glyph::Check, 16., p.secondary)),
-                            )
+                            .child(div().mt(px(3.)).size(px(16.)).flex_none().child(icon(
+                                Glyph::Check,
+                                16.,
+                                p.secondary,
+                            )))
                             .child(div().flex_1().min_w_0().child(point.text.clone()))
                             .when(valid, |v| {
                                 v.child(

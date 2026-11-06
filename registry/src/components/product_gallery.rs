@@ -376,54 +376,56 @@ impl Render for ProductGallery {
             })
             .child(self.bounds.measure())
             .child(
-            canvas(
-                |b, w, _| w.insert_hitbox(b, HitboxBehavior::Normal),
-                move |_, hit, w, _| {
-                    w.on_mouse_event(move |e: &ScrollEvent, phase, w, cx| {
-                        if !phase.capture() || e.source != ScrollSource::Touch {
-                            return;
-                        }
-                        if e.touch_phase == TouchPhase::Started {
-                            touch.set(if hit.is_hovered_at(e.position, w) {
-                                1
-                            } else {
-                                0
-                            });
-                            touch_x.set(px(0.));
-                            touch_y.set(px(0.));
-                        }
-                        if touch.get() == 0 {
-                            return;
-                        }
-                        let delta = e.delta.pixel_delta(px(16.));
-                        touch_x.set(touch_x.get() + delta.x);
-                        touch_y.set(touch_y.get() + delta.y);
-                        if touch.get() == 1
-                            && (touch_x.get().abs() > px(4.) || touch_y.get().abs() > px(4.))
-                        {
-                            touch.set(if touch_x.get().abs() > touch_y.get().abs() {
-                                2
-                            } else {
-                                3
-                            });
-                        }
-                        if touch.get() == 2 {
-                            if e.touch_phase == TouchPhase::Ended && touch_x.get().abs() > px(40.) {
-                                let direction = if touch_x.get() < px(0.) { -1 } else { 1 };
-                                swipe(&direction, w, cx);
+                canvas(
+                    |b, w, _| w.insert_hitbox(b, HitboxBehavior::Normal),
+                    move |_, hit, w, _| {
+                        w.on_mouse_event(move |e: &ScrollEvent, phase, w, cx| {
+                            if !phase.capture() || e.source != ScrollSource::Touch {
+                                return;
                             }
-                            w.prevent_default();
-                            cx.stop_propagation();
-                        }
-                        if matches!(e.touch_phase, TouchPhase::Ended | TouchPhase::Cancelled) {
-                            touch.set(0);
-                        }
-                    });
-                },
-            )
-            .absolute()
-            .inset_0(),
-        );
+                            if e.touch_phase == TouchPhase::Started {
+                                touch.set(if hit.is_hovered_at(e.position, w) {
+                                    1
+                                } else {
+                                    0
+                                });
+                                touch_x.set(px(0.));
+                                touch_y.set(px(0.));
+                            }
+                            if touch.get() == 0 {
+                                return;
+                            }
+                            let delta = e.delta.pixel_delta(px(16.));
+                            touch_x.set(touch_x.get() + delta.x);
+                            touch_y.set(touch_y.get() + delta.y);
+                            if touch.get() == 1
+                                && (touch_x.get().abs() > px(4.) || touch_y.get().abs() > px(4.))
+                            {
+                                touch.set(if touch_x.get().abs() > touch_y.get().abs() {
+                                    2
+                                } else {
+                                    3
+                                });
+                            }
+                            if touch.get() == 2 {
+                                if e.touch_phase == TouchPhase::Ended
+                                    && touch_x.get().abs() > px(40.)
+                                {
+                                    let direction = if touch_x.get() < px(0.) { -1 } else { 1 };
+                                    swipe(&direction, w, cx);
+                                }
+                                w.prevent_default();
+                                cx.stop_propagation();
+                            }
+                            if matches!(e.touch_phase, TouchPhase::Ended | TouchPhase::Cancelled) {
+                                touch.set(0);
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .inset_0(),
+            );
         let mut thumbs = div()
             .id("product-thumbnails")
             .flex()
@@ -485,7 +487,9 @@ impl Render for ProductGallery {
                     .rounded(crate::foundation::surface_radius(cx))
                     .border_1()
                     .when(unavailable, |b| {
-                        b.bg(p.tray).border_color(gpui::transparent_black()).text_color(p.faint)
+                        b.bg(p.tray)
+                            .border_color(gpui::transparent_black())
+                            .text_color(p.faint)
                     })
                     .when(
                         !unavailable && self.size.is_some_and(|i| self.sizes[i].id == size.id),
@@ -689,7 +693,11 @@ impl Render for ProductGallery {
                                     .line_height(px(16.))
                                     .text_color(p.faint)
                                     .child(if self.zoom {
-                                        tr(cx, "Move to pan, click to zoom out", "移动查看，点击缩小")
+                                        tr(
+                                            cx,
+                                            "Move to pan, click to zoom out",
+                                            "移动查看，点击缩小",
+                                        )
                                     } else {
                                         tr(cx, "Click the photo to zoom", "点击图片放大")
                                     }),
@@ -715,9 +723,11 @@ impl Render for ProductGallery {
                                         .border_color(p.line)
                                         .hover(|s| s.bg(p.tray))
                                         .child("‹")
-                                        .on_click(cx.listener(|s, _, _, cx| {
-                                            s.set_index(s.index.saturating_sub(1), cx)
-                                        })),
+                                        .on_click(
+                                            cx.listener(|s, _, _, cx| {
+                                                s.set_index(s.index.saturating_sub(1), cx)
+                                            }),
+                                        ),
                                     )
                                     .child(
                                         button("product-next", tr(cx, "Next photo", "下一张"), cx)

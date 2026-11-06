@@ -250,9 +250,7 @@ impl Render for RealtimeStream {
             }
             TouchPhase::Cancelled => s.freeze(s.pinned || s.hovering || s.keyboard_hold, cx),
         });
-        let tip_reading = active
-            .filter(|&i| i < n)
-            .map(|i| graph_data[i].clone());
+        let tip_reading = active.filter(|&i| i < n).map(|i| graph_data[i].clone());
         let mut graph = div()
             .id("realtime-stream")
             .role(Role::Figure)
@@ -338,8 +336,7 @@ impl Render for RealtimeStream {
                         let plot_height = (height - 36.).max(1.);
                         let x_for = |i: usize| {
                             if n > 1 {
-                                plot_width
-                                    * (i as f32 + if moving { phase } else { 0. })
+                                plot_width * (i as f32 + if moving { phase } else { 0. })
                                     / (n - 1) as f32
                             } else {
                                 plot_width
@@ -469,20 +466,26 @@ impl Render for RealtimeStream {
                             if let Ok(path) = line.build() {
                                 w.paint_path(path, p.ink.opacity(0.5));
                             }
-                            w.paint_quad(fill(
-                                Bounds {
-                                    origin: point(pt.x - px(6.), pt.y - px(6.)),
-                                    size: size(px(12.), px(12.)),
-                                },
-                                p.panel,
-                            ).corner_radii(px(6.)));
-                            w.paint_quad(fill(
-                                Bounds {
-                                    origin: point(pt.x - px(4.), pt.y - px(4.)),
-                                    size: size(px(8.), px(8.)),
-                                },
-                                p.bright,
-                            ).corner_radii(px(4.)));
+                            w.paint_quad(
+                                fill(
+                                    Bounds {
+                                        origin: point(pt.x - px(6.), pt.y - px(6.)),
+                                        size: size(px(12.), px(12.)),
+                                    },
+                                    p.panel,
+                                )
+                                .corner_radii(px(6.)),
+                            );
+                            w.paint_quad(
+                                fill(
+                                    Bounds {
+                                        origin: point(pt.x - px(4.), pt.y - px(4.)),
+                                        size: size(px(8.), px(8.)),
+                                    },
+                                    p.bright,
+                                )
+                                .corner_radii(px(4.)),
+                            );
                             let _ = cx;
                         }
                     },
@@ -528,8 +531,7 @@ impl Render for RealtimeStream {
             let width = (f32::from(self.bounds.get().size.width) - 38.).max(1.);
             let plot_width = (width - 44.).max(1.);
             let x = if n > 1 {
-                plot_width
-                    * (active.unwrap_or(0) as f32 + if moving { phase } else { 0. })
+                plot_width * (active.unwrap_or(0) as f32 + if moving { phase } else { 0. })
                     / (n - 1) as f32
             } else {
                 plot_width
@@ -542,7 +544,11 @@ impl Render for RealtimeStream {
             } else {
                 x + 14.
             };
-            let top = if y < 12. + 44. { y + 14. } else { y - 12. - 44. };
+            let top = if y < 12. + 44. {
+                y + 14.
+            } else {
+                y - 12. - 44.
+            };
             graph = graph.child(
                 div()
                     .absolute()
@@ -620,16 +626,13 @@ impl Render for RealtimeStream {
             .border_color(p.line)
             .text_color(p.ink)
             .child(
-                row()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_size(px(16.))
-                            .line_height(px(22.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(self.title.clone()),
-                    ),
+                row().justify_between().items_center().child(
+                    div()
+                        .text_size(px(16.))
+                        .line_height(px(22.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(self.title.clone()),
+                ),
             )
             .child(
                 row()
@@ -668,9 +671,13 @@ impl Render for RealtimeStream {
                         .hover(|s| s.bg(p.tray).text_color(p.ink))
                         .aria_toggled(self.pinned.into())
                         .child(if self.frozen.is_some() {
-                            div().w(px(8.)).h(px(8.)).flex().justify_between().child(
-                                div().w(px(3.)).h(px(8.)).bg(p.secondary),
-                            ).child(div().w(px(3.)).h(px(8.)).bg(p.secondary))
+                            div()
+                                .w(px(8.))
+                                .h(px(8.))
+                                .flex()
+                                .justify_between()
+                                .child(div().w(px(3.)).h(px(8.)).bg(p.secondary))
+                                .child(div().w(px(3.)).h(px(8.)).bg(p.secondary))
                         } else {
                             div().size(px(8.)).rounded_full().bg(p.bright)
                         })

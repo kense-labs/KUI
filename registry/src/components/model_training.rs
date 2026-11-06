@@ -419,18 +419,13 @@ impl Render for ModelTraining {
                         .child(name.to_string()),
                 )
                 .child(
-                    div()
-                        .w_full()
-                        .h(px(2.))
-                        .rounded_full()
-                        .bg(p.line)
-                        .child(
-                            div()
-                                .h_full()
-                                .w(relative(if i <= stage { 1. } else { 0. }))
-                                .rounded_full()
-                                .bg(p.faint),
-                        ),
+                    div().w_full().h(px(2.)).rounded_full().bg(p.line).child(
+                        div()
+                            .h_full()
+                            .w(relative(if i <= stage { 1. } else { 0. }))
+                            .rounded_full()
+                            .bg(p.faint),
+                    ),
                 )
                 .on_click(cx.listener(move |s, _, _, cx| s.set_step(i, cx)))
             }));
@@ -522,11 +517,7 @@ impl Render for ModelTraining {
                                 div()
                                     .flex()
                                     .gap(px(16.))
-                                    .child(stat(
-                                        tr(cx, "Loss", "损失"),
-                                        format!("{loss:.2}"),
-                                        p,
-                                    ))
+                                    .child(stat(tr(cx, "Loss", "损失"), format!("{loss:.2}"), p))
                                     .child(stat(
                                         tr(cx, "Epoch", "轮次"),
                                         format!("{epoch} / {}", self.config.epochs),

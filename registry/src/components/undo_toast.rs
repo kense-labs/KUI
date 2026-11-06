@@ -457,11 +457,7 @@ impl Render for UndoToast {
             } else if self.waiting {
                 tr(cx, "Completing…", "正在完成…").to_owned()
             } else if self.restored > 0 {
-                format!(
-                    "{} {}",
-                    self.restored,
-                    tr(cx, "restored", "项已恢复")
-                )
+                format!("{} {}", self.restored, tr(cx, "restored", "项已恢复"))
             } else {
                 format!(
                     "{count} {} {action_word} · {:.0}s",
@@ -474,8 +470,8 @@ impl Render for UndoToast {
                 )
             };
             let undo = tr(cx, "Undo", "撤销");
-            let ring_frac = (self.remaining.as_secs_f32() / self.duration.as_secs_f32().max(0.1))
-                .clamp(0., 1.);
+            let ring_frac =
+                (self.remaining.as_secs_f32() / self.duration.as_secs_f32().max(0.1)).clamp(0., 1.);
             let mut left = div().flex().items_center().gap(px(12.));
             if self.restored > 0 {
                 left = left.child(icon(Glyph::Check, 16., p.success));
@@ -518,12 +514,7 @@ impl Render for UndoToast {
                         .bg(p.tray)
                         .hover(move |s| s.bg(p.tray.blend(p.ink.opacity(0.09))))
                         .child(undo)
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(p.faint)
-                                .child("⌘Z"),
-                        )
+                        .child(div().text_size(px(12.)).text_color(p.faint).child("⌘Z"))
                         .on_click(cx.listener(|s, _, _, cx| s.undo(cx))),
                 );
             }

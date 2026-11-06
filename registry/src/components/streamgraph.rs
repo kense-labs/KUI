@@ -423,15 +423,13 @@ impl Render for Streamgraph {
                             .map(|i| baseline[i] + totals[i])
                             .fold(f32::NEG_INFINITY, f32::max);
                         let span = (max - min).max(1.);
-                        let centers: Vec<f32> = (0..GRID)
-                            .map(|i| baseline[i] + totals[i] * 0.5)
-                            .collect();
+                        let centers: Vec<f32> =
+                            (0..GRID).map(|i| baseline[i] + totals[i] * 0.5).collect();
                         let pt = |i: usize, y: f32| {
                             let shown = centers[i] + (y - centers[i]) * reveal;
                             point(
                                 b.origin.x + px(width * i as f32 / (GRID - 1) as f32),
-                                b.origin.y
-                                    + px(10. + (height - 20.) * (1. - (shown - min) / span)),
+                                b.origin.y + px(10. + (height - 20.) * (1. - (shown - min) / span)),
                             )
                         };
                         let mut lower = baseline;
@@ -454,7 +452,8 @@ impl Render for Streamgraph {
                                     (upper[a] - lower[a]).total_cmp(&(upper[b] - lower[b]))
                                 })
                                 .unwrap_or(GRID / 2);
-                            let thickness = (upper[mid] - lower[mid]) * (height - 20.) / span * reveal;
+                            let thickness =
+                                (upper[mid] - lower[mid]) * (height - 20.) / span * reveal;
                             if width >= 360. && thickness >= 19. {
                                 let label = labels[layer_index].clone();
                                 let mut style = w.text_style();
@@ -480,10 +479,7 @@ impl Render for Streamgraph {
                         if active.is_some() && n > 0 {
                             let mut line = PathBuilder::stroke(px(1.));
                             line.move_to(point(b.origin.x + px(cursor_x), b.origin.y));
-                            line.line_to(point(
-                                b.origin.x + px(cursor_x),
-                                b.origin.y + px(height),
-                            ));
+                            line.line_to(point(b.origin.x + px(cursor_x), b.origin.y + px(height)));
                             if let Ok(path) = line.build() {
                                 w.paint_path(path, p.ink.opacity(0.5));
                             }
@@ -575,13 +571,7 @@ impl Render for Streamgraph {
                         .gap(px(8.))
                         .text_size(px(14.))
                         .line_height(px(20.))
-                        .child(
-                            div()
-                                .w(px(10.))
-                                .h(px(2.5))
-                                .rounded(px(2.))
-                                .bg(layer.color),
-                        )
+                        .child(div().w(px(10.)).h(px(2.5)).rounded(px(2.)).bg(layer.color))
                         .child(
                             div()
                                 .flex_1()

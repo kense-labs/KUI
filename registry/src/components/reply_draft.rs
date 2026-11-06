@@ -427,7 +427,10 @@ impl Render for ReplyDraft {
                 .role(Role::RadioButton)
                 .aria_toggled(active.into())
                 .when(active, |v| {
-                    v.bg(p.panel).text_color(p.ink).border_1().border_color(p.line)
+                    v.bg(p.panel)
+                        .text_color(p.ink)
+                        .border_1()
+                        .border_color(p.line)
                 })
                 .when(!active, |v| {
                     v.text_color(p.secondary)
@@ -487,7 +490,10 @@ impl Render for ReplyDraft {
                 .role(Role::RadioButton)
                 .aria_toggled(active.into())
                 .when(active, |v| {
-                    v.bg(p.panel).text_color(p.ink).border_1().border_color(p.line)
+                    v.bg(p.panel)
+                        .text_color(p.ink)
+                        .border_1()
+                        .border_color(p.line)
                 })
                 .when(!active, |v| {
                     v.text_color(p.secondary)

@@ -303,11 +303,8 @@ impl Render for AgentLoop {
                         );
                     }
                     w.paint_quad(
-                        fill(
-                            Bounds::centered_at(pos, size(px(10.), px(10.))),
-                            line,
-                        )
-                        .corner_radii(px(5.)),
+                        fill(Bounds::centered_at(pos, size(px(10.), px(10.))), line)
+                            .corner_radii(px(5.)),
                     );
                 }
                 for n in (1..=12).rev() {

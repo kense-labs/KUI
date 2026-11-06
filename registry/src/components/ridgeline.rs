@@ -396,7 +396,8 @@ impl Render for Ridgeline {
                         for i in order {
                             let (values, lift, color, label, q1, median, q3) = &rows[i];
                             let denom = 1. - (rows.len() as f32 * 0.025).min(0.5);
-                            let stagger = ((reveal - i as f32 * 0.025) / denom.max(0.001)).clamp(0., 1.);
+                            let stagger =
+                                ((reveal - i as f32 * 0.025) / denom.max(0.001)).clamp(0., 1.);
                             let base = 56. + (i as f32 + 1.) * 30. - lift * 6.;
                             let at = |j: usize, y: f32| {
                                 point(
@@ -473,7 +474,11 @@ impl Render for Ridgeline {
                                 FontWeight::NORMAL
                             };
                             let mut run = style.to_run(label.len());
-                            run.color = if active == Some(i) { p.ink } else { p.secondary };
+                            run.color = if active == Some(i) {
+                                p.ink
+                            } else {
+                                p.secondary
+                            };
                             let text =
                                 w.text_system()
                                     .shape_line(label.clone(), px(12.), &[run], None);
@@ -493,10 +498,7 @@ impl Render for Ridgeline {
                         {
                             let mut hair = PathBuilder::stroke(px(1.));
                             hair.move_to(point(b.origin.x + px(x), b.origin.y));
-                            hair.line_to(point(
-                                b.origin.x + px(x),
-                                b.origin.y + b.size.height,
-                            ));
+                            hair.line_to(point(b.origin.x + px(x), b.origin.y + b.size.height));
                             if let Ok(path) = hair.build() {
                                 w.paint_path(path, p.ink.opacity(0.35));
                             }
@@ -604,10 +606,7 @@ impl Render for Ridgeline {
                                 .text_size(px(12.))
                                 .line_height(px(20.))
                                 .text_color(p.faint)
-                                .child(format!(
-                                    "Q1 {q1:.1}  ·  Q3 {q3:.1}  ·  n={}",
-                                    values.len()
-                                )),
+                                .child(format!("Q1 {q1:.1}  ·  Q3 {q3:.1}  ·  n={}", values.len())),
                         ),
                 );
             }

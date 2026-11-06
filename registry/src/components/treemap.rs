@@ -928,48 +928,51 @@ impl Render for Treemap {
                         .on_click(cx.listener(move |s, _, _, cx| s.enter(i, cx))),
                 )
             }))
-            .when_some(self.active.and_then(|i| data.get(i).cloned()), |stage, node| {
-                stage.child(
-                    div()
-                        .absolute()
-                        .left(px(tip_x))
-                        .top(px(tip_y))
-                        .min_w(px(160.))
-                        .max_w(px(240.))
-                        .px(px(12.))
-                        .py(px(10.))
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .rounded(crate::foundation::surface_radius(cx))
-                        .border_1()
-                        .border_color(p.line)
-                        .bg(p.panel)
-                        .shadow_lg()
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(20.))
-                                .text_color(p.faint)
-                                .child(node.label.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_baseline()
-                                .justify_between()
-                                .gap(px(12.))
-                                .text_size(px(14.))
-                                .line_height(px(18.9))
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .child(format!("{:.1}", node.weight(self.metric))),
-                                ),
-                        ),
-                )
-            });
+            .when_some(
+                self.active.and_then(|i| data.get(i).cloned()),
+                |stage, node| {
+                    stage.child(
+                        div()
+                            .absolute()
+                            .left(px(tip_x))
+                            .top(px(tip_y))
+                            .min_w(px(160.))
+                            .max_w(px(240.))
+                            .px(px(12.))
+                            .py(px(10.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .rounded(crate::foundation::surface_radius(cx))
+                            .border_1()
+                            .border_color(p.line)
+                            .bg(p.panel)
+                            .shadow_lg()
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .line_height(px(20.))
+                                    .text_color(p.faint)
+                                    .child(node.label.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_baseline()
+                                    .justify_between()
+                                    .gap(px(12.))
+                                    .text_size(px(14.))
+                                    .line_height(px(18.9))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(format!("{:.1}", node.weight(self.metric))),
+                                    ),
+                            ),
+                    )
+                },
+            );
         let detail = self
             .active
             .and_then(|i| data.get(i))

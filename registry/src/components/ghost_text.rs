@@ -497,16 +497,18 @@ impl Render for GhostText {
             .items_center()
             .min_h(px(if self.plain { 0. } else { 30. }))
             .gap(px(10.))
-            .when(!self.plain, |footer| footer.pr(px(6.)).pb(px(6.)).pl(px(16.)))
+            .when(!self.plain, |footer| {
+                footer.pr(px(6.)).pb(px(6.)).pl(px(16.))
+            })
             .child(
-            div()
-                .id("ghost-status")
-                .role(Role::Status)
-                .aria_label(announcement)
-                .text_size(px(12.))
-                .text_color(p.secondary)
-                .child(self.model.clone()),
-        );
+                div()
+                    .id("ghost-status")
+                    .role(Role::Status)
+                    .aria_label(announcement)
+                    .text_size(px(12.))
+                    .text_color(p.secondary)
+                    .child(self.model.clone()),
+            );
         if matches!(self.status, GhostStatus::Ready | GhostStatus::Error) {
             let ready = self.status == GhostStatus::Ready;
             footer = footer.child(

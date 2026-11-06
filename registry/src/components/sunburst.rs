@@ -415,7 +415,8 @@ impl Render for Sunburst {
                 top = y + 14.;
             }
             self.tip_x.duration(left.max(0.), 0.26, cx);
-            self.tip_y.duration(top.clamp(0., (height - 72.).max(0.)), 0.26, cx);
+            self.tip_y
+                .duration(top.clamp(0., (height - 72.).max(0.)), 0.26, cx);
         }
         let tip_x = self.tip_x.get(w, cx);
         let tip_y = self.tip_y.get(w, cx);
@@ -714,7 +715,10 @@ impl Render for Sunburst {
         let crumb_count = crumbs.len();
         let focus = self.focus.clone();
         let depth = self.focus.len();
-        let hot = self.active.as_ref().and_then(|path| path.get(depth).copied());
+        let hot = self
+            .active
+            .as_ref()
+            .and_then(|path| path.get(depth).copied());
         let legend = column().gap(px(2.)).min_w(px(150.)).flex_1().children(
             root.children.iter().enumerate().map(|(i, child)| {
                 let mut path = focus.clone();
@@ -740,7 +744,13 @@ impl Render for Sunburst {
                 .text_color(if hot == Some(i) { p.ink } else { p.secondary })
                 .when(hot == Some(i), |row| row.bg(p.ink.opacity(0.05)))
                 .when(hot.is_some() && hot != Some(i), |row| row.opacity(0.55))
-                .child(div().size(px(8.)).flex_none().rounded_full().bg(child.color))
+                .child(
+                    div()
+                        .size(px(8.))
+                        .flex_none()
+                        .rounded_full()
+                        .bg(child.color),
+                )
                 .child(div().flex_1().min_w(px(0.)).child(child.label.clone()))
                 .child(
                     div()

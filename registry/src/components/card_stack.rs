@@ -198,8 +198,7 @@ impl CardStack {
             drag.speed = f32::from(x - drag.last) / elapsed;
             drag.last = x;
             drag.last_time = now;
-            self.x
-                .reset(drag.origin + f32::from(x - drag.start));
+            self.x.reset(drag.origin + f32::from(x - drag.start));
             cx.notify();
         }
     }
@@ -208,9 +207,8 @@ impl CardStack {
             return;
         };
         let offset = self.x.value(cx);
-        let flick = offset.abs() > 12.
-            && drag.speed.abs() > 500.
-            && drag.speed.signum() == offset.signum();
+        let flick =
+            offset.abs() > 12. && drag.speed.abs() > 500. && drag.speed.signum() == offset.signum();
         let width = stack_width(f32::from(self.container_width.get()));
         let threshold = (width * 0.35).min(140.);
         let opposing = drag.speed.signum() == -offset.signum() && drag.speed.abs() > 300.;
@@ -231,15 +229,15 @@ impl CardStack {
     }
 }
 fn stack_width(measured: f32) -> f32 {
-    if measured > 1. { measured.min(320.) } else { 320. }
+    if measured > 1. {
+        measured.min(320.)
+    } else {
+        320.
+    }
 }
 
 fn shown_depth(depth: f32, lift: f32) -> f32 {
-    if depth <= 0. {
-        0.
-    } else {
-        depth - lift * 0.4
-    }
+    if depth <= 0. { 0. } else { depth - lift * 0.4 }
 }
 
 fn card_scale(shown: f32) -> f32 {
@@ -305,7 +303,9 @@ impl Render for CardStack {
                         .w(px(card_w.max(1.)))
                         .h(px(card_h))
                         .opacity(presence)
-                        .when(depth == 0 && (x.abs() > 1. || self.exiting), |d| d.shadow_lg())
+                        .when(depth == 0 && (x.abs() > 1. || self.exiting), |d| {
+                            d.shadow_lg()
+                        })
                         .p_5()
                         .bg(p.panel)
                         .border_1()

@@ -261,7 +261,8 @@ impl Render for SlotText {
             .text_color(p.ink)
             .text_size(px(self.font_size))
             .line_height(px(window));
-        self.reels.retain(|reel| !reel.exiting || reel.width.value(cx) > 0.5);
+        self.reels
+            .retain(|reel| !reel.exiting || reel.width.value(cx) > 0.5);
         for (index, reel) in self.reels.iter_mut().enumerate() {
             let target_width = if reel.exiting {
                 0.
@@ -281,9 +282,7 @@ impl Render for SlotText {
                 reel.measured_width = Some(target_width);
             }
             let width = reel.width.get(w, cx).max(0.);
-            let mut cell = div().relative().w(px(width))
-                .h(px(window))
-                .flex_none();
+            let mut cell = div().relative().w(px(width)).h(px(window)).flex_none();
             if digit(&reel.target).is_some() {
                 let progress = if reduced {
                     1.
@@ -335,7 +334,7 @@ impl Render for SlotText {
 
 #[cfg(test)]
 mod tests {
-    use super::{landing, match_reels, reel_time, SlotText};
+    use super::{SlotText, landing, match_reels, reel_time};
     #[test]
     fn decimal_columns_stay_anchored_when_digit_count_or_grouping_changes() {
         assert_eq!(

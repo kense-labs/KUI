@@ -1,6 +1,6 @@
 //! An illustrative, host-supplied sparse expert routing diagram.
 use crate::primitives::{
-    family::{disabled_motion, face, Paint, PhaseClock, Tone},
+    family::{Paint, PhaseClock, Tone, disabled_motion, face},
     presentation::{column, hint, row, title, tr},
 };
 use gpui::{prelude::*, *};
@@ -394,7 +394,12 @@ impl Render for MixtureOfExperts {
         };
         let route = self.routes.get(index);
         let token = self.tokens.get(index);
-        let mut tokens = row().gap_1().flex_wrap().pt(px(16.)).border_t_1().border_color(p.line);
+        let mut tokens = row()
+            .gap_1()
+            .flex_wrap()
+            .pt(px(16.))
+            .border_t_1()
+            .border_color(p.line);
         for (i, token) in self.tokens.iter().enumerate() {
             let selected = index == i;
             let done = i < index && self.pin.is_none();
@@ -451,7 +456,11 @@ impl Render for MixtureOfExperts {
                 })
                 .text_size(px(14.))
                 .line_height(px(20.))
-                .text_color(if pinned || selected || done { p.ink } else { p.faint })
+                .text_color(if pinned || selected || done {
+                    p.ink
+                } else {
+                    p.faint
+                })
                 .when(!pinned && !selected && !done, |token| {
                     token.hover(|s| s.border_color(p.faint).text_color(p.ink))
                 })
@@ -661,22 +670,18 @@ impl Render for MixtureOfExperts {
             } else {
                 expert.name.clone()
             };
-            let bar = div()
-                .w_full()
-                .h(px(2.))
-                .bg(p.faint.opacity(0.28))
-                .child(
-                    div()
-                        .h_full()
-                        .w(relative(weight.clamp(0., 1.)))
-                        .bg(if dropped {
-                            p.danger.opacity(0.7)
-                        } else if rank.is_some() {
-                            rank_color.opacity(0.7)
-                        } else {
-                            p.secondary.opacity(0.55)
-                        }),
-                );
+            let bar = div().w_full().h(px(2.)).bg(p.faint.opacity(0.28)).child(
+                div()
+                    .h_full()
+                    .w(relative(weight.clamp(0., 1.)))
+                    .bg(if dropped {
+                        p.danger.opacity(0.7)
+                    } else if rank.is_some() {
+                        rank_color.opacity(0.7)
+                    } else {
+                        p.secondary.opacity(0.55)
+                    }),
+            );
             let pos = expert_position(i, expert_count, narrow);
             let tile_width = if narrow { 54. } else { 94. };
             stage = stage.child(

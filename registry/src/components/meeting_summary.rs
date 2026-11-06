@@ -349,12 +349,11 @@ impl Render for MeetingSummary {
             .px(px(20.))
             .pb(px(12.));
         for (section, points) in sections {
-            let mut list = div().flex().flex_col().gap(px(4.)).child(
-                div()
-                    .text_size(px(13.))
-                    .line_height(px(20.))
-                    .child(section),
-            );
+            let mut list = div()
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(div().text_size(px(13.)).line_height(px(20.)).child(section));
             for (index, point) in points.iter().enumerate() {
                 let mut row = div().flex().flex_col().gap_1();
                 let mut heading = div()

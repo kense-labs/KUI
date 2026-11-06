@@ -604,8 +604,14 @@ impl Render for RaceBarChart {
                 let dim = self.selected.is_some() && !is_selected;
                 let fraction = (value / max).clamp(0., 1.);
                 let bar_px = (fraction * plot_w).max(2.);
-                let value_span = if label_w == 0. { bar_px.max(16.) } else { bar_px };
-                let wash = p.panel.blend(item.color.opacity(if is_selected { 0.6 } else { 0.4 }));
+                let value_span = if label_w == 0. {
+                    bar_px.max(16.)
+                } else {
+                    bar_px
+                };
+                let wash = p
+                    .panel
+                    .blend(item.color.opacity(if is_selected { 0.6 } else { 0.4 }));
                 div()
                     .id(("race-item", i))
                     .absolute()
@@ -682,11 +688,8 @@ impl Render for RaceBarChart {
                     )
             }));
         if let Some(id) = self.selected.clone()
-            && let Some((index, item)) = self
-                .data
-                .iter()
-                .enumerate()
-                .find(|(_, item)| item.id == id)
+            && let Some((index, item)) =
+                self.data.iter().enumerate().find(|(_, item)| item.id == id)
         {
             let (rank, value) = values[index];
             let place = self.order().iter().position(|v| *v == index).unwrap_or(0) + 1;
@@ -731,147 +734,139 @@ impl Render for RaceBarChart {
                     ),
             );
         }
-        let timeline =
-            if self.frames.is_empty() {
-                None
+        let timeline = if self.frames.is_empty() {
+            None
+        } else {
+            let end = self.frames.len() - 1;
+            let index = (self.position.round() as usize).min(end);
+            let period = self.frames[index].label.clone();
+            let first = self.frames[0].label.clone();
+            let last = self.frames[end].label.clone();
+            let fraction = if end > 0 {
+                (self.position / end as f32).clamp(0., 1.)
             } else {
-                let end = self.frames.len() - 1;
-                let index = (self.position.round() as usize).min(end);
-                let period = self.frames[index].label.clone();
-                let first = self.frames[0].label.clone();
-                let last = self.frames[end].label.clone();
-                let fraction = if end > 0 {
-                    (self.position / end as f32).clamp(0., 1.)
-                } else {
-                    0.
-                };
-                let track_bounds = self.track.clone();
-                let touch = self.contact.listen(cx, |s, e: &TouchDragEvent, _, cx| {
-                    if matches!(e.phase, TouchPhase::Started | TouchPhase::Moved) {
+                0.
+            };
+            let track_bounds = self.track.clone();
+            let touch = self.contact.listen(cx, |s, e: &TouchDragEvent, _, cx| {
+                if matches!(e.phase, TouchPhase::Started | TouchPhase::Moved) {
+                    s.scrub(e.position.x, cx);
+                }
+            });
+            let track = div()
+                .id("race-timeline")
+                .role(Role::Slider)
+                .tab_index(0)
+                .aria_label(tr(cx, "Race timeline", "排名时间轴"))
+                .aria_value(period.clone())
+                .relative()
+                .w_full()
+                .h(px(36.))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|s, e: &MouseDownEvent, _, cx| {
+                        s.dragging = true;
+                        s.scrub(e.position.x, cx);
+                    }),
+                )
+                .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
+                    if s.dragging {
                         s.scrub(e.position.x, cx);
                     }
-                });
-                let track = div()
-                    .id("race-timeline")
-                    .role(Role::Slider)
-                    .tab_index(0)
-                    .aria_label(tr(cx, "Race timeline", "排名时间轴"))
-                    .aria_value(period.clone())
-                    .relative()
-                    .w_full()
-                    .h(px(36.))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|s, e: &MouseDownEvent, _, cx| {
-                            s.dragging = true;
-                            s.scrub(e.position.x, cx);
-                        }),
-                    )
-                    .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
-                        if s.dragging {
-                            s.scrub(e.position.x, cx);
-                        }
-                    }))
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(|s, _, _, cx| s.release_scrub(cx)),
-                    )
-                    .on_mouse_up_out(
-                        MouseButton::Left,
-                        cx.listener(|s, _, _, cx| s.release_scrub(cx)),
-                    )
-                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
-                        let current = s.position.round() as usize;
-                        let last = s.frames.len().saturating_sub(1);
-                        let target = match e.keystroke.key.as_str() {
-                            "left" | "down" => Some(current.saturating_sub(1)),
-                            "right" | "up" => Some((current + 1).min(last)),
-                            "home" => Some(0),
-                            "end" => Some(last),
-                            "space" | "enter" if !e.is_held => {
-                                s.toggle_play(cx);
-                                w.prevent_default();
-                                cx.stop_propagation();
-                                return;
-                            }
-                            _ => None,
-                        };
-                        if let Some(target) = target {
-                            s.set_frame(target, cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|s, _, _, cx| s.release_scrub(cx)),
+                )
+                .on_mouse_up_out(
+                    MouseButton::Left,
+                    cx.listener(|s, _, _, cx| s.release_scrub(cx)),
+                )
+                .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                    let current = s.position.round() as usize;
+                    let last = s.frames.len().saturating_sub(1);
+                    let target = match e.keystroke.key.as_str() {
+                        "left" | "down" => Some(current.saturating_sub(1)),
+                        "right" | "up" => Some((current + 1).min(last)),
+                        "home" => Some(0),
+                        "end" => Some(last),
+                        "space" | "enter" if !e.is_held => {
+                            s.toggle_play(cx);
                             w.prevent_default();
                             cx.stop_propagation();
+                            return;
                         }
-                    }))
-                    .child(
-                        canvas(move |b, _, _| track_bounds.set(b), |_, _, _, _| {})
-                            .absolute()
-                            .inset_0(),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .left_0()
-                            .right_0()
-                            .top(px(16.))
-                            .h(px(4.))
-                            .rounded(px(2.))
-                            .bg(p.tray)
-                            .child(
-                                div()
-                                    .h_full()
-                                    .w(relative(fraction))
-                                    .rounded(px(2.))
-                                    .bg(p.ink.opacity(0.55)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .left(relative(fraction))
-                            .top(px(10.))
-                            .ml(px(-8.))
-                            .size(px(16.))
-                            .rounded_full()
-                            .bg(p.panel)
-                            .border_1()
-                            .border_color(p.faint)
-                            .shadow_sm(),
-                    )
-                    .child(touch);
-                let label = if reduced {
-                    tr(cx, "Next period", "下一时间段")
-                } else if self.playing {
-                    tr(cx, "Pause", "暂停")
-                } else if index == end {
-                    tr(cx, "Replay", "重新播放")
-                } else {
-                    tr(cx, "Play", "播放")
-                };
-                Some(
-                    column()
-                        .w_full()
-                        .gap(px(2.))
+                        _ => None,
+                    };
+                    if let Some(target) = target {
+                        s.set_frame(target, cx);
+                        w.prevent_default();
+                        cx.stop_propagation();
+                    }
+                }))
+                .child(
+                    canvas(move |b, _, _| track_bounds.set(b), |_, _, _, _| {})
+                        .absolute()
+                        .inset_0(),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .top(px(16.))
+                        .h(px(4.))
+                        .rounded(px(2.))
+                        .bg(p.tray)
                         .child(
                             div()
-                                .text_size(px(30.))
-                                .line_height(px(33.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(period.clone()),
-                        )
-                        .child(
-                            row()
-                                .items_center()
-                                .gap(px(12.))
-                                .child(
-                                    face(
-                                        "race-play",
-                                        label,
-                                        36.,
-                                        18.,
-                                        Tone::Surface,
-                                        cx,
-                                    )
+                                .h_full()
+                                .w(relative(fraction))
+                                .rounded(px(2.))
+                                .bg(p.ink.opacity(0.55)),
+                        ),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .left(relative(fraction))
+                        .top(px(10.))
+                        .ml(px(-8.))
+                        .size(px(16.))
+                        .rounded_full()
+                        .bg(p.panel)
+                        .border_1()
+                        .border_color(p.faint)
+                        .shadow_sm(),
+                )
+                .child(touch);
+            let label = if reduced {
+                tr(cx, "Next period", "下一时间段")
+            } else if self.playing {
+                tr(cx, "Pause", "暂停")
+            } else if index == end {
+                tr(cx, "Replay", "重新播放")
+            } else {
+                tr(cx, "Play", "播放")
+            };
+            Some(
+                column()
+                    .w_full()
+                    .gap(px(2.))
+                    .child(
+                        div()
+                            .text_size(px(30.))
+                            .line_height(px(33.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(period.clone()),
+                    )
+                    .child(
+                        row()
+                            .items_center()
+                            .gap(px(12.))
+                            .child(
+                                face("race-play", label, 36., 18., Tone::Surface, cx)
                                     .size(px(36.))
                                     .min_w(px(36.))
                                     .p_0()
@@ -903,23 +898,18 @@ impl Render for RaceBarChart {
                                             cx.stop_propagation();
                                         }
                                     })),
-                                )
-                                .child(
-                                    column()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .gap(px(2.))
-                                        .child(track)
-                                        .child(
-                                            row()
-                                                .justify_between()
-                                                .child(hint(first, p))
-                                                .child(hint(last, p)),
-                                        ),
+                            )
+                            .child(
+                                column().flex_1().min_w_0().gap(px(2.)).child(track).child(
+                                    row()
+                                        .justify_between()
+                                        .child(hint(first, p))
+                                        .child(hint(last, p)),
                                 ),
-                        ),
-                )
-            };
+                            ),
+                    ),
+            )
+        };
         column()
             .w(px(496.))
             .max_w_full()

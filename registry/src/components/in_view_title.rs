@@ -128,9 +128,7 @@ impl Render for InViewTitle {
         let count = parts.len().max(1);
         let (settle, step) = match self.entrance {
             TitleEntrance::Lines => (0.86, 0.08),
-            TitleEntrance::Words | TitleEntrance::Blur => {
-                (0.8, (0.4 / count as f32).min(0.06))
-            }
+            TitleEntrance::Words | TitleEntrance::Blur => (0.8, (0.4 / count as f32).min(0.06)),
             TitleEntrance::Rise | TitleEntrance::Fade => (0.8, 0.),
         };
         let end = if hiding {

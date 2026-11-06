@@ -421,7 +421,9 @@ impl Render for VectorSearch {
                                                     div()
                                                         .text_size(px(12.))
                                                         .font_weight(FontWeight::MEDIUM)
-                                                        .text_color(p.ink.blend(p.bright.opacity(0.7)))
+                                                        .text_color(
+                                                            p.ink.blend(p.bright.opacity(0.7)),
+                                                        )
                                                         .child(score),
                                                 ),
                                         )

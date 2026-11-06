@@ -685,9 +685,9 @@ impl Render for VoiceRecorder {
                             .text_color(p.secondary)
                             .hover(|s| s.bg(p.tray).text_color(p.danger))
                             .child(icon(Glyph::Trash, 16., p.secondary))
-                            .on_click(cx.listener(|s, _, _, cx| {
-                                s.request(RecorderEvent::Discard, cx)
-                            })),
+                            .on_click(
+                                cx.listener(|s, _, _, cx| s.request(RecorderEvent::Discard, cx)),
+                            ),
                         )
                         .child(
                             div()

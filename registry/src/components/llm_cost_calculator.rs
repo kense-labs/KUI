@@ -2,7 +2,7 @@
 use crate::{
     components::slider::{SlideValue, Slider},
     primitives::{
-        family::{face, Paint, Tone},
+        family::{Paint, Tone, face},
         presentation::{column, hint, row, tr},
     },
 };
@@ -314,100 +314,89 @@ impl Render for LlmCostCalculator {
             let first = ranking[0];
             let last = ranking[ranking.len() - 1];
             let hot = self.hovered == Some(index);
-            let item = face(
-                ("llm-cost-model", index),
-                label,
-                44.,
-                2.,
-                Tone::Clear,
-                cx,
-            )
-            .w_full()
-            .h(px(44.))
-            .px(px(8.))
-            .bg(if selected {
-                p.bright.opacity(0.07)
-            } else if hot {
-                p.ink.opacity(0.04)
-            } else {
-                gpui::transparent_black()
-            })
-            .when(!selected, |b| b.hover(|s| s.bg(p.ink.opacity(0.04))))
-            .when(selected, |b| b.hover(|s| s.bg(p.bright.opacity(0.10))))
-            .on_hover(cx.listener(move |s, over: &bool, _, cx| {
-                s.hovered = if *over { Some(index) } else { None };
-                cx.notify();
-            }))
-            .track_focus(&self.focus[index])
-            .aria_toggled(selected.into())
-            .child(
-                row()
-                    .w_full()
-                    .items_center()
-                    .gap(px(12.))
-                    .child(
-                        div()
-                            .w(px(16.))
-                            .text_size(px(13.))
-                            .line_height(px(20.))
-                            .text_color(p.faint)
-                            .text_center()
-                            .child((rank + 1).to_string()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .max_w(px(168.))
-                            .min_w(px(0.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(model.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .h(px(6.))
-                            .rounded_full()
-                            .bg(p.ink.opacity(0.06))
-                            .child(
-                                div()
-                                    .h_full()
-                                    .w(relative(share))
-                                    .rounded_full()
-                                    .bg(if selected {
+            let item = face(("llm-cost-model", index), label, 44., 2., Tone::Clear, cx)
+                .w_full()
+                .h(px(44.))
+                .px(px(8.))
+                .bg(if selected {
+                    p.bright.opacity(0.07)
+                } else if hot {
+                    p.ink.opacity(0.04)
+                } else {
+                    gpui::transparent_black()
+                })
+                .when(!selected, |b| b.hover(|s| s.bg(p.ink.opacity(0.04))))
+                .when(selected, |b| b.hover(|s| s.bg(p.bright.opacity(0.10))))
+                .on_hover(cx.listener(move |s, over: &bool, _, cx| {
+                    s.hovered = if *over { Some(index) } else { None };
+                    cx.notify();
+                }))
+                .track_focus(&self.focus[index])
+                .aria_toggled(selected.into())
+                .child(
+                    row()
+                        .w_full()
+                        .items_center()
+                        .gap(px(12.))
+                        .child(
+                            div()
+                                .w(px(16.))
+                                .text_size(px(13.))
+                                .line_height(px(20.))
+                                .text_color(p.faint)
+                                .text_center()
+                                .child((rank + 1).to_string()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .max_w(px(168.))
+                                .min_w(px(0.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(model.name.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .h(px(6.))
+                                .rounded_full()
+                                .bg(p.ink.opacity(0.06))
+                                .child(div().h_full().w(relative(share)).rounded_full().bg(
+                                    if selected {
                                         p.bright
                                     } else if hot {
                                         p.ink.opacity(0.34)
                                     } else {
                                         p.ink.opacity(0.24)
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w(px(88.))
-                            .text_right()
-                            .text_color(if selected { p.ink } else { p.secondary })
-                            .child(amount),
-                    ),
-            )
-            .on_click(cx.listener(move |s, _, _, cx| s.select(index, cx)))
-            .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
-                let target = match e.keystroke.key.as_str() {
-                    "enter" | "space" => Some(index),
-                    "up" | "left" => Some(previous),
-                    "down" | "right" => Some(next),
-                    "home" => Some(first),
-                    "end" => Some(last),
-                    _ => None,
-                };
-                if let Some(target) = target {
-                    s.select(target, cx);
-                    if let Some(focus) = s.focus.get(target) {
-                        focus.focus(w, cx);
+                                    },
+                                )),
+                        )
+                        .child(
+                            div()
+                                .w(px(88.))
+                                .text_right()
+                                .text_color(if selected { p.ink } else { p.secondary })
+                                .child(amount),
+                        ),
+                )
+                .on_click(cx.listener(move |s, _, _, cx| s.select(index, cx)))
+                .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                    let target = match e.keystroke.key.as_str() {
+                        "enter" | "space" => Some(index),
+                        "up" | "left" => Some(previous),
+                        "down" | "right" => Some(next),
+                        "home" => Some(first),
+                        "end" => Some(last),
+                        _ => None,
+                    };
+                    if let Some(target) = target {
+                        s.select(target, cx);
+                        if let Some(focus) = s.focus.get(target) {
+                            focus.focus(w, cx);
+                        }
+                        cx.stop_propagation();
                     }
-                    cx.stop_propagation();
-                }
-            }));
+                }));
             list = list.child(item);
         }
         let model_name = selected.and_then(|i| self.models.get(i)).map_or_else(
@@ -452,7 +441,11 @@ impl Render for LlmCostCalculator {
                                     .text_size(px(13.))
                                     .line_height(px(20.))
                                     .text_color(p.faint)
-                                    .child(tr(cx, "Prices per one million tokens", "每百万 token 的价格")),
+                                    .child(tr(
+                                        cx,
+                                        "Prices per one million tokens",
+                                        "每百万 token 的价格",
+                                    )),
                             ),
                     )
                     .child(
@@ -590,7 +583,7 @@ impl Render for LlmCostCalculator {
 }
 #[cfg(test)]
 mod tests {
-    use super::{compute_llm_cost, LlmModelPrice, LlmUsage};
+    use super::{LlmModelPrice, LlmUsage, compute_llm_cost};
     #[test]
     fn cached_inputs_and_zero_traffic_are_computed_correctly() {
         let model = LlmModelPrice::new("a", "A", "", 2., 8.).with_cached_input(0.5);

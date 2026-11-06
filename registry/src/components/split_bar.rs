@@ -801,59 +801,64 @@ impl Render for SplitBar {
                     ),
             )
             .child(graph)
-            .child(row().flex_wrap().ml(px(-8.)).gap_x(px(4.)).gap_y(px(2.)).children(
-                self.data.iter().enumerate().map(|(i, segment)| {
-                    let off = self.hidden.contains(&segment.id);
-                    let label = format!(
-                        "{}  {}",
-                        segment.label,
-                        if off {
-                            tr(cx, "Off", "已隐藏").to_owned()
-                        } else {
-                            format!("{:.1}%", base[i] * 100.)
-                        }
-                    );
-                    face(
-                        ("split-segment", i),
-                        label.clone(),
-                        32.,
-                        radius.into(),
-                        Tone::Clear,
-                        cx,
-                    )
-                    .pl(px(8.))
-                    .pr(px(10.))
-                    .aria_toggled((!off).into())
-                    .gap(px(8.))
-                    .text_size(px(14.))
-                    .line_height(px(20.))
-                    .font_weight(FontWeight::NORMAL)
-                    .hover(|s| s.bg(p.tray))
-                    .child(
-                        div()
-                            .relative()
-                            .size(px(12.))
-                            .flex_none()
-                            .rounded(px(3.))
-                            .when(off, |view| view.border(px(1.5)).border_color(p.faint))
-                            .when(!off, |view| {
-                                view.bg(p.panel.blend(segment.color.opacity(0.42))).child(
-                                    div()
-                                        .absolute()
-                                        .right_0()
-                                        .top_0()
-                                        .bottom_0()
-                                        .w(px(3.))
-                                        .bg(segment.color),
-                                )
-                            }),
-                    )
-                    .child(segment.label.clone())
-                    .when(off, |view| view.child(tr(cx, "Off", "已隐藏")))
-                    .when(!off, |view| view.child(counter_views[i].2.clone()))
-                    .on_click(cx.listener(move |s, _, _, cx| s.toggle(i, cx)))
-                }),
-            ))
+            .child(
+                row()
+                    .flex_wrap()
+                    .ml(px(-8.))
+                    .gap_x(px(4.))
+                    .gap_y(px(2.))
+                    .children(self.data.iter().enumerate().map(|(i, segment)| {
+                        let off = self.hidden.contains(&segment.id);
+                        let label = format!(
+                            "{}  {}",
+                            segment.label,
+                            if off {
+                                tr(cx, "Off", "已隐藏").to_owned()
+                            } else {
+                                format!("{:.1}%", base[i] * 100.)
+                            }
+                        );
+                        face(
+                            ("split-segment", i),
+                            label.clone(),
+                            32.,
+                            radius.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .pl(px(8.))
+                        .pr(px(10.))
+                        .aria_toggled((!off).into())
+                        .gap(px(8.))
+                        .text_size(px(14.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::NORMAL)
+                        .hover(|s| s.bg(p.tray))
+                        .child(
+                            div()
+                                .relative()
+                                .size(px(12.))
+                                .flex_none()
+                                .rounded(px(3.))
+                                .when(off, |view| view.border(px(1.5)).border_color(p.faint))
+                                .when(!off, |view| {
+                                    view.bg(p.panel.blend(segment.color.opacity(0.42))).child(
+                                        div()
+                                            .absolute()
+                                            .right_0()
+                                            .top_0()
+                                            .bottom_0()
+                                            .w(px(3.))
+                                            .bg(segment.color),
+                                    )
+                                }),
+                        )
+                        .child(segment.label.clone())
+                        .when(off, |view| view.child(tr(cx, "Off", "已隐藏")))
+                        .when(!off, |view| view.child(counter_views[i].2.clone()))
+                        .on_click(cx.listener(move |s, _, _, cx| s.toggle(i, cx)))
+                    })),
+            )
     }
 }
 #[cfg(test)]

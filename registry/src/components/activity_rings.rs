@@ -359,88 +359,85 @@ impl Render for ActivityRings {
                         ),
                 )
             });
-        let legend =
-            column()
-                .min_w(px(200.))
-                .flex_1()
-                .gap(px(2.))
-                .children(self.goals.iter().enumerate().map(|(i, goal)| {
-                    let value = self.value(i);
-                    let pct = if goal.goal.is_finite() && goal.goal > 0. {
-                        value / goal.goal * 100.
-                    } else {
-                        0.
-                    };
-                    face(
-                        ("activity-goal", i),
-                        format!(
-                            "{} {:.0} / {:.0} {} ({pct:.0}%)",
-                            goal.label, value, goal.goal, goal.unit
-                        ),
-                        52.,
-                        crate::foundation::surface_radius(cx).into(),
-                        Tone::Clear,
-                        cx,
-                    )
-                    .w_full()
-                    .px(px(12.))
-                    .py(px(10.))
-                    .aria_toggled((self.active == Some(i)).into())
-                    .hover(|s| s.bg(p.tray))
-                    .when(highlighted == Some(i), |v| v.bg(p.tray))
-                    .when(highlighted.is_some() && highlighted != Some(i), |v| {
-                        v.opacity(0.5)
-                    })
-                    .on_hover(cx.listener(move |s, over: &bool, _, cx| {
-                        s.hovered = if *over { Some(i) } else { None };
-                        cx.notify();
-                    }))
-                    .on_click(cx.listener(move |s, _, _, cx| {
-                        s.active = if s.active == Some(i) { None } else { Some(i) };
-                        cx.notify();
-                    }))
-                    .child(
-                        row()
-                            .items_center()
-                            .gap(px(12.))
-                            .w_full()
-                            .child(div().w(px(3.)).h(px(32.)).rounded(px(2.)).bg(goal.color))
-                            .child(
-                                column()
-                                    .flex_1()
-                                    .min_w(px(0.))
-                                    .child(
+        let legend = column().min_w(px(200.)).flex_1().gap(px(2.)).children(
+            self.goals.iter().enumerate().map(|(i, goal)| {
+                let value = self.value(i);
+                let pct = if goal.goal.is_finite() && goal.goal > 0. {
+                    value / goal.goal * 100.
+                } else {
+                    0.
+                };
+                face(
+                    ("activity-goal", i),
+                    format!(
+                        "{} {:.0} / {:.0} {} ({pct:.0}%)",
+                        goal.label, value, goal.goal, goal.unit
+                    ),
+                    52.,
+                    crate::foundation::surface_radius(cx).into(),
+                    Tone::Clear,
+                    cx,
+                )
+                .w_full()
+                .px(px(12.))
+                .py(px(10.))
+                .aria_toggled((self.active == Some(i)).into())
+                .hover(|s| s.bg(p.tray))
+                .when(highlighted == Some(i), |v| v.bg(p.tray))
+                .when(highlighted.is_some() && highlighted != Some(i), |v| {
+                    v.opacity(0.5)
+                })
+                .on_hover(cx.listener(move |s, over: &bool, _, cx| {
+                    s.hovered = if *over { Some(i) } else { None };
+                    cx.notify();
+                }))
+                .on_click(cx.listener(move |s, _, _, cx| {
+                    s.active = if s.active == Some(i) { None } else { Some(i) };
+                    cx.notify();
+                }))
+                .child(
+                    row()
+                        .items_center()
+                        .gap(px(12.))
+                        .w_full()
+                        .child(div().w(px(3.)).h(px(32.)).rounded(px(2.)).bg(goal.color))
+                        .child(
+                            column()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(
+                                    div()
+                                        .text_size(px(14.))
+                                        .line_height(px(20.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(goal.label.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.secondary)
+                                        .child(format!("{value:.0} {}", goal.unit)),
+                                ),
+                        )
+                        .child(
+                            row()
+                                .items_center()
+                                .gap(px(6.))
+                                .text_size(px(14.))
+                                .text_color(p.secondary)
+                                .when(pct >= 100., |row| {
+                                    row.child(
                                         div()
-                                            .text_size(px(14.))
-                                            .line_height(px(20.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .child(goal.label.clone()),
+                                            .size(px(16.))
+                                            .rounded_full()
+                                            .bg(p.success.opacity(0.14)),
                                     )
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .text_color(p.secondary)
-                                            .child(format!("{value:.0} {}", goal.unit)),
-                                    ),
-                            )
-                            .child(
-                                row()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .text_size(px(14.))
-                                    .text_color(p.secondary)
-                                    .when(pct >= 100., |row| {
-                                        row.child(
-                                            div()
-                                                .size(px(16.))
-                                                .rounded_full()
-                                                .bg(p.success.opacity(0.14)),
-                                        )
-                                    })
-                                    .child(format!("{pct:.0}%")),
-                            ),
-                    )
-                }));
+                                })
+                                .child(format!("{pct:.0}%")),
+                        ),
+                )
+            }),
+        );
         let day = self.day;
         let week = div()
             .id("activity-week")

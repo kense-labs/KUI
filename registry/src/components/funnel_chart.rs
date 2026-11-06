@@ -410,11 +410,7 @@ impl Render for FunnelChart {
                         } else {
                             height
                         };
-                        let shift = if vertical {
-                            (width - cross) * 0.5
-                        } else {
-                            0.
-                        };
+                        let shift = if vertical { (width - cross) * 0.5 } else { 0. };
                         let at = |t: f32, offset: f32| {
                             if vertical {
                                 point(
@@ -560,8 +556,7 @@ impl Render for FunnelChart {
                         tip.left(px(8.)).top(relative(along.clamp(0.04, 0.72)))
                     })
                     .when(!narrow, |tip| {
-                        tip.left(relative(along.clamp(0.02, 0.58)))
-                            .top(px(8.))
+                        tip.left(relative(along.clamp(0.02, 0.58))).top(px(8.))
                     })
                     .min_w(px(168.))
                     .max_w(px(240.))

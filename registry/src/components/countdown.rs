@@ -34,14 +34,7 @@ impl Default for PairReel {
     }
 }
 impl PairReel {
-    fn render(
-        &mut self,
-        value: u64,
-        font_size: f32,
-        line: f32,
-        w: &Window,
-        cx: &App,
-    ) -> Div {
+    fn render(&mut self, value: u64, font_size: f32, line: f32, w: &Window, cx: &App) -> Div {
         let formatted = format!("{:02}", value.min(99));
         let mut chars = formatted.chars();
         let next = [chars.next().unwrap_or('0'), chars.next().unwrap_or('0')];
@@ -290,12 +283,7 @@ impl Render for Countdown {
                 .gap(px(5.6));
             if done {
                 pill = pill
-                    .child(
-                        div()
-                            .size(px(8.))
-                            .rounded_full()
-                            .bg(p.success),
-                    )
+                    .child(div().size(px(8.)).rounded_full().bg(p.success))
                     .child(
                         div()
                             .font_weight(FontWeight::MEDIUM)
@@ -363,12 +351,7 @@ impl Render for Countdown {
             root = root
                 .gap(px(14.4))
                 .items_center()
-                .child(
-                    div()
-                        .size(px(11.))
-                        .rounded_full()
-                        .bg(p.success),
-                )
+                .child(div().size(px(11.)).rounded_full().bg(p.success))
                 .child(
                     div()
                         .text_size(px(36.))

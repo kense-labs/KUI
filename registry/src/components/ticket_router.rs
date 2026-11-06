@@ -738,53 +738,52 @@ impl Render for TicketRouter {
                 } else {
                     1.
                 };
-                panel =
-                    panel.child(
-                        div()
-                            .id(("ticket-lane-item", i * 1000 + j))
-                            .debug_selector(move || subject.to_string())
-                            .role(Role::ListItem)
-                            .relative()
-                            .top(px(3. * (1. - landing)))
-                            .opacity(landing)
-                            .h(px(56.))
-                            .px(px(8.))
-                            .rounded(radius)
-                            .flex()
-                            .flex_col()
-                            .justify_center()
-                            .gap(px(2.))
-                            .hover(|s| s.bg(p.ink.opacity(0.05)))
-                            .child(
-                                div()
-                                    .text_size(px(14.))
-                                    .line_height(px(20.))
-                                    .text_color(p.ink)
-                                    .child(entry.ticket.subject.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w(px(0.))
-                                            .text_size(px(12.))
-                                            .line_height(px(18.))
-                                            .text_color(p.secondary)
-                                            .child(decision.assignee.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .line_height(px(18.))
-                                            .text_color(p.faint)
-                                            .child(format!("{:.0}%", decision.confidence * 100.)),
-                                    ),
-                            ),
-                    );
+                panel = panel.child(
+                    div()
+                        .id(("ticket-lane-item", i * 1000 + j))
+                        .debug_selector(move || subject.to_string())
+                        .role(Role::ListItem)
+                        .relative()
+                        .top(px(3. * (1. - landing)))
+                        .opacity(landing)
+                        .h(px(56.))
+                        .px(px(8.))
+                        .rounded(radius)
+                        .flex()
+                        .flex_col()
+                        .justify_center()
+                        .gap(px(2.))
+                        .hover(|s| s.bg(p.ink.opacity(0.05)))
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .line_height(px(20.))
+                                .text_color(p.ink)
+                                .child(entry.ticket.subject.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w(px(0.))
+                                        .text_size(px(12.))
+                                        .line_height(px(18.))
+                                        .text_color(p.secondary)
+                                        .child(decision.assignee.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .line_height(px(18.))
+                                        .text_color(p.faint)
+                                        .child(format!("{:.0}%", decision.confidence * 100.)),
+                                ),
+                        ),
+                );
             }
             if last_page > 0 {
                 let mut pages = div().flex().flex_wrap().items_center().gap(px(4.));

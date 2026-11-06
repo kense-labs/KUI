@@ -161,7 +161,10 @@ impl TreeTable {
                             .map_or_else(String::new, |x| x.to_lowercase())
                     };
                     let num_l = left.trim_start_matches('$').replace(',', "").parse::<f64>();
-                    let num_r = right.trim_start_matches('$').replace(',', "").parse::<f64>();
+                    let num_r = right
+                        .trim_start_matches('$')
+                        .replace(',', "")
+                        .parse::<f64>();
                     let cmp = match (num_l, num_r) {
                         (Ok(x), Ok(y)) => x.total_cmp(&y),
                         _ => left.cmp(&right),
@@ -619,11 +622,13 @@ impl TreeTable {
                     .child(cell_val),
             );
         }
-        line = line.cursor_pointer().on_click(cx.listener(move |s, _, w, cx| {
-            s.focused = Some(id.clone());
-            s.focus.focus(w, cx);
-            s.toggle(&id, cx)
-        }));
+        line = line
+            .cursor_pointer()
+            .on_click(cx.listener(move |s, _, w, cx| {
+                s.focused = Some(id.clone());
+                s.focus.focus(w, cx);
+                s.toggle(&id, cx)
+            }));
         line.into_any_element()
     }
     fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {

@@ -249,7 +249,8 @@ impl Render for VoiceOrb {
                                         for i in 0..96 {
                                             let angle = std::f32::consts::TAU * i as f32 / 96.;
                                             let wobble = if animate {
-                                                (angle * 3. + age * motion.flow).sin() * motion.wobble
+                                                (angle * 3. + age * motion.flow).sin()
+                                                    * motion.wobble
                                             } else {
                                                 0.
                                             };

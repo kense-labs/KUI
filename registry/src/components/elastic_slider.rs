@@ -107,49 +107,35 @@ impl Render for ElasticSlider {
                     .child(icon(end_g, 18., p.secondary)),
             );
         }
-        let mut root = div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .max_w_full()
-            .child(row);
+        let mut root = div().flex().flex_col().w_full().max_w_full().child(row);
         if !self.marks.is_empty() {
             let pl = if self.icons.is_some() { 42. } else { 12. };
             let pr = if self.icons.is_some() { 42. } else { 12. };
-            let mut marks_row = div()
-                .relative()
-                .w_full()
-                .h(px(20.))
-                .pl(px(pl))
-                .pr(px(pr));
+            let mut marks_row = div().relative().w_full().h(px(20.)).pl(px(pl)).pr(px(pr));
             let mut inner = div().relative().size_full();
             for (idx, (val, label)) in self.marks.iter().cloned().enumerate() {
                 let frac = ((val - min) / span).clamp(0., 1.) as f32;
                 let active = (current - val).abs() < 0.02;
                 inner = inner.child(
-                    div()
-                        .absolute()
-                        .left(relative(frac))
-                        .ml(px(-18.))
-                        .child(
-                            face(
-                                ("elastic-mark", idx),
-                                label.clone(),
-                                22.,
-                                radius.into(),
-                                Tone::Clear,
-                                cx,
-                            )
-                            .px(px(6.))
-                            .text_size(px(12.))
-                            .text_color(if active { p.ink } else { p.faint })
-                            .hover(move |s| s.text_color(p.ink))
-                            .child(label)
-                            .on_click(cx.listener(move |s, _, _, cx| {
-                                s.set_value(val, cx);
-                                cx.emit(ElasticChanged(val));
-                            })),
-                        ),
+                    div().absolute().left(relative(frac)).ml(px(-18.)).child(
+                        face(
+                            ("elastic-mark", idx),
+                            label.clone(),
+                            22.,
+                            radius.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .px(px(6.))
+                        .text_size(px(12.))
+                        .text_color(if active { p.ink } else { p.faint })
+                        .hover(move |s| s.text_color(p.ink))
+                        .child(label)
+                        .on_click(cx.listener(move |s, _, _, cx| {
+                            s.set_value(val, cx);
+                            cx.emit(ElasticChanged(val));
+                        })),
+                    ),
                 );
             }
             marks_row = marks_row.child(inner);

@@ -142,10 +142,14 @@ impl SheetStack {
         }
         let size = w.viewport_size();
         let dialog = size.width >= px(640.);
-        self.offset
-            .reset(if dialog { 18. } else { f32::from(size.height) + 24. });
+        self.offset.reset(if dialog {
+            18.
+        } else {
+            f32::from(size.height) + 24.
+        });
         self.offset.duration(0., 0.44, cx);
-        self.transition.duration(1., if dialog { 0.2 } else { 0.3 }, cx);
+        self.transition
+            .duration(1., if dialog { 0.2 } else { 0.3 }, cx);
         self.close.focus(w, cx);
         self.emit(cx);
         cx.notify();
@@ -234,11 +238,7 @@ impl SheetStack {
             .as_millis()
             < 100;
         let size = w.viewport_size();
-        let (_, _, _, height, _) = sheet_frame(
-            f32::from(size.width),
-            f32::from(size.height),
-            0,
-        );
+        let (_, _, _, height, _) = sheet_frame(f32::from(size.width), f32::from(size.height), 0);
         let offset = self.offset.value(cx);
         if !cancel && (offset > 0.35 * height || (fresh && drag.speed > 450. && offset > 16.)) {
             self.pop(w, cx);
@@ -306,11 +306,8 @@ impl Render for SheetStack {
         for (depth, &page_index) in self.stack.iter().rev().enumerate().rev() {
             let page = &self.pages[page_index];
             let front = depth == 0;
-            let (mut left, mut top, mut width, mut height, dialog) = sheet_frame(
-                f32::from(size.width),
-                f32::from(size.height),
-                depth,
-            );
+            let (mut left, mut top, mut width, mut height, dialog) =
+                sheet_frame(f32::from(size.width), f32::from(size.height), depth);
             let scale = if crate::primitives::family::disabled_motion(cx) {
                 1.
             } else {

@@ -399,42 +399,52 @@ impl Render for ImageGeneration {
         for (i, name) in self.models.iter().enumerate() {
             options = options.child(
                 face(("image-model", i), name.clone(), 32., 8., Tone::Clear, cx)
-                .h(px(32.))
-                .px(px(10.))
-                .rounded(px(8.))
-                .text_size(px(14.))
-                .line_height(px(20.))
-                .text_color(if self.model == i { p.ink } else { p.secondary })
-                .bg(if self.model == i { p.panel } else { gpui::transparent_black() })
-                .when(self.model == i, |b| b.border_1().border_color(p.line))
-                .when(self.model != i, |b| b.hover(|s| s.bg(p.panel.opacity(0.55)).text_color(p.ink)))
-                .child(name.clone())
-                .on_click(cx.listener(move |s, _, _, cx| {
-                    s.model = i;
-                    cx.notify();
-                })),
+                    .h(px(32.))
+                    .px(px(10.))
+                    .rounded(px(8.))
+                    .text_size(px(14.))
+                    .line_height(px(20.))
+                    .text_color(if self.model == i { p.ink } else { p.secondary })
+                    .bg(if self.model == i {
+                        p.panel
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .when(self.model == i, |b| b.border_1().border_color(p.line))
+                    .when(self.model != i, |b| {
+                        b.hover(|s| s.bg(p.panel.opacity(0.55)).text_color(p.ink))
+                    })
+                    .child(name.clone())
+                    .on_click(cx.listener(move |s, _, _, cx| {
+                        s.model = i;
+                        cx.notify();
+                    })),
             );
         }
         for (i, name) in self.aspects.iter().enumerate() {
             options = options.child(
                 face(("image-aspect", i), name.clone(), 32., 8., Tone::Clear, cx)
-                .h(px(32.))
-                .pl(px(9.))
-                .pr(px(10.))
-                .rounded(px(8.))
-                .text_size(px(14.))
-                .line_height(px(20.))
-                .text_color(if self.aspect == i { p.ink } else { p.secondary })
-                .bg(if self.aspect == i { p.panel } else { gpui::transparent_black() })
-                .when(self.aspect == i, |b| b.border_1().border_color(p.line))
-                .when(self.aspect != i, |b| {
-                    b.hover(|s| s.bg(p.panel.opacity(0.55)).text_color(p.ink))
-                })
-                .child(name.clone())
-                .on_click(cx.listener(move |s, _, _, cx| {
-                    s.aspect = i;
-                    cx.notify();
-                })),
+                    .h(px(32.))
+                    .pl(px(9.))
+                    .pr(px(10.))
+                    .rounded(px(8.))
+                    .text_size(px(14.))
+                    .line_height(px(20.))
+                    .text_color(if self.aspect == i { p.ink } else { p.secondary })
+                    .bg(if self.aspect == i {
+                        p.panel
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .when(self.aspect == i, |b| b.border_1().border_color(p.line))
+                    .when(self.aspect != i, |b| {
+                        b.hover(|s| s.bg(p.panel.opacity(0.55)).text_color(p.ink))
+                    })
+                    .child(name.clone())
+                    .on_click(cx.listener(move |s, _, _, cx| {
+                        s.aspect = i;
+                        cx.notify();
+                    })),
             );
         }
         let label = if busy {

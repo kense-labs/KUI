@@ -4,7 +4,7 @@ use kui::{
     components::link_unfurl::{LinkPreview, LinkUnfurl, LinkUnfurlEvent},
     primitives::{
         control::UiLanguage,
-        family::{face, Paint, Tone},
+        family::{Paint, Tone, face},
     },
 };
 use std::{cell::Cell, rc::Rc, time::Duration};
@@ -106,20 +106,22 @@ impl Demo {
             .is_none_or(|bridge| (bridge.visible)());
         composer.update(cx, |s, cx| s.set_visible(visible, cx));
         let weak = composer.downgrade();
-        cx.spawn(async move |_, cx| loop {
-            cx.background_executor()
-                .timer(Duration::from_millis(250))
-                .await;
-            if weak
-                .update(cx, |s, cx| {
-                    let visible = cx
-                        .try_global::<crate::StoryBridge>()
-                        .is_none_or(|bridge| (bridge.visible)());
-                    s.set_visible(visible, cx);
-                })
-                .is_err()
-            {
-                break;
+        cx.spawn(async move |_, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+                if weak
+                    .update(cx, |s, cx| {
+                        let visible = cx
+                            .try_global::<crate::StoryBridge>()
+                            .is_none_or(|bridge| (bridge.visible)());
+                        s.set_visible(visible, cx);
+                    })
+                    .is_err()
+                {
+                    break;
+                }
             }
         })
         .detach();

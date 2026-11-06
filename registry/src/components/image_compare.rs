@@ -215,7 +215,8 @@ impl Render for ImageCompare {
         };
         self.handle_w.duration(target_w, 0.42, cx);
         self.handle_h.duration(target_h, 0.42, cx);
-        self.chevron.duration(if self.dragging { 4. } else { 0. }, 0.42, cx);
+        self.chevron
+            .duration(if self.dragging { 4. } else { 0. }, 0.42, cx);
         let handle_w = self.handle_w.get(w, cx);
         let handle_h = self.handle_h.get(w, cx);
         let spread = self.chevron.get(w, cx);
@@ -226,7 +227,11 @@ impl Render for ImageCompare {
         } else {
             soften(fraction * width_px, width_px)
         };
-        let marks = if vertical { ("⌃", "⌄") } else { ("‹", "›") };
+        let marks = if vertical {
+            ("⌃", "⌄")
+        } else {
+            ("‹", "›")
+        };
         let thumb = div()
             .absolute()
             .w(px(handle_w))

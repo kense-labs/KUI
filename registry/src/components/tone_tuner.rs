@@ -506,58 +506,51 @@ impl Render for ToneTuner {
         {
             let selected = self.settings.voice == voice;
             chips = chips.child(
-                face(
-                    ("tone-voice", i),
-                    name,
-                    36.,
-                    8.,
-                    Tone::Clear,
-                    cx,
-                )
-                .h(px(36.))
-                .px(px(12.))
-                .gap(px(6.))
-                .rounded(px(8.))
-                .border_1()
-                .border_color(if selected {
-                    p.line.blend(p.bright.opacity(0.45))
-                } else {
-                    p.line
-                })
-                .bg(if selected {
-                    p.bright.opacity(0.12)
-                } else {
-                    gpui::transparent_black()
-                })
-                .text_color(if selected { p.ink } else { p.secondary })
-                .font_weight(FontWeight::MEDIUM)
-                .when(!selected, |b| b.hover(|s| s.bg(p.tray).text_color(p.ink)))
-                .aria_toggled(selected.into())
-                .child(name)
-                .on_click(cx.listener(move |s, _, _, cx| {
-                    let mut next = s.settings;
-                    if next.voice == voice {
-                        next.voice = VoiceTone::Neutral;
+                face(("tone-voice", i), name, 36., 8., Tone::Clear, cx)
+                    .h(px(36.))
+                    .px(px(12.))
+                    .gap(px(6.))
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(if selected {
+                        p.line.blend(p.bright.opacity(0.45))
                     } else {
-                        next.voice = voice;
-                        match voice {
-                            VoiceTone::Friendly => {
-                                next.formality = 0;
-                                next.detail = 1;
+                        p.line
+                    })
+                    .bg(if selected {
+                        p.bright.opacity(0.12)
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .text_color(if selected { p.ink } else { p.secondary })
+                    .font_weight(FontWeight::MEDIUM)
+                    .when(!selected, |b| b.hover(|s| s.bg(p.tray).text_color(p.ink)))
+                    .aria_toggled(selected.into())
+                    .child(name)
+                    .on_click(cx.listener(move |s, _, _, cx| {
+                        let mut next = s.settings;
+                        if next.voice == voice {
+                            next.voice = VoiceTone::Neutral;
+                        } else {
+                            next.voice = voice;
+                            match voice {
+                                VoiceTone::Friendly => {
+                                    next.formality = 0;
+                                    next.detail = 1;
+                                }
+                                VoiceTone::Confident => {
+                                    next.formality = 2;
+                                    next.detail = 0;
+                                }
+                                VoiceTone::Empathetic => {
+                                    next.formality = 1;
+                                    next.detail = 2;
+                                }
+                                VoiceTone::Neutral => {}
                             }
-                            VoiceTone::Confident => {
-                                next.formality = 2;
-                                next.detail = 0;
-                            }
-                            VoiceTone::Empathetic => {
-                                next.formality = 1;
-                                next.detail = 2;
-                            }
-                            VoiceTone::Neutral => {}
                         }
-                    }
-                    s.set_settings(next, cx);
-                })),
+                        s.set_settings(next, cx);
+                    })),
             );
         }
         root = root.child(

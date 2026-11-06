@@ -233,7 +233,12 @@ impl Render for AnnouncementBar {
                     .gap(px(6.))
                     .text_color(muted)
                     .child(tr(cx, "Ends in", "剩余"))
-                    .child(div().font_weight(FontWeight::MEDIUM).text_color(fg).child(time_str)),
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(fg)
+                            .child(time_str),
+                    ),
             );
         }
         if let Some(action) = message.action.clone() {
@@ -281,18 +286,11 @@ impl Render for AnnouncementBar {
             let progress = 1. - (self.rotation_ticks as f32 / 7.).clamp(0., 1.);
             let next_label = tr(cx, "Next announcement", "下一条公告");
             controls = controls.child(
-                face(
-                    "announcement-next",
-                    next_label,
-                    32.,
-                    16.,
-                    Tone::Clear,
-                    cx,
-                )
-                .size(px(32.))
-                .hover(move |s| s.bg(hover_bg))
-                .child(countdown_ring(progress, 20., muted))
-                .on_click(cx.listener(|s, _, _, cx| s.advance(cx))),
+                face("announcement-next", next_label, 32., 16., Tone::Clear, cx)
+                    .size(px(32.))
+                    .hover(move |s| s.bg(hover_bg))
+                    .child(countdown_ring(progress, 20., muted))
+                    .on_click(cx.listener(|s, _, _, cx| s.advance(cx))),
             );
         }
         let dismiss_label: SharedString = tr(cx, "Dismiss announcement", "关闭公告").into();

@@ -435,13 +435,19 @@ impl Render for MultiRegionFailover {
                     )),
             )
             .child(
-                div().w(px(184.)).max_w_full().h(px(4.)).rounded(px(2.)).bg(p.line).child(
-                    div()
-                        .h_full()
-                        .w(relative(weight))
-                        .rounded(px(2.))
-                        .bg(p.bright),
-                ),
+                div()
+                    .w(px(184.))
+                    .max_w_full()
+                    .h(px(4.))
+                    .rounded(px(2.))
+                    .bg(p.line)
+                    .child(
+                        div()
+                            .h_full()
+                            .w(relative(weight))
+                            .rounded(px(2.))
+                            .bg(p.bright),
+                    ),
             )
             .child(hint(
                 format!(

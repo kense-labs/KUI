@@ -291,7 +291,11 @@ impl Render for SlopeChart {
             } else {
                 0.3
             };
-            let name_color = if focused || accent { p.ink } else { p.secondary };
+            let name_color = if focused || accent {
+                p.ink
+            } else {
+                p.secondary
+            };
             let enter = ((age - i as f32 * 0.05) / 0.3).clamp(0., 1.);
             labels.push(
                 div()

@@ -555,8 +555,8 @@ impl Render for SignaturePad {
                 div()
                     .absolute()
                     .left(relative(0.07))
-                        .top(relative(0.72))
-                        .mt(px(-22.))
+                    .top(relative(0.72))
+                    .mt(px(-22.))
                     .child(icon(Glyph::Close, 12., p.faint)),
             )
             .when(!self.signer.is_empty(), |s| {
@@ -677,7 +677,11 @@ impl Render for SignaturePad {
         let mut weight_group = div().flex().items_center().gap(px(2.));
         for (i, (w_opt, dot_sz, name)) in [
             (SignatureWeight::Thin, 5.4, tr(cx, "Thin stroke", "细笔触")),
-            (SignatureWeight::Medium, 7.6, tr(cx, "Medium stroke", "中笔触")),
+            (
+                SignatureWeight::Medium,
+                7.6,
+                tr(cx, "Medium stroke", "中笔触"),
+            ),
             (SignatureWeight::Bold, 10.4, tr(cx, "Bold stroke", "粗笔触")),
         ]
         .into_iter()

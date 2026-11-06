@@ -57,20 +57,22 @@ impl Demo {
             .is_none_or(|bridge| (bridge.visible)());
         diagram.update(cx, |d, cx| d.set_visible(visible, cx));
         let weak = diagram.downgrade();
-        cx.spawn(async move |_, cx| loop {
-            cx.background_executor()
-                .timer(Duration::from_millis(250))
-                .await;
-            if weak
-                .update(cx, |d, cx| {
-                    let visible = cx
-                        .try_global::<crate::StoryBridge>()
-                        .is_none_or(|bridge| (bridge.visible)());
-                    d.set_visible(visible, cx);
-                })
-                .is_err()
-            {
-                break;
+        cx.spawn(async move |_, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+                if weak
+                    .update(cx, |d, cx| {
+                        let visible = cx
+                            .try_global::<crate::StoryBridge>()
+                            .is_none_or(|bridge| (bridge.visible)());
+                        d.set_visible(visible, cx);
+                    })
+                    .is_err()
+                {
+                    break;
+                }
             }
         })
         .detach();

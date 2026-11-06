@@ -261,88 +261,92 @@ impl Render for PromptCache {
                     .child(div().size(px(10.)).rounded(px(3.)).bg(s.color))
                     .child(hint(format!("{} {}", s.label, s.tokens), p))
             }));
-        let requests = column()
-            .gap(px(16.))
-            .children(
-                self.snapshot
-                    .requests
-                    .iter()
-                    .enumerate()
-                    .map(|(i, request)| {
-                        let result = request.result.as_ref();
-                        let summary = result.map_or_else(
-                            || tr(cx, "Not sent", "尚未发送").to_string(),
-                            |r| {
-                                format!(
-                                    "{} · {} {} · {} {}",
-                                    outcome(r.outcome, cx),
-                                    r.cached_tokens,
-                                    tr(cx, "cached", "缓存"),
-                                    r.processed_tokens,
-                                    tr(cx, "processed", "处理")
-                                )
-                            },
-                        );
-                        let cost = result
-                            .and_then(|r| r.cost)
-                            .filter(|v| v.is_finite() && *v >= 0.)
-                            .map_or_else(|| "—".into(), |v| format!("${v:.4}"));
-                        let latency = result
-                            .and_then(|r| r.first_token_ms)
-                            .map_or_else(|| "—".into(), |v| format!("{v} ms"));
-                        let bars = row()
-                            .w_full()
-                            .h(px(10.))
-                            .gap(px(2.))
-                            .children(self.segments.iter().map(|segment| {
-                                div()
-                                    .h_full()
-                                    .w(relative((segment.tokens as f32).sqrt() / total * 0.85))
-                                    .rounded(px(3.))
-                                    .bg(segment.color.opacity(if result.is_some() {
-                                        0.45 + progress * 0.4
-                                    } else {
-                                        0.18
-                                    }))
-                            }))
-                            .child(
-                                div().h_full().flex_1().rounded(px(3.)).bg(p
-                                    .secondary
-                                    .opacity(if result.is_some() { 0.65 } else { 0.2 })),
+        let requests =
+            column()
+                .gap(px(16.))
+                .children(
+                    self.snapshot
+                        .requests
+                        .iter()
+                        .enumerate()
+                        .map(|(i, request)| {
+                            let result = request.result.as_ref();
+                            let summary = result.map_or_else(
+                                || tr(cx, "Not sent", "尚未发送").to_string(),
+                                |r| {
+                                    format!(
+                                        "{} · {} {} · {} {}",
+                                        outcome(r.outcome, cx),
+                                        r.cached_tokens,
+                                        tr(cx, "cached", "缓存"),
+                                        r.processed_tokens,
+                                        tr(cx, "processed", "处理")
+                                    )
+                                },
                             );
-                        column()
-                            .id(("prompt-cache-row", i))
-                            .role(Role::ListItem)
-                            .aria_label(format!(
-                                "{} · {} · {} · {}",
-                                request.label, summary, cost, latency
-                            ))
-                            .gap(px(6.))
-                            .child(
-                                row()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(request.label.clone())
-                                    .child(hint(summary, p)),
-                            )
-                            .child(bars)
-                            .child(
-                                row()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(hint(format!("{} {}", tr(cx, "Cost", "费用"), cost), p))
-                                    .child(hint(
-                                        format!(
-                                            "{} {}",
-                                            tr(cx, "First token", "首 token"),
-                                            latency
-                                        ),
-                                        p,
-                                    )),
-                            )
-                    }),
-            );
+                            let cost = result
+                                .and_then(|r| r.cost)
+                                .filter(|v| v.is_finite() && *v >= 0.)
+                                .map_or_else(|| "—".into(), |v| format!("${v:.4}"));
+                            let latency = result
+                                .and_then(|r| r.first_token_ms)
+                                .map_or_else(|| "—".into(), |v| format!("{v} ms"));
+                            let bars = row()
+                                .w_full()
+                                .h(px(10.))
+                                .gap(px(2.))
+                                .children(self.segments.iter().map(|segment| {
+                                    div()
+                                        .h_full()
+                                        .w(relative((segment.tokens as f32).sqrt() / total * 0.85))
+                                        .rounded(px(3.))
+                                        .bg(segment.color.opacity(if result.is_some() {
+                                            0.45 + progress * 0.4
+                                        } else {
+                                            0.18
+                                        }))
+                                }))
+                                .child(
+                                    div().h_full().flex_1().rounded(px(3.)).bg(p
+                                        .secondary
+                                        .opacity(if result.is_some() { 0.65 } else { 0.2 })),
+                                );
+                            column()
+                                .id(("prompt-cache-row", i))
+                                .role(Role::ListItem)
+                                .aria_label(format!(
+                                    "{} · {} · {} · {}",
+                                    request.label, summary, cost, latency
+                                ))
+                                .gap(px(6.))
+                                .child(
+                                    row()
+                                        .items_center()
+                                        .justify_between()
+                                        .gap_2()
+                                        .child(request.label.clone())
+                                        .child(hint(summary, p)),
+                                )
+                                .child(bars)
+                                .child(
+                                    row()
+                                        .justify_between()
+                                        .gap_2()
+                                        .child(hint(
+                                            format!("{} {}", tr(cx, "Cost", "费用"), cost),
+                                            p,
+                                        ))
+                                        .child(hint(
+                                            format!(
+                                                "{} {}",
+                                                tr(cx, "First token", "首 token"),
+                                                latency
+                                            ),
+                                            p,
+                                        )),
+                                )
+                        }),
+                );
         let change = self
             .change_segment
             .as_ref()

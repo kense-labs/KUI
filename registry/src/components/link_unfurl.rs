@@ -2,7 +2,7 @@
 use crate::{
     components::textarea::Textarea,
     primitives::{
-        family::{face, Paint, Slide, Tone},
+        family::{Paint, Slide, Tone, face},
         field::FieldEvent,
         presentation::{column, hint, row, tr},
     },
@@ -331,7 +331,9 @@ impl Render for LinkUnfurl {
                     } else {
                         p.line
                     })
-                    .when(!self.open, |b| b.hover(|s| s.border_color(p.faint).text_color(p.ink)))
+                    .when(!self.open, |b| {
+                        b.hover(|s| s.border_color(p.faint).text_color(p.ink))
+                    })
                     .aria_toggled(self.open.into())
                     .child(label)
                     .on_click(cx.listener(|s, _, _, cx| s.toggle(cx)))
@@ -495,12 +497,7 @@ impl Render for LinkUnfurl {
             }
         }
         if let Some(error) = self.error.clone() {
-            panel = panel.child(
-                div()
-                    .px(px(18.))
-                    .text_color(p.danger)
-                    .child(error),
-            );
+            panel = panel.child(div().px(px(18.)).text_color(p.danger).child(error));
         }
         let sending = self.send_id.is_some();
         panel = panel.child(

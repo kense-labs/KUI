@@ -647,9 +647,7 @@ impl Render for DataFlow {
 }
 #[cfg(test)]
 mod tests {
-    use super::{
-        DataFlowNode, DataFlowSnapshot, DataFlowStatus, chip_rect, intersects_viewport,
-    };
+    use super::{DataFlowNode, DataFlowSnapshot, DataFlowStatus, chip_rect, intersects_viewport};
     use gpui::{Bounds, point, px, size};
     #[test]
     fn destination_shares_are_bounded() {

@@ -298,7 +298,11 @@ impl Render for BottomSheet {
                     .w(px(36.))
                     .h(px(5.))
                     .rounded_full()
-                    .bg(if self.handle_hover { p.secondary } else { p.faint }),
+                    .bg(if self.handle_hover {
+                        p.secondary
+                    } else {
+                        p.faint
+                    }),
             )
             .child(
                 canvas(
@@ -463,7 +467,11 @@ impl Render for BottomSheet {
                 let dim = if disabled_motion(cx) {
                     opacity
                 } else {
-                    veil(current, self.detents[0], *self.detents.last().unwrap_or(&1.))
+                    veil(
+                        current,
+                        self.detents[0],
+                        *self.detents.last().unwrap_or(&1.),
+                    )
                 };
                 full * dim
             }))

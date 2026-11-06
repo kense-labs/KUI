@@ -1,6 +1,6 @@
 //! A host-driven workflow preview and editor. No actions are executed internally.
 use crate::primitives::{
-    family::{face, Paint, Slide, Tone},
+    family::{Paint, Slide, Tone, face},
     presentation::{column, hint, row, tr},
 };
 use gpui::{prelude::*, *};
@@ -663,23 +663,15 @@ impl Render for AiWorkflow {
                             ),
                     )
                     .child(
-                        face(
-                            "workflow-run",
-                            action_label,
-                            28.,
-                            10.,
-                            Tone::Primary,
-                            cx,
-                        )
-                        .min_w(px(96.))
-                        .px(px(10.))
-                        .text_size(px(13.))
-                        .child(action_label)
-                        .on_click(cx.listener(
-                            |s, _, _, cx| if s.running { s.stop(cx) } else { s.start(cx) },
-                        ))
-                        .on_key_down(cx.listener(
-                            |s, e: &KeyDownEvent, _, cx| {
+                        face("workflow-run", action_label, 28., 10., Tone::Primary, cx)
+                            .min_w(px(96.))
+                            .px(px(10.))
+                            .text_size(px(13.))
+                            .child(action_label)
+                            .on_click(cx.listener(
+                                |s, _, _, cx| if s.running { s.stop(cx) } else { s.start(cx) },
+                            ))
+                            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
                                 if matches!(e.keystroke.key.as_str(), "enter" | "space")
                                     && !e.is_held
                                 {
@@ -690,8 +682,7 @@ impl Render for AiWorkflow {
                                     }
                                     cx.stop_propagation();
                                 }
-                            },
-                        )),
+                            })),
                     ),
             )
             .child(list);

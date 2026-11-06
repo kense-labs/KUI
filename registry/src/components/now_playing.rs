@@ -196,94 +196,89 @@ impl Render for NowPlaying {
         let expanded = self.expanded;
         let playing = self.playing;
         let mini = div()
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .child(
-                    img(image.clone())
-                        .size(px(44.))
-                        .object_fit(ObjectFit::Cover),
-                )
-                .child(
-                    div()
-                        .id("player-expand")
-                        .min_w_0()
-                        .h(px(44.))
-                        .px(px(2.))
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .justify_center()
-                        .cursor_pointer()
-                        .on_click(cx.listener(|s, _, _, cx| {
-                            if !s.expanded {
-                                s.set_expanded(true, cx);
-                            }
-                        }))
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(14.))
-                                .line_height(px(20.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(title.clone()),
-                        )
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(12.))
-                                .line_height(px(17.))
-                                .text_color(p.secondary)
-                                .child(artist.clone()),
-                        ),
-                )
-                .child(
-                    face(
-                        "player-play",
-                        if playing {
-                            tr(cx, "Pause", "暂停")
-                        } else {
-                            tr(cx, "Play", "播放")
-                        },
-                        40. + 12. * t,
-                        20.,
-                        Tone::Surface,
-                        cx,
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .child(
+                img(image.clone())
+                    .size(px(44.))
+                    .object_fit(ObjectFit::Cover),
+            )
+            .child(
+                div()
+                    .id("player-expand")
+                    .min_w_0()
+                    .h(px(44.))
+                    .px(px(2.))
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .cursor_pointer()
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        if !s.expanded {
+                            s.set_expanded(true, cx);
+                        }
+                    }))
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(14.))
+                            .line_height(px(20.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(title.clone()),
                     )
-                    .size(px(40. + 12. * t))
-                    .p_0()
-                    .bg(if expanded { p.ink } else { p.tray })
-                    .child(icon(
-                        if playing { Glyph::Pause } else { Glyph::Play },
-                        16.,
-                        if expanded { p.inverse } else { p.ink },
-                    ))
-                    .on_click(cx.listener(move |_, _, _, cx| cx.emit(PlayerEvent::Play(!playing)))),
-                )
-                .child({
-                    let scales = if playing {
-                        [0.7, 1.0, 0.55]
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(12.))
+                            .line_height(px(17.))
+                            .text_color(p.secondary)
+                            .child(artist.clone()),
+                    ),
+            )
+            .child(
+                face(
+                    "player-play",
+                    if playing {
+                        tr(cx, "Pause", "暂停")
                     } else {
-                        [0.3, 0.6, 0.42]
-                    };
-                    let mut levels = div()
-                        .h(px(14.))
-                        .mr(px(4.))
-                        .flex()
-                        .items_end()
-                        .gap(px(2.))
-                        .opacity(if playing { 1. } else { 0.55 });
-                    for scale in scales {
-                        levels = levels.child(
-                            div()
-                                .w(px(3.))
-                                .h(px(14. * scale))
-                                .rounded(px(1.))
-                                .bg(p.ink),
-                        );
-                    }
-                    levels
-                });
+                        tr(cx, "Play", "播放")
+                    },
+                    40. + 12. * t,
+                    20.,
+                    Tone::Surface,
+                    cx,
+                )
+                .size(px(40. + 12. * t))
+                .p_0()
+                .bg(if expanded { p.ink } else { p.tray })
+                .child(icon(
+                    if playing { Glyph::Pause } else { Glyph::Play },
+                    16.,
+                    if expanded { p.inverse } else { p.ink },
+                ))
+                .on_click(cx.listener(move |_, _, _, cx| cx.emit(PlayerEvent::Play(!playing)))),
+            )
+            .child({
+                let scales = if playing {
+                    [0.7, 1.0, 0.55]
+                } else {
+                    [0.3, 0.6, 0.42]
+                };
+                let mut levels = div()
+                    .h(px(14.))
+                    .mr(px(4.))
+                    .flex()
+                    .items_end()
+                    .gap(px(2.))
+                    .opacity(if playing { 1. } else { 0.55 });
+                for scale in scales {
+                    levels =
+                        levels.child(div().w(px(3.)).h(px(14. * scale)).rounded(px(1.)).bg(p.ink));
+                }
+                levels
+            });
         if !expanded {
             root = root.child(mini);
         }
@@ -341,12 +336,7 @@ impl Render for NowPlaying {
                     .child(
                         div()
                             .relative()
-                            .child(
-                                img(image)
-                                    .w_full()
-                                    .h(px(192.))
-                                    .object_fit(ObjectFit::Cover),
-                            )
+                            .child(img(image).w_full().h(px(192.)).object_fit(ObjectFit::Cover))
                             .child(
                                 button("player-collapse", tr(cx, "Collapse", "收起"), cx)
                                     .absolute()
@@ -480,9 +470,9 @@ impl Render for NowPlaying {
                                     18.,
                                     p.inverse,
                                 ))
-                                .on_click(cx.listener(move |_, _, _, cx| {
-                                    cx.emit(PlayerEvent::Play(!playing))
-                                })),
+                                .on_click(cx.listener(
+                                    move |_, _, _, cx| cx.emit(PlayerEvent::Play(!playing)),
+                                )),
                             )
                             .child(
                                 face(

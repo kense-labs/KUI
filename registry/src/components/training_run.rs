@@ -1,6 +1,6 @@
 //! A host-controlled fine-tuning monitor. It never starts or deploys jobs itself.
 use crate::primitives::{
-    family::{face, Paint, Tone},
+    family::{Paint, Tone, face},
     presentation::{column, hint, row, title, tr},
 };
 use gpui::{prelude::*, *};
@@ -468,20 +468,14 @@ impl Render for TrainingRun {
         }
         let mut events = column().h(px(96.)).gap(px(0.));
         for event in snapshot.events.iter().rev().take(3) {
-            events = events.child(
-                div()
-                    .h(px(32.))
-                    .flex()
-                    .items_center()
-                    .child(hint(
-                        format!(
-                            "{}{}",
-                            event.label,
-                            event.step.map_or_else(String::new, |v| format!(" · {v}"))
-                        ),
-                        p,
-                    )),
-            );
+            events = events.child(div().h(px(32.)).flex().items_center().child(hint(
+                format!(
+                    "{}{}",
+                    event.label,
+                    event.step.map_or_else(String::new, |v| format!(" · {v}"))
+                ),
+                p,
+            )));
         }
         column()
             .w_full()

@@ -261,7 +261,11 @@ impl Render for RadarChart {
                     .text_center()
                     .text_size(px(12.))
                     .line_height(px(15.))
-                    .text_color(if self.active == Some(i) { p.ink } else { p.secondary })
+                    .text_color(if self.active == Some(i) {
+                        p.ink
+                    } else {
+                        p.secondary
+                    })
                     .opacity(if self.active.is_some() && self.active != Some(i) {
                         0.55
                     } else {
@@ -413,7 +417,10 @@ impl Render for RadarChart {
                                     w.paint_quad(
                                         fill(
                                             Bounds {
-                                                origin: point(center.x - px(5.5), center.y - px(5.5)),
+                                                origin: point(
+                                                    center.x - px(5.5),
+                                                    center.y - px(5.5),
+                                                ),
                                                 size: size(px(11.), px(11.)),
                                             },
                                             panel,
@@ -423,7 +430,10 @@ impl Render for RadarChart {
                                     w.paint_quad(
                                         fill(
                                             Bounds {
-                                                origin: point(center.x - px(3.5), center.y - px(3.5)),
+                                                origin: point(
+                                                    center.x - px(3.5),
+                                                    center.y - px(3.5),
+                                                ),
                                                 size: size(px(7.), px(7.)),
                                             },
                                             *color,
@@ -600,27 +610,23 @@ impl Render for RadarChart {
                         ))
                     })),
             )
-            .child(
-                row()
-                    .flex_wrap()
-                    .gap_x(px(16.))
-                    .gap_y(px(6.))
-                    .children(self.profiles.iter().enumerate().map(|(i, series)| {
-                        div()
-                            .id(("radar-series", i))
-                            .h(px(32.))
-                            .px(px(10.))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .text_size(px(14.))
-                            .line_height(px(20.))
-                            .text_color(p.secondary)
-                            .hover(|s| s.text_color(p.ink))
-                            .child(div().size(px(8.)).rounded_full().bg(series.color))
-                            .child(series.label.clone())
-                    })),
-            )
+            .child(row().flex_wrap().gap_x(px(16.)).gap_y(px(6.)).children(
+                self.profiles.iter().enumerate().map(|(i, series)| {
+                    div()
+                        .id(("radar-series", i))
+                        .h(px(32.))
+                        .px(px(10.))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .text_size(px(14.))
+                        .line_height(px(20.))
+                        .text_color(p.secondary)
+                        .hover(|s| s.text_color(p.ink))
+                        .child(div().size(px(8.)).rounded_full().bg(series.color))
+                        .child(series.label.clone())
+                }),
+            ))
     }
 }
 
