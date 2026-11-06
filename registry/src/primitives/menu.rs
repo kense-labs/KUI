@@ -647,7 +647,11 @@ pub(crate) fn render_menu<T: MenuControl>(
             })
         }
         let ink = if item.destructive { p.danger } else { p.ink };
-        let row_name = item.label.clone();
+        let row_name = if roster && !item.detail.is_empty() {
+            format!("{} · {}", item.label, item.detail)
+        } else {
+            item.label.to_string()
+        };
         let mut row = div()
             .id(("menu-item", i))
             .debug_selector(move || row_name.to_string())
