@@ -540,13 +540,13 @@ fn sheet_frame(width: f32, height: f32, depth: usize) -> (f32, f32, f32, f32, bo
     let depth = depth as f32;
     let dialog = width >= 640.;
     if dialog {
-        let panel_w = (width - 32.).min(440.).max(1.);
+        let panel_w = (width - 32.).clamp(1., 440.);
         let panel_h = (height - 80. - 14. * depth).max(160.);
         let left = (width - panel_w) * 0.5;
         let top = (height - panel_h) * 0.5 - 14. * depth;
         (left, top, panel_w, panel_h, true)
     } else {
-        let panel_w = width.min(560.).max(1.);
+        let panel_w = width.clamp(1., 560.);
         let panel_h = (height - 20. - 10. * depth).max(160.);
         let left = (width - panel_w) * 0.5;
         let top = height - panel_h - 10. * depth;

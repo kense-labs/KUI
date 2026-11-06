@@ -535,81 +535,81 @@ impl Render for Ridgeline {
                 .absolute()
                 .inset_0(),
             );
-        if let Some(i) = self.active {
-            if let Some(series) = self.series.get(i) {
-                let values = self
-                    .ridges
-                    .get(i)
-                    .map(|r| r.sorted.clone())
-                    .unwrap_or_default();
-                let median = if values.is_empty() {
-                    0.
-                } else {
-                    quantile(&values, 0.5)
-                };
-                let q1 = if values.is_empty() {
-                    0.
-                } else {
-                    quantile(&values, 0.25)
-                };
-                let q3 = if values.is_empty() {
-                    0.
-                } else {
-                    quantile(&values, 0.75)
-                };
-                graph = graph.child(
-                    div()
-                        .absolute()
-                        .left(px(tip_x))
-                        .top(px(tip_y))
-                        .min_w(px(170.))
-                        .max_w(px(240.))
-                        .px(px(12.))
-                        .py(px(10.))
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .rounded(crate::foundation::surface_radius(cx))
-                        .border_1()
-                        .border_color(p.line)
-                        .bg(p.panel)
-                        .shadow_lg()
-                        .child(
-                            div()
-                                .mb(px(2.))
-                                .text_size(px(12.))
-                                .line_height(px(20.))
-                                .text_color(p.secondary)
-                                .child(series.label.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .justify_between()
-                                .gap(px(12.))
-                                .text_size(px(14.))
-                                .line_height(px(19.6))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(format!("{median:.1}"))
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight::NORMAL)
-                                        .text_color(p.faint)
-                                        .child(tr(cx, "Median", "中位数")),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .mt(px(4.))
-                                .text_size(px(12.))
-                                .line_height(px(20.))
-                                .text_color(p.faint)
-                                .child(format!("Q1 {q1:.1}  ·  Q3 {q3:.1}  ·  n={}", values.len())),
-                        ),
-                );
-            }
+        if let Some(i) = self.active
+            && let Some(series) = self.series.get(i)
+        {
+            let values = self
+                .ridges
+                .get(i)
+                .map(|r| r.sorted.clone())
+                .unwrap_or_default();
+            let median = if values.is_empty() {
+                0.
+            } else {
+                quantile(&values, 0.5)
+            };
+            let q1 = if values.is_empty() {
+                0.
+            } else {
+                quantile(&values, 0.25)
+            };
+            let q3 = if values.is_empty() {
+                0.
+            } else {
+                quantile(&values, 0.75)
+            };
+            graph = graph.child(
+                div()
+                    .absolute()
+                    .left(px(tip_x))
+                    .top(px(tip_y))
+                    .min_w(px(170.))
+                    .max_w(px(240.))
+                    .px(px(12.))
+                    .py(px(10.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .rounded(crate::foundation::surface_radius(cx))
+                    .border_1()
+                    .border_color(p.line)
+                    .bg(p.panel)
+                    .shadow_lg()
+                    .child(
+                        div()
+                            .mb(px(2.))
+                            .text_size(px(12.))
+                            .line_height(px(20.))
+                            .text_color(p.secondary)
+                            .child(series.label.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(14.))
+                            .line_height(px(19.6))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(format!("{median:.1}"))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight::NORMAL)
+                                    .text_color(p.faint)
+                                    .child(tr(cx, "Median", "中位数")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .mt(px(4.))
+                            .text_size(px(12.))
+                            .line_height(px(20.))
+                            .text_color(p.faint)
+                            .child(format!("Q1 {q1:.1}  ·  Q3 {q3:.1}  ·  n={}", values.len())),
+                    ),
+            );
         }
         let detail = self
             .active

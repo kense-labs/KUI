@@ -314,11 +314,7 @@ impl Render for CookieConsent {
             } else {
                 10.
             }))
-            .pl(px(if self.panel == Panel::Preferences {
-                18.
-            } else {
-                18.
-            }))
+            .pl(px(18.))
             .rounded(radius)
             .border_1()
             .border_color(p.line)

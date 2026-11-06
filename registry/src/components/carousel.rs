@@ -32,7 +32,7 @@ struct Drag {
 }
 /// One slide is 80% of the carousel, and never wider than 340px. The step adds the 16px gap.
 fn slide_width(container: f32) -> f32 {
-    (container * 0.8).min(340.).max(1.)
+    (container * 0.8).clamp(1., 340.)
 }
 fn slide_step(container: f32) -> f32 {
     slide_width(container) + 16.

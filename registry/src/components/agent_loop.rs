@@ -293,7 +293,7 @@ impl Render for AgentLoop {
                 for n in 0..3 {
                     let a = -std::f32::consts::FRAC_PI_2 + n as f32 * std::f32::consts::TAU / 3.;
                     let pos = center + point(px(a.cos() * radius), px(a.sin() * radius));
-                    if (station.round() as i32) == n as i32 {
+                    if (station.round() as i32) == n {
                         w.paint_quad(
                             fill(
                                 Bounds::centered_at(pos, size(px(21.), px(21.))),
