@@ -263,6 +263,7 @@ mod tests {
             kui::foundation::init(cx);
             cx.set_global(crate::StoryBridge {
                 visible: || VISIBLE.get(),
+                min_height: || 0.,
                 frame: |_, _| {},
                 leave: |_| {},
                 theme_target: |_, _| {},

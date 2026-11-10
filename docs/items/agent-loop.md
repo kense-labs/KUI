@@ -1,6 +1,6 @@
 # Agent loop
 
-An illustrative gather, act and verify timeline.
+Follow an agent through context gathering, tool calls, and verification.
 
 ## Install
 
@@ -22,18 +22,18 @@ let control = cx.new(|_| AgentLoop::new("Verify the build", iterations));
 
 ## Interaction
 
-The host supplies the whole illustrative timeline; this component makes no agent or tool calls.
+Use Play/Pause, Next step or Restart to control the sample run. Tab to the controls and use the arrow keys to choose a playback speed. The host supplies the timeline; the component does not call an agent or tools.
 
 ## API
 
 `set_playing` · `(bool, &mut Context<Self>)`
 
-Use set_playing, step, restart and set_speed. Events report station changes and completion.
+Use set_playing, step, restart and set_speed. Autoplay is off by default; autoplay(true) starts the first visible run. Set visibility in an embedded host to pause when the preview leaves the viewport. Events report station changes and completion.
 
-Event: `AgentLoopEvent`.
+Event: `AgentLoopEvent`. The Rust `restart` method returns to Ready; the preview’s Restart button immediately starts a new run. Next step pauses after the next context or result arrives. At narrow widths the last result occupies one shared slot; wider layouts retain the latest tool and check separately.
 
 ## Motion
 
-The head follows the ring during playback and stays at its current position when paused; off-screen playback pauses. Reduced motion skips travel. Detailed visual transitions remain to be verified.
+The active point travels clockwise and pauses in place. Tools and checks resolve in fixed slots. Off-screen playback pauses. Reduced motion removes the moving trail and reveals each step without travel.
 
 Desktop and web use the same GPUI view.

@@ -140,8 +140,8 @@
     "en": "Code"
   },
   "stage.hint": {
-    "zh": "可切换预览与源码",
-    "en": "Switch between preview and source"
+    "zh": "实时预览 · 支持键盘",
+    "en": "Live · keyboard ready"
   },
   "button.when": {
     "zh": "适用",

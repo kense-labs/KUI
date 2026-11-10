@@ -184,6 +184,12 @@
 - 第二批 Web 专项：安装片段点击「生成密钥」后占位符被样例密钥替换、步骤显示勾；智能体光标在同一文档里可见 Kense 和协作者；训练第 720 步进入显存不足，失败时对应场景仍选中；会议纪要的错误与无转录均可达，顶栏位置不随状态切换；提示缓存首请求写入、后续命中，重置和单步可操作。[生成密钥](/private/tmp/kui-speculative-ref/local-install-key-generated.png) · [双光标](/private/tmp/kui-speculative-ref/local-agent-cursor-double.png) · [显存不足](/private/tmp/kui-speculative-ref/local-training-final-oom.png) · [会议错误](/private/tmp/kui-speculative-ref/local-meeting-fixed-error.png) · [缓存命中](/private/tmp/kui-speculative-ref/local-prompt-cache-results.png)
 - 本地交付构建 `2d4c30e11a1ff7c881fe`。Clippy、379 个组件单测、108 个 Story 单测及另外 4 个测试、WASM 发布构建、注册表和网站检查通过。网站校验 231 项双语文档、947 个静态目标。以上返修项用注册 JSON 与本地源码分别在空白 crate 安装，文档 Rust 示例通过原生与 wasm32 编译。浏览器截图是专项证据；各项仍需对照官网同场景完整动效及 Safari／桌面实物复验。
 
+## 智能体循环再次返修（2026-11-10）
+
+- [官方 Agent loop](https://uiarc.dev/components/agent-loop) 的公开交互预览确认了三站圆环、检查与工具结果定位、上下文与累计词元、窄屏共用结果槽和速度控制。KUI 用共享 GPUI 控件实现并保留 8px 卡片圆角，默认模型使用 Kense 标志。
+- 中文本地预览依次单步到「收集上下文」「执行操作」；后一状态保留 1.2K 上下文并展示工具结果。在同一预览切换到 312px 手机框后状态保留，控件和结果完整可见。[修复前](/private/tmp/kui-agent-loop-before.png) · [单步结果](/private/tmp/kui-agent-loop-step.png) · [手机布局](/private/tmp/kui-agent-loop-mobile.png) · [官方宽版](/private/tmp/kui-agent-loop-arc-desktop.png) · [官方手机布局](/private/tmp/kui-agent-loop-arc-mobile.png)
+- 原生流程测试、Story 测试、Clippy、WASM 发布构建、注册表预览哈希、双语站点和 947 个静态目标检查通过。示例对照不等同于逐帧验收；原生窗口、实际触屏、Safari 和同速动效仍待核对。
+
 ## 用户截图专项复查（2026-11-09）
 
 按用户截图的编号登记。数值步进和结构文本编辑器是原 108 项中用户明确要求返修的两个案例。其余原验收范围沿用此前划分。以下为问题级验证，组件整体仍按八个阶段验收。
@@ -346,7 +352,7 @@
 | <a id="review-data-flow"></a>78 [数据流示意](http://127.0.0.1:4321/kui/components/data-flow/)<br>[data-flow](</Users/leon/Documents/Kense ui/KUI/docs/items/data-flow.md>) | P1 | 源→处理→目标节点、端口/路径/分支、计数及状态色。 | 节点检查、暂停/隐藏、错误/恢复；空心到实心标记、路径运动、数量守恒。 | 文档明确详细路径动效、无障碍和设备行为待验。 | 待重审 · `□□□□□□D□` |
 | <a id="review-vector-search"></a>79 [向量检索示意](http://127.0.0.1:4321/kui/components/vector-search/)<br>[vector-search](</Users/leon/Documents/Kense ui/KUI/docs/items/vector-search.md>) | P1 | 2.5D投影、点云/网格、文档卡、查询向量与结果排名。 | 阶段切换/播放暂停、筛选/选中；嵌入→索引→查询→结果的空间移动、相似度展示。 | 文档已承认2.5D几何与细节转场未复现；应列待补，不能因有四阶段按钮通过。 | 待重审 · `□□□□□□D□` |
 | <a id="review-ai-spark"></a>80 [智能状态光芒](http://127.0.0.1:4321/kui/components/ai-spark/)<br>[ai-spark](</Users/leon/Documents/Kense ui/KUI/docs/items/ai-spark.md>) | P1 | 八道射线轮廓、尺寸阈值、小图点/大图粒子、Mark/Pill/Avatar。 | 所有状态/自动与受控/速度/暂停/隐藏；旋转收尾、双心跳、错误抖动、文字和色彩混合。 | 文档明确仍无同尺寸60Hz逐帧误差验收；无障碍等价未证明。 | 待重审 · `□□□□□□D□` |
-| <a id="review-agent-loop"></a>81 [智能体循环](http://127.0.0.1:4321/kui/components/agent-loop/)<br>[agent-loop](</Users/leon/Documents/Kense ui/KUI/docs/items/agent-loop.md>) | P1 | 环/阶段节点、活动头、工具面板、步骤和时间线。 | 播放/暂停/定位/隐藏、阶段数据更新；头沿路径行进、停在当前位置和阶段联动。 | 文档明确详细视觉过渡待验；图示不执行实际Agent，需保持标注。 | 已返修，待完整对照 · `□□□□□□D□` |
+| <a id="review-agent-loop"></a>81 [智能体循环](http://127.0.0.1:4321/kui/components/agent-loop/)<br>[agent-loop](</Users/leon/Documents/Kense ui/KUI/docs/items/agent-loop.md>) | P1 | 环/阶段节点、活动头、工具面板、步骤和时间线。 | 播放/暂停/定位/隐藏、阶段数据更新；头沿路径行进、停在当前位置和阶段联动。 | 11-10 复查官网桌面、手机与单步；重做顺时针圆环、固定的结果和上下文区域，补全播放、工具失败重试及结束。实测单步依次落在收集和工具站，312px 手机预览完整；连续同速录制、真机触摸仍待验。 | 已返修，待完整对照 · `□□□□□□D□` |
 | <a id="review-reasoning-tree"></a>82 [推理树](http://127.0.0.1:4321/kui/components/reasoning-tree/)<br>[reasoning-tree](</Users/leon/Documents/Kense ui/KUI/docs/items/reasoning-tree.md>) | P1 | 树层级、分支曲线、节点卡、评分/路径高亮与窄屏大纲。 | 展开/折叠/选择/定位、阶段切换；节点入场、评分增长、路径连接和连续回放。 | 文档明确连续动效与输入验证待办，不能只显示一棵静态树。 | 待重审 · `□□□□□□D□` |
 | <a id="review-speculative-decoding"></a>83 [推测解码示意](http://127.0.0.1:4321/kui/components/speculative-decoding/)<br>[speculative-decoding](</Users/leon/Documents/Kense ui/KUI/docs/items/speculative-decoding.md>) | P1 | draft/verify/accepted token布局、空格、拒绝标记、统计。 | 阶段前进/暂停/重播、拒绝与回滚、边界接受率；token跨位置飞行、验证扫过、统计滚动。 | 文档承认跨位置token飞行及滚动统计仍与参考不同。 | 已返修，待完整对照 · `□□□□□□D□` |
 | <a id="review-prompt-cache"></a>84 [提示缓存示意](http://127.0.0.1:4321/kui/components/prompt-cache/)<br>[prompt-cache](</Users/leon/Documents/Kense ui/KUI/docs/items/prompt-cache.md>) | P1 | 请求/缓存块、命中/未命中、token/费用/延迟/TTL读数。 | 自动播放/暂停、连续请求、失败/过期/清缓存；缓存飞行、命中动画、倒计时和柱形。 | 文档承认自动播放、cache-flight与倒计时未实现。 | 已返修，待完整对照 · `□□□□□□D□` |

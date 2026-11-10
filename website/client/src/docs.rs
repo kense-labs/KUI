@@ -1,12 +1,13 @@
 //! Browser interactions for the component reference and its sidebar.
 
 use crate::document;
-use js_sys::{Array, Reflect};
+use js_sys::{Array, Function, Object, Reflect};
+use std::cell::RefCell;
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{
-    Element, Event, EventTarget, HtmlElement, HtmlIFrameElement, HtmlInputElement,
-    HtmlSelectElement, KeyboardEvent, MessageEvent, NodeList, Response,
+    Animation, DomRect, Element, Event, EventTarget, HtmlElement, HtmlIFrameElement,
+    HtmlInputElement, HtmlSelectElement, KeyboardEvent, MessageEvent, NodeList, Response,
 };
 
 fn query(selector: &str) -> Option<Element> {
@@ -260,50 +261,168 @@ fn set_view(tab: &Element, focus: bool) -> Option<()> {
     indicator()
 }
 
-fn set_preview_size(button: &Element) -> Option<()> {
-    let stage = button.closest("[data-component-stage]").ok()??;
-    let mode = button.get_attribute("data-preview-mode")?;
-    let slot = child(&stage, "[data-preview-slot]")?;
-    attr(&slot, "data-preview-size", &mode);
-    for item in children(&stage, "[data-preview-mode]") {
+thread_local! {
+    static PREVIEW_ANIMATION: RefCell<Option<Animation>> = const { RefCell::new(None) };
+}
+
+fn cancel_preview_animation() {
+    PREVIEW_ANIMATION.with_borrow_mut(|running| {
+        if let Some(animation) = running.take() {
+            animation.cancel();
+        }
+    });
+}
+
+fn preview_animation(
+    target: &Element,
+    values: &[(&str, String, String)],
+    duration: f64,
+) -> Result<Animation, JsValue> {
+    let frames = Object::new();
+    for (property, from, to) in values {
+        Reflect::set(
+            &frames,
+            &(*property).into(),
+            &Array::of2(&from.into(), &to.into()),
+        )?;
+    }
+    let options = Object::new();
+    Reflect::set(&options, &"duration".into(), &duration.into())?;
+    Reflect::set(
+        &options,
+        &"easing".into(),
+        &"cubic-bezier(.22,1,.36,1)".into(),
+    )?;
+    Reflect::get(target, &"animate".into())?
+        .dyn_into::<Function>()?
+        .call2(target, &frames, &options)?
+        .dyn_into()
+}
+
+fn preview_motion() -> bool {
+    web_sys::window()
+        .and_then(|win| {
+            win.match_media("(prefers-reduced-motion: no-preference)")
+                .ok()
+                .flatten()
+        })
+        .is_some_and(|query| query.matches())
+}
+
+fn device_geometry(device: &Element) -> Option<(DomRect, String)> {
+    let bounds = device.get_bounding_client_rect();
+    let style = web_sys::window()?.get_computed_style(device).ok()??;
+    Some((bounds, style.get_property_value("border-radius").ok()?))
+}
+
+fn fit_height(slot: &Element, restore: bool) -> Option<()> {
+    let frame: HtmlIFrameElement = child(slot, "iframe")?.unchecked_into();
+    let style = frame.style();
+    if restore {
+        let height = slot.get_attribute("data-fit-height").unwrap_or_default();
+        style.set_property("height", &height).ok()?;
+    } else {
         attr(
-            &item,
-            "aria-pressed",
-            if item == *button { "true" } else { "false" },
+            slot,
+            "data-fit-height",
+            &style.get_property_value("height").ok()?,
         );
     }
     Some(())
 }
 
-fn expand_preview(button: &Element, open: bool) -> Option<()> {
+fn set_preview_size(button: &Element) -> Option<()> {
     let stage = button.closest("[data-component-stage]").ok()??;
+    let mode = button.get_attribute("data-preview-mode")?;
+    let slot = child(&stage, "[data-preview-slot]")?;
+    if slot.get_attribute("data-preview-size").as_deref() == Some(&mode) {
+        return Some(());
+    }
+    let device = child(&slot, "[data-preview-device]")?;
+    let before = preview_motion().then(|| device_geometry(&device)).flatten();
+    cancel_preview_animation();
+    // Use the previous fit height until GPUI paints at the new width.
+    fit_height(&slot, mode == "fit");
+    attr(&slot, "data-preview-size", &mode);
+    for item in children(&stage, "[data-preview-mode]") {
+        let selected = item == *button;
+        attr(
+            &item,
+            "aria-checked",
+            if selected { "true" } else { "false" },
+        );
+        attr(&item, "tabindex", if selected { "0" } else { "-1" });
+    }
+    if let Some((old, old_radius)) = before
+        && let Some((new, new_radius)) = device_geometry(&device)
+        && let Ok(animation) = preview_animation(
+            &device,
+            &[
+                (
+                    "width",
+                    format!("{}px", old.width()),
+                    format!("{}px", new.width()),
+                ),
+                (
+                    "height",
+                    format!("{}px", old.height()),
+                    format!("{}px", new.height()),
+                ),
+                ("borderRadius", old_radius, new_radius),
+            ],
+            320.,
+        )
+    {
+        PREVIEW_ANIMATION.with_borrow_mut(|running| *running = Some(animation));
+    }
+    Some(())
+}
+
+fn expand_preview(trigger: &Element, open: bool) -> Option<()> {
+    let stage = trigger.closest("[data-component-stage]").ok()??;
+    let bar = child(&stage, ".preview-fullscreen-bar")?;
+    let slot = child(&stage, "[data-preview-slot]")?;
+    let origin = slot.get_bounding_client_rect();
+    cancel_preview_animation();
+    if slot.get_attribute("data-preview-size").as_deref() == Some("fit") {
+        fit_height(&slot, !open);
+    }
     flag(&stage, "data-preview-expanded", open);
+    flag(&bar, "hidden", !open);
     if open {
         attr(&stage, "role", "dialog");
         attr(&stage, "aria-modal", "true");
-        attr(
-            &stage,
-            "aria-label",
-            if english() {
-                "Component preview"
-            } else {
-                "组件预览"
-            },
-        );
+        attr(&stage, "aria-labelledby", "stage-fullscreen-title");
+        if preview_motion() {
+            let bounds = stage.get_bounding_client_rect();
+            let (w, h) = (bounds.width(), bounds.height());
+            let start = format!(
+                "inset({}px {}px {}px {}px round 8px)",
+                origin.top().clamp(0., h),
+                (w - origin.right()).clamp(0., w),
+                (h - origin.bottom()).clamp(0., h),
+                origin.left().clamp(0., w)
+            );
+            if let Ok(animation) =
+                preview_animation(&stage, &[("clipPath", start, "inset(0px)".into())], 260.)
+            {
+                PREVIEW_ANIMATION.with_borrow_mut(|running| *running = Some(animation));
+            }
+        }
     } else {
-        for name in ["role", "aria-modal", "aria-label"] {
+        for name in ["role", "aria-modal", "aria-labelledby"] {
             flag(&stage, name, false);
         }
     }
-    attr(button, "aria-pressed", if open { "true" } else { "false" });
-    let label = button.get_attribute(if open {
-        "data-collapse-label"
-    } else {
-        "data-expand-label"
-    })?;
-    attr(button, "aria-label", &label);
-    attr(button, "title", &label);
-    button.dyn_ref::<HtmlElement>()?.focus().ok();
+    let target = child(
+        &stage,
+        if open {
+            "[data-preview-close]"
+        } else {
+            "[data-preview-expand]"
+        },
+    )?;
+    target.dyn_ref::<HtmlElement>()?.focus().ok();
     indicator()
 }
 
@@ -327,9 +446,11 @@ fn click(event: &Event) -> Option<()> {
     if let Some(button) = target.closest("[data-preview-mode]").ok()? {
         return set_preview_size(&button);
     }
-    if let Some(button) = target.closest("[data-preview-expand]").ok()? {
-        let open = button.get_attribute("aria-pressed").as_deref() != Some("true");
-        return expand_preview(&button, open);
+    if let Some(button) = target
+        .closest("[data-preview-expand],[data-preview-close]")
+        .ok()?
+    {
+        return expand_preview(&button, button.has_attribute("data-preview-expand"));
     }
     if let Some(toggle) = target
         .closest("[data-section-toggle],[data-group-toggle]")
@@ -358,30 +479,43 @@ fn keydown(event: &Event) -> Option<()> {
         .dyn_into::<HtmlInputElement>()
         .ok()?;
     let name = key.key();
-    if name == "Escape"
-        && let Some(button) = query("[data-preview-expanded] [data-preview-expand]")
-    {
-        event.prevent_default();
-        return expand_preview(&button, false);
-    }
-    if name == "Tab"
-        && let Some(stage) = query("[data-preview-expanded]")
-    {
-        let stops = tab_stops(&stage);
-        let edge = if key.shift_key() {
-            stops.first()
-        } else {
-            stops.last()
-        };
-        if edge.is_some_and(|element| element.unchecked_ref::<Element>() == &target) {
-            let next = if key.shift_key() {
-                stops.last()
-            } else {
-                stops.first()
-            }?;
+    if let Some(stage) = query("[data-preview-expanded]") {
+        if name == "Escape" {
             event.prevent_default();
-            return next.focus().ok();
+            return expand_preview(&child(&stage, "[data-preview-close]")?, false);
         }
+        if name == "Tab" {
+            let stops = tab_stops(&stage);
+            let (edge, next) = if key.shift_key() {
+                (stops.first(), stops.last())
+            } else {
+                (stops.last(), stops.first())
+            };
+            if edge.is_some_and(|element| element.unchecked_ref::<Element>() == &target) {
+                event.prevent_default();
+                return next?.focus().ok();
+            }
+        }
+        return None;
+    }
+    if matches(&target, "[data-preview-mode]") {
+        let next = match name.as_str() {
+            "ArrowRight" | "ArrowLeft" | "ArrowUp" | "ArrowDown" => {
+                if target.get_attribute("data-preview-mode").as_deref() == Some("fit") {
+                    "mobile"
+                } else {
+                    "fit"
+                }
+            }
+            "Home" => "fit",
+            "End" => "mobile",
+            _ => return None,
+        };
+        let group = target.closest("[role=radiogroup]").ok()??;
+        let next = child(&group, &format!(r#"[data-preview-mode="{next}"]"#))?;
+        event.prevent_default();
+        set_preview_size(&next);
+        return next.dyn_ref::<HtmlElement>()?.focus().ok();
     }
     if ((key.meta_key() || key.ctrl_key()) && name.eq_ignore_ascii_case("k"))
         || (name == "/"
@@ -533,11 +667,11 @@ fn leave_story(event: &Event) -> Option<()> {
     let kind = Reflect::get(&data, &"type".into()).ok()?.as_string()?;
     let source = message.source()?;
     if kind == "kui:preview-exit" {
-        let frame = query("[data-preview-expanded] [data-preview-slot] > iframe")?;
+        let frame = query("[data-preview-expanded] [data-preview-slot] iframe")?;
         let frame: HtmlIFrameElement = frame.unchecked_into();
         if js_sys::Object::is(frame.content_window()?.as_ref(), source.as_ref()) {
             return expand_preview(
-                &query("[data-preview-expanded] [data-preview-expand]")?,
+                &query("[data-preview-expanded] [data-preview-close]")?,
                 false,
             );
         }
@@ -624,6 +758,7 @@ pub fn init() -> Result<(), JsValue> {
         }
     })?;
     on(&doc, "kui:navigated", false, |_| {
+        cancel_preview_animation();
         show_current(true);
         indicator();
     })?;

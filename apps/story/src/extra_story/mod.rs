@@ -237,10 +237,14 @@ impl Render for EmbeddedStory {
                 .tab_stop(true)
                 .size(px(0.))
         };
-        let embedded = cx.try_global::<crate::StoryBridge>().is_some();
+        let bridge = cx.try_global::<crate::StoryBridge>();
+        let embedded = bridge.is_some();
+        let min_height = bridge.map_or(self.min_height, |bridge| {
+            self.min_height.max((bridge.min_height)())
+        });
         let scene = div()
             .w_full()
-            .min_h(px(self.min_height))
+            .min_h(px(min_height))
             .flex_none()
             .flex()
             .flex_col()

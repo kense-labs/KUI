@@ -8,24 +8,24 @@
     },
     "rustType": "AgentLoop",
     "lead": {
-      "en": "An illustrative gather, act and verify timeline.",
-      "zh": "展示收集上下文、执行和验证的示意流程。"
+      "en": "Follow an agent through context gathering, tool calls, and verification.",
+      "zh": "沿着圆环查看智能体收集上下文、调用工具和验证结果的过程。"
     },
     "usageRust": "use gpui::prelude::*;\nuse kui::components::agent_loop::{AgentLoop, LoopIteration};\n\nlet iterations = vec![LoopIteration::new(\"Read logs\", 1200, true, \"Checks passed\")];\nlet control = cx.new(|_| AgentLoop::new(\"Verify the build\", iterations));",
     "method": "set_playing",
     "signature": "(bool, &mut Context<Self>)",
     "event": "AgentLoopEvent",
     "rule": {
-      "en": "The host supplies the whole illustrative timeline; this component makes no agent or tool calls.",
-      "zh": "宿主提供示意流程数据；组件不会调用真实智能体或工具。"
+      "en": "Use Play/Pause, Next step or Restart to control the sample run. Tab to the controls and use the arrow keys to choose a playback speed. The host supplies the timeline; the component does not call an agent or tools.",
+      "zh": "使用播放／暂停、下一步和重新开始控制示例。用 Tab 聚焦控件，方向键切换播放速度。流程数据由宿主提供，组件不会调用真实智能体或工具。"
     },
     "api": {
-      "en": "Use set_playing, step, restart and set_speed. Events report station changes and completion.",
-      "zh": "可调用 set_playing、step、restart 和 set_speed；事件报告站点变化和结束状态。"
+      "en": "Use set_playing, step, restart and set_speed. Autoplay is off by default; autoplay(true) starts the first visible run. Set visibility in an embedded host to pause when the preview leaves the viewport. Events report station changes and completion.",
+      "zh": "可调用 set_playing、step、restart 和 set_speed。默认关闭自动播放；autoplay(true) 在首次可见时启动。嵌入预览可用 visibility 报告可见性。事件报告站点变化和结束状态。"
     },
     "motion": {
-      "en": "The head follows the ring during playback and stays at its current position when paused; off-screen playback pauses. Reduced motion skips travel. Detailed visual transitions remain to be verified.",
-      "zh": "播放时节点沿圆环移动，暂停时保持当前位置，离屏时暂停；减少动效时跳过中间轨迹。细节视觉过渡仍待验收。"
+      "en": "The active point travels clockwise and pauses in place. Tools and checks resolve in fixed slots. Off-screen playback pauses. Reduced motion removes the moving trail and reveals each step without travel.",
+      "zh": "活动点沿顺时针前进，暂停时保持原位。工具与检查在固定位置显示结果，离屏时暂停。减少动效时去掉移动尾迹，单步直接显示结果。"
     }
   }
 ]

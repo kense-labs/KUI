@@ -1010,7 +1010,7 @@ impl Render for FamilyStory {
         let vw = f32::from(w.viewport_size().width);
         let narrow = vw < 532.;
         // Anchor expanding pickers at the top of their reserved interaction area.
-        let (height, top) = match (self.id.as_str(), narrow) {
+        let (height, top): (f32, Option<f32>) = match (self.id.as_str(), narrow) {
             ("date-picker", true) => (539., Some(17.)),
             ("date-picker", false) => (583., Some(33.)),
             ("time-picker", true) => (481., Some(66.)),
@@ -1027,7 +1027,9 @@ impl Render for FamilyStory {
             ("icon-morph", true) => (560., None),
             _ => (520., None),
         };
-        let embedded = cx.try_global::<crate::StoryBridge>().is_some();
+        let bridge = cx.try_global::<crate::StoryBridge>();
+        let embedded = bridge.is_some();
+        let height = bridge.map_or(height, |bridge| height.max((bridge.min_height)()));
         let edge = |i: usize| {
             div()
                 .id(("edge", i))

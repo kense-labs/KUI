@@ -300,7 +300,7 @@ fn icon(name: &str, size: u8) -> String {
         }
         "mobile" => r#"<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>"#,
         "expand" => r#"<path d="M14 4h6v6M20 4l-7 7m-3 9H4v-6m0 6 7-7"/>"#,
-        "collapse" => r#"<path d="M20 4l-7 7m0-6v6h6M4 20l7-7m0 6v-6H5"/>"#,
+        "close" => r#"<path d="m6 6 12 12M18 6 6 18"/>"#,
         "terminal" => r#"<path d="M4 17 10 11 4 5M12 19h8"/>"#,
         "file" => {
             r#"<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/>"#
@@ -515,22 +515,24 @@ fn stage(doc: &Entry, en: bool, revision: &str, example: &str) -> String {
     let collapse = pick(en, "Exit fullscreen preview", "退出全屏预览");
     let size_switch = [("fit", fit, true), ("mobile", mobile, false)].map(|(mode, label, selected)| {
         controls::button(
-            &format!(r#"class="preview-control" data-preview-mode="{mode}" aria-label="{label}" title="{label}" aria-pressed="{selected}""#),
-            &icon(mode, 16),
+            &format!(r#"class="preview-control" role="radio" data-preview-mode="{mode}" aria-label="{label}" title="{label}" aria-checked="{selected}" tabindex="{}""#, if selected { 0 } else { -1 }),
+            &icon(mode, 14),
         )
     }).join("");
     let fullscreen = controls::button(
         &format!(
-            r#"class="preview-control preview-expand" data-preview-expand data-expand-label="{expand}" data-collapse-label="{collapse}" aria-label="{expand}" title="{expand}" aria-pressed="false""#
+            r#"class="preview-control preview-expand" data-preview-expand aria-label="{expand}" title="{expand}" aria-haspopup="dialog""#
         ),
+        &icon("expand", 15),
+    );
+    let close = controls::button(
         &format!(
-            r#"<span data-preview-enter>{}</span><span data-preview-exit>{}</span>"#,
-            icon("expand", 16),
-            icon("collapse", 16)
+            r#"class="preview-control preview-close" data-preview-close aria-label="{collapse}" title="{collapse}""#
         ),
+        &icon("close", 16),
     );
     let mut html = format!(
-        r#"<section class="stage" data-component-stage><div class="view-bar"><div class="tabs" role="tablist" aria-label="{}">{tabs}<span class="indicator" data-view-indicator aria-hidden="true"></span></div><div class="preview-options" data-preview-options><p class="hint muted">{}</p><div class="preview-modes" role="group" aria-label="{}">{size_switch}</div>{fullscreen}</div></div><div class="panel is-active" role="tabpanel" id="stage-panel-preview" data-panel="preview" aria-labelledby="stage-tab-preview"><div data-preview-slot data-preview-size="fit" data-preview-src="{url}"><iframe allow="clipboard-write" class="rust-story family-story{theme_class}" data-story="{id}" data-story-key="{id}" data-lang="{locale}" aria-label="{title}" src="{url}"></iframe></div></div><div class="panel" role="tabpanel" id="stage-panel-code" data-panel="code" aria-labelledby="stage-tab-code" hidden>{example}{}</div></section>"#,
+        r#"<section class="stage" data-component-stage><div class="view-bar"><div class="tabs" role="tablist" aria-label="{}">{tabs}<span class="indicator" data-view-indicator aria-hidden="true"></span></div><div class="preview-options" data-preview-options><p class="hint muted">{}</p><div class="preview-tools"><div class="preview-modes" role="radiogroup" aria-label="{}"><span class="preview-highlight" aria-hidden="true"></span>{size_switch}</div>{fullscreen}</div></div></div><div class="preview-fullscreen-bar" hidden><span id="stage-fullscreen-title">{title}</span>{close}</div><div class="panel is-active" role="tabpanel" id="stage-panel-preview" data-panel="preview" aria-labelledby="stage-tab-preview"><div data-preview-slot data-preview-size="fit" data-preview-src="{url}"><div data-preview-device><div data-preview-screen><iframe allow="clipboard-write" class="rust-story family-story{theme_class}" data-story="{id}" data-story-key="{id}" data-lang="{locale}" aria-label="{title}" src="{url}"></iframe></div></div></div></div><div class="panel" role="tabpanel" id="stage-panel-code" data-panel="code" aria-labelledby="stage-tab-code" hidden>{example}{}</div></section>"#,
         t("stage.views", en),
         t("stage.hint", en),
         pick(en, "Preview size", "预览尺寸"),

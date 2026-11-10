@@ -16,9 +16,16 @@ window.kuiArticleViewport = () => {
   const rect = frame.getBoundingClientRect();
   const doc = frame.ownerDocument;
   const host = doc.defaultView;
-  const header = doc.querySelector("header.topbar");
-  const top = header?.getBoundingClientRect().bottom ?? 0;
-  return new Float32Array([Math.max(0, top - rect.top), Math.min(innerHeight, host.innerHeight - rect.top)]);
+  const fullscreen = frame.closest("[data-preview-expanded]");
+  const header = fullscreen?.querySelector(".preview-fullscreen-bar") ?? doc.querySelector("header.topbar");
+  const screen = frame.closest("[data-preview-screen]")?.getBoundingClientRect();
+  const top = Math.max(header?.getBoundingClientRect().bottom ?? 0, screen?.top ?? 0);
+  const bottom = Math.min(host.innerHeight, screen?.bottom ?? host.innerHeight);
+  const scale = rect.width > 0 && frame.clientWidth > 0 ? rect.width / frame.clientWidth : 1;
+  return new Float32Array([
+    Math.max(0, (top - rect.top) / scale),
+    Math.min(innerHeight, (bottom - rect.top) / scale)
+  ]);
 };
 window.kuiArticleModal = open => {
   if (!open) {

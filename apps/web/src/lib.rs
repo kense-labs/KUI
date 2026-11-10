@@ -192,7 +192,7 @@ mod web {
 
     // The host owns browser integration; neither the story nor installed controls depend on JS.
     #[wasm_bindgen(inline_js = "
-        export function compactHost(){try{const f=window.frameElement;return f?.parentElement?.dataset.previewSize==='mobile'||(f?.ownerDocument.defaultView??window).matchMedia('(max-width:639px)').matches}catch{return innerWidth<640}}
+        export function compactHost(){try{const f=window.frameElement;return Boolean(f?.closest('[data-preview-size=mobile]'))||(f?.ownerDocument.defaultView??window).matchMedia('(max-width:639px)').matches}catch{return innerWidth<640}}
         export function storedAppearance(){try{return ({light:0,dark:1})[localStorage.getItem('theme')] ?? 2}catch{return 2}}
         export function accountAppearance(mode){parent.postMessage({type:'kui:account-appearance',mode},location.origin)}
         export function previewStarted() { queueMicrotask(() => window.kuiPreviewStarted?.()); }
@@ -222,6 +222,12 @@ mod web {
         export function reducedTransparency() { return matchMedia('(prefers-reduced-transparency: reduce)').matches; }
         export function reportFrame(height, dark) {
             window.kuiFramePainted?.(Math.ceil(height), dark);
+        }
+        export function previewMinHeight() {
+            const frame = window.frameElement;
+            if (frame?.closest('[data-preview-size=mobile]')) return 844;
+            if (frame?.closest('[data-preview-expanded]')) return Math.max(0, parent.innerHeight - 50);
+            return 0;
         }
         export function previewVisible() { return !document.hidden && self.kuiStoryInViewport !== false && self.kuiStoryPageActive !== false; }
         export function leavePreview(back) {
@@ -283,6 +289,8 @@ mod web {
         #[wasm_bindgen(js_name=hostDirection)]
         fn host_direction() -> bool;
 
+        #[wasm_bindgen(js_name=previewMinHeight)]
+        fn preview_min_height() -> f32;
         #[wasm_bindgen(js_name=previewVisible)]
         fn preview_visible() -> bool;
         #[wasm_bindgen(js_name=leavePreview)]
@@ -448,6 +456,7 @@ mod web {
                 }));
                 cx.set_global(StoryBridge {
                     visible: preview_visible,
+                    min_height: preview_min_height,
                     frame: |height, mode| report_frame(height, mode == ThemeMode::Dark),
                     leave: leave_preview,
                     theme_target: |b, radius| {

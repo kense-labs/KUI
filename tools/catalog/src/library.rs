@@ -1686,7 +1686,7 @@ pub(super) const LIBRARY: &[Item] = &[
         title: "AgentLoop",
         description: "An illustrative gather, act and verify timeline.",
         category: "intelligence",
-        primitives: &["control", "family", "nav", "flyout", "glyph"],
+        primitives: &["control", "family", "nav", "flyout", "glyph", "kense_mark"],
         components: &[],
         cargo: &["web-time@1"],
     },

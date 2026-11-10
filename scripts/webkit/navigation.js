@@ -21,6 +21,39 @@
       if (heading && getComputedStyle(heading).animationName === 'doc-enter') motionObserved = true;
     });
     const original = frame().contentDocument;
+    const previewMode = mode => document.querySelector(`[data-preview-mode="${mode}"]`);
+    const previewSlot = () => document.querySelector('[data-preview-slot]');
+    const device = () => document.querySelector('[data-preview-device]');
+    const screen = () => document.querySelector('[data-preview-screen]');
+    const expand = document.querySelector('[data-preview-expand]');
+    const fitHeight = device().getBoundingClientRect().height;
+    previewMode('fit').focus();
+    previewMode('fit').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await wait(() => previewSlot().dataset.previewSize === 'mobile' &&
+      frame().contentWindow.innerWidth === 390 && Math.abs(device().getBoundingClientRect().width - 332) < 1 &&
+      Math.abs(screen().getBoundingClientRect().width - 312) < 1, 'phone preview geometry');
+    if (document.activeElement !== previewMode('mobile') || previewMode('mobile').getAttribute('aria-checked') !== 'true') {
+      throw Error('arrow key did not select and focus the phone preview');
+    }
+    expand.click();
+    const close = document.querySelector('[data-preview-close]');
+    if (document.activeElement !== close || close.closest('[role=dialog]')?.getAttribute('aria-modal') !== 'true' ||
+        previewSlot().dataset.previewSize !== 'mobile' || frame().contentDocument !== original) {
+      throw Error('fullscreen lost the selected viewport, focus, or runtime');
+    }
+    close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    if (document.activeElement !== expand || previewSlot().dataset.previewSize !== 'mobile') {
+      throw Error('leaving fullscreen lost focus or the selected viewport');
+    }
+    previewMode('fit').click();
+    const targetHeight = device().getAnimations()[0]?.effect.getKeyframes().at(-1).height;
+    if (targetHeight && Math.abs(parseFloat(targetHeight) - fitHeight) > 1) {
+      throw Error('fit transition targets the old phone height');
+    }
+    await wait(() => frame().contentWindow.innerWidth > 390 &&
+      device().getBoundingClientRect().width > 390, 'fit preview did not restore');
+    if (frame().contentDocument !== original) throw Error('viewport switch reloaded GPUI');
+    report('phone geometry, keyboard switch, fullscreen, and GPUI reuse: PASS');
     const check = async (id, action) => {
       const start = performance.now();
       action();

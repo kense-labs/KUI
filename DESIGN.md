@@ -110,6 +110,8 @@ Progress and result overlays must preserve their owning button's outline. In GPU
 
 ### Documentation preview and source
 
+- The preview toolbar offers Fit and Mobile as a radio group with a sliding selection. Mobile shows a 390px logical viewport at 80% scale inside a rounded phone frame. Narrower pages reduce the viewport width to fit the available space. The screen scrolls independently when a story is taller than it. The phone outline uses 46px corners and 10px bezel spacing.
+- Switching sizes animates the preview shell while keeping the live GPUI runtime mounted. Fullscreen keeps the selected size and offers a title bar with a close button and Escape. Reduced motion applies layout changes immediately.
 - Before the first GPUI frame, center a 20px loading ring and a muted 13px status label inside the preview. Use a 2px ring stroke, a 12px gap, and an 800ms rotation. Keep the preview's existing dimensions while loading.
 - Respect reduced motion by keeping the loading ring static. Expose the loading message as a polite status and mark the preview body busy until it paints or reports an error.
 - Hide loading only after the first frame paints. On a module or runtime loading failure, stop the ring and show a localized retry instruction.

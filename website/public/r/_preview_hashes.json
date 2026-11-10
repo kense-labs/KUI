@@ -7,7 +7,7 @@
   "components/activity_rings.rs": "770249e49062f081cf2d5f558e3add1f0a0d6d5b717704190685dfe20cb6071a",
   "components/agent_cursor.rs": "ff13fcf7e6ae2e7ceb6011db2d0304a31dd0a3f521f504b110327885f4f01117",
   "components/agent_handoff.rs": "e79d0b673963dedac763c1eb5e89f69add366388b23fc8ef1a8a3e4e4aaa5894",
-  "components/agent_loop.rs": "2c2c926ed53d5b5064dd4c3382fafe25397f4e1bdcd95d3b4d4482b393ec39df",
+  "components/agent_loop.rs": "91bdbc0c8f414e075c4fd7acb640acc9d8a0906823d27f28ff13dc3a3ec88520",
   "components/agent_plan.rs": "9ea96652b204f1f9e228bb24b29e035a531acd1efa8357227e5cb19a5a72cd94",
   "components/agent_status.rs": "deb97cb8c7d003dd28cf3582d8a6daa6513a5f82658863b058f311327e5a852a",
   "components/agent_timeline.rs": "bd2c3977392f36f7c25fda445e3376fed7d20897bc84662cdcac935c46d80c04",

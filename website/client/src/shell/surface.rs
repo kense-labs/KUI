@@ -41,12 +41,14 @@ impl Opening {
         let radius = preview(frame, "controlRadius", &Array::new())
             .and_then(|v| v.as_f64())
             .unwrap_or(8.);
+        let width = f64::from(frame.client_width());
+        let scale = if width > 0. { r.width() / width } else { 1. };
         Self {
-            x: x + r.x(),
-            y: y + r.y(),
-            w,
-            h,
-            radius: [radius; 4],
+            x: r.x() + x * scale,
+            y: r.y() + y * scale,
+            w: w * scale,
+            h: h * scale,
+            radius: [radius * scale; 4],
         }
     }
     fn mask(self) -> String {
