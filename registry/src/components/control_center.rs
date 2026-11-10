@@ -2117,7 +2117,7 @@ impl Render for ControlCenter {
             .text_size(px(14.))
             .text_color(p.p.ink)
             .shadow(vec![
-                BoxShadow::new(px(0.), px(15.), black().opacity(0.23)).blur_radius(px(38.)),
+                BoxShadow::new(px(0.), px(9.), black().opacity(0.14)).blur_radius(px(24.)),
             ])
             .child(
                 div()

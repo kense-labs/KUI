@@ -23,19 +23,19 @@ impl Demo {
         let lang = UiLanguage::current(cx);
         let t = |en, zh| lang.text(en, zh);
         let segments = vec![
-            CacheSegment::new("tools", t("Tools", "工具"), 3800, rgb(0x7795de).into()),
+            CacheSegment::new("tools", t("Tools", "工具"), 3800, rgb(0xcf8a1b).into()),
             CacheSegment::new(
                 "system",
                 t("System prompt", "系统提示"),
                 2400,
-                rgb(0xa08ad2).into(),
+                rgb(0x743d9d).into(),
             ),
-            CacheSegment::new("docs", t("Documents", "文档"), 36200, rgb(0x65b69a).into()),
+            CacheSegment::new("docs", t("Documents", "文档"), 36200, rgb(0x008b74).into()),
             CacheSegment::new(
                 "conversation",
                 t("Conversation", "对话"),
                 6000,
-                rgb(0xd4a875).into(),
+                rgb(0x2877be).into(),
             ),
         ];
         let requests = [180, 240, 410, 150]
@@ -52,6 +52,7 @@ impl Demo {
         let autoplay = !disabled_motion(cx);
         let chart = cx.new(|_| {
             PromptCache::new(segments, CacheSnapshot::new(requests))
+                .with_model("Claude Sonnet 5.5")
                 .with_change_segment("system")
                 .with_sample_playback(autoplay)
         });
@@ -135,8 +136,13 @@ impl Render for Demo {
             .p(px(20.))
             .bg(p.stage)
             .text_color(p.ink)
-            .child(lang_sample(UiLanguage::current(cx)))
             .child(self.chart.clone())
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(p.secondary)
+                    .child(lang_sample(UiLanguage::current(cx))),
+            )
     }
 }
 fn lang_sample(lang: UiLanguage) -> &'static str {

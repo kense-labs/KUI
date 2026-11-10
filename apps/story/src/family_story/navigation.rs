@@ -548,15 +548,36 @@ impl NavDemo {
                         "The tracing timeline separated cache reads from module compilation. Smaller startup bundles let the first request finish earlier.",
                         "跟踪时间线将缓存读取与模块编译分开。减小启动包以后，首个请求可以更早完成。",
                     ),
+                    (
+                        "Several dependencies searched the same directories on startup. Consolidating those lookups meant the process spent less time waiting on disk.",
+                        "多个依赖在启动时重复搜索同一批目录。合并这些查询后，进程等待磁盘的时间减少了。",
+                    ),
+                    (
+                        "We postponed imports used only for refunds and exports until the request actually needed them. The main checkout route could then start with a smaller set of modules.",
+                        "退款和导出功能的模块改为在请求真正需要时才加载。结账主流程因此只需加载更少的模块。",
+                    ),
+                    (
+                        "Separating the payment integration from the shared bundle gave each deployment a stable core. A provider update no longer forced every worker to rebuild that core.",
+                        "把支付集成从共享产物拆出后，每次部署都有稳定的核心模块。更新服务商接口时，工作进程无需重建核心模块。",
+                    ),
+                    (
+                        "A brief warm-up request now runs after deployment. It primes the cache with the same modules that the first real checkout would load.",
+                        "部署后会执行一次简短的预热请求，将首笔真实结账需要加载的模块提前写入缓存。",
+                    ),
+                    (
+                        "We compared each release with the same traffic replay. The first checkout finished sooner, and subsequent requests kept the same throughput.",
+                        "每次发布均使用同一组请求回放来对比。首笔结账更快完成，后续请求的吞吐量保持稳定。",
+                    ),
                 ];
                 let entries = parts
                     .iter()
                     .enumerate()
                     .map(|(i, (a, b))| {
-                        ReadingSection::new(t(a, b), t(bodies[i % 3].0, bodies[i % 3].1), usize::from(matches!(i, 2 | 3 | 5)))
+                        ReadingSection::new(t(a, b), t(bodies[i].0, bodies[i].1), usize::from(matches!(i, 2 | 3 | 5)))
                     })
                     .collect();
-                cx.new(|_| ReadingOutline::new(t("Reducing checkout cold starts", "缩短结账服务的冷启动时间"), entries, 6))
+                cx.new(|_| ReadingOutline::new(t("Reducing checkout cold starts", "缩短结账服务的冷启动时间"), entries, 6)
+                    .with_byline(t("Kense Engineering · September 18, 2026", "Kense 工程团队 · 2026 年 9 月 18 日")))
                     .into()
             }
 
@@ -630,6 +651,7 @@ impl NavDemo {
                         w,
                         cx,
                     )
+                    .with_min_column_width(px(146.))
                 });
                 s._subs.push(cx.subscribe(&grid, |_: &mut Self, _, export: &GridExport, cx| {
                     if let Some(host) = cx.try_global::<CsvDownload>() {
@@ -988,7 +1010,7 @@ impl Render for NavDemo {
                 reviews
             }
             "data-grid" => root
-                .child(self.views[0].clone())
+                .child(div().w_full().max_w(px(522.)).child(self.views[0].clone()))
                 .when(!self.notice.is_empty(), |r| {
                     r.child(label(self.notice.clone(), 12., p.secondary))
                 }),

@@ -2,6 +2,7 @@
 use crate::{
     components::textarea::{Textarea, TextareaStyle},
     primitives::{
+        brand_mark::brand_mark,
         control::UiLanguage,
         family::{Paint, PhaseClock, Tone, ease, face},
         field::{Field, FieldEvent},
@@ -84,6 +85,8 @@ pub enum ReplyDraftEvent {
 /// Generation is performed by the host. This control never sends a message.
 pub struct ReplyDraft {
     message: ReplyMessage,
+    sender_image: Option<ImageSource>,
+    model: Option<SharedString>,
     hints: Vec<ReplyHint>,
     hint: Option<usize>,
     tone: ReplyTone,
@@ -136,6 +139,8 @@ impl ReplyDraft {
         });
         Self {
             message,
+            sender_image: None,
+            model: None,
             hints,
             hint: None,
             tone: ReplyTone::Neutral,
@@ -167,6 +172,16 @@ impl ReplyDraft {
     }
     pub fn editor(&self) -> Entity<Textarea> {
         self.draft.clone()
+    }
+    /// Set the portrait shown with the source message.
+    pub fn with_sender_image(mut self, image: impl Into<ImageSource>) -> Self {
+        self.sender_image = Some(image.into());
+        self
+    }
+    /// Name the host-selected model in the draft.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     pub fn status(&self) -> ReplyStatus {
         self.status
@@ -621,14 +636,25 @@ impl Render for ReplyDraft {
                             .text_size(px(14.))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.ink)
-                            .child(
-                                self.message
-                                    .sender
-                                    .chars()
-                                    .next()
-                                    .map(|c| c.to_string())
-                                    .unwrap_or_default(),
-                            ),
+                            .overflow_hidden()
+                            .when_some(self.sender_image.clone(), |portrait, image| {
+                                portrait.child(
+                                    img(image)
+                                        .size_full()
+                                        .rounded_full()
+                                        .object_fit(ObjectFit::Cover),
+                                )
+                            })
+                            .when(self.sender_image.is_none(), |portrait| {
+                                portrait.child(
+                                    self.message
+                                        .sender
+                                        .chars()
+                                        .next()
+                                        .map(|c| c.to_string())
+                                        .unwrap_or_default(),
+                                )
+                            }),
                     )
                     .child(
                         div()
@@ -659,6 +685,18 @@ impl Render for ReplyDraft {
                     .flex_col()
                     .gap(px(12.))
                     .child(hints)
+                    .when_some(self.model.clone(), |draft, model| {
+                        draft.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .text_size(px(12.))
+                                .text_color(p.secondary)
+                                .children(brand_mark(&model, 14., cx))
+                                .child(model),
+                        )
+                    })
                     .child(self.draft.clone())
                     .child(
                         div()

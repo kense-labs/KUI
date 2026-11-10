@@ -30,6 +30,8 @@ Open pages with push; pop returns one level and Escape closes the top layer.
 
 SheetStackChanged carries the currently open page IDs. Existing IDs return to that page.
 
+`with_launcher_context` places a heading or profile above the launch button. `set_presentation` accepts `SheetStackPresentation::{Auto, Sheet, Dialog}`. Auto uses the measured container width for a contained stack, or the window width otherwise, and opens a dialog at 640px and wider. Presentation changes preserve the open page IDs.
+
 Event: `SheetStackChanged`.
 
 ## Motion

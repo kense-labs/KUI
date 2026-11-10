@@ -1139,7 +1139,7 @@ fn readouts(
         .when(side_by_side, |e| {
             e.flex_none().w(relative(0.379)).h(px(213.))
         })
-        .when(!side_by_side, |e| e.w_full().h(px(133.)))
+        .when(!side_by_side, |e| e.w_full().h(px(154.)))
         .rounded(radius)
         .border_1()
         .border_color(paint.line)
@@ -1219,7 +1219,7 @@ impl Render for ChargeSession {
         let pad = if narrow { 16. } else { 32. };
         let content = (width - pad * 2. - 2.).max(1.);
         let pack = self.stage(content, stage, spoken.into(), cx);
-        let plot = self.chart(stage, if side_by_side { 163. } else { 135. }, power, cx);
+        let plot = self.chart(stage, if side_by_side { 163. } else { 170. }, power, cx);
         let stats = readouts(
             [
                 lang.text("Power", "功率").into(),

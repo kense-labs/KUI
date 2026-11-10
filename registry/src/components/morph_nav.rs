@@ -1367,7 +1367,9 @@ impl Render for MorphNav {
             .border_1()
             .border_color(p.line)
             .bg(p.panel.opacity(0.88))
-            .shadow_md()
+            .shadow(vec![
+                BoxShadow::new(px(0.), px(3.), black().opacity(0.10)).blur_radius(px(12.)),
+            ])
             .text_color(p.ink)
             .on_mouse_down_out(cx.listener(|s, _, _, cx| s.close(cx)))
             .child(self.surface.measure())

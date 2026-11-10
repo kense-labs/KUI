@@ -11,7 +11,10 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SmartField {
@@ -108,6 +111,7 @@ pub struct SmartFormFill {
     request_seq: u64,
     request_source: SharedString,
     highlight: Rc<RefCell<Option<SharedString>>>,
+    wide: Rc<Cell<bool>>,
     _subs: Vec<Subscription>,
 }
 impl EventEmitter<SmartFillEvent> for SmartFormFill {}
@@ -254,6 +258,7 @@ impl SmartFormFill {
             request_seq: 0,
             request_source: "".into(),
             highlight,
+            wide: Rc::new(Cell::new(false)),
             _subs: subs,
         }
     }
@@ -609,11 +614,11 @@ impl Render for SmartFormFill {
         let radius = crate::foundation::surface_radius(cx);
         let t = |en: &'static str, zh: &'static str| l.text(en, zh);
         let mut fields = div()
-            .flex()
-            .flex_col()
+            .grid()
+            .grid_cols(if self.wide.get() { 2 } else { 1 })
             .gap(px(12.))
-            .min_w(px(240.))
-            .flex_1();
+            .min_w_0()
+            .w_full();
         for i in 0..self.fields.len() {
             let field = &self.fields[i];
             let age = field.flash.time(0.9, w, cx);
@@ -627,6 +632,7 @@ impl Render for SmartFormFill {
             let review = field.needs_review;
             let mut row = div()
                 .id(("smart-field", i))
+                .min_w_0()
                 .rounded(radius)
                 .bg(p.focus.opacity(tint))
                 .on_hover(cx.listener(move |s, over: &bool, _, cx| s.highlight_field(i, *over, cx)))
@@ -746,12 +752,12 @@ impl Render for SmartFormFill {
                     s.submit(w, cx);
                 })),
             );
-        div()
+        let card = div()
             .id("smart-form-fill")
             .role(Role::Group)
             .aria_label(t("Smart form fill", "智能表单填写"))
             .w_full()
-            .max_w(px(860.))
+            .max_w(px(522.))
             .rounded(radius)
             .border_1()
             .border_color(p.line)
@@ -760,14 +766,8 @@ impl Render for SmartFormFill {
             .flex()
             .flex_col()
             .gap(px(16.))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(20.))
-                    .child(div().min_w(px(240.)).flex_1().child(self.source.clone()))
-                    .child(fields),
-            )
+            .child(div().w_full().child(self.source.clone()))
+            .child(fields)
             .when(self.status == SmartFillStatus::Failed, |v| {
                 v.child(
                     div()
@@ -798,7 +798,21 @@ impl Render for SmartFormFill {
                             .child(status),
                     )
                     .child(actions),
-            )
+            );
+        let wide = self.wide.clone();
+        let entity = cx.weak_entity();
+        div()
+            .w_full()
+            .max_w(px(522.))
+            .child(card)
+            .on_children_prepainted(move |bounds, _, cx| {
+                if let Some(bounds) = bounds.first() {
+                    let next = bounds.size.width >= px(424.);
+                    if wide.replace(next) != next {
+                        let _ = entity.update(cx, |_, cx| cx.notify());
+                    }
+                }
+            })
     }
 }
 

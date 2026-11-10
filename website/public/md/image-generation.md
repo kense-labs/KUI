@@ -25,6 +25,8 @@ The host performs generation, upscale and download. Respond to each ticket indep
 
 ## API
 
+The four thumbnails select the main preview. Use the arrow keys within the image group and Enter to select a finished image.
+
 `finish` · `(u64, GeneratedImage, &mut Context<Self>)`
 
 `with_suggestions` · `(Vec<SharedString>) -> Self`. Defaults to an empty list.

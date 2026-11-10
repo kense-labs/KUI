@@ -102,6 +102,7 @@ pub struct MetricTicker {
     last_time: f32,
     measured: Rc<Cell<Bounds<Pixels>>>,
     marquee: bool,
+    inline_deltas: bool,
     counter_size: f32,
 }
 impl EventEmitter<TickerInspect> for MetricTicker {}
@@ -130,6 +131,7 @@ impl MetricTicker {
             last_time: 0.,
             measured: Default::default(),
             marquee: true,
+            inline_deltas: true,
             counter_size: 18.,
         };
         result.set_metrics(metrics, cx);
@@ -137,6 +139,11 @@ impl MetricTicker {
     }
     pub fn with_marquee(mut self, on: bool) -> Self {
         self.marquee = on;
+        self
+    }
+    /// Control whether the compact metric cells show their change badges.
+    pub fn with_inline_deltas(mut self, enabled: bool) -> Self {
+        self.inline_deltas = enabled;
         self
     }
     pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
@@ -431,6 +438,7 @@ impl Render for MetricTicker {
         let measured = self.measured.get();
         let width = f32::from(measured.size.width).max(1.);
         let compact = width < 420.;
+        let strip_height = if self.inline_deltas { 82. } else { 66. };
         // Below 420px values drop to the base size; the counters are rebuilt
         // only when the strip crosses that line, not on every frame.
         let wanted = if compact { 16. } else { 18. };
@@ -458,7 +466,13 @@ impl Render for MetricTicker {
             }
             self.counter_size = wanted;
         }
-        let min_width = if compact { 155. } else { 190. };
+        let min_width = if compact {
+            155.
+        } else if self.inline_deltas {
+            190.
+        } else {
+            162.
+        };
         let count = self.entries.len().max(1);
         let cell_width = (width / count as f32).max(min_width);
         let content_width = cell_width * self.entries.len() as f32;
@@ -508,7 +522,7 @@ impl Render for MetricTicker {
                 } else {
                     format!("{arrow} {amount}")
                 };
-                let age = if self.visible {
+                let age = if self.visible && self.inline_deltas {
                     entry.flash.time(1.6, w, cx)
                 } else {
                     1.6
@@ -527,7 +541,7 @@ impl Render for MetricTicker {
                     ))
                     .flex_none()
                     .relative()
-                    .w(px(cell_width))
+                    .w(px(cell_width - 8.))
                     .m(px(4.))
                     .px(px(14.))
                     .pt(px(8.))
@@ -541,7 +555,9 @@ impl Render for MetricTicker {
                             .items_baseline()
                             .gap(px(8.))
                             .child(entry.counter.clone())
-                            .child(delta_chip(arrow, &amount, good, age, p)),
+                            .when(self.inline_deltas, |r| {
+                                r.child(delta_chip(arrow, &amount, good, age, p))
+                            }),
                     )
                     .child(
                         div()
@@ -583,7 +599,7 @@ impl Render for MetricTicker {
                         .id(("ticker-repeat", i))
                         .flex_none()
                         .relative()
-                        .w(px(cell_width))
+                        .w(px(cell_width - 8.))
                         .m(px(4.))
                         .px(px(14.))
                         .pt(px(8.))
@@ -597,7 +613,9 @@ impl Render for MetricTicker {
                                 .items_baseline()
                                 .gap(px(8.))
                                 .child(entry.duplicate.clone())
-                                .child(delta_chip(arrow, &amount, good, 1.6, p)),
+                                .when(self.inline_deltas, |r| {
+                                    r.child(delta_chip(arrow, &amount, good, 1.6, p))
+                                }),
                         )
                         .child(
                             div()
@@ -880,7 +898,7 @@ impl Render for MetricTicker {
             .id("ticker-shell")
             .relative()
             .w_full()
-            .h(px(if panel.is_some() { 240. } else { 82. }))
+            .h(px(strip_height + if panel.is_some() { 158. } else { 0. }))
             .rounded(crate::foundation::surface_radius(cx))
             .border_1()
             .border_color(p.line)
@@ -901,7 +919,13 @@ impl Render for MetricTicker {
             }))
             .child(strip)
             .when_some(panel, |v, panel| {
-                v.child(div().absolute().top(px(90.)).left(px(x)).child(panel))
+                v.child(
+                    div()
+                        .absolute()
+                        .top(px(strip_height + 8.))
+                        .left(px(x))
+                        .child(panel),
+                )
             })
     }
 }

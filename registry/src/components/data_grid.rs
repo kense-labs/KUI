@@ -39,9 +39,9 @@ struct GridTracks {
     columns: Vec<Pixels>,
 }
 impl GridTracks {
-    fn new(viewport: Pixels, count: usize) -> Self {
+    fn new(viewport: Pixels, count: usize, minimum: Pixels) -> Self {
         let gutter = px(32.);
-        let space = f32::from((viewport - gutter).max(px(94. * count as f32)));
+        let space = f32::from((viewport - gutter).max(minimum * count as f32));
         let edge = |i: usize| (space * i as f32 / count.max(1) as f32).round();
         let columns = (0..count).map(|i| px(edge(i + 1) - edge(i))).collect();
         Self {
@@ -64,6 +64,7 @@ pub struct DataGrid {
     title: SharedString,
     hscroll: ScrollHandle,
     viewport_width: Pixels,
+    min_column_width: Pixels,
     headers: Vec<SharedString>,
     data: Vec<Vec<SharedString>>,
     order: Vec<usize>,
@@ -167,6 +168,7 @@ impl DataGrid {
             title: title.into(),
             hscroll: ScrollHandle::new(),
             viewport_width: px(0.),
+            min_column_width: px(94.),
             headers,
             order: (0..rows.len()).collect(),
             moving: Default::default(),
@@ -357,6 +359,12 @@ impl DataGrid {
         }
         cx.notify()
     }
+    /// Minimum width of each data column before the grid scrolls horizontally.
+    pub fn with_min_column_width(mut self, width: Pixels) -> Self {
+        self.min_column_width = width.clamp(px(72.), px(360.));
+        self
+    }
+
     fn tools(&self, w: &Window, cx: &Context<Self>) -> Div {
         let p = Paint::get(cx);
         let mut toolbar = row().gap_1().px_2().h(px(36.)).child(
@@ -366,6 +374,22 @@ impl DataGrid {
                 .flex_1()
                 .child(self.search.clone()),
         );
+        let count = if self.order.len() == self.data.len() {
+            self.data.len().to_string()
+        } else {
+            format!("{} / {}", self.order.len(), self.data.len())
+        };
+        if w.viewport_size().width >= px(410.) {
+            toolbar = toolbar.child(
+                label(
+                    format!("{count} {}", tr(cx, "rows", "行")),
+                    11.,
+                    p.secondary,
+                )
+                .flex_none()
+                .px_2(),
+            );
+        }
         let buttons = [
             (
                 "grid-filter",
@@ -804,8 +828,9 @@ impl Render for DataGrid {
             fit(w, 680.) - px(2.)
         };
         self.edits.retain(|_, phase| phase.age(cx) < 0.9);
-        let tracks = GridTracks::new(viewport, self.visible.len());
+        let tracks = GridTracks::new(viewport, self.visible.len(), self.min_column_width);
         let width = tracks.width;
+        let gutter = tracks.gutter;
         // Coordinates are in scroll-content space. Scrolling adds the live
         // offset at paint time instead of retargeting the highlight behind it.
         let edge = |col: usize| {
@@ -909,6 +934,59 @@ impl Render for DataGrid {
         .absolute()
         .inset_0();
         let weak = cx.weak_entity();
+        let x_scroll = self.hscroll.clone();
+        let y_scroll = self.scroll.0.borrow().base_handle.clone();
+        let row_count = self.order.len();
+        let frozen_gutter = canvas(
+            |_, _, _| (),
+            move |bounds, _, w, cx| {
+                if x_scroll.offset().x >= px(-0.01) {
+                    return;
+                }
+                let heading = Bounds::new(bounds.origin, size(gutter, px(32.)));
+                w.paint_quad(fill(heading, p.stage));
+                let body = Bounds::new(
+                    point(bounds.left(), bounds.top() + px(32.)),
+                    size(gutter, px(310.)),
+                );
+                let y = y_scroll.offset().y;
+                let first = ((-f32::from(y)) / 31.).floor().max(0.) as usize;
+                w.with_content_mask(Some(ContentMask { bounds: body }), |w| {
+                    w.paint_quad(fill(body, p.panel));
+                    for i in first..row_count.min(first + 12) {
+                        let top = body.top() + y + px(i as f32 * 31.);
+                        let number: SharedString = (i + 1).to_string().into();
+                        let mut run = w.text_style().to_run(number.len());
+                        run.color = p.faint;
+                        let line = w.text_system().shape_line(number, px(11.), &[run], None);
+                        let _ = line.paint(
+                            point(body.left() + px(4.), top + px(7.)),
+                            px(16.),
+                            TextAlign::Left,
+                            None,
+                            w,
+                            cx,
+                        );
+                        w.paint_quad(fill(
+                            Bounds::new(point(body.left(), top + px(30.)), size(gutter, px(1.))),
+                            p.line,
+                        ));
+                    }
+                    w.paint_quad(fill(
+                        Bounds::new(
+                            point(body.right() - px(1.), body.top()),
+                            size(px(1.), body.size.height),
+                        ),
+                        p.line,
+                    ));
+                });
+            },
+        )
+        .absolute()
+        .left_0()
+        .top_0()
+        .w(gutter)
+        .h(px(342.));
         let previous_width = self.viewport_width;
         let count = if self.order.is_empty() || self.headers.is_empty() {
             0
@@ -925,6 +1003,7 @@ impl Render for DataGrid {
             .role(Role::Grid)
             .track_focus(&self.focus)
             .w(fit(w, 680.))
+            .max_w_full()
             .on_key_down(cx.listener(|s, e, w, cx| s.key(e, w, cx)))
             .on_mouse_up(
                 MouseButton::Left,
@@ -948,25 +1027,41 @@ impl Render for DataGrid {
             )
             .child(self.tools(w, cx))
             .child(
-                horizontal_viewport(
-                    "horizontal",
-                    &self.hscroll,
-                    column()
-                        .w(width)
-                        .flex_none()
-                        .child(head)
-                        .child(div().relative().w(width).child(list).child(monitor)),
-                )
-                .on_children_prepainted(move |bounds, _, cx| {
-                    if let Some(view) = bounds.first()
-                        && (view.size.width - previous_width).abs() > px(0.01)
-                    {
-                        let _ = weak.update(cx, |grid, cx| {
-                            grid.viewport_width = view.size.width;
-                            cx.notify()
-                        });
-                    }
-                }),
+                div()
+                    .relative()
+                    .w_full()
+                    .child(
+                        horizontal_viewport(
+                            "horizontal",
+                            &self.hscroll,
+                            column()
+                                .w(width)
+                                .flex_none()
+                                .child(head)
+                                .child(div().relative().w(width).child(list).child(monitor)),
+                        )
+                        .on_children_prepainted(move |bounds, _, cx| {
+                            if let Some(view) = bounds.first()
+                                && (view.size.width - previous_width).abs() > px(0.01)
+                            {
+                                let _ = weak.update(cx, |grid, cx| {
+                                    grid.viewport_width = view.size.width;
+                                    cx.notify()
+                                });
+                            }
+                        }),
+                    )
+                    .child(frozen_gutter)
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top_0()
+                            .w(gutter)
+                            .h(px(342.))
+                            .id("grid-fixed-gutter")
+                            .block_mouse_except_scroll(),
+                    ),
             )
             .child(
                 label(

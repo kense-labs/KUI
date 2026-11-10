@@ -3,7 +3,7 @@ use gpui::{prelude::*, *};
 use kui::{
     components::{
         announcement_bar::{Announcement, AnnouncementBar},
-        ask_your_data::{AskDataEvent, AskDataResult, AskDataSeries, AskYourData},
+        ask_your_data::{AskDataEvent, AskDataResult, AskDataSeries, AskDataStatus, AskYourData},
         billing_toggle::BillingToggle,
         cookie_consent::{ConsentCategory, CookieConsent},
         countdown::Countdown,
@@ -75,6 +75,7 @@ pub const IDS: &[&str] = &[
 struct InputExamples {
     views: Vec<AnyView>,
     width: f32,
+    padded: bool,
 }
 struct SmartFillExample {
     control: Entity<SmartFormFill>,
@@ -86,14 +87,16 @@ impl SmartFillExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
         let fields = vec![
-            SmartField::new("name", l.text("Name", "姓名")),
-            SmartField::new("email", l.text("Email", "邮箱")),
+            SmartField::new("name", l.text("Full name", "全名")),
+            SmartField::new("role", l.text("Job title", "职位")),
             SmartField::new("company", l.text("Company", "公司")),
-            SmartField::new("role", l.text("Role", "职位")),
+            SmartField::new("email", l.text("Email", "邮箱")),
+            SmartField::new("phone", l.text("Phone", "电话")),
+            SmartField::new("address", l.text("Address", "地址")),
         ];
         let control = cx.new(|cx| SmartFormFill::new(fields, w, cx));
         let source = control.read(cx).source();
-        source.update(cx, |field, cx| field.set_value("Name: Alex Chen\nEmail: alex@example.com\nCompany: Northstar\nRole: Product designer", w, cx));
+        source.update(cx, |field, cx| field.set_value("Name: Maya Okafor\nRole: Head of Partnerships\nCompany: Stripe\nEmail: maya@example.com\nPhone: +1 415 555 0100\nAddress: San Francisco, CA", w, cx));
         let subscription = cx.subscribe_in(
             &control,
             w,
@@ -129,6 +132,8 @@ impl SmartFillExample {
                             ("email", "Email:"),
                             ("company", "Company:"),
                             ("role", "Role:"),
+                            ("phone", "Phone:"),
+                            ("address", "Address:"),
                         ] {
                             let Some(line) = text
                                 .lines()
@@ -173,6 +178,9 @@ impl SmartFillExample {
                 SmartFillEvent::Cancelled(_) => {}
             },
         );
+        control.update(cx, |control, cx| {
+            control.start(cx);
+        });
         Self {
             control,
             fail_next: false,
@@ -223,114 +231,254 @@ impl Render for SmartFillExample {
             .child(div().text_size(px(12.)).child(self.note.clone()))
     }
 }
+#[derive(Clone, Copy, Default)]
+enum AskSample {
+    #[default]
+    Signups,
+    Revenue,
+    Churn,
+}
+impl AskSample {
+    fn questions(l: UiLanguage) -> [&'static str; 3] {
+        [
+            l.text(
+                "Weekly signups by plan since August",
+                "八月以来每周各套餐的注册量",
+            ),
+            l.text(
+                "Monthly recurring revenue by region in 2026",
+                "2026 年各地区每月经常性收入",
+            ),
+            l.text(
+                "Monthly churn rate by plan since May",
+                "五月以来各套餐的每月流失率",
+            ),
+        ]
+    }
+    fn from_question(q: &str) -> Option<Self> {
+        let q = q.to_lowercase();
+        if q.contains("revenue") || q.contains("收入") {
+            Some(Self::Revenue)
+        } else if q.contains("churn") || q.contains("流失") {
+            Some(Self::Churn)
+        } else if q.contains("signup") || q.contains("注册") {
+            Some(Self::Signups)
+        } else {
+            None
+        }
+    }
+    fn sql(self) -> &'static str {
+        match self {
+            Self::Signups => {
+                "-- Weekly signups for completed weeks
+SELECT
+  date_trunc('week', u.created_at)::date AS week,
+  p.name AS plan,
+  count(*) AS signups
+FROM sample_users u
+JOIN sample_subscriptions s ON u.id = s.user_id
+JOIN sample_plans p ON p.id = s.plan_id
+WHERE u.created_at >= DATE '2026-08-03'
+  AND u.created_at < DATE '2026-10-26'
+GROUP BY week, plan
+ORDER BY week, plan;"
+            }
+            Self::Revenue => {
+                "-- Monthly recurring revenue by region
+SELECT
+  date_trunc('month', recorded_at)::date AS month,
+  region,
+  sum(monthly_amount) AS recurring_revenue
+FROM sample_revenue
+WHERE recorded_at >= DATE '2026-01-01'
+GROUP BY month, region
+ORDER BY month, region;"
+            }
+            Self::Churn => {
+                "-- Monthly churn rate by plan
+SELECT
+  date_trunc('month', recorded_at)::date AS month,
+  plan,
+  avg(churn_pct) AS churn_rate
+FROM sample_churn
+WHERE recorded_at >= DATE '2026-05-01'
+GROUP BY month, plan
+ORDER BY month, plan;"
+            }
+        }
+    }
+    fn result(self, l: UiLanguage) -> AskDataResult {
+        let t = |en, zh| l.text(en, zh);
+        let (title, months, series, insight) = match self {
+            Self::Signups => (
+                t("Weekly signups by plan", "每周各套餐的注册量"),
+                vec![
+                    t("Aug 3", "8月3日"),
+                    t("Aug 10", "8月10日"),
+                    t("Aug 17", "8月17日"),
+                    t("Aug 24", "8月24日"),
+                    t("Aug 31", "8月31日"),
+                    t("Sep 7", "9月7日"),
+                    t("Sep 14", "9月14日"),
+                    t("Sep 21", "9月21日"),
+                    t("Sep 28", "9月28日"),
+                    t("Oct 5", "10月5日"),
+                    t("Oct 12", "10月12日"),
+                    t("Oct 19", "10月19日"),
+                ],
+                vec![
+                    AskDataSeries::new(
+                        t("Free", "免费"),
+                        vec![59., 61., 62., 59., 48., 55., 60., 59., 60., 58., 60., 60.],
+                    ),
+                    AskDataSeries::new(
+                        "Pro",
+                        vec![24., 26., 28., 29., 27., 31., 33., 34., 34., 35., 37., 40.],
+                    ),
+                    AskDataSeries::new(
+                        t("Team", "团队"),
+                        vec![9., 10., 11., 11., 12., 13., 13., 14., 16., 17., 18., 21.],
+                    ),
+                    AskDataSeries::new(
+                        t("Enterprise", "企业"),
+                        vec![2., 2., 3., 2., 3., 3., 3., 3., 4., 4., 5., 6.],
+                    ),
+                ],
+                t(
+                    "Weekly Pro signups rose from 24 to 40. Team rose from 9 to 21, while Free stayed close to 60 after the late-August dip.",
+                    "Pro 每周注册量从 24 增至 40，团队套餐从 9 增至 21。免费套餐在八月底回落后回到 60 左右。",
+                ),
+            ),
+            Self::Revenue => (
+                t("Recurring revenue by region", "各地区经常性收入"),
+                vec![
+                    t("Jan", "一月"),
+                    t("Feb", "二月"),
+                    t("Mar", "三月"),
+                    t("Apr", "四月"),
+                    t("May", "五月"),
+                    t("Jun", "六月"),
+                ],
+                vec![
+                    AskDataSeries::new(t("Americas", "美洲"), vec![69., 73., 84., 88., 92., 97.]),
+                    AskDataSeries::new(t("Europe", "欧洲"), vec![42., 44., 51., 58., 61., 67.]),
+                    AskDataSeries::new(
+                        t("Asia Pacific", "亚太"),
+                        vec![30., 36., 38., 43., 46., 54.],
+                    ),
+                ],
+                t(
+                    "Europe added 25 units and Asia Pacific added 24. The Americas stayed the largest region through June.",
+                    "欧洲增加 25，亚太增加 24。截至六月，美洲仍是收入最高的地区。",
+                ),
+            ),
+            Self::Churn => (
+                t("Monthly churn rate by plan", "各套餐每月流失率"),
+                vec![
+                    t("May", "五月"),
+                    t("Jun", "六月"),
+                    t("Jul", "七月"),
+                    t("Aug", "八月"),
+                    t("Sep", "九月"),
+                    t("Oct", "十月"),
+                ],
+                vec![
+                    AskDataSeries::new(t("Free", "免费"), vec![6.2, 6.0, 5.8, 5.5, 5.2, 5.0]),
+                    AskDataSeries::new("Pro", vec![4.7, 4.2, 4.1, 4.0, 3.7, 3.4]),
+                    AskDataSeries::new(t("Team", "团队"), vec![3.2, 3.1, 3.0, 3.0, 2.7, 2.6]),
+                ],
+                t(
+                    "Free, Pro and Team all improved. Pro fell from 4.7% to 3.4%.",
+                    "免费、Pro 和团队套餐的流失率均下降。Pro 从 4.7% 降到 3.4%。",
+                ),
+            ),
+        };
+        let count = months.len() * series.len();
+        AskDataResult::new(title, months.into_iter().map(Into::into).collect(), series)
+            .with_meta(count, 214)
+            .with_insight(insight)
+    }
+}
 struct AskDataExample {
     control: Entity<AskYourData>,
+    sample: AskSample,
     fail_next: bool,
     _subscription: Subscription,
 }
 impl AskDataExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
-        let control = cx.new(|cx| AskYourData::new(l.text("Sample data", "样例数据"), w, cx));
+        let control = cx.new(|cx| AskYourData::new("analytics", w, cx).with_dialect("PostgreSQL"));
         let input = control.read(cx).question();
         input.update(cx, |field, cx| {
-            field.set_value(
-                l.text("How did signups change?", "注册量有什么变化？"),
-                w,
-                cx,
-            )
+            field.set_value(AskSample::questions(l)[0], w, cx)
         });
         let subscription = cx.subscribe_in(
-            &control,
-            w,
+            &control, w,
             |s: &mut Self, entity, event: &AskDataEvent, _, cx| {
                 let language = UiLanguage::current(cx);
                 match event {
-                    AskDataEvent::GenerateSql { id, .. } => {
+                    AskDataEvent::GenerateSql { id, question } => {
+                        let Some(sample) = AskSample::from_question(question) else {
+                            entity.update(cx, |view, cx| {
+                                view.fail(*id, language.text("Try one of the suggested questions to explore the sample data.", "可以选一个建议问题来查看样例数据。"), cx);
+                            });
+                            return;
+                        };
+                        s.sample = sample;
                         let id = *id;
                         let entity = entity.clone();
                         cx.spawn(async move |_, cx| {
-                            for chunk in [
-                                "SELECT week, plan, ",
-                                "COUNT(*) AS signups ",
-                                "FROM sample_signups ",
-                                "GROUP BY week, plan",
-                            ] {
-                                let accepted =
-                                    entity.update(cx, |view, cx| view.append_sql(id, chunk, cx));
-                                if !accepted {
-                                    return;
-                                }
-                                cx.background_executor()
-                                    .timer(std::time::Duration::from_millis(150))
-                                    .await;
+                            let sql = sample.sql();
+                            let mut cursor = 0;
+                            let mut ends = sql.match_indices(char::is_whitespace)
+                                .filter(|(i, _)| *i > 0 && !sql.as_bytes()[i - 1].is_ascii_whitespace())
+                                .map(|(i, separator)| i + separator.len()).skip(3).step_by(4)
+                                .chain(std::iter::once(sql.len()));
+                            for end in &mut ends {
+                                let accepted = entity.update(cx, |view, cx| view.append_sql(id, &sql[cursor..end], cx));
+                                if !accepted { return; }
+                                cursor = end;
+                                cx.background_executor().timer(std::time::Duration::from_millis(34)).await;
                             }
-                            entity.update(cx, |view, cx| {
-                                view.finish_sql(id, cx);
-                            });
-                        })
-                        .detach();
+                            entity.update(cx, |view, cx| view.finish_sql(id, cx));
+                        }).detach();
                     }
                     AskDataEvent::RunQuery { id, .. } => {
                         let id = *id;
+                        let fail = std::mem::take(&mut s.fail_next);
+                        let sample = s.sample;
                         let entity = entity.clone();
-                        let fail = s.fail_next;
-                        s.fail_next = false;
                         cx.spawn(async move |_, cx| {
-                            entity.update(cx, |view, cx| {
-                                view.progress(id, 12, Some(28), cx);
-                            });
-                            cx.background_executor()
-                                .timer(std::time::Duration::from_millis(500))
-                                .await;
+                            let result = sample.result(language);
+                            for step in 1..=4 {
+                                let accepted = entity.update(cx, |view, cx| view.progress(id, result.row_count * step / 4, Some(result.row_count), cx));
+                                if !accepted { return; }
+                                cx.background_executor().timer(std::time::Duration::from_millis(170)).await;
+                            }
                             entity.update(cx, |view, cx| {
                                 if fail {
-                                    view.fail(
-                                        id,
-                                        language.text(
-                                            "Sample query failed. Try again.",
-                                            "样例查询失败，请重试。",
-                                        ),
-                                        cx,
-                                    );
+                                    view.fail(id, language.text("Sample query failed. Try again.", "样例查询失败，请重试。"), cx)
                                 } else {
-                                    let categories = vec![
-                                        language.text("Week 1", "第 1 周").into(),
-                                        language.text("Week 2", "第 2 周").into(),
-                                        language.text("Week 3", "第 3 周").into(),
-                                    ];
-                                    let series = vec![
-                                        AskDataSeries::new(
-                                            language.text("Free", "免费"),
-                                            vec![6., 8., 9.],
-                                        ),
-                                        AskDataSeries::new(
-                                            language.text("Team", "团队"),
-                                            vec![3., 4., 5.],
-                                        ),
-                                    ];
-                                    let result = AskDataResult::new(
-                                        language.text("Weekly signups", "每周注册量"),
-                                        categories,
-                                        series,
-                                    )
-                                    .with_meta(28, 214)
-                                    .with_insight(language.text(
-                                        "Week 3 totals 14 signups.",
-                                        "第 3 周合计 14 次注册。",
-                                    ));
-                                    view.finish_query(id, result, cx);
+                                    let finished = view.finish_query(id, result, cx);
+                                    if finished {
+                                        view.set_stacked(!matches!(sample, AskSample::Churn), cx);
+                                    }
+                                    finished
                                 }
                             });
-                        })
-                        .detach();
+                        }).detach();
                     }
                     AskDataEvent::Cancelled(_) => {}
                 }
             },
         );
+        control.update(cx, |control, cx| {
+            control.run(w, cx);
+        });
         Self {
             control,
+            sample: AskSample::default(),
             fail_next: false,
             _subscription: subscription,
         }
@@ -339,6 +487,11 @@ impl AskDataExample {
 impl Render for AskDataExample {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let l = UiLanguage::current(cx);
+        let show_suggestions = matches!(
+            self.control.read(cx).status(),
+            AskDataStatus::Idle | AskDataStatus::Failed | AskDataStatus::Stopped
+        );
+        let radius = f32::from(kui::foundation::surface_radius(cx));
         let failure = if self.fail_next {
             l.text("Next sample query will fail", "下次样例查询将失败")
         } else {
@@ -348,8 +501,45 @@ impl Render for AskDataExample {
             .w_full()
             .flex()
             .flex_col()
+            .items_center()
             .gap(px(10.))
             .child(self.control.clone())
+            .when(show_suggestions, |root| {
+                root.child(
+                    div()
+                        .w_full()
+                        .max_w(px(522.))
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(6.))
+                        .children(AskSample::questions(l).into_iter().enumerate().map(
+                            |(i, question)| {
+                                face(
+                                    ("ask-example-suggestion", i),
+                                    question,
+                                    32.,
+                                    radius,
+                                    Tone::Surface,
+                                    cx,
+                                )
+                                .px(px(9.))
+                                .text_size(px(12.))
+                                .child(div().min_w_0().truncate().child(question))
+                                .on_click(cx.listener(
+                                    move |s, _, w, cx| {
+                                        let field = s.control.read(cx).question();
+                                        field.update(cx, |field, cx| {
+                                            field.set_value(question, w, cx)
+                                        });
+                                        s.control.update(cx, |view, cx| {
+                                            view.run(w, cx);
+                                        });
+                                    },
+                                ))
+                            },
+                        )),
+                )
+            })
             .child(div().text_size(px(12.)).child(l.text(
                 "Example only: fixed SQL and sample data; no database is queried.",
                 "仅为示例：使用固定查询和样例数据，不会连接数据库。",
@@ -385,10 +575,14 @@ struct PiiExample {
 }
 impl PiiExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
-        let control = cx.new(|cx| PiiRedaction::new(w, cx));
+        let lang = UiLanguage::current(cx);
+        let control = cx.new(|cx| PiiRedaction::new(w, cx).with_model("Claude Sonnet 5.5"));
         let source = control.read(cx).source();
         source.update(cx, |field, cx| {
-            field.set_value("Name: 林晓\nEmail: lin@example.com\nPhone: 555-0100", w, cx)
+            field.set_value(lang.text(
+                "Hi, this is Sofia Ramirez. I was charged twice for my order on card 4242 4242 4242 4242. Please contact me at sofia@example.com or +1 415 555 0100.",
+                "你好，我是 Sofia Ramirez。我的银行卡 4242 4242 4242 4242 被重复扣款。请联系 sofia@example.com 或 +1 415 555 0100。"
+            ), w, cx)
         });
         let subscription = cx.subscribe_in(
             &control,
@@ -407,9 +601,10 @@ impl PiiExample {
                             .await;
                         let mut spans = Vec::new();
                         for (needle, kind) in [
-                            ("林晓", PiiKind::Name),
-                            ("lin@example.com", PiiKind::Email),
-                            ("555-0100", PiiKind::Phone),
+                            ("Sofia Ramirez", PiiKind::Name),
+                            ("sofia@example.com", PiiKind::Email),
+                            ("+1 415 555 0100", PiiKind::Phone),
+                            ("4242 4242 4242 4242", PiiKind::Card),
                         ] {
                             for (start, _) in text.match_indices(needle) {
                                 spans.push(PiiSpan::new(start, start + needle.len(), kind));
@@ -435,6 +630,9 @@ impl PiiExample {
                 PiiEvent::Cancelled(_) => {}
             },
         );
+        control.update(cx, |control, cx| {
+            control.scan(cx);
+        });
         Self {
             control,
             fail_next: false,
@@ -453,8 +651,8 @@ impl Render for PiiExample {
         div().w_full().flex().flex_col().gap(px(10.))
             .child(self.control.clone())
             .child(div().text_size(px(12.)).child(l.text(
-                "Simulated demo: matches only the three fixed example values. No text is transmitted. Do not use this demo as a real detector.",
-                "模拟演示：只匹配三个固定样例，不会传输文本；不能作为真实识别工具。",
+                "Simulated demo: matches only the four fixed example values. No text is transmitted. Do not use this demo as a real detector.",
+                "模拟演示：只匹配四个固定样例，不会传输文本；不能作为真实识别工具。",
             )))
             .child(div().id("pii-example-fail").role(Role::Button).tab_index(0).cursor_pointer().text_size(px(12.))
                 .child(failure)
@@ -477,19 +675,23 @@ impl ReplyExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
         let message = ReplyMessage::new(
-            "Alex",
-            l.text("Planning our next review", "安排下一次评审"),
+            "Diana Foster",
+            l.text("Renewal call next week", "下周的续约会议"),
             l.text(
-                "Could we meet next week to review the latest changes?",
-                "下周可以一起评审最新改动吗？",
+                "Hi Ryan,\n\nThanks for the update. Before we sign the renewal, could we talk through the new seats and single sign-on? Does Thursday afternoon work for you?\n\nBest,\nDiana",
+                "你好 Ryan，\n\n谢谢你的更新。签订续约之前，我们能否讨论新增席位和单点登录？周四下午方便吗？\n\nDiana",
             ),
         );
         let hints = vec![
-            ReplyHint::new("yes", l.text("Sounds good", "可以")),
-            ReplyHint::new("later", l.text("Another time", "另约时间")),
-            ReplyHint::new("details", l.text("Ask details", "询问详情")),
+            ReplyHint::new("yes", l.text("Thursday works", "周四可以")),
+            ReplyHint::new("later", l.text("Suggest Friday", "建议周五")),
+            ReplyHint::new("details", l.text("Ask about SSO", "询问单点登录")),
         ];
-        let control = cx.new(|cx| ReplyDraft::new(message, hints, w, cx));
+        let control = cx.new(|cx| {
+            ReplyDraft::new(message, hints, w, cx)
+                .with_sender_image(crate::family_story::collections::portrait_image(0))
+                .with_model("Claude Sonnet 5.5")
+        });
         let subscription = cx.subscribe_in(&control, w, |s: &mut Self, entity, event: &ReplyDraftEvent, w, cx| {
             match event {
                 ReplyDraftEvent::Requested(request) => {
@@ -503,20 +705,20 @@ impl ReplyExample {
                         }
                         let kind = request.hint.as_ref().map(|hint| hint.id.as_ref()).unwrap_or("yes");
                         let sentence = match (language, kind) {
-                            (UiLanguage::Chinese, "later") => "下周我有其他安排，我们可以另约时间。",
-                            (UiLanguage::Chinese, "details") => "可以先发我评审的议程和材料吗？",
-                            (UiLanguage::Chinese, _) => "下周一起评审很合适，我会提前准备好材料。",
-                            (_, "later") => "I have a conflict next week. Could we find another time?",
-                            (_, "details") => "Could you share the agenda and materials first?",
-                            _ => "Next week works well. I will prepare the materials in advance.",
+                            (UiLanguage::Chinese, "later") => "周四我有其他安排，周五方便吗？",
+                            (UiLanguage::Chinese, "details") => "能否先告诉我你们的单点登录服务商？",
+                            (UiLanguage::Chinese, _) => "周四下午合适。我会提前准备新增席位和单点登录的资料。",
+                            (_, "later") => "I have a conflict Thursday. Would Friday work for you?",
+                            (_, "details") => "Could you share which identity provider you use for single sign-on?",
+                            _ => "Thursday afternoon works. I can review the new seats and single sign-on options before we meet.",
                         };
                         let greeting = match (language, request.tone) {
                             (UiLanguage::Chinese, ReplyTone::Formal) => "您好，\n\n",
                             (UiLanguage::Chinese, ReplyTone::Warm) => "你好，很高兴收到你的消息。\n\n",
                             (UiLanguage::Chinese, _) => "你好，\n\n",
-                            (_, ReplyTone::Formal) => "Dear Alex,\n\n",
-                            (_, ReplyTone::Warm) => "Hi Alex, great to hear from you.\n\n",
-                            _ => "Hi Alex,\n\n",
+                            (_, ReplyTone::Formal) => "Dear Diana,\n\n",
+                            (_, ReplyTone::Warm) => "Hi Diana, great to hear from you.\n\n",
+                            _ => "Hi Diana,\n\n",
                         };
                         let extra = match (language, request.length) {
                             (_, ReplyLength::Short) => "",
@@ -538,6 +740,9 @@ impl ReplyExample {
                 ReplyDraftEvent::Cancelled(_) => {}
                 ReplyDraftEvent::Insert(_) => { s.note = UiLanguage::current(cx).text("Sample inserted; no message sent.", "已触发样例插入，未发送消息。").into(); cx.notify(); }
             }
+        });
+        control.update(cx, |control, cx| {
+            control.generate(cx);
         });
         Self {
             control,
@@ -602,30 +807,31 @@ impl TicketExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
         let lanes = vec![
-            TicketLane::new("support", l.text("Support", "支持")),
             TicketLane::new("billing", l.text("Billing", "账务")),
-            TicketLane::new("product", l.text("Product", "产品")),
+            TicketLane::new("support", l.text("Engineering", "工程")),
+            TicketLane::new("product", l.text("Success", "客户成功")),
         ];
         let tickets = vec![
             Ticket::new(
                 "invoice",
-                l.text("Invoice question", "账单咨询"),
-                l.text("Can you explain this invoice?", "请问这笔账单如何计算？"),
-            ),
+                l.text("Charged twice for the October invoice", "十月账单被重复扣款"),
+                l.text("Hi team, our ending 4417 was billed twice for the growth plan. Could you check the duplicate charge?", "你好，我们尾号 4417 的卡被重复扣费，能帮忙检查这笔账单吗？"),
+            ).with_sender("Priya Raman").with_channel("Gmail"),
             Ticket::new(
                 "login",
                 l.text("Cannot sign in", "无法登录"),
-                l.text("I cannot access my account.", "我无法访问账户。"),
-            ),
+                l.text("Our SAML login loops back to the sign-in screen after authentication.", "验证后会跳回登录界面。"),
+            ).with_sender("Daniel Kim").with_channel("Gmail"),
             Ticket::new(
                 "feature",
                 l.text("Feature request", "功能建议"),
-                l.text("Please add an export option.", "希望增加导出功能。"),
-            ),
+                l.text("Can we export all changes as a CSV for the team report?", "可以导出 CSV 供团队报告使用吗？"),
+            ).with_sender("Avery Chen").with_channel("Gmail"),
         ];
         let control = cx.new(|_| {
-            TicketRouter::new(l.text("Ticket triage", "工单分流"), lanes, tickets)
+            TicketRouter::new(l.text("Ticket routing", "工单分流"), lanes, tickets)
                 .with_concurrency(2)
+                .with_model("Claude Haiku 5.5")
         });
         let weak = control.downgrade();
         cx.spawn(async move |_, cx| {
@@ -904,12 +1110,12 @@ struct TldrExample {
 impl TldrExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
-        let article = TldrArticle::new(l.text("A calmer way to ship", "更从容地交付"), vec![
-            TldrParagraph::new("context", l.text("A team can move faster when everyone understands the goal and the constraints before work begins.", "当团队在开始前理解目标和约束时，就能更从容地推进工作。")),
-            TldrParagraph::new("small", l.text("Small releases make feedback easier to collect and give the team a safe way to learn.", "小步发布更容易收集反馈，也让团队可以安全地学习和调整。")),
-            TldrParagraph::new("review", l.text("Regular reviews connect what was built to the outcomes that matter, so the next decision is clearer.", "定期回顾把已完成的工作与实际结果联系起来，让下一步决策更加清晰。")),
-        ]).with_source(l.text("Example article · Kense", "示例文章 · Kense"));
-        let control = cx.new(|cx| TldrToggle::new(article, cx));
+        let article = TldrArticle::new(l.text("Making workspace sync faster", "让工作区同步更快"), vec![
+            TldrParagraph::new("context", l.text("Large workspaces are busiest at the start of the day, when many clients reconnect and request recent changes.", "工作日开始时，许多客户端重新连接并请求近期改动，大型工作区最为繁忙。")),
+            TldrParagraph::new("small", l.text("Loading the most important changes first keeps the interface responsive while older items arrive in the background.", "优先加载关键改动，旧内容在后台到达，界面可保持响应。")),
+            TldrParagraph::new("review", l.text("We measured first paint and time to catch up independently, so each change could be evaluated.", "我们分别测量首帧时间和完成同步的时间，便于评估每项改动。")),
+        ]).with_source("Linear");
+        let control = cx.new(|cx| TldrToggle::new(article, cx).with_model("Claude Haiku 5.5"));
         let subscription = cx.subscribe_in(
             &control,
             w,
@@ -940,15 +1146,15 @@ impl TldrExample {
                         if request.mode == TldrMode::Summary {
                             let chunks = if language == UiLanguage::Chinese {
                                 vec![
-                                    "明确目标和约束，",
-                                    "通过小步发布收集反馈，",
-                                    "再用定期回顾指导下一步决策。",
+                                    "大型工作区在重新连接时优先加载关键改动，",
+                                    "旧内容在后台加载，",
+                                    "首帧与完整同步时间分开测量。",
                                 ]
                             } else {
                                 vec![
-                                    "Clarify goals and constraints, ",
-                                    "ship in small steps to gather feedback, ",
-                                    "then use regular reviews to guide the next decision.",
+                                    "Load the most important workspace changes first, ",
+                                    "let older content catch up in the background, ",
+                                    "and measure first paint separately from total sync time.",
                                 ]
                             };
                             for chunk in chunks {
@@ -965,15 +1171,15 @@ impl TldrExample {
                         } else {
                             let points = if language == UiLanguage::Chinese {
                                 vec![
-                                    ("先明确目标和约束。", "context"),
-                                    ("小步发布并收集反馈。", "small"),
-                                    ("定期回顾结果以指导决策。", "review"),
+                                    ("优先加载关键改动。", "context"),
+                                    ("旧内容在后台同步。", "small"),
+                                    ("分开测量首帧与完整同步。", "review"),
                                 ]
                             } else {
                                 vec![
-                                    ("Clarify goals and constraints first.", "context"),
-                                    ("Release in small steps and gather feedback.", "small"),
-                                    ("Review outcomes to guide decisions.", "review"),
+                                    ("Load the most important changes first.", "context"),
+                                    ("Sync older content in the background.", "small"),
+                                    ("Measure first paint and full sync separately.", "review"),
                                 ]
                             };
                             for (text, source) in points.into_iter().take(request.point_count) {
@@ -1000,6 +1206,9 @@ impl TldrExample {
                 }
             },
         );
+        control.update(cx, |control, cx| {
+            control.select_mode(TldrMode::Summary, cx);
+        });
         Self {
             control,
             fail_next: false,
@@ -1225,7 +1434,7 @@ impl Render for PresenceExample {
 }
 struct GlassExample {
     control: Entity<GlassSegmented>,
-    images: [ImageSource; 3],
+    images: [ImageSource; 4],
     current: usize,
     previous: usize,
     transition: kui::primitives::family::PhaseClock,
@@ -1238,9 +1447,10 @@ impl GlassExample {
             GlassSegmented::new(
                 language.text("Photo", "照片"),
                 vec![
-                    GlassSegmentOption::new("one", language.text("One", "照片一")),
-                    GlassSegmentOption::new("two", language.text("Two", "照片二")),
-                    GlassSegmentOption::new("three", language.text("Three", "照片三")),
+                    GlassSegmentOption::new("alfama", language.text("Alfama", "老城")),
+                    GlassSegmentOption::new("tram", language.text("Tram", "电车")),
+                    GlassSegmentOption::new("bridge", language.text("Bridge", "大桥")),
+                    GlassSegmentOption::new("coast", language.text("Coast", "海岸")),
                 ],
                 cx,
             )
@@ -1250,9 +1460,10 @@ impl GlassExample {
             w,
             |s: &mut Self, _, event: &GlassSegmentChanged, _, cx| {
                 let next = match event.0.as_ref() {
-                    "one" => 0,
-                    "two" => 1,
-                    "three" => 2,
+                    "alfama" => 0,
+                    "tram" => 1,
+                    "bridge" => 2,
+                    "coast" => 3,
                     _ => return,
                 };
                 if next != s.current {
@@ -1269,9 +1480,10 @@ impl GlassExample {
         Self {
             control,
             images: [
-                image(include_bytes!("../../assets/navigation/as17-134-20481.jpg")),
-                image(include_bytes!("../../assets/navigation/as17-134-20476.jpg")),
-                image(include_bytes!("../../assets/navigation/as17-137-20989.jpg")),
+                image(include_bytes!("../../assets/places/alfama.jpg")),
+                image(include_bytes!("../../assets/places/tram.jpg")),
+                image(include_bytes!("../../assets/places/bridge.jpg")),
+                image(include_bytes!("../../assets/places/coast.jpg")),
             ],
             current: 0,
             previous: 0,
@@ -1282,6 +1494,7 @@ impl GlassExample {
 }
 struct GlassMenuExample {
     control: Entity<GlassMenu>,
+    image: ImageSource,
     note: SharedString,
     _subscription: Subscription,
 }
@@ -1304,8 +1517,8 @@ impl GlassMenuExample {
                 GlassMenuItem::new("delete", t("Delete", "删除")).with_danger(true),
             ]),
         ];
-        let control = cx
-            .new(|cx| GlassMenu::new("glass-actions", t("Photo actions", "图片操作"), groups, cx));
+        let control =
+            cx.new(|cx| GlassMenu::new("glass-actions", t("Pool house", "泳池住宅"), groups, cx));
         let subscription = cx.subscribe_in(
             &control,
             w,
@@ -1326,23 +1539,37 @@ impl GlassMenuExample {
         );
         Self {
             control,
+            image: std::sync::Arc::new(Image::from_bytes(
+                ImageFormat::Jpeg,
+                include_bytes!("../../assets/places/pool-house.jpg").to_vec(),
+            ))
+            .into(),
             note: "".into(),
             _subscription: subscription,
         }
     }
 }
 impl Render for GlassMenuExample {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let radius = kui::foundation::surface_radius(cx);
         div()
+            .relative()
             .w_full()
-            .h(px(300.))
-            .rounded(px(8.))
+            .h(px(if w.viewport_size().width < px(460.) {
+                388.
+            } else {
+                556.
+            }))
+            .rounded(radius)
             .p(px(16.))
-            .bg(linear_gradient(
-                32.,
-                linear_color_stop(rgb(0x444b78), 0.),
-                linear_color_stop(rgb(0xb57870), 1.),
-            ))
+            .child(
+                img(self.image.clone())
+                    .absolute()
+                    .inset_0()
+                    .size_full()
+                    .rounded(radius)
+                    .object_fit(ObjectFit::Cover),
+            )
             .flex()
             .flex_col()
             .justify_between()
@@ -1359,18 +1586,30 @@ impl Render for GlassMenuExample {
 impl Render for GlassExample {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let alpha = kui::primitives::family::ease(self.transition.time(0.25, w, cx) / 0.25);
-        let ids = ["AS17-134-20481", "AS17-134-20476", "AS17-137-20989"];
+        let language = UiLanguage::current(cx);
+        let title = [
+            language.text("Alfama at sunset", "日落下的老城"),
+            language.text("Tram through Graça", "驶过山城的电车"),
+            language.text("Across the Tagus", "跨越塔霍河"),
+            language.text("Atlantic coast", "大西洋海岸"),
+        ][self.current];
+        let radius = kui::foundation::surface_radius(cx);
         div()
             .relative()
             .w_full()
-            .h(px(300.))
-            .rounded(px(8.))
+            .h(px(if w.viewport_size().width < px(460.) {
+                370.
+            } else {
+                514.
+            }))
+            .rounded(radius)
             .overflow_hidden()
             .child(
                 img(self.images[self.previous].clone())
                     .absolute()
                     .inset_0()
                     .size_full()
+                    .rounded(radius)
                     .object_fit(ObjectFit::Cover),
             )
             .child(
@@ -1378,6 +1617,7 @@ impl Render for GlassExample {
                     .absolute()
                     .inset_0()
                     .size_full()
+                    .rounded(radius)
                     .object_fit(ObjectFit::Cover)
                     .opacity(alpha),
             )
@@ -1391,9 +1631,14 @@ impl Render for GlassExample {
                     .justify_between()
                     .child(
                         div()
+                            .rounded(radius)
+                            .bg(black().opacity(0.34))
+                            .px(px(10.))
+                            .py(px(7.))
+                            .self_start()
                             .text_color(white())
-                            .text_size(px(12.))
-                            .child(format!("NASA · Apollo 17 · {}", ids[self.current])),
+                            .text_size(px(14.))
+                            .child(title),
                     )
                     .child(self.control.clone()),
             )
@@ -1409,8 +1654,20 @@ impl MegaExample {
     fn new(sections: Vec<MegaMenuSection>, w: &mut Window, cx: &mut Context<Self>) -> Self {
         let lang = UiLanguage::current(cx);
         let menu = cx.new(|cx| {
+            let brand = |bytes: &[u8]| {
+                std::sync::Arc::new(Image::from_bytes(ImageFormat::Png, bytes.to_vec())).into()
+            };
             MegaMenuMorph::new("Kense", sections, cx)
-                .with_primary("start", lang.text("Get started", "开始使用"))
+                .with_brand_images(
+                    brand(include_bytes!(
+                        "../../../../website/public/assets/logo-light.png"
+                    )),
+                    brand(include_bytes!(
+                        "../../../../website/public/assets/logo-dark.png"
+                    )),
+                )
+                .with_compact_below(px(640.))
+                .with_primary("start", lang.text("Start now", "开始使用"))
         });
         let subscription = cx.subscribe_in(
             &menu,
@@ -1434,7 +1691,7 @@ impl MegaExample {
     }
 }
 impl Render for MegaExample {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let lang = UiLanguage::current(cx);
         let note = if self.note.is_empty() {
             lang.text(
@@ -1445,14 +1702,58 @@ impl Render for MegaExample {
         } else {
             self.note.clone()
         };
+        let p = Paint::get(cx);
+        let narrow = w.viewport_size().width < px(400.);
         div()
             .relative()
             .w_full()
-            .flex()
-            .flex_col()
-            .gap(px(344.))
+            .min_h(px(if narrow { 472. } else { 520. }))
+            .rounded(kui::foundation::surface_radius(cx))
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .child(
+                div()
+                    .absolute()
+                    .top(px(108.))
+                    .left(px(if narrow { 20. } else { 28. }))
+                    .right(px(if narrow { 20. } else { 28. }))
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .max_w(px(380.))
+                            .text_size(px(if narrow { 26. } else { 31. }))
+                            .line_height(px(if narrow { 31. } else { 36. }))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(
+                                lang.text(
+                                    "Build native interfaces with KUI",
+                                    "用 KUI 构建原生界面",
+                                ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .text_color(p.secondary)
+                            .child(lang.text(
+                                "One toolkit for responsive desktop and web applications.",
+                                "一套工具，构建适应不同屏幕的桌面与网页应用。",
+                            )),
+                    )
+                    .child(
+                        div()
+                            .id("mega-demo-destination")
+                            .role(Role::Status)
+                            .text_size(px(13.))
+                            .text_color(p.faint)
+                            .child(note),
+                    ),
+            )
             .child(self.menu.clone())
-            .child(div().text_size(px(13.)).child(note))
     }
 }
 struct TreeExample {
@@ -1589,8 +1890,34 @@ impl UndoExample {
                     "已附上包含新税号的 PDF。",
                 ))
                 .with_meta("Yesterday"),
+            UndoItem::new("five", t("Agreement signed", "协议已签署"))
+                .with_sender("Olivia Bennett")
+                .with_description(t(
+                    "Both copies are ready in the project folder.",
+                    "两份文件都已放在项目文件夹。",
+                ))
+                .with_meta(t("Sun", "周日")),
+            UndoItem::new("six", t("Access to the design workspace", "设计工作区权限"))
+                .with_sender("Nathan Cole")
+                .with_description(t(
+                    "Your read access is ready for the next review.",
+                    "下次评审需要的读取权限已开通。",
+                ))
+                .with_meta(t("Sat", "周六")),
         ];
-        let control = cx.new(|cx| UndoToast::new(language.text("Inbox", "收件箱"), items, cx));
+        let avatars = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                (
+                    item.key.clone(),
+                    crate::family_story::collections::portrait_image(i).into(),
+                )
+            })
+            .collect();
+        let control = cx.new(|cx| {
+            UndoToast::new(language.text("Inbox", "收件箱"), items, cx).with_avatars(avatars)
+        });
         let subscription = cx.subscribe_in(
             &control,
             w,
@@ -1627,6 +1954,13 @@ impl Render for UndoExample {
             language.text("Simulate a failed commit", "模拟一次提交失败")
         };
         div()
+            .w_full()
+            .min_h(px(512.))
+            .p(px(16.))
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
             .flex()
             .flex_col()
             .gap(px(10.))
@@ -1636,6 +1970,7 @@ impl Render for UndoExample {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .px(px(10.))
                     .child(
                         div()
                             .text_size(px(15.))
@@ -1667,6 +2002,8 @@ impl Render for UndoExample {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .flex_wrap()
+                    .gap(px(6.))
                     .text_size(px(12.))
                     .text_color(p.faint)
                     .child(language.text(
@@ -1749,7 +2086,7 @@ impl Render for SignatureExample {
     }
 }
 impl Render for InputExamples {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let mut stack = div()
             .flex()
             .flex_col()
@@ -1764,6 +2101,13 @@ impl Render for InputExamples {
             .size_full()
             .flex()
             .justify_center()
+            .when(self.padded, |d| {
+                d.py(px(if w.viewport_size().width < px(460.) {
+                    24.
+                } else {
+                    54.
+                }))
+            })
             .when(self.width > 700., |d| d.items_start().pt(px(70.)))
             .when(self.width <= 700., |d| d.items_center())
             .child(stack)
@@ -1777,8 +2121,8 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
         "ask-your-data" => views.push(cx.new(|cx| AskDataExample::new(w, cx)).into()),
         "pii-redaction" => views.push(cx.new(|cx| PiiExample::new(w, cx)).into()),
         "reply-draft" => views.push(cx.new(|cx| ReplyExample::new(w, cx)).into()),
-        "ticket-router" => views.push(cx.new(|cx| TicketExample::new(w, cx)).into()),
         "enrich-column" => views.push(cx.new(|cx| EnrichExample::new(w, cx)).into()),
+        "ticket-router" => views.push(cx.new(|cx| TicketExample::new(w, cx)).into()),
         "smart-form-fill" => views.push(cx.new(|cx| SmartFillExample::new(w, cx)).into()),
         "tldr-toggle" => views.push(cx.new(|cx| TldrExample::new(w, cx)).into()),
         "presence-stack" => views.push(cx.new(|cx| PresenceExample::new(w, cx)).into()),
@@ -2011,23 +2355,41 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
         _ => return None,
     }
     let width = if id == "mega-menu-morph" {
-        760.
-    } else if matches!(id, "announcement-bar" | "presence-stack") {
+        680.
+    } else if matches!(
+        id,
+        "announcement-bar"
+            | "presence-stack"
+            | "undo-toast"
+            | "glass-menu"
+            | "glass-segmented"
+            | "ticket-router"
+            | "ask-your-data"
+    ) {
         554.
     } else if id == "tree-table"
         || id == "tldr-toggle"
         || id == "smart-form-fill"
         || id == "enrich-column"
-        || id == "ticket-router"
         || id == "reply-draft"
-        || id == "ask-your-data"
         || id == "pii-redaction"
     {
         680.
     } else {
         390.
     };
-    Some(cx.new(|_| InputExamples { views, width }).into())
+    let padded = matches!(
+        id,
+        "glass-menu" | "glass-segmented" | "ticket-router" | "ask-your-data"
+    );
+    Some(
+        cx.new(|_| InputExamples {
+            views,
+            width,
+            padded,
+        })
+        .into(),
+    )
 }
 
 #[cfg(test)]
@@ -2049,7 +2411,7 @@ mod glass_menu_tests {
         let mut app = TestAppContext::single();
         app.update(kui::init);
         let (view, w) = app.add_window_view(GlassMenuExample::new);
-        let trigger = w.debug_bounds("Photo actions").expect("trigger").center();
+        let trigger = w.debug_bounds("Pool house").expect("trigger").center();
         w.simulate_click(trigger, Modifiers::default());
         tick(w, 600);
         assert!(w.debug_bounds("Move to").is_some());
@@ -2077,7 +2439,7 @@ mod glass_menu_tests {
         app.update(kui::init);
         let (view, w) = app.add_window_view(GlassExample::new);
         assert_eq!(w.update(|_, cx| view.read(cx).current), 0);
-        let photo = w.debug_bounds("Two").expect("second photo").center();
+        let photo = w.debug_bounds("Tram").expect("second photo").center();
         w.simulate_click(photo, Modifiers::default());
         tick(w, 300);
         assert_eq!(w.update(|_, cx| view.read(cx).current), 1);

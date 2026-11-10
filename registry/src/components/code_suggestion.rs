@@ -1,6 +1,6 @@
 //! Review a proposed edit and accept or reject its changes.
-use crate::primitives::family::Paint;
 use crate::primitives::ops_surface::*;
+use crate::primitives::{brand_mark::brand_mark, family::Paint};
 use gpui::{prelude::*, *};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Decision {
@@ -21,6 +21,7 @@ pub struct PatchEvent {
 pub struct PatchReview {
     id: SharedString,
     pub file: String,
+    model: Option<SharedString>,
     pub summary: String,
     pub hunks: Vec<Hunk>,
     focus: FocusHandle,
@@ -36,10 +37,16 @@ impl PatchReview {
         Self {
             id: id.into(),
             file: file.into(),
+            model: None,
             summary: String::new(),
             hunks,
             focus: cx.focus_handle().tab_stop(true),
         }
+    }
+    /// Name the host-selected model in the review header.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     fn decide(&mut self, at: Option<usize>, d: Decision, cx: &mut Context<Self>) {
         let mut changed = vec![];
@@ -61,7 +68,7 @@ impl PatchReview {
 impl Render for PatchReview {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let mut body = column().id("patch").max_h(px(330.)).overflow_y_scroll();
+        let mut body = column().id("patch").max_h(px(374.)).overflow_y_scroll();
         for (i, h) in self.hunks.iter().enumerate() {
             let mut part = column()
                 .gap_0()
@@ -85,7 +92,11 @@ impl Render for PatchReview {
                             arrive(
                                 div()
                                     .w_full()
-                                    .p(px(3.))
+                                    .h(px(22.))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(7.))
+                                    .px(px(8.))
                                     .text_size(px(12.))
                                     .font_family("monospace")
                                     .bg(colour.opacity(if h.decision == Decision::Pending {
@@ -93,7 +104,22 @@ impl Render for PatchReview {
                                     } else {
                                         0.
                                     }))
-                                    .child(format!("{label} {s}")),
+                                    .child(
+                                        div()
+                                            .w(px(28.))
+                                            .flex_none()
+                                            .text_right()
+                                            .text_color(p.faint)
+                                            .child((h.line + n).to_string()),
+                                    )
+                                    .child(
+                                        div()
+                                            .w(px(10.))
+                                            .flex_none()
+                                            .text_color(colour)
+                                            .child(label),
+                                    )
+                                    .child(div().min_w_0().truncate().child(s.clone())),
                                 (key, i * 131 + n),
                                 if old { 0 } else { 38 * n as u64 },
                                 2.,
@@ -139,16 +165,51 @@ impl Render for PatchReview {
                     cx.stop_propagation()
                 }
             }))
-            .child(title(self.summary.clone()))
-            .child(row().child(badge(self.file.clone(), cx)).child(note(
-                format!(
-                    "+{}   −{}",
-                    self.hunks.iter().map(|h| h.after.len()).sum::<usize>(),
-                    self.hunks.iter().map(|h| h.before.len()).sum::<usize>()
-                ),
-                cx,
-            )))
-            .child(body)
+            .child(
+                row()
+                    .items_start()
+                    .gap(px(8.))
+                    .children(
+                        self.model
+                            .as_ref()
+                            .and_then(|model| brand_mark(model, 16., cx)),
+                    )
+                    .child(
+                        column()
+                            .min_w_0()
+                            .gap(px(2.))
+                            .child(title(self.summary.clone()))
+                            .when_some(self.model.clone(), |head, model| {
+                                head.child(note(model, cx))
+                            }),
+                    ),
+            )
+            .child(
+                column()
+                    .gap_0()
+                    .border_1()
+                    .border_color(p.line)
+                    .rounded(crate::foundation::surface_radius(cx))
+                    .overflow_hidden()
+                    .child(
+                        row()
+                            .justify_between()
+                            .px(px(10.))
+                            .py(px(6.))
+                            .border_b_1()
+                            .border_color(p.line)
+                            .child(badge(self.file.clone(), cx))
+                            .child(note(
+                                format!(
+                                    "+{}   −{}",
+                                    self.hunks.iter().map(|h| h.after.len()).sum::<usize>(),
+                                    self.hunks.iter().map(|h| h.before.len()).sum::<usize>()
+                                ),
+                                cx,
+                            )),
+                    )
+                    .child(body),
+            )
             .when(pending > 0, |r| {
                 r.child(
                     row()

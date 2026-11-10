@@ -32,7 +32,7 @@ use kui::{
         Size,
         control::UiLanguage,
         family::{Paint, Tone, face},
-        glyph::Glyph,
+        glyph::{Glyph, icon},
         presentation::{column, row},
     },
 };
@@ -313,6 +313,16 @@ impl Demo {
                     DataFlowNode::new("dash", t("Dashboard", "仪表盘")),
                     DataFlowNode::new("alerts", t("Alerts", "告警")).with_share(0.34),
                 ];
+                let mark = |data: &[u8]| {
+                    let image =
+                        std::sync::Arc::new(Image::from_bytes(ImageFormat::Svg, data.to_vec()));
+                    move || {
+                        img(image.clone())
+                            .size(px(16.))
+                            .object_fit(ObjectFit::Contain)
+                            .into_any_element()
+                    }
+                };
                 let chart = cx.new(|_| {
                     DataFlow::new(
                         sources,
@@ -321,12 +331,21 @@ impl Demo {
                         DataFlowSnapshot::new(12_480, DataFlowStatus::Running),
                     )
                     .with_node_icon("app", kui::primitives::glyph::Glyph::Monitor)
-                    .with_node_icon("db", kui::primitives::glyph::Glyph::Archive)
-                    .with_node_icon("events", kui::primitives::glyph::Glyph::Send)
+                    .with_node_mark(
+                        "db",
+                        mark(include_bytes!("../../assets/orbit-logos/supabase.svg")),
+                    )
+                    .with_node_mark(
+                        "events",
+                        mark(include_bytes!("../../assets/orbit-logos/stripe.svg")),
+                    )
                     .with_node_icon("core", kui::primitives::glyph::Glyph::Settings)
                     .with_node_icon("store", kui::primitives::glyph::Glyph::Folder)
                     .with_node_icon("dash", kui::primitives::glyph::Glyph::FolderKanban)
-                    .with_node_icon("alerts", kui::primitives::glyph::Glyph::Bell)
+                    .with_node_mark(
+                        "alerts",
+                        mark(include_bytes!("../../assets/orbit-logos/slack.svg")),
+                    )
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -469,6 +488,7 @@ impl Demo {
                         ticker_data(0, language),
                         cx,
                     )
+                    .with_inline_deltas(false)
                 });
                 let paused = Rc::new(Cell::new(false));
                 let paused_task = paused.clone();
@@ -552,25 +572,39 @@ impl Demo {
                 Content::Sankey(chart)
             }
             "realtime-stream" => {
+                let sample = |tick: usize| {
+                    let x = tick as f32;
+                    let base = 125. + (x * 0.054).sin() * 29. + (x * 1.49).sin() * 5.;
+                    let spike = match tick % 53 {
+                        16 => 120.,
+                        17 => 270.,
+                        18 => 65.,
+                        _ => 0.,
+                    };
+                    StreamReading::new(
+                        format!("{:02}:{:02}", tick / 120, tick / 2 % 60),
+                        base + spike,
+                    )
+                };
                 let chart = cx.new(|_| {
-                    RealtimeStream::new(t("Live activity", "实时活动"))
-                        .with_capacity(60)
-                        .with_unit(" req/s")
+                    RealtimeStream::new(t("Checkout API", "结账 API"))
+                        .with_subtitle(t("p95 latency · simulated feed", "p95 延迟 · 模拟数据"))
+                        .with_timing(30_000, 500)
+                        .with_series_color(rgb(0x3296d1).into())
+                        .with_unit(" ms")
                 });
                 chart.update(cx, |chart, cx| {
                     chart.set_visible(false, cx);
-                    for tick in 0..60 {
-                        let value =
-                            60. + (tick as f32 * 0.23).sin() * 8. + (tick as f32 * 0.7).cos() * 3.;
-                        chart.push(StreamReading::new(format!("{tick}"), value), cx);
+                    for tick in 0..61 {
+                        chart.push(sample(tick), cx);
                     }
                 });
                 let weak = chart.downgrade();
                 cx.spawn(async move |_, cx| {
-                    let mut tick = 60usize;
+                    let mut tick = 61usize;
                     loop {
                         cx.background_executor()
-                            .timer(std::time::Duration::from_millis(240))
+                            .timer(std::time::Duration::from_millis(500))
                             .await;
                         let result = weak.update(cx, |chart, cx| {
                             let visible = cx
@@ -578,21 +612,7 @@ impl Demo {
                                 .is_none_or(|bridge| (bridge.visible)());
                             chart.set_visible(visible, cx);
                             if visible {
-                                let value = 60.
-                                    + (tick as f32 * 0.23).sin() * 8.
-                                    + (tick as f32 * 0.7).cos() * 3.;
-                                let value = if tick.is_multiple_of(37) {
-                                    value * 1.9
-                                } else {
-                                    value
-                                };
-                                let reading = StreamReading::new(format!("{tick}"), value);
-                                let reading = if tick.is_multiple_of(37) {
-                                    reading.with_anomaly("Spike")
-                                } else {
-                                    reading
-                                };
-                                chart.push(reading, cx);
+                                chart.push(sample(tick), cx);
                                 tick += 1;
                             }
                         });
@@ -1199,6 +1219,9 @@ impl Render for Demo {
             .gap(px(28.))
             .w_full()
             .max_w_full()
+            .when(matches!(self.content, Content::Ticker(_, _)), |view| {
+                view.max_w(px(520.))
+            })
             .when(matches!(self.content, Content::Sankey(_)), |view| {
                 view.max_w(px(488.))
             })
@@ -1275,11 +1298,15 @@ impl Render for Demo {
             Some(
                 div()
                     .w_full()
-                    .max_w(px(760.))
+                    .max_w(px(520.))
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(self.language.text("Product health", "产品概况"))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(self.language.text("Product health", "产品概况")),
+                    )
                     .child(
                         face(
                             "ticker-pause",
@@ -1290,6 +1317,16 @@ impl Render for Demo {
                             cx,
                         )
                         .px(px(12.))
+                        .gap(px(6.))
+                        .child(icon(
+                            if paused.get() {
+                                Glyph::Play
+                            } else {
+                                Glyph::Pause
+                            },
+                            13.,
+                            p.secondary,
+                        ))
                         .child(label)
                         .on_click(cx.listener(|s, _, _, cx| {
                             if let Content::Ticker(_, paused) = &s.content {
@@ -1352,6 +1389,9 @@ impl Render for Demo {
             .items_center()
             .justify_center()
             .gap(px(34.))
+            .when(matches!(self.content, Content::Ticker(_, _)), |view| {
+                view.gap(px(12.))
+            })
             .p(px(20.))
             .when(
                 matches!(self.content, Content::Sankey(_)) && w.viewport_size().width < px(420.),
@@ -1366,8 +1406,10 @@ impl Render for Demo {
             .when_some(failover_demo, |view, text| {
                 view.child(div().text_color(p.secondary).child(text))
             })
-            .when_some(flow_demo, |view, controls| view.child(controls))
             .child(values)
+            .when_some(flow_demo, |view, controls| {
+                view.gap(px(12.)).child(controls)
+            })
             .when(
                 !matches!(
                     self.content,
@@ -1594,17 +1636,21 @@ fn ticker_data(step: usize, language: UiLanguage) -> Vec<TickerMetric> {
     vec![
         TickerMetric::new(
             "revenue",
-            t("Monthly revenue", "月收入"),
-            124_860. + wave * 1250.,
+            t("Monthly recurring revenue", "月度经常性收入"),
+            84_210. + wave * 1250.,
         )
         .with_format("$", "", 0)
         .with_caption(t("Last 30 days", "最近 30 天")),
-        TickerMetric::new("active", t("Active now", "当前活跃"), 4268. + wave * 180.)
+        TickerMetric::new("active", t("Active now", "当前活跃"), 1284. + wave * 180.)
             .with_caption(t("Active sessions", "活跃会话")),
-        TickerMetric::new("conversion", t("Conversion", "转化率"), 6.4 + wave * 0.32)
-            .with_format("", "%", 1)
-            .with_change(TickerDelta::Absolute, TickerGood::Up)
-            .with_caption(t("Recent trials", "近期试用")),
+        TickerMetric::new(
+            "conversion",
+            t("Trial conversion", "试用转化率"),
+            18.4 + wave * 0.32,
+        )
+        .with_format("", "%", 1)
+        .with_change(TickerDelta::Absolute, TickerGood::Up)
+        .with_caption(t("Recent trials", "近期试用")),
         TickerMetric::new("latency", t("API latency", "接口延迟"), 182. + wave * 12.)
             .with_format("", " ms", 0)
             .with_change(TickerDelta::Absolute, TickerGood::Down)

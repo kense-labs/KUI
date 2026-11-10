@@ -1,5 +1,6 @@
 //! Host-supplied prompt-cache outcomes with explicit, retryable requests.
 use crate::primitives::{
+    brand_mark::brand_mark,
     family::{Paint, Slide, Tone, face},
     glyph::{Glyph, icon},
     presentation::{column, hint, row, title, tr},
@@ -114,6 +115,7 @@ pub struct PromptCache {
     segments: Vec<CacheSegment>,
     snapshot: CacheSnapshot,
     simulated: bool,
+    model: Option<SharedString>,
     change_segment: Option<SharedString>,
     change_armed: bool,
     next_id: u64,
@@ -131,6 +133,7 @@ impl PromptCache {
             segments,
             snapshot,
             simulated: true,
+            model: None,
             change_segment: None,
             change_armed: false,
             next_id: 0,
@@ -141,6 +144,11 @@ impl PromptCache {
             playing: false,
             ticks: 0,
         }
+    }
+    /// Names the model that produced the host-supplied cache metrics.
+    pub fn with_model(mut self, name: impl Into<SharedString>) -> Self {
+        self.model = Some(name.into());
+        self
     }
     /// Enables replay and automatic requests for a local simulation.
     pub fn with_sample_playback(mut self, autoplay: bool) -> Self {
@@ -464,6 +472,28 @@ impl Render for PromptCache {
                     .child(title(tr(cx, "Cache", "缓存"), p))
                     .child(hint(state, p)),
             )
+            .child(
+                row()
+                    .w_full()
+                    .h(px(10.))
+                    .gap(px(3.))
+                    .children(self.segments.iter().map(|segment| {
+                        div()
+                            .h_full()
+                            .w(relative((segment.tokens as f32).sqrt() / total))
+                            .min_w_0()
+                            .rounded(px(3.))
+                            .border_1()
+                            .border_color(segment.color.opacity(0.46))
+                            .bg(segment.color.opacity(
+                                if self.snapshot.state == CacheState::Available {
+                                    0.42
+                                } else {
+                                    0.16
+                                },
+                            ))
+                    })),
+            )
             .child(hint(
                 format!(
                     "{} {}",
@@ -557,6 +587,14 @@ impl Render for PromptCache {
                         column()
                             .gap_1()
                             .child(title(tr(cx, "Prompt cache", "提示缓存"), p))
+                            .when_some(self.model.clone(), |header, model| {
+                                header.child(
+                                    row()
+                                        .gap(px(6.))
+                                        .children(brand_mark(&model, 14., cx))
+                                        .child(hint(model, p)),
+                                )
+                            })
                             .child(hint(
                                 if self.simulated {
                                     tr(cx, "Illustrative data", "示意数据")
@@ -576,7 +614,21 @@ impl Render for PromptCache {
                     .gap_3()
                     .when(!side_by_side, |v| v.flex_col())
                     .child(cache)
-                    .child(requests.flex_1().w_full().min_w_0()),
+                    .child(
+                        column()
+                            .flex_1()
+                            .w_full()
+                            .min_w_0()
+                            .gap_3()
+                            .child(
+                                row()
+                                    .gap_3()
+                                    .flex_wrap()
+                                    .child(hint(tr(cx, "■ Processed", "■ 已处理"), p))
+                                    .child(hint(tr(cx, "□ From cache", "□ 来自缓存"), p)),
+                            )
+                            .child(requests),
+                    ),
             )
             .child(row().gap_2().flex_wrap().when_some(change, |v, label| {
                 v.child(

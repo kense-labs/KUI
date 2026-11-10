@@ -197,10 +197,10 @@ impl Render for Example {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(400.))
+                    .max_w(px(390.))
                     .flex()
                     .flex_col()
-                    .gap(px(24.))
+                    .gap(px(16.))
                     .child(self.ticket.clone())
                     .child(
                         div().flex().justify_end().child(

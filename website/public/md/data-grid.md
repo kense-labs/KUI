@@ -37,6 +37,8 @@ Search rows, apply column filters, and show, hide or reorder columns before expo
 
 ## API
 
+`with_min_column_width` configures the minimum width of a data column before horizontal scrolling. The default is 94px, with the configured width bounded to 72–360px. The row-number gutter remains at the leading edge while scrolling horizontally.
+
 `csv` · `(&self) → String`
 
 Subscribe to CellEdited for backing row/column updates. GridExport carries a file name and CSV in filtered row order and current visible column order. The host saves the CSV.

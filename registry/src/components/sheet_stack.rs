@@ -80,8 +80,25 @@ pub struct SheetStack {
     container: Option<TriggerBounds>,
     back_label: SharedString,
     close_label: SharedString,
+    presentation: SheetStackPresentation,
+    launcher_context: Option<SheetContent>,
 }
 impl EventEmitter<SheetStackChanged> for SheetStack {}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SheetStackPresentation {
+    #[default]
+    Auto,
+    Sheet,
+    Dialog,
+}
+
+impl SheetStackPresentation {
+    fn is_dialog(self, width: Pixels) -> bool {
+        self == Self::Dialog || (self == Self::Auto && width >= px(640.))
+    }
+}
+
 impl SheetStack {
     pub fn new(trigger: impl Into<SharedString>, pages: Vec<SheetPage>, cx: &App) -> Self {
         let link_focus = pages
@@ -108,11 +125,41 @@ impl SheetStack {
             container: None,
             back_label: "Back".into(),
             close_label: "Close all".into(),
+            presentation: SheetStackPresentation::Auto,
+            launcher_context: None,
         }
     }
     pub fn contained(mut self) -> Self {
         self.container = Some(TriggerBounds::default());
         self
+    }
+    /// Put a host-provided profile or heading above the launch button.
+    pub fn with_launcher_context<E: IntoElement>(
+        mut self,
+        render: impl Fn(&mut Window, &mut App) -> E + 'static,
+    ) -> Self {
+        self.launcher_context = Some(Rc::new(move |w, cx| render(w, cx).into_any_element()));
+        self
+    }
+    /// Change the layout used by open and future layers.
+    pub fn set_presentation(
+        &mut self,
+        presentation: SheetStackPresentation,
+        cx: &mut Context<Self>,
+    ) {
+        if self.presentation != presentation {
+            self.presentation = presentation;
+            self.drag = None;
+            self.offset.reset(0.);
+            cx.notify();
+        }
+    }
+    fn viewport(&self, w: &Window) -> Size<Pixels> {
+        self.container
+            .as_ref()
+            .map(|b| b.get().size)
+            .filter(|b| b.width > px(0.) && b.height > px(0.))
+            .unwrap_or_else(|| w.viewport_size())
     }
     pub fn with_action_labels(
         mut self,
@@ -140,8 +187,8 @@ impl SheetStack {
         } else {
             self.stack.push(index);
         }
-        let size = w.viewport_size();
-        let dialog = size.width >= px(640.);
+        let size = self.viewport(w);
+        let dialog = self.presentation.is_dialog(size.width);
         self.offset.reset(if dialog {
             18.
         } else {
@@ -164,7 +211,7 @@ impl SheetStack {
             self.transition.duration(0., 0.24, cx);
             self.launch.focus(w, cx);
         } else {
-            let peek = if w.viewport_size().width >= px(640.) {
+            let peek = if self.presentation.is_dialog(self.viewport(w).width) {
                 14.
             } else {
                 10.
@@ -237,8 +284,13 @@ impl SheetStack {
             .saturating_duration_since(drag.last_time)
             .as_millis()
             < 100;
-        let size = w.viewport_size();
-        let (_, _, _, height, _) = sheet_frame(f32::from(size.width), f32::from(size.height), 0);
+        let size = self.viewport(w);
+        let (_, _, _, height, _) = sheet_frame(
+            f32::from(size.width),
+            f32::from(size.height),
+            0,
+            self.presentation.is_dialog(size.width),
+        );
         let offset = self.offset.value(cx);
         if !cancel && (offset > 0.35 * height || (fresh && drag.speed > 450. && offset > 16.)) {
             self.pop(w, cx);
@@ -253,6 +305,19 @@ impl Render for SheetStack {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
         let first = self.pages.first().map(|p| p.id.clone());
+        let context = self.launcher_context.as_ref().map(|body| body(w, cx));
+        let launch = button("stack-open", self.trigger.clone(), cx)
+            .bg(if context.is_some() { p.bright } else { p.panel })
+            .when(context.is_some(), |b| b.text_color(p.inverse))
+            .border_1()
+            .border_color(p.line)
+            .track_focus(&self.launch)
+            .child(self.trigger.clone())
+            .on_click(cx.listener(move |s, _, w, cx| {
+                if let Some(id) = first.as_ref() {
+                    s.push(id, w, cx);
+                }
+            }));
         let root = div()
             .relative()
             .when_some(self.container.as_ref(), |d, b| {
@@ -265,26 +330,20 @@ impl Render for SheetStack {
                     .child(b.measure())
             })
             .child(
-                button("stack-open", self.trigger.clone(), cx)
-                    .bg(p.panel)
-                    .border_1()
-                    .border_color(p.line)
-                    .track_focus(&self.launch)
-                    .child(self.trigger.clone())
-                    .on_click(cx.listener(move |s, _, w, cx| {
-                        if let Some(id) = first.as_ref() {
-                            s.push(id, w, cx);
-                        }
-                    })),
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(12.))
+                    .children(context)
+                    .child(launch),
             );
         let active = self.transition.get(w, cx).clamp(0., 1.);
         if self.stack.is_empty() && active < 0.001 {
             return root;
         }
-        let size = self
-            .container
-            .as_ref()
-            .map_or(w.viewport_size(), |b| b.get().size);
+        let size = self.viewport(w);
+        let as_dialog = self.presentation.is_dialog(size.width);
         let offset = self.offset.get(w, cx);
         let veil = match crate::foundation::Theme::global(cx).mode {
             crate::foundation::ThemeMode::Dark => 0.56,
@@ -306,8 +365,12 @@ impl Render for SheetStack {
         for (depth, &page_index) in self.stack.iter().rev().enumerate().rev() {
             let page = &self.pages[page_index];
             let front = depth == 0;
-            let (mut left, mut top, mut width, mut height, dialog) =
-                sheet_frame(f32::from(size.width), f32::from(size.height), depth);
+            let (mut left, mut top, mut width, mut height, dialog) = sheet_frame(
+                f32::from(size.width),
+                f32::from(size.height),
+                depth,
+                as_dialog,
+            );
             let scale = if crate::primitives::family::disabled_motion(cx) {
                 1.
             } else {
@@ -321,6 +384,7 @@ impl Render for SheetStack {
             height = (height * scale).max(1.);
             let mut panel = panel(cx)
                 .id(("stack-sheet", depth))
+                .debug_selector(move || format!("stack-sheet-{depth}"))
                 .absolute()
                 .left(px(left))
                 .top(px(top))
@@ -422,7 +486,6 @@ impl Render for SheetStack {
                             .text_size(px(14.))
                             .line_height(px(20.))
                             .text_color(p.secondary)
-                            .hover(|s| s.bg(p.tray).text_color(p.ink))
                             .child(parent_title)
                             .on_click(cx.listener(|s, _, w, cx| {
                                 s.pop(w, cx);
@@ -459,7 +522,6 @@ impl Render for SheetStack {
                             .p_0()
                             .bg(p.tray)
                             .text_color(p.secondary)
-                            .hover(|s| s.bg(p.tray.blend(p.ink.opacity(0.10))).text_color(p.ink))
                             .track_focus(&self.close)
                             .child(icon(Glyph::Close, 16., p.secondary))
                             .on_click(cx.listener(|s, _, w, cx| s.close(w, cx))),
@@ -477,14 +539,13 @@ impl Render for SheetStack {
                 if let Some(content) = &page.content {
                     panel = panel.child(content(w, cx));
                 }
+                let mut links = div().flex().flex_col().px(px(16.)).py(px(14.)).gap(px(12.));
                 for (i, link) in page.links.iter().enumerate() {
                     let id = link.id.clone();
-                    panel = panel.child(
+                    links = links.child(
                         button(("stack-link", i), link.label.clone(), cx)
                             .track_focus(&self.link_focus[page_index][i])
                             .w_full()
-                            .mt(px(14.))
-                            .mx(px(16.))
                             .h(px(44.))
                             .px(px(12.))
                             .gap(px(12.))
@@ -494,14 +555,20 @@ impl Render for SheetStack {
                             .text_size(px(14.))
                             .line_height(px(20.))
                             .font_weight(FontWeight::MEDIUM)
-                            .hover(|s| s.bg(p.tray))
                             .justify_between()
-                            .child(link.label.clone())
-                            .child(icon(Glyph::Arrow, 16., p.secondary))
+                            .child(div().min_w_0().truncate().child(link.label.clone()))
+                            .child(div().size(px(16.)).flex_none().child(icon(
+                                Glyph::Arrow,
+                                16.,
+                                p.secondary,
+                            )))
                             .on_click(cx.listener(move |s, _, w, cx| {
                                 s.push(&id, w, cx);
                             })),
                     );
+                }
+                if !page.links.is_empty() {
+                    panel = panel.child(links);
                 }
             } else {
                 panel = panel
@@ -536,9 +603,8 @@ impl Render for SheetStack {
 }
 
 /// Sheet frames follow the source: 560px sheets leave 20px, dialogs are 440px and leave 80px.
-fn sheet_frame(width: f32, height: f32, depth: usize) -> (f32, f32, f32, f32, bool) {
+fn sheet_frame(width: f32, height: f32, depth: usize, dialog: bool) -> (f32, f32, f32, f32, bool) {
     let depth = depth as f32;
-    let dialog = width >= 640.;
     if dialog {
         let panel_w = (width - 32.).clamp(1., 440.);
         let panel_h = (height - 80. - 14. * depth).max(160.);
@@ -556,17 +622,47 @@ fn sheet_frame(width: f32, height: f32, depth: usize) -> (f32, f32, f32, f32, bo
 
 #[cfg(test)]
 mod tests {
-    use super::sheet_frame;
+    use super::{SheetLink, SheetPage, SheetStack, sheet_frame};
+    use gpui::{TestAppContext, px, size};
+
+    #[test]
+    fn links_stay_inside_the_sheet_at_narrow_widths() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (stack, window) = app.add_window_view(|_, cx| {
+            SheetStack::new(
+                "Open",
+                vec![
+                    SheetPage::new("settings", "Settings", "Account settings")
+                        .with_links(vec![SheetLink::new("privacy", "Privacy")]),
+                    SheetPage::new("privacy", "Privacy", "Manage visibility"),
+                ],
+                cx,
+            )
+        });
+        window.simulate_resize(size(px(320.), px(600.)));
+        window.update(|w, cx| stack.update(cx, |stack, cx| stack.push("settings", w, cx)));
+        window
+            .executor()
+            .advance_clock(std::time::Duration::from_secs(1));
+        window.run_until_parked();
+        let panel = window
+            .debug_bounds("stack-sheet-0")
+            .expect("front settings panel");
+        let link = window.debug_bounds("Privacy").expect("privacy link");
+        assert!(link.left() >= panel.left() + px(16.));
+        assert!(link.right() <= panel.right() - px(16.));
+    }
 
     #[test]
     fn sheet_and_dialog_frames_follow_the_source() {
-        let (left, top, width, height, dialog) = sheet_frame(800., 700., 0);
+        let (left, top, width, height, dialog) = sheet_frame(800., 700., 0, true);
         assert!(dialog);
         assert!((width - 440.).abs() < 0.001);
         assert!((height - 620.).abs() < 0.001);
         assert!((left - 180.).abs() < 0.001);
         assert!((top - 40.).abs() < 0.001);
-        let (_, top, width, height, dialog) = sheet_frame(400., 700., 1);
+        let (_, top, width, height, dialog) = sheet_frame(400., 700., 1, false);
         assert!(!dialog);
         assert!((width - 400.).abs() < 0.001);
         assert!((height - 670.).abs() < 0.001);

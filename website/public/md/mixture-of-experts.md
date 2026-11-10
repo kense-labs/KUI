@@ -35,6 +35,6 @@ Event: `MoeEvent`.
 
 ## Motion
 
-The sample uses a moving packet along curved links. The stage switches to a vertical layout below 568 px. Hidden, paused and pinned views stop animation; reduced motion renders static links. Live announcements and desktop, Web, visual and accessibility verification remain pending.
+The router displays a vertical sequence of probabilities, expert counts and an output token. Expert rows wrap to the available width. Colored packets follow the selected routes. The load bar summarizes completed, accepted routes, and its balance is the mean expert load relative to the highest expert load. Hidden, paused and pinned views stop animation. Reduced motion renders static links.
 
 Desktop and web use the same GPUI view.

@@ -7,7 +7,7 @@ use kui::{
 use std::sync::Arc;
 
 pub const IDS: &[&str] = &["card-to-article"];
-pub const PREVIEW_HEIGHT: f32 = 592.;
+pub const PREVIEW_HEIGHT: f32 = 520.;
 
 pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
     IDS.contains(&id).then(|| cx.new(Demo::new).into())
@@ -25,64 +25,67 @@ struct Story {
 
 const STORIES: [Story; 4] = [
     Story {
-        id: "quiet-room",
-        title: ["A quiet room in afternoon light", "午后光线里的安静房间"],
+        id: "pool-house",
+        title: [
+            "A pool house built for bright summers",
+            "为明亮夏日建造的泳池住宅",
+        ],
         alt: [
-            "A painting of an interior with a window",
-            "一幅带窗户的室内画",
+            "A glass house reflected in a pool",
+            "倒映在泳池里的玻璃住宅",
         ],
         tag: ["Case study", "案例"],
         meta: ["5 min read", "阅读约 5 分钟"],
         opening: [
-            "A room can feel different as the sun moves across it. At midday, the objects at the window are clear, while those further inside almost disappear into the wall. The painting follows that change across the floor.",
-            "阳光移动时，一间房也会变得不同。正午时，靠窗的物件清晰可见，屋子深处的物件几乎融入墙面。画家把这一变化留在地板上。",
+            "Deep terraces shade the rooms before the afternoon sun reaches the glass. The pool sets the distance between the garden and the building.",
+            "宽阔的露台挡住下午照向玻璃的阳光。泳池把花园与住宅隔开，留下足够的空间。",
         ],
-        photo: include_bytes!("../../assets/navigation/room-0.jpg"),
+        photo: include_bytes!("../../assets/places/pool-house.jpg"),
     },
     Story {
-        id: "under-dome",
-        title: ["An afternoon under the dome", "圆顶下的一个下午"],
+        id: "lisbon-tram",
+        title: ["Across Lisbon by tram", "乘电车穿越里斯本"],
         alt: [
-            "A painting of the interior of the Pantheon",
-            "一幅罗马万神殿内部的画",
+            "A yellow tram between tiled buildings",
+            "瓷砖建筑之间的黄色电车",
         ],
         tag: ["Travel", "旅行"],
         meta: ["4 min read", "阅读约 4 分钟"],
         opening: [
-            "From the doorway, the room seems to hold a single pool of light. After a few steps the scale changes. Look upward and the small square openings around the dome begin to make sense as a repeating pattern.",
-            "从门口望去，殿内像是盛着一片光。往前走几步，空间的尺度便不同了。抬头时，圆顶上的方格开始显出重复的规律。",
+            "The first tram rounds the corner before the cafés open. A short ride traces the slope of the hill from the old streets to the river.",
+            "第一班电车在咖啡店开门前转过街角。短短一程，沿着山坡从旧街一路开向河边。",
         ],
-        photo: include_bytes!("../../assets/navigation/room-3.jpg"),
+        photo: include_bytes!("../../assets/places/tram.jpg"),
     },
     Story {
-        id: "drawing-room",
-        title: ["Notes from the drawing room", "会客厅里的观察笔记"],
-        alt: [
-            "A painting of a family in a drawing room",
-            "一幅描绘家人在会客厅相聚的画",
-        ],
-        tag: ["Notebook", "笔记"],
+        id: "dinner-menu",
+        title: ["A menu for the day's catch", "随当天渔获变化的菜单"],
+        alt: ["A plated meal on a wood table", "木桌上的一盘菜"],
+        tag: ["Changelog", "更新"],
         meta: ["2 min read", "阅读约 2 分钟"],
         opening: [
-            "The people in this room are arranged around their conversation. Start with the figure nearest the chair and follow the direction of each glance. You can trace the exchange without reading a word.",
-            "室内人物的位置围绕着一场谈话。可以先看椅子旁的人，再顺着每一道视线观察。不读一句文字，也能看出他们在怎样交流。",
+            "The kitchen rewrites the menu each morning. Ingredients that arrive in small batches can sell out before the last seating.",
+            "厨房每天早上重写菜单。数量不多的食材，可能在最后一桌客人到来之前就卖完。",
         ],
-        photo: include_bytes!("../../assets/navigation/room-1.jpg"),
+        photo: include_bytes!("../../assets/places/dinner.jpg"),
     },
     Story {
-        id: "slow-looking",
-        title: ["What we notice when we look slowly", "慢一点看，会发现什么"],
+        id: "atlantic-seasons",
+        title: [
+            "A coast that changes with the seasons",
+            "随季节变换的大西洋海岸",
+        ],
         alt: [
-            "A painting of the interior of a synagogue",
-            "一幅描绘会堂内部的画",
+            "Atlantic waves breaking at sunset",
+            "日落时拍打礁石的大西洋海浪",
         ],
         tag: ["Essay", "随笔"],
         meta: ["6 min read", "阅读约 6 分钟"],
         opening: [
-            "The details near the bottom of the frame are easy to overlook. Give them a moment, and the composition starts to show how a visitor would cross the room, where they might stop, and what they would see first.",
-            "画面底部的细节很容易被忽略。多看一会儿，构图就会告诉你访客如何穿过房间、在哪里停下，以及他们最先看见什么。",
+            "In summer the path stays open until dusk. By autumn the water moves higher up the cliffs and the same walk feels completely different.",
+            "夏天，小径直到黄昏仍可通行。入秋后，海浪拍得更高，同一条路也有了完全不同的感受。",
         ],
-        photo: include_bytes!("../../assets/navigation/room-5.jpg"),
+        photo: include_bytes!("../../assets/places/coast.jpg"),
     },
 ];
 
@@ -105,7 +108,7 @@ impl Demo {
                 .with_meta(story.meta[zh])
             })
             .collect();
-        Self(cx.new(|cx| CardToArticle::new(articles, cx)))
+        Self(cx.new(|cx| CardToArticle::new(articles, cx).with_aspect_ratio(1.42)))
     }
 }
 
@@ -114,15 +117,15 @@ fn article(story: &Story, zh: usize, cx: &App) -> AnyElement {
     let body = [
         story.opening[zh],
         [
-            "Look at one edge of the painting, then the opposite edge. Repeated shapes link the two sides, even where their colors or sizes differ. The scene feels like it continues beyond the frame because the painter repeats those shapes at different depths.",
-            "先看画面的一边，再看另一边。即使颜色和大小不同，重复的形状仍把两边连在一起。画家在不同深度重复这些形状，让场景像是延伸到了画框之外。",
+            "Look from one edge of the photograph to the opposite edge. Repeated shapes connect the foreground with the details in the distance.",
+            "从照片的一边看向另一边。重复的形状把近处和远处的细节连在一起。",
         ][zh],
         [
             "Small details help establish distance: a brighter edge can bring a nearby object forward, while softer marks let the background recede. The technique is easiest to see if you compare two objects with roughly the same shape.",
             "小细节有助于建立距离感。更亮的边缘让近处的物件突出，柔和的笔触让背景退后。比较两个形状相近的物件，就容易看出这种手法。",
         ][zh],
         [
-            "The last step is to look at the whole room again. Familiar objects now occupy clearer places in it. That change of scale, from the smallest detail back to the entire composition, is why the same picture can reward several visits.",
+            "Step back and look at the whole scene again. The smallest details make more sense when they are seen alongside the rest of the photograph.",
             "最后再看一遍整个房间。熟悉的物件在其中有了更清楚的位置。从最小的细节回到整体构图，这个尺度的变化让同一幅画值得多看几遍。",
         ][zh],
     ];

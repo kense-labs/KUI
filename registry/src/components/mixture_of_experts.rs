@@ -2,7 +2,7 @@
 use crate::primitives::{
     family::{Paint, PhaseClock, Tone, disabled_motion, face},
     glyph::{Glyph, icon},
-    presentation::{column, hint, row, title, tr},
+    presentation::{column, hint, row, tr},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
@@ -303,25 +303,18 @@ impl MixtureOfExperts {
         }
     }
 }
-fn selected_for(route: Option<&MoeRoute>, index: usize) -> bool {
-    route.is_some_and(|route| route.choices.iter().any(|choice| choice.expert == index))
-}
-fn expert_position(index: usize, count: usize, compact: bool) -> (f32, f32) {
-    if !compact {
-        return (0.69, (index as f32 + 0.5) / count.max(1) as f32);
-    }
-    let cols = count.clamp(1, if compact { 4 } else { 8 });
-    let row = index / cols;
-    let rows = count.max(1).div_ceil(cols);
-    let col = index % cols;
-    let in_row = (count - row * cols).min(cols).max(1);
+fn expert_position(
+    index: usize,
+    count: usize,
+    columns: usize,
+    center: f32,
+    height: f32,
+) -> (f32, f32) {
+    let row = index / columns;
+    let in_row = count.saturating_sub(row * columns).min(columns).max(1);
     (
-        (col as f32 + 0.5) / in_row as f32,
-        if rows == 1 {
-            0.66
-        } else {
-            0.49 + (row as f32 + 0.5) * 0.30 / rows as f32
-        },
+        (index % columns) as f32 / in_row as f32 + 0.5 / in_row as f32,
+        (center + row as f32 * 52.) / height,
     )
 }
 fn curve_point(a: Point<Pixels>, b: Point<Pixels>, t: f32, vertical: bool) -> Point<Pixels> {
@@ -508,15 +501,17 @@ impl Render for MixtureOfExperts {
         } else {
             (f32::from(w.viewport_size().width) - 80.).clamp(180., 619.)
         };
-        // The measured width is inside the padded card. Keep the desktop
-        // graph in the documentation's 628px canvas, and reflow on phones.
-        let compact = width < 512.;
-        let vertical = compact;
-        let positions = if compact {
-            ((0.5, 0.08), (0.5, 0.26), (0.5, 0.92))
-        } else {
-            ((0.063, 0.50), (0.30, 0.50), (0.937, 0.50))
-        };
+        let columns = (width / 55.).floor().clamp(1., 8.) as usize;
+        let expert_count = self.experts.len();
+        let rows = expert_count.max(1).div_ceil(columns);
+        let score_height = rows as f32 * 60. + 10.;
+        let expert_center = 80. + score_height;
+        let stage_height = expert_center + rows as f32 * 52. + 29.;
+        let positions = (
+            (0.5, 21. / stage_height),
+            (0.5, 49. / stage_height),
+            (0.5, 1. - 18. / stage_height),
+        );
         let cycle = 2.2;
         let phase = if reduced {
             1.
@@ -526,12 +521,30 @@ impl Render for MixtureOfExperts {
         let gate = 0.5 / cycle;
         let expert_at = 1.16 / cycle;
         let out_at = 1.86 / cycle;
-        let expert_count = self.experts.len();
-        let stage_height = if compact {
-            if expert_count > 4 { 330. } else { 286. }
+        let dark = crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark;
+        let rank_colors: [Hsla; 2] = if dark {
+            [rgb(0x60a5fa).into(), rgb(0xb995ed).into()]
         } else {
-            (expert_count as f32 * 34.).max(294.)
+            [rgb(0x2379b9).into(), rgb(0x7839a5).into()]
         };
+        let mut shown_loads = vec![0usize; expert_count];
+        let shown = if reduced && self.pin.is_none() {
+            self.routes.len()
+        } else {
+            index + usize::from(phase >= out_at || self.pin.is_some())
+        };
+        for choice in self
+            .routes
+            .iter()
+            .take(shown)
+            .flat_map(|route| &route.choices)
+        {
+            if !choice.dropped
+                && let Some(count) = shown_loads.get_mut(choice.expert)
+            {
+                *count += 1;
+            }
+        }
         let bounds = self.bounds.clone();
         let selected_routes = route.map_or_else(Vec::new, |r| r.choices.clone());
         let mut stage = div()
@@ -560,20 +573,29 @@ impl Render for MixtureOfExperts {
                     };
                     let (input, router, output) = positions;
                     let (input, router, output) = (at(input), at(router), at(output));
-                    paint_curve(input, router, vertical, p.line, w);
+                    paint_curve(input, router, true, p.line, w);
                     for i in 0..expert_count {
-                        let expert = at(expert_position(i, expert_count, compact));
-                        let choice = selected_routes.iter().find(|choice| choice.expert == i);
+                        let expert = at(expert_position(
+                            i,
+                            expert_count,
+                            columns,
+                            expert_center,
+                            stage_height,
+                        ));
+                        let choice = selected_routes
+                            .iter()
+                            .enumerate()
+                            .find(|(_, choice)| choice.expert == i);
                         let color = match choice {
-                            Some(choice) if choice.dropped => p.danger.opacity(0.7),
-                            Some(_) => p.bright.opacity(0.8),
+                            Some((_, choice)) if choice.dropped => p.danger.opacity(0.7),
+                            Some((rank, _)) => rank_colors[rank.min(1)].opacity(0.78),
                             None => p.line,
                         };
-                        paint_curve(router, expert, vertical, color, w);
+                        paint_curve(router, expert, true, color, w);
                         paint_curve(
                             expert,
                             output,
-                            vertical,
+                            true,
                             color.opacity(if choice.is_some() { 0.8 } else { 0.45 }),
                             w,
                         );
@@ -581,33 +603,42 @@ impl Render for MixtureOfExperts {
                     if !reduced && phase < out_at {
                         if phase < gate {
                             paint_packet(
-                                curve_point(input, router, phase / gate, vertical),
+                                curve_point(input, router, phase / gate, true),
                                 p.bright,
                                 w,
                             );
                         } else {
-                            for choice in selected_routes.iter().filter(|choice| !choice.dropped) {
+                            for (rank, choice) in selected_routes
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, choice)| !choice.dropped)
+                            {
                                 if choice.expert >= expert_count {
                                     continue;
                                 }
-                                let expert =
-                                    at(expert_position(choice.expert, expert_count, compact));
+                                let expert = at(expert_position(
+                                    choice.expert,
+                                    expert_count,
+                                    columns,
+                                    expert_center,
+                                    stage_height,
+                                ));
                                 let packet = if phase < expert_at {
                                     curve_point(
                                         router,
                                         expert,
                                         (phase - gate) / (expert_at - gate),
-                                        vertical,
+                                        true,
                                     )
                                 } else {
                                     curve_point(
                                         expert,
                                         output,
                                         (phase - expert_at) / (out_at - expert_at),
-                                        vertical,
+                                        true,
                                     )
                                 };
-                                paint_packet(packet, p.bright, w);
+                                paint_packet(packet, rank_colors[rank.min(1)], w);
                             }
                         }
                     }
@@ -616,96 +647,130 @@ impl Render for MixtureOfExperts {
             .absolute()
             .inset_0(),
         );
-        let (input_pos, router_pos, output_pos) = positions;
+        let radius = crate::foundation::surface_radius(cx);
+        let (input_pos, _, output_pos) = positions;
         for (pos, label) in [
-            (input_pos, token_text),
-            (router_pos, tr(cx, "Router", "路由器").into()),
-            (output_pos, tr(cx, "Output", "输出").into()),
+            (input_pos, tr(cx, "Input", "输入")),
+            (output_pos, tr(cx, "Output", "输出")),
         ] {
-            let chip_radius = crate::foundation::surface_radius(cx);
-            if !compact && pos == router_pos {
-                let mut scores = column().w_full().gap(px(8.));
-                for (index, expert) in self.experts.iter().enumerate() {
-                    let score = token
-                        .and_then(|token| token.scores.get(index))
-                        .copied()
-                        .filter(|v| v.is_finite())
-                        .unwrap_or(0.)
-                        .clamp(0., 1.);
-                    let chosen = selected_for(route, index);
-                    scores = scores.child(
-                        row()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .w(px(26.))
-                                    .flex_none()
-                                    .truncate()
-                                    .text_size(px(10.))
-                                    .text_color(p.secondary)
-                                    .child(expert.name.clone()),
-                            )
-                            .child(
-                                div().flex_1().h(px(3.)).rounded_full().bg(p.line).child(
-                                    div()
-                                        .w(relative(score))
-                                        .h_full()
-                                        .rounded_full()
-                                        .bg(if chosen { p.bright } else { p.faint }),
-                                ),
-                            )
-                            .child(
-                                div()
-                                    .w(px(24.))
-                                    .flex_none()
-                                    .text_right()
-                                    .text_size(px(10.))
-                                    .text_color(p.secondary)
-                                    .child(format!("{:.0}%", score * 100.)),
-                            ),
-                    );
-                }
-                stage = stage.child(
-                    column()
-                        .absolute()
-                        .left(relative(pos.0))
-                        .top(px(11.))
-                        .bottom(px(11.))
-                        .ml(px(-68.))
-                        .w(px(136.))
-                        .p_2()
-                        .gap_2()
-                        .justify_center()
-                        .rounded(chip_radius)
-                        .border_1()
-                        .border_color(p.line)
-                        .bg(p.panel)
-                        .child(title(label, p))
-                        .child(scores),
-                );
-                continue;
-            }
+            stage = stage.child(
+                hint(label, p)
+                    .absolute()
+                    .left_0()
+                    .top(relative(pos.1))
+                    .mt(px(-8.)),
+            );
+            let token_label = if pos == input_pos || phase >= out_at {
+                token_text.clone()
+            } else {
+                "—".into()
+            };
             stage = stage.child(
                 div()
                     .absolute()
                     .left(relative(pos.0))
                     .top(relative(pos.1))
-                    .ml(px(-34.))
+                    .ml(px(-45.))
                     .mt(px(-14.))
-                    .w(px(68.))
+                    .w(px(90.))
                     .h(px(28.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .overflow_hidden()
-                    .rounded(chip_radius)
+                    .rounded(radius)
                     .border_1()
                     .border_color(p.line)
-                    .bg(p.tray)
+                    .bg(p.panel)
                     .text_sm()
-                    .child(label),
+                    .child(div().truncate().child(token_label)),
             );
         }
+        let score_total = token.map_or(0., |token| {
+            token
+                .scores
+                .iter()
+                .take(expert_count)
+                .copied()
+                .filter(|score| score.is_finite() && *score > 0.)
+                .map(f64::from)
+                .sum()
+        });
+        let scores = div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .top(px(49.))
+            .h(px(score_height))
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.stage)
+            .flex()
+            .flex_col()
+            .py(px(4.))
+            .children(
+                self.experts
+                    .chunks(columns)
+                    .enumerate()
+                    .map(|(row_index, group)| {
+                        row()
+                            .w_full()
+                            .h(px(60.))
+                            .gap_0()
+                            .children(group.iter().enumerate().map(|(column_index, expert)| {
+                                let index = row_index * columns + column_index;
+                                let score = token
+                                    .and_then(|token| token.scores.get(index))
+                                    .copied()
+                                    .filter(|v| v.is_finite())
+                                    .unwrap_or(0.)
+                                    .max(0.);
+                                let weight = if score_total > 0. {
+                                    (f64::from(score) / score_total) as f32
+                                } else {
+                                    0.
+                                };
+                                let rank = route
+                                    .and_then(|r| r.choices.iter().position(|c| c.expert == index));
+                                let color = rank.map_or(p.faint, |r| rank_colors[r.min(1)]);
+                                column()
+                                    .id(("expert-probability", index))
+                                    .items_center()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap(px(3.))
+                                    .aria_label(format!("{} {:.0}%", expert.name, weight * 100.))
+                                    .child(
+                                        div()
+                                            .text_size(px(11.))
+                                            .text_color(if rank.is_some() {
+                                                p.ink
+                                            } else {
+                                                p.secondary
+                                            })
+                                            .child(format!("{:.0}%", weight * 100.)),
+                                    )
+                                    .child(
+                                        div()
+                                            .relative()
+                                            .h(px(34.))
+                                            .w(px(4.))
+                                            .rounded_full()
+                                            .bg(p.line)
+                                            .child(
+                                                div()
+                                                    .absolute()
+                                                    .bottom_0()
+                                                    .w_full()
+                                                    .h(relative(weight))
+                                                    .rounded_full()
+                                                    .bg(color),
+                                            ),
+                                    )
+                            }))
+                    }),
+            );
+        stage = stage.child(scores);
         for (i, expert) in self.experts.iter().enumerate() {
             let choice =
                 route.and_then(|r| r.choices.iter().enumerate().find(|(_, v)| v.expert == i));
@@ -725,7 +790,7 @@ impl Render for MixtureOfExperts {
                 "{} · {} · {} {}{}",
                 expert.name,
                 choice_text,
-                self.loads.get(i).copied().unwrap_or(0),
+                shown_loads[i],
                 tr(cx, "routes", "条路由"),
                 if dropped {
                     tr(cx, " · full", " · 已满")
@@ -736,11 +801,9 @@ impl Render for MixtureOfExperts {
             let pinned = self.pin == Some(Pin::Expert(i));
             let rank = choice.as_ref().map(|(rank, _)| *rank);
             let rank_color = match rank {
-                Some(0) => p.bright,
-                Some(_) => p.success,
+                Some(rank) => rank_colors[rank.min(1)],
                 None => p.line,
             };
-            let name = expert.name.clone();
             let bar = div()
                 .w_full()
                 .h(px(2.))
@@ -759,18 +822,33 @@ impl Render for MixtureOfExperts {
                             p.secondary.opacity(0.55)
                         }),
                 );
-            let pos = expert_position(i, expert_count, compact);
-            let cols = expert_count.clamp(1, 4) as f32;
-            let tile_width = if compact {
-                (width / cols - 6.).clamp(20., 96.)
-            } else {
-                150.
+            let pos = expert_position(i, expert_count, columns, expert_center, stage_height);
+            let in_row = expert_count
+                .saturating_sub(i / columns * columns)
+                .min(columns)
+                .max(1);
+            let tile_width = (width / in_row as f32 - 6.).clamp(20., 100.);
+            let tile_mark = match expert.id.as_ref() {
+                "code" => "</>".to_string(),
+                "numbers" => "#".to_string(),
+                "punctuation" => "“ ”".to_string(),
+                "names" => "Aa".to_string(),
+                "grammar" => "¶".to_string(),
+                "verbs" => "↗".to_string(),
+                "dates" => "01".to_string(),
+                "symbols" => "Σ".to_string(),
+                _ => expert
+                    .name
+                    .chars()
+                    .next()
+                    .map(|ch| ch.to_string())
+                    .unwrap_or_default(),
             };
             stage = stage.child(
                 face(
                     ("moe-expert", i),
                     caption,
-                    28.,
+                    46.,
                     crate::foundation::surface_radius(cx).into(),
                     Tone::Clear,
                     cx,
@@ -779,7 +857,7 @@ impl Render for MixtureOfExperts {
                 .left(relative(pos.0))
                 .top(relative(pos.1))
                 .ml(px(-tile_width / 2.))
-                .mt(px(-14.))
+                .mt(px(-23.))
                 .w(px(tile_width))
                 .px(px(4.))
                 .border_1()
@@ -813,8 +891,25 @@ impl Render for MixtureOfExperts {
                         .w_full()
                         .min_w_0()
                         .items_center()
-                        .child(div().max_w_full().truncate().child(name))
-                        .when(compact, |v| v.child(bar)),
+                        .gap_0()
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .text_color(if rank.is_some() {
+                                    rank_color
+                                } else {
+                                    p.secondary
+                                })
+                                .child(tile_mark),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.))
+                                .line_height(px(15.))
+                                .child(shown_loads[i].to_string()),
+                        )
+                        .child(bar),
                 )
                 .on_click(cx.listener(move |s, _, _, cx| s.pin(Pin::Expert(i), cx)))
                 .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
@@ -895,12 +990,56 @@ impl Render for MixtureOfExperts {
                 cx.stop_propagation();
             }))
         }));
+        let total_load = shown_loads.iter().sum::<usize>();
+        let peak_load = shown_loads.iter().copied().max().unwrap_or(0);
+        let balance = if peak_load > 0 {
+            (100. * total_load as f64 / (peak_load as f64 * expert_count as f64)).round()
+        } else {
+            0.
+        };
+        let load_balance = column()
+            .gap(px(7.))
+            .child(
+                row()
+                    .justify_between()
+                    .child(hint(tr(cx, "Load balance", "负载均衡"), p))
+                    .child(hint(
+                        if total_load > 0 {
+                            format!("{balance:.0}%")
+                        } else {
+                            tr(cx, "No routes yet", "暂无路由").to_owned()
+                        },
+                        p,
+                    )),
+            )
+            .child(
+                row()
+                    .w_full()
+                    .h(px(8.))
+                    .gap(px(2.))
+                    .rounded_full()
+                    .overflow_hidden()
+                    .bg(p.line)
+                    .children(
+                        shown_loads
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, load)| **load > 0)
+                            .map(|(i, &load)| {
+                                div()
+                                    .h_full()
+                                    .w(relative(load as f32 / total_load as f32))
+                                    .bg(rank_colors[i % 2]
+                                        .opacity(0.70 + 0.30 * (i as f32 / expert_count as f32)))
+                            }),
+                    ),
+            );
         column()
             .id("moe-card")
             .role(Role::Group)
             .aria_label(tr(cx, "Mixture of experts routing", "专家混合路由"))
             .w_full()
-            .max_w(px(669.))
+            .max_w(px(524.))
             .gap(px(16.))
             .p(px(if w.viewport_size().width < px(552.) {
                 16.
@@ -943,8 +1082,8 @@ impl Render for MixtureOfExperts {
                             ),
                     ),
             )
-            .child(tokens)
             .child(stage)
+            .child(tokens)
             .child(
                 column()
                     .gap_1()
@@ -954,6 +1093,7 @@ impl Render for MixtureOfExperts {
                     .child(hint(route_description, p))
                     .child(hint(detail, p)),
             )
+            .child(load_balance)
             .when(self.simulated, |v| {
                 v.child(hint(
                     tr(

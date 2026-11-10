@@ -24,11 +24,15 @@ let control = cx.new(|cx| UndoToast::new("Inbox", items, cx));
 
 Archive or delete items, then undo before the countdown expires. Repeated removals join the same batch. Hovering or focusing the notice pauses the timer.
 
+The timestamp shares a fixed-width cell with the archive and delete actions. The cell reveals actions on hover, and shows them for keyboard or touch input.
+
 ## API
 
 `resolve_commit` · `(u64, bool, &mut Context<Self>)`
 
 CommitRequested contains a batch ID and entries. The host must call resolve_commit with the matching ID; a failure restores rows in their original order. Pending operations stay local until the host commits.
+
+`with_avatars` associates optional image sources with item keys.
 
 Event: `UndoToastEvent`.
 

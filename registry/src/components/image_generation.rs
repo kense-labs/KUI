@@ -1,5 +1,6 @@
 //! Host-controlled image generation. No network, download or model is invoked by this view.
 use crate::primitives::{
+    brand_mark::brand_mark,
     editor::{EditEvent, Editor, EditorShortcutEvent, InputMode},
     family::{Paint, Slide, Tone, face},
     nav::tr,
@@ -342,7 +343,7 @@ impl Render for ImageGeneration {
         .min(px(440.))
         .max(px(1.));
         let measured_width = self.width.clone();
-        let tile_size = (side - px(8.)) / 2.;
+        let primary = self.selected.unwrap_or(self.cursor);
         let busy = self
             .tiles
             .iter()
@@ -375,7 +376,7 @@ impl Render for ImageGeneration {
                 .absolute()
                 .inset_0(),
             )
-            .max_w(px(640.))
+            .max_w(px(522.))
             .p_4()
             .rounded(r)
             .border_1()
@@ -419,6 +420,7 @@ impl Render for ImageGeneration {
                     .when(self.model != i, |b| {
                         b.hover(|s| s.bg(p.panel.opacity(0.55)).text_color(p.ink))
                     })
+                    .children(brand_mark(name, 15., cx))
                     .child(name.clone())
                     .on_click(cx.listener(move |s, _, _, cx| {
                         s.model = i;
@@ -491,13 +493,15 @@ impl Render for ImageGeneration {
                 }
                 let current = s.cursor;
                 let next = match e.keystroke.key.as_str() {
-                    "left" => current.saturating_sub(1),
-                    "right" => (current + 1).min(3),
-                    "up" => current.saturating_sub(2),
-                    "down" => (current + 2).min(3),
+                    "left" | "up" => current.saturating_sub(1),
+                    "right" | "down" => (current + 1).min(3),
                     _ => return,
                 };
                 s.cursor = next;
+                if s.selected.is_some_and(|index| index != next) {
+                    s.selected = None;
+                    cx.emit(ImageGenerationEvent::Select(None));
+                }
                 s.tile_focus.focus(w, cx);
                 cx.notify();
                 cx.stop_propagation();
@@ -506,13 +510,7 @@ impl Render for ImageGeneration {
             .tiles
             .iter()
             .all(|tile| tile.status == TileStatus::Empty);
-        let tile_indices: Vec<usize> = if idle {
-            Vec::new()
-        } else {
-            self.selected
-                .filter(|i| self.tiles[*i].status == TileStatus::Upscaling)
-                .map_or_else(|| (0..4).collect(), |i| vec![i])
-        };
+        let tile_indices: Vec<usize> = if idle { Vec::new() } else { vec![primary] };
         for i in tile_indices {
             let tile = &self.tiles[i];
             let progress = tile.visual.get(w, cx).clamp(0., 1.);
@@ -526,17 +524,8 @@ impl Render for ImageGeneration {
                 TileStatus::Stopped => tr(cx, "Stopped", "已停止"),
                 TileStatus::Upscaling => tr(cx, "Upscaling", "放大中"),
             };
-            let width = if tile.status == TileStatus::Upscaling {
-                side
-            } else {
-                tile_size
-            };
-            let ratio = tile.aspect;
-            let height = if tile.status == TileStatus::Upscaling {
-                (width / ratio).min(px(320.))
-            } else {
-                (tile_size / ratio).min(px(260.))
-            };
+            let width = side;
+            let height = (side / tile.aspect).min(px(520.));
             let mut tile_view = div()
                 .id(("image-tile", i))
                 .role(Role::Button)
@@ -705,6 +694,52 @@ impl Render for ImageGeneration {
                 );
             }
             grid = grid.child(tile_view.on_click(cx.listener(move |s, _, _, cx| s.select(i, cx))));
+            grid = grid.child(div().flex().w_full().gap(px(6.)).children(
+                self.tiles.iter().enumerate().map(|(index, tile)| {
+                    let label = format!("{} {}", tr(cx, "Image", "图片"), index + 1);
+                    face(
+                        ("image-thumbnail", index),
+                        label,
+                        44.,
+                        r.into(),
+                        Tone::Surface,
+                        cx,
+                    )
+                    .size(px(44.))
+                    .flex_none()
+                    .overflow_hidden()
+                    .border_1()
+                    .border_color(if index == primary { p.ink } else { p.line })
+                    .aria_toggled((index == primary).into())
+                    .child(tile.image.as_ref().map_or_else(
+                        || {
+                            div()
+                                .text_size(px(12.))
+                                .text_color(p.secondary)
+                                .child((index + 1).to_string())
+                                .into_any_element()
+                        },
+                        |image| {
+                            img(image.source.clone())
+                                .size_full()
+                                .rounded(r)
+                                .object_fit(ObjectFit::Cover)
+                                .into_any_element()
+                        },
+                    ))
+                    .on_click(cx.listener(move |s, _, _, cx| {
+                        s.cursor = index;
+                        if s.selected.is_some_and(|previous| previous != index) {
+                            s.selected = None;
+                            cx.emit(ImageGenerationEvent::Select(None));
+                        }
+                        if s.tiles[index].status == TileStatus::Ready && s.selected != Some(index) {
+                            s.select(index, cx);
+                        }
+                        cx.notify();
+                    }))
+                }),
+            ));
         }
         if idle {
             let dot_field = canvas(
@@ -863,6 +898,29 @@ impl Render for ImageGeneration {
                     );
             }
             root = root.child(actions);
+        } else if busy {
+            root = root.child(
+                div().flex().flex_wrap().gap_2().children(
+                    [
+                        ("image-upscale-busy", tr(cx, "Upscale", "放大")),
+                        ("image-vary-busy", tr(cx, "Vary", "生成变体")),
+                        ("image-download-busy", tr(cx, "Download", "下载")),
+                    ]
+                    .map(|(id, label)| {
+                        div()
+                            .id(id)
+                            .h(px(32.))
+                            .flex()
+                            .items_center()
+                            .px_2()
+                            .rounded(r)
+                            .bg(p.tray)
+                            .text_color(p.secondary)
+                            .opacity(0.45)
+                            .child(label)
+                    }),
+                ),
+            );
         }
         root.child(prompt).child(options)
     }

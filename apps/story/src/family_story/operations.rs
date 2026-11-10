@@ -474,7 +474,10 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             cx.new(|_| {
                 RunLanes::new(
                     id,
-                    t("Checkout conversion drop", "结账转化率下降"),
+                    t(
+                        "Checkout conversion drop on Oct 14",
+                        "10 月 14 日结账转化率下降",
+                    ),
                     names.map(String::from).to_vec(),
                     spans,
                 )
@@ -789,31 +792,67 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             use source_cards::*;
             let sources = [
                 (
-                    "docs.rs",
-                    "gpui",
-                    "https://docs.rs/gpui/",
+                    "stripe.com",
+                    t("Check the webhook signatures", "检查 Webhook 签名"),
+                    "https://docs.stripe.com/webhooks/signature",
                     t(
-                        "API reference and trait implementations.",
-                        "接口参考和 trait 实现。",
+                        "Use the unchanged raw request body to verify the signature.",
+                        "使用未经转换的原始请求体验证签名。",
                     ),
                 ),
                 (
-                    "rust-lang.org",
-                    "The Rust Book",
-                    "https://doc.rust-lang.org/book/",
-                    t("Ownership and borrowing examples.", "所有权和借用示例。"),
+                    "mozilla.org",
+                    "Request: text()",
+                    "https://developer.mozilla.org/en-US/docs/Web/API/Request/text",
+                    t(
+                        "Read the request body as UTF-8 text.",
+                        "将请求体读取为 UTF-8 文本。",
+                    ),
                 ),
                 (
-                    "developer.mozilla.org",
-                    "WebAssembly",
-                    "https://developer.mozilla.org/en-US/docs/WebAssembly",
-                    t("Browser module lifecycle.", "浏览器模块生命周期。"),
+                    "github.com",
+                    t(
+                        "Verifying signatures in App Router",
+                        "在 App Router 中验证签名",
+                    ),
+                    "https://github.com/stripe/stripe-node",
+                    t(
+                        "Check your route handler and signing secret.",
+                        "检查路由处理程序和签名密钥。",
+                    ),
+                ),
+                (
+                    "vercel.com",
+                    "Vercel Functions",
+                    "https://vercel.com/docs/functions",
+                    t(
+                        "Read the incoming Request in the handler.",
+                        "在处理程序中读取传入的 Request。",
+                    ),
+                ),
+                (
+                    "linear.app",
+                    t("Troubleshoot a webhook", "排查 Webhook"),
+                    "https://linear.app/docs/api-and-webhooks",
+                    t(
+                        "Inspect the delivery and signing details.",
+                        "检查投递和签名详情。",
+                    ),
                 ),
                 (
                     "w3.org",
-                    "ARIA",
-                    "https://www.w3.org/WAI/ARIA/apg/",
-                    t("Keyboard interaction patterns.", "键盘交互模式。"),
+                    "Web API",
+                    "https://www.w3.org/",
+                    t("Reference material for web requests.", "网页请求参考资料。"),
+                ),
+                (
+                    "figma.com",
+                    "Webhooks",
+                    "https://developers.figma.com/docs/rest-api/webhooks/",
+                    t(
+                        "Compare webhook payload and delivery details.",
+                        "对比 Webhook 请求和投递详情。",
+                    ),
                 ),
             ]
             .map(|(d, n, url, p)| Citation {
@@ -824,15 +863,28 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             })
             .to_vec();
             let e = cx.new(|_| {
-                CitationShelf::new(
+                let mut shelf = CitationShelf::new(
                     id,
                     t(
-                        "How does a Rust UI run in the browser?",
-                        "Rust 界面如何在浏览器中运行？",
+                        "Why does my Stripe webhook fail signature verification in a Next.js route handler?",
+                        "为什么 Stripe Webhook 在 Next.js 路由中无法通过签名验证？",
                     ),
                     sources.clone(),
-                )
+                );
+                shelf.state = SearchState::Searching;
+                shelf
             });
+            later(
+                &e,
+                1500,
+                |s, cx| {
+                    if matches!(s.state, SearchState::Searching) && !s.sources.is_empty() {
+                        s.state = SearchState::Ready;
+                        cx.notify();
+                    }
+                },
+                cx,
+            );
             for (mode, label) in [
                 (0, t("Live", "实时")),
                 (1, t("Failed", "失败")),
@@ -860,9 +912,11 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                         &e,
                         350,
                         move |s, cx| {
-                            s.sources = data;
-                            s.state = SearchState::Ready;
-                            cx.notify()
+                            if matches!(s.state, SearchState::Searching) && s.sources.is_empty() {
+                                s.sources = data;
+                                s.state = SearchState::Ready;
+                                cx.notify();
+                            }
                         },
                         cx,
                     )
@@ -1157,12 +1211,18 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                         line: 4,
                         before: vec!["let response = send(request).await?;".into()],
                         after: vec![
-                            "let response = retry(3, || send(request.clone())).await?;".into(),
+                            "const MAX_ATTEMPTS: usize = 4;".into(),
+                            "let mut response = send(request.clone()).await?;".into(),
+                            "for attempt in 1..MAX_ATTEMPTS {".into(),
+                            "    if !response.is_retryable() { break; }".into(),
+                            "    sleep(Duration::from_millis(250 << (attempt - 1))).await;".into(),
+                            "    response = send(request.clone()).await?;".into(),
+                            "}".into(),
                         ],
                         decision: Decision::Pending,
                     },
                     Hunk {
-                        line: 9,
+                        line: 12,
                         before: vec!["return response.body();".into()],
                         after: vec!["response.ensure_success()?.body()".into()],
                         decision: Decision::Pending,
@@ -1170,7 +1230,8 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                 ]
             };
             let e = cx.new(|cx| {
-                let mut s = PatchReview::new(id, "invoice.rs", hunks(), cx);
+                let mut s = PatchReview::new(id, "fetch_invoice.rs", hunks(), cx)
+                    .with_model("Claude Sonnet 5.5");
                 s.summary = t("Add retry with backoff", "添加退避重试").into();
                 s
             });

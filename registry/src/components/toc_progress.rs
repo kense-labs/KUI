@@ -5,6 +5,7 @@ use crate::primitives::{
     nav::*,
 };
 use gpui::{prelude::*, *};
+use std::{cell::RefCell, rc::Rc};
 pub struct ReadingSection {
     pub heading: SharedString,
     pub body: SharedString,
@@ -26,6 +27,7 @@ impl ReadingSection {
 pub struct SectionChanged(pub usize);
 pub struct ReadingOutline {
     title: SharedString,
+    byline: Option<SharedString>,
     sections: Vec<ReadingSection>,
     scroll: ScrollHandle,
     current: usize,
@@ -42,6 +44,7 @@ impl ReadingOutline {
     ) -> Self {
         Self {
             title: title.into(),
+            byline: None,
             sections,
             scroll: ScrollHandle::new(),
             current: 0,
@@ -49,6 +52,12 @@ impl ReadingOutline {
             reading: Slide::new(0.),
             minutes,
         }
+    }
+
+    /// Add author and publication information below the article title.
+    pub fn with_byline(mut self, byline: impl Into<SharedString>) -> Self {
+        self.byline = Some(byline.into());
+        self
     }
 }
 impl Render for ReadingOutline {
@@ -102,13 +111,7 @@ impl Render for ReadingOutline {
             ((1. - fraction) * self.minutes as f32).ceil() as u32,
             tr(cx, "min left", "分钟读完")
         );
-        let mut toc = panel(cx).p_3().child(
-            row()
-                .justify_between()
-                .pb_2()
-                .child(label(tr(cx, "On this page", "本页目录"), 14., p.ink))
-                .child(label(remaining, 12., p.faint)),
-        );
+        let mut toc = column().relative();
         for (i, v) in self.sections.iter().enumerate() {
             article = article.child(
                 column()
@@ -127,32 +130,12 @@ impl Render for ReadingOutline {
                 toc = toc.child(
                     button(("section", i), v.heading.clone(), cx)
                         .h_auto()
-                        .py_1()
-                        .pl(px(8. + 8. * v.depth as f32))
+                        .min_h(px(25.))
+                        .py(px(3.))
+                        .pl(px(22. + 8. * v.depth.min(4) as f32))
                         .justify_start()
-                        .h(px(25.))
-                        .py_0()
                         .text_color(if i == active { p.ink } else { p.secondary })
-                        .child(
-                            div()
-                                .relative()
-                                .w(px(8.))
-                                .h_full()
-                                .border_l_1()
-                                .border_color(p.line)
-                                .when(i == marker.floor() as usize, |d| {
-                                    d.child(
-                                        div()
-                                            .absolute()
-                                            .top(px(10. + 25. * marker.fract()))
-                                            .left(px(-3.))
-                                            .size(px(5.))
-                                            .rounded_full()
-                                            .bg(p.ink),
-                                    )
-                                }),
-                        )
-                        .child(v.heading.clone())
+                        .child(div().w_full().whitespace_normal().child(v.heading.clone()))
                         .on_click(cx.listener(move |s, _, _, cx| {
                             if let Some(bounds) = s.scroll.bounds_for_item(i) {
                                 let goal = f32::from(
@@ -169,6 +152,72 @@ impl Render for ReadingOutline {
                 )
             }
         }
+        let depths = self
+            .sections
+            .iter()
+            .map(|v| v.depth.min(4))
+            .collect::<Vec<_>>();
+        let count = depths.len();
+        let layout = Rc::new(RefCell::new(Vec::with_capacity(count)));
+        let paint_layout = layout.clone();
+        let rail = canvas(
+            |_, _, _| (),
+            move |_, _, w, _| {
+                let boxes = paint_layout.borrow();
+                let centers = boxes
+                    .iter()
+                    .zip(&depths)
+                    .map(|(b, depth): (&Bounds<Pixels>, &usize)| {
+                        point(b.left() + px(10. + *depth as f32 * 8.), b.center().y)
+                    })
+                    .collect::<Vec<_>>();
+                if let Some(first) = centers.first().copied() {
+                    let mut path = PathBuilder::stroke(px(1.));
+                    path.move_to(first);
+                    for pair in centers.windows(2) {
+                        let middle = pair[0].y + (pair[1].y - pair[0].y) * 0.5;
+                        path.line_to(point(pair[0].x, middle - px(3.)));
+                        path.line_to(point(pair[1].x, middle + px(3.)));
+                        path.line_to(pair[1]);
+                    }
+                    if let Ok(path) = path.build() {
+                        w.paint_path(path, p.line);
+                    }
+                    let index = (marker.floor() as usize).min(centers.len() - 1);
+                    let from = centers[index];
+                    let to = centers.get(index + 1).copied().unwrap_or(from);
+                    let fraction = marker.fract();
+                    let y = from.y + (to.y - from.y) * fraction;
+                    let middle = from.y + (to.y - from.y) * 0.5;
+                    let bend = (f32::from(y - middle + px(3.)) / 6.).clamp(0., 1.);
+                    let position = point(from.x + (to.x - from.x) * bend, y);
+                    w.paint_quad(
+                        fill(
+                            Bounds::new(position - point(px(3.), px(3.)), size(px(6.), px(6.))),
+                            p.ink,
+                        )
+                        .corner_radii(px(3.)),
+                    );
+                }
+            },
+        )
+        .absolute()
+        .inset_0();
+        let toc = panel(cx)
+            .p_4()
+            .child(
+                row()
+                    .justify_between()
+                    .pb_3()
+                    .child(
+                        label(tr(cx, "On this page", "本页目录"), 14., p.ink)
+                            .font_weight(FontWeight::MEDIUM),
+                    )
+                    .child(label(remaining, 12., p.faint)),
+            )
+            .child(toc.child(rail).on_children_prepainted(move |boxes, _, _| {
+                *layout.borrow_mut() = boxes.iter().take(count).copied().collect();
+            }));
         let monitor = canvas(
             |_, _, _| (),
             move |b, _, _, cx| {
@@ -183,12 +232,24 @@ impl Render for ReadingOutline {
         )
         .absolute()
         .inset_0();
-        let height = px(312.);
+        let height = px(416.);
         column().w(fit(w, 520.)).gap_3().child(toc).child(
             panel(cx)
                 .p_4()
-                .gap_3()
-                .child(label(self.title.clone(), 20., p.ink))
+                .gap_4()
+                .child(
+                    column()
+                        .px_3()
+                        .gap_1()
+                        .child(
+                            label(self.title.clone(), 26., p.ink)
+                                .font_weight(FontWeight::MEDIUM)
+                                .line_height(px(31.)),
+                        )
+                        .when_some(self.byline.clone(), |head, byline| {
+                            head.child(label(byline, 12., p.faint))
+                        }),
+                )
                 .child(div().relative().h(height).child(article).child(monitor)),
         )
     }

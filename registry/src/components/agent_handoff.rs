@@ -1,5 +1,6 @@
 //! Host-controlled assistant-to-person handoff. This view never contacts a support service.
 use crate::primitives::{
+    brand_mark::brand_mark,
     editor::{EditEvent, Editor, InputMode},
     family::{Paint, Slide, Tone, face},
     glyph::{Glyph, icon},
@@ -102,6 +103,7 @@ fn draft_is_unchanged(sent: Option<&str>, current: &str) -> bool {
 pub struct AgentHandoff {
     title: SharedString,
     subtitle: SharedString,
+    assistant_model: Option<SharedString>,
     task: SharedString,
     summary: HandoffSummary,
     messages: Vec<HandoffMessage>,
@@ -143,6 +145,7 @@ impl AgentHandoff {
         Self {
             title: title.into(),
             subtitle: "".into(),
+            assistant_model: None,
             task: task.into(),
             summary,
             messages: Vec::new(),
@@ -165,6 +168,11 @@ impl AgentHandoff {
     }
     pub fn subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
         self.subtitle = subtitle.into();
+        self
+    }
+    /// Name the model shown on assistant messages.
+    pub fn with_assistant_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.assistant_model = Some(model.into());
         self
     }
     pub fn estimate(mut self, estimate: impl Into<SharedString>) -> Self {
@@ -308,6 +316,7 @@ impl AgentHandoff {
 fn message_view(
     message: &HandoffMessage,
     agent: &str,
+    model: Option<&str>,
     p: Paint,
     radius: Pixels,
     cx: &App,
@@ -330,7 +339,22 @@ fn message_view(
                 .text_size(px(12.))
                 .line_height(px(16.))
                 .text_color(p.secondary)
-                .child(format!("{} {}", name, message.time)),
+                .gap(px(6.))
+                .children(if message.author == HandoffAuthor::Assistant {
+                    model.and_then(|model| brand_mark(model, 14., cx))
+                } else {
+                    None
+                })
+                .child(format!(
+                    "{} {} {}",
+                    name,
+                    if message.author == HandoffAuthor::Assistant {
+                        model.unwrap_or_default()
+                    } else {
+                        ""
+                    },
+                    message.time
+                )),
         )
         .child(
             div()
@@ -383,7 +407,14 @@ impl Render for AgentHandoff {
             .iter()
             .filter(|message| !message.after_handoff)
         {
-            thread = thread.child(message_view(message, &self.agent, p, radius, cx));
+            thread = thread.child(message_view(
+                message,
+                &self.agent,
+                self.assistant_model.as_deref(),
+                p,
+                radius,
+                cx,
+            ));
         }
         if self.stage == HandoffStage::Assistant {
             thread = thread.child(
@@ -395,6 +426,7 @@ impl Render for AgentHandoff {
                     Tone::Surface,
                     cx,
                 )
+                .ml_auto()
                 .pl(px(12.))
                 .pr(px(14.))
                 .gap(px(6.))
@@ -570,7 +602,14 @@ impl Render for AgentHandoff {
             thread = thread.child(card);
         }
         for message in self.messages.iter().filter(|message| message.after_handoff) {
-            thread = thread.child(message_view(message, &self.agent, p, radius, cx));
+            thread = thread.child(message_view(
+                message,
+                &self.agent,
+                self.assistant_model.as_deref(),
+                p,
+                radius,
+                cx,
+            ));
         }
         let mut root = div()
             .id("agent-handoff")

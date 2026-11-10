@@ -7,6 +7,8 @@ use crate::primitives::{
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, f32::consts::TAU, rc::Rc};
+
+type NodeMark = Box<dyn Fn() -> AnyElement>;
 #[derive(Clone, Debug)]
 pub struct DataFlowNode {
     pub id: SharedString,
@@ -81,6 +83,7 @@ pub struct DataFlow {
     destinations: Vec<DataFlowNode>,
     snapshot: DataFlowSnapshot,
     icons: HashMap<SharedString, Glyph>,
+    marks: HashMap<SharedString, NodeMark>,
     counter: Option<Entity<AnimatedCounter>>,
     selected: Option<usize>,
     hovered: Option<usize>,
@@ -106,6 +109,7 @@ impl DataFlow {
             destinations,
             snapshot,
             icons: HashMap::new(),
+            marks: HashMap::new(),
             counter: None,
             selected: None,
             hovered: None,
@@ -120,6 +124,15 @@ impl DataFlow {
     /// Supplies an optional icon for a host-defined node ID.
     pub fn with_node_icon(mut self, id: impl Into<SharedString>, glyph: Glyph) -> Self {
         self.icons.insert(id.into(), glyph);
+        self
+    }
+    /// Supplies a decorative mark for a node, taking precedence over its glyph.
+    pub fn with_node_mark(
+        mut self,
+        id: impl Into<SharedString>,
+        mark: impl Fn() -> AnyElement + 'static,
+    ) -> Self {
+        self.marks.insert(id.into(), Box::new(mark));
         self
     }
     pub fn set_snapshot(&mut self, snapshot: DataFlowSnapshot, cx: &mut Context<Self>) {
@@ -313,7 +326,7 @@ impl Render for DataFlow {
         let stage_h = if width <= 0. {
             360.
         } else if narrow {
-            (width * 1.24).clamp(440., 560.)
+            (width * 0.97).clamp(400., 510.)
         } else {
             (width * 0.4).clamp(300., 400.)
         };
@@ -331,7 +344,7 @@ impl Render for DataFlow {
             .get_or_insert_with(|| {
                 cx.new(|_| {
                     AnimatedCounter::new(self.snapshot.processed.min(1_000_000_000_000) as f64)
-                        .with_size(20.)
+                        .with_size(14.)
                 })
             })
             .clone();
@@ -514,6 +527,7 @@ impl Render for DataFlow {
                 .inset_0(),
             );
         let mut node_elements = Vec::new();
+        let core_side_caption = narrow && width >= 360.;
         for index in 0..self.total() {
             let (side, within, count) = if index < source_count {
                 (0, index, source_count)
@@ -561,18 +575,25 @@ impl Render for DataFlow {
                     .when(observed.is_some() && observed != Some(index), |v| {
                         v.opacity(0.5)
                     })
-                    .when_some(self.icons.get(&node.id).copied(), |node, glyph| {
-                        node.child(icon(glyph, 16., p.secondary))
-                    })
-                    .child(
-                        div()
-                            .max_w_full()
-                            .truncate()
-                            .text_size(px(if narrow { 12. } else { 14. }))
-                            .line_height(px(if narrow { 16. } else { 20. }))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(label),
+                    .when_some(
+                        self.marks.get(&node.id).map(|mark| mark()).or_else(|| {
+                            self.icons
+                                .get(&node.id)
+                                .map(|&glyph| icon(glyph, 16., p.secondary).into_any_element())
+                        }),
+                        |node, mark| node.child(mark),
                     )
+                    .when(side != 1 || !core_side_caption, |v| {
+                        v.child(
+                            div()
+                                .max_w_full()
+                                .truncate()
+                                .text_size(px(if narrow { 12. } else { 14. }))
+                                .line_height(px(if narrow { 16. } else { 20. }))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(label),
+                        )
+                    })
                     .when(!narrow && side != 1 && !meta.is_empty(), |v| {
                         v.child(
                             div()
@@ -608,10 +629,50 @@ impl Render for DataFlow {
                 }
             })
             .unwrap_or_else(|| tr(cx, "Select a node to inspect", "选择节点查看说明").into());
+        let core_rect = chip_rect(width.max(1.), stage_h, 0, 1, 1);
+        let summary = column()
+            .min_w_0()
+            .gap_0()
+            .when(core_side_caption, |v| {
+                v.child(
+                    div()
+                        .text_size(px(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(self.core.label.clone()),
+                )
+            })
+            .child(
+                row()
+                    .flex_wrap()
+                    .gap_1()
+                    .items_center()
+                    .when(self.snapshot.processed <= 1_000_000_000_000, |v| {
+                        v.child(counter)
+                    })
+                    .when(self.snapshot.processed > 1_000_000_000_000, |v| {
+                        v.child(self.snapshot.processed.to_string())
+                    })
+                    .child(hint(tr(cx, "processed", "条已处理"), p)),
+            );
+        let graph = graph.children(node_elements);
+        let (graph, summary) = if core_side_caption {
+            (
+                graph.child(
+                    summary
+                        .absolute()
+                        .left(px(core_rect.0 + core_rect.2 + 10.))
+                        .right_0()
+                        .top(px(core_rect.1 + 16.)),
+                ),
+                None,
+            )
+        } else {
+            (graph, Some(summary))
+        };
         column()
             .w_full()
             .max_w(px(920.))
-            .gap_3()
+            .gap_2()
             .p(px(16.))
             .rounded(crate::foundation::surface_radius(cx))
             .bg(p.panel)
@@ -626,52 +687,48 @@ impl Render for DataFlow {
                     .child(title(tr(cx, "Data flow", "数据流"), p))
                     .child(hint(status, p)),
             )
-            .child(graph.children(node_elements))
+            .child(graph)
+            .children(summary)
             .child(
                 row()
-                    .items_center()
+                    .justify_between()
                     .gap_2()
-                    .when(self.snapshot.processed <= 1_000_000_000_000, |row| {
-                        row.child(counter)
-                    })
-                    .when(self.snapshot.processed > 1_000_000_000_000, |row| {
-                        row.child(self.snapshot.processed.to_string())
-                    })
-                    .child(hint(tr(cx, "processed", "条已处理"), p)),
-            )
-            .child(
-                div()
-                    .mt(px(16.))
-                    .text_size(px(14.))
-                    .line_height(px(20.))
-                    .text_color(p.secondary)
-                    .child(details),
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(14.))
+                            .line_height(px(20.))
+                            .text_color(p.secondary)
+                            .child(details),
+                    )
+                    .child(
+                        face(
+                            "data-flow-pause",
+                            if self.paused {
+                                tr(cx, "Resume animation", "继续动画")
+                            } else {
+                                tr(cx, "Pause animation", "暂停动画")
+                            },
+                            36.,
+                            crate::foundation::surface_radius(cx).into(),
+                            Tone::Surface,
+                            cx,
+                        )
+                        .px(px(10.))
+                        .aria_toggled(self.paused.into())
+                        .child(if self.paused {
+                            tr(cx, "Resume animation", "继续动画")
+                        } else {
+                            tr(cx, "Pause animation", "暂停动画")
+                        })
+                        .on_click(cx.listener(|s, _, _, cx| s.set_paused(!s.paused, cx))),
+                    ),
             )
             .when(!self.snapshot.message.is_empty(), |v| {
                 v.child(hint(self.snapshot.message.clone(), p))
             })
-            .child(
-                face(
-                    "data-flow-pause",
-                    if self.paused {
-                        tr(cx, "Resume animation", "继续动画")
-                    } else {
-                        tr(cx, "Pause animation", "暂停动画")
-                    },
-                    36.,
-                    crate::foundation::surface_radius(cx).into(),
-                    Tone::Surface,
-                    cx,
-                )
-                .px(px(10.))
-                .aria_toggled(self.paused.into())
-                .child(if self.paused {
-                    tr(cx, "Resume animation", "继续动画")
-                } else {
-                    tr(cx, "Pause animation", "暂停动画")
-                })
-                .on_click(cx.listener(|s, _, _, cx| s.set_paused(!s.paused, cx))),
-            )
     }
 }
 #[cfg(test)]

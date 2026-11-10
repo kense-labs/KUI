@@ -144,7 +144,7 @@ impl Demo {
                         width * 0.54
                     } else {
                         let t = ((width - 342.) / 179.61).clamp(0., 1.);
-                        184.68 + (161.7 - 184.68) * t
+                        184.68 + (172. - 184.68) * t
                     }
                 })
         });
@@ -233,7 +233,7 @@ impl Render for Demo {
             .child(save);
         div()
             .w_full()
-            .min_h(px(520.))
+            .min_h(px(542.))
             .px_6()
             .py_10()
             .bg(p.stage)

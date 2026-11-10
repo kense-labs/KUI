@@ -71,10 +71,10 @@ impl Demo {
 
 impl Render for Demo {
     fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let stage_height = if window.viewport_size().width < px(576.) {
-            620.
+        let stage_height = if window.viewport_size().width < px(400.) {
+            648.
         } else {
-            564.
+            612.
         };
         div()
             .w_full()
@@ -84,6 +84,6 @@ impl Render for Demo {
             .items_start()
             .px(px(8.))
             .py(px(22.))
-            .child(self.0.clone())
+            .child(div().w_full().max_w(px(552.)).child(self.0.clone()))
     }
 }

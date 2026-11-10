@@ -26,6 +26,8 @@ Paste source text, request suggestions, review low-confidence values and save. A
 
 ## API
 
+Source evidence is displayed above the editable fields. The preview starts a local extraction and leaves low-confidence suggestions for review.
+
 `apply` · `(u64, SmartSuggestion, &Window, &mut Context<Self>) -> bool`
 
 Handle SmartFillEvent::Requested and Cancelled in the host; pass the request ID to apply, finish or fail. Submitted contains reviewed values; the host owns extraction and persistence.

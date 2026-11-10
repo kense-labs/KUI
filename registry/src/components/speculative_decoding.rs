@@ -1411,9 +1411,10 @@ impl Render for SpeculativeDecoding {
             (f32::from(w.viewport_size().width) - 32.).clamp(200., 720.)
         };
         let narrow = width < NARROW;
+        let stacked_lanes = width < 640.;
         let pad = if narrow { 16. } else { 24. };
         let inner_width = width - pad * 2. - 2.;
-        let line_width = (inner_width - if narrow { 0. } else { 136. }).max(50.);
+        let line_width = (inner_width - if stacked_lanes { 0. } else { 136. }).max(50.);
         let ready = self.status == DecodeStatus::Ready;
         let time = self.elapsed;
         let done = self.plan.passed(time);
@@ -1550,9 +1551,9 @@ impl Render for SpeculativeDecoding {
         let lane_names = div()
             .flex()
             .flex_none()
-            .gap(px(if narrow { 20. } else { 8. }))
-            .when(narrow, |d| d.w_full().h(px(38.)))
-            .when(!narrow, |d| d.w(px(120.)).flex_col())
+            .gap(px(if stacked_lanes { 20. } else { 8. }))
+            .when(stacked_lanes, |d| d.w_full().min_h(px(38.)).flex_wrap())
+            .when(!stacked_lanes, |d| d.w(px(120.)).flex_col())
             .child(lane_label(
                 labels[0].clone(),
                 labels[1].clone(),
@@ -1787,12 +1788,12 @@ impl Render for SpeculativeDecoding {
         let slider = has_slider.then(|| self.slider(ready, p, cx));
         let controls = div()
             .flex()
+            .flex_col()
+            .items_start()
             .w_full()
             .min_w_0()
-            .gap(px(if narrow { 12. } else { 24. }))
-            .when(narrow, |d| d.flex_col().items_start())
-            .when(!narrow, |d| d.items_end().justify_between())
-            .when_some(slider, |d, slider| d.child(slider))
+            .gap(px(8.))
+            .when_some(slider, |d, slider| d.child(slider.w_full()))
             .child(switch)
             .opacity(if ready { 1. } else { 0.5 });
         let stats = self.stats_row(totals, narrow, p, cx);
@@ -1834,7 +1835,7 @@ impl Render for SpeculativeDecoding {
                     .items_start()
                     .min_w_0()
                     .opacity(if ready { 1. } else { 0.5 })
-                    .when(narrow, |d| d.flex_col().gap(px(12.)))
+                    .when(stacked_lanes, |d| d.flex_col().gap(px(12.)))
                     .when(!narrow, |d| d.gap(px(16.)))
                     .child(lane_names)
                     .child(lane_content),

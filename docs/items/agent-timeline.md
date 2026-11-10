@@ -33,7 +33,7 @@ let control = cx.new(|_| RunLanes::new("run","Release review",vec!["Planner".int
 
 ## Interaction
 
-Place work on a shared time axis. Select a span to highlight its direct handoff. Drag the scrubber or use arrow keys to seek by one second; Home and End jump to the first and last frame. Seeking pauses playback. Speed cycles through 0.5×, 1× and 2×.
+Place work on a shared time axis. Select a span to highlight its direct handoff. Drag the axis or use arrow keys to seek by one second. Home and End jump to the first and last frame. Seeking pauses playback. Choose 1× or 2× from the speed control.
 
 ## API
 

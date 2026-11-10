@@ -150,6 +150,8 @@ fn scroll_report(scroll: ScrollHandle) -> impl IntoElement {
 pub struct MegaMenuMorph {
     brand: SharedString,
     brand_id: SharedString,
+    brand_images: Option<[ImageSource; 2]>,
+    compact_below: Pixels,
     primary: Option<(SharedString, SharedString)>,
     sections: Vec<MegaMenuSection>,
     open: Option<usize>,
@@ -213,6 +215,8 @@ impl MegaMenuMorph {
         Self {
             brand: brand.into(),
             brand_id: "brand".into(),
+            brand_images: None,
+            compact_below: px(0.),
             primary: None,
             sections,
             open: None,
@@ -244,6 +248,16 @@ impl MegaMenuMorph {
     }
     pub fn with_brand_id(mut self, id: impl Into<SharedString>) -> Self {
         self.brand_id = id.into();
+        self
+    }
+    /// Set the images shown before the brand label in each color theme.
+    pub fn with_brand_images(mut self, light: ImageSource, dark: ImageSource) -> Self {
+        self.brand_images = Some([light, dark]);
+        self
+    }
+    /// Use the compact navigation below this width even if all labels fit.
+    pub fn with_compact_below(mut self, width: Pixels) -> Self {
+        self.compact_below = width.max(px(0.));
         self
     }
     pub fn with_primary(
@@ -672,7 +686,8 @@ impl Render for MegaMenuMorph {
                 .primary
                 .as_ref()
                 .map_or(0., |(_, label)| measure(label, 14., w) + 30.);
-        let compact = viewport < natural + 24.;
+        let brand_width = if self.brand_images.is_some() { 24. } else { 0. };
+        let compact = viewport < (natural + brand_width + 24.).max(self.compact_below.into());
         let visible = self.presence.get(w, cx).clamp(0., 1.);
         let index = self
             .open
@@ -707,6 +722,13 @@ impl Render for MegaMenuMorph {
                 .mr(px(8.))
                 .text_size(px(16.))
                 .font_weight(FontWeight::MEDIUM)
+                .when_some(self.brand_images.as_ref(), |b, images| {
+                    b.child(
+                        img(images[usize::from(dark)].clone())
+                            .size(px(18.))
+                            .flex_none(),
+                    )
+                })
                 .child(self.brand.clone())
                 .on_click(cx.listener(move |s, _, _, cx| {
                     cx.emit(MegaMenuNavigate(brand_id.clone()));

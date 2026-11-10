@@ -2,9 +2,11 @@
 use crate::{
     components::input::{Input, InputStyle},
     primitives::{
+        brand_mark::brand_mark,
         clipboard,
         control::UiLanguage,
         direct_touch::Contact,
+        editor::EditEvent,
         family::{Paint, PhaseClock, Tone, disabled_motion, face, standard_ease},
         field::{Field, FieldEvent},
         glyph::{Glyph, icon},
@@ -88,6 +90,7 @@ pub enum AskDataEvent {
 pub struct AskYourData {
     question: Entity<Input>,
     source: SharedString,
+    dialect: Option<SharedString>,
     run_question: SharedString,
     sql: String,
     status: AskDataStatus,
@@ -98,11 +101,14 @@ pub struct AskYourData {
     result: Option<AskDataResult>,
     error: SharedString,
     sql_open: bool,
+    sql_preference: Option<bool>,
     view: AskDataView,
+    stacked: bool,
     chart_focus: FocusHandle,
     chart_bounds: Rc<Cell<Bounds<Pixels>>>,
     contact: Contact,
     selected: usize,
+    inspecting: bool,
     page: usize,
     hovered_row: Option<usize>,
     plot: PhaseClock,
@@ -112,6 +118,7 @@ pub struct AskYourData {
     copy_epoch: u64,
     action_focus: FocusHandle,
     _sub: Subscription,
+    _escape: Subscription,
 }
 impl EventEmitter<AskDataEvent> for AskYourData {}
 impl AskYourData {
@@ -124,13 +131,27 @@ impl AskYourData {
                 w,
                 cx,
             )
+            .with_placeholder(
+                lang.text("Ask a question about your data", "输入想查询的问题"),
+                cx,
+            )
+        });
+        let editor = question.read(cx).editor();
+        let escape = cx.subscribe(&editor, |s: &mut Self, _, e: &EditEvent, cx| {
+            if matches!(e, EditEvent::Escape) {
+                s.stop(cx);
+            }
         });
         let sub = cx.subscribe_in(
             &question,
             w,
             |s: &mut Self, _, event: &FieldEvent, w, cx| match event {
                 FieldEvent::Submitted => {
-                    s.run(w, cx);
+                    if s.active.is_some() {
+                        s.stop(cx);
+                    } else {
+                        s.run(w, cx);
+                    }
                 }
                 FieldEvent::Changed(value) if value != &s.run_question => {
                     s.invalidate_result(cx);
@@ -141,6 +162,7 @@ impl AskYourData {
         Self {
             question,
             source: source.into(),
+            dialect: None,
             run_question: "".into(),
             sql: String::new(),
             status: AskDataStatus::Idle,
@@ -151,11 +173,14 @@ impl AskYourData {
             result: None,
             error: "".into(),
             sql_open: false,
+            sql_preference: None,
             view: AskDataView::Bars,
+            stacked: true,
             chart_focus: cx.focus_handle().tab_stop(true),
             chart_bounds: Default::default(),
             contact: Default::default(),
             selected: 0,
+            inspecting: false,
             page: 0,
             hovered_row: None,
             plot: PhaseClock::default(),
@@ -165,10 +190,23 @@ impl AskYourData {
             copy_epoch: 0,
             action_focus: cx.focus_handle().tab_stop(true),
             _sub: sub,
+            _escape: escape,
         }
     }
     pub fn question(&self) -> Entity<Input> {
         self.question.clone()
+    }
+    /// Dialect name and its mark in the generated query header, when available.
+    pub fn with_dialect(mut self, dialect: impl Into<SharedString>) -> Self {
+        self.dialect = Some(dialect.into());
+        self
+    }
+    /// Show grouped columns instead of stacked totals for rates or averages.
+    pub fn set_stacked(&mut self, stacked: bool, cx: &mut Context<Self>) {
+        if self.stacked != stacked {
+            self.stacked = stacked;
+            cx.notify();
+        }
     }
     pub fn status(&self) -> AskDataStatus {
         self.status
@@ -220,8 +258,9 @@ impl AskYourData {
         let question: SharedString = raw_question.trim().to_owned().into();
         if question.is_empty() {
             let text = UiLanguage::current(cx).text("Enter a question first", "请先输入问题");
-            self.question
-                .update(cx, |input, cx| input.set_error(text, cx));
+            self.status = AskDataStatus::Failed;
+            self.error = text.into();
+            cx.notify();
             return false;
         }
         let _ = w;
@@ -237,10 +276,11 @@ impl AskYourData {
         self.scanned = 0;
         self.total = None;
         self.result = None;
-        self.sql_open = true;
+        self.sql_open = self.sql_preference.unwrap_or(true);
         self.copied = None;
         self.copy_epoch = self.copy_epoch.wrapping_add(1);
         self.selected = 0;
+        self.inspecting = false;
         self.page = 0;
         self.plot = PhaseClock::default();
         cx.emit(AskDataEvent::GenerateSql { id, question });
@@ -272,7 +312,7 @@ impl AskYourData {
         let next = self.next_id();
         self.active = Some(next);
         self.status = AskDataStatus::RunningQuery;
-        self.sql_open = false;
+        self.sql_open = self.sql_preference.unwrap_or(false);
         cx.emit(AskDataEvent::RunQuery {
             id: next,
             sql: self.sql.clone().into(),
@@ -373,9 +413,13 @@ impl AskYourData {
         if b.size.width <= px(0.) {
             return;
         }
-        let f = ((x - b.left()) / b.size.width).clamp(0., 0.9999);
-        self.selected = ((f * count as f32) as usize).min(count - 1);
-        cx.notify();
+        let f = ((x - b.left() - px(34.)) / (b.size.width - px(34.)).max(px(1.))).clamp(0., 0.9999);
+        let next = ((f * count as f32) as usize).min(count - 1);
+        if next != self.selected || !self.inspecting {
+            self.selected = next;
+            self.inspecting = true;
+            cx.notify();
+        }
     }
 }
 fn chart_readout(result: &AskDataResult, index: usize) -> String {
@@ -385,10 +429,114 @@ fn chart_readout(result: &AskDataResult, index: usize) -> String {
         .map_or_else(String::new, ToString::to_string);
     for series in &result.series {
         if let Some(value) = series.values.get(index).filter(|v| v.is_finite()) {
-            text.push_str(&format!(" · {}: {:.2}", series.name, value));
+            text.push_str(&format!(" · {}: {}", series.name, number(*value)));
         }
     }
     text
+}
+
+fn number(value: f64) -> String {
+    if value.abs() >= 1_000_000. {
+        format!("{value:.1e}")
+    } else if (value.round() - value).abs() < 0.005 {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.2}")
+    }
+}
+
+fn database_mark(ink: Hsla) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, w, _| {
+            let c = bounds.center();
+            let mut path = PathBuilder::stroke(px(1.2));
+            let oval = |path: &mut PathBuilder, y: f32, start: usize, end: usize| {
+                for i in start..=end {
+                    let angle = i as f32 * std::f32::consts::TAU / 24.;
+                    let point = c + point(px(5.5 * angle.cos()), px(y + 2.1 * angle.sin()));
+                    if i == start {
+                        path.move_to(point);
+                    } else {
+                        path.line_to(point);
+                    }
+                }
+            };
+            oval(&mut path, -4., 0, 24);
+            for y in [0., 4.] {
+                oval(&mut path, y, 0, 12);
+            }
+            for x in [-5.5, 5.5] {
+                path.move_to(c + point(px(x), px(-4.)));
+                path.line_to(c + point(px(x), px(4.)));
+            }
+            if let Ok(path) = path.build() {
+                w.paint_path(path, ink);
+            }
+        },
+    )
+    .size(px(16.))
+    .flex_none()
+}
+
+fn sql_text(line: &str, p: Paint) -> StyledText {
+    let mut highlights = Vec::new();
+    let dark = p.ink.to_rgb().r > 0.5;
+    let keyword = rgb(if dark { 0xcb9cf0 } else { 0x7950a4 });
+    let literal = rgb(if dark { 0x86d6b9 } else { 0x237b65 });
+    let mut words = line.char_indices().peekable();
+    while let Some((start, ch)) = words.next() {
+        let (end, color) = if line[start..].starts_with("--") {
+            highlights.push((
+                start..line.len(),
+                HighlightStyle {
+                    color: Some(p.faint),
+                    ..Default::default()
+                },
+            ));
+            break;
+        } else if ch == '\'' {
+            let mut end = line.len();
+            for (i, ch) in words.by_ref() {
+                if ch == '\'' {
+                    end = i + 1;
+                    break;
+                }
+            }
+            (end, Some(literal))
+        } else if ch.is_ascii_alphanumeric() || ch == '_' {
+            while words
+                .peek()
+                .is_some_and(|(_, ch)| ch.is_ascii_alphanumeric() || *ch == '_')
+            {
+                words.next();
+            }
+            let end = words.peek().map_or(line.len(), |(i, _)| *i);
+            let kind = line[start..end].to_ascii_uppercase();
+            let color = match kind.as_str() {
+                "SELECT" | "AS" | "FROM" | "WHERE" | "AND" | "BY" | "GROUP" | "ORDER" | "JOIN"
+                | "ON" | "DATE" => Some(keyword),
+                "COUNT" | "SUM" | "AVG" | "DATE_TRUNC" => {
+                    Some(rgb(if dark { 0x88bafa } else { 0x387ba9 }))
+                }
+                _ if ch.is_ascii_digit() => Some(literal),
+                _ => None,
+            };
+            (end, color)
+        } else {
+            continue;
+        };
+        if let Some(color) = color {
+            highlights.push((
+                start..end,
+                HighlightStyle {
+                    color: Some(color.into()),
+                    ..Default::default()
+                },
+            ));
+        }
+    }
+    StyledText::new(SharedString::from(line.to_owned())).with_highlights(highlights)
 }
 impl Render for AskYourData {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -404,51 +552,46 @@ impl Render for AskYourData {
             AskDataStatus::Stopped => t("Stopped", "已停止"),
             AskDataStatus::Failed => t("Failed", "失败"),
         };
-        let mut actions = div().flex().flex_wrap().gap(px(6.));
-        if self.active.is_some() {
-            actions = actions.child(
-                face(
-                    "ask-data-action",
-                    t("Stop", "停止"),
-                    36.,
-                    radius.into(),
-                    Tone::Surface,
-                    cx,
-                )
-                .track_focus(&self.action_focus)
-                .px(px(10.))
-                .child(t("Stop", "停止"))
-                .on_click(cx.listener(|s, _, _, cx| s.stop(cx))),
-            );
+        let busy = self.active.is_some();
+        let action_label = if busy {
+            t("Stop", "停止")
         } else {
-            let label = if matches!(self.status, AskDataStatus::Failed | AskDataStatus::Stopped) {
-                t("Try again", "重试")
+            t("Ask", "查询")
+        };
+        let action = face(
+            "ask-data-action",
+            action_label,
+            32.,
+            radius.into(),
+            Tone::Primary,
+            cx,
+        )
+        .track_focus(&self.action_focus)
+        .size(px(32.))
+        .child(if busy {
+            div()
+                .size(px(10.))
+                .rounded(px(2.))
+                .bg(p.inverse)
+                .into_any_element()
+        } else {
+            icon(Glyph::ArrowUp, 16., p.inverse).into_any_element()
+        })
+        .on_click(cx.listener(|s, _, w, cx| {
+            if s.active.is_some() {
+                s.stop(cx);
             } else {
-                t("Ask", "查询")
-            };
-            actions = actions.child(
-                face(
-                    "ask-data-action",
-                    label,
-                    36.,
-                    radius.into(),
-                    Tone::Primary,
-                    cx,
-                )
-                .track_focus(&self.action_focus)
-                .px(px(10.))
-                .child(label)
-                .on_click(cx.listener(|s, _, w, cx| {
-                    s.run(w, cx);
-                })),
-            );
-        }
+                s.run(w, cx);
+            }
+        }));
+        let editor = self.question.read(cx).editor();
+        let focused = self.question.read(cx).focus_handle(cx).is_focused(w);
         let mut root = div()
             .id("ask-your-data")
             .role(Role::Group)
             .aria_label(t("Ask your data", "数据问答"))
             .w_full()
-            .max_w(px(720.))
+            .max_w(px(522.))
             .rounded(radius)
             .border_1()
             .border_color(p.line)
@@ -456,83 +599,185 @@ impl Render for AskYourData {
             .flex()
             .flex_col()
             .child(
-                div()
-                    .p(px(12.))
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(10.))
-                    .child(div().min_w(px(200.)).flex_1().child(self.question.clone()))
-                    .child(actions),
+                div().p(px(12.)).child(
+                    div()
+                        .h(px(44.))
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .pl(px(12.))
+                        .pr(px(5.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(if focused { p.focus } else { p.line })
+                        .child(database_mark(p.secondary))
+                        .child(div().h(px(20.)).w(px(1.)).flex_none().bg(p.line))
+                        .child(div().h_full().min_w_0().flex_1().child(editor))
+                        .child(action),
+                ),
             )
             .child(
                 div()
                     .id("ask-data-status")
                     .role(Role::Status)
-                    .px(px(16.))
-                    .pb(px(4.))
-                    .text_size(px(13.))
-                    .line_height(px(20.))
-                    .text_color(p.faint)
+                    .absolute()
+                    .size(px(1.))
+                    .overflow_hidden()
                     .child(format!("{} · {}", self.source, state)),
             );
-        if !self.sql.is_empty() {
-            let button = face(
-                "ask-data-sql",
-                t("Generated SQL", "生成的查询"),
-                36.,
-                radius.into(),
-                Tone::Surface,
-                cx,
-            )
-            .w_full()
-            .h(px(48.))
-            .justify_between()
-            .pl(px(16.))
-            .pr(px(12.))
-            .font_weight(FontWeight::MEDIUM)
-            .hover(|s| s.bg(p.tray.opacity(0.7)))
-            .aria_expanded(self.sql_open)
-            .child(t("Generated SQL", "生成的查询"))
-            .child(icon(
-                if self.sql_open {
-                    Glyph::Up
-                } else {
-                    Glyph::Down
-                },
-                14.,
-                p.secondary,
-            ))
-            .on_click(cx.listener(|s, _, _, cx| {
+        let detail = self.result.as_ref().map_or_else(
+            || self.source.to_string(),
+            |r| format!("{} {}", r.row_count, t("rows", "行")),
+        );
+        let query_label = format!(
+            "{}, {} · {detail}",
+            t("Generated SQL", "生成的查询"),
+            self.dialect.as_deref().unwrap_or(self.source.as_ref())
+        );
+        let query = face(
+            "ask-data-sql",
+            query_label,
+            36.,
+            radius.into(),
+            Tone::Clear,
+            cx,
+        )
+        .flex_1()
+        .min_w_0()
+        .gap(px(9.))
+        .justify_start()
+        .when_some(self.dialect.as_ref(), |row, dialect| {
+            row.children(brand_mark(dialect, 16., cx))
+        })
+        .child(
+            div()
+                .flex_none()
+                .font_weight(FontWeight::MEDIUM)
+                .child(t("Generated SQL", "生成的查询")),
+        )
+        .child(div().min_w_0().truncate().text_color(p.faint).child(detail))
+        .aria_expanded(self.sql_open && !self.sql.is_empty())
+        .tab_stop(!self.sql.is_empty())
+        .on_click(cx.listener(|s, _, _, cx| {
+            if !s.sql.is_empty() {
                 s.sql_open = !s.sql_open;
+                s.sql_preference = Some(s.sql_open);
                 cx.notify();
-            }));
-            root = root.child(button);
-            if self.sql_open {
-                let label = match self.copied {
-                    Some(true) => t("Copied", "已复制"),
-                    Some(false) => t("Copy failed", "复制失败"),
-                    None => t("Copy SQL", "复制查询"),
-                };
-                let scroll = self.sql_scroll.clone();
-                let monitor = canvas(
-                    |_, _, _| (),
-                    move |bounds, _, _, cx| {
-                        if let Some(host) = cx.try_global::<HorizontalScrollRegion>() {
-                            let left = -scroll.offset().x;
-                            (host.0)(
-                                bounds,
-                                left > px(0.1),
-                                left + px(0.1) < scroll.max_offset().x,
-                            );
-                        }
-                    },
-                )
-                .absolute()
-                .inset_0();
-                let code = div()
+            }
+        }));
+        let copy_label = match self.copied {
+            Some(true) => t("Copied", "已复制"),
+            Some(false) => t("Copy failed", "复制失败"),
+            None => t("Copy SQL", "复制查询"),
+        };
+        let copy = face(
+            "ask-data-copy",
+            copy_label,
+            30.,
+            radius.into(),
+            Tone::Clear,
+            cx,
+        )
+        .size(px(30.))
+        .tab_stop(!self.sql.is_empty())
+        .opacity(if self.sql.is_empty() { 0.4 } else { 1. })
+        .child(icon(
+            match self.copied {
+                Some(true) => Glyph::Check,
+                Some(false) => Glyph::Alert,
+                None => Glyph::Copy,
+            },
+            16.,
+            p.secondary,
+        ))
+        .on_click(cx.listener(|s, _, _, cx| s.copy_sql(cx)));
+        let chevron = face(
+            "ask-data-sql-chevron",
+            t("Toggle SQL", "展开或收起查询"),
+            28.,
+            radius.into(),
+            Tone::Clear,
+            cx,
+        )
+        .size(px(28.))
+        .tab_stop(false)
+        .child(icon(
+            if self.sql_open && !self.sql.is_empty() {
+                Glyph::Up
+            } else {
+                Glyph::Down
+            },
+            14.,
+            p.secondary,
+        ))
+        .on_click(cx.listener(|s, _, _, cx| {
+            if !s.sql.is_empty() {
+                s.sql_open = !s.sql_open;
+                s.sql_preference = Some(s.sql_open);
+                cx.notify();
+            }
+        }));
+        root = root.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(3.))
+                .px(px(12.))
+                .h(px(48.))
+                .border_t_1()
+                .border_color(p.line)
+                .child(query)
+                .child(copy)
+                .child(chevron),
+        );
+        if self.sql_open && !self.sql.is_empty() {
+            let scroll = self.sql_scroll.clone();
+            let monitor = canvas(
+                |_, _, _| (),
+                move |bounds, _, _, cx| {
+                    if let Some(host) = cx.try_global::<HorizontalScrollRegion>() {
+                        let left = -scroll.offset().x;
+                        (host.0)(
+                            bounds,
+                            left > px(0.1),
+                            left + px(0.1) < scroll.max_offset().x,
+                        );
+                    }
+                },
+            )
+            .absolute()
+            .inset_0();
+            let lines = self
+                .sql
+                .split('\n')
+                .enumerate()
+                .map(|(i, line)| {
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .h(px(19.))
+                        .flex_none()
+                        .child(
+                            div()
+                                .w(px(22.))
+                                .flex_none()
+                                .text_right()
+                                .text_color(p.faint)
+                                .child((i + 1).to_string()),
+                        )
+                        .child(div().flex_none().child(sql_text(line, p)))
+                })
+                .collect::<Vec<_>>();
+            root = root.child(
+                div()
                     .relative()
-                    .w_full()
+                    .mx(px(12.))
+                    .mb(px(12.))
+                    .rounded(radius)
+                    .bg(p.stage)
+                    .border_1()
+                    .border_color(p.line)
                     .child(
                         div()
                             .id("ask-data-sql-scroll")
@@ -541,48 +786,17 @@ impl Render for AskYourData {
                             .track_scroll(&self.sql_scroll)
                             .child(
                                 div()
-                                    .px(px(14.))
+                                    .px(px(9.))
                                     .py(px(10.))
-                                    .text_size(px(14.))
-                                    .line_height(px(20.))
+                                    .text_size(px(12.))
+                                    .line_height(px(19.))
+                                    .font_family("Fira Code")
                                     .text_color(p.ink)
                                     .whitespace_nowrap()
-                                    .child(self.sql.clone()),
+                                    .children(lines),
                             ),
                     )
-                    .child(monitor);
-                root = root.child(
-                    div()
-                        .mx(px(12.))
-                        .mb(px(12.))
-                        .rounded(radius)
-                        .bg(p.tray.opacity(0.6))
-                        .border_1()
-                        .border_color(p.line)
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.))
-                        .child(code)
-                        .child(
-                            face("ask-data-copy", label, 32., radius.into(), Tone::Clear, cx)
-                                .px(px(8.))
-                                .child(label)
-                                .on_click(cx.listener(|s, _, _, cx| s.copy_sql(cx))),
-                        ),
-                );
-            }
-        }
-        if self.status == AskDataStatus::RunningQuery {
-            let count = if let Some(total) = self.total {
-                format!("{} / {total}", self.scanned)
-            } else {
-                self.scanned.to_string()
-            };
-            root = root.child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(format!("{}: {count}", t("Rows scanned", "已扫描行数"))),
+                    .child(monitor),
             );
         }
         if self.status == AskDataStatus::Failed {
@@ -604,8 +818,83 @@ impl Render for AskYourData {
             );
         }
         let Some(result) = self.result.clone() else {
+            if self.active.is_some() {
+                root = root.child(
+                    div()
+                        .id("ask-data-chart-loading")
+                        .aria_label(t("Chart pending", "等待图表"))
+                        .border_t_1()
+                        .border_color(p.line)
+                        .px(px(16.))
+                        .pt(px(14.))
+                        .pb(px(24.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(15.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(icon(Glyph::Spinner, 15., p.secondary))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .child(
+                                            div().text_size(px(14.)).text_color(p.ink).child(state),
+                                        )
+                                        .child(div().text_size(px(12.)).text_color(p.faint).child(
+                                            if self.status == AskDataStatus::WritingSql {
+                                                t("Reading the schema", "正在读取数据库结构")
+                                                    .to_owned()
+                                            } else {
+                                                match self.total {
+                                                    Some(total) => format!(
+                                                        "{} / {total} {}",
+                                                        self.scanned,
+                                                        t("rows", "行")
+                                                    ),
+                                                    None => format!(
+                                                        "{} {}",
+                                                        self.scanned,
+                                                        t("rows scanned", "行已扫描")
+                                                    ),
+                                                }
+                                            },
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .h(px(245.))
+                                .pt(px(22.))
+                                .pl(px(26.))
+                                .flex()
+                                .items_end()
+                                .gap(px(6.))
+                                .border_b_1()
+                                .border_color(p.line)
+                                .children(
+                                    [
+                                        0.40, 0.54, 0.48, 0.62, 0.44, 0.67, 0.72, 0.63, 0.81, 0.71,
+                                        0.9, 0.84,
+                                    ]
+                                    .map(|height| {
+                                        div()
+                                            .flex_1()
+                                            .h(relative(height))
+                                            .rounded_t(px(4.))
+                                            .bg(p.stage)
+                                    }),
+                                ),
+                        )
+                        .child(div().h(px(7.)).w(relative(0.65)).bg(p.stage).rounded_full()),
+                );
+            }
             return root;
         };
+        let colors: [Hsla; 4] = [0x2f91f2, 0x9a52d1, 0x06a879, 0xe7a331].map(|v| rgb(v).into());
         let choices = [
             (AskDataView::Bars, t("Bars", "柱状图")),
             (AskDataView::Lines, t("Lines", "折线图")),
@@ -625,13 +914,25 @@ impl Render for AskYourData {
                 .px(px(12.))
                 .text_size(px(12.))
                 .line_height(px(16.))
+                .border_1()
+                .border_color(transparent_black())
                 .aria_toggled((self.view == view).into())
-                .when(self.view == view, |v| v.bg(p.tray).text_color(p.ink))
+                .when(self.view == view, |v| {
+                    v.bg(p.stage).border_color(p.line).text_color(p.ink)
+                })
                 .when(self.view != view, |v| {
                     v.text_color(p.secondary)
                         .hover(|s| s.bg(p.tray.opacity(0.7)).text_color(p.ink))
                 })
                 .child(label)
+                .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                    if !e.is_held && matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                        s.view = view;
+                        w.prevent_default();
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                }))
                 .on_click(cx.listener(move |s, _, _, cx| {
                     s.view = view;
                     cx.notify();
@@ -652,11 +953,29 @@ impl Render for AskYourData {
                 .gap(px(12.))
                 .child(
                     div()
-                        .text_size(px(14.))
-                        .line_height(px(20.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .child(result.title.clone()),
+                        .flex()
+                        .flex_col()
+                        .gap(px(3.))
+                        .min_w_0()
+                        .child(
+                            div()
+                                .text_size(px(16.))
+                                .line_height(px(22.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(result.title.clone()),
+                        )
+                        .when(result.categories.len() > 1, |header| {
+                            header.child(div().text_size(px(12.)).text_color(p.faint).child(
+                                format!(
+                                    "{} – {} · {} {}",
+                                    result.categories[0],
+                                    result.categories[result.categories.len() - 1],
+                                    result.row_count,
+                                    t("rows", "行")
+                                ),
+                            ))
+                        }),
                 )
                 .child(switch),
         );
@@ -665,6 +984,40 @@ impl Render for AskYourData {
         let offset = self.page * 120;
         let count = result.categories.len().saturating_sub(offset).min(120);
         self.selected = self.selected.min(count.saturating_sub(1));
+        let mut legend = div()
+            .px(px(16.))
+            .py(px(10.))
+            .flex()
+            .flex_wrap()
+            .gap(px(16.));
+        for (i, series) in result.series.iter().enumerate() {
+            let mut values = series.values.iter().copied().filter(|v| v.is_finite());
+            let value = if self.stacked {
+                values.sum()
+            } else {
+                values.next_back().unwrap_or_default()
+            };
+            legend = legend.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .size(px(8.))
+                            .rounded(px(2.5))
+                            .bg(colors[i % colors.len()]),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(p.secondary)
+                            .child(format!("{}  {}", series.name, number(value))),
+                    ),
+            );
+        }
+        root = root.child(legend);
         if self.view == AskDataView::Table {
             let mut table = div()
                 .id("ask-data-table")
@@ -746,7 +1099,7 @@ impl Render for AskYourData {
                         .values
                         .get(offset + i)
                         .filter(|v| v.is_finite())
-                        .map_or_else(|| "—".to_owned(), |v| format!("{v:.2}"));
+                        .map_or_else(|| "—".to_owned(), |v| number(*v));
                     row = row.child(
                         div()
                             .id((
@@ -814,21 +1167,23 @@ impl Render for AskYourData {
             };
             let graph = result.clone();
             let kind = self.view;
+            let stacked = self.stacked;
             let bounds = self.chart_bounds.clone();
-            let colors = [p.focus, p.success, p.secondary, p.danger];
             let plot = canvas(
                 move |b, _, _| bounds.set(b),
-                move |b, _, w, _| {
+                move |b, _, w, cx| {
                     let count = graph.categories.len().saturating_sub(offset).min(120);
                     if count == 0 {
                         return;
                     }
-                    let width: f32 = b.size.width.into();
-                    let height: f32 = b.size.height.into();
+                    let width = f32::from(b.size.width - px(34.)).max(1.);
+                    let height = f32::from(b.size.height - px(26.)).max(1.);
+                    let plot_left = b.left() + px(34.);
+                    let plot_bottom = b.top() + px(height);
                     let mut low = 0f64;
                     let mut high = 0f64;
                     for i in 0..count {
-                        if kind == AskDataView::Bars {
+                        if kind == AskDataView::Bars && stacked {
                             let mut pos = 0.;
                             let mut neg = 0.;
                             for s in &graph.series {
@@ -863,8 +1218,63 @@ impl Render for AskYourData {
                         high = 1.;
                         low = 0.;
                     }
-                    let y = |v: f64| b.bottom() - px(((v - low) / (high - low)) as f32 * height);
+                    let step_scale = ((high - low) / 3.).log10().floor();
+                    let unit = 10_f64.powf(step_scale).max(1e-10);
+                    let step = [1., 2., 5., 10.]
+                        .into_iter()
+                        .map(|n| n * unit)
+                        .find(|step| *step >= (high - low) / 3.)
+                        .unwrap_or(unit * 10.);
+                    let max_tick = (high / step).ceil() * step;
+                    let min_tick = (low / step).floor() * step;
+                    let y = |v: f64| {
+                        plot_bottom
+                            - px(((v - min_tick) / (max_tick - min_tick).max(step)) as f32 * height)
+                    };
                     let pitch = width / count as f32;
+                    let paint_label = |text: SharedString,
+                                       x: Pixels,
+                                       y: Pixels,
+                                       align: TextAlign,
+                                       w: &mut Window,
+                                       cx: &mut App| {
+                        let mut run = w.text_style().to_run(text.len());
+                        run.color = p.faint;
+                        let line = w.text_system().shape_line(text, px(10.), &[run], None);
+                        let x = match align {
+                            TextAlign::Right => x - line.width,
+                            TextAlign::Center => x - line.width / 2.,
+                            _ => x,
+                        };
+                        let _ = line.paint(point(x, y), px(14.), TextAlign::Left, None, w, cx);
+                    };
+                    for i in 0..=((max_tick - min_tick) / step).round().clamp(0., 8.) as usize {
+                        let value = min_tick + i as f64 * step;
+                        let row_y = y(value);
+                        w.paint_quad(fill(
+                            Bounds::new(point(plot_left, row_y), size(px(width), px(1.))),
+                            p.line.opacity(0.65),
+                        ));
+                        paint_label(
+                            number(value).into(),
+                            plot_left - px(6.),
+                            row_y - px(7.),
+                            TextAlign::Right,
+                            w,
+                            cx,
+                        );
+                    }
+                    let every = (46. / pitch).ceil().max(1.) as usize;
+                    for i in (0..count).step_by(every) {
+                        paint_label(
+                            graph.categories[offset + i].clone(),
+                            plot_left + px((i as f32 + 0.5) * pitch),
+                            plot_bottom + px(5.),
+                            TextAlign::Center,
+                            w,
+                            cx,
+                        );
+                    }
                     if kind == AskDataView::Bars {
                         for i in 0..count {
                             let mut pos = 0.;
@@ -880,7 +1290,9 @@ impl Render for AskYourData {
                                     .filter(|v| v.is_finite())
                                     .unwrap_or(0.)
                                     * f64::from(grow);
-                                let (a, z) = if v >= 0. {
+                                let (a, z) = if !stacked {
+                                    (0., v)
+                                } else if v >= 0. {
                                     let a = pos;
                                     pos += v;
                                     (a, pos)
@@ -893,13 +1305,20 @@ impl Render for AskYourData {
                                 let yz = y(z);
                                 let h = (ya - yz).abs();
                                 if h > px(0.1) {
+                                    let group = pitch * 0.68;
+                                    let column_width = if stacked {
+                                        group
+                                    } else {
+                                        group / graph.series.len() as f32
+                                    };
+                                    let start = plot_left
+                                        + px(i as f32 * pitch
+                                            + pitch * 0.16
+                                            + if stacked { 0. } else { j as f32 * column_width });
                                     w.paint_quad(fill(
                                         Bounds::new(
-                                            point(
-                                                b.left() + px(i as f32 * pitch + pitch * 0.16),
-                                                ya.min(yz),
-                                            ),
-                                            size(px((pitch * 0.68).max(1.)), h),
+                                            point(start, ya.min(yz)),
+                                            size(px(column_width.max(0.5)), h),
                                         ),
                                         colors[j % colors.len()],
                                     ));
@@ -918,7 +1337,7 @@ impl Render for AskYourData {
                                 }
                                 if let Some(v) = s.values.get(offset + i).filter(|v| v.is_finite())
                                 {
-                                    let pt = point(b.left() + px((i as f32 + 0.5) * pitch), y(*v));
+                                    let pt = point(plot_left + px((i as f32 + 0.5) * pitch), y(*v));
                                     if started {
                                         path.line_to(pt);
                                     } else {
@@ -937,6 +1356,7 @@ impl Render for AskYourData {
                 },
             )
             .size_full();
+            let inspecting = self.inspecting;
             let readout = if count == 0 {
                 t("No data", "暂无数据").to_owned()
             } else {
@@ -951,10 +1371,35 @@ impl Render for AskYourData {
                         .aria_value(readout.clone())
                         .track_focus(&self.chart_focus)
                         .tab_index(0)
-                        .w_full()
-                        .h(px(220.))
+                        .h(px(252.))
+                        .mx(px(16.))
                         .relative()
                         .child(plot)
+                        .when(inspecting && count > 0, |chart| {
+                            let pos = (self.selected as f32 + 0.5) / count as f32;
+                            chart.child(
+                                div()
+                                    .absolute()
+                                    .top(px(10.))
+                                    .when(pos < 0.5, |tip| tip.right(px(6.)))
+                                    .when(pos >= 0.5, |tip| tip.left(px(34.)))
+                                    .max_w(relative(0.7))
+                                    .px(px(10.))
+                                    .py(px(7.))
+                                    .rounded(radius)
+                                    .bg(p.panel)
+                                    .border_1()
+                                    .border_color(p.line)
+                                    .text_size(px(12.))
+                                    .child(readout.clone()),
+                            )
+                        })
+                        .on_hover(cx.listener(|s, over: &bool, _, cx| {
+                            if s.inspecting != *over {
+                                s.inspecting = *over;
+                                cx.notify();
+                            }
+                        }))
                         .child(self.contact.listen(cx, |s, e, w, cx| {
                             if matches!(e.phase, TouchPhase::Started | TouchPhase::Moved) {
                                 if e.phase == TouchPhase::Started {
@@ -971,15 +1416,18 @@ impl Render for AskYourData {
                             }),
                         )
                         .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
-                            if e.pressed_button == Some(MouseButton::Left) {
-                                s.choose(e.position.x, cx);
-                            }
+                            s.choose(e.position.x, cx);
                         }))
                         .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
                             let count = s.result.as_ref().map_or(0, |r| {
                                 r.categories.len().saturating_sub(s.page * 120).min(120)
                             });
                             if count == 0 {
+                                return;
+                            }
+                            if e.keystroke.key == "escape" {
+                                s.inspecting = false;
+                                cx.notify();
                                 return;
                             }
                             s.selected = match e.keystroke.key.as_str() {
@@ -989,6 +1437,7 @@ impl Render for AskYourData {
                                 "end" => count - 1,
                                 _ => return,
                             };
+                            s.inspecting = true;
                             cx.notify();
                             w.prevent_default();
                             cx.stop_propagation();
@@ -997,35 +1446,14 @@ impl Render for AskYourData {
                 .child(
                     div()
                         .id("ask-data-readout")
+                        .absolute()
+                        .size(px(1.))
+                        .overflow_hidden()
                         .role(Role::Status)
                         .text_size(px(12.))
                         .text_color(p.secondary)
                         .child(readout),
                 );
-            let palette = [p.focus, p.success, p.secondary, p.danger];
-            let mut legend = div().px(px(16.)).flex().flex_wrap().gap(px(16.));
-            for (i, series) in result.series.iter().enumerate() {
-                legend = legend.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .rounded(px(2.5))
-                                .bg(palette[i % palette.len()]),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
-                                .text_color(p.secondary)
-                                .child(series.name.clone()),
-                        ),
-                );
-            }
-            root = root.child(legend);
         }
         if last_page > 0 {
             let mut pages = div().flex().flex_wrap().items_center().gap(px(6.)).child(
@@ -1091,15 +1519,7 @@ impl Render for AskYourData {
                     .child(result.insight),
             );
         }
-        root.child(
-            div()
-                .px(px(16.))
-                .pb(px(16.))
-                .text_size(px(13.))
-                .line_height(px(20.))
-                .text_color(p.faint)
-                .child(format!("{} · {} ms", result.row_count, result.duration_ms)),
-        )
+        root.pb(px(16.))
     }
 }
 

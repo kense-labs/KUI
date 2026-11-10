@@ -36,6 +36,6 @@ Event: `VectorStageChanged, VectorPlaybackChanged`.
 
 ## Motion
 
-The illustration progresses through embedding, indexing, query and results; reduced motion shows a still frame. The reference's 2.5D geometry and detailed transitions are not yet reproduced, and device/accessibility validation remains pending.
+The isometric illustration progresses through embedding, indexing, query and results. The panel below the grid shows counters, a sample of the supplied projection coordinates and the host's ranked results. Reduced motion shows a still frame.
 
 Desktop and web use the same GPUI view.

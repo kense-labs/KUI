@@ -44,7 +44,11 @@ struct FrozenSeries {
 
 pub struct RealtimeStream {
     title: SharedString,
+    subtitle: Option<SharedString>,
     unit: SharedString,
+    series_color: Option<Hsla>,
+    interval: f32,
+    window_ms: Option<u32>,
     counter: Option<Entity<AnimatedCounter>>,
     readings: Vec<StreamReading>,
     leading: VecDeque<f32>,
@@ -72,7 +76,11 @@ impl RealtimeStream {
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
             title: title.into(),
+            subtitle: None,
             unit: "".into(),
+            series_color: None,
+            interval: 0.35,
+            window_ms: None,
             counter: None,
             readings: vec![],
             leading: VecDeque::with_capacity(EDGE_HISTORY),
@@ -104,6 +112,26 @@ impl RealtimeStream {
         self.unit = unit.into();
         self
     }
+    /// A supporting line below the metric name.
+    pub fn with_subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
+        self.subtitle = Some(subtitle.into());
+        self
+    }
+    /// Set the stroke and area color of the series.
+    pub fn with_series_color(mut self, color: Hsla) -> Self {
+        self.series_color = Some(color);
+        self
+    }
+    /// Configure the visible duration and the cadence of regularly sampled points.
+    pub fn with_timing(mut self, window_ms: u32, interval_ms: u32) -> Self {
+        let interval_ms = interval_ms.max(1);
+        self.window_ms = Some(window_ms.max(interval_ms));
+        self.interval = interval_ms as f32 / 1000.;
+        self.capacity = ((window_ms / interval_ms) as usize)
+            .saturating_add(1)
+            .clamp(2, 2000);
+        self
+    }
     /// Hosts should update this when the chart leaves or re-enters their viewport.
     pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         if self.visible == visible {
@@ -132,7 +160,7 @@ impl RealtimeStream {
             self.evictions += 1;
             if self.visible && self.frozen.is_none() {
                 self.shift.translate(1.);
-                self.shift.duration(0., 0.35, cx);
+                self.shift.duration(0., self.interval, cx);
             }
         }
         if self.visible && self.frozen.is_none() {
@@ -266,6 +294,9 @@ impl Render for RealtimeStream {
             .expect("focus initialized")
             .clone();
         let p = Paint::get(cx);
+        let series_color = self.series_color.unwrap_or(p.bright);
+        let window_ms = self.window_ms;
+        let now: SharedString = tr(cx, "now", "现在").into();
         let data = self.data().to_vec();
         let n = data.len();
         let active = self.selected;
@@ -517,10 +548,10 @@ impl Render for RealtimeStream {
                             area.line_to(point(at(n - 1).x, b.origin.y + px(height)));
                             area.close();
                             if let Ok(path) = area.build() {
-                                w.paint_path(path, p.bright.opacity(0.1));
+                                w.paint_path(path, series_color.opacity(0.1));
                             }
                             if let Ok(path) = path.build() {
-                                w.paint_path(path, p.bright);
+                                w.paint_path(path, series_color);
                             }
                         });
                         let mut last_tag_right = b.origin.x - px(8.);
@@ -574,13 +605,29 @@ impl Render for RealtimeStream {
                             let last = last_visible_index(n, phase);
                             let middle =
                                 reading_index(b, b.left() + px(plot_width * 0.5), n, phase);
-                            for (i, anchor) in [(0, 0.), (middle, 0.5), (last, 1.)] {
+                            let labels = if window_ms.is_some() { 4 } else { 3 };
+                            for slot in 0..labels {
+                                let anchor = slot as f32 / (labels - 1) as f32;
+                                let i = if slot == 0 {
+                                    0
+                                } else if slot == labels - 1 {
+                                    last
+                                } else {
+                                    middle
+                                };
                                 if (anchor == 0.5 && (middle == 0 || middle == last))
                                     || (anchor == 1. && last == 0)
                                 {
                                     continue;
                                 }
-                                let label = graph_data[i].label.clone();
+                                let label = match window_ms {
+                                    Some(_) if slot == labels - 1 => now.clone(),
+                                    Some(window_ms) => {
+                                        format!("−{:.0}s", window_ms as f32 * (1. - anchor) / 1000.)
+                                            .into()
+                                    }
+                                    None => graph_data[i].label.clone(),
+                                };
                                 let mut run = w.text_style().to_run(label.len());
                                 run.color = p.secondary;
                                 let line = w.text_system().shape_line(label, px(10.), &[run], None);
@@ -808,12 +855,23 @@ impl Render for RealtimeStream {
                     .flex_wrap()
                     .gap(px(8.))
                     .child(
-                        div()
+                        column()
                             .min_w_0()
-                            .text_size(px(16.))
-                            .line_height(px(22.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(self.title.clone()),
+                            .child(
+                                div()
+                                    .text_size(px(16.))
+                                    .line_height(px(22.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(self.title.clone()),
+                            )
+                            .when_some(self.subtitle.clone(), |title, subtitle| {
+                                title.child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.secondary)
+                                        .child(subtitle),
+                                )
+                            }),
                     )
                     .children(title_status),
             )

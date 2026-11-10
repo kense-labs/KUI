@@ -4,11 +4,33 @@ use crate::{
     primitives::{
         family::{Paint, Slide, Tone, face},
         field::FieldEvent,
+        glyph::{Glyph, icon},
         presentation::{column, hint, row, tr},
     },
 };
 use gpui::{prelude::*, *};
 use std::{sync::Arc, time::Duration};
+
+/// A shortcut that replaces the composer draft with a supplied example.
+pub struct LinkSample {
+    pub label: SharedString,
+    pub draft: SharedString,
+    pub icon: ImageSource,
+}
+
+impl LinkSample {
+    pub fn new(
+        label: impl Into<SharedString>,
+        draft: impl Into<SharedString>,
+        icon: impl Into<ImageSource>,
+    ) -> Self {
+        Self {
+            label: label.into(),
+            draft: draft.into(),
+            icon: icon.into(),
+        }
+    }
+}
 #[derive(Clone)]
 pub struct LinkPreview {
     pub site: SharedString,
@@ -72,6 +94,8 @@ pub struct LinkUnfurl {
     visible: bool,
     presence: Slide,
     simulated: bool,
+    samples: Vec<LinkSample>,
+    auto_open: bool,
 }
 impl EventEmitter<LinkUnfurlEvent> for LinkUnfurl {}
 fn first_url(text: &str) -> Option<SharedString> {
@@ -119,10 +143,22 @@ impl LinkUnfurl {
             visible: true,
             presence: Slide::new(0.),
             simulated: false,
+            samples: Vec::new(),
+            auto_open: true,
         }
     }
     pub fn with_simulated(mut self, value: bool) -> Self {
         self.simulated = value;
+        self
+    }
+    /// Show local example drafts beside the send control.
+    pub fn with_samples(mut self, samples: Vec<LinkSample>) -> Self {
+        self.samples = samples;
+        self
+    }
+    /// Wait for activation of the resolved link before opening its card.
+    pub fn with_collapsed_previews(mut self) -> Self {
+        self.auto_open = false;
         self
     }
     pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
@@ -199,8 +235,10 @@ impl LinkUnfurl {
         match result {
             Ok(Some(preview)) => {
                 self.preview = Some(preview);
-                self.open = true;
-                self.presence.duration(1., 0.48, cx);
+                self.open = self.auto_open;
+                if self.open {
+                    self.presence.duration(1., 0.48, cx);
+                }
                 self.error = None;
             }
             Ok(None) => {
@@ -500,33 +538,70 @@ impl Render for LinkUnfurl {
             panel = panel.child(div().px(px(18.)).text_color(p.danger).child(error));
         }
         let sending = self.send_id.is_some();
-        panel = panel.child(
-            face(
-                "link-send",
-                if sending {
-                    tr(cx, "Sending…", "发送中…")
-                } else {
-                    tr(cx, "Send", "发送")
-                },
-                36.,
-                999.,
-                Tone::Primary,
-                cx,
-            )
-            .px(px(10.))
-            .when(sending, |v| v.opacity(0.6))
-            .child(if sending {
+        let send = face(
+            "link-send",
+            if sending {
                 tr(cx, "Sending…", "发送中…")
             } else {
                 tr(cx, "Send", "发送")
-            })
-            .on_click(cx.listener(|s, _, _, cx| s.send(cx)))
-            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
-                if matches!(e.keystroke.key.as_str(), "enter" | "space") && !e.is_held {
-                    s.send(cx);
-                    cx.stop_propagation();
-                }
-            })),
+            },
+            36.,
+            999.,
+            Tone::Primary,
+            cx,
+        )
+        .size(px(36.))
+        .rounded_full()
+        .p_0()
+        .flex_none()
+        .when(sending, |v| v.opacity(0.6))
+        .child(icon(Glyph::ArrowUp, 16., p.inverse))
+        .on_click(cx.listener(|s, _, _, cx| s.send(cx)))
+        .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
+            if matches!(e.keystroke.key.as_str(), "enter" | "space") && !e.is_held {
+                s.send(cx);
+                cx.stop_propagation();
+            }
+        }));
+        let examples = row()
+            .min_w_0()
+            .gap(px(4.))
+            .flex_wrap()
+            .when(
+                !self.samples.is_empty() && w.viewport_size().width >= px(360.),
+                |r| r.child(hint(tr(cx, "Try", "试试"), p)),
+            )
+            .children(self.samples.iter().enumerate().map(|(i, sample)| {
+                let draft = sample.draft.clone();
+                let keyboard_draft = draft.clone();
+                face(
+                    ("link-example", i),
+                    sample.label.clone(),
+                    28.,
+                    999.,
+                    Tone::Clear,
+                    cx,
+                )
+                .px(px(5.))
+                .gap(px(4.))
+                .text_size(px(12.))
+                .child(img(sample.icon.clone()).size(px(13.)).flex_none())
+                .child(sample.label.clone())
+                .on_click(cx.listener(move |s, _, w, cx| s.set_text(draft.as_ref(), w, cx)))
+                .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                    if matches!(e.keystroke.key.as_str(), "enter" | "space") && !e.is_held {
+                        s.set_text(keyboard_draft.as_ref(), w, cx);
+                        cx.stop_propagation();
+                    }
+                }))
+            }));
+        panel = panel.child(
+            row()
+                .w_full()
+                .justify_between()
+                .gap(px(6.))
+                .child(examples)
+                .child(send),
         );
         panel.when(self.simulated, |v| {
             v.child(hint(

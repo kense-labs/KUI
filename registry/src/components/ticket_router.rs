@@ -1,5 +1,6 @@
 //! Host-driven support classification and assignment, with review and retry.
 use crate::primitives::{
+    brand_mark::brand_mark,
     control::UiLanguage,
     family::{Paint, PhaseClock, Tone, disabled_motion, ease, face},
     presentation::ChangingText,
@@ -124,6 +125,7 @@ struct Entry {
 /// Requests are emitted to the host; a ticket is marked routed only after host confirmation.
 pub struct TicketRouter {
     title: SharedString,
+    model: Option<SharedString>,
     lanes: Vec<TicketLane>,
     entries: Vec<Entry>,
     threshold: f32,
@@ -166,6 +168,7 @@ impl TicketRouter {
         let lane_pages = vec![0; lanes.len()];
         Self {
             title: title.into(),
+            model: None,
             lanes,
             entries,
             threshold: 0.75,
@@ -178,6 +181,11 @@ impl TicketRouter {
             review_count: ChangingText::new("0"),
             content_width: Default::default(),
         }
+    }
+    /// Name the host-selected classification model in the header.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     pub fn with_review_threshold(mut self, threshold: f32) -> Self {
         if threshold.is_finite() {
@@ -524,7 +532,24 @@ impl Render for TicketRouter {
                     .text_size(px(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.ink)
-                    .child(self.title.clone()),
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(7.))
+                    .children(
+                        self.model
+                            .as_ref()
+                            .and_then(|model| brand_mark(model, 14., cx)),
+                    )
+                    .child(self.title.clone())
+                    .when_some(self.model.clone(), |header, model| {
+                        header.child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(p.secondary)
+                                .child(model),
+                        )
+                    }),
             )
             .child(
                 face(
@@ -536,6 +561,8 @@ impl Render for TicketRouter {
                     cx,
                 )
                 .px(px(8.))
+                .border_1()
+                .border_color(p.line)
                 .child(button_label)
                 .on_click(cx.listener(|s, _, _, cx| {
                     if s.paused {
@@ -556,12 +583,20 @@ impl Render for TicketRouter {
                 })),
             );
         let mut queue = div().flex().flex_col().gap(px(6.)).w_full();
-        for (i, entry) in self
+        let active = self.entries.iter().position(|entry| {
+            matches!(
+                entry.status,
+                TicketStatus::Classifying | TicketStatus::Routing
+            )
+        });
+        let settled = self
             .entries
             .iter()
-            .enumerate()
-            .filter(|(_, e)| !matches!(e.status, TicketStatus::Routed | TicketStatus::Review))
-        {
+            .all(|entry| matches!(entry.status, TicketStatus::Routed | TicketStatus::Review));
+        for (i, entry) in self.entries.iter().enumerate().filter(|(i, e)| {
+            (settled && *i + 1 == self.entries.len())
+                || !matches!(e.status, TicketStatus::Routed | TicketStatus::Review)
+        }) {
             let status = match entry.status {
                 TicketStatus::Idle => t("Waiting", "等待中"),
                 TicketStatus::Queued => t("Queued", "排队中"),
@@ -569,7 +604,8 @@ impl Render for TicketRouter {
                 TicketStatus::RouteQueued => t("Awaiting assignment", "等待分配"),
                 TicketStatus::Routing => t("Assigning", "分配中"),
                 TicketStatus::Failed => t("Failed", "失败"),
-                _ => "",
+                TicketStatus::Review => t("Needs review", "待审核"),
+                TicketStatus::Routed => t("Assigned", "已分配"),
             };
             let key = entry.ticket.id.clone();
             let fade = if animate {
@@ -593,8 +629,14 @@ impl Render for TicketRouter {
                 .id(("ticket-entry", i))
                 .w_full()
                 .rounded(radius)
-                .bg(p.tray)
-                .p(px(8.))
+                .border_1()
+                .border_color(if active == Some(i) {
+                    p.ink.opacity(0.16)
+                } else {
+                    p.line
+                })
+                .bg(p.panel)
+                .p(px(12.))
                 .flex()
                 .flex_wrap()
                 .items_center()
@@ -607,7 +649,33 @@ impl Render for TicketRouter {
                         .flex_1()
                         .text_size(px(13.))
                         .text_color(p.ink)
-                        .child(entry.ticket.subject.clone()),
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .when(!entry.ticket.sender.is_empty(), |ticket| {
+                            ticket.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .text_size(px(12.))
+                                    .text_color(p.secondary)
+                                    .children(brand_mark(&entry.ticket.channel, 13., cx))
+                                    .child(entry.ticket.sender.clone()),
+                            )
+                        })
+                        .child(
+                            div()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(entry.ticket.subject.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(18.))
+                                .text_color(p.secondary)
+                                .child(entry.ticket.body.clone()),
+                        ),
                 )
                 .child(
                     div()
@@ -620,6 +688,38 @@ impl Render for TicketRouter {
                         .opacity(shimmer)
                         .child(status),
                 );
+            if let Some(decision) = &entry.decision {
+                row = row.child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(8.))
+                        .pt(px(8.))
+                        .border_t_1()
+                        .border_color(p.line)
+                        .children(
+                            [
+                                decision.intent.clone(),
+                                decision.sentiment.clone(),
+                                format!("{:.0}%", decision.confidence * 100.).into(),
+                            ]
+                            .into_iter()
+                            .filter(|value| !value.is_empty())
+                            .map(|value| {
+                                div()
+                                    .px(px(6.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(p.tray)
+                                    .text_size(px(12.))
+                                    .text_color(p.secondary)
+                                    .child(value)
+                            }),
+                        ),
+                );
+            }
             if entry.status == TicketStatus::Failed {
                 let label = format!("{} {}", t("Retry", "重试"), entry.ticket.subject);
                 row = row
@@ -668,7 +768,8 @@ impl Render for TicketRouter {
         } else {
             None
         };
-        let mut lanes = div().w_full().flex().flex_wrap().gap(px(8.));
+        let columns = if width >= px(350.) { 2 } else { 1 };
+        let mut lanes = div().w_full().grid().grid_cols(columns).gap(px(8.));
         for (i, lane) in self.lanes.iter().enumerate() {
             let total = self
                 .entries
@@ -704,10 +805,10 @@ impl Render for TicketRouter {
                 .id(("ticket-lane", i))
                 .role(Role::List)
                 .aria_label(label.clone())
-                .min_w(px(120.))
-                .flex_1()
+                .min_w_0()
+                .min_h(px(84.))
                 .rounded(radius)
-                .bg(p.tray.opacity(0.62))
+                .bg(p.stage)
                 .p(px(3.))
                 .flex()
                 .flex_col()
@@ -756,10 +857,19 @@ impl Render for TicketRouter {
                         .hover(|s| s.bg(p.ink.opacity(0.05)))
                         .child(
                             div()
-                                .text_size(px(14.))
-                                .line_height(px(20.))
-                                .text_color(p.ink)
-                                .child(entry.ticket.subject.clone()),
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .children(brand_mark(&entry.ticket.channel, 12., cx))
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(14.))
+                                        .line_height(px(20.))
+                                        .text_color(p.ink)
+                                        .child(entry.ticket.subject.clone()),
+                                ),
                         )
                         .child(
                             div()
@@ -847,11 +957,15 @@ impl Render for TicketRouter {
         let mut review_panel = div()
             .id("ticket-review")
             .role(Role::List)
-            .aria_label(format!("{} · {}", t("Review", "待审核"), review.len()))
-            .min_w(px(120.))
-            .flex_1()
+            .aria_label(format!(
+                "{} · {}",
+                t("Needs review", "待审核"),
+                review.len()
+            ))
+            .min_w_0()
+            .min_h(px(84.))
             .rounded(radius)
-            .bg(p.tray.opacity(0.62))
+            .bg(p.stage)
             .p(px(3.))
             .flex()
             .flex_col()
@@ -866,7 +980,7 @@ impl Render for TicketRouter {
                     .items_center()
                     .justify_between()
                     .gap(px(8.))
-                    .child(t("Review", "待审核"))
+                    .child(t("Needs review", "待审核"))
                     .child(
                         div()
                             .text_size(px(12.))
@@ -887,8 +1001,9 @@ impl Render for TicketRouter {
             let mut card = div()
                 .id(("ticket-review-item", i))
                 .role(Role::ListItem)
-                .h(px(56.))
+                .min_h(px(56.))
                 .px(px(8.))
+                .py(px(6.))
                 .rounded(radius)
                 .bg(p.panel)
                 .flex()

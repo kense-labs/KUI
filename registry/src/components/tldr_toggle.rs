@@ -1,5 +1,6 @@
 //! Article views with host-provided, cancellable streamed summaries.
 use crate::primitives::{
+    brand_mark::brand_mark,
     control::UiLanguage,
     direct_touch::Contact,
     editor::EditorScrollRegion,
@@ -94,6 +95,7 @@ struct ResultData {
 /// The component renders supplied article content; a host owns all summarization work.
 pub struct TldrToggle {
     article: TldrArticle,
+    model: Option<SharedString>,
     mode: TldrMode,
     length: u8,
     status: TldrStatus,
@@ -124,6 +126,7 @@ impl TldrToggle {
             .collect();
         Self {
             article,
+            model: None,
             mode: TldrMode::Full,
             length: 1,
             status: TldrStatus::Idle,
@@ -157,6 +160,11 @@ impl TldrToggle {
     }
     pub fn length(&self) -> u8 {
         self.length
+    }
+    /// Name the host-selected summarization model in the status row.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     pub fn active_request(&self) -> Option<u64> {
         self.active
@@ -677,7 +685,26 @@ impl Render for TldrToggle {
             .text_size(px(12.))
             .line_height(px(16.))
             .text_color(p.secondary)
-            .child(status);
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.))
+                    .children(
+                        self.model
+                            .as_ref()
+                            .and_then(|model| brand_mark(model, 14., cx)),
+                    )
+                    .child(
+                        self.model
+                            .as_ref()
+                            .filter(|_| !status.is_empty())
+                            .map_or_else(
+                                || status.to_string(),
+                                |model| format!("{model} · {status}"),
+                            ),
+                    ),
+            );
         if self.active.is_some() {
             footer = footer.child(
                 face(
@@ -724,6 +751,18 @@ impl Render for TldrToggle {
             .flex()
             .flex_col()
             .gap(px(8.))
+            .when(!self.article.source.is_empty(), |article| {
+                article.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .text_size(px(12.))
+                        .text_color(p.secondary)
+                        .children(brand_mark(&self.article.source, 14., cx))
+                        .child(self.article.source.clone()),
+                )
+            })
             .child(
                 div()
                     .text_size(px(18.))
@@ -732,15 +771,6 @@ impl Render for TldrToggle {
                     .text_color(p.ink)
                     .child(self.article.title.clone()),
             )
-            .when(!self.article.source.is_empty(), |v| {
-                v.child(
-                    div()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(p.secondary)
-                        .child(self.article.source.clone()),
-                )
-            })
             .child(
                 div()
                     .flex()

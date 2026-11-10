@@ -27,6 +27,8 @@ The host supplies outcomes, token counts, costs, latency and cache lifetime. Req
 
 ## API
 
+Use `with_model(name)` to identify the model that produced the supplied cache metrics.
+
 `resolve` · `(u64, Result<(CacheResult, CacheState, u64, Option<u64>), SharedString>, &mut Context<Self>)`
 
 Next request emits PromptCacheAction; resolve supplies the result or error. An optional changed segment can be armed before sending.

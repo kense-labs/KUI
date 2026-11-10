@@ -9,7 +9,7 @@ use kui::{
         in_view_title::InViewTitle,
         product_gallery::{ProductColor, ProductGallery, ProductPhoto, ProductSize},
         segmented_control::{FormOption, SegmentedControl, SelectionChanged},
-        sheet_stack::{SheetLink, SheetPage, SheetStack},
+        sheet_stack::{SheetLink, SheetPage, SheetStack, SheetStackPresentation},
         slot_text::SlotText,
         text_morph::TextMorph,
         text_reveal::TextReveal,
@@ -94,6 +94,7 @@ struct Demo {
     step: usize,
     /// Orientation switch for the compare demo, built on first render.
     orientation: Option<Entity<SegmentedControl>>,
+    sheet_presentation: SheetStackPresentation,
 }
 impl Demo {
     fn new(id: &str, cx: &mut Context<Self>) -> Self {
@@ -353,6 +354,32 @@ impl Demo {
                 Example::SheetStack(cx.new(|cx| {
                     SheetStack::new(t("Open settings", "打开设置"), pages, cx)
                         .with_action_labels(t("Back", "返回"), t("Close all", "全部关闭"))
+                        .with_launcher_context(move |_, cx| {
+                            let p = Paint::get(cx);
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_center()
+                                .child(
+                                    img(crate::family_story::collections::portrait_image(0))
+                                        .size(px(64.))
+                                        .rounded_full(),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(16.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child("Emma Collins"),
+                                )
+                                .child(div().text_size(px(12.)).text_color(p.secondary).child(
+                                    language.text(
+                                        "Product designer · Studio team",
+                                        "产品设计师 · 工作室团队",
+                                    ),
+                                ))
+                        })
                         .contained()
                 }))
             }
@@ -518,6 +545,7 @@ impl Demo {
             language,
             step: 0,
             orientation: None,
+            sheet_presentation: SheetStackPresentation::Auto,
         }
     }
     fn change(&mut self, cx: &mut Context<Self>) {
@@ -731,6 +759,71 @@ impl Render for Demo {
                 .items_center()
                 .child(div().w_full().max_w(px(824.)).child(gallery.clone()));
         }
+        if let Example::SheetStack(e) = &self.content {
+            let control = e.clone();
+            let t = |en, zh| self.language.text(en, zh);
+            let mut modes = div().flex().items_center().gap(px(6.)).flex_wrap();
+            for (mode, label) in [
+                (SheetStackPresentation::Auto, t("Auto", "自动")),
+                (SheetStackPresentation::Sheet, t("Sheets", "面板")),
+                (SheetStackPresentation::Dialog, t("Dialogs", "对话框")),
+            ] {
+                let handle = control.clone();
+                let selected = mode == self.sheet_presentation;
+                modes = modes.child(
+                    button(("sheet-mode", mode as usize), label, cx)
+                        .aria_toggled(selected.into())
+                        .when(selected, |b| b.bg(p.panel))
+                        .child(label)
+                        .on_click(cx.listener(move |s, _, _, cx| {
+                            s.sheet_presentation = mode;
+                            handle.update(cx, |v, cx| v.set_presentation(mode, cx));
+                            cx.notify();
+                        })),
+                );
+            }
+            let stage = div()
+                .w_full()
+                .max_w(px(522.))
+                .flex()
+                .flex_col()
+                .gap(px(12.))
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(565.))
+                        .rounded(kui::foundation::surface_radius(cx))
+                        .border_1()
+                        .border_color(p.line)
+                        .child(control.clone()),
+                )
+                .child(
+                    modes.child(
+                        button("sheet-reset", t("Reset", "重置"), cx)
+                            .child(t("Reset", "重置"))
+                            .on_click(cx.listener(move |s, _, w, cx| {
+                                s.sheet_presentation = SheetStackPresentation::Auto;
+                                control.update(cx, |v, cx| {
+                                    v.close(w, cx);
+                                    v.set_presentation(SheetStackPresentation::Auto, cx);
+                                });
+                                cx.notify();
+                            })),
+                    ),
+                );
+            return div()
+                .w_full()
+                .px_5()
+                .py(px(if w.viewport_size().width < px(460.) {
+                    22.
+                } else {
+                    56.
+                }))
+                .bg(p.stage)
+                .flex()
+                .justify_center()
+                .child(stage);
+        }
         let view: AnyView = match &self.content {
             Example::Reveal(e) => e.clone().into(),
             Example::Title(e) => e.clone().into(),
@@ -774,13 +867,9 @@ impl Render for Demo {
             .child(
                 div()
                     .max_w_full()
-                    .when(
-                        matches!(
-                            self.content,
-                            Example::BottomSheet(_) | Example::SheetStack(_)
-                        ),
-                        |d| d.w_full().h(px(440.)),
-                    )
+                    .when(matches!(self.content, Example::BottomSheet(_)), |d| {
+                        d.w_full().h(px(440.))
+                    })
                     .child(view),
             )
             .when(

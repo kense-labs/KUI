@@ -65,6 +65,7 @@ pub enum UndoToastEvent {
 /// Optimistically hides rows until a reversible batch is undone or confirmed by the host.
 pub struct UndoToast {
     label: SharedString,
+    avatars: HashMap<SharedString, ImageSource>,
     items: Vec<UndoItem>,
     initial_items: Vec<UndoItem>,
     pending: Vec<UndoEntry>,
@@ -100,6 +101,7 @@ impl UndoToast {
             .collect();
         Self {
             label: label.into(),
+            avatars: HashMap::new(),
             initial_items: items.clone(),
             items,
             pending: Vec::new(),
@@ -124,6 +126,11 @@ impl UndoToast {
     }
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.duration = duration.max(Duration::from_millis(100));
+        self
+    }
+    /// Associate optional sender images with the corresponding item keys.
+    pub fn with_avatars(mut self, avatars: Vec<(SharedString, ImageSource)>) -> Self {
+        self.avatars = avatars.into_iter().collect();
         self
     }
     pub fn pending(&self) -> &[UndoEntry] {
@@ -269,6 +276,9 @@ impl Render for UndoToast {
         }
         let p = Paint::get(cx);
         let radius = crate::foundation::surface_radius(cx);
+        let show_actions = w.last_input_was_touch()
+            || w.last_input_was_keyboard()
+            || w.viewport_size().width < px(440.);
         let mut rows = div()
             .flex()
             .flex_col()
@@ -279,7 +289,7 @@ impl Render for UndoToast {
             .bg(p.panel)
             .overflow_hidden();
         let mut any_visible = false;
-        for (row_idx, item) in self.items.iter().enumerate() {
+        for item in &self.items {
             let target = if self.pending.iter().any(|e| e.key == item.key) {
                 0.
             } else {
@@ -297,13 +307,16 @@ impl Render for UndoToast {
             any_visible = true;
             let key_archive = item.key.clone();
             let key_delete = item.key.clone();
+            let avatar = self.avatars.get(&item.key).cloned();
             let mut title_line = div().flex().items_center().gap(px(8.)).min_w_0();
-            if item.unread {
+            if item.unread && avatar.is_none() {
                 title_line = title_line.child(div().size(px(6.)).rounded_full().bg(p.bright));
             }
             if !item.sender.is_empty() {
                 title_line = title_line.child(
                     div()
+                        .max_w(relative(0.54))
+                        .truncate()
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.ink)
                         .child(item.sender.clone()),
@@ -311,6 +324,7 @@ impl Render for UndoToast {
             }
             title_line = title_line.child(
                 div()
+                    .min_w_0()
                     .truncate()
                     .text_color(if item.sender.is_empty() {
                         p.ink
@@ -344,6 +358,8 @@ impl Render for UndoToast {
             let delete = tr(cx, "Delete", "删除");
             rows = rows.child(
                 div()
+                    .id(item.key.clone())
+                    .group("undo-inbox-row")
                     .h(px(60. * amount))
                     .overflow_hidden()
                     .opacity(amount)
@@ -352,52 +368,88 @@ impl Render for UndoToast {
                     .gap(px(12.))
                     .px(px(12.))
                     .py(px(10.))
-                    .when(row_idx > 0, |r| r.border_t_1().border_color(p.line))
                     .hover(move |s| s.bg(p.tray))
-                    .child(content)
-                    .when(!item.meta.is_empty(), |r| {
+                    .when_some(avatar, |r, source| {
                         r.child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(p.faint)
-                                .child(item.meta.clone()),
+                            img(source)
+                                .size(px(32.))
+                                .rounded_full()
+                                .object_fit(ObjectFit::Cover)
+                                .flex_none(),
                         )
                     })
+                    .child(content)
                     .child(
-                        face(
-                            SharedString::from(format!("undo-archive-{}", key_archive)),
-                            archive,
-                            32.,
-                            radius.into(),
-                            Tone::Clear,
-                            cx,
-                        )
-                        .size(px(32.))
-                        .rounded_full()
-                        .p_0()
-                        .hover(move |s| s.bg(p.ink.opacity(0.07)).text_color(p.ink))
-                        .child(icon(Glyph::Archive, 14., p.secondary))
-                        .on_click(cx.listener(move |s, _, _, cx| {
-                            s.remove(&key_archive, RemovalKind::Archive, cx)
-                        })),
-                    )
-                    .child(
-                        face(
-                            SharedString::from(format!("undo-delete-{}", key_delete)),
-                            delete,
-                            32.,
-                            radius.into(),
-                            Tone::Clear,
-                            cx,
-                        )
-                        .size(px(32.))
-                        .rounded_full()
-                        .p_0()
-                        .hover(move |s| s.bg(p.ink.opacity(0.07)).text_color(p.ink))
-                        .child(icon(Glyph::Trash, 14., p.secondary))
-                        .on_click(cx.listener(move |s, _, _, cx| {
-                            s.remove(&key_delete, RemovalKind::Delete, cx)
-                        })),
+                        div()
+                            .relative()
+                            .flex_none()
+                            .w(px(68.))
+                            .h(px(34.))
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .when(!show_actions && !item.meta.is_empty(), |cell| {
+                                cell.child(
+                                    div()
+                                        .absolute()
+                                        .right_0()
+                                        .top(px(9.))
+                                        .text_size(px(12.))
+                                        .text_color(p.faint)
+                                        .group_hover("undo-inbox-row", |s| s.opacity(0.))
+                                        .child(item.meta.clone()),
+                                )
+                            })
+                            .child(
+                                face(
+                                    SharedString::from(format!("undo-archive-{}", key_archive)),
+                                    archive,
+                                    32.,
+                                    radius.into(),
+                                    Tone::Clear,
+                                    cx,
+                                )
+                                .size(px(32.))
+                                .rounded_full()
+                                .p_0()
+                                .when(!show_actions, |v| {
+                                    v.opacity(0.)
+                                        .group_hover("undo-inbox-row", |s| s.opacity(1.))
+                                        .focus_visible(|s| s.opacity(1.))
+                                })
+                                .hover(move |s| s.bg(p.ink.opacity(0.07)).text_color(p.ink))
+                                .child(icon(Glyph::Archive, 14., p.secondary))
+                                .on_click(cx.listener(
+                                    move |s, _, _, cx| {
+                                        s.remove(&key_archive, RemovalKind::Archive, cx)
+                                    },
+                                )),
+                            )
+                            .child(
+                                face(
+                                    SharedString::from(format!("undo-delete-{}", key_delete)),
+                                    delete,
+                                    32.,
+                                    radius.into(),
+                                    Tone::Clear,
+                                    cx,
+                                )
+                                .size(px(32.))
+                                .rounded_full()
+                                .p_0()
+                                .when(!show_actions, |v| {
+                                    v.opacity(0.)
+                                        .group_hover("undo-inbox-row", |s| s.opacity(1.))
+                                        .focus_visible(|s| s.opacity(1.))
+                                })
+                                .hover(move |s| s.bg(p.ink.opacity(0.07)).text_color(p.ink))
+                                .child(icon(Glyph::Trash, 14., p.secondary))
+                                .on_click(cx.listener(
+                                    move |s, _, _, cx| {
+                                        s.remove(&key_delete, RemovalKind::Delete, cx)
+                                    },
+                                )),
+                            ),
                     ),
             );
         }

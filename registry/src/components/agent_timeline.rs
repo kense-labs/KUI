@@ -1,10 +1,10 @@
 //! Follow the steps of an agent run and inspect individual results.
-use crate::primitives::{family::Paint, ops_surface::*};
+use crate::primitives::{family::Paint, glyph::Glyph, ops_surface::*};
 use gpui::{prelude::*, *};
 use web_time::Instant;
 
 const COLORS: [u32; 5] = [0x7594cb, 0x61ad94, 0xcd9b54, 0x9c83b4, 0xc67a79];
-const ROW: f32 = 44.;
+const ROW: f32 = 42.;
 
 #[derive(Clone)]
 pub struct Span {
@@ -108,7 +108,7 @@ impl Render for RunLanes {
         let p = Paint::get(cx);
         let radius = crate::foundation::surface_radius(cx);
         let compact = w.viewport_size().width < px(500.);
-        let label_width = if compact { 94. } else { 176. };
+        let label_width = if compact { 82. } else { 124. };
         let cursor = self.cursor / end;
         let mut labels = column().w(px(label_width)).flex_none().gap_0();
         let mut plot = column().relative().flex_1().gap_0().min_w_0();
@@ -135,12 +135,7 @@ impl Render for RunLanes {
                             }),
                     ),
             );
-            let mut rail = div()
-                .relative()
-                .w_full()
-                .h(px(ROW))
-                .border_b_1()
-                .border_color(p.line);
+            let mut rail = div().relative().w_full().h(px(ROW));
             for (index, span) in self.spans.iter().enumerate().filter(|(_, s)| {
                 s.lane == lane
                     && s.start.is_finite()
@@ -157,6 +152,9 @@ impl Render for RunLanes {
                         == Some(index);
                 let start = span.start.clamp(0., end);
                 let finish = span.end.clamp(start, end);
+                if self.cursor <= start && !selected {
+                    continue;
+                }
                 rail = rail.child(
                     item(("span", index), span.detail.clone(), cx, move |v, _, cx| {
                         v.selected = Some(index);
@@ -168,7 +166,7 @@ impl Render for RunLanes {
                     .top(px(12.))
                     .left(relative(start / end))
                     .w(relative((finish - start) / end))
-                    .h(px(20.))
+                    .h(px(16.))
                     .p_0()
                     .rounded(radius)
                     .overflow_hidden()
@@ -210,6 +208,14 @@ impl Render for RunLanes {
             canvas(
                 |_, _, _| (),
                 move |b, _, w, _| {
+                    let divisions = if compact { 2 } else { 5 };
+                    for i in 0..=divisions {
+                        let x = b.left() + (b.size.width - px(1.)) * (i as f32 / divisions as f32);
+                        w.paint_quad(fill(
+                            Bounds::new(point(x, b.top()), size(px(1.), b.size.height)),
+                            p.line,
+                        ));
+                    }
                     let pos = |fraction, lane| {
                         point(
                             b.left() + b.size.width * fraction,
@@ -245,7 +251,7 @@ impl Render for RunLanes {
             .size_full(),
         );
 
-        let ticks = if compact { 2 } else { 4 };
+        let ticks = if compact { 2 } else { 5 };
         let mut axis = row().w_full().justify_between();
         for index in 0..=ticks {
             axis = axis.child(note(
@@ -268,29 +274,20 @@ impl Render for RunLanes {
             .aria_value(format!("{:.1} / {:.1}s", self.cursor, end))
             .relative()
             .w_full()
-            .h(px(24.))
+            .h(px(28.))
             .cursor_pointer()
             .focus_visible(|v| v.bg(p.hover).rounded(radius))
             .child(
                 div()
                     .absolute()
-                    .left_0()
-                    .right_0()
-                    .top(px(11.))
-                    .h(px(2.))
-                    .bg(p.line)
-                    .child(div().w(relative(cursor)).h_full().bg(p.secondary)),
-            )
-            .child(
-                div()
-                    .absolute()
                     .left(relative(cursor))
-                    .ml(px(-4.))
-                    .top(px(8.))
-                    .size(px(8.))
+                    .ml(px(-3.))
+                    .top(px(0.))
+                    .size(px(6.))
                     .rounded_full()
                     .bg(p.ink),
             )
+            .child(axis.mt(px(9.)))
             .child(
                 canvas(
                     move |b, _, cx| {
@@ -360,80 +357,92 @@ impl Render for RunLanes {
                 );
             }
         }
-        panel(&self.id, 669., cx)
+        let playing = self.last.is_some();
+        let state = if playing {
+            tr(cx, "Running", "运行中")
+        } else if self.cursor >= end {
+            tr(cx, "Completed", "已完成")
+        } else {
+            tr(cx, "Paused", "已暂停")
+        };
+        panel(&self.id, 524., cx)
             .p(px(if compact { 12. } else { 24. }))
             .child(
-                row()
-                    .justify_between()
-                    .flex_wrap()
-                    .child(title(self.title.clone()))
-                    .child(
-                        row()
-                            .flex_wrap()
-                            .gap_2()
-                            .child(
-                                note(format!("{:.1}s / {:.1}s", self.cursor, end), cx)
-                                    .w(px(96.))
-                                    .text_right(),
-                            )
-                            .when_some(self.totals.clone(), |v, totals| v.child(note(totals, cx))),
-                    ),
+                column().gap_0().child(title(self.title.clone())).child(
+                    row()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(note(format!("{state} · {:.1}s", self.cursor), cx))
+                        .when_some(self.totals.clone(), |v, totals| v.child(note(totals, cx))),
+                ),
             )
             .child(row().items_start().gap_0().child(labels).child(plot))
             .child(
                 row()
                     .gap_0()
                     .child(div().w(px(label_width)).flex_none())
-                    .child(column().flex_1().gap_0().child(axis).child(seek)),
+                    .child(column().flex_1().gap_0().child(seek)),
             )
             .child(
-                row().flex_wrap().justify_between().child(legend).child(
-                    row()
-                        .child(btn(
-                            "play",
-                            if self.last.is_some() {
-                                tr(cx, "Pause", "暂停")
-                            } else {
-                                tr(cx, "Play", "播放")
-                            },
-                            false,
-                            cx,
-                            move |s, _, cx| {
-                                if s.last.take().is_none() {
-                                    if s.cursor >= end {
-                                        s.cursor = 0.;
+                column()
+                    .gap(px(10.))
+                    .child(
+                        row()
+                            .flex_wrap()
+                            .child(icon_btn(
+                                "play",
+                                if self.last.is_some() {
+                                    tr(cx, "Pause", "暂停")
+                                } else {
+                                    tr(cx, "Play", "播放")
+                                },
+                                if playing { Glyph::Pause } else { Glyph::Play },
+                                cx,
+                                move |s, _, cx| {
+                                    if s.last.take().is_none() {
+                                        if s.cursor >= end {
+                                            s.cursor = 0.;
+                                        }
+                                        s.last = Some(cx.background_executor().now());
                                     }
+                                    cx.notify();
+                                },
+                            ))
+                            .child(icon_btn(
+                                "rewind",
+                                tr(cx, "Replay", "重播"),
+                                Glyph::Undo,
+                                cx,
+                                |s, _, cx| {
+                                    s.cursor = 0.;
                                     s.last = Some(cx.background_executor().now());
-                                }
-                                cx.notify();
-                            },
-                        ))
-                        .child(btn(
-                            "rewind",
-                            tr(cx, "Replay", "重播"),
-                            false,
-                            cx,
-                            |s, _, cx| {
-                                s.cursor = 0.;
-                                s.last = Some(cx.background_executor().now());
-                                cx.notify();
-                            },
-                        ))
-                        .child(btn(
-                            "speed",
-                            format!("{}×", self.speed),
-                            false,
-                            cx,
-                            |s, _, cx| {
-                                s.speed = match s.speed {
-                                    0.5 => 1.,
-                                    1. => 2.,
-                                    _ => 0.5,
-                                };
-                                cx.notify();
-                            },
-                        )),
-                ),
+                                    cx.notify();
+                                },
+                            ))
+                            .child(
+                                row()
+                                    .gap_0()
+                                    .p(px(2.))
+                                    .rounded(radius)
+                                    .bg(p.stage)
+                                    .children([1., 2.].into_iter().enumerate().map(
+                                        |(index, speed)| {
+                                            btn(
+                                                ("speed", index),
+                                                format!("{speed}×"),
+                                                self.speed == speed,
+                                                cx,
+                                                move |s, _, cx| {
+                                                    s.speed = speed;
+                                                    cx.notify();
+                                                },
+                                            )
+                                            .aria_toggled((self.speed == speed).into())
+                                        },
+                                    )),
+                            ),
+                    )
+                    .child(legend),
             )
             .when_some(self.selected.and_then(|i| self.spans.get(i)), |v, s| {
                 v.child(note(

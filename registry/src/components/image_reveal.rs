@@ -234,6 +234,46 @@ impl Render for ImageReveal {
                 }
             }
         }
+        if self.status == RevealStatus::Generating && progress < 0.9 {
+            visual = visual.child(
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        let edge = bounds.top() + bounds.size.height * progress;
+                        let cell = px(7.).max(bounds.size.width / 32.);
+                        let (mut y, mut row) = (bounds.top(), 0u32);
+                        while y < bounds.bottom() {
+                            let reveal = ((y - edge) / px(20.) + 0.3).clamp(0., 1.);
+                            if reveal > 0. {
+                                let (mut x, mut col) = (bounds.left(), 0u32);
+                                while x < bounds.right() {
+                                    let hash = col
+                                        .wrapping_mul(1_511_307)
+                                        .wrapping_add(row.wrapping_mul(979_733));
+                                    let hash =
+                                        (hash ^ hash.rotate_left(11)).wrapping_mul(2_654_435_761);
+                                    let sample = (hash & 255) as f32 / 255.;
+                                    let shade = [0x7b8fa5, 0xc4a387, 0x7c8c78, 0x4d5968, 0xb2a9ae]
+                                        [((hash >> 8) % 5) as usize];
+                                    let color = rgb(shade)
+                                        .opacity(reveal * (1. - progress) * (0.18 + sample * 0.54));
+                                    window.paint_quad(fill(
+                                        Bounds::new(point(x, y), size(cell, cell)),
+                                        color,
+                                    ));
+                                    x += cell;
+                                    col += 1;
+                                }
+                            }
+                            y += cell;
+                            row += 1;
+                        }
+                    },
+                )
+                .absolute()
+                .inset_0(),
+            );
+        }
         frame = frame.child(visual);
         if self.status == RevealStatus::Error {
             frame = frame.child(

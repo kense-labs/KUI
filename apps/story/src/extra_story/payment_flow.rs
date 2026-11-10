@@ -21,13 +21,20 @@ pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 struct Demo(Entity<PaymentFlow>);
 
 impl Render for Demo {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let width = w.viewport_size().width;
         div()
             .size_full()
+            .min_h(px(552.))
             .flex()
             .items_center()
             .justify_center()
             .px(px(12.))
-            .child(self.0.clone())
+            .child(
+                div()
+                    .w_full()
+                    .max_w(if width < px(724.) { px(522.) } else { px(761.) })
+                    .child(self.0.clone()),
+            )
     }
 }

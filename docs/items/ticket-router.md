@@ -23,9 +23,11 @@ let control = cx.new(|_| TicketRouter::new("Inbox", lanes, tickets));
 
 ## Interaction
 
-Start or pause processing; retry failures. Review uncertain suggestions and choose a destination. Assignment is shown only after host confirmation.
+Start or pause processing; retry failures. In-flight and failed tickets show their original message. Once classified, a ticket displays the available intent, sentiment and confidence. Review uncertain suggestions and choose a destination. Assignment is shown only after host confirmation. Queue cards use two columns when the content area is at least 350px wide, then stack on narrower surfaces.
 
 ## API
+
+Use `with_model(name)` to identify the classification model. Set `Ticket::with_sender` and `Ticket::with_channel` to supply the email context displayed in the queue.
 
 `classified` · `(u64, TicketDecision, &mut Context<Self>) -> bool`
 

@@ -59,7 +59,7 @@ impl Demo {
             ),
         ];
         let tokens = [
-            ("Maya", 3, 4),
+            ("Maya", 3, 5),
             (" paid", 5, 4),
             (" $", 7, 1),
             ("1", 1, 7),
@@ -77,6 +77,9 @@ impl Demo {
         ]
         .into_iter()
         .map(|(token, first, second)| {
+            if token == "Maya" {
+                return MoeToken::new(token, vec![0.04, 0.07, 0.06, 0.46, 0.08, 0.21, 0.03, 0.05]);
+            }
             let mut scores = vec![0.02; 8];
             scores[first] = 0.67;
             scores[second] = 0.21;
@@ -85,7 +88,7 @@ impl Demo {
         .collect();
         let diagram = cx.new(|_| {
             MixtureOfExperts::new(experts, tokens)
-                .with_capacity_factor(0.8)
+                .with_capacity_factor(1.)
                 .with_parameters(671., 5., 16.)
                 .with_simulated(true)
         });

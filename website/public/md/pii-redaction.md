@@ -25,6 +25,8 @@ Select text to add ranges, remove or undo them, then explicitly review before co
 
 ## API
 
+Use `with_model(name)` to name the host-selected scan model. The range cards show the same replacement tokens used in the masked preview.
+
 `finish_scan` · `(u64, Vec<PiiSpan>, &mut Context<Self>) -> bool`
 
 Handle ScanRequested and Cancelled in the host. Pass the matching ID and non-overlapping UTF-8 byte ranges aligned to Unicode graphemes to finish_scan, or call fail_scan. Edits and cancellation invalidate old results.

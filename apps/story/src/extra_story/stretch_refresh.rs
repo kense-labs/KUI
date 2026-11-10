@@ -12,7 +12,7 @@ use kui::{
 use std::{sync::Arc, time::Duration};
 
 pub const IDS: &[&str] = &["stretch-refresh"];
-pub const PREVIEW_HEIGHT: f32 = 428.;
+pub const PREVIEW_HEIGHT: f32 = 520.;
 
 pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
     IDS.contains(&id).then(|| cx.new(Demo::new).into())
@@ -282,7 +282,7 @@ impl Render for Demo {
                 div()
                     .w_full()
                     .max_w(px(376.))
-                    .h(px(368.))
+                    .h(px(392.))
                     .flex_none()
                     .child(self.view.clone()),
             )

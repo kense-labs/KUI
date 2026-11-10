@@ -1,6 +1,7 @@
 //! Illustrative model-training sequence; all values are supplied by the host.
 use crate::primitives::{
     family::{Paint, PhaseClock, Slide, Tone, disabled_motion, face},
+    glyph::{Glyph, icon},
     presentation::{column, hint, row, tr},
 };
 use gpui::{prelude::*, *};
@@ -144,7 +145,8 @@ fn paint_circle(center: Point<Pixels>, radius: f32, color: Hsla, w: &mut Window)
 fn line(a: Point<Pixels>, b: Point<Pixels>, width: f32, color: Hsla, w: &mut Window) {
     let mut path = PathBuilder::stroke(px(width));
     path.move_to(a);
-    path.line_to(b);
+    let bend = (b.x - a.x) * 0.46;
+    path.cubic_bezier_to(b, point(a.x + bend, a.y), point(b.x - bend, b.y));
     if let Ok(path) = path.build() {
         w.paint_path(path, color);
     }
@@ -152,6 +154,7 @@ fn line(a: Point<Pixels>, b: Point<Pixels>, width: f32, color: Hsla, w: &mut Win
 impl Render for ModelTraining {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
+        let compact = w.viewport_size().width < px(470.);
         let reduced = disabled_motion(cx);
         let running = self.visible && w.is_visible() && !self.paused && self.speed > 0. && !reduced;
         let target_speed = if self.hovered { 0.35 } else { 1. };
@@ -265,21 +268,21 @@ impl Render for ModelTraining {
             .role(Role::Image)
             .aria_label(diagram_label)
             .w_full()
-            .min_w(px(250.))
-            .h(px(316.))
+            .min_w_0()
+            .h(px(210.))
             .child(
                 canvas(
                     |_, _, _| {},
                     move |bounds, _, w, _| {
                         let width = f32::from(bounds.size.width);
                         let height = f32::from(bounds.size.height);
-                        let left = 28.;
-                        let right = (width - 28.).max(left + 1.);
+                        let left = 17.;
+                        let right = (width - 17.).max(left + 1.);
                         let layers = [3usize, 4, 4, 2];
                         let node = |layer: usize, index: usize| {
                             let x = left + (right - left) * layer as f32 / 3.;
                             let count = layers[layer];
-                            let y = height / 2. + (index as f32 - (count - 1) as f32 / 2.) * 37.;
+                            let y = height / 2. + (index as f32 - (count - 1) as f32 / 2.) * 43.;
                             point(bounds.origin.x + px(x), bounds.origin.y + px(y))
                         };
                         for layer in 0..3 {
@@ -306,10 +309,12 @@ impl Render for ModelTraining {
                                             + j as f32 * 0.03)
                                             .fract();
                                         let phase = if stage == 2 { 1. - phase } else { phase };
-                                        let q = point(
-                                            a.x + (b.x - a.x) * phase,
-                                            a.y + (b.y - a.y) * phase,
-                                        );
+                                        let inv = 1. - phase;
+                                        let x = phase.powi(3)
+                                            + 3. * (inv.powi(2) * phase * 0.46
+                                                + inv * phase.powi(2) * 0.54);
+                                        let y = phase * phase * (3. - 2. * phase);
+                                        let q = point(a.x + (b.x - a.x) * x, a.y + (b.y - a.y) * y);
                                         paint_circle(
                                             q,
                                             2.2,
@@ -327,14 +332,15 @@ impl Render for ModelTraining {
                         for (layer, &count) in layers.iter().enumerate() {
                             for i in 0..count {
                                 let q = node(layer, i);
-                                paint_circle(q, 7., p.panel, w);
+                                paint_circle(q, 7., p.faint.opacity(0.40), w);
+                                paint_circle(q, 6., p.panel, w);
                                 paint_circle(
                                     q,
                                     if layer == 3 { 4.5 } else { 4. },
                                     if t >= STAGES[1] {
                                         p.bright.opacity(0.85)
                                     } else {
-                                        p.secondary.opacity(0.55)
+                                        p.panel
                                     },
                                     w,
                                 );
@@ -416,7 +422,7 @@ impl Render for ModelTraining {
                                 .text_color(if current { p.bright } else { p.faint })
                                 .child(format!("{}", i + 1)),
                         )
-                        .child(name.to_string()),
+                        .when(!compact, |label| label.child(name.to_string())),
                 )
                 .child(
                     div().w_full().h(px(2.)).rounded_full().bg(p.line).child(
@@ -429,104 +435,127 @@ impl Render for ModelTraining {
                 )
                 .on_click(cx.listener(move |s, _, _, cx| s.set_step(i, cx)))
             }));
+        let datasets = div()
+            .flex()
+            .when(compact, |v| v.w_full().gap(px(16.)))
+            .when(!compact, |v| {
+                v.flex_col().w(px(100.)).flex_none().gap(px(24.))
+            })
+            .children(
+                [
+                    (tr(cx, "Training set", "训练集"), self.config.samples, false),
+                    (tr(cx, "Held-out set", "留出集"), self.config.held_out, true),
+                ]
+                .into_iter()
+                .map(|(name, count, held_out)| {
+                    column()
+                        .gap(px(4.))
+                        .when(compact, |v| v.flex_1())
+                        .child(
+                            div()
+                                .w(px(74.))
+                                .max_w_full()
+                                .h(px(46.))
+                                .p_2()
+                                .flex()
+                                .flex_col()
+                                .gap(px(5.))
+                                .rounded(crate::foundation::surface_radius(cx))
+                                .border_1()
+                                .border_color(p.line)
+                                .when(held_out, |v| v.border_dashed())
+                                .bg(p.panel)
+                                .children([0.74, 1., 0.58].map(|width| {
+                                    div()
+                                        .w(relative(width))
+                                        .h(px(2.))
+                                        .rounded_full()
+                                        .bg(p.faint.opacity(0.55))
+                                })),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(13.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(name),
+                        )
+                        .child(hint(format!("{count} {}", tr(cx, "samples", "条样本")), p))
+                }),
+            );
+        let playback = face(
+            "training-playback",
+            if self.paused {
+                tr(cx, "Play", "播放")
+            } else {
+                tr(cx, "Pause", "暂停")
+            },
+            36.,
+            18.,
+            Tone::Clear,
+            cx,
+        )
+        .w(px(36.))
+        .flex_none()
+        .p_0()
+        .border_1()
+        .border_color(p.line)
+        .hover(|s| s.bg(p.tray))
+        .aria_toggled(self.paused.into())
+        .child(icon(
+            if self.paused {
+                Glyph::Play
+            } else {
+                Glyph::Pause
+            },
+            15.,
+            p.secondary,
+        ))
+        .on_click(cx.listener(|s, _, _, cx| s.set_paused(!s.paused, cx)));
         column()
             .id("model-training")
             .w_full()
-            .max_w(px(960.))
+            .max_w(px(552.))
             .gap(px(24.))
-            .p(px(16.))
-            .rounded(crate::foundation::surface_radius(cx))
-            .bg(p.panel)
-            .border_1()
-            .border_color(p.line)
+            .px(px(if compact { 8. } else { 16. }))
+            .py(px(30.))
+            .role(Role::Group)
+            .aria_label(tr(cx, "Illustrative model training", "模型训练示意"))
             .text_color(p.ink)
-            .child(
-                row()
-                    .justify_between()
-                    .items_center()
-                    .gap(px(16.))
-                    .child(
-                        div()
-                            .text_size(px(16.))
-                            .line_height(px(22.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(tr(cx, "Model training", "模型训练")),
-                    )
-                    .child(
-                        face(
-                            "training-playback",
-                            if self.paused {
-                                tr(cx, "Play", "播放")
-                            } else {
-                                tr(cx, "Pause", "暂停")
-                            },
-                            36.,
-                            18.,
-                            Tone::Clear,
-                            cx,
-                        )
-                        .w(px(36.))
-                        .px(px(0.))
-                        .border_1()
-                        .border_color(p.line)
-                        .hover(|s| s.bg(p.tray))
-                        .child(if self.paused { "▶" } else { "❚❚" })
-                        .on_click(cx.listener(|s, _, _, cx| s.set_paused(!s.paused, cx))),
-                    ),
-            )
-            .child(hint(
-                tr(
-                    cx,
-                    "Illustrative example, not real training metrics",
-                    "以下为示意数据，不代表真实训练指标",
-                ),
-                p,
-            ))
-            .child(
-                row().gap_2().flex_wrap().children(
-                    [
-                        (tr(cx, "Training set", "训练集"), self.config.samples),
-                        (tr(cx, "Held-out set", "留出集"), self.config.held_out),
-                    ]
-                    .into_iter()
-                    .map(|(name, count)| {
-                        column()
-                            .gap_1()
-                            .px(px(10.))
-                            .py(px(7.))
-                            .rounded(crate::foundation::surface_radius(cx))
-                            .bg(p.stage)
-                            .child(name)
-                            .child(hint(format!("{count} {}", tr(cx, "samples", "条样本")), p))
-                    }),
-                ),
-            )
             .child(
                 div()
                     .flex()
-                    .flex_wrap()
                     .items_center()
-                    .gap(px(40.))
-                    .child(div().flex_1().min_w(px(250.)).child(image))
+                    .gap(px(12.))
+                    .when(compact, |v| v.flex_col())
+                    .child(datasets)
                     .child(
-                        column()
-                            .w(px(232.))
-                            .max_w_full()
-                            .gap(px(16.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(16.))
-                                    .child(stat(tr(cx, "Loss", "损失"), format!("{loss:.2}"), p))
-                                    .child(stat(
-                                        tr(cx, "Epoch", "轮次"),
-                                        format!("{epoch} / {}", self.config.epochs),
-                                        p,
-                                    )),
-                            )
-                            .child(graph),
+                        column().flex_1().w_full().gap_0().child(image).child(
+                            row().justify_between().px(px(4.)).children(
+                                [
+                                    tr(cx, "Input", "输入"),
+                                    tr(cx, "Hidden", "隐藏"),
+                                    tr(cx, "Hidden", "隐藏"),
+                                    tr(cx, "Output", "输出"),
+                                ]
+                                .map(|label| hint(label, p)),
+                            ),
+                        ),
                     ),
             )
+            .child(
+                row()
+                    .gap(px(16.))
+                    .child(stat(tr(cx, "Loss", "损失"), format!("{loss:.2}"), p).flex_1())
+                    .child(
+                        stat(
+                            tr(cx, "Epoch", "轮次"),
+                            format!("{epoch} / {}", self.config.epochs),
+                            p,
+                        )
+                        .flex_1(),
+                    ),
+            )
+            .child(graph)
             .child(
                 div()
                     .pt(px(16.))
@@ -601,7 +630,7 @@ impl Render for ModelTraining {
                             )
                     })),
             )
-            .child(steps)
+            .child(row().gap(px(12.)).child(playback).child(steps))
             .child(hint(
                 if stage == 0 {
                     format!("{} {}", self.config.batch_size, captions[stage])

@@ -30,6 +30,8 @@ Hover or activate a section. Use arrow keys to navigate, Enter to choose and Esc
 
 Provide sections, groups and stable link IDs; optionally configure a brand destination, primary action and feature card. MegaMenuNavigate reports the chosen ID and the host performs navigation.
 
+Use `with_brand_images` to supply light and dark marks. Use `with_compact_below` to set the minimum width for the full navigation. It also collapses when its labels need more space than the container provides.
+
 Event: `MegaMenuNavigate`.
 
 ## Motion

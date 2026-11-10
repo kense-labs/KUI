@@ -567,7 +567,7 @@ fn paint_ticket(
     window.paint_drop_shadows(
         Bounds::new(bounds.origin, size(px(shadow_width), bounds.size.height)),
         Corners::all(px(shape.radius)),
-        &[BoxShadow::new(px(0.), px(10.), black().opacity(0.19)).blur_radius(px(29.))],
+        &[BoxShadow::new(px(0.), px(6.), black().opacity(0.12)).blur_radius(px(18.))],
     );
     let body = paper_path(
         0.,

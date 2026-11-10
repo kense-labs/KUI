@@ -28,6 +28,8 @@ The host owns the conversation and transfer service. The preview simulates all t
 
 ## API
 
+Use `with_assistant_model(name)` to show the model on assistant messages.
+
 `connect` · `(u64, impl Into<SharedString>, &mut Context<Self>) -> bool`
 
 Handle Request with connect or fail_transfer using its ticket; Cancel invalidates that request. Handle Send with finish_send using its ticket; failure preserves the draft, CancelSend invalidates it, and successful messages are appended by the host with unique IDs. Mark messages after_handoff to display them after the summary card.

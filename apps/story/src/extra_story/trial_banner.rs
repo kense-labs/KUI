@@ -107,20 +107,6 @@ impl Example {
 impl Render for Example {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let lang = UiLanguage::current(cx);
-        let picker = |label, control| {
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(4.))
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(p.secondary)
-                        .child(label),
-                )
-                .child(control)
-        };
         let height = if self.banner.read(cx).is_expanded() {
             if w.viewport_size().width < px(510.) {
                 628.
@@ -128,16 +114,17 @@ impl Render for Example {
                 574.
             }
         } else {
-            510.
+            586.
         };
         div()
             .flex()
             .flex_col()
             .w_full()
-            .max_w(px(780.))
+            .max_w(px(552.))
             .min_h(px(height))
-            .p(px(12.))
-            .gap(px(12.))
+            .px(px(12.))
+            .py(px(48.))
+            .gap(px(24.))
             .items_center()
             .child(
                 div()
@@ -147,8 +134,8 @@ impl Render for Example {
                     .justify_center()
                     .gap(px(16.))
                     .flex_wrap()
-                    .child(picker(lang.text("Variant", "外观"), self.variants.clone()))
-                    .child(picker(lang.text("Trial", "试用状态"), self.trials.clone())),
+                    .child(self.variants.clone())
+                    .child(self.trials.clone()),
             )
             .child(self.banner.clone())
             .children(self.note.map(|note| {

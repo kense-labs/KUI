@@ -26,6 +26,8 @@ Select a view and length to request a summary. Stop or retry a run; activate a k
 
 ## API
 
+Set the publisher with `TldrArticle::with_source` and the host-selected summarization model with `TldrToggle::with_model`.
+
 `append_text` · `(u64, &str, &mut Context<Self>) -> bool`
 
 Handle TldrEvent::Requested and Cancelled in the host. Pass matching request IDs to append_text, append_point, finish or fail; late events from cancelled requests are ignored. Successful results are cached by mode and length.

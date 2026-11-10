@@ -537,19 +537,23 @@ fn refresh_mark(ink: Hsla, turns: f32) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, _, w, _| {
-            let rotate = |angle: f32, radius: f32| {
-                let a = (angle + turns * 360.).to_radians();
-                bounds.center() + point(px(a.cos() * radius), px(a.sin() * radius))
+            let (sin, cos) = (turns * std::f32::consts::TAU).sin_cos();
+            let rotate = |x: f32, y: f32| {
+                bounds.center() + point(px(x * cos - y * sin), px(x * sin + y * cos))
             };
-            let mut path = PathBuilder::stroke(px(1.35));
-            path.move_to(rotate(13., 5.7));
-            for i in 1..=28 {
-                path.line_to(rotate(13. + i as f32 * 10.7, 5.7));
+            let arc = |i: usize| {
+                let angle = (12. + i as f32 * 310. / 32.).to_radians();
+                rotate(5.7 * angle.cos(), 5.7 * angle.sin())
+            };
+            let mut path = PathBuilder::stroke(px(1.45));
+            path.move_to(arc(0));
+            for i in 1..=32 {
+                path.line_to(arc(i));
             }
-            let tip = rotate(313., 5.7);
-            path.move_to(rotate(273., 6.9));
-            path.line_to(tip);
-            path.line_to(rotate(331., 9.));
+            path.line_to(rotate(5.7, -3.1));
+            path.move_to(rotate(1.8, -3.1));
+            path.line_to(rotate(5.7, -3.1));
+            path.line_to(rotate(5.7, -7.0));
             if let Ok(path) = path.build() {
                 w.paint_path(path, ink);
             }

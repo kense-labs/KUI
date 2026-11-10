@@ -118,8 +118,9 @@ impl Render for Demo {
         let radius = Theme::global(cx).tokens.radius.md;
         div()
             .w_full()
-            .max_w(px(698.))
-            .px(px(if narrow { 8. } else { 14. }))
+            .max_w(px(572.))
+            .px(px(if narrow { 12. } else { 22. }))
+            .py(px(12.))
             .child(
                 div()
                     .w_full()

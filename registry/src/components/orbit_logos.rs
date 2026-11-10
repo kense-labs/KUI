@@ -1047,7 +1047,7 @@ impl Render for OrbitLogos {
             .filter(|&i| self.connections[i] == Connection::Connected)
             .count();
         let accent = p.bright;
-        let ring_color = p.line.blend(p.secondary.opacity(0.18));
+        let ring_color = p.line.opacity(0.52);
         let selected_ring = selected.map(|i| self.slots[i].ring);
         let selected_center = selected.map(|i| chip_centers[i]);
         let canvas_rings = canvas(
@@ -1316,8 +1316,8 @@ impl Render for OrbitLogos {
                     format!("共 {} 项集成，已连接 {connected} 项", self.logos.len()),
                 )
             };
-            panel = panel.child(column().p(px(16.)).gap(px(9.)).opacity(1.-shell)
-                .child(column().child(div().text_size(px(16.)).font_weight(FontWeight::MEDIUM).child(label))
+            panel = panel.child(column().p(px(16.)).gap(px(9.)).opacity(1.-shell).items_center().text_center()
+                .child(column().items_center().child(div().text_size(px(16.)).font_weight(FontWeight::MEDIUM).child(label))
                     .child(hint(sub, p)))
                 .child(hint(tr(cx, "Pick a logo to see what it does and connect it. Arrow keys step through them.", "选择标志查看详情或连接。使用方向键可切换。"),p))
                 .child(hint(total, p)));

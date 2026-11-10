@@ -6,6 +6,7 @@ use crate::{
     },
     foundation::{Theme, ThemeMode, surface_radius},
     primitives::{
+        brand_mark::brand_mark,
         family::{Paint, PhaseClock, Slide, Tone, disabled_motion, ease, face},
         glyph::{Glyph, icon, spinner},
         presentation::{column, row, tr},
@@ -593,6 +594,12 @@ impl UpgradePrompt {
                                     .gap(px(8.))
                                     .h(px(20.))
                                     .child(icon(Glyph::Check, 14., p.secondary))
+                                    .children(
+                                        feature
+                                            .label
+                                            .split(" and ")
+                                            .filter_map(|model| brand_mark(model, 14., cx)),
+                                    )
                                     .child(
                                         div()
                                             .flex_1()

@@ -41,6 +41,8 @@ Scroll the article or jump to a heading. The active section and remaining minute
 
 Sections carry a heading, text and nesting depth. Events report a visible section index.
 
+`with_byline` places optional author and publication text below the title. The outline measures wrapped headings to position the connecting line and marker.
+
 Event: `SectionChanged`.
 
 ## Motion

@@ -419,7 +419,7 @@ impl Render for InstallSnippet {
         let radius = crate::foundation::surface_radius(cx);
         let framework_count = self.frameworks.len();
         let width = f32::from(self.tab_width.get());
-        let compact = width > 0. && width < 348.;
+        let compact = width > 0. && width < 380.;
         let cells = framework_count.max(1);
         let cell_width = ((width - 6. - 2. * (cells - 1) as f32) / cells as f32).max(0.);
         let marker = self.framework_marker.get(window, cx);
@@ -576,7 +576,7 @@ impl Render for InstallSnippet {
                 .role(Role::List)
                 .flex()
                 .flex_col()
-                .gap(px(16.));
+                .gap(px(24.));
             for (i, step) in steps.iter().enumerate() {
                 let done = self.done.contains(&(self.selected, i));
                 let marker = if done {
@@ -634,7 +634,11 @@ impl Render for InstallSnippet {
                             label,
                             32.,
                             radius.into(),
-                            Tone::Surface,
+                            if key_pending {
+                                Tone::Surface
+                            } else {
+                                Tone::Primary
+                            },
                             cx,
                         )
                         .px(px(8.))

@@ -20,7 +20,7 @@
 
 ## 本轮修复进度
 
-原表是修复前的取证。85 项明确差异中，**33 项已有代码或预览数据改动，52 项仍待修复**。下表记录已改内容，完整对齐需要在同样的播放阶段、宽度和主题下复测。保留 KUI 品牌、用户指定的 8px 外框及独立素材。
+原表是修复前的取证。85 项明确差异分两批返修，第一批 33 项，第二批 52 项。以下记录改动和复测结果。保留 KUI 品牌、用户指定的 8px 外框及独立素材。
 
 | 组件 | 已改内容 |
 | --- | --- |
@@ -66,11 +66,77 @@
 | [meeting-summary](https://uiarc.dev/components/meeting-summary) | 调整摘要结构及模拟状态。 |
 | [team-switcher](https://uiarc.dev/components/team-switcher) | 更新工作区品牌标志与布局。 |
 
-### 仍待修复的 52 项
+### 第二批起点 · 52 项
 
 每项的已知差异及修复前截图见下方逐项清单。
 
 `morph-nav`, `dock`, `wallet-stack`, `control-center`, `cover-flow`, `stretch-refresh`, `orbit-menu`, `data-grid`, `action-morph`, `realtime-stream`, `sheet-stack`, `dot-grid`, `keycap-keyboard`, `ticket-tear`, `glass-menu`, `glass-segmented`, `glass-tabbar`, `card-to-article`, `orbit-logos`, `data-flow`, `payment-flow`, `dns-resolution`, `model-training`, `vector-search`, `agent-timeline`, `typewriter-terminal`, `mixture-of-experts`, `speculative-decoding`, `prompt-cache`, `source-cards`, `code-suggestion`, `ghost-text`, `image-generation`, `reply-draft`, `agent-handoff`, `pii-redaction`, `tldr-toggle`, `smart-form-fill`, `ticket-router`, `ask-your-data`, `image-reveal`, `tone-tuner`, `upgrade-prompt`, `trial-banner`, `install-snippet`, `branch-graph`, `link-unfurl`, `charge-session`, `mega-menu-morph`, `toc-progress`, `metric-ticker`, `undo-toast`。
+
+### 第二批逐项返修 · 52 项
+
+下表记录逐项改动和验证边界。原有对照截图保留在后文，新的预览和专项测试另行记录。采用同一套 Rust + GPUI 源码，矩形保留 8px 设计圆角，保留 KUI 说明、独立素材及安装方式。
+
+| 组件 | 本批改动 | 专项范围 |
+| --- | --- | --- |
+| [morph-nav](https://uiarc.dev/components/morph-nav) | 预览高度改为 634px，浮动导航留在顶部，演示切换放到画布下部。减轻导航阴影。 | 外壳沿用 KUI 8px；待复查搜索和展开中间帧。 |
+| [dock](https://uiarc.dev/components/dock) | 用风景照片与评论呈现画板，工具栏底部留 26px，活动工具播报移到无障碍状态。 | 预览素材使用独立图片。 |
+| [wallet-stack](https://uiarc.dev/components/wallet-stack) | 减轻卡片阴影并增加闭合状态后卡的露出比例。 | 后卡步距需复查开合中间态。 |
+| [control-center](https://uiarc.dev/components/control-center) | 收紧面板外阴影，保留开关、原生焦点和统一 8px 外框。 | 圆角按 KUI 规范。 |
+| [cover-flow](https://uiarc.dev/components/cover-flow) | 增大桌面中央封面宽度并恢复画布留白。 | 示例使用原有徒步照片。 |
+| [stretch-refresh](https://uiarc.dev/components/stretch-refresh) | 重画右上角顺时针箭头。预览高度恢复为 520px，活动列表和重置之间保留空间。 | 浏览器验证了静止图案、点击刷新和新列表；原生测试覆盖短拖、滚轮、触摸取消及失败重试。 |
+| [orbit-menu](https://uiarc.dev/components/orbit-menu) | 用山间木屋代替月球图，匹配参考的照片语境并加长舞台，保留独立下载。 | 原有 KUI 图片素材。 |
+| [data-grid](https://uiarc.dev/components/data-grid) | 工具栏显示总数和筛选后行数，扩大演示数据列，横向滚动时固定行号区。 | 逐行选择模式和固定区仍需和公开预览逐项对照。 |
+| [action-morph](https://uiarc.dev/components/action-morph) | 收紧任务板宽度、增加上下留白，减弱行分隔。 | 保持既有创建与失败恢复。 |
+| [realtime-stream](https://uiarc.dev/components/realtime-stream) | 恢复结账 API p95 延迟、500ms 样例采样、30 秒相对刻度、蓝线和模拟峰值。 | 保持宿主驱动和原有检查能力，需复核实时录屏。 |
+| [sheet-stack](https://uiarc.dev/components/sheet-stack) | 加入头像启动页和 Auto／Sheets／Dialogs 切换，按测量到的容器选择自动模式。链接行改用父容器内边距，标题和箭头完整保留。 | 新增窄宽链接几何回归。 |
+| [dot-grid](https://uiarc.dev/components/dot-grid) | 缩窄点阵舞台，给四边加留白，保留密度切换。 | 光标及触屏反应需复测。 |
+| [keycap-keyboard](https://uiarc.dev/components/keycap-keyboard) | 减轻底板和单键阴影。 | 动态按键状态依旧沿用共享 GPUI。 |
+| [ticket-tear](https://uiarc.dev/components/ticket-tear) | 减小演示票面和阴影，将换票按钮靠近票根。 | Kense 品牌保留。 |
+| [glass-menu](https://uiarc.dev/components/glass-menu) | 换为原创实景泳池住宅，菜单叠在照片上，恢复照片面板的占比。 | 保留 8px 外框，折射材质需逐帧复核。 |
+| [glass-segmented](https://uiarc.dev/components/glass-segmented) | 四档可操作的 Alfama、电车、桥、海岸照片，切换保留原有胶囊几何和淡入淡出。 | 素材独立，窄宽和暗色待复验。 |
+| [glass-tabbar](https://uiarc.dev/components/glass-tabbar) | 首屏以浮动导航为主，滚动后再显示低对比内容；用于玻璃取样的源和模糊图来自同一场景。 | 按真实滚动与拖动比较玻璃材质。 |
+| [card-to-article](https://uiarc.dev/components/card-to-article) | 用四张主题对应的原创实景图和中英文文章，恢复 2×2 卡片裁切、尺寸和留白。 | 对照展开、滚动返回和内容裁切。 |
+| [orbit-logos](https://uiarc.dev/components/orbit-logos) | 减淡轨道并居中说明区，保留各服务真实标志。 | 保持 Kense 中心标志。 |
+| [data-flow](https://uiarc.dev/components/data-flow) | 为节点接入 Supabase、Stripe、Slack 图标，在处理中枢旁显示计数，调整演示布局。 | 需核对路径与节点高亮连续变化。 |
+| [payment-flow](https://uiarc.dev/components/payment-flow) | 收紧两列与演示宽度，给活动节点增加轮廓，降低金额动画对静态视图的干扰。 | 需核对支付、结算和打款时序。 |
+| [dns-resolution](https://uiarc.dev/components/dns-resolution) | 添加解析服务标志并约束演示布局，回放轨道进入可见范围。 | 章节联动与最窄宽度需复测。 |
+| [model-training](https://uiarc.dev/components/model-training) | 把数据集、网络、指标和回放分区，采用曲线连接网络节点。 | 需复验暂停、反向和检查点状态。 |
+| [vector-search](https://uiarc.dev/components/vector-search) | 新增等距空间网格，保留真实投影样例和读数。 | 完整嵌入向量继续由宿主提供。 |
+| [agent-timeline](https://uiarc.dev/components/agent-timeline) | 统计移到标题下方，回放用 1×、2× 档，图例移至底部。 | 词元和费用继续由宿主提供。 |
+| [typewriter-terminal](https://uiarc.dev/components/typewriter-terminal) | 减轻回放滑块和标题栏样式。 | 保留可执行的 Rust／KUI 命令。 |
+| [mixture-of-experts](https://uiarc.dev/components/mixture-of-experts) | 采用纵向概率条、专家位、路径色和负载平衡视图。 | 需核对 Top 1／2 动画与减动效。 |
+| [speculative-decoding](https://uiarc.dev/components/speculative-decoding) | 在常见预览宽度将两模型标签与词元分上下区，草稿长度滑杆独占一行，比较开关另起一行。 | 未做相同时刻的播放轨迹逐帧对齐。 |
+| [prompt-cache](https://uiarc.dev/components/prompt-cache) | 缓存区加入按分段显示的缓存条、处理和命中图例；示例采用对应类别颜色及 Claude 标志，模拟说明移至面板下。 | 未做缓存流入、TTL 环和指标动效逐帧对齐。 |
+| [source-cards](https://uiarc.dev/components/source-cards) | 替换为七条签名排查示例，站点用已知品牌标志，更多卡展示叠放站点及域名，首屏有模拟检索态。 | 未知站点使用首字母，需复查悬停详情及键盘。 |
+| [code-suggestion](https://uiarc.dev/components/code-suggestion) | 代码视图分离行号、符号和代码，增添文件头、模型名和更完整的 Rust 重试代码。 | 未复刻单一源码流的生成占位、停止和语法高亮。 |
+| [ghost-text](https://uiarc.dev/components/ghost-text) | GitHub 标志和 PR 语境，Claude 标志以及模拟输入的账单修复补全文字。 | 未做不同输入中断时的逐帧对齐。 |
+| [image-generation](https://uiarc.dev/components/image-generation) | 可选主图加四个缩略图、结果控件、模型标志、带进度的自动本地样例和可选失败。 | 生成纹理分块和宽高比转换需同进度复查。 |
+| [reply-draft](https://uiarc.dev/components/reply-draft) | 引入完整续约邮件、真实示例头像、模型标志、三种建议及自动本地草稿。 | 未做同一阶段的键盘与逐帧比较。 |
+| [agent-handoff](https://uiarc.dev/components/agent-handoff) | 恢复订单损坏场景、助手模型标识及右对齐转接入口。 | 接入时间线和原生键盘需复查。 |
+| [pii-redaction](https://uiarc.dev/components/pii-redaction) | 演示四类测试值，卡片显示真实替换编号，模型状态与脱敏区分层，自动运行本地示例。 | 未实现模型恢复回答，仅提供宿主驱动脱敏预览。 |
+| [tldr-toggle](https://uiarc.dev/components/tldr-toggle) | Linear 文章来源及 Claude 生成标志，首屏触发可取消的本地摘要，并保留正文及来源映射。 | 未对照文章长篇折叠和初态停留时间。 |
+| [smart-form-fill](https://uiarc.dev/components/smart-form-fill) | 来源放在六字段上方，容器达到 424px 时字段排成两列，保留流式填充和置信度复核。 | 浏览器确认桌面字段网格。品牌图标及完整转场待比对。 |
+| [ticket-router](https://uiarc.dev/components/ticket-router) | 邮件显示发件人、Gmail 标志和正文，分类后显示意图、情绪和置信度。四个队列改为自适应网格，保留确认与失败重试。 | 样例卡片数量和分流轨迹有差异。 |
+| [ask-your-data](https://uiarc.dev/components/ask-your-data) | 重排问题、停止按钮、可折叠 SQL 和结果。加入 PostgreSQL 标志、语法色、行号、四系列柱图、折线、表格及图例。 | 浏览器验证三种结果、失败重试与 312px 布局。原生测试验证取消及过期回执。连续入场曲线待对照。 |
+| [image-reveal](https://uiarc.dev/components/image-reveal) | 生成阶段显示逐步退去的彩色颗粒层，保留进度、失败和重试状态。 | 同一时间及窄屏帧时间仍需复查。 |
+| [tone-tuner](https://uiarc.dev/components/tone-tuner) | 恢复头像、模型标志与上下排列的两条滑杆，保留用户编辑、切换与复制。 | 未对照逐字改写进入及离场。 |
+| [upgrade-prompt](https://uiarc.dev/components/upgrade-prompt) | 示例权益显示 Claude 与 GPT 的具体型号和标志。 | 套餐失败、成功和移动宽度未逐帧复查。 |
+| [trial-banner](https://uiarc.dev/components/trial-banner) | 桌面演示按 552px 布局让操作下移，调整标题和内容的对齐。 | 各种到期和提醒时态需复测。 |
+| [install-snippet](https://uiarc.dev/components/install-snippet) | 补齐多行可执行 Rust 示例和操作间距，突出生成密钥。 | 保留 KUI 技术栈。 |
+| [branch-graph](https://uiarc.dev/components/branch-graph) | 收紧示例，让切换器在标题下，窄态继续显示提交哈希。 | 需对照动画和节点稳定性。 |
+| [link-unfurl](https://uiarc.dev/components/link-unfurl) | 预填 Airbnb 链接，加入 Airbnb、Figma、Spotify 品牌捷径和可展开的本地链接预览。 | 拖动折叠与行内链接样式仍需复查。 |
+| [charge-session](https://uiarc.dev/components/charge-session) | 堆叠模式下按 520px 布局，为曲线和统计区增加空间。 | 真实充电状态由宿主提供。 |
+| [mega-menu-morph](https://uiarc.dev/components/mega-menu-morph) | 采用双色 Kense 标志与 640px 窄屏断点，补齐嵌入页面标题和正文。 | 需同状态验证安全区和菜单动画。 |
+| [toc-progress](https://uiarc.dev/components/toc-progress) | 按目录行实测高度绘制连接线，补入作者和较长的文章。 | 检查窄宽回绕及滚动焦点。 |
+| [metric-ticker](https://uiarc.dev/components/metric-ticker) | 收紧统计横条和间距，简化指标徽标并保留检查与滚动。 | 需比较单元进入和滚动帧。 |
+| [undo-toast](https://uiarc.dev/components/undo-toast) | 补齐六封邮件、头像和固定宽度的时间／操作槽。 | 需验证连续撤销及键盘焦点恢复。 |
+
+#### 第二批验证
+
+- 原生 383 个组件测试和 108 个 Story 单测通过，另外通过集成测试、文档测试和 Clippy。多层面板加入 320px 箭头所在链接行的几何回归。
+- 52 项分别在空白项目通过 `kui add` 安装，并在原生和 WASM 目标通过编译。网站检查覆盖 231 个双语组件、注册表和 947 个静态路由。
+- 52 个浏览器预览在同一版本逐项渲染，保留修复后的初态对照。专项实测数据问答的柱图、折线、表格、失败重试、312px 手机预览、亮暗主题和键盘切换，多层面板的打开、下钻和返回，以及弹性刷新的点击、旋转和完成态。[浏览器渲染记录](../../target/parity-52/final-browser-results.json) · [数据问答](../../target/parity-52/ask-your-data-final-preview.png) · [多层面板](../../target/parity-52/sheet-stack-final-open.png) · [弹性刷新](../../target/parity-52/stretch-refresh-final-done.png)
+- 状态相同的截图和操作用于核对具体差异。逐帧同速录制、全量 Safari、真机触屏和原生视觉验收仍需独立记录。
 
 ### 本地验证范围
 

@@ -2,7 +2,10 @@
 use gpui::{prelude::*, *};
 use kui::{
     components::image_generation::{GeneratedImage, ImageGeneration, ImageGenerationEvent},
-    primitives::{control::UiLanguage, family::Paint},
+    primitives::{
+        control::UiLanguage,
+        family::{Paint, Tone, face},
+    },
 };
 use std::{collections::HashMap, sync::Arc, time::Duration};
 pub const IDS: &[&str] = &["image-generation"];
@@ -13,8 +16,7 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 struct Example {
     view: Entity<ImageGeneration>,
     language: UiLanguage,
-    failed: bool,
-    variation_failed: bool,
+    fail_next: bool,
     images: HashMap<String, usize>,
     _subscription: Subscription,
 }
@@ -31,30 +33,32 @@ impl Example {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
         let view = cx.new(|cx| {
-            ImageGeneration::new(w, cx).with_suggestions(vec![
-                language
-                    .text(
-                        "Terracotta architecture under a clear blue sky",
-                        "蓝天下的赤陶建筑",
-                    )
-                    .into(),
-                language
-                    .text(
-                        "Glazed cups on a pale table in soft daylight",
-                        "柔光下浅色桌面上的釉色茶杯",
-                    )
-                    .into(),
-                language
-                    .text(
-                        "A reading corner with oak and woven linen",
-                        "橡木与亚麻布布置的阅读角",
-                    )
-                    .into(),
-            ])
+            ImageGeneration::new(w, cx)
+                .models(vec!["GPT Image".into(), "Gemini".into(), "Grok".into()])
+                .with_suggestions(vec![
+                    language
+                        .text(
+                            "Terracotta architecture under a clear blue sky",
+                            "蓝天下的赤陶建筑",
+                        )
+                        .into(),
+                    language
+                        .text(
+                            "Glazed cups on a pale table in soft daylight",
+                            "柔光下浅色桌面上的釉色茶杯",
+                        )
+                        .into(),
+                    language
+                        .text(
+                            "A reading corner with oak and woven linen",
+                            "橡木与亚麻布布置的阅读角",
+                        )
+                        .into(),
+                ])
         });
         view.update(cx, |v, cx| {
             v.set_prompt(
-                language.text("A quiet room in morning light", "晨光中的安静房间"),
+                language.text("Quiet interiors in soft morning light, with textured walls, oak, and warm shadows", "柔和晨光下的室内，带有纹理墙面、橡木与暖色阴影"),
                 w,
                 cx,
             )
@@ -69,15 +73,11 @@ impl Example {
                         variation_of,
                         ..
                     } => {
-                        let fail = if variation_of.is_some() && !s.variation_failed {
-                            s.variation_failed = true;
-                            true
-                        } else if variation_of.is_none() && *index == 1 && !s.failed {
-                            s.failed = true;
-                            true
-                        } else {
-                            false
-                        };
+                        let fail = (variation_of.is_some() || *index == 1) && s.fail_next;
+                        if fail {
+                            s.fail_next = false;
+                            cx.notify();
+                        }
                         (*ticket, *index, fail)
                     }
                     ImageGenerationEvent::Upscale { ticket, image_id } => (
@@ -127,11 +127,11 @@ impl Example {
                 .detach();
             },
         );
+        view.update(cx, |view, cx| view.generate(cx));
         Self {
             view,
             language,
-            failed: false,
-            variation_failed: false,
+            fail_next: false,
             images: HashMap::new(),
             _subscription: subscription,
         }
@@ -160,6 +160,28 @@ impl Render for Example {
                         "模拟生成，不会发送数据",
                     )),
             )
-            .child(div().w_full().max_w(px(640.)).child(self.view.clone()))
+            .child(div().w_full().max_w(px(522.)).child(self.view.clone()))
+            .child(
+                face(
+                    "image-example-fail",
+                    self.language.text("Fail one image", "模拟一张图片失败"),
+                    32.,
+                    kui::foundation::surface_radius(cx).into(),
+                    if self.fail_next {
+                        Tone::Surface
+                    } else {
+                        Tone::Clear
+                    },
+                    cx,
+                )
+                .role(Role::Switch)
+                .aria_toggled(self.fail_next.into())
+                .px_2()
+                .child(self.language.text("Fail one image", "模拟一张图片失败"))
+                .on_click(cx.listener(|s, _, _, cx| {
+                    s.fail_next = !s.fail_next;
+                    cx.notify();
+                })),
+            )
     }
 }

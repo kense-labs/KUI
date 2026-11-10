@@ -730,7 +730,7 @@ impl TrialBanner {
                         .child(heading.flex_1().min_h(px(61.)))
                         .child(utilities),
                 )
-                .child(actions.ml(px(28.)))
+                .child(actions.ml(px(40.)))
         } else {
             column().w_full().child(
                 row()

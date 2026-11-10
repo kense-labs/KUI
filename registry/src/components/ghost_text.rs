@@ -1,5 +1,6 @@
 //! Host-driven inline completion, drawn in the same layout as the editable text.
 use crate::primitives::{
+    brand_mark::brand_mark,
     editor::{EditEvent, Editor, EditorCompletionEvent, InputMode},
     family::{Paint, Tone, face},
     nav::tr,
@@ -505,8 +506,12 @@ impl Render for GhostText {
                     .id("ghost-status")
                     .role(Role::Status)
                     .aria_label(announcement)
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
                     .text_size(px(12.))
                     .text_color(p.secondary)
+                    .children(brand_mark(&self.model, 14., cx))
                     .child(self.model.clone()),
             );
         if matches!(self.status, GhostStatus::Ready | GhostStatus::Error) {

@@ -2,6 +2,7 @@
 use crate::{
     components::textarea::{Textarea, TextareaStyle},
     primitives::{
+        brand_mark::brand_mark,
         clipboard,
         control::UiLanguage,
         family::{Paint, Tone, face},
@@ -88,29 +89,40 @@ fn valid_spans(text: &str, spans: &mut [PiiSpan]) -> bool {
     }
     true
 }
-fn mask_text(text: &str, spans: &[PiiSpan]) -> Option<String> {
+fn redaction_tokens(text: &str, spans: &[PiiSpan]) -> Option<Vec<(PiiSpan, String)>> {
     let mut sorted = spans.to_vec();
     if !valid_spans(text, &mut sorted) {
         return None;
     }
-    let mut output = String::new();
-    let mut previous = 0;
     let mut counts: HashMap<PiiKind, usize> = HashMap::new();
     let mut tokens: HashMap<(PiiKind, &str), String> = HashMap::new();
-    for span in sorted {
+    Some(
+        sorted
+            .into_iter()
+            .map(|span| {
+                let original = &text[span.start..span.end];
+                let token = tokens.entry((span.kind, original)).or_insert_with(|| {
+                    let count = counts.entry(span.kind).or_insert(0);
+                    loop {
+                        *count += 1;
+                        let candidate = format!("[{}_{}]", span.kind.token(), count);
+                        if !text.contains(&candidate) {
+                            break candidate;
+                        }
+                    }
+                });
+                (span, token.clone())
+            })
+            .collect(),
+    )
+}
+
+fn mask_text(text: &str, spans: &[PiiSpan]) -> Option<String> {
+    let mut output = String::new();
+    let mut previous = 0;
+    for (span, token) in redaction_tokens(text, spans)? {
         output.push_str(&text[previous..span.start]);
-        let original = &text[span.start..span.end];
-        let token = tokens.entry((span.kind, original)).or_insert_with(|| {
-            let count = counts.entry(span.kind).or_insert(0);
-            loop {
-                *count += 1;
-                let candidate = format!("[{}_{}]", span.kind.token(), count);
-                if !text.contains(&candidate) {
-                    break candidate;
-                }
-            }
-        });
-        output.push_str(token);
+        output.push_str(&token);
         previous = span.end;
     }
     output.push_str(&text[previous..]);
@@ -122,6 +134,7 @@ pub struct PiiRedaction {
     spans: Vec<PiiSpan>,
     painted: Rc<RefCell<Vec<PiiSpan>>>,
     snapshot: SharedString,
+    model: Option<SharedString>,
     status: PiiStatus,
     active: Option<u64>,
     sequence: u64,
@@ -183,6 +196,7 @@ impl PiiRedaction {
             spans: Vec::new(),
             painted,
             snapshot: "".into(),
+            model: None,
             status: PiiStatus::Idle,
             active: None,
             sequence: 0,
@@ -195,6 +209,11 @@ impl PiiRedaction {
             action_focus: cx.focus_handle().tab_stop(true),
             _sub: sub,
         }
+    }
+    /// Name the host-selected scan model in the status row.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     pub fn source(&self) -> Entity<Textarea> {
         self.source.clone()
@@ -557,10 +576,14 @@ impl Render for PiiRedaction {
             .role(Role::List)
             .aria_label(t("Redaction ranges", "脱敏范围"))
             .flex()
-            .flex_col()
-            .gap(px(4.));
-        for (i, span) in self.spans.iter().enumerate() {
-            let label = format!("{} {}–{}", span.kind.label(l), span.start, span.end);
+            .flex_wrap()
+            .gap(px(8.));
+        for (i, (span, token)) in redaction_tokens(&self.snapshot, &self.spans)
+            .unwrap_or_default()
+            .into_iter()
+            .enumerate()
+        {
+            let label = format!("{} · {token}", span.kind.label(l));
             let remove = format!("{} {}", t("Remove", "移除"), label);
             list = list.child(
                 div()
@@ -569,6 +592,11 @@ impl Render for PiiRedaction {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .min_w(px(140.))
+                    .flex_1()
+                    .p(px(6.))
+                    .rounded(radius)
+                    .bg(p.tray)
                     .min_h(px(28.))
                     .gap(px(12.))
                     .child(
@@ -657,7 +685,18 @@ impl Render for PiiRedaction {
                     .text_size(px(14.))
                     .line_height(px(22.))
                     .text_color(p.secondary)
-                    .child(status)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(7.))
+                            .children(
+                                self.model
+                                    .as_ref()
+                                    .and_then(|model| brand_mark(model, 14., cx)),
+                            )
+                            .child(status),
+                    )
                     .child(actions),
             );
         if !self.error.is_empty() {
@@ -683,6 +722,13 @@ impl Render for PiiRedaction {
                         .text_size(px(14.))
                         .line_height(px(22.))
                         .text_color(p.ink)
+                        .child(
+                            div()
+                                .mb(px(6.))
+                                .text_size(px(12.))
+                                .text_color(p.secondary)
+                                .child(t("Masked preview", "脱敏预览")),
+                        )
                         .child(preview),
                 )
                 .child(

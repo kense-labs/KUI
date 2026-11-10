@@ -29,6 +29,8 @@ The component does not visit URLs. It emits Resolve, Cancel, Open and Send for t
 
 set_text updates the composer; resolve_preview returns a host-supplied preview or error; resolve_send confirms or fails sending. Images, when supplied, must be decoded RenderImage values. Removing a link or replacing it emits Cancel for its outstanding preview.
 
+`with_samples` accepts a list of `LinkSample` values with labels, example drafts and icons. Selecting one replaces the draft. Use `with_collapsed_previews` to let the reader open a resolved card from its link.
+
 Event: `LinkUnfurlEvent`.
 
 ## Motion

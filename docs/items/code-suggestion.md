@@ -37,6 +37,8 @@ Accept or reject each pending hunk once. Cmd/Ctrl+Enter accepts remaining hunks.
 
 ## API
 
+Use `with_model(name)` to show the host-selected model. The review aligns line numbers and change markers independently from code.
+
 `new` · `(id, file, Vec<Hunk>, cx)`
 
 Each Hunk declares a starting line, before/after lines and a Decision. PatchEvent lists only newly decided indices.

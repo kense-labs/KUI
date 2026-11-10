@@ -27,21 +27,21 @@ impl Example {
                 t("Desktop", "桌面"),
                 "cargo add kense-kui --rename kui",
                 "src/main.rs",
-                "kui::init(cx);",
+                "use kui::components::button::Button;\n\nfn save_button() -> Button {\n    Button::new(\"save\")\n        .primary()\n        .label(\"Save changes\")\n}",
             ),
             (
                 "web",
                 t("Web", "网页"),
                 "rustup target add wasm32-unknown-unknown",
                 "src/lib.rs",
-                "kui::init(cx);",
+                "use gpui::App;\n\nfn configure_preview(cx: &mut App) {\n    kui::init(cx);\n}",
             ),
             (
                 "library",
                 t("Library", "组件库"),
                 "cargo add kense-kui --rename kui --no-default-features",
                 "src/lib.rs",
-                "use kui::components::button::Button;",
+                "use kui::components::button::Button;\n\nfn cancel_button() -> Button {\n    Button::new(\"cancel\")\n        .secondary()\n        .label(\"Cancel\")\n}",
             ),
             (
                 "cli",
@@ -77,7 +77,7 @@ impl Example {
                     .filename(".env.example")
                     .description(t(
                         "The preview creates a sample key locally.",
-                        "此预览在本地生成样例密钥。 ",
+                        "此预览在本地生成样例密钥。",
                     ))
                     .generate_key(true),
                     InstallStep::new(
@@ -129,6 +129,6 @@ impl Render for Example {
             .p(px(20.))
             .flex()
             .justify_center()
-            .child(self.snippet.clone())
+            .child(div().w_full().max_w(px(512.)).child(self.snippet.clone()))
     }
 }

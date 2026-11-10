@@ -15,8 +15,8 @@ use kui::{
 use std::sync::Arc;
 
 pub const IDS: &[&str] = &["orbit-menu"];
-const PHOTO: &[u8] = include_bytes!("../../assets/navigation/as17-147-22465.jpg");
-const FILENAME: &str = "apollo-17-lunar-ridges.jpg";
+const PHOTO: &[u8] = include_bytes!("../../assets/cover-flow/cabin.jpg");
+const FILENAME: &str = "mountain-cabin.jpg";
 
 /// Browser integration for the bundled photo example.
 pub struct OrbitPhotoHost {
@@ -234,7 +234,7 @@ impl Render for Example {
         let base = (width - 32.).clamp(1., 360.);
         let open = self.menu_progress.get(w, cx).clamp(0., 1.);
         let scale = 1. - open * 0.03;
-        let stage_height = if narrow { 420. } else { 440. };
+        let stage_height = if narrow { 444. } else { 506. };
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
         let card_bg = if dark { rgb(0x191919) } else { rgb(0xffffff) };
         let stage_bg = if dark { rgb(0x242424) } else { rgb(0xf8f8f8) };
@@ -282,7 +282,7 @@ impl Render for Example {
                 column()
                     .id("orbit-photo-card")
                     .debug_selector(|| "orbit-photo-card".into())
-                    .aria_label(t("Lunar ridges", "月球山脊"))
+                    .aria_label(t("Mountain cabin", "山间木屋"))
                     .w(px(base * scale))
                     .h(px((hero_height + 105.) * scale))
                     .max_w_full()
@@ -336,7 +336,7 @@ impl Render for Example {
                                                     .truncate()
                                                     .text_size(px(16. * scale))
                                                     .font_weight(FontWeight::MEDIUM)
-                                                    .child(t("Lunar ridges", "月球山脊")),
+                                                    .child(t("Mountain cabin", "山间木屋")),
                                             )
                                             .child(
                                                 div()
@@ -344,8 +344,8 @@ impl Render for Example {
                                                     .text_color(p.secondary)
                                                     .text_size(px(12. * scale))
                                                     .child(t(
-                                                        "NASA, Apollo 17 archive",
-                                                        "NASA · 阿波罗 17 号档案",
+                                                        "Trail journal · Pacific Northwest",
+                                                        "徒步手记 · 太平洋西北地区",
                                                     )),
                                             ),
                                     ),
@@ -405,6 +405,7 @@ impl Render for Example {
             .w_full()
             .max_w(px(534.))
             .px(px(6.))
+            .py(px(if narrow { 10. } else { 20. }))
             .gap(px(14.))
             .items_center()
             .child(stage)

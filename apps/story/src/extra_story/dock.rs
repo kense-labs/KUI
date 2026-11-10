@@ -237,8 +237,8 @@ impl Board {
             selected: "move".into(),
             selection_label: lang.text("Move", "移动").into(),
             images: [
-                picture(include_bytes!("../../assets/navigation/room-0.jpg")),
-                picture(include_bytes!("../../assets/navigation/room-3.jpg")),
+                picture(include_bytes!("../../assets/cover-flow/crescent.jpg")),
+                picture(include_bytes!("../../assets/places/coast.jpg")),
             ],
             pins: initial_pins(lang),
             placed: vec![],
@@ -384,8 +384,8 @@ impl Render for Board {
         let radius = surface_radius(cx);
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
         let caption = [
-            lang.text("The drawing room", "客厅"),
-            lang.text("Interior study", "室内习作"),
+            lang.text("Lake Crescent, morning", "清晨的新月湖"),
+            lang.text("Atlantic coast, dusk", "暮色中的大西洋海岸"),
         ];
         let mut scene = div()
             .id("dock-board-scene")
@@ -593,7 +593,7 @@ impl Render for Board {
             .relative()
             .w(px(522.))
             .max_w_full()
-            .h(px(440.))
+            .h(px(446.))
             .rounded(radius)
             .bg(p.panel)
             .border_1()
@@ -632,7 +632,7 @@ impl Render for Board {
                     .absolute()
                     .left_0()
                     .right_0()
-                    .bottom(px(17.))
+                    .bottom(px(26.))
                     .justify_center()
                     .child(self.dock.clone()),
             );
@@ -652,6 +652,9 @@ impl Render for Board {
                 div()
                     .id("dock-status")
                     .role(Role::Status)
+                    .absolute()
+                    .size(px(1.))
+                    .overflow_hidden()
                     .child(hint(status, p)),
             )
     }

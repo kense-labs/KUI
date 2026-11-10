@@ -251,7 +251,7 @@ fn card_pose(
     };
     let closed = if d >= 0. {
         Pose {
-            top: front.top - h * (0.06 + 0.16 * fan) * d,
+            top: front.top - h * (0.074 + 0.16 * fan) * d,
             scale: (1. - 0.05 * d).max(0.60),
         }
     } else {
@@ -990,13 +990,11 @@ impl CardArt {
         w.paint_drop_shadows(
             b,
             r.into(),
-            &[BoxShadow::new(
-                px(0.),
-                px(16. * s),
-                black().opacity(0.29 + self.lift * 0.14),
-            )
-            .blur_radius(px((32. + self.lift * 8.) * s))
-            .spread_radius(px(-4. * s))],
+            &[
+                BoxShadow::new(px(0.), px(9. * s), black().opacity(0.14 + self.lift * 0.10))
+                    .blur_radius(px((20. + self.lift * 8.) * s))
+                    .spread_radius(px(-4. * s)),
+            ],
         );
         w.paint_quad(fill(b, base).corner_radii(r));
         if let Some(image) = &self.image {

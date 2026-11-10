@@ -30,6 +30,8 @@ Use unique stable IDs. The host owns updates and visibility; non-finite values a
 
 Configure format, delta type, favorable direction and history per metric. Hover, focus or tap to inspect; use set_visible when outside the viewport. Touch and screen-reader behavior still require device testing.
 
+`with_inline_deltas(false)` hides change badges in the compact strip while keeping trend details in the inspection panel.
+
 Event: `TickerInspect`.
 
 ## Motion

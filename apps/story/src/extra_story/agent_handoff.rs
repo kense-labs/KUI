@@ -109,6 +109,7 @@ impl Example {
                 cx,
             )
             .subtitle(t("Kense support", "Kense 客服"))
+            .with_assistant_model("Claude Sonnet 5.5")
             .estimate(t("Typical wait: 2 min", "预计等待：2 分钟"))
         });
         view.update(cx, |v, cx| {
@@ -117,14 +118,14 @@ impl Example {
                     HandoffMessage::new(
                         "one",
                         HandoffAuthor::Customer,
-                        t("Can you help with my order?", "可以帮我处理订单吗？"),
+                        t("My desk arrived with a cracked leg. What should I do?", "书桌送到时有一条腿裂了。我该怎么处理？"),
                     ),
                     HandoffMessage::new(
                         "two",
                         HandoffAuthor::Assistant,
                         t(
-                            "I can share the details with a person.",
-                            "我可以把情况转交给人工客服。",
+                            "I found your order. I can share the damage report with a support specialist so you won't have to repeat these details.",
+                            "我已找到订单。可以把损坏情况转交给客服，你无需重复说明。",
                         ),
                     ),
                 ],

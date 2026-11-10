@@ -5,10 +5,14 @@ use kui::{
     primitives::{
         control::UiLanguage,
         family::{Paint, disabled_motion},
-        glyph::{Glyph, icon},
     },
 };
-use std::{cell::Cell, rc::Rc, time::Duration};
+use std::{
+    cell::Cell,
+    rc::Rc,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 pub const IDS: &[&str] = &["ghost-text"];
 pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
@@ -20,6 +24,21 @@ struct Example {
     language: UiLanguage,
     _subscription: Subscription,
 }
+fn github_mark(dark: bool) -> Arc<Image> {
+    static LIGHT: OnceLock<Arc<Image>> = OnceLock::new();
+    static DARK: OnceLock<Arc<Image>> = OnceLock::new();
+    let mark = if dark { &DARK } else { &LIGHT };
+    mark.get_or_init(|| {
+        let svg = include_str!("../../assets/orbit-logos/github.svg");
+        let bytes = if dark {
+            svg.replace("#181717", "#f1f1f1").into_bytes()
+        } else {
+            svg.as_bytes().to_vec()
+        };
+        Arc::new(Image::from_bytes(ImageFormat::Svg, bytes))
+    })
+    .clone()
+}
 impl Example {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
@@ -27,14 +46,14 @@ impl Example {
             GhostText::new(language.text("Description", "说明"), w, cx)
                 .plain()
                 .min_height(186.)
-                .model("Kense")
+                .model("Claude Haiku 5.5")
                 .placeholder(language.text("Write a description…", "输入说明…"), cx)
         });
         view.update(cx, |view, cx| {
             view.set_value(
                 language.text(
-                    "Workspace changes now stay in sync across devices.\n\nThe update keeps local edits intact",
-                    "工作区的更改现在会在设备之间同步。\n\n更新会保留本地编辑内容",
+                    "Customers who upgraded mid-cycle could be charged twice.\n\nThis change keeps the original subscription reference",
+                    "在账期中途升级的客户可能被重复扣款。\n\n此改动保留原订阅记录",
                 ),
                 w,
                 cx,
@@ -49,8 +68,8 @@ impl Example {
                 GhostTextEvent::PreviewStopped => user_active.set(false),
                 GhostTextEvent::Request { id, .. } => {
                     let text = s.language.text(
-                        " while keeping everything up to date.",
-                        "，同时保持所有内容为最新。 ",
+                        " when the billing request is retried.",
+                        "，便于重试账单请求。",
                     );
                     view.update(cx, |view, cx| view.push_chunk(*id, text, true, cx));
                 }
@@ -59,7 +78,10 @@ impl Example {
         );
         let weak = view.downgrade();
         cx.spawn(async move |_, cx| {
-            let suffix = language.text(" while syncing the latest changes.", "，并同步最新更改。");
+            let suffix = language.text(
+                " when a billing request is retried.",
+                "，便于重试账单请求。",
+            );
             let length = suffix.chars().count();
             let mut step = 0usize;
             let mut last_count = None;
@@ -140,7 +162,14 @@ impl Render for Example {
                             .py(px(14.))
                             .border_b_1()
                             .border_color(p.line)
-                            .child(icon(Glyph::FileText, 16., p.ink))
+                            .child(
+                                img(github_mark(
+                                    kui::foundation::Theme::global(cx).mode
+                                        == kui::foundation::ThemeMode::Dark,
+                                ))
+                                .size(px(16.))
+                                .flex_none(),
+                            )
                             .child(
                                 div()
                                     .min_w_0()
@@ -151,13 +180,16 @@ impl Render for Example {
                                         div()
                                             .text_size(px(13.))
                                             .font_weight(FontWeight::MEDIUM)
-                                            .child(
-                                                language
-                                                    .text("Keep work in sync", "保持工作区同步"),
-                                            ),
+                                            .child(language.text(
+                                                "Fix double charge on mid-cycle upgrades",
+                                                "修复账期中途升级时的重复扣款",
+                                            )),
                                     )
                                     .child(div().text_size(px(12.)).text_color(p.secondary).child(
-                                        language.text("Kense · sample change", "Kense · 示例变更"),
+                                        language.text(
+                                            "Daniel Kim wants to merge a sample billing change",
+                                            "Daniel Kim 请求合并一项示例账单改动",
+                                        ),
                                     )),
                             ),
                     )

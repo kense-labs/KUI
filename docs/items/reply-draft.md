@@ -27,6 +27,8 @@ Choose a quick reply, tone or length. Stop or retry generation, edit the draft, 
 
 ## API
 
+Use `with_sender_image(image)` to set the source portrait and `with_model(name)` to identify the host-selected model.
+
 `append` · `(u64, &str, &mut Context<Self>) -> bool`
 
 Handle Requested and Cancelled in the host; pass the request ID to append, finish or fail. Insert reports the edited text; the host controls insertion and sending.

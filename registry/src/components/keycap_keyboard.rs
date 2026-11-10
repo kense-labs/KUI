@@ -937,7 +937,7 @@ impl KeycapKeyboard {
                     .rounded(radius)
                     .bg(p.well)
                     .shadow(vec![
-                        BoxShadow::new(px(0.), px(1.5), black().opacity(0.37))
+                        BoxShadow::new(px(0.), px(1.), black().opacity(0.22))
                             .blur_radius(unit * 0.17),
                     ]),
             )
@@ -1057,7 +1057,7 @@ impl Render for KeycapKeyboard {
             .border_1()
             .border_color(p.rim)
             .shadow(vec![
-                BoxShadow::new(px(0.), px(1.), black().opacity(0.18)).blur_radius(px(2.)),
+                BoxShadow::new(px(0.), px(1.), black().opacity(0.08)).blur_radius(px(2.)),
             ])
             .children(self.rows.iter().cloned().map(|range| {
                 div()

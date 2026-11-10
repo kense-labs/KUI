@@ -25,6 +25,8 @@ The host runs rewrites and handles cancellation. The sample is simulated; Copy u
 
 ## API
 
+Use `with_recipient_image(image)` to set a source portrait and `with_model(name)` to name the host-selected rewrite model.
+
 `finish` · `(u64, impl Into<String>, &Window, &mut Context<Self>) -> bool`
 
 A settings change waits 220 ms, then emits Rewrite with a ticket. Stop or a new edit emits Cancel; finish and fail reject stale results or a changed draft. User edits become the source for future rewrites.

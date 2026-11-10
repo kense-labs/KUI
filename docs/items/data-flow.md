@@ -30,6 +30,8 @@ The host supplies the processed count and service state; the illustration never 
 
 `with_node_icon` · `(impl Into<SharedString>, Glyph) -> Self`. Associates a KUI glyph with a node ID. Nodes display their text by default.
 
+`with_node_mark` · `(impl Into<SharedString>, impl Fn() -> AnyElement + 'static) -> Self`. Supplies decorative artwork for a node. The label and description continue to name the node for assistive technology.
+
 `set_snapshot` · `(DataFlowSnapshot, &mut Context<Self>)`
 
 Use arrows, Home and End to inspect nodes; set_visible stops off-screen animation and set_paused controls illustration playback. The demo uses explicitly labelled sample data.

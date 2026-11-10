@@ -27,6 +27,8 @@ On a narrow card, the pause button sits beside the title so the reading and unit
 
 ## API
 
+`with_subtitle` adds supporting text below the title. `with_series_color` sets the stroke and area tint. `with_timing(window_ms, interval_ms)` sets the window and interval for evenly spaced samples, adds relative time labels to the axis and limits the retained buffer to 2–2000 samples. `with_capacity` remains available for a point-count window.
+
 `push` · `(StreamReading, &mut Context<Self>)`
 
 Use set_visible and set_paused to control rendering; an optional anomaly label identifies unusual readings.

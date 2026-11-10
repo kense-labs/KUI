@@ -251,8 +251,8 @@ impl Layout {
         let vertical = width < 700.;
         let height = if vertical { 391. } else { 187. };
         let cards = if vertical {
-            let left = (width / 2.).round() + 1.;
-            let right = (width * 0.45).round();
+            let left = (width * 0.46).round();
+            let right = (width * 0.51).round();
             std::array::from_fn(|i| Card {
                 origin: if i < 4 {
                     xy(1., 10. + i as f32 * 108.)
@@ -758,23 +758,25 @@ fn chip_face(
     w: &Window,
 ) -> Div {
     let width =
-        crate::primitives::family::measure(&label, 12., w) + if approval { 32. } else { 18. };
+        crate::primitives::family::measure(&label, 11., w) + if approval { 28. } else { 14. };
     div()
         .absolute()
         .left(px(center.x - width / 2.))
-        .top(px(center.y - 12.))
+        .top(px(center.y - 10.))
         .w(px(width))
-        .h(px(24.))
+        .h(px(20.))
         .rounded(radius)
         .border_1()
-        .border_color(ink.opacity(0.4))
-        .bg(paint.panel.blend(ink.opacity(0.11)))
+        .border_color(ink.opacity(if approval { 0.4 } else { 0.22 }))
+        .bg(paint
+            .panel
+            .blend(ink.opacity(if approval { 0.11 } else { 0.045 })))
         .opacity(opacity)
         .flex()
         .gap(px(4.))
         .items_center()
         .justify_center()
-        .text_size(px(12.))
+        .text_size(px(11.))
         .line_height(px(16.))
         .font_features(tabular())
         .text_color(if approval { ink } else { paint.ink })
@@ -947,7 +949,9 @@ impl Render for PaymentFlow {
                     .border_color(if over {
                         accent.opacity(0.48)
                     } else if success {
-                        paint.success.opacity(0.32)
+                        paint.success.opacity(0.58)
+                    } else if active {
+                        paint.ink.opacity(0.62)
                     } else {
                         paint.line
                     })

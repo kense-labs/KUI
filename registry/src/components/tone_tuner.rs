@@ -2,6 +2,7 @@
 use crate::{
     components::slider::{SlideValue, Slider},
     primitives::{
+        brand_mark::brand_mark,
         clipboard,
         editor::{EditEvent, Editor, InputMode},
         family::{Paint, Slide, Tone, face},
@@ -137,6 +138,8 @@ fn can_apply(
 pub struct ToneTuner {
     label: SharedString,
     recipient: Option<(SharedString, SharedString)>,
+    recipient_image: Option<ImageSource>,
+    model: Option<SharedString>,
     changes_count: usize,
     changes_motion: Slide,
     editor: Entity<Editor>,
@@ -230,6 +233,8 @@ impl ToneTuner {
         Self {
             label,
             recipient: None,
+            recipient_image: None,
+            model: None,
             changes_count: 0,
             changes_motion: Slide::new(1.),
             editor,
@@ -251,6 +256,18 @@ impl ToneTuner {
             _subscriptions: vec![edits, formal_sub, detail_sub],
         }
     }
+    /// The optional portrait displayed alongside the source message.
+    pub fn with_recipient_image(mut self, image: impl Into<ImageSource>) -> Self {
+        self.recipient_image = Some(image.into());
+        self
+    }
+
+    /// Name the host-selected model in the status row.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+
     /// Optional recipient name and subject shown above the editable draft.
     pub fn with_recipient(
         mut self,
@@ -478,7 +495,17 @@ impl Render for ToneTuner {
                         row()
                             .flex_1()
                             .min_w_0()
-                            .child(avatar(name, 0, cx).flex_none())
+                            .child(self.recipient_image.as_ref().map_or_else(
+                                || avatar(name, 0, cx).flex_none().into_any_element(),
+                                |image| {
+                                    img(image.clone())
+                                        .size(px(36.))
+                                        .object_fit(ObjectFit::Cover)
+                                        .rounded_full()
+                                        .flex_none()
+                                        .into_any_element()
+                                },
+                            ))
                             .child(
                                 div()
                                     .flex_1()
@@ -599,8 +626,8 @@ impl Render for ToneTuner {
                 .child(
                     div()
                         .flex()
-                        .when(compact, |v| v.flex_col())
-                        .gap(px(if compact { 12. } else { 24. }))
+                        .flex_col()
+                        .gap(px(12.))
                         .child(
                             div()
                                 .flex_1()
@@ -713,10 +740,25 @@ impl Render for ToneTuner {
         }
         root.child(
             actions.child(
-                note(status, cx)
-                    .id("tone-status")
-                    .role(Role::Status)
-                    .ml_auto(),
+                row()
+                    .ml_auto()
+                    .gap(px(6.))
+                    .children(
+                        self.model
+                            .as_ref()
+                            .and_then(|model| brand_mark(model, 13., cx)),
+                    )
+                    .child(
+                        note(
+                            self.model.as_ref().map_or_else(
+                                || status.to_string(),
+                                |model| format!("{model} · {status}"),
+                            ),
+                            cx,
+                        )
+                        .id("tone-status")
+                        .role(Role::Status),
+                    ),
             ),
         )
     }

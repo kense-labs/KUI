@@ -27,6 +27,8 @@ impl Example {
                 ),
                 w, cx,
             ).with_recipient("Sofia Ramirez", language.text("Re: Duplicate charge on INV-20481", "回复：发票 INV-20481 重复扣款"))
+                .with_recipient_image(crate::family_story::collections::portrait_image(3))
+                .with_model("Claude Sonnet 5.5")
         });
         let sub = cx.subscribe_in(
             &view,

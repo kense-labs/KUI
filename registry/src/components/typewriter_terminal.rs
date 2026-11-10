@@ -1516,15 +1516,15 @@ impl TypewriterTerminal {
             move |b, _, w, _| {
                 let center_y = b.center().y;
                 let track = Bounds::new(
-                    point(b.left(), center_y - px(2.)),
-                    size(b.size.width, px(4.)),
+                    point(b.left(), center_y - px(1.5)),
+                    size(b.size.width, px(3.)),
                 );
                 w.paint_quad(fill(track, p.line).corner_radii(px(2.)));
                 if value > 0. {
                     w.paint_quad(
                         fill(
-                            Bounds::new(track.origin, size(track.size.width * value, px(4.))),
-                            accent.opacity(0.8),
+                            Bounds::new(track.origin, size(track.size.width * value, px(3.))),
+                            accent.opacity(0.74),
                         )
                         .corner_radii(px(2.)),
                     );
@@ -1532,14 +1532,14 @@ impl TypewriterTerminal {
                 for value in marks {
                     let x = b.left() + b.size.width * value;
                     let mark =
-                        Bounds::new(point(x - px(1.), center_y - px(5.)), size(px(2.), px(10.)));
+                        Bounds::new(point(x - px(0.5), center_y - px(3.)), size(px(1.), px(6.)));
                     w.paint_quad(fill(mark, p.faint.opacity(0.48)).corner_radii(px(1.)));
                 }
-                let thumb = Bounds::new(
-                    point(b.left() + b.size.width * value - px(9.), center_y - px(9.)),
-                    size(px(18.), px(18.)),
-                );
-                w.paint_quad(fill(thumb, accent).corner_radii(px(9.)));
+                let thumb = point(b.left() + b.size.width * value, center_y);
+                let edge = Bounds::new(thumb - point(px(7.), px(7.)), size(px(14.), px(14.)));
+                let face = Bounds::new(thumb - point(px(6.), px(6.)), size(px(12.), px(12.)));
+                w.paint_quad(fill(edge, p.line.blend(p.ink.opacity(0.16))).corner_radii(px(7.)));
+                w.paint_quad(fill(face, p.panel).corner_radii(px(6.)));
             },
         )
         .absolute()
@@ -1748,7 +1748,7 @@ impl Render for TypewriterTerminal {
             .items_center()
             .justify_center()
             .h(px(44.))
-            .bg(p.ink.opacity(if dark { 0.035 } else { 0.03 }))
+            .bg(p.panel)
             .child(
                 div()
                     .px(px(96.))

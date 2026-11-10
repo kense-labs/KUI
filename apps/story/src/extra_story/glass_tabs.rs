@@ -8,7 +8,7 @@ use kui::{
 use std::{cell::RefCell, fmt::Write, rc::Rc, sync::Arc};
 
 pub const IDS: &[&str] = &["glass-tabbar"];
-const HEIGHT: f32 = 560.;
+const HEIGHT: f32 = 666.;
 const FEED_HEIGHT: f32 = 1518.;
 
 pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
@@ -17,15 +17,6 @@ pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 
 // The unobtrusive feed uses original neutral cards with a few subdued sections below the fold.
 fn feed_image(dark: bool, blurred: bool) -> Arc<Image> {
-    if blurred {
-        // Pre-rasterize the same feed with its 12px SVG Gaussian filter.
-        let pixels: &[u8] = if dark {
-            include_bytes!("../../assets/glass/feed-soft-dark.png")
-        } else {
-            include_bytes!("../../assets/glass/feed-soft-light.png")
-        };
-        return Arc::new(Image::from_bytes(ImageFormat::Png, pixels.to_vec()));
-    }
     let base = if dark { "#242424" } else { "#f4f4f4" };
     let neutral = if dark { "#282828" } else { "#e9e9e9" };
     let accent = if dark {
@@ -37,7 +28,10 @@ fn feed_image(dark: bool, blurred: bool) -> Arc<Image> {
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="420" height="{FEED_HEIGHT}" viewBox="0 0 420 {FEED_HEIGHT}">
 <rect width="420" height="{FEED_HEIGHT}" fill="{base}"/>"#,
     );
-    let mut y = 24;
+    if blurred {
+        svg.push_str(r#"<defs><filter id="soft"><feGaussianBlur stdDeviation="12"/></filter></defs><g filter="url(#soft)">"#);
+    }
+    let mut y = HEIGHT as i32 + 40;
     for (i, (wide, tall)) in [
         (true, true),
         (false, false),
@@ -70,6 +64,9 @@ fn feed_image(dark: bool, blurred: bool) -> Arc<Image> {
             r#"<rect x="{x}" y="{y}" width="{width}" height="{height}" rx="8" fill="{ink}"/>"#
         );
         y += height + 12;
+    }
+    if blurred {
+        svg.push_str("</g>");
     }
     svg.push_str("</svg>");
     Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))

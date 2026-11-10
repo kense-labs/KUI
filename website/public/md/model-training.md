@@ -33,6 +33,6 @@ Event: `TrainingStepChanged, TrainingPlaybackChanged`.
 
 ## Motion
 
-A 21-second sequence shows signal travel, learning, loss and evaluation; reduced motion shows a still frame. The stacks and fine-grained motion differ from the reference and visual, touch and screen-reader validation remain pending.
+A 21-second sequence shows signal travel, learning, loss and evaluation. Signals travel along the curved links between layers. Training and held-out data sit beside the network on wider layouts and above it on narrow layouts. Loss and epoch appear below the network. Reduced motion shows a still frame.
 
 Desktop and web use the same GPUI view.

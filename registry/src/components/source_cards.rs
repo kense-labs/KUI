@@ -1,6 +1,10 @@
 //! Browse references associated with an answer and inspect a source.
-use crate::primitives::family::Paint;
 use crate::primitives::ops_surface::*;
+use crate::primitives::{
+    brand_mark::brand_mark,
+    family::Paint,
+    glyph::{Glyph, icon},
+};
 use gpui::{prelude::*, *};
 #[derive(Clone)]
 pub struct Citation {
@@ -8,6 +12,18 @@ pub struct Citation {
     pub title: String,
     pub passage: String,
     pub url: String,
+}
+
+fn site_mark(domain: &str, cx: &App) -> Option<AnyElement> {
+    let provider = match domain.trim_start_matches("www.") {
+        "stripe.com" => "Stripe",
+        "github.com" => "GitHub",
+        "vercel.com" => "Vercel",
+        "linear.app" => "Linear",
+        "figma.com" => "Figma",
+        _ => return None,
+    };
+    brand_mark(provider, 15., cx)
 }
 pub enum SearchState {
     Searching,
@@ -123,7 +139,9 @@ impl Render for CitationShelf {
                 .child(
                     row()
                         .w_full()
-                        .child(avatar(&c.domain, i, cx).size(px(20.)))
+                        .child(site_mark(&c.domain, cx).unwrap_or_else(|| {
+                            avatar(&c.domain, i, cx).size(px(20.)).into_any_element()
+                        }))
                         .child(note(c.domain.clone(), cx).flex_1().truncate())
                         .child(badge((i + 1).to_string(), cx)),
                 )
@@ -143,15 +161,44 @@ impl Render for CitationShelf {
                     },
                 )
                 .flex_1()
+                .min_w_0()
                 .min_h(px(84.))
                 .p(px(12.))
+                .flex_col()
+                .items_start()
                 .border_1()
                 .border_color(p.line)
+                .when(!self.all, |card| {
+                    card.child(row().gap(px(4.)).children(
+                        shown.iter().enumerate().skip(3).take(3).map(|(i, source)| {
+                            site_mark(&source.domain, cx).unwrap_or_else(|| {
+                                avatar(&source.domain, i, cx)
+                                    .size(px(16.))
+                                    .into_any_element()
+                            })
+                        }),
+                    ))
+                })
                 .child(title(if self.all {
                     tr(cx, "Show less", "收起").to_string()
                 } else {
                     format!("+{} {}", shown.len() - 3, tr(cx, "more", "个来源"))
                 }))
+                .when(!self.all, |card| {
+                    card.child(
+                        note(
+                            shown
+                                .iter()
+                                .skip(3)
+                                .map(|source| source.domain.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            cx,
+                        )
+                        .w_full()
+                        .truncate(),
+                    )
+                })
                 .into_any_element(),
             )
         }
@@ -175,8 +222,17 @@ impl Render for CitationShelf {
             .child(title(self.query.clone()).text_size(px(16.)))
             .child(
                 row()
+                    .min_w_0()
+                    .gap(px(6.))
+                    .when(matches!(self.state, SearchState::Searching), |row| {
+                        row.child(icon(Glyph::Search, 14., p.secondary))
+                    })
                     .child(note(state, cx))
-                    .child(badge(self.sources.len().to_string(), cx)),
+                    .child(badge(self.sources.len().to_string(), cx))
+                    .when(
+                        matches!(self.state, SearchState::Searching) && !self.sources.is_empty(),
+                        |row| row.child(note(self.query.clone(), cx).flex_1().min_w_0().truncate()),
+                    ),
             )
             .when(grid_fold.mounted(), |v| v.child(grid_fold.wrap(12., grid)))
             .when_some(current.and_then(|i| self.sources.get(i)), |v, c| {
