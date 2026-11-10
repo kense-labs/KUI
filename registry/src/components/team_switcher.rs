@@ -1,4 +1,5 @@
 //! Find and activate a team without leaving the current workspace.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::ops_surface::*;
 use crate::primitives::{
     editor::{EditEvent, Editor, EditorScrollRegion, InputMode},
@@ -223,6 +224,21 @@ impl WorkspacePicker {
         cx.notify()
     }
 }
+fn workspace_mark(name: &str, i: usize, cx: &App) -> Div {
+    if let Some(mark) = brand_mark(name, 16., cx) {
+        div()
+            .size(px(28.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(Paint::get(cx).stage)
+            .child(mark)
+    } else {
+        avatar(name, i, cx)
+    }
+}
+
 impl Render for WorkspacePicker {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
@@ -252,7 +268,7 @@ impl Render for WorkspacePicker {
                 .bg(p.panel)
                 .border_1()
                 .border_color(p.line)
-                .child(avatar(&name, self.current, cx).rounded(radius))
+                .child(workspace_mark(&name, self.current, cx).rounded(radius))
                 .child(
                     column()
                         .flex_1()
@@ -478,7 +494,7 @@ impl Render for WorkspacePicker {
                     .flex_none()
                     .py_0()
                     .when(pos == self.cursor, |e| e.bg(p.stage))
-                    .child(avatar(&t.name, i, cx).rounded(radius))
+                    .child(workspace_mark(&t.name, i, cx).rounded(radius))
                     .child(
                         column()
                             .flex_1()

@@ -1,5 +1,6 @@
 //! A read-aloud controller. Synthesis and playback belong to the host.
 use crate::primitives::{
+    brand_mark::brand_mark,
     family::{Paint, Slide, Tone, face},
     flyout::TriggerBounds,
     glyph::{Glyph, icon},
@@ -64,6 +65,8 @@ fn seek_at(bounds: Bounds<Pixels>, x: Pixels, duration: f32) -> f32 {
 pub struct SpeechPlayer {
     label: SharedString,
     text: SharedString,
+    model: Option<SharedString>,
+    show_transport: bool,
     phase: SpeechPhase,
     word: Option<usize>,
     hovered_word: Option<usize>,
@@ -102,6 +105,8 @@ impl SpeechPlayer {
         Self {
             label: label.into(),
             text: text.into(),
+            model: None,
+            show_transport: false,
             phase: SpeechPhase::Idle,
             word: None,
             hovered_word: None,
@@ -137,6 +142,21 @@ impl SpeechPlayer {
     }
     pub fn with_voices(mut self, voices: Vec<SpeechVoice>) -> Self {
         self.voices = voices;
+        self
+    }
+    /// Attribute the text to its model and show that model's mark when available.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+    /// Show playback controls before the host starts the first session.
+    pub fn with_transport(mut self, duration: f32) -> Self {
+        self.show_transport = true;
+        self.duration = if duration.is_finite() {
+            duration.max(0.)
+        } else {
+            0.
+        };
         self
     }
     /// Legacy unscoped update; asynchronous hosts should use `set_phase_for`.
@@ -422,7 +442,7 @@ impl Render for SpeechPlayer {
             .id("speech-player")
             .role(Role::Group)
             .aria_label(self.label.clone())
-            .w(px(640.))
+            .w(px(522.))
             .max_w_full()
             .pt(px(16.))
             .px(px(16.))
@@ -434,6 +454,21 @@ impl Render for SpeechPlayer {
             .flex()
             .flex_col()
             .gap_3()
+            .when_some(self.model.clone(), |root, model| {
+                root.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .when_some(brand_mark(&model, 16., cx), |row, mark| row.child(mark))
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(model),
+                        ),
+                )
+            })
             .child(words);
         if self.phase == SpeechPhase::Error {
             root = root.child(
@@ -450,7 +485,7 @@ impl Render for SpeechPlayer {
             .items_center()
             .gap(px(2.))
             .overflow_hidden();
-        if self.phase == SpeechPhase::Idle {
+        if self.phase == SpeechPhase::Idle && !self.show_transport {
             actions = actions.child(
                 face(
                     "speech-start",
@@ -475,7 +510,8 @@ impl Render for SpeechPlayer {
                 SpeechPhase::Playing => SpeechEvent::Pause,
                 SpeechPhase::Error => SpeechEvent::Retry,
                 SpeechPhase::Paused | SpeechPhase::Finished => SpeechEvent::Resume,
-                _ => SpeechEvent::Pause,
+                SpeechPhase::Idle => SpeechEvent::Start,
+                SpeechPhase::Preparing => SpeechEvent::Pause,
             };
             let label = match self.phase {
                 SpeechPhase::Playing => tr(cx, "Pause", "暂停"),

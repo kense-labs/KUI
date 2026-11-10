@@ -37,6 +37,8 @@ Filter or shuffle prompts. Picking a card fills and focuses the editor.
 
 ## API
 
+`with_model(model)` displays the model beside the composer. A recognized app name in `Prompt::app` displays its brand mark.
+
 `new` · `(id, greeting, Vec<Prompt>, window, cx)`
 
 Populate Prompt with its group, app, title, detail and draft text. PromptSent carries a trimmed draft.

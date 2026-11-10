@@ -122,35 +122,12 @@ impl Render for Avatar {
                         self.arrival.restart(cx);
                     }
                     let shown = ease(self.arrival.time(0.24, w, cx) / 0.24);
-                    let mut photo = div().absolute().inset_0().overflow_hidden().opacity(shown);
-                    if shown < 0.999 {
-                        // A small convolution softens the first decoded frames. The resting image
-                        // takes a single draw and shares exactly the fallback's circular clip.
-                        let spread = 2.8 * (1. - shown);
-                        for (i, (dx, dy)) in [(0., -1.), (-1., 0.), (1., 0.), (0., 1.)]
-                            .into_iter()
-                            .enumerate()
-                        {
-                            photo = photo.child(
-                                div()
-                                    .absolute()
-                                    .left(px(dx * spread))
-                                    .top(px(dy * spread))
-                                    .size_full()
-                                    .opacity(1. / (i + 1) as f32)
-                                    .child(
-                                        img(image.clone()).size_full().object_fit(ObjectFit::Cover),
-                                    ),
-                            );
-                        }
-                    }
                     face = face.child(
-                        photo.child(
-                            div()
-                                .absolute()
-                                .inset_0()
-                                .opacity(0.2 + 0.8 * shown)
-                                .child(img(image).size_full().object_fit(ObjectFit::Cover)),
+                        div().absolute().inset_0().opacity(shown).child(
+                            img(image)
+                                .size_full()
+                                .rounded_full()
+                                .object_fit(ObjectFit::Cover),
                         ),
                     );
                 }

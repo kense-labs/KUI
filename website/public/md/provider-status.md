@@ -12,6 +12,8 @@ Initialize KUI with `kui::init(cx)` before opening a window. To copy this compon
 
 ## Usage
 
+Use `with_open_incident(id)` to show an incident from the initial snapshot. The provider ID must identify a row with an incident.
+
 ```rust
 use gpui::prelude::*;
 use kui::components::provider_status::{ProviderHealth, ProviderStatus, ProviderStatusItem};

@@ -1,4 +1,5 @@
 """Publish the preview shell, WASM, bindings and fonts as one immutable build."""
+import gzip
 import hashlib
 from pathlib import Path
 import shutil
@@ -6,6 +7,11 @@ import shutil
 root = Path(__file__).resolve().parents[1]
 source = root / "apps/web/www"
 public = root / "website/public/stories"
+wasm = source / "pkg/kui_web_bg.wasm"
+# A static host can serve these bytes without configuring content negotiation.
+with wasm.open("rb") as binary, Path(str(wasm) + ".gz").open("wb") as output:
+    with gzip.GzipFile(filename="", fileobj=output, mode="wb", compresslevel=6, mtime=0) as compressed:
+        shutil.copyfileobj(binary, compressed)
 files = [source / name for name in ("index.html", "preview.js", "fonts/KUIInputSans.ttf")]
 files += sorted(path for path in (source / "pkg").rglob("*") if path.is_file() and not path.name.endswith(".d.ts"))
 digest = hashlib.sha256()

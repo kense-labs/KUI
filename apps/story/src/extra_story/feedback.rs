@@ -20,8 +20,13 @@ struct Example {
 impl Example {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
-        let feedback =
-            cx.new(|cx| ResponseFeedback::new("example-feedback", "example-message", w, cx));
+        let feedback = cx.new(|cx| {
+            ResponseFeedback::new("example-feedback", "example-message", w, cx)
+                .with_response("Claude Sonnet 5.5", language.text(
+                    "To prepare the release, verify the build in staging and run the checkout smoke test. Then publish the changelog and keep an eye on the first deployment.",
+                    "发布前，先在预发布环境验证构建并测试结账流程。然后发布更新日志，留意首次部署的运行情况。",
+                ), cx)
+        });
         let subscription = cx.subscribe(
             &feedback,
             |this: &mut Self, _, event: &ResponseFeedbackEvent, cx| {
@@ -54,16 +59,12 @@ impl Render for Example {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let paint = Paint::get(cx);
         div()
-            .w(px(460.))
+            .w(px(522.))
             .max_w_full()
             .flex()
             .flex_col()
             .gap(px(14.))
             .text_color(paint.ink)
-            .child(div().text_size(px(15.)).child(self.language.text(
-                "A good first step is to break the task into smaller, testable parts.",
-                "可以先把任务拆分成较小、容易验证的步骤。",
-            )))
             .child(self.feedback.clone())
             .child(
                 div()

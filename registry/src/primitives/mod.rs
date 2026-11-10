@@ -8,6 +8,7 @@ pub mod sizing;
 
 pub use button::ButtonBehavior;
 pub use sizing::Size;
+pub(crate) mod brand_mark;
 pub mod clipboard;
 pub mod commit;
 pub mod control;

@@ -59,23 +59,25 @@ fn tool_columns_and_approval_controls_follow_the_measured_panel() {
         let linear = w.debug_bounds("tool-name-1").unwrap();
         let search = w.debug_bounds("tool-title-0").unwrap();
         let create = w.debug_bounds("tool-title-1").unwrap();
-        let summary = w.debug_bounds("tool-summary-1").unwrap();
+        let reason = w.debug_bounds("tool-reason-1").unwrap();
         let deny = w.debug_bounds("Deny").unwrap();
         let allow = w.debug_bounds("Allow").unwrap();
         assert_eq!(gh.left(), linear.left());
         assert_eq!(gh.size.width, linear.size.width);
         assert_eq!(search.left(), create.left());
-        assert_eq!(create.left() - linear.right(), px(10.));
-        assert!((linear.center().y - summary.center().y).abs() <= px(1.));
+        assert_eq!(create.left() - linear.right(), px(9.));
+        assert!((linear.center().y - create.center().y).abs() <= px(1.));
+        assert!(reason.top() >= create.bottom());
+        assert_eq!(reason.left(), create.left());
         assert_eq!(deny.top(), allow.top());
         assert_eq!(allow.left() - deny.right(), px(6.));
         assert!(allow.right() <= px(width) && allow.size.height >= px(32.));
         if compact {
             assert_eq!(deny.left(), create.left());
-            assert!(deny.top() >= create.bottom());
+            assert!(deny.top() >= reason.bottom());
         } else {
-            assert!(deny.left() >= create.right());
-            assert!((deny.center().y - summary.center().y).abs() <= px(1.));
+            assert!(deny.left() >= reason.right());
+            assert!((deny.center().y - reason.center().y).abs() <= px(1.));
         }
     }
     let at = w.debug_bounds("Allow").unwrap().center();

@@ -1,4 +1,5 @@
 //! Provider health display. The host owns polling, visibility and networking.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::{
     family::{Paint, Slide, Tone, face},
     flyout::TriggerBounds,
@@ -183,6 +184,20 @@ impl ProviderStatus {
         self.footnote = footnote.into();
         self
     }
+    /// Start with a provider's incident expanded when it exists in the snapshot.
+    pub fn with_open_incident(mut self, id: impl Into<SharedString>) -> Self {
+        let id = id.into();
+        if self
+            .providers
+            .iter()
+            .any(|p| p.id == id && p.incident.is_some())
+        {
+            self.expanded = Some(id.clone());
+            self.animated_id = Some(id);
+            self.expansion.reset(1.);
+        }
+        self
+    }
     pub fn refresh_enabled(mut self, enabled: bool) -> Self {
         self.refresh_enabled = enabled;
         self
@@ -323,6 +338,10 @@ impl Render for ProviderStatus {
                     counts.unknown,
                     tr(cx, "unknown", "状态未知")
                 ));
+            }
+            let operational = counts.total - counts.outage - counts.degraded - counts.unknown;
+            if operational > 0 {
+                parts.push(format!("{} {}", operational, tr(cx, "operational", "正常")));
             }
             parts.join(" · ")
         };
@@ -589,7 +608,7 @@ impl Render for ProviderStatus {
                 .uptime
                 .filter(|n| n.is_finite())
                 .map_or_else(|| "—".to_string(), |n| format!("{:.2}%", n.clamp(0., 100.)));
-            let mut info = div()
+            let info = div()
                 .flex()
                 .flex_col()
                 .min_w(px(100.))
@@ -601,27 +620,29 @@ impl Render for ProviderStatus {
                         .text_color(p.ink)
                         .child(provider.name.clone()),
                 )
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(p.faint)
-                        .child(provider.detail.clone()),
-                );
-            if compact {
-                info = info.child(
-                    div()
-                        .text_size(px(13.))
-                        .line_height(px(20.))
-                        .text_color(p.secondary)
-                        .child(latency(provider.latency_ms)),
-                );
-            }
-            let status = div()
-                .text_size(px(13.))
-                .line_height(px(20.))
-                .text_color(status_color(provider.health, p))
-                .child(format!("● {}", status_label(provider.health, cx)));
+                .when(!provider.detail.is_empty(), |info| {
+                    info.child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(p.faint)
+                            .child(provider.detail.clone()),
+                    )
+                });
+            let status = || {
+                div()
+                    .text_size(px(13.))
+                    .line_height(px(20.))
+                    .text_color(status_color(provider.health, p))
+                    .child(format!("● {}", status_label(provider.health, cx)))
+            };
+            let latency_readout = || {
+                div()
+                    .text_size(px(13.))
+                    .line_height(px(20.))
+                    .text_color(p.secondary)
+                    .child(latency(provider.latency_ms))
+            };
             let has_incident = provider.incident.is_some();
             let is_open = self.expanded.as_ref() == Some(&id);
             let mut main = div()
@@ -630,8 +651,11 @@ impl Render for ProviderStatus {
                 .items_center()
                 .gap_3()
                 .flex_1()
+                .when_some(brand_mark(&provider.name, 20., cx), |row, mark| {
+                    row.child(mark)
+                })
                 .child(info)
-                .child(status);
+                .when(!compact, |row| row.child(status()));
             if has_incident {
                 let toggle_id = id.clone();
                 main = main
@@ -646,8 +670,14 @@ impl Render for ProviderStatus {
                             tr(cx, "Expand incident", "展开事件")
                         }
                     ))
+                    .aria_expanded(is_open)
                     .tab_index(0)
                     .cursor_pointer()
+                    .child(icon(
+                        if is_open { Glyph::Up } else { Glyph::Down },
+                        14.,
+                        p.faint,
+                    ))
                     .on_click(cx.listener(move |s, _, _, cx| s.toggle(toggle_id.clone(), cx)));
             }
             let mut row = div()
@@ -662,14 +692,7 @@ impl Render for ProviderStatus {
                 .child(main);
             if !compact {
                 row = row
-                    .child(
-                        div()
-                            .w(px(64.))
-                            .text_size(px(13.))
-                            .line_height(px(20.))
-                            .text_color(p.secondary)
-                            .child(latency(provider.latency_ms)),
-                    )
+                    .child(latency_readout().w(px(64.)))
                     .child(div().w(px(150.)).child(bar.take().unwrap()))
                     .child(
                         div()
@@ -689,19 +712,31 @@ impl Render for ProviderStatus {
                 .gap_2()
                 .child(row);
             if compact {
-                group = group.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(div().flex_1().child(bar.take().unwrap()))
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(p.secondary)
-                                .child(percentage),
-                        ),
-                );
+                group = group
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .pl(px(44.))
+                            .pr(px(12.))
+                            .child(status())
+                            .child(latency_readout()),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .pl(px(44.))
+                            .pr(px(12.))
+                            .child(div().flex_1().child(bar.take().unwrap()))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.secondary)
+                                    .child(percentage),
+                            ),
+                    );
             }
             if let Some(day) = selected.and_then(|n| visible_days.get(n)) {
                 let uptime = day
@@ -747,10 +782,22 @@ impl Render for ProviderStatus {
                                     .rounded_full()
                                     .bg(p.line),
                             )
-                            .child(div().text_color(p.secondary).child(format!(
-                                "{} · {}  {}",
-                                update.stage, update.time, update.message
-                            ))),
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(3.))
+                                    .child(
+                                        div()
+                                            .text_color(p.ink)
+                                            .child(format!("{} · {}", update.stage, update.time)),
+                                    )
+                                    .child(
+                                        div().text_color(p.secondary).child(update.message.clone()),
+                                    ),
+                            ),
                     );
                 }
                 if incident.link.is_some() {

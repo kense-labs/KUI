@@ -138,6 +138,7 @@ pub struct VoiceRecorder {
     send_focus: Option<FocusHandle>,
     error: SharedString,
     label: SharedString,
+    contact: Option<(ImageSource, SharedString)>,
     seek_bounds: TriggerBounds,
     seek_touch: Rc<Cell<bool>>,
     seek_x: Rc<Cell<Pixels>>,
@@ -168,6 +169,7 @@ impl VoiceRecorder {
             send_focus: None,
             error: "".into(),
             label: label.into(),
+            contact: None,
             seek_bounds: TriggerBounds::default(),
             seek_touch: Default::default(),
             seek_x: Rc::new(Cell::new(px(0.))),
@@ -177,6 +179,15 @@ impl VoiceRecorder {
     }
     pub fn with_messages(mut self, messages: Vec<VoiceMessage>) -> Self {
         self.messages = messages;
+        self
+    }
+    /// Add a conversation header and show the contact image on their messages.
+    pub fn with_contact(
+        mut self,
+        portrait: impl Into<ImageSource>,
+        subtitle: impl Into<SharedString>,
+    ) -> Self {
+        self.contact = Some((portrait.into(), subtitle.into()));
         self
     }
     pub fn set_messages(&mut self, messages: Vec<VoiceMessage>, cx: &mut Context<Self>) {
@@ -503,7 +514,7 @@ impl Render for VoiceRecorder {
                 }
             }))
             .role(Role::Group)
-            .aria_label(label)
+            .aria_label(label.clone())
             .w_full()
             .max_w(px(416.))
             .pt(px(14.))
@@ -515,7 +526,34 @@ impl Render for VoiceRecorder {
             .bg(p.panel)
             .flex()
             .flex_col()
-            .gap_3();
+            .gap_3()
+            .when_some(self.contact.clone(), |root, (portrait, subtitle)| {
+                root.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .border_b_1()
+                        .border_color(p.line)
+                        .pb_3()
+                        .child(
+                            img(portrait)
+                                .size(px(36.))
+                                .object_fit(ObjectFit::Cover)
+                                .rounded_full(),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .min_w_0()
+                                .child(div().font_weight(FontWeight::MEDIUM).child(label))
+                                .child(
+                                    div().text_size(px(12.)).text_color(p.faint).child(subtitle),
+                                ),
+                        ),
+                )
+            });
         if !self.messages.is_empty() {
             let mut history = div().flex().flex_col().gap_3();
             for (i, message) in self.messages.iter().enumerate() {
@@ -531,7 +569,7 @@ impl Render for VoiceRecorder {
                             .w(px(3.))
                             .h(px((peak * 22.).max(3.)))
                             .rounded(px(2.))
-                            .bg(p.ink.opacity(0.28)),
+                            .bg(if message.outgoing { p.inverse } else { p.ink }.opacity(0.28)),
                     );
                 }
                 let duration = format!(
@@ -539,20 +577,28 @@ impl Render for VoiceRecorder {
                     message.duration as u64 / 60,
                     message.duration as u64 % 60
                 );
+                let portrait = self
+                    .contact
+                    .as_ref()
+                    .filter(|_| !message.outgoing && message.author == self.label)
+                    .map(|(portrait, _)| portrait.clone());
                 history = history.child(
                     div()
                         .flex()
                         .flex_col()
                         .gap(px(4.))
                         .when(message.outgoing, |d| d.items_end())
-                        .child(
-                            div()
-                                .px(px(6.))
-                                .text_size(px(12.))
-                                .line_height(px(16.))
-                                .text_color(p.faint)
-                                .child(message.meta.clone()),
-                        )
+                        .when_some(portrait.clone(), |message, portrait| {
+                            message.relative().pl(px(39.)).child(
+                                img(portrait)
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(8.))
+                                    .size(px(28.))
+                                    .object_fit(ObjectFit::Cover)
+                                    .rounded_full(),
+                            )
+                        })
                         .child(
                             div()
                                 .flex()
@@ -562,7 +608,7 @@ impl Render for VoiceRecorder {
                                 .py(px(6.))
                                 .pl(px(6.))
                                 .pr(px(14.))
-                                .rounded(r)
+                                .rounded_full()
                                 .bg(if message.outgoing { p.ink } else { p.tray })
                                 .text_color(if message.outgoing { p.inverse } else { p.ink })
                                 .child(
@@ -600,6 +646,14 @@ impl Render for VoiceRecorder {
                                         .opacity(0.8)
                                         .child(duration),
                                 ),
+                        )
+                        .child(
+                            div()
+                                .px(px(6.))
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .text_color(p.faint)
+                                .child(message.meta.clone()),
                         ),
                 );
             }
@@ -646,7 +700,7 @@ impl Render for VoiceRecorder {
                             .rounded_full()
                             .p_0()
                             .bg(p.ink)
-                            .child(icon(Glyph::Comment, 18., p.inverse))
+                            .child(icon(Glyph::Mic, 18., p.inverse))
                             .on_click(
                                 cx.listener(|s, _, _, cx| s.request(RecorderEvent::Start, cx)),
                             ),

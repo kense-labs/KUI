@@ -364,8 +364,9 @@ impl Render for PresenceStack {
         let step = d * (0.67 + 0.39 * fan);
         let count = self.people.len().min(self.max);
         let extra = self.people.len().saturating_sub(self.max);
-        let reserve = d + (count.saturating_sub(1) + usize::from(extra > 0)) as f32 * d * 0.67;
-        let used = d + (count.saturating_sub(1) + usize::from(extra > 0)) as f32 * step;
+        let gaps = (count.saturating_sub(1) + usize::from(extra > 0)) as f32;
+        let reserve = d + gaps * d * 1.06;
+        let used = d + gaps * step;
         let origin = if self.align == PresenceAlign::End {
             reserve - used
         } else {
@@ -523,7 +524,7 @@ impl Render for PresenceStack {
             if self.self_id.as_deref() == self.active.as_deref() {
                 text.push_str(lang.text(" (you)", "（你）"));
             }
-            let width = measure(&SharedString::from(text.clone()), 12., w) + 20.;
+            let width = (measure(&SharedString::from(text.clone()), 12., w) + 20.).min(reserve);
             if self.label_width.value(cx) < 1. {
                 self.label_width.reset(width);
             } else {
@@ -536,11 +537,12 @@ impl Render for PresenceStack {
             } else {
                 self.label_x.duration(target, 0.42, cx);
             }
-            let label_w = self.label_width.get(w, cx);
+            let label_w = self.label_width.get(w, cx).min(reserve);
+            let left = (self.label_x.get(w, cx) - label_w * 0.5).clamp(0., reserve - label_w);
             stack = stack.child(
                 div()
                     .absolute()
-                    .left(px(self.label_x.get(w, cx) - label_w * 0.5))
+                    .left(px(left))
                     .top(px(d + 8.))
                     .w(px(label_w))
                     .h(px(26.))
@@ -561,7 +563,7 @@ impl Render for PresenceStack {
                     .text_size(px(12.))
                     .line_height(px(26.))
                     .text_color(p.stage)
-                    .child(text),
+                    .child(div().min_w_0().truncate().child(text)),
             );
         }
         let label: SharedString = format!(

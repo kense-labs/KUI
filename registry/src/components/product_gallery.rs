@@ -1,7 +1,7 @@
 //! A product gallery with a hover lens, gliding highlights, and a fullscreen viewer.
 use crate::primitives::{
     control::UiLanguage,
-    family::{Paint, Slide, disabled_motion},
+    family::{Paint, Slide, disabled_motion, measure},
     flyout::TriggerBounds,
     glyph::{Glyph, icon},
     nav::button,
@@ -12,11 +12,13 @@ use std::{cell::Cell, rc::Rc};
 const THUMB_W: f32 = 64.;
 const THUMB_H: f32 = 80.;
 const THUMB_STEP: f32 = 88.;
+const STACK_RAIL_AT: f32 = 520.;
+const STACK_DETAILS_AT: f32 = 680.;
+const DETAILS_GAP: f32 = 24.;
 const SWATCH: f32 = 32.;
 const SWATCH_STEP: f32 = 44.;
 const SIZE_W: f32 = 92.;
 const SIZE_H: f32 = 44.;
-const SIZE_STEP: f32 = 100.;
 const LENS: f32 = 176.;
 const ZOOM: f32 = 2.4;
 const FLICK: f32 = 360.;
@@ -385,10 +387,11 @@ impl ProductGallery {
             drag.speed
         };
         let max = self.photo_count().saturating_sub(1) as f32;
+        let stage_width = f32::from(Self::stage_width(self.container_width.get()));
         let target = if cancelled {
             drag.origin
         } else {
-            landing(current, drag.origin, speed, f32::from(self.stage_width())).clamp(0., max)
+            landing(current, drag.origin, speed, stage_width).clamp(0., max)
         };
         let index = target as usize;
         let changed = index != self.index;
@@ -396,12 +399,8 @@ impl ProductGallery {
             self.track.reset(target);
             self.rail.reset(target);
         } else {
-            self.track.release(
-                target,
-                -(speed / f32::from(self.stage_width()).max(1.)),
-                TRACK_TIME,
-                cx,
-            );
+            self.track
+                .release(target, -(speed / stage_width), TRACK_TIME, cx);
             Self::glide(&mut self.rail, target, GLIDE, cx);
         }
         self.index = index;
@@ -410,20 +409,19 @@ impl ProductGallery {
         }
         cx.notify();
     }
-    fn stage_width(&self) -> Pixels {
-        let measured = self.container_width.get();
-        let width = if measured > px(0.) {
-            measured
+    fn stage_width(width: Pixels) -> Pixels {
+        let width = f32::from(width);
+        let media_width = if width > STACK_DETAILS_AT {
+            (width - DETAILS_GAP) * 0.58
         } else {
-            px(640.)
+            width
         };
-        let wide = f32::from(width) >= 680.;
-        let rail_room = if wide || f32::from(width) >= 520. {
+        let rail_room = if width > STACK_RAIL_AT {
             THUMB_W + 12.
         } else {
             0.
         };
-        px((f32::from(width) - rail_room).max(1.))
+        px((media_width - rail_room).max(1.))
     }
     fn size_or_zero(&self) -> usize {
         self.size.unwrap_or(0)
@@ -476,10 +474,9 @@ fn picker_row(cx: &App, name: &str, zh_name: &str, value: &str) -> Div {
 }
 impl ProductGallery {
     /// Photo stage visuals: crossfade layer, spring track, hover lens.
-    fn stage_inner(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Div {
+    fn stage_inner(&mut self, stage_w: Pixels, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
-        let stage_w = self.stage_width();
         let height = stage_w / 0.8;
         let track = -self.track.get(w, cx) * stage_w;
         let fade = self.fade.get(w, cx).clamp(0., 1.);
@@ -558,9 +555,13 @@ impl ProductGallery {
     }
 
     /// The stage wrapped as the main photo button with drag and viewer wiring.
-    fn main_block(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn main_block(
+        &mut self,
+        stage_w: Pixels,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let zh = UiLanguage::current(cx) == UiLanguage::Chinese;
-        let stage_w = self.stage_width();
         let alt = self.current().map_or(String::new(), |c| c.alt.to_string());
         let aria = if zh {
             format!(
@@ -577,7 +578,7 @@ impl ProductGallery {
                 self.photo_count()
             )
         };
-        let stage = self.stage_inner(w, cx);
+        let stage = self.stage_inner(stage_w, w, cx);
         let stage_w_for_move = stage_w;
         let moved = cx.listener(move |s, e: &MouseMoveEvent, _, cx| {
             s.move_pointer(e.position.x, stage_w_for_move, cx)
@@ -697,19 +698,23 @@ impl ProductGallery {
     }
 
     /// Thumbnail rail with the gliding selection ring.
-    fn rail_block(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn rail_block(
+        &mut self,
+        vertical: bool,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
         let zh = UiLanguage::current(cx) == UiLanguage::Chinese;
-        let mid = f32::from(self.container_width.get().max(px(520.))) >= 520.;
         let rail_pos = self.rail.get(w, cx);
         let indicator = div()
             .absolute()
             .map(|d| {
-                if mid {
+                if vertical {
                     d.left(px(-2.)).top(px(rail_pos * THUMB_STEP - 2.))
                 } else {
-                    d.left(px(rail_pos * THUMB_STEP - 2.)).top(px(-2.))
+                    d.left(px(rail_pos * (THUMB_W + 8.))).top_0()
                 }
             })
             .w(px(THUMB_W + 4.))
@@ -724,10 +729,10 @@ impl ProductGallery {
             .relative()
             .gap(px(8.))
             .map(|d| {
-                if mid {
+                if vertical {
                     d.flex().flex_col().w(px(THUMB_W)).flex_none()
                 } else {
-                    d.flex().flex_row().w_full().overflow_x_scroll()
+                    d.flex().flex_row().w_full().p(px(2.)).overflow_x_scroll()
                 }
             })
             .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
@@ -778,11 +783,11 @@ impl ProductGallery {
     }
 
     /// Media block: rail beside the stage, or under it on narrow columns.
-    fn media_block(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Div {
-        let mid = f32::from(self.container_width.get().max(px(520.))) >= 520.;
-        let main = self.main_block(w, cx);
-        let rail = self.rail_block(w, cx);
-        if mid {
+    fn media_block(&mut self, width: Pixels, w: &mut Window, cx: &mut Context<Self>) -> Div {
+        let vertical = f32::from(width) > STACK_RAIL_AT;
+        let main = self.main_block(Self::stage_width(width), w, cx);
+        let rail = self.rail_block(vertical, w, cx);
+        if vertical {
             div().flex().gap(px(12.)).child(rail).child(main)
         } else {
             div().flex().flex_col().gap(px(12.)).child(main).child(rail)
@@ -843,26 +848,37 @@ impl ProductGallery {
     }
 
     /// Size radiogroup with a gliding fill; sold-out sizes strike through.
-    fn size_block(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn size_block(&mut self, width: f32, w: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
-        let size_pos = self.size_fill.get(w, cx);
-        let has_size = self.size.is_some();
+        let gap = if width < 420. { 4. } else { 8. };
+        let count = self.sizes.len().max(1) as f32;
+        let minimum = self
+            .sizes
+            .iter()
+            .map(|size| measure(&size.label, 14., w) + 12.)
+            .fold(44., f32::max)
+            .min(width);
+        let available = (width - (count - 1.) * gap) / count;
+        let wrap = available < minimum;
+        let slot_width = available.min(SIZE_W).max(minimum);
+        let size_pos = self.size_fill.get(w, cx).clamp(0., count - 1.);
         let fill = div()
             .absolute()
-            .left(px(size_pos.max(0.) * SIZE_STEP))
+            .left(px(size_pos * (slot_width + gap)))
             .top_0()
-            .w(px(SIZE_W))
+            .w(px(slot_width))
             .h(px(SIZE_H))
-            .rounded(px(4.))
-            .bg(p.secondary)
-            .opacity(if has_size { 1. } else { 0. });
+            .rounded(r)
+            .bg(p.ink);
         let mut sizes = div()
             .id("product-sizes")
             .role(Role::RadioGroup)
             .relative()
             .flex()
-            .gap(px(8.))
+            .gap(px(gap))
+            .when(wrap, |row| row.flex_wrap())
+            .when(!wrap && self.size.is_some(), |row| row.child(fill))
             .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
                 let len = s.sizes.len();
                 if len == 0 {
@@ -900,10 +916,16 @@ impl ProductGallery {
             let id = size.id.clone();
             let unavailable = self.sold_out_in_color(size);
             let selected = self.size == Some(si);
+            let highlighted = if wrap {
+                selected
+            } else {
+                self.size.is_some() && (size_pos - si as f32).abs() < 0.5
+            };
             sizes = sizes.child(
                 button(("product-size", si), size.label.clone(), cx)
-                    .w(px(SIZE_W))
+                    .w(px(slot_width))
                     .h(px(SIZE_H))
+                    .flex_none()
                     .p_0()
                     .rounded(r)
                     .flex()
@@ -913,15 +935,23 @@ impl ProductGallery {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if unavailable {
                         p.faint
-                    } else if selected {
-                        p.inverse
+                    } else if highlighted {
+                        p.neutral_inverse
                     } else {
                         p.ink
                     })
                     .role(Role::RadioButton)
                     .aria_toggled(selected.into())
+                    .when(selected, |button| {
+                        button
+                            .when(wrap, |button| button.bg(p.ink))
+                            .hover(|style| style.bg(if wrap { p.ink } else { transparent_black() }))
+                            .active(|style| {
+                                style.bg(if wrap { p.ink } else { transparent_black() })
+                            })
+                    })
                     .when(unavailable, |b| b.line_through().cursor_default())
-                    .child(size.label.clone())
+                    .child(div().min_w_0().truncate().child(size.label.clone()))
                     .on_click(cx.listener(move |s, _, _, cx| {
                         if !s.sold_out_in_color(&s.sizes[si]) {
                             s.set_size(&id, cx);
@@ -929,11 +959,11 @@ impl ProductGallery {
                     })),
             );
         }
-        sizes.child(fill)
+        sizes
     }
 
     /// Details column: header, both pickers, footer, sold-out meta.
-    fn details_block(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Div {
+    fn details_block(&mut self, width: f32, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = Paint::get(cx);
         let zh = UiLanguage::current(cx) == UiLanguage::Chinese;
         let colors = self.color_block(w, cx);
@@ -942,7 +972,7 @@ impl ProductGallery {
             .get(self.color)
             .map(|c| c.label.to_string())
             .unwrap_or_default();
-        let sizes = self.size_block(w, cx);
+        let sizes = self.size_block(width, w, cx);
         let size_value = match self.size {
             Some(i) => self
                 .sizes
@@ -1181,15 +1211,22 @@ impl Render for ProductGallery {
             w.viewport_size().width - px(32.)
         }
         .max(px(1.));
-        let wide = f32::from(width) >= 680.;
-        let media = self.media_block(w, cx);
-        let details = self.details_block(w, cx);
+        let wide = f32::from(width) > STACK_DETAILS_AT;
+        let media = self.media_block(width, w, cx).flex_none();
+        let details_width = if wide {
+            (f32::from(width) - DETAILS_GAP) * 0.42
+        } else {
+            f32::from(width)
+        };
+        let details = self
+            .details_block(details_width, w, cx)
+            .when(wide, |details| details.flex_1());
         let mut root = div()
             .id("product-gallery")
             .w(width)
             .max_w_full()
             .flex()
-            .gap(px(24.))
+            .gap(px(DETAILS_GAP))
             .map(|d| if wide { d.flex_row() } else { d.flex_col() })
             .child(media)
             .child(details);
@@ -1205,7 +1242,17 @@ impl Render for ProductGallery {
 }
 #[cfg(test)]
 mod tests {
-    use super::{landing, rubber_band};
+    use super::{ProductGallery, landing, rubber_band};
+    use gpui::px;
+
+    #[test]
+    fn photo_keeps_full_width_until_the_thumbnails_move_to_its_side() {
+        assert_eq!(ProductGallery::stage_width(px(320.)), px(320.));
+        assert_eq!(ProductGallery::stage_width(px(520.)), px(520.));
+        assert_eq!(ProductGallery::stage_width(px(600.)), px(524.));
+        let width = ProductGallery::stage_width(px(800.));
+        assert!(width > px(320.) && width < px(400.));
+    }
 
     #[test]
     fn rubber_band_compresses_past_edges() {

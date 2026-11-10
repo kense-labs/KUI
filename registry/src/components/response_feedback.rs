@@ -5,6 +5,7 @@ use crate::primitives::{
     glyph::{Glyph, transformed},
     nav::tr,
 };
+use crate::{components::copy_button::CopyButton, primitives::brand_mark::brand_mark};
 use gpui::{prelude::*, *};
 use std::time::Duration;
 
@@ -49,6 +50,7 @@ pub struct ResponseFeedback {
     sequence: u64,
     focus: FocusHandle,
     first_reason_focus: FocusHandle,
+    response: Option<(SharedString, SharedString, Entity<CopyButton>)>,
     _editor_subscription: Subscription,
 }
 impl EventEmitter<ResponseFeedbackEvent> for ResponseFeedback {}
@@ -77,8 +79,28 @@ impl ResponseFeedback {
             sequence: 0,
             focus: cx.focus_handle(),
             first_reason_focus: cx.focus_handle(),
+            response: None,
             _editor_subscription: subscription,
         }
+    }
+    /// Present the answer, model attribution, and copy action above the feedback form.
+    pub fn with_response(
+        mut self,
+        model: impl Into<SharedString>,
+        text: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let text = text.into();
+        let copy = cx.new(|cx| {
+            CopyButton::new(
+                "feedback-copy-answer",
+                text.clone(),
+                tr(cx, "Copy answer", "复制回答"),
+            )
+            .icon_only()
+        });
+        self.response = Some((model.into(), text, copy));
+        self
     }
     pub fn rating(&self) -> Option<FeedbackRating> {
         self.rating
@@ -153,6 +175,9 @@ impl Render for ResponseFeedback {
         let radius = crate::foundation::surface_radius(cx);
         let height = self.expansion.get(w, cx).clamp(0., 1.);
         let mut actions = div().flex().items_center().gap(px(2.));
+        if let Some((_, _, copy)) = &self.response {
+            actions = actions.child(copy.clone());
+        }
         for (key, label, rating) in [
             (
                 "positive",
@@ -320,6 +345,28 @@ impl Render for ResponseFeedback {
             .w_full()
             .max_w(px(600.))
             .text_color(p.ink)
+            .when_some(self.response.as_ref(), |root, (model, text, _)| {
+                root.p(px(16.))
+                    .gap(px(10.))
+                    .bg(p.panel)
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(p.line)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .when_some(brand_mark(model, 16., cx), |row, mark| row.child(mark))
+                            .child(div().font_weight(FontWeight::MEDIUM).child(model.clone())),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .line_height(px(22.))
+                            .child(text.clone()),
+                    )
+            })
             .child(actions)
             .child(panel)
     }

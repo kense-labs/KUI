@@ -26,6 +26,8 @@ The host supplies unique stable IDs, thoughts and illustrative scores; no model 
 
 ## API
 
+`with_model(model)` adds the model attribution to the tree header.
+
 `set_thoughts` · `(Vec<Thought>, &mut Context<Self>)`
 
 Use set_beam_width (1–3), set_playing, step and restart. set_error reports a host failure; Retry asks the host to recover. Arrow keys navigate and expand the visible tree.

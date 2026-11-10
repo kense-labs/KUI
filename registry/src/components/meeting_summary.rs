@@ -1,4 +1,5 @@
 //! Host-provided meeting notes, citations and task delivery.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::{
     clipboard,
     family::{Paint, PhaseClock, Slide, Tone, ease, face},
@@ -113,6 +114,7 @@ enum SendState {
     Failed(SharedString),
 }
 pub struct MeetingSummary {
+    service: SharedString,
     data: MeetingData,
     status: MeetingStatus,
     error: SharedString,
@@ -131,8 +133,15 @@ pub struct MeetingSummary {
 }
 impl EventEmitter<MeetingSummaryEvent> for MeetingSummary {}
 impl MeetingSummary {
+    /// Names the meeting service to display its mark.
+    pub fn service(mut self, service: impl Into<SharedString>) -> Self {
+        self.service = service.into();
+        self
+    }
+
     pub fn new(data: MeetingData) -> Self {
         Self {
+            service: "".into(),
             data,
             status: MeetingStatus::Ready,
             error: "".into(),
@@ -786,11 +795,9 @@ impl Render for MeetingSummary {
                             .gap(px(10.))
                             .flex_1()
                             .min_w(px(160.))
-                            .child(div().size(px(20.)).flex_none().child(icon(
-                                Glyph::Monitor,
-                                20.,
-                                p.secondary,
-                            )))
+                            .child(brand_mark(&self.service, 20., cx).unwrap_or_else(|| {
+                                icon(Glyph::Monitor, 20., p.secondary).into_any_element()
+                            }))
                             .child(
                                 stack()
                                     .gap(px(2.))

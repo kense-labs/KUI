@@ -25,6 +25,8 @@ The host performs synthesis and playback; the component sends requests and shows
 
 ## API
 
+`with_model(model)` attributes the text to a model. `with_transport(duration)` shows the playback controls before a host session begins.
+
 `set_progress` · `(Option<usize>, f32, f32, &mut Context<Self>)`
 
 Capture session_id on Start or Retry and use set_phase_for, set_progress_for and set_error_for for asynchronous results. Stop ends the session, so late results from it are ignored; the host still cancels its synthesis or playback. Unscoped methods remain compatible but require host-side filtering.

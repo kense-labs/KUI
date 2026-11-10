@@ -26,9 +26,11 @@ Node IDs must be unique. Branch values are sums of children; non-finite and nega
 
 ## API
 
+`with_value_format(prefix, suffix, decimals)` formats totals in host display units. `set_header(subtitle, extra, cx)` supplies an optional period label and filter view. The legend appears below the chart.
+
 `set_root` · `(SunburstNode, &mut Context<Self>)`
 
-Use arrow keys to select, Enter to focus, and Escape to return. Upright labels are positioned along arcs; the accessibility table has not yet been tested with a screen reader.
+Use arrow keys to select, Enter to focus, and Escape to return. Each label is shaped as one horizontal line so the text keeps its reading order. Labels are hidden when a segment is too small.
 
 Event: `SunburstFocus`.
 

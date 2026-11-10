@@ -27,7 +27,7 @@ impl Example {
         );
         events.detail = t("Recent payment failures", "最近的支付失败记录").into();
         events.calls.push(LoopCall::new(
-            "Logs",
+            "GitHub",
             t("Find declines", "查找拒付记录"),
             t("41 EU declines found", "找到 41 条欧洲拒付记录"),
         ));
@@ -42,13 +42,13 @@ impl Example {
         routes.calls.push(LoopCall {
             failed: true,
             ..LoopCall::new(
-                "Routes",
+                "PostgreSQL",
                 t("Compare regions", "比较地区"),
                 t("Provider lookup timed out", "服务商查询超时"),
             )
         });
         routes.calls.push(LoopCall::new(
-            "Routes",
+            "PostgreSQL",
             t("Retry lookup", "重试查询"),
             t("Fallback route isolated", "已定位备用路由"),
         ));
@@ -61,12 +61,12 @@ impl Example {
         );
         replay.detail = t("Replay before and after the fix", "修复前后的重放对比").into();
         replay.calls.push(LoopCall::new(
-            "Tests",
+            "GitHub",
             t("Replay checkout", "重放结账"),
             t("12 of 12 passed", "12 项检查全部通过"),
         ));
         replay.calls.push(LoopCall::new(
-            "Notes",
+            "Linear",
             t("Summarize results", "整理结果"),
             t("Update drafted for the team", "已起草团队更新"),
         ));

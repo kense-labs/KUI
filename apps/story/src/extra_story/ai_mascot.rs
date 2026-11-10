@@ -131,8 +131,8 @@ impl Render for Example {
         let mut states = div()
             .id("mascot-states")
             .flex()
+            .flex_wrap()
             .min_w_0()
-            .overflow_x_scroll()
             .gap(px(2.))
             .p(px(3.))
             .rounded(radius)
@@ -148,7 +148,8 @@ impl Render for Example {
                     Tone::Clear,
                     cx,
                 )
-                .px(px(10.))
+                .px(px(8.))
+                .text_size(px(13.))
                 .aria_toggled((self.selected == i).into())
                 .when(self.selected == i, |view| view.bg(p.panel))
                 .child(label)

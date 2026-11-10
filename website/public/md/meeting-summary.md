@@ -35,6 +35,8 @@ Use with_transcript(credit, words) to display attribution and transcript size. T
 
 Event: `MeetingSummaryEvent`.
 
+The `service` builder adds a provider label for the appropriate meeting mark, such as `Google Meet` or `Zoom`.
+
 ## Motion
 
 When data arrives after Summarizing, summary points, decisions and actions reveal in order. Each row starts 170 ms after the previous one, and its text appears in five groups. The body follows its measured height with a critically damped 240 ms visual transition. Reduced motion displays all content immediately.

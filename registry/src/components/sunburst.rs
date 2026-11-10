@@ -157,6 +157,11 @@ fn lerp_pose(a: Pose, b: Pose, t: f32) -> Pose {
 }
 pub struct Sunburst {
     title: SharedString,
+    subtitle: Option<SharedString>,
+    header_extra: Option<AnyView>,
+    prefix: SharedString,
+    suffix: SharedString,
+    decimals: usize,
     root: SunburstNode,
     focus: Vec<usize>,
     active: Option<Vec<usize>>,
@@ -177,6 +182,11 @@ impl Sunburst {
     pub fn new(title: impl Into<SharedString>, root: SunburstNode) -> Self {
         Self {
             title: title.into(),
+            subtitle: None,
+            header_extra: None,
+            prefix: "".into(),
+            suffix: "".into(),
+            decimals: 0,
             root,
             focus: vec![],
             active: None,
@@ -202,6 +212,33 @@ impl Sunburst {
     pub fn with_depth(mut self, depth: usize) -> Self {
         self.max_depth = depth.clamp(1, 8);
         self
+    }
+    /// Format center, legend, and tooltip values in the host's display units.
+    pub fn with_value_format(
+        mut self,
+        prefix: impl Into<SharedString>,
+        suffix: impl Into<SharedString>,
+        decimals: usize,
+    ) -> Self {
+        self.prefix = prefix.into();
+        self.suffix = suffix.into();
+        self.decimals = decimals.min(6);
+        self
+    }
+    /// Update the period label and the host's filter controls.
+    pub fn set_header(
+        &mut self,
+        subtitle: Option<SharedString>,
+        extra: Option<AnyView>,
+        cx: &mut Context<Self>,
+    ) {
+        self.subtitle = subtitle;
+        self.header_extra = extra;
+        cx.notify();
+    }
+    fn formatted_value(&self, value: f64) -> String {
+        let (prefix, suffix, decimals) = (&self.prefix, &self.suffix, self.decimals);
+        format!("{prefix}{value:.decimals$}{suffix}")
     }
     pub fn set_root(&mut self, root: SunburstNode, cx: &mut Context<Self>) {
         let ids: Vec<_> = (1..=self.focus.len())
@@ -377,7 +414,13 @@ impl Render for Sunburst {
         let counter = self
             .counter
             .get_or_insert_with(|| {
-                cx.new(|_| AnimatedCounter::new(total.min(1_000_000_000_000.)).with_size(22.))
+                cx.new(|_| {
+                    AnimatedCounter::new(total.min(1_000_000_000_000.))
+                        .with_size(22.)
+                        .with_prefix(self.prefix.clone())
+                        .with_suffix(self.suffix.clone())
+                        .with_decimals(self.decimals)
+                })
             })
             .clone();
         counter.update(cx, |v, cx| v.set_value(total.min(1_000_000_000_000.), cx));
@@ -616,40 +659,38 @@ impl Render for Sunburst {
                                 }
                                 w.paint_path(path, fill);
                             }
-                            // Arrange upright glyphs along the arc; GPUI text does not expose
-                            // glyph rotation, so this preserves legibility on both platforms.
-                            let ring_radius = radius * (pose.inner + pose.outer) / 2.;
+                            // Keep the entire shaped label on one horizontal baseline. Placing
+                            // characters independently along the arc reverses their visual order
+                            // on its left half and breaks shaping for multi-codepoint glyphs.
+                            let ring_radius = radius * (pose.inner + pose.outer) * 0.5;
+                            let thickness = (pose.outer - pose.inner) * radius;
                             if !departing
-                                && active.as_ref().map(|p| p == &item.path).unwrap_or(true)
+                                && active.as_ref().is_none_or(|path| path == &item.path)
                                 && ring_radius > 0.
-                                && (pose.outer - pose.inner) * radius >= 16.
+                                && thickness >= 16.
                             {
-                                let lines: Vec<_> = item
-                                    .label
-                                    .chars()
-                                    .map(|ch| {
-                                        let text: SharedString = ch.to_string().into();
-                                        let mut run = w.text_style().to_run(text.len());
-                                        run.color = p.ink;
-                                        w.text_system().shape_line(text, px(10.), &[run], None)
-                                    })
-                                    .collect();
-                                let length: f32 =
-                                    lines.iter().map(|line| f32::from(line.width())).sum();
-                                if length + 14. < (end - start) * ring_radius {
-                                    let mid = (start + end) / 2.;
-                                    let mut offset = -length / 2.;
-                                    for line in lines {
-                                        let width = f32::from(line.width());
-                                        let angle = mid + (offset + width / 2.) / ring_radius;
-                                        let pos = point(
-                                            center.x + px(angle.cos() * ring_radius - width / 2.),
-                                            center.y + px(angle.sin() * ring_radius - 6.),
-                                        );
-                                        let _ =
-                                            line.paint(pos, px(12.), TextAlign::Left, None, w, cx);
-                                        offset += width;
-                                    }
+                                let mid = (start + end) * 0.5;
+                                let mut run = w.text_style().to_run(item.label.len());
+                                run.color = p.ink;
+                                let line = w.text_system().shape_line(
+                                    item.label.clone(),
+                                    px(10.),
+                                    &[run],
+                                    None,
+                                );
+                                let width = f32::from(line.width());
+                                let height = 12.;
+                                let tangent = width * mid.sin().abs() + height * mid.cos().abs();
+                                let radial = width * mid.cos().abs() + height * mid.sin().abs();
+                                if tangent + 10. < (end - start) * ring_radius
+                                    && radial + 5. <= thickness
+                                {
+                                    let pos = point(
+                                        center.x + px(mid.cos() * ring_radius - width / 2.),
+                                        center.y + px(mid.sin() * ring_radius - height / 2.),
+                                    );
+                                    let _ =
+                                        line.paint(pos, px(height), TextAlign::Left, None, w, cx);
                                 }
                             }
                         }
@@ -691,7 +732,13 @@ impl Render for Sunburst {
                         view.child(counter)
                     })
                     .when(!empty && total > 1_000_000_000_000., |view| {
-                        view.child(format!("{total:.2e}"))
+                        view.child(format!("{}{total:.2e}{}", self.prefix, self.suffix))
+                    })
+                    .when(!root.children.is_empty() && !empty, |view| {
+                        view.child(hint(
+                            format!("{} {}", root.children.len(), tr(cx, "groups", "组")),
+                            p,
+                        ))
                     }),
             );
         if let Some((label, value, share)) = &selected {
@@ -731,7 +778,7 @@ impl Render for Sunburst {
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.ink)
-                                    .child(format!("{value:.0}")),
+                                    .child(self.formatted_value(f64::from(*value))),
                             )
                             .child(
                                 div()
@@ -750,8 +797,10 @@ impl Render for Sunburst {
             .active
             .as_ref()
             .and_then(|path| path.get(depth).copied());
-        let legend = column().gap(px(2.)).min_w(px(150.)).flex_1().children(
-            root.children.iter().enumerate().map(|(i, child)| {
+        let legend = column()
+            .gap(px(2.))
+            .w_full()
+            .children(root.children.iter().enumerate().map(|(i, child)| {
                 let mut path = focus.clone();
                 path.push(i);
                 let key_path = path.clone();
@@ -787,7 +836,7 @@ impl Render for Sunburst {
                     div()
                         .flex_none()
                         .text_color(p.ink)
-                        .child(format!("{:.0}", child.total())),
+                        .child(self.formatted_value(child.total())),
                 )
                 .child(
                     div()
@@ -804,14 +853,13 @@ impl Render for Sunburst {
                         cx.stop_propagation();
                     }
                 }))
-            }),
-        );
+            }));
         let mut rows = vec![];
         table_rows(&self.root, "", self.root.total(), &mut rows);
         column()
             .relative()
             .w_full()
-            .max_w(px(700.))
+            .max_w(px(522.))
             .gap(px(16.))
             .p(px(24.))
             .rounded(crate::foundation::surface_radius(cx))
@@ -820,11 +868,24 @@ impl Render for Sunburst {
             .border_color(p.line)
             .text_color(p.ink)
             .child(
-                div()
-                    .text_size(px(16.))
-                    .line_height(px(22.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(self.title.clone()),
+                row()
+                    .justify_between()
+                    .flex_wrap()
+                    .child(
+                        column()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(16.))
+                                    .line_height(px(22.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(self.title.clone()),
+                            )
+                            .when_some(self.subtitle.clone(), |column, subtitle| {
+                                column.child(hint(subtitle, p))
+                            }),
+                    )
+                    .when_some(self.header_extra.clone(), |row, extra| row.child(extra)),
             )
             .child(
                 row()
@@ -866,8 +927,7 @@ impl Render for Sunburst {
             .child(
                 div()
                     .flex()
-                    .flex_wrap()
-                    .gap_x(px(32.))
+                    .flex_col()
                     .gap_y(px(24.))
                     .items_center()
                     .justify_center()

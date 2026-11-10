@@ -1,4 +1,5 @@
 //! Start a new conversation from a short list of suggested questions.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::editor::{EditEvent, Editor, InputMode};
 use crate::primitives::ops_surface::*;
 use gpui::{prelude::*, *};
@@ -17,6 +18,7 @@ pub struct PromptShelf {
     filter: Option<String>,
     offset: usize,
     draft: Entity<Editor>,
+    model: Option<SharedString>,
     _sub: Subscription,
 }
 pub struct PromptSent(pub String);
@@ -47,8 +49,14 @@ impl PromptShelf {
             filter: None,
             offset: 0,
             draft,
+            model: None,
             _sub: sub,
         }
+    }
+    /// Display the selected model next to the prompt composer.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     fn send(&mut self, w: &Window, cx: &mut Context<Self>) {
         let text = self.draft.read(cx).value().trim().to_owned();
@@ -100,6 +108,7 @@ impl Render for PromptShelf {
                 .border_color(crate::primitives::family::Paint::get(cx).line)
                 .child(
                     row()
+                        .when_some(brand_mark(&p.app, 16., cx), |row, mark| row.child(mark))
                         .child(badge(p.group.clone(), cx))
                         .child(swap_label_after(
                             ("prompt-app", r * cols + i),
@@ -182,5 +191,13 @@ impl Render for PromptShelf {
                 cx,
                 |s, w, cx| s.send(w, cx),
             )))
+            .when_some(self.model.clone(), |panel, model| {
+                panel.child(
+                    row()
+                        .gap(px(6.))
+                        .when_some(brand_mark(&model, 14., cx), |row, mark| row.child(mark))
+                        .child(note(model, cx)),
+                )
+            })
     }
 }

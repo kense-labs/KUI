@@ -87,6 +87,7 @@ pub struct ActivityRings {
     hovered: Option<usize>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     width: Rc<Cell<Pixels>>,
+    surface: bool,
 }
 impl EventEmitter<ActivityDayChanged> for ActivityRings {}
 impl EventEmitter<ActivityGoalClosed> for ActivityRings {}
@@ -117,6 +118,7 @@ impl ActivityRings {
             hovered: None,
             bounds: Default::default(),
             width: Default::default(),
+            surface: true,
         };
         view.retarget(cx);
         view
@@ -124,6 +126,15 @@ impl ActivityRings {
     pub fn with_day(mut self, index: usize) -> Self {
         self.day = index.min(self.days.len().saturating_sub(1));
         self
+    }
+    /// Use the dial and week picker within an existing surface.
+    pub fn with_surface(mut self, surface: bool) -> Self {
+        self.surface = surface;
+        self
+    }
+    /// Index of the day displayed in the dial.
+    pub fn selected_day(&self) -> usize {
+        self.day
     }
     pub fn set_day(&mut self, index: usize, cx: &mut Context<Self>) {
         if index >= self.days.len() || index == self.day {
@@ -640,15 +651,20 @@ impl Render for ActivityRings {
             }));
         let width = self.width.clone();
         column()
+            .id("activity-rings")
+            .role(Role::Group)
             .relative()
             .w_full()
             .max_w(px(608.))
             .gap(px(20.))
-            .p(px(16.))
-            .rounded(crate::foundation::surface_radius(cx))
-            .bg(p.panel)
-            .border_1()
-            .border_color(p.line)
+            .when(self.surface, |view| {
+                view.p(px(16.))
+                    .rounded(crate::foundation::surface_radius(cx))
+                    .bg(p.panel)
+                    .border_1()
+                    .border_color(p.line)
+            })
+            .aria_label(self.title.clone())
             .text_color(p.ink)
             .child(
                 canvas(
@@ -662,7 +678,9 @@ impl Render for ActivityRings {
                 .absolute()
                 .inset_0(),
             )
-            .child(title(self.title.clone(), p))
+            .when(self.surface, |view| {
+                view.child(title(self.title.clone(), p))
+            })
             .child(
                 div()
                     .flex()

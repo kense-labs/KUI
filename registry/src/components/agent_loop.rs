@@ -2,17 +2,14 @@
 use crate::{
     foundation::{Theme, ThemeMode},
     primitives::{
+        brand_mark::brand_mark,
         family::{Paint, Tone, disabled_motion, face},
         glyph::{Glyph, icon, spinner},
-        kense_mark,
         nav::tr,
     },
 };
 use gpui::{prelude::*, *};
-use std::{
-    f32::consts::{FRAC_PI_2, PI, TAU},
-    sync::{Arc, OnceLock},
-};
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use web_time::Instant;
 
 #[derive(Clone)]
@@ -419,18 +416,6 @@ fn dot(w: &mut Window, center: Point<Pixels>, diameter: f32, color: Hsla) {
     );
 }
 
-fn model_mark(mode: ThemeMode) -> Arc<Image> {
-    static LIGHT: OnceLock<Arc<Image>> = OnceLock::new();
-    static DARK: OnceLock<Arc<Image>> = OnceLock::new();
-    let (cache, bytes) = match mode {
-        ThemeMode::Light => (&LIGHT, kense_mark::LIGHT),
-        ThemeMode::Dark => (&DARK, kense_mark::DARK),
-    };
-    cache
-        .get_or_init(|| Arc::new(Image::from_bytes(ImageFormat::Png, bytes.to_vec())))
-        .clone()
-}
-
 fn tokens(value: u64) -> String {
     if value >= 1_000 {
         let whole = value / 1000;
@@ -690,13 +675,10 @@ impl AgentLoop {
                     .flex_col()
                     .items_center()
                     .gap_1()
-                    .child(if self.model.as_ref() == "Kense" {
-                        img(model_mark(Theme::global(cx).mode))
-                            .size(px(22.))
-                            .into_any_element()
-                    } else {
-                        icon(Glyph::Curious, 22., blue).into_any_element()
-                    })
+                    .child(
+                        brand_mark(&self.model, 22., cx)
+                            .unwrap_or_else(|| icon(Glyph::Curious, 22., blue).into_any_element()),
+                    )
                     .child(
                         div()
                             .max_w(px(radius * 1.48))
@@ -808,7 +790,13 @@ impl AgentLoop {
                 .items_center()
                 .gap_2()
                 .opacity(0.28 + entering * 0.72)
-                .child(icon(glyph, 14., p.secondary))
+                .child(match beat.cue {
+                    Cue::Call(call) | Cue::ResolveCall(call) => {
+                        brand_mark(&item.calls[call].tool, 14., cx)
+                            .unwrap_or_else(|| icon(glyph, 14., p.secondary).into_any_element())
+                    }
+                    _ => icon(glyph, 14., p.secondary).into_any_element(),
+                })
                 .child(
                     div()
                         .flex_1()

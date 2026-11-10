@@ -1,6 +1,8 @@
 //! Illustrative beam search over host-supplied thoughts; scores are not model output.
 use crate::primitives::{
+    brand_mark::brand_mark,
     family::{Paint, Slide, Tone, disabled_motion, face},
+    glyph::{Glyph, icon},
     nav::tr,
 };
 use gpui::{prelude::*, *};
@@ -149,6 +151,7 @@ fn tree_rows(nodes: &[Node]) -> (Vec<f32>, f32) {
 }
 pub struct ReasoningTree {
     question: SharedString,
+    model: Option<SharedString>,
     thoughts: Vec<Thought>,
     nodes: Vec<Node>,
     stages: Vec<Vec<usize>>,
@@ -177,6 +180,7 @@ impl ReasoningTree {
         let (nodes, stages, answer) = search(&thoughts, 2, 7);
         Self {
             question: question.into(),
+            model: None,
             thoughts,
             nodes,
             stages,
@@ -195,6 +199,11 @@ impl ReasoningTree {
             width: Rc::new(Cell::new(px(0.))),
             stage_motion: std::array::from_fn(|_| Slide::new(0.)),
         }
+    }
+    /// Attribute the sample candidate search to its model.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     pub fn set_thoughts(&mut self, thoughts: Vec<Thought>, cx: &mut Context<Self>) {
         self.thoughts = thoughts;
@@ -379,9 +388,27 @@ impl Render for ReasoningTree {
                 .child(
                     div()
                         .flex()
+                        .items_center()
+                        .flex_wrap()
                         .justify_between()
                         .gap_2()
-                        .child(tr(cx, "Reasoning tree", "推理树"))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .when_some(self.model.clone(), |row, model| {
+                                    row.when_some(brand_mark(&model, 16., cx), |row, mark| {
+                                        row.child(mark)
+                                    })
+                                    .child(div().font_weight(FontWeight::MEDIUM).child(model))
+                                })
+                                .child(div().text_size(px(13.)).text_color(p.secondary).child(tr(
+                                    cx,
+                                    "Tree of thoughts",
+                                    "推理树",
+                                ))),
+                        )
                         .child(div().text_size(px(12.)).text_color(p.secondary).child(
                             if completed {
                                 tr(cx, "Answer ready", "结果已就绪")
@@ -437,6 +464,11 @@ impl Render for ReasoningTree {
             .flex()
             .flex_col()
             .gap_1()
+            .when(!wide, |tree| {
+                tree.min_h(px((self.nodes.len().min(9) * 48) as f32))
+                    .max_h(px(492.))
+                    .overflow_y_scroll()
+            })
             .on_key_down(cx.listener(move |s, e: &KeyDownEvent, _, cx| {
                 if nav.is_empty() {
                     return;
@@ -665,11 +697,14 @@ impl Render for ReasoningTree {
                         .text_right()
                         .text_size(px(11.))
                         .text_color(p.secondary)
-                        .child(format!("{:.0}%", node.score * node_animation * 100.)),
+                        .child(format!("{:.2}", node.score * node_animation)),
                 )
                 .child(
                     div()
-                        .w(px(if wide { 24. } else { 46. }))
+                        .when(wide, |bar| bar.w(px(24.)))
+                        .when(!wide, |bar| {
+                            bar.absolute().left(px(8.)).right(px(8.)).bottom(px(5.))
+                        })
                         .h(px(3.))
                         .flex_none()
                         .rounded_full()
@@ -682,6 +717,7 @@ impl Render for ReasoningTree {
                                 .bg(if node.kept { p.bright } else { p.secondary }),
                         ),
                 )
+                .relative()
                 .on_click(cx.listener(move |s, _, w, cx| {
                     s.selected = position;
                     if has_children && !s.collapsed.remove(&id) {
@@ -713,13 +749,28 @@ impl Render for ReasoningTree {
         } else {
             tr(cx, "Play", "播放")
         };
-        let mut controls = div().flex().flex_wrap().items_center().gap_2();
+        let mut controls = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .border_t_1()
+            .border_color(p.line)
+            .pt(px(12.));
         if !completed && self.error.is_none() {
             controls = controls
                 .child(
                     face("tree-play", play, 32., 8., Tone::Surface, cx)
-                        .px_2()
-                        .child(play)
+                        .size(px(32.))
+                        .child(icon(
+                            if self.playing {
+                                Glyph::Pause
+                            } else {
+                                Glyph::Play
+                            },
+                            14.,
+                            p.ink,
+                        ))
                         .on_click(cx.listener(|s, _, _, cx| s.set_playing(!s.playing, cx))),
                 )
                 .child(
@@ -731,8 +782,8 @@ impl Render for ReasoningTree {
                         Tone::Surface,
                         cx,
                     )
-                    .px_2()
-                    .child(tr(cx, "Next step", "下一步"))
+                    .size(px(32.))
+                    .child(icon(Glyph::Arrow, 14., p.ink))
                     .on_click(cx.listener(|s, _, _, cx| {
                         s.playing = false;
                         s.step(cx);
@@ -748,9 +799,15 @@ impl Render for ReasoningTree {
                 Tone::Surface,
                 cx,
             )
-            .px_2()
-            .child(tr(cx, "Restart", "重新开始"))
+            .size(px(32.))
+            .child(icon(Glyph::Undo, 14., p.ink))
             .on_click(cx.listener(|s, _, _, cx| s.restart(cx))),
+        );
+        controls = controls.child(div().flex_1()).child(
+            div()
+                .text_size(px(12.))
+                .text_color(p.secondary)
+                .child(tr(cx, "Beam width", "束宽")),
         );
         for width in 1..=3 {
             controls = controls.child(

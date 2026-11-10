@@ -23,13 +23,18 @@ struct Demo {
     selected: usize,
     status_stage: bool,
     reasoning_stage: bool,
+    showcase_cap: Option<f32>,
 }
 impl Render for Demo {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let width = f32::from(w.viewport_size().width);
+        let frame = self.showcase_cap.map_or(600., |cap| {
+            (width - if width < 500. { 28. } else { 84. }).clamp(100., cap)
+        });
         let mut r = column()
             .items_center()
             .w_full()
-            .max_w(px(600.))
+            .max_w(px(frame))
             .text_color(Paint::get(cx).ink);
         if self.reasoning_stage {
             r = r.gap(px(20.));
@@ -98,6 +103,42 @@ fn demo_chunks(value: &str) -> Vec<String> {
     }
     chunks
 }
+struct ToolTranscript {
+    view: Entity<kui::components::tool_call::InvocationInspector>,
+    language: UiLanguage,
+}
+impl Render for ToolTranscript {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = kui::primitives::family::Paint::get(cx);
+        div()
+            .w_full()
+            .max_w(px(560.))
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .text_size(px(15.))
+            .child(
+                div().flex().justify_end().child(
+                    div()
+                        .max_w(relative(0.9))
+                        .px_3()
+                        .py_2()
+                        .rounded(kui::foundation::surface_radius(cx))
+                        .bg(p.hover)
+                        .child(self.language.text(
+                            "Is anything blocking the next release?",
+                            "下次发布还有阻塞项吗？",
+                        )),
+                ),
+            )
+            .child(div().text_color(p.ink).child(self.language.text(
+                "Let me check the open issues, project and database.",
+                "我来检查待处理问题、项目和数据库。",
+            )))
+            .child(self.view.clone())
+    }
+}
+
 fn later<T: 'static>(
     entity: &Entity<T>,
     ms: u64,
@@ -252,7 +293,7 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                 ),
                 (
                     t("Write", "写作"),
-                    "Calendar",
+                    "Google Meet",
                     t("Prepare meeting notes", "准备会议记录"),
                     t("Draft an agenda with decisions", "拟定包含决策事项的议程"),
                 ),
@@ -274,6 +315,7 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                     w,
                     cx,
                 )
+                .with_model("Claude Opus 5.5")
             });
             cx.subscribe(&e, move |d: &mut Demo, _, ev: &PromptSent, cx| {
                 d.info = format!("{} · {}", t("Sent", "已发送"), ev.0);
@@ -284,7 +326,17 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
         }
         "ai-translate" => {
             use ai_translate::*;
-            let e=cx.new(|_|{let mut c=MessageTranslation::new(id,"Chloé Nguyen","Bonjour à toute l’équipe ! La nouvelle version est prête. Pouvez-vous vérifier les écrans de paiement avant jeudi ?",["English","Deutsch","Español","日本語","Português"].map(String::from).to_vec());c.detected="Français".into();c.credit=t("Sample translation · Local demo","样例译文 · 本地演示").into();c});
+            let e = cx.new(|_| {
+                let mut c = MessageTranslation::new(
+                    id, "Chloé Nguyen",
+                    "Bonjour à toute l'équipe ! La version 4.2 de notre app est prête pour la revue, avec un mode hors ligne. Les premiers essais montrent que la synchronisation prend trois secondes en moyenne. Pouvez-vous vérifier les écrans de paiement avant jeudi ? Merci pour ce sprint.",
+                    ["English", "Deutsch", "Français", "Español", "日本語", "Português"].map(String::from).to_vec(),
+                ).byline(t("Mobile lead, Lyon · Oct 27, 09:14", "移动端负责人，里昂 · 10 月 27 日 09:14"))
+                    .portrait(Image::from_bytes(ImageFormat::Svg, include_bytes!("../../assets/portraits/emma.svg").to_vec()));
+                c.detected = "French".into();
+                c.credit = "Claude Haiku 5.5".into();
+                c
+            });
             let failure = Rc::new(std::cell::Cell::new(false));
             let next = failure.clone();
             option!(
@@ -308,28 +360,38 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                 let lines = match ev.language.as_str() {
                     "Deutsch" => [
                         "Hallo zusammen!",
-                        "Die neue Version ist fertig.",
-                        "Bitte prüft die Zahlungsansicht bis Donnerstag.",
+                        "Version 4.2 unserer App ist mit einem Offline-Modus zur Prüfung bereit.",
+                        "Erste Tests zeigen eine durchschnittliche Synchronisierung von drei Sekunden.",
+                        "Könnt ihr die Zahlungsansicht bis Donnerstag prüfen?",
+                        "Danke für diesen Sprint.",
                     ],
                     "Español" => [
                         "¡Hola equipo!",
-                        "La nueva versión está lista.",
-                        "Revisad las pantallas de pago antes del jueves.",
+                        "La versión 4.2 está lista para revisión, con un modo sin conexión.",
+                        "Las primeras pruebas muestran una sincronización media de tres segundos.",
+                        "¿Podéis revisar las pantallas de pago antes del jueves?",
+                        "Gracias por este sprint.",
                     ],
                     "日本語" => [
                         "こんにちは。",
-                        "新しいバージョンが完成しました。",
-                        "木曜日までに支払い画面を確認してください。",
+                        "オフラインモードを備えたバージョン4.2の審査準備ができました。",
+                        "初回テストでは同期に平均3秒かかりました。",
+                        "木曜日までに支払い画面を確認できますか？",
+                        "今スプリントもありがとうございました。",
                     ],
                     "Português" => [
                         "Olá, equipe!",
-                        "A nova versão está pronta.",
-                        "Revisem as telas de pagamento até quinta-feira.",
+                        "A versão 4.2 está pronta para revisão, com modo offline.",
+                        "Os primeiros testes indicam três segundos de sincronização em média.",
+                        "Podem rever os ecrãs de pagamento até quinta-feira?",
+                        "Obrigado por este sprint.",
                     ],
                     _ => [
                         "Hello team!",
-                        "The new release is ready.",
-                        "Please review the payment screens by Thursday.",
+                        "Version 4.2 is ready for review, with an offline mode.",
+                        "Early tests show that syncing takes three seconds on average.",
+                        "Could you check the payment screens by Thursday?",
+                        "Thanks for your work this sprint.",
                     ],
                 };
                 let full = lines.join(" ");
@@ -428,11 +490,11 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
         "context-window" => {
             use context_window::*;
             let bands = [
-                (t("System prompt", "系统指令"), 4100, 0x6383ac),
-                (t("Tools", "工具"), 32000, 0x8383b2),
-                (t("Files and memory", "文件和记忆"), 100000, 0xb29366),
-                (t("Summary", "摘要"), 0, 0x619f88),
-                (t("Messages", "消息"), 291000, 0x628995),
+                (t("System prompt", "系统指令"), 4100, 0x782ba6),
+                (t("Tools", "工具"), 32000, 0xe49a12),
+                (t("Files and memory", "文件和记忆"), 100000, 0x089b86),
+                (t("Summary", "摘要"), 0, 0x92b9dd),
+                (t("Messages", "消息"), 291000, 0x287cc1),
             ]
             .into_iter()
             .map(|(n, tokens, c)| Band {
@@ -442,8 +504,7 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             })
             .collect();
             let e = cx.new(|_| {
-                let mut s =
-                    CapacityBands::new(id, t("Assistant · 1M", "助理 · 1M"), 1_000_000, bands);
+                let mut s = CapacityBands::new(id, "Claude Opus 5.5", 1_000_000, bands);
                 s.reserved = 64000;
                 s
             });
@@ -554,26 +615,46 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
         }
         "tool-call" => {
             use tool_call::*;
+            let bridge = cx.try_global::<crate::StoryBridge>().map(|b| b.visible);
             let e = cx.new(|_| {
-                InvocationInspector::new(
+                let view = InvocationInspector::new(
                     id,
                     vec![
                         Invocation {
                             name: "GitHub".into(),
-                            action: t("Search release blockers", "搜索发布阻塞项").into(),
+                            action: t(
+                                "Searched issues in kense-labs/KUI",
+                                "搜索 kense-labs/KUI 的问题",
+                            )
+                            .into(),
                             input: "{\"label\": \"blocking-release\"}".into(),
-                            output: t("Two open issues", "两个待处理问题").into(),
+                            output: t("4 results", "4 条结果").into(),
                             state: ToolState::Done,
                         },
                         Invocation {
                             name: "Linear".into(),
-                            action: t("Create a release checklist", "创建发布检查清单").into(),
-                            input: "{\"team\": \"platform\"}".into(),
-                            output: String::new(),
-                            state: ToolState::Approval,
+                            action: t("Read the release project", "查看发布项目").into(),
+                            input: "{\"project\": \"KUI Release\"}".into(),
+                            output: t("2 blocked", "2 项阻塞").into(),
+                            state: ToolState::Done,
+                        },
+                        Invocation {
+                            name: "PostgreSQL".into(),
+                            action: t("Query pending migrations", "查询待处理迁移").into(),
+                            input: "SELECT id, status FROM migrations WHERE status = 'pending';"
+                                .into(),
+                            output: t("The database connection timed out.", "数据库连接超时。")
+                                .into(),
+                            state: ToolState::Failed,
                         },
                     ],
                 )
+                .durations(vec!["1.2s".into(), "760ms".into(), "910ms".into()]);
+                if let Some(visible) = bridge {
+                    view.visibility(visible)
+                } else {
+                    view
+                }
             });
             cx.subscribe(&e, move |_: &mut Demo, e, a: &ToolAction, cx| {
                 let i = match a {
@@ -582,62 +663,107 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                 };
                 later(
                     &e,
-                    400,
+                    720,
                     move |s, cx| {
-                        s.calls[i].state = ToolState::Done;
-                        s.calls[i].output =
-                            t("Checklist created · PLAT-104", "已创建检查清单 · PLAT-104").into();
-                        cx.notify()
+                        if let Some(call) =
+                            s.calls.get_mut(i).filter(|c| c.state == ToolState::Running)
+                        {
+                            call.state = ToolState::Done;
+                            call.output = if i == 2 {
+                                t("1 pending migration", "1 项待处理迁移")
+                            } else {
+                                t("Checklist created", "已创建检查清单")
+                            }
+                            .into();
+                            cx.notify();
+                        }
                     },
                     cx,
                 )
             })
             .detach();
             let x = e.clone();
-            option!(t("Simulate failure", "模拟失败"), move |_, cx| {
-                x.update(cx, |s, cx| {
-                    s.calls[0].state = ToolState::Failed;
-                    s.calls[0].output = t("Connection timed out", "连接超时").into();
-                    cx.notify()
-                })
-            });
-            e.into()
+            option!(t("Simulate failure", "模拟失败"), move |_, cx| x
+                .update(cx, |s, cx| {
+                    s.calls[2].state = ToolState::Failed;
+                    s.calls[2].output =
+                        t("The database connection timed out.", "数据库连接超时。").into();
+                    cx.notify();
+                }));
+            let x = e.clone();
+            option!(t("Request approval", "请求批准"), move |_, cx| x
+                .update(cx, |s, cx| {
+                    s.calls[1].state = ToolState::Approval;
+                    s.calls[1].action = t("Create a release checklist", "创建发布检查清单").into();
+                    s.calls[1].output = t(
+                        "This will create a new issue in Linear.",
+                        "将在 Linear 创建一个问题。",
+                    )
+                    .into();
+                    cx.notify();
+                }));
+            cx.new(|_| ToolTranscript {
+                view: e,
+                language: l,
+            })
+            .into()
         }
         "agent-plan" => {
             use agent_plan::*;
             let steps = [
-                t("Read the API routes", "检查 API 路由"),
-                t("Choose a rate limit", "确定速率限制"),
-                t("Add request counters", "添加请求计数器"),
-                t("Return retry headers", "返回重试头"),
-                t("Test the limiter", "测试限流器"),
-                t("Document limits", "编写限流说明"),
+                t("Map the public API routes", "梳理公开 API 路由"),
+                t("Choose a sliding window rate limit", "确定滑动窗口限流规则"),
+                t("Add expiring request counters", "添加会过期的请求计数器"),
+                t(
+                    "Return retry and rate limit headers",
+                    "返回重试和限流响应头",
+                ),
+                t("Test bursts and window resets", "测试突发请求和窗口重置"),
+                t(
+                    "Document the limits in the API reference",
+                    "在 API 文档记录限制",
+                ),
             ]
             .map(String::from)
             .to_vec();
+            let bridge = cx.try_global::<crate::StoryBridge>().map(|b| b.visible);
             let e = cx.new(|cx| {
-                TaskPlan::new(
+                let view = TaskPlan::new(
                     id,
                     t("Add rate limiting to the public API", "为公开 API 添加限流"),
                     steps,
                     w,
                     cx,
                 )
+                .model("Claude Opus 5.5");
+                if let Some(visible) = bridge {
+                    view.visibility(visible)
+                } else {
+                    view
+                }
             });
+            let generation = Rc::new(std::cell::Cell::new(0u64));
             cx.subscribe(&e, move |d: &mut Demo, e, a: &PlanEvent, cx| match a {
-                PlanEvent::Approve => {
-                    for i in 0..e.read(cx).steps.len() {
+                PlanEvent::Approve | PlanEvent::Pause(false) => {
+                    let n = generation.get() + 1;
+                    generation.set(n);
+                    let first = e.read(cx).completed;
+                    for i in first..e.read(cx).steps.len() {
+                        let generation = generation.clone();
                         later(
                             &e,
-                            400 * (i + 1) as u64,
+                            680 * (i - first + 1) as u64,
                             move |s, cx| {
-                                s.completed = i + 1;
-                                cx.notify()
+                                if generation.get() == n && s.approved {
+                                    s.completed = i + 1;
+                                    cx.notify();
+                                }
                             },
                             cx,
                         )
                     }
                 }
+                PlanEvent::Pause(true) | PlanEvent::Restart => generation.set(generation.get() + 1),
                 PlanEvent::Revise => {
                     d.info = t(
                         "Edit a step or add the missing work.",
@@ -649,6 +775,13 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                 PlanEvent::Changed => {}
             })
             .detach();
+            let x = e.clone();
+            option!(
+                t("Fail current step", "模拟当前步骤失败"),
+                move |_, cx| x.update(cx, |s, cx| {
+                    s.fail_current(t("The local check timed out.", "本地检查超时。"), cx);
+                })
+            );
             e.into()
         }
         "reasoning-block" => reasoning::demo(id, l, &mut options, w, cx),
@@ -740,42 +873,187 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
         }
         "generation-stats" => {
             use generation_stats::*;
-            let data = |n: u32| Metrics {
-                first_token_ms: 420,
-                duration_ms: 420 + (n * 3220 + 142) / 284,
-                input_tokens: 1147,
-                output_tokens: n,
-                input_rate: 3.,
-                output_rate: 15.,
-                running: n < 284,
-                samples: (0..n.div_ceil(14))
-                    .map(|j| 86. + (j as f32 * 0.53).sin() * 8. + (j as f32 * 1.12).sin() * 2.)
-                    .collect(),
+            let runs = [
+                (
+                    "Claude Sonnet 5.5",
+                    420u32,
+                    3640u32,
+                    284u32,
+                    1147u32,
+                    3.,
+                    15.,
+                ),
+                ("GPT-6.1 Sol", 550, 4590, 336, 1370, 4., 18.),
+                ("Gemini 3.8 Flash", 260, 2960, 642, 1640, 0.45, 2.75),
+                ("Mistral Large 4", 380, 3290, 244, 1024, 2., 7.),
+            ];
+            let visible: fn() -> bool = cx
+                .try_global::<crate::StoryBridge>()
+                .map_or((|| true) as fn() -> bool, |b| b.visible);
+            let data = move |index: usize, elapsed: u32| {
+                let (_, ttft, duration, target, input_tokens, input_rate, output_rate) =
+                    runs[index];
+                let stream = elapsed.saturating_sub(ttft) as f32 / (duration - ttft) as f32;
+                let output_tokens = (target as f32 * stream.clamp(0., 1.)).round() as u32;
+                let base_speed = target as f32 * 1000. / (duration - ttft) as f32;
+                Metrics {
+                    first_token_ms: if elapsed >= ttft { ttft } else { 0 },
+                    duration_ms: elapsed.min(duration),
+                    input_tokens,
+                    output_tokens,
+                    input_rate,
+                    output_rate,
+                    running: elapsed < duration,
+                    samples: (0..elapsed.saturating_sub(ttft).div_ceil(160).min(48))
+                        .map(|n| {
+                            base_speed
+                                * (1.
+                                    + 0.08 * (n as f32 * 0.41).sin()
+                                    + 0.02 * (n as f32 * 0.74).sin())
+                        })
+                        .collect(),
+                }
             };
-            let e = cx
-                .new(|_| GenerationReadout::new(id, t("Kense assistant", "Kense 助手"), data(284)));
-            let x = e.clone();
+            let e = cx.new(|_| {
+                GenerationReadout::new(id, runs[0].0, data(0, runs[0].2)).visibility(visible)
+            });
+            let selected = Rc::new(std::cell::Cell::new(0usize));
             let epoch = Rc::new(std::cell::Cell::new(0u64));
+            let failed_mistral = Rc::new(std::cell::Cell::new(false));
+            let play = {
+                let weak = e.downgrade();
+                let selection = selected.clone();
+                move |index: usize, cycling: bool, cx: &mut Context<Demo>| {
+                    let id = epoch.get() + 1;
+                    epoch.set(id);
+                    let epoch = epoch.clone();
+                    let failure = failed_mistral.clone();
+                    let weak = weak.clone();
+                    let selection = selection.clone();
+                    let reduce = kui::primitives::family::disabled_motion(cx);
+                    let start =
+                        move |view: &mut GenerationReadout,
+                              index: usize,
+                              cx: &mut Context<GenerationReadout>| {
+                            let (model, _, duration, _, input, input_rate, _) = runs[index];
+                            view.model = model.to_owned();
+                            view.set_usage(
+                                UsageBreakdown {
+                                    cached_tokens: if index == 0 { 0 } else { input / 6 },
+                                    reasoning_tokens: 0,
+                                    cached_input_rate: input_rate * 0.1,
+                                },
+                                cx,
+                            );
+                            view.set_metrics(data(index, if reduce { duration } else { 0 }), cx);
+                            view.set_state(
+                                if reduce {
+                                    GenerationState::Done
+                                } else {
+                                    GenerationState::Waiting
+                                },
+                                cx,
+                            );
+                        };
+                    if weak.update(cx, |v, cx| start(v, index, cx)).is_err() || reduce {
+                        return;
+                    }
+                    cx.spawn(async move |_, cx| {
+                        let mut index = index;
+                        'run: loop {
+                            let (_, ttft, duration, _, _, _, _) = runs[index];
+                            let mut time = 0;
+                            while time < duration {
+                                cx.background_executor()
+                                    .timer(Duration::from_millis(if visible() { 80 } else { 320 }))
+                                    .await;
+                                if epoch.get() != id || weak.upgrade().is_none() {
+                                    break 'run;
+                                }
+                                if !visible() {
+                                    continue;
+                                }
+                                let previous = time;
+                                time = (time + 80).min(duration);
+                                let fail = index == 3 && time >= 1500 && !failure.replace(true);
+                                if weak
+                                    .update(cx, |view, cx| {
+                                        view.set_metrics(data(index, time), cx);
+                                        if fail {
+                                            view.set_state(
+                                                GenerationState::Failed(
+                                                    t(
+                                                        "The sample response timed out.",
+                                                        "样例响应超时。",
+                                                    )
+                                                    .into(),
+                                                ),
+                                                cx,
+                                            );
+                                        } else if time == duration {
+                                            view.set_state(GenerationState::Done, cx);
+                                        } else if previous < ttft && time >= ttft {
+                                            view.set_state(GenerationState::Streaming, cx);
+                                        }
+                                    })
+                                    .is_err()
+                                    || fail
+                                {
+                                    break 'run;
+                                }
+                            }
+                            if !cycling {
+                                break;
+                            }
+                            let mut dwell = 0;
+                            while dwell < 1600 {
+                                cx.background_executor()
+                                    .timer(Duration::from_millis(160))
+                                    .await;
+                                if epoch.get() != id {
+                                    break 'run;
+                                }
+                                match weak.update(cx, |v, cx| {
+                                    (
+                                        v.details_open(),
+                                        kui::primitives::family::disabled_motion(cx),
+                                    )
+                                }) {
+                                    Ok((false, false)) if visible() => dwell += 160,
+                                    Ok((_, false)) => {}
+                                    _ => break 'run,
+                                }
+                            }
+                            index = (index + 1) % runs.len();
+                            selection.set(index);
+                            if weak.update(cx, |v, cx| start(v, index, cx)).is_err() {
+                                break;
+                            }
+                        }
+                    })
+                    .detach();
+                }
+            };
+            let replay = play.clone();
+            let index = selected.clone();
             option!(
                 t("Replay generation", "重播生成过程"),
+                move |_, cx| replay(index.get(), false, cx)
+            );
+            let switch = play.clone();
+            let index = selected.clone();
+            option!(
+                t("Next sample model", "下一个样例模型"),
                 move |_, cx| {
-                    let generation = epoch.get() + 1;
-                    epoch.set(generation);
-                    for i in 0..=10 {
-                        let epoch = epoch.clone();
-                        later(
-                            &x,
-                            if i == 0 { 0 } else { 420 + i * 322 },
-                            move |s, cx| {
-                                if generation == epoch.get() {
-                                    s.set_metrics(data((i * 284 / 10) as u32), cx)
-                                }
-                            },
-                            cx,
-                        )
-                    }
+                    index.set((index.get() + 1) % runs.len());
+                    switch(index.get(), false, cx);
                 }
             );
+            play(0, true, cx);
+            cx.subscribe(&e, move |_: &mut Demo, _, _: &RetryGeneration, cx| {
+                play(selected.get(), true, cx)
+            })
+            .detach();
             e.into()
         }
         "comment-thread" => {
@@ -922,8 +1200,8 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             use model_card::*;
             let models = [
                 (
-                    t("Long context", "长上下文配置"),
-                    t("Sample profile", "示例配置"),
+                    "Claude Opus 5.5",
+                    "Anthropic",
                     1_000_000,
                     128000,
                     5.,
@@ -931,23 +1209,24 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                     0.91,
                 ),
                 (
-                    t("Low latency", "低延迟配置"),
-                    t("Sample profile", "示例配置"),
-                    256000,
+                    "Claude Sonnet 5.5",
+                    "Anthropic",
+                    1_000_000,
                     64000,
                     1.5,
                     6.,
                     0.84,
                 ),
                 (
-                    t("Compact", "轻量配置"),
-                    t("Sample profile", "示例配置"),
+                    "GPT-6.1 Sol",
+                    "OpenAI",
+                    1_000_000,
                     128000,
-                    32000,
-                    0.4,
-                    1.6,
+                    4.,
+                    18.,
                     0.73,
                 ),
+                ("Gemini 4 Argon", "Google AI", 1_000_000, 64000, 2., 12., 0.71),
             ]
             .into_iter()
             .map(
@@ -955,8 +1234,8 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                     name: n.into(),
                     provider: p.into(),
                     description: t(
-                        "A sample model profile for workspace reasoning and document tasks.",
-                        "工作区推理与文档任务的样例模型档案。",
+                        "Illustrative model profile for reasoning, code, and document tasks. Prices and scores are sample data.",
+                        "面向推理、代码和文档任务的演示档案。价格和评分均为样例数据。",
                     )
                     .into(),
                     features: vec![
@@ -1094,7 +1373,8 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             })
             .into_iter()
             .collect();
-            let e = cx.new(|cx| CommandDesk::new(id, commands, w, cx));
+            let e =
+                cx.new(|cx| CommandDesk::new(id, commands, w, cx).with_model("Claude Sonnet 5.5"));
             let fail = Rc::new(std::cell::Cell::new(false));
             let next = fail.clone();
             option!(t("Fail next request", "模拟请求失败"), move |_, _| {
@@ -1249,6 +1529,7 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             "ai-translate"
                 | "agent-status"
                 | "tool-call"
+                | "agent-plan"
                 | "generation-stats"
                 | "connector-setup"
                 | "ai-command"
@@ -1260,6 +1541,12 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
         selected: 0,
         status_stage: id == "agent-status",
         reasoning_stage: id == "reasoning-block",
+        showcase_cap: match id {
+            "ai-translate" => Some(620.),
+            "tool-call" | "agent-plan" => Some(560.),
+            "generation-stats" => Some(760.),
+            _ => None,
+        },
     }
 }
 

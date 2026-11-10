@@ -20,50 +20,57 @@ struct Example {
 }
 fn samples(language: UiLanguage, healthy: bool) -> Vec<ProviderStatusItem> {
     let names = [
-        ("north", "North AI", ProviderHealth::Operational),
+        ("anthropic", "Anthropic", ProviderHealth::Operational),
         (
-            "river",
-            "River AI",
+            "openai",
+            "OpenAI",
             if healthy {
                 ProviderHealth::Operational
             } else {
                 ProviderHealth::Outage
             },
         ),
-        ("summit", "Summit", ProviderHealth::Degraded),
+        ("gemini", "Google Gemini", ProviderHealth::Degraded),
+        ("mistral", "Mistral AI", ProviderHealth::Operational),
+        ("xai", "xAI", ProviderHealth::Operational),
+        ("bedrock", "Amazon Bedrock", ProviderHealth::Operational),
     ];
     names
         .into_iter()
         .enumerate()
         .map(|(i, (id, name, health))| {
             let mut item = ProviderStatusItem::new(id, name, health);
-            item.detail = language
-                .text("Sample model endpoint", "样例模型接口")
-                .into();
-            item.latency_ms = Some([412., 2140., 1380.][i]);
-            item.uptime = Some([99.96, 99.61, 99.93][i]);
+            item.latency_ms = Some([412., 2140., 1380., 367., 448., 543.][i]);
+            item.uptime = Some([99.96, 99.61, 99.93, 99.81, 99.98, 99.97][i]);
             item.days = (1..=30)
                 .map(|day| {
+                    let day_health = if day == 30 && i > 0 {
+                        health
+                    } else if day == 4 + i * 3 {
+                        ProviderHealth::Degraded
+                    } else {
+                        ProviderHealth::Operational
+                    };
                     ProviderDay::new(
                         format!("2026-10-{day:02}"),
-                        if day == 29 && i > 0 {
-                            health
+                        day_health,
+                        Some(if day_health == ProviderHealth::Operational {
+                            100.
                         } else {
-                            ProviderHealth::Operational
-                        },
-                        Some(if day == 29 && i > 0 { 97.2 } else { 100. }),
+                            97.2
+                        }),
                     )
                 })
                 .collect();
             if i == 1 && !healthy {
                 item.incident = Some(ProviderIncident::new(
-                    language.text("Increased error rate", "错误率上升"),
+                    language.text("Elevated model error rates", "模型错误率上升"),
                     vec![ProviderIncidentUpdate::new(
                         language.text("Investigating", "调查中"),
                         "14:02 UTC",
                         language.text(
-                            "Requests may take longer than usual.",
-                            "请求可能比平时更慢。",
+                            "The simulated Responses endpoint is returning more 5xx errors.",
+                            "模拟 Responses 接口的 5xx 错误增多。",
                         ),
                     )],
                 ));
@@ -80,9 +87,10 @@ impl Example {
                 language.text("AI providers", "AI 服务状态"),
                 samples(language, false),
             )
+            .with_open_incident("openai")
             .footnote(language.text(
-                "Sample data; no network requests are made.",
-                "样例数据，不会发出网络请求。",
+                "Sample data. Latency is the median over the last 5 minutes.",
+                "仅为样例。延迟展示最近 5 分钟的中位数。",
             ))
         });
         let sub = cx.subscribe(
@@ -125,7 +133,7 @@ impl Render for Example {
         let p = Paint::get(cx);
         div()
             .size_full()
-            .min_h(px(540.))
+            .min_h(px(840.))
             .p_4()
             .bg(p.stage)
             .text_color(p.ink)
@@ -134,12 +142,6 @@ impl Render for Example {
             .items_center()
             .justify_center()
             .gap_3()
-            .child(
-                div().text_size(px(12.)).text_color(p.secondary).child(
-                    self.language
-                        .text("Simulated provider health", "模拟服务状态"),
-                ),
-            )
-            .child(div().w_full().max_w(px(760.)).child(self.view.clone()))
+            .child(div().w_full().max_w(px(522.)).child(self.view.clone()))
     }
 }

@@ -163,6 +163,11 @@ impl Render for AvatarGroup {
                     v.fan(cx);
                     cx.notify();
                 }))
+                .size(px(40.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
                 .p(px(2.))
                 .bg(p.stage)
                 .rounded_full()
@@ -185,7 +190,14 @@ impl Render for AvatarGroup {
                 });
             faces = faces.child(
                 div()
-                    .w(px(if i == 0 { 40. } else { 33. } * t))
+                    .w(px(
+                        if i + 1 == self.slots.len() && self.people.len() <= self.limit {
+                            40. * t
+                        } else {
+                            33. * t
+                        },
+                    ))
+                    .flex_none()
                     .relative()
                     .opacity(t)
                     .child(face),

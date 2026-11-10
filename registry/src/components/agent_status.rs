@@ -1,4 +1,5 @@
 //! Show the current activity of an assistant during a run.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::ops_surface::*;
 use crate::primitives::{
     family::{Paint, PhaseClock, disabled_motion, measure},
@@ -111,15 +112,13 @@ impl Render for WorkBadge {
                                     .child(spinner(turn, 24., p.success)),
                             )
                         })
-                        .child(icon(
-                            if !self.steps.is_empty() && !working {
-                                Glyph::Check
-                            } else {
-                                Glyph::Bulb
-                            },
-                            12.,
-                            p.success,
-                        )),
+                        .child(if !self.steps.is_empty() && !working {
+                            icon(Glyph::Check, 12., p.success).into_any_element()
+                        } else {
+                            brand_mark(&self.agent, 13., cx).unwrap_or_else(|| {
+                                icon(Glyph::Bulb, 12., p.success).into_any_element()
+                            })
+                        }),
                 )
                 .child(
                     swap_label("activity-label", text, w, cx)

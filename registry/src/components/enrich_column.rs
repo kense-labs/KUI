@@ -5,6 +5,7 @@ use crate::{
         textarea::{Textarea, TextareaStyle},
     },
     primitives::{
+        brand_mark::brand_mark,
         control::UiLanguage,
         family::{Paint, PhaseClock, Slide, Tone, disabled_motion, ease, face},
         field::{Field, FieldEvent},
@@ -772,7 +773,16 @@ impl Render for EnrichColumn {
                             .line_height(px(17.))
                             .text_color(p.ink)
                             .font_weight(FontWeight::MEDIUM)
-                            .child(div().truncate().child(cell.row.name.clone()))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .when_some(brand_mark(&cell.row.name, 16., cx), |row, mark| {
+                                        row.child(mark)
+                                    })
+                                    .child(div().min_w_0().truncate().child(cell.row.name.clone())),
+                            )
                             .when(!cell.row.domain.is_empty(), |v| {
                                 v.child(
                                     div()

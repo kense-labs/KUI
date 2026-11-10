@@ -2,6 +2,7 @@
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit, unquote
+import gzip
 import json
 import sys
 
@@ -51,6 +52,12 @@ for en in (False, True):
         assert fragment['lang']==lang and fragment['id']==id and 'data-preview-slot' in fragment['html'], path
         assert any(a.get('data-kui-control')=='button' for t,a in page.elements), path
 assert not broken, broken[:20]
+revision = (root / 'stories/revision.txt').read_text().strip()
+preview = root / f'stories/v/{revision}/pkg/kui_web_bg.wasm'
+with preview.open('rb') as raw, gzip.open(str(preview) + '.gz', 'rb') as compressed:
+    for chunk in iter(lambda: raw.read(1024 * 1024), b''):
+        assert chunk == compressed.read(len(chunk)), 'preview gzip differs from the raw WASM'
+    assert not compressed.read(1), 'preview gzip has trailing bytes'
 assert not list(root.rglob('*.ts')), "unexpected TypeScript in release"
 assert not (root / '_astro').exists(), "old frontend build present"
 print(f'Verified both locales, {len(ids)} components, install registry, and {len(seen)} static destinations.')

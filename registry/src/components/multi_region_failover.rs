@@ -292,6 +292,7 @@ impl Render for MultiRegionFailover {
         let bounds = self.bounds.clone();
         let stage_w = f32::from(bounds.get().size.width);
         let narrow = stage_w > 0. && stage_w < 640.;
+        let compact = stage_w > 0. && stage_w < 440.;
         let stage_h = if narrow {
             (stage_w * 1.46).clamp(370., 790.)
         } else if stage_w > 1. {
@@ -392,7 +393,8 @@ impl Render for MultiRegionFailover {
                     .w(relative(if narrow { 0.48 } else { 0.44 }))
                     .text_center()
                     .top(relative(if narrow { 0.89 } else { 0.44 }))
-                    .child(hint(format!("{primary} · {h0}"), p)),
+                    .child(hint(primary.clone(), p).truncate())
+                    .child(hint(h0, p).truncate()),
             )
             .child(
                 div()
@@ -400,8 +402,9 @@ impl Render for MultiRegionFailover {
                     .left(relative(if narrow { 0.51 } else { 0.56 }))
                     .w(relative(if narrow { 0.48 } else { 0.44 }))
                     .text_center()
-                    .top(relative(if narrow { 0.89 } else { 0.94 }))
-                    .child(hint(format!("{secondary} · {h1}"), p)),
+                    .top(relative(if narrow { 0.89 } else { 0.91 }))
+                    .child(hint(secondary.clone(), p).truncate())
+                    .child(hint(h1, p).truncate()),
             );
         let busy = self.pending.is_some();
         let steps = div()
@@ -479,6 +482,7 @@ impl Render for MultiRegionFailover {
                         weight * 100.,
                         rate * weight,
                         false,
+                        compact,
                         p,
                     ))
                     .child(split_side(
@@ -486,6 +490,7 @@ impl Render for MultiRegionFailover {
                         (1. - weight) * 100.,
                         rate * (1. - weight),
                         true,
+                        compact,
                         p,
                     )),
             )
@@ -571,19 +576,17 @@ impl Render for MultiRegionFailover {
             })
     }
 }
-fn split_side(name: &str, percent: f32, rate: f32, end: bool, p: Paint) -> Div {
-    div()
-        .flex()
-        .items_baseline()
-        .gap(px(8.))
-        .when(end, |side| side.flex_row_reverse())
-        .child(
-            div()
-                .text_size(px(14.))
-                .line_height(px(20.))
-                .text_color(p.faint)
-                .child(name.to_string()),
-        )
+fn split_side(name: &str, percent: f32, rate: f32, end: bool, compact: bool, p: Paint) -> Div {
+    let label = div()
+        .min_w_0()
+        .truncate()
+        .text_size(px(14.))
+        .line_height(px(20.))
+        .text_color(p.secondary)
+        .child(name.to_string());
+    let metrics = row()
+        .gap(px(6.))
+        .when(end && !compact, |side| side.flex_row_reverse())
         .child(
             div()
                 .min_w(px(32.))
@@ -599,7 +602,21 @@ fn split_side(name: &str, percent: f32, rate: f32, end: bool, p: Paint) -> Div {
                 .line_height(px(18.))
                 .text_color(p.faint)
                 .child(format!("{rate:.0}/s")),
-        )
+        );
+    div()
+        .flex()
+        .flex_1()
+        .min_w_0()
+        .gap(px(if compact { 2. } else { 8. }))
+        .when(compact, |side| {
+            side.flex_col().when(end, |side| side.items_end())
+        })
+        .when(!compact, |side| {
+            side.items_baseline()
+                .when(end, |side| side.flex_row_reverse())
+        })
+        .child(label)
+        .child(metrics)
 }
 #[cfg(test)]
 mod tests {

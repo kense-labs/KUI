@@ -202,11 +202,16 @@ impl Render for NowPlaying {
             .child(
                 img(image.clone())
                     .size(px(44.))
+                    .rounded(crate::foundation::surface_radius(cx))
                     .object_fit(ObjectFit::Cover),
             )
             .child(
                 div()
                     .id("player-expand")
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .aria_label(tr(cx, "Expand player", "展开播放器"))
+                    .aria_expanded(expanded)
                     .min_w_0()
                     .h(px(44.))
                     .px(px(2.))
@@ -237,6 +242,25 @@ impl Render for NowPlaying {
                             .child(artist.clone()),
                     ),
             )
+            .child({
+                let scales = if playing {
+                    [0.7, 1.0, 0.55]
+                } else {
+                    [0.3, 0.6, 0.42]
+                };
+                let mut levels = div()
+                    .h(px(14.))
+                    .mr(px(4.))
+                    .flex()
+                    .items_end()
+                    .gap(px(2.))
+                    .opacity(if playing { 1. } else { 0.55 });
+                for scale in scales {
+                    levels =
+                        levels.child(div().w(px(3.)).h(px(14. * scale)).rounded(px(1.)).bg(p.ink));
+                }
+                levels
+            })
             .child(
                 face(
                     "player-play",
@@ -260,25 +284,22 @@ impl Render for NowPlaying {
                 ))
                 .on_click(cx.listener(move |_, _, _, cx| cx.emit(PlayerEvent::Play(!playing)))),
             )
-            .child({
-                let scales = if playing {
-                    [0.7, 1.0, 0.55]
-                } else {
-                    [0.3, 0.6, 0.42]
-                };
-                let mut levels = div()
-                    .h(px(14.))
-                    .mr(px(4.))
-                    .flex()
-                    .items_end()
-                    .gap(px(2.))
-                    .opacity(if playing { 1. } else { 0.55 });
-                for scale in scales {
-                    levels =
-                        levels.child(div().w(px(3.)).h(px(14. * scale)).rounded(px(1.)).bg(p.ink));
-                }
-                levels
-            });
+            .child(
+                face(
+                    "player-next-mini",
+                    tr(cx, "Next track", "下一首"),
+                    34.,
+                    17.,
+                    Tone::Clear,
+                    cx,
+                )
+                .size(px(34.))
+                .gap_0()
+                .hover(|v| v.bg(p.tray))
+                .child(icon(Glyph::Play, 14., p.ink))
+                .child(div().w(px(1.5)).h(px(11.)).rounded_full().bg(p.ink))
+                .on_click(cx.listener(|s, _, _, cx| s.request_track(1, cx))),
+            );
         if !expanded {
             root = root.child(mini);
         }

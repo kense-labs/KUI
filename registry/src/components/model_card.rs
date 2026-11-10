@@ -1,4 +1,5 @@
 //! Inspect a model’s capabilities and select it for a task.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::family::{Paint, Slide};
 use crate::primitives::ops_surface::*;
 use gpui::{prelude::*, *};
@@ -81,7 +82,13 @@ impl Render for ModelSheet {
             )
             .child(
                 row()
-                    .child(avatar(&m.name, self.selected, cx))
+                    .child(
+                        brand_mark(&m.name, 23., cx)
+                            .or_else(|| brand_mark(&m.provider, 23., cx))
+                            .unwrap_or_else(|| {
+                                avatar(&m.name, self.selected, cx).into_any_element()
+                            }),
+                    )
                     .child(
                         column()
                             .flex_1()

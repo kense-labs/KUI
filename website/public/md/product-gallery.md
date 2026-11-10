@@ -40,6 +40,8 @@ Drag or flick the photo track one photo at a time; edges rubber-band. The thumbn
 
 Selecting a color crossfades every photo, retargets the rail, and clears a size that is sold out in the new color (`onSizeChange` fires with `None`). Sold-out sizes stay visible, struck through and skipped.
 
+The gallery stacks the media and details at container widths of 680px or less. At 520px or less, thumbnails move below the main photo.
+
 ## API
 
 `set_color` · `(&str, &mut Context<Self>)` — switch color, resetting to its first photo.

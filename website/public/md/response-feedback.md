@@ -25,6 +25,8 @@ The host sends Submit events and reports the matching request ID through complet
 
 ## API
 
+`with_response(model, text, cx)` includes the answer, its model attribution and a copy action above the rating controls.
+
 `complete` · `(u64, bool, &mut Context<Self>)`
 
 Choose a rating, toggle reasons, add an optional note and submit. Duplicate pending submissions and stale callbacks are ignored.

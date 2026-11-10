@@ -31,12 +31,7 @@ impl Demo {
     fn new(cx: &mut Context<Self>) -> Self {
         let lang = UiLanguage::current(cx);
         let t = |en, zh| lang.text(en, zh);
-        let mut initial = TrainingRunSnapshot::new(
-            "support-triage-v3",
-            t("Kense sample model", "Kense 样例模型"),
-            1860,
-            3,
-        );
+        let mut initial = TrainingRunSnapshot::new("support-triage-v3", "Qwen 3.8 Max", 1860, 3);
         initial.details = "LoRA r16 · 8× H200".into();
         initial.dataset = t("Sample dataset · 48,210 examples", "样例数据集 · 48,210 条").into();
         initial.learning_rate = Some(0.0002);

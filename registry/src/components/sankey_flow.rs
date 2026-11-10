@@ -1488,13 +1488,17 @@ impl Render for SankeyFlow {
                                 .p(px(3.))
                                 .gap(px(2.))
                                 .bg(p.tray)
-                                .rounded(crate::foundation::surface_radius(cx))
+                                .rounded_full()
                                 .children(self.periods.iter().enumerate().map(|(i, label)| {
                                     face(
                                         ("flow-period", i),
                                         label.clone(),
                                         36.,
-                                        crate::foundation::surface_radius(cx).into(),
+                                        crate::foundation::Theme::global(cx)
+                                            .tokens
+                                            .radius
+                                            .full
+                                            .into(),
                                         Tone::Clear,
                                         cx,
                                     )

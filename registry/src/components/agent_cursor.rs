@@ -1,4 +1,5 @@
 //! Host-driven read-only document review with an illustrative collaborator cursor.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::{
     family::{Paint, PhaseClock, Slide, Tone, ease, face},
     flyout::TriggerBounds,
@@ -551,7 +552,22 @@ impl Render for AgentCursor {
             .flex()
             .items_center()
             .flex_none()
-            .child(avatar(&self.agent, ink, p))
+            .child(
+                brand_mark(&self.agent, 18., cx)
+                    .map(|mark| {
+                        div()
+                            .size(px(28.))
+                            .rounded_full()
+                            .border_2()
+                            .border_color(p.panel)
+                            .bg(p.panel.blend(ink.opacity(0.12)))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(mark)
+                    })
+                    .unwrap_or_else(|| avatar(&self.agent, ink, p)),
+            )
             .when_some(self.collaborator.as_ref(), |row, (name, color)| {
                 row.child(avatar(name, *color, p).ml(px(-7.)))
             });

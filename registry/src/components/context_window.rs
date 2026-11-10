@@ -1,7 +1,9 @@
 //! Inspect how different parts of a conversation consume its context budget.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::family::{Paint, PhaseClock, Slide, disabled_motion, standard_ease};
 use crate::primitives::ops_surface::*;
 use gpui::{prelude::*, *};
+use std::{cell::Cell, rc::Rc};
 pub struct Band {
     pub label: String,
     pub tokens: u64,
@@ -60,6 +62,7 @@ pub struct CapacityBands {
     wave: Option<Compaction>,
     start_wave: bool,
     freed: u64,
+    grid_width: Rc<Cell<Pixels>>,
 }
 impl EventEmitter<CapacityAction> for CapacityBands {}
 impl CapacityBands {
@@ -83,6 +86,7 @@ impl CapacityBands {
             wave: None,
             start_wave: false,
             freed: 0,
+            grid_width: Default::default(),
             hovered: None,
             bands,
             selected: None,
@@ -131,7 +135,7 @@ impl Render for CapacityBands {
         let highlighted = self.hovered.or(self.selected);
 
         let p = Paint::get(cx);
-        let radius = crate::foundation::Theme::global(cx).tokens.radius.md;
+        let cell_radius = px(2.);
         let cell = |index: usize, boundaries: &[u64]| {
             let pos = index as f64 / CELL_COUNT as f64 * limit as f64;
             let mut end = 0u64;
@@ -141,7 +145,7 @@ impl Render for CapacityBands {
             });
             let color = which.map(|i| self.bands[i].color).unwrap_or_else(|| {
                 if pos >= limit.saturating_sub(self.reserved) as f64 {
-                    p.faint
+                    p.panel
                 } else {
                     p.stage
                 }
@@ -179,44 +183,114 @@ impl Render for CapacityBands {
             self.wave = None;
         }
         self.painted_cells.clear();
-        let mut grid = column().gap(px(2.));
-        for r in 0..10 {
-            let mut line = row().gap(px(2.));
-            for c in 0..20 {
-                let i = r * 20 + c;
-                let (which, base) = cell(
-                    i,
-                    if self.wave.is_some() {
-                        &target
-                    } else {
-                        &displayed
-                    },
-                );
-                let (color, alpha) = self
-                    .wave
-                    .as_ref()
-                    .map_or((base, 1.), |wave| wave.paint(i, base, elapsed));
-                self.painted_cells.push((color, alpha));
-                let highlight = if highlighted.is_none() || highlighted == which {
-                    1.
+        let grid_width = self.grid_width.clone();
+        let measured = grid_width.get();
+        let fallback = (w.viewport_size().width - px(64.)).clamp(px(160.), px(488.));
+        let width = if measured > px(0.) {
+            measured
+        } else {
+            fallback
+        };
+        let side = ((width - px(38.)) / 20.).max(px(1.));
+        let threshold_row = (10. * self.threshold).round() as usize;
+        let threshold_visible = (1..=10).contains(&threshold_row);
+        let threshold_gap = px(if threshold_visible { 6. } else { 0. });
+        let mut cells = Vec::with_capacity(CELL_COUNT);
+        for i in 0..CELL_COUNT {
+            let (which, base) = cell(
+                i,
+                if self.wave.is_some() {
+                    &target
                 } else {
-                    0.25
-                };
-                line = line.child(
-                    div()
-                        .flex_1()
-                        .h(px(9.))
-                        .rounded(radius)
-                        .bg(color)
-                        .opacity(alpha * highlight),
-                );
-            }
-            grid = grid.child(line);
-            if (r + 1) as f32 == (10. * self.threshold).round() {
-                grid = grid.child(divider(cx))
-            }
+                    &displayed
+                },
+            );
+            let (color, alpha) = self
+                .wave
+                .as_ref()
+                .map_or((base, 1.), |wave| wave.paint(i, base, elapsed));
+            self.painted_cells.push((color, alpha));
+            let highlight = if highlighted.is_none() || highlighted == which {
+                1.
+            } else {
+                0.25
+            };
+            let reserved = which.is_none()
+                && i as f64 / CELL_COUNT as f64 * limit as f64
+                    >= limit.saturating_sub(self.reserved) as f64;
+            cells.push((
+                color.opacity(alpha * highlight),
+                reserved,
+                alpha * highlight,
+            ));
         }
-        panel(&self.id, 480., cx)
+        let grid = div()
+            .id("capacity-grid")
+            .debug_selector(|| "capacity-grid".into())
+            .w_full()
+            .h(side * 10. + px(18.) + threshold_gap)
+            .child(
+                canvas(
+                    move |bounds, w, _| {
+                        if (grid_width.replace(bounds.size.width) - bounds.size.width).abs()
+                            > px(0.5)
+                        {
+                            w.request_animation_frame();
+                        }
+                    },
+                    move |bounds, _, w, _| {
+                        let stride = side + px(2.);
+                        for (i, (fill_color, reserved, alpha)) in cells.into_iter().enumerate() {
+                            let row = i / 20;
+                            let col = i % 20;
+                            let offset = if threshold_visible && row >= threshold_row {
+                                threshold_gap
+                            } else {
+                                px(0.)
+                            };
+                            let origin = bounds.origin
+                                + point(stride * col as f32, stride * row as f32 + offset);
+                            w.paint_quad(quad(
+                                Bounds::new(origin, size(side, side)),
+                                Corners::all(cell_radius),
+                                fill_color,
+                                Edges::all(if reserved { px(1.) } else { px(0.) }),
+                                p.line.opacity(alpha),
+                                BorderStyle::Solid,
+                            ));
+                        }
+                        if threshold_visible {
+                            let y = bounds.top() + stride * threshold_row as f32 + px(1.);
+                            w.paint_quad(fill(
+                                Bounds::new(
+                                    point(bounds.left(), y),
+                                    size(bounds.size.width, px(1.)),
+                                ),
+                                p.line,
+                            ));
+                        }
+                    },
+                )
+                .size_full(),
+            );
+        let readout = |tokens: u64, cx: &App| {
+            let amount = if tokens >= 1_000 {
+                let scaled = format!("{:.1}", tokens as f64 / 1_000.);
+                format!("{}K", scaled.trim_end_matches(".0"))
+            } else {
+                tokens.to_string()
+            };
+            row()
+                .gap(px(12.))
+                .child(note(amount, cx))
+                .child(div().w(px(38.)).text_right().child(note(
+                    format!("{:.1}%", 100. * tokens as f64 / limit as f64),
+                    cx,
+                )))
+        };
+        let reserve = self.reserved.min(limit);
+        let free = limit.saturating_sub(used).saturating_sub(reserve);
+        panel(&self.id, 522., cx)
             .child(
                 row()
                     .justify_between()
@@ -249,7 +323,14 @@ impl Render for CapacityBands {
                                 cx,
                             )),
                     )
-                    .child(badge(self.model.clone(), cx)),
+                    .child(
+                        row()
+                            .gap_1()
+                            .when_some(brand_mark(&self.model, 14., cx), |row, mark| {
+                                row.child(mark)
+                            })
+                            .child(badge(self.model.clone(), cx)),
+                    ),
             )
             .child(grid)
             .child({
@@ -294,10 +375,30 @@ impl Render for CapacityBands {
                             }
                             cx.notify()
                         }))
-                        .child(div().size(px(9.)).rounded(radius).bg(b.color))
+                        .child(div().size(px(9.)).rounded(cell_radius).bg(b.color))
                         .child(div().flex_1().child(b.label.clone()))
-                        .child(note(format!("{}", b.tokens), cx))
-                    })),
+                        .child(readout(b.tokens, cx))
+                    }))
+                    .children(
+                        [
+                            (tr(cx, "Free", "可用"), free, false),
+                            (tr(cx, "Reserved for output", "预留输出"), reserve, true),
+                        ]
+                        .map(|(label, tokens, outline)| {
+                            row()
+                                .min_h(px(30.))
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .size(px(9.))
+                                        .rounded(cell_radius)
+                                        .bg(p.stage)
+                                        .when(outline, |cell| cell.border_1().border_color(p.line)),
+                                )
+                                .child(div().flex_1().child(label))
+                                .child(readout(tokens, cx))
+                        }),
+                    ),
             )
             .child(
                 row()

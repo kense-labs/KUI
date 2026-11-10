@@ -36,8 +36,8 @@ impl MemberCard {
         let lang = UiLanguage::current(cx);
         let front = HoloFace::painted(
             lang.text(
-                "Jasmine Brooks, design lead. Member since 2023. Shipped 148 projects.",
-                "Jasmine Brooks，设计负责人。2023 年加入，已交付 148 个项目。",
+                "Leon Zhu, design lead. Member since 2023. Shipped 148 projects.",
+                "Leon Zhu，设计负责人。2023 年加入，已交付 148 个项目。",
             ),
             move |surface, w, cx| front(surface, lang, w, cx),
         );
@@ -208,13 +208,9 @@ fn front(surface: HoloSurface, lang: UiLanguage, w: &mut Window, cx: &mut App) {
     Lettering::new(11., ink(0x202020))
         .medium()
         .paint(surface, "Pro", pos(250.5, 25.5), true, w);
-    Lettering::new(28., white()).medium().paint(
-        surface,
-        "Jasmine Brooks",
-        pos(20., 266.),
-        false,
-        w,
-    );
+    Lettering::new(28., white())
+        .medium()
+        .paint(surface, "Leon Zhu", pos(20., 266.), false, w);
     Lettering::new(14., ink(0xc1c1c1)).paint(
         surface,
         lang.text("Design lead", "设计负责人"),

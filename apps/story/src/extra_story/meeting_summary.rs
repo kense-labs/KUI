@@ -28,8 +28,8 @@ fn sample(language: UiLanguage) -> MeetingData {
     let t = |en, zh| language.text(en, zh);
     let mut data = MeetingData::new(t("Annual billing launch review", "年度账单上线评审"));
     data.meta = t(
-        "Video call · Tue, Oct 27 · 10:00–10:42 · 42 min",
-        "视频会议 · 10 月 27 日 · 10:00–10:42 · 42 分钟",
+        "Google Meet · Tue, Oct 27 · 10:00–10:42 · 42 min",
+        "Google Meet · 10 月 27 日 · 10:00–10:42 · 42 分钟",
     )
     .into();
     data.attendees = ["Maya", "Alex", "Lin", "Noah", "Sam", "Jo"]
@@ -181,7 +181,11 @@ fn sample(language: UiLanguage) -> MeetingData {
 impl Example {
     fn new(cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
-        let view = cx.new(|_| MeetingSummary::new(sample(language)).with_transcript("Kense", 4182));
+        let view = cx.new(|_| {
+            MeetingSummary::new(sample(language))
+                .service("Google Meet")
+                .with_transcript("Kense", 4182)
+        });
         let sub = cx.subscribe(
             &view,
             |s: &mut Self, view, event: &MeetingSummaryEvent, cx| match event {

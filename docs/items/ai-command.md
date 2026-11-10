@@ -37,6 +37,8 @@ Filter host commands or submit a question. Changing mode invalidates the previou
 
 ## API
 
+`with_model(model)` displays a model label and its supported brand mark. When the editor has focus, Tab switches to Ask AI and submits a nonempty query. Escape returns from Ask AI to search and cancels any pending answer.
+
 `receive` · `(ticket, Result<String, ()>, done, cx)`
 
 Command provides ID, name, group and shortcut hint. CommandEvent separates navigation, question submission and cancellation.

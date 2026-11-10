@@ -865,16 +865,14 @@ impl Render for RadarChart {
                         .child(meta),
                 )
             });
-        let top = row()
-            .flex_wrap()
+        let top = column()
             .items_start()
-            .justify_between()
             .gap(px(12.))
             .child(heading)
             .when_some(self.header_extra.clone(), |v, extra| v.child(extra));
         let narrow = w.viewport_size().width < px(640.);
         column()
-            .w(px(600.))
+            .w(px(522.))
             .max_w_full()
             .gap(px(24.))
             .map(|card| {
@@ -1003,6 +1001,16 @@ mod tests {
             )
         });
         w.run_until_parked();
+        let (start, finish, expected_tip) = w.update(|_, cx| {
+            let chart = view.read(cx);
+            let width = f32::from(chart.bounds.get().size.width);
+            let (height, radius) = radar_metrics(width);
+            let start = width / 2.;
+            let finish = stage_point(start, height / 2., 2, 6, radius * 0.71).0;
+            let (tip_w, tip_h) = tip_size(&chart.profiles);
+            let tip = tooltip_anchor(width, height, radius, 2, 6, tip_w, tip_h).0;
+            (start, finish, tip)
+        });
         let mut samples = w.update(|_, cx| {
             view.update(cx, |chart, cx| {
                 chart.select(Some(0), cx);
@@ -1028,18 +1036,21 @@ mod tests {
             "marker and tooltip stay finite across the glide: {samples:?}"
         );
         let xs: Vec<f32> = samples.iter().map(|s| s.0).collect();
-        assert!((xs[0] - 275.).abs() < 0.5, "glide starts at axis 0: {xs:?}");
+        assert!(
+            (xs[0] - start).abs() < 0.5,
+            "glide starts at axis 0: {xs:?}"
+        );
         assert!(
             xs.windows(2).all(|w| (w[1] - w[0]).abs() < 45.),
             "no frame teleports: {xs:?}"
         );
         assert!(
-            xs[xs.len() - 1] - 373.4 < 2.,
+            (xs[xs.len() - 1] - finish).abs() < 2.,
             "glide ends at axis 2: {xs:?}"
         );
         let tip_end = samples[samples.len() - 1].1;
         assert!(
-            (tip_end - 246.4).abs() < 2.,
+            (tip_end - expected_tip).abs() < 2.,
             "tooltip ends beside the axis 2 label: {tip_end}"
         );
     }

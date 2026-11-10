@@ -1,4 +1,5 @@
 //! A host-driven workflow preview and editor. No actions are executed internally.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::{
     control::activate,
     editor::{EditEvent, Editor, InputMode},
@@ -645,10 +646,10 @@ impl AiWorkflow {
                     .gap_2()
                     .text_size(px(13.))
                     .child(
-                        div()
-                            .size(px(16.))
-                            .flex_none()
-                            .child(icon(mark, 16., color)),
+                        div().size(px(16.)).flex_none().child(
+                            brand_mark(&step.app, 16., cx)
+                                .unwrap_or_else(|| icon(mark, 16., color).into_any_element()),
+                        ),
                     )
                     .child(div().flex_1().truncate().child(step.title.clone()))
                     .child(hint(kind(step.kind, cx), p)),
@@ -814,7 +815,10 @@ impl Render for AiWorkflow {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(icon(mark, 16., color)),
+                            .child(
+                                brand_mark(&step.app, 16., cx)
+                                    .unwrap_or_else(|| icon(mark, 16., color).into_any_element()),
+                            ),
                     )
                     .child(label)
                     .child(

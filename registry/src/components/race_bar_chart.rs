@@ -78,6 +78,7 @@ const BAR_H: f32 = 24.;
 const ROWS_TOP: f32 = 26.;
 const LABEL_W: f32 = 104.;
 const VALUE_GAP: f32 = 8.;
+const TICK_LABEL_W: f32 = 48.;
 
 /// Compact money in the reference's shape: `$14K`, `$660K`, `$3.87M`.
 fn compact_value(value: f32, prefix: &str) -> String {
@@ -101,7 +102,7 @@ fn compact_value(value: f32, prefix: &str) -> String {
     }
     format!("{prefix}{v:.0}")
 }
-/// The largest 1-2-5 multiple of a power of ten not above `raw`.
+/// The smallest 1-2-5 multiple of a power of ten at least as large as `raw`.
 fn nice_step(raw: f32) -> f32 {
     if !raw.is_finite() || raw <= 0. {
         return 1.;
@@ -109,12 +110,14 @@ fn nice_step(raw: f32) -> f32 {
     let exponent = raw.log10().floor();
     let base = 10f32.powf(exponent);
     let scaled = raw / base;
-    let multiple = if scaled >= 5. {
-        5.
-    } else if scaled >= 2. {
-        2.
-    } else {
+    let multiple = if scaled <= 1. {
         1.
+    } else if scaled <= 2. {
+        2.
+    } else if scaled <= 5. {
+        5.
+    } else {
+        10.
     };
     multiple * base
 }
@@ -567,7 +570,7 @@ impl Render for RaceBarChart {
         let plot_w = (width - bar_left - tail_room).max(40.);
         // Nice steps choose labels only. Rounding the domain to a multiple of
         // the step caused every bar to jump whenever that multiple changed.
-        let tick_count = (plot_w / 84.).floor().clamp(2., 4.);
+        let tick_count = (plot_w / (TICK_LABEL_W + 12.)).clamp(1., 5.);
         let tick_step = nice_step(axis_max / tick_count);
         if self.tick_step != tick_step {
             self.previous_tick_step = self.tick_step;
@@ -743,6 +746,11 @@ impl Render for RaceBarChart {
                 if x < bar_left + plot_w - 2. {
                     let alpha = if shared { 1. } else { opacity };
                     let alpha = alpha * ((bar_left + plot_w - x) / 14.).clamp(0., 1.);
+                    let nearest = (ratio.round() * alternate).clamp(0., axis_max);
+                    let label_overlaps = outgoing
+                        && nearest > 0.
+                        && nearest < axis_max
+                        && (tick - nearest).abs() / axis_max * plot_w < TICK_LABEL_W + 4.;
                     chart = chart
                         .child(
                             div()
@@ -753,19 +761,21 @@ impl Render for RaceBarChart {
                                 .h(px(cut as f32 * ROW_H))
                                 .bg(p.line.opacity(alpha)),
                         )
-                        .child(
-                            div()
-                                .absolute()
-                                .left(px(x))
-                                .top(px(4.))
-                                .ml(px(-24.))
-                                .w(px(48.))
-                                .text_center()
-                                .text_size(px(12.))
-                                .line_height(px(12.))
-                                .text_color(p.faint.opacity(alpha))
-                                .child(compact_value(tick, &prefix)),
-                        );
+                        .when(!label_overlaps, |chart| {
+                            chart.child(
+                                div()
+                                    .absolute()
+                                    .left(px(x))
+                                    .top(px(4.))
+                                    .ml(px(-TICK_LABEL_W / 2.))
+                                    .w(px(TICK_LABEL_W))
+                                    .text_center()
+                                    .text_size(px(12.))
+                                    .line_height(px(12.))
+                                    .text_color(p.faint.opacity(alpha))
+                                    .child(compact_value(tick, &prefix)),
+                            )
+                        });
                 }
             }
         }
@@ -1329,10 +1339,10 @@ mod tests {
     }
     #[test]
     fn axis_steps_read_as_1_2_5_times_powers_of_ten() {
-        assert_eq!(nice_step(0.4), 0.2);
-        assert_eq!(nice_step(3.2), 2.);
-        assert_eq!(nice_step(7.5), 5.);
-        assert_eq!(nice_step(220_000.), 200_000.);
+        assert_eq!(nice_step(0.4), 0.5);
+        assert_eq!(nice_step(3.2), 5.);
+        assert_eq!(nice_step(7.5), 10.);
+        assert_eq!(nice_step(220_000.), 500_000.);
     }
     #[test]
     fn crossing_a_tick_step_keeps_the_leader_at_the_same_painted_bounds() {
@@ -1345,8 +1355,8 @@ mod tests {
             RaceBarChart::new("Race", vec![RaceEntry::new("a", "Leader")])
                 .with_autoplay(false)
                 .with_frames(vec![
-                    RaceFrame::new("May", vec![("a".into(), 199_990.)]),
-                    RaceFrame::new("September", vec![("a".into(), 200_010.)]),
+                    RaceFrame::new("May", vec![("a".into(), 249_990.)]),
+                    RaceFrame::new("September", vec![("a".into(), 250_010.)]),
                 ])
         });
         w.simulate_resize(size(px(630.), px(600.)));

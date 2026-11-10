@@ -29,6 +29,8 @@ Supply stable goal and day IDs. A non-positive goal reports zero progress; value
 
 `new` · `(title, goals, days, &mut Context<Self>)` selects the last day.
 
+`with_surface(false)` embeds the dial and week picker without the default card. `selected_day()` returns the selected day index for host actions that change its values.
+
 `set_day` · `(index, &mut Context<Self>)` and `set_days` · `(Vec<ActivityDay>, &mut Context<Self>)` retarget the rings from their current values on a 0.4s spring. `set_days` preserves the selected day by ID and falls back to the last day if that ID was removed.
 
 Tab enters the selected day. Arrow keys move the selection and focus together. Home and End select the first or last day. Legend buttons highlight a goal.

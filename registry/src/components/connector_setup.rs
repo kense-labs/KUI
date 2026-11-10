@@ -1,4 +1,5 @@
 //! Connect an external service and track the setup state.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::family::Paint;
 use crate::primitives::ops_surface::*;
 use gpui::{prelude::*, *};
@@ -110,7 +111,10 @@ impl Render for ConnectionWizard {
             };
             r = r.child(divider(cx)).child(
                 row()
-                    .child(avatar(&s.name, i, cx))
+                    .child(
+                        brand_mark(&s.name, 20., cx)
+                            .unwrap_or_else(|| avatar(&s.name, i, cx).into_any_element()),
+                    )
                     .child(
                         column()
                             .flex_1()

@@ -33,18 +33,20 @@ let control = cx.new(|_| MessageTranslation::new("translation","Maya","Bonjour !
 
 ## Interaction
 
-Keep the source available and apply only the current translation ticket.
+Pick a language from the floating list. Use arrows and Enter to select, Escape to close, and Show original to return. Retry preserves the last readable message.
+
 
 ## API
 
 `update_translation` · `(ticket, Result<String, ()>, finished, cx)`
 
-TranslationRequest carries a ticket and selected language. Send cumulative text by ticket, then mark the final update.
+TranslationRequest carries the ticket and target language. Call update_translation with cumulative text; mark the final update. Set credit to the actual model name and use byline and portrait for author details.
 
 Event: `TranslationRequest`.
 
+
 ## Motion
 
-New text ranges fade for 140ms independently. Completed translations cache by source and language, and late chunks are rejected by ticket.
+New chunks replace the dimmed text sentence by sentence. Cached translations and the original crossfade. Stale tickets never overwrite the active request.
 
 Desktop and web use the same GPUI view.

@@ -26,6 +26,8 @@ Edit the instruction, run all rows or one row, stop a run, and retry individual 
 
 ## API
 
+Rows for known companies display the mark associated with `EnrichRow::name`. Hosts can still supply names and domains for arbitrary accounts.
+
 `finish` · `(u64, EnrichResult, &Window, &mut Context<Self>) -> bool`
 
 Handle EnrichEvent::Requested and Cancelled in the host. Deliver matching IDs to finish or fail, persist Changed events, and handle OpenSource in the host. Concurrency defaults to two.

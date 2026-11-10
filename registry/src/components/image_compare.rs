@@ -221,9 +221,17 @@ fn chord_half(width: f32, height: f32, dx: f32, dy: f32) -> f32 {
 
 /// Chevron polylines in handle-local coordinates around the centre: `‹ ›`.
 const CHEVRONS: [[(f32, f32); 3]; 2] = [
-    [(-1., 4.), (-5., 0.), (-1., -4.)],
-    [(1., 4.), (5., 0.), (1., -4.)],
+    [(-3.5, 4.), (-7.5, 0.), (-3.5, -4.)],
+    [(3.5, 4.), (7.5, 0.), (3.5, -4.)],
 ];
+
+fn inset_handle(offset: f32, half: f32) -> f32 {
+    let margin = half.min(42.);
+    let threshold = half - margin;
+    let travel = (offset.abs() - threshold).max(0.);
+    let give = (12. * travel / (12. + travel)).min(margin);
+    offset.signum() * (offset.abs().min(threshold) + give)
+}
 
 // Measure the available parent width independently of the component's inner layout.
 fn constrained(
@@ -295,8 +303,9 @@ impl Render for ImageCompare {
         let pivot_y = height_px * 0.5 + dir_y * radius;
         let bump = self.bump.get(w, cx);
         let bump_off = 6. * bump * self.bump_dir;
-        let handle_x = pivot_x + dir_x * bump_off;
-        let handle_y = pivot_y + dir_y * bump_off;
+        let handle_offset = inset_handle(radius + bump_off, half);
+        let handle_x = width_px * 0.5 + dir_x * handle_offset;
+        let handle_y = height_px * 0.5 + dir_y * handle_offset;
 
         // Reference line: raised surface in light, foreground in dark, with a
         // 0.5px dark halo drawn as a wider stroke behind it.
@@ -335,6 +344,7 @@ impl Render for ImageCompare {
         self.handle_h.duration(target_h, 0.42, cx);
         let handle_w = self.handle_w.get(w, cx);
         let handle_h = self.handle_h.get(w, cx);
+        let spread = ((handle_w.max(handle_h) - 40.) / 4.).clamp(0., 4.);
         let chevron_color = p.ink;
         let thumb = div()
             .absolute()
@@ -357,15 +367,13 @@ impl Render for ImageCompare {
                 canvas(
                     |_, _, _| (),
                     move |b, _, w, _| {
-                        let c = point(
-                            b.origin.x + px(handle_w * 0.5),
-                            b.origin.y + px(handle_h * 0.5),
-                        );
+                        let c = point(b.center().x, b.center().y);
                         let (s, co) = theta.sin_cos();
                         for tri in CHEVRONS {
                             let mut path = PathBuilder::stroke(px(1.75));
                             let mut first = true;
                             for (x, y) in tri {
+                                let x = x + x.signum() * spread;
                                 let pt = point(c.x + px(x * co - y * s), c.y + px(x * s + y * co));
                                 if first {
                                     path.move_to(pt);
@@ -654,7 +662,15 @@ impl Render for ImageCompare {
 
 #[cfg(test)]
 mod tests {
-    use super::{CHEVRONS, chord_half};
+    use super::{CHEVRONS, chord_half, inset_handle};
+
+    #[test]
+    fn thumb_stays_inside_at_both_divider_limits() {
+        assert_eq!(inset_handle(24., 120.), 24.);
+        assert_eq!(inset_handle(78., 120.), 78.);
+        assert!(inset_handle(129., 120.) + 28. < 120.);
+        assert_eq!(inset_handle(-120., 120.), -inset_handle(120., 120.));
+    }
 
     #[test]
     fn chord_reaches_the_frame_edge_on_both_axes() {

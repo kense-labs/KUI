@@ -33,18 +33,20 @@ let control = cx.new(|cx| TaskPlan::new("plan", "Review release", vec!["Check ch
 
 ## Interaction
 
-Rename, add and reorder steps in draft. Approval locks the plan for execution.
+Rename, drag, add or remove steps in draft. Alt plus the arrow keys reorder a step. Approve to run; pause, resume, retry or skip a failed step.
+
 
 ## API
 
 `new` · `(id, goal, Vec<String>, window, cx)`
 
-TaskPlan takes a goal and ordered step titles. Subscribe to PlanEvent, then set completed as work advances.
+TaskPlan takes a goal and ordered step titles. Set model for the named model mark. Listen for PlanEvent and update completed; fail_current exposes recovery for the current step.
 
 Event: `PlanEvent`.
 
+
 ## Motion
 
-Completion advances the overall progress spring. Each completed disc tints in while its two-stroke check draws over 220ms.
+Completion moves the progress line over 260ms and draws a check over 220ms. Running uses a spinner and a changing title tone; reduced motion leaves both still.
 
 Desktop and web use the same GPUI view.

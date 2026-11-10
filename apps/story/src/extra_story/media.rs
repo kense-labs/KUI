@@ -357,36 +357,9 @@ impl Demo {
                 }))
             }
             "product-gallery" => {
-                let bytes = |n: u8| -> Arc<Image> {
-                    match n {
-                        0 => Arc::new(Image::from_bytes(
-                            ImageFormat::Jpeg,
-                            include_bytes!("../../assets/navigation/room-0.jpg").to_vec(),
-                        )),
-                        1 => Arc::new(Image::from_bytes(
-                            ImageFormat::Jpeg,
-                            include_bytes!("../../assets/navigation/room-1.jpg").to_vec(),
-                        )),
-                        2 => Arc::new(Image::from_bytes(
-                            ImageFormat::Jpeg,
-                            include_bytes!("../../assets/navigation/room-2.jpg").to_vec(),
-                        )),
-                        3 => Arc::new(Image::from_bytes(
-                            ImageFormat::Jpeg,
-                            include_bytes!("../../assets/navigation/room-3.jpg").to_vec(),
-                        )),
-                        4 => Arc::new(Image::from_bytes(
-                            ImageFormat::Jpeg,
-                            include_bytes!("../../assets/navigation/room-4.jpg").to_vec(),
-                        )),
-                        _ => Arc::new(Image::from_bytes(
-                            ImageFormat::Jpeg,
-                            include_bytes!("../../assets/navigation/room-5.jpg").to_vec(),
-                        )),
-                    }
-                };
-                let shot = |n: u8, alt: (&'static str, &'static str)| {
-                    ProductPhoto::new(bytes(n), t(alt.0, alt.1))
+                let shot = |bytes: &[u8], alt: (&'static str, &'static str)| {
+                    let image = Arc::new(Image::from_bytes(ImageFormat::Jpeg, bytes.to_vec()));
+                    ProductPhoto::new(image, t(alt.0, alt.1))
                 };
                 let colors = vec![
                     ProductColor::new(
@@ -394,10 +367,21 @@ impl Demo {
                         t("Oat", "燕麦"),
                         rgb(0xdccfbc).into(),
                         vec![
-                            shot(0, ("Made bed with striped pillows", "条纹靠枕的床铺")),
-                            shot(1, ("Bedroom bench and linens", "床尾凳与织物")),
-                            shot(2, ("Nightstand detail", "床头柜细节")),
-                            shot(3, ("Full room in daylight", "日光下的房间")),
+                            shot(
+                                include_bytes!("../../assets/product-gallery/oat-bed.jpg"),
+                                (
+                                    "Oat linen duvet and striped pillows",
+                                    "燕麦色亚麻被套和条纹枕头",
+                                ),
+                            ),
+                            shot(
+                                include_bytes!("../../assets/product-gallery/oat-fold.jpg"),
+                                ("Folded oat linen duvet", "折叠的燕麦色亚麻被套"),
+                            ),
+                            shot(
+                                include_bytes!("../../assets/product-gallery/oat-detail.jpg"),
+                                ("Oat linen weave in daylight", "日光下的燕麦色亚麻纹理"),
+                            ),
                         ],
                     ),
                     ProductColor::new(
@@ -405,19 +389,30 @@ impl Demo {
                         t("Forest", "森林绿"),
                         rgb(0x365541).into(),
                         vec![
-                            shot(4, ("Reading chair by the window", "窗边的阅读椅")),
-                            shot(5, ("Soft corner with throws", "盖毯的柔光一角")),
-                            shot(0, ("Made bed with striped pillows", "条纹靠枕的床铺")),
+                            shot(
+                                include_bytes!("../../assets/product-gallery/forest-bed.jpg"),
+                                (
+                                    "Forest green linen duvet on the bed",
+                                    "铺在床上的森林绿亚麻被套",
+                                ),
+                            ),
+                            shot(
+                                include_bytes!("../../assets/product-gallery/forest-fold.jpg"),
+                                ("Folded forest green linen duvet", "折叠的森林绿亚麻被套"),
+                            ),
                         ],
                     ),
                     ProductColor::new(
                         "walnut",
                         t("Walnut", "胡桃"),
                         rgb(0x6b4631).into(),
-                        vec![
-                            shot(2, ("Nightstand detail", "床头柜细节")),
-                            shot(5, ("Soft corner with throws", "盖毯的柔光一角")),
-                        ],
+                        vec![shot(
+                            include_bytes!("../../assets/product-gallery/walnut-bed.jpg"),
+                            (
+                                "Walnut brown linen duvet on the bed",
+                                "铺在床上的胡桃色亚麻被套",
+                            ),
+                        )],
                     ),
                 ];
                 let sizes = vec![
@@ -721,19 +716,20 @@ impl Render for Demo {
                 .justify_center()
                 .child(div().w_full().max_w(px(720.)).child(carousel.clone()));
         }
-        // The product gallery keeps the reference 649px stacked figure.
         if let Example::ProductGallery(gallery) = &self.content {
             return div()
                 .size_full()
                 .min_h(px(520.))
-                .p_5()
+                .p(px(
+                    (f32::from(w.viewport_size().width) * 0.087).clamp(16., 54.)
+                ))
                 .bg(p.stage)
                 .text_color(p.ink)
                 .flex()
                 .flex_col()
                 .gap(px(32.))
                 .items_center()
-                .child(div().w_full().max_w(px(649.)).child(gallery.clone()));
+                .child(div().w_full().max_w(px(824.)).child(gallery.clone()));
         }
         let view: AnyView = match &self.content {
             Example::Reveal(e) => e.clone().into(),

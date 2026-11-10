@@ -200,18 +200,12 @@ fn operations_detail_gap_animates_from_the_closed_height() {
     use gpui::{px, size};
 
     fn height(w: &mut VisualTestContext) -> f32 {
-        w.update(|w, _| {
-            let scale = w.scale_factor();
-            let panel = w
-                .painted_quads()
-                .into_iter()
-                .find(|q| {
-                    (q.bounds.size.width.0 / scale - 522.).abs() < 0.5
-                        && q.bounds.size.height.0 / scale > 80.
-                })
-                .expect("readout panel should be painted");
-            panel.bounds.size.height.0 / scale
-        })
+        f32::from(
+            w.debug_bounds("generation-readout")
+                .expect("readout panel should be painted")
+                .size
+                .height,
+        )
     }
 
     for reduced in [false, true] {
@@ -248,6 +242,10 @@ fn operations_compaction_sweeps_in_order_and_keeps_new_messages() {
     use gpui::{px, size};
 
     fn cell_alpha(w: &mut VisualTestContext) -> Vec<f32> {
+        let grid = w
+            .debug_bounds("capacity-grid")
+            .expect("token grid is painted");
+        let side = f32::from((grid.size.width - px(38.)) / 20.);
         w.update(|w, _| {
             let scale = w.scale_factor();
             let mut cells: Vec<_> = w
@@ -256,9 +254,11 @@ fn operations_compaction_sweeps_in_order_and_keeps_new_messages() {
                 .filter_map(|q| {
                     let bounds = q.bounds;
                     let solid = q.background.as_solid()?;
-                    ((bounds.size.height.0 / scale - 9.).abs() < 0.1
-                        && bounds.size.width.0 / scale > 14.
-                        && bounds.size.width.0 / scale < 30.)
+                    let center = bounds.center();
+                    (grid.contains(&gpui::point(px(center.x.0 / scale), px(center.y.0 / scale)))
+                        && solid.a > 0.
+                        && (bounds.size.height.0 / scale - side).abs() < 0.6
+                        && (bounds.size.width.0 / scale - side).abs() < 0.6)
                         .then_some((bounds.top().0, bounds.left().0, solid.a))
                 })
                 .collect();

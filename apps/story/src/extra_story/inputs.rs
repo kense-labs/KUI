@@ -18,7 +18,9 @@ use kui::{
         money_input::MoneyInput,
         morph_select::{MorphOption, MorphSelect},
         pii_redaction::{PiiEvent, PiiKind, PiiRedaction, PiiSpan},
-        presence_stack::{PresencePerson, PresenceSelected, PresenceStack, PresenceStatus},
+        presence_stack::{
+            PresenceAlign, PresencePerson, PresenceSelected, PresenceStack, PresenceStatus,
+        },
         range_histogram_slider::RangeHistogramSlider,
         reply_draft::{
             ReplyDraft, ReplyDraftEvent, ReplyHint, ReplyLength, ReplyMessage, ReplyTone,
@@ -771,21 +773,21 @@ impl EnrichExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
         let rows = vec![
-            EnrichRow::new("northstar", "Northstar").with_domain("northstar.example"),
-            EnrichRow::new("orion", "Orion").with_domain("orion.example"),
-            EnrichRow::new("river", "River").with_domain("river.example"),
-            EnrichRow::new("studio", "Studio").with_domain("studio.example"),
-            EnrichRow::new("canopy", "Canopy").with_domain("canopy.example"),
-            EnrichRow::new("atlas", "Atlas").with_domain("atlas.example"),
-            EnrichRow::new("haven", "Haven").with_domain("haven.example"),
+            EnrichRow::new("linear", "Linear"),
+            EnrichRow::new("vercel", "Vercel"),
+            EnrichRow::new("notion", "Notion"),
+            EnrichRow::new("figma", "Figma"),
+            EnrichRow::new("stripe", "Stripe"),
+            EnrichRow::new("supabase", "Supabase"),
+            EnrichRow::new("retool", "Retool"),
         ];
         let control = cx.new(|cx| {
             EnrichColumn::new(
                 language.text("Company", "公司"),
                 rows,
                 language.text(
-                    "Find a short description for each company",
-                    "为每家公司整理简短描述",
+                    "Find each company's team size and latest funding round",
+                    "查找每家公司的团队规模与最新一轮融资",
                 ),
                 w,
                 cx,
@@ -799,7 +801,7 @@ impl EnrichExample {
                     let id = *id;
                     let row = row.clone();
                     let entity = entity.clone();
-                    let fail = row.id.as_ref() == "orion" && s.fail_once;
+                    let fail = row.id.as_ref() == "vercel" && s.fail_once;
                     if fail {
                         s.fail_once = false;
                     }
@@ -821,15 +823,26 @@ impl EnrichExample {
                                     );
                                 } else {
                                     let value = match row.id.as_ref() {
-                                        "northstar" => l.text("Design tools", "设计工具"),
-                                        "orion" => l.text("Analytics platform", "数据分析平台"),
-                                        "studio" => {
-                                            l.text("Digital product studio", "数字产品工作室")
+                                        "linear" => {
+                                            l.text("180 people · Series C", "180 人 · C 轮")
                                         }
-                                        "canopy" => l.text("Cloud infrastructure", "云基础设施"),
-                                        "atlas" => l.text("Data visualization", "数据可视化"),
-                                        "haven" => l.text("Team operations", "团队运营工具"),
-                                        _ => l.text("Collaboration software", "协作软件"),
+                                        "vercel" => {
+                                            l.text("820 people · Series F", "820 人 · F 轮")
+                                        }
+                                        "notion" => {
+                                            l.text("1,100 people · Series C", "1,100 人 · C 轮")
+                                        }
+                                        "figma" => l.text(
+                                            "1,400 people · Public company",
+                                            "1,400 人 · 上市公司",
+                                        ),
+                                        "stripe" => {
+                                            l.text("8,000 people · Series I", "8,000 人 · I 轮")
+                                        }
+                                        "supabase" => {
+                                            l.text("180 people · Series D", "180 人 · D 轮")
+                                        }
+                                        _ => l.text("360 people · Series C", "360 人 · C 轮"),
                                     };
                                     column.finish(
                                         id,
@@ -876,8 +889,8 @@ impl Render for EnrichExample {
             .gap(px(10.))
             .child(self.control.clone())
             .child(div().text_size(px(12.)).child(l.text(
-                "Sample data only; no requests are sent. Orion fails once so retry can be tested.",
-                "仅使用样例数据，不发送请求；Orion 首次失败，可测试重试。",
+                "Illustrative results. The first Vercel lookup fails so you can try again.",
+                "结果为演示数据。Vercel 首次查询模拟失败，可测试重试。",
             )))
             .child(div().text_size(px(12.)).child(self.note.clone()))
     }
@@ -1059,7 +1072,9 @@ impl PresenceExample {
             PresencePerson::new("kai", "Kai Liu"),
         ];
         let control = cx.new(|cx| {
-            PresenceStack::new("presence-example", people.clone(), cx).with_self_id("me", cx)
+            PresenceStack::new("presence-example", people.clone(), cx)
+                .with_self_id("me", cx)
+                .with_align(PresenceAlign::End)
         });
         let subscription = cx.subscribe_in(
             &control,
@@ -1118,13 +1133,14 @@ impl Render for PresenceExample {
             .child(
                 div()
                     .w_full()
-                    .min_h(px(78.))
+                    .min_h(px(104.))
                     .flex()
                     .flex_wrap()
                     .items_center()
                     .justify_between()
                     .gap(px(12.))
                     .p(px(16.))
+                    .pb(px(36.))
                     .rounded(kui::foundation::surface_radius(cx))
                     .border_1()
                     .border_color(p.line)

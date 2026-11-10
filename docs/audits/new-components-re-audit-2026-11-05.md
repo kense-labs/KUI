@@ -184,6 +184,13 @@
 - 第二批 Web 专项：安装片段点击「生成密钥」后占位符被样例密钥替换、步骤显示勾；智能体光标在同一文档里可见 Kense 和协作者；训练第 720 步进入显存不足，失败时对应场景仍选中；会议纪要的错误与无转录均可达，顶栏位置不随状态切换；提示缓存首请求写入、后续命中，重置和单步可操作。[生成密钥](/private/tmp/kui-speculative-ref/local-install-key-generated.png) · [双光标](/private/tmp/kui-speculative-ref/local-agent-cursor-double.png) · [显存不足](/private/tmp/kui-speculative-ref/local-training-final-oom.png) · [会议错误](/private/tmp/kui-speculative-ref/local-meeting-fixed-error.png) · [缓存命中](/private/tmp/kui-speculative-ref/local-prompt-cache-results.png)
 - 本地交付构建 `2d4c30e11a1ff7c881fe`。Clippy、379 个组件单测、108 个 Story 单测及另外 4 个测试、WASM 发布构建、注册表和网站检查通过。网站校验 231 项双语文档、947 个静态目标。以上返修项用注册 JSON 与本地源码分别在空白 crate 安装，文档 Rust 示例通过原生与 wasm32 编译。浏览器截图是专项证据；各项仍需对照官网同场景完整动效及 Safari／桌面实物复验。
 
+## Pro 组件补充复核（2026-11-10）
+
+Arc 已移植到 KUI 的 **110 个 Pro 组件已逐项核对桌面预览**。85 项的预览有明确差异，16 项初态接近，6 项取证时的播放阶段不同，3 项画布宽度不同。另有 26 项操作或同状态补测、5 项手机预览复查。每项的差异、截图、Rust 文件与后续验证条件均已记录。连续动效、Safari、原生桌面、真机触屏及完整键盘体验仍需逐项验证。[110 项 Pro 复核清单](</Users/leon/Documents/Kense ui/KUI/docs/audits/pro-parity-2026-11-10.md>)
+
+
+本次修复覆盖其中 **33 / 85 项明确差异**，还有 **52 项待修**。具体改动、剩余组件和复验条件已写入 [Pro 修复进度](pro-parity-2026-11-10.md#本轮修复进度)。
+
 ## 智能体循环再次返修（2026-11-10）
 
 - [官方 Agent loop](https://uiarc.dev/components/agent-loop) 的公开交互预览确认了三站圆环、检查与工具结果定位、上下文与累计词元、窄屏共用结果槽和速度控制。KUI 用共享 GPUI 控件实现并保留 8px 卡片圆角，默认模型使用 Kense 标志。

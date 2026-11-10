@@ -654,16 +654,16 @@
     "signature": "(ticket, Result<String, ()>, finished, cx)",
     "event": "TranslationRequest",
     "rule": {
-      "en": "Keep the source available and apply only the current translation ticket.",
-      "zh": "保留原文，只应用当前翻译请求的结果。"
+      "en": "Pick a language from the floating list. Use arrows and Enter to select, Escape to close, and Show original to return. Retry preserves the last readable message.",
+      "zh": "从浮动菜单选择语言；方向键和回车选择，Esc 关闭。可切回原文；重试期间保留上一次可读内容。"
     },
     "api": {
-      "en": "TranslationRequest carries a ticket and selected language. Send cumulative text by ticket, then mark the final update.",
-      "zh": "TranslationRequest 包含请求标识和目标语言。按同一标识推送累积译文，最后一次更新标记完成。"
+      "en": "TranslationRequest carries the ticket and target language. Call update_translation with cumulative text; mark the final update. Set credit to the actual model name and use byline and portrait for author details.",
+      "zh": "TranslationRequest 提供请求标识和目标语言。用 update_translation 传入累积译文并标记最后一段；credit 填真实模型名称，byline、portrait 提供作者信息。"
     },
     "motion": {
-      "en": "New text ranges fade for 140ms independently. Completed translations cache by source and language, and late chunks are rejected by ticket.",
-      "zh": "新增文本范围各自淡入 140ms。按原文及语言缓存结果，过期请求无法覆盖新译文。"
+      "en": "New chunks replace the dimmed text sentence by sentence. Cached translations and the original crossfade. Stale tickets never overwrite the active request.",
+      "zh": "新文本逐句替换淡化的旧文本；缓存译文与原文交叉淡入。旧请求不会覆盖当前请求。"
     }
   },
   {
@@ -770,16 +770,16 @@
     "signature": "(id, Vec<Invocation>)",
     "event": "ToolAction",
     "rule": {
-      "en": "Approval, denial and retry target one invocation. A pending invocation rejects duplicate actions.",
-      "zh": "允许、拒绝和重试针对单次调用，等待期间不重复提交。"
+      "en": "Open a call to inspect its input and output, and copy the input. Approve, deny or retry one call at a time; a running call rejects duplicates.",
+      "zh": "展开调用查看输入输出并复制输入。批准、拒绝和重试针对单次调用，运行期间不重复提交。"
     },
     "api": {
-      "en": "Invocation binds a tool name and description to input/output strings and ToolState. Use the ToolAction index to resolve approvals or retries.",
-      "zh": "Invocation 关联工具名称、操作说明、输入输出和 ToolState。宿主按 ToolAction 的索引处理批准及重试。"
+      "en": "Invocation binds its named tool, arguments, output and ToolState. Use durations for optional timing labels. Resolve actions by the index carried in ToolAction.",
+      "zh": "Invocation 提供工具名称、参数、输出和 ToolState。可用 durations 传入耗时；宿主按 ToolAction 的索引处理操作。"
     },
     "motion": {
-      "en": "The group and each call's input/output disclosure fold to measured height on a 240ms spring. Tool status transitions independently of the card.",
-      "zh": "调用组与单次调用详情按实测内容高度进行 240ms 弹簧收放，状态文案独立淡变。"
+      "en": "The group and detail panels fold to measured height over 260ms; rows enter with a 20ms stagger. Reduced motion keeps labels and status icons steady.",
+      "zh": "组和详情按实测高度在 260ms 内展开，每行间隔 20ms 入场。减少动效保留文案和静止状态图标。"
     }
   },
   {
@@ -799,16 +799,16 @@
     "signature": "(id, goal, Vec<String>, window, cx)",
     "event": "PlanEvent",
     "rule": {
-      "en": "Rename, add and reorder steps in draft. Approval locks the plan for execution.",
-      "zh": "草稿允许重命名、添加和调整顺序，批准后锁定步骤。"
+      "en": "Rename, drag, add or remove steps in draft. Alt plus the arrow keys reorder a step. Approve to run; pause, resume, retry or skip a failed step.",
+      "zh": "草稿支持改名、拖动、添加和移除；Alt 加方向键排序。批准后执行，可暂停、继续、重试或跳过失败步骤。"
     },
     "api": {
-      "en": "TaskPlan takes a goal and ordered step titles. Subscribe to PlanEvent, then set completed as work advances.",
-      "zh": "TaskPlan 接收目标及有序步骤标题。订阅 PlanEvent，并在执行时更新 completed。"
+      "en": "TaskPlan takes a goal and ordered step titles. Set model for the named model mark. Listen for PlanEvent and update completed; fail_current exposes recovery for the current step.",
+      "zh": "TaskPlan 接收目标和有序步骤标题。model 设置模型名称及标志；监听 PlanEvent 并更新 completed，fail_current 显示当前步骤的恢复操作。"
     },
     "motion": {
-      "en": "Completion advances the overall progress spring. Each completed disc tints in while its two-stroke check draws over 220ms.",
-      "zh": "整体进度随已完成步骤平滑推进；每个完成圆点渐显，勾形在 220ms 内分段绘出。"
+      "en": "Completion moves the progress line over 260ms and draws a check over 220ms. Running uses a spinner and a changing title tone; reduced motion leaves both still.",
+      "zh": "完成时进度线在 260ms 内更新，勾形在 220ms 内画出。运行中有旋转弧和轻微明暗变化；减少动效时保持静止。"
     }
   },
   {
@@ -884,18 +884,18 @@
     "usageRust": "use gpui::prelude::*;\nuse kui::components::generation_stats::{GenerationReadout, Metrics};\n\nlet control = cx.new(|_| GenerationReadout::new(\"stats\",\"Assistant\",Metrics {first_token_ms:400,duration_ms:2400,input_tokens:800,output_tokens:120,input_rate:2.,output_rate:8.,..Metrics::default()}));",
     "method": "set_metrics",
     "signature": "(Metrics, cx)",
-    "event": "",
+    "event": "RetryGeneration",
     "rule": {
-      "en": "Show the latest throughput sample while streaming and the average speed after completion. Details shows the latency split and token rates.",
-      "zh": "生成中显示最新速度样本，完成后显示平均速度。详细信息展示延迟拆分和词元费率。"
+      "en": "Read first-token latency, throughput, output tokens and cost. Open Details for latency and per-token cost, and copy the stats as JSON. Failed runs can be retried.",
+      "zh": "查看首词元耗时、速度、输出词元与费用。展开详情查看耗时拆分及费率，也可复制 JSON；失败时可重试。"
     },
     "api": {
-      "en": "Metrics accepts first-token and total milliseconds, input/output counts, rates per million and throughput samples.",
-      "zh": "Metrics 接收首词元和总耗时（毫秒）、输入输出数量、每百万费率与速度样本。"
+      "en": "Use Metrics for counts, latency, prices and samples. set_state provides the five run states, set_usage adds cached and reasoning tokens, and variant selects a card or inline readout. RetryGeneration is emitted on Retry.",
+      "zh": "Metrics 提供数量、耗时、费率和样本。set_state 设置五种状态，set_usage 补充缓存与推理词元，variant 选择卡片或行内布局；重试发出 RetryGeneration。"
     },
     "motion": {
-      "en": "Details opens over 260 ms using measured height. Output tokens count up over 100 ms and reset when the count drops. The sparkline uses up to 48 recent samples.",
-      "zh": "详情面板按实测高度在 260ms 内展开。输出词元增加时在 100ms 内插值，下降时直接复位。趋势线最多读取最近 48 个样本。"
+      "en": "Details unfolds over 260ms; output counts interpolate over 100ms and snap down on a reset. The sparkline keeps up to 48 samples.",
+      "zh": "明细在 260ms 内展开；输出数量在 100ms 内插值，重置时直接回落。速度趋势最多保留 48 个样本。"
     }
   },
   {

@@ -2,6 +2,7 @@
 use crate::{
     components::slider::{SlideValue, Slider},
     primitives::{
+        brand_mark::brand_mark,
         family::{Paint, Tone, face},
         presentation::{column, hint, row, tr},
     },
@@ -346,6 +347,11 @@ impl Render for LlmCostCalculator {
                                 .text_color(p.faint)
                                 .text_center()
                                 .child((rank + 1).to_string()),
+                        )
+                        .when_some(
+                            brand_mark(&model.name, 16., cx)
+                                .or_else(|| brand_mark(&model.provider, 16., cx)),
+                            |row, mark| row.child(mark),
                         )
                         .child(
                             div()

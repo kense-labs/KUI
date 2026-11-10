@@ -464,7 +464,14 @@ fn click(event: &Event) -> Option<()> {
             if open { "true" } else { "false" },
         );
         set_open(&shell, open);
+        if !open
+            && shell.get_attribute("data-section-id").as_deref() == Some("components")
+            && let Some(scroll) = query("[data-nav-scroll]")
+        {
+            scroll.set_scroll_top(0);
+        }
         position_pill();
+        scroll_state();
     }
     Some(())
 }
@@ -748,8 +755,9 @@ pub fn init() -> Result<(), JsValue> {
         toggle(e);
     })?;
     on(&doc, "transitionend", false, |e| {
-        if target(e).is_some_and(|t| matches(&t, "[data-section-body],[data-group-body]")) {
+        if target(e).is_some_and(|t| matches(&t, "[data-group-body]")) {
             position_pill();
+            scroll_state();
         }
     })?;
     on(&doc, "scroll", true, |e| {

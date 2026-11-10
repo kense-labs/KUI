@@ -25,6 +25,8 @@ The host provides the device or audio playback adapter.
 
 ## API
 
+`with_contact(portrait, subtitle)` adds a conversation header and shows the portrait on incoming messages whose author matches the recorder label.
+
 `set_phase` · `(RecorderPhase, &mut Context<Self>)`
 
 On Start, Stop, Send or Retry capture request_id; use set_phase_for, set_error_for and append_message_for with that ID. Capture session_id for set_audio_for and set_recording_error_for. Message IDs deduplicate confirmations. Legacy unscoped methods remain available but the host must filter stale callbacks itself.

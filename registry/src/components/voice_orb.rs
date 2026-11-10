@@ -1,6 +1,7 @@
 //! A host-driven voice visualization; it never opens an audio device.
 use crate::primitives::{
     family::{Paint, PhaseClock, disabled_motion},
+    glyph::{Glyph, icon},
     nav::{button, tr},
 };
 use gpui::{prelude::*, *};
@@ -152,16 +153,17 @@ impl Render for VoiceOrb {
         } else {
             1. + motion.grow
         };
-        let size = 208. * scale;
+        let size = 136. * scale;
+        let dark = crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark;
         let mut primary = crate::foundation::Theme::global(cx)
             .accent
             .for_mode(crate::foundation::Theme::global(cx).mode);
         let default_tint = primary.a < 0.01;
         if default_tint {
-            primary = hsla(0., 0., 0.82, 1.);
+            primary = hsla(0., 0., if dark { 0.65 } else { 0.37 }, 1.);
         }
         let secondary = if default_tint {
-            hsla(0., 0., 0.54, 1.)
+            hsla(0., 0., if dark { 0.23 } else { 0.13 }, 1.)
         } else {
             hsla(
                 (primary.h + 0.05) % 1.,
@@ -204,8 +206,15 @@ impl Render for VoiceOrb {
             .aria_label(status)
             .flex()
             .flex_col()
+            .w(px(522.))
+            .max_w_full()
             .items_center()
             .gap(px(14.))
+            .p(px(24.))
+            .rounded(crate::foundation::surface_radius(cx))
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
             .child(
                 div()
                     .h(px(20.))
@@ -233,9 +242,9 @@ impl Render for VoiceOrb {
                     .on_click(cx.listener(move |_, _, _, cx| cx.emit(action)))
                     .child(
                         div()
-                            .size(px(208.))
+                            .size(px(150.))
                             .rounded_full()
-                            .bg(primary.opacity(0.12 * motion.halo))
+                            .bg(primary.opacity(0.045 * motion.halo))
                             .flex()
                             .items_center()
                             .justify_center()
@@ -285,13 +294,15 @@ impl Render for VoiceOrb {
                                             } else {
                                                 0.
                                             };
+                                            let (x, y, spread, angle) = [
+                                                (-0.28, -0.31, 0.58, 120.),
+                                                (0.37, -0.17, 0.36, 218.),
+                                                (-0.45, 0.36, 0.32, 33.),
+                                                (0.22, 0.50, 0.31, 315.),
+                                            ][layer];
                                             let light_center = center
-                                                + point(
-                                                    px(-radius * 0.28 + offset),
-                                                    px(-radius * 0.31),
-                                                );
-                                            let light_radius =
-                                                radius * (0.21 + layer as f32 * 0.065);
+                                                + point(px(radius * x + offset), px(radius * y));
+                                            let light_radius = radius * spread;
                                             let mut light = PathBuilder::fill();
                                             for i in 0..48 {
                                                 let angle = std::f32::consts::TAU * i as f32 / 48.;
@@ -311,10 +322,10 @@ impl Render for VoiceOrb {
                                                 w.paint_path(
                                                     path,
                                                     linear_gradient(
-                                                        135.,
+                                                        angle,
                                                         linear_color_stop(
                                                             white().opacity(
-                                                                0.16 - layer as f32 * 0.025,
+                                                                0.21 - layer as f32 * 0.025,
                                                             ),
                                                             0.,
                                                         ),
@@ -337,7 +348,15 @@ impl Render for VoiceOrb {
                     .text_size(px(16.))
                     .line_height(px(22.))
                     .text_color(p.ink)
-                    .child(self.transcript.clone()),
+                    .child(if !active && self.transcript.is_empty() {
+                        SharedString::from(tr(
+                            cx,
+                            "Tap the orb to start a voice session.",
+                            "轻触光球，开始语音对话。",
+                        ))
+                    } else {
+                        self.transcript.clone()
+                    }),
             );
         let controls = if active {
             let mute_label = if self.muted {
@@ -409,6 +428,7 @@ impl Render for VoiceOrb {
                     .line_height(px(20.))
                     .font_weight(FontWeight::MEDIUM)
                     .hover(|s| s.bg(p.tray))
+                    .child(icon(Glyph::Mic, 16., p.ink))
                     .child(tr(cx, "Start voice chat", "开始语音对话"))
                     .on_click(cx.listener(move |_, _, _, cx| cx.emit(action))),
                 )

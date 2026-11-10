@@ -1,4 +1,5 @@
 //! Choose and run an assistant command against a selection.
+use crate::primitives::brand_mark::brand_mark;
 use crate::primitives::ops_surface::*;
 use crate::primitives::{
     editor::{EditEvent, Editor, InputMode},
@@ -28,6 +29,7 @@ pub struct CommandDesk {
     answer: String,
     waiting: bool,
     failed: bool,
+    model: Option<SharedString>,
 }
 impl EventEmitter<CommandEvent> for CommandDesk {}
 impl CommandDesk {
@@ -56,9 +58,13 @@ impl CommandDesk {
                 }
                 EditEvent::Changed => s.cursor = 0,
                 EditEvent::Escape => {
-                    s.ticket += 1;
-                    s.waiting = false;
-                    cx.emit(CommandEvent::Cancel)
+                    if s.ai {
+                        s.mode(false, cx);
+                    } else {
+                        s.ticket += 1;
+                        s.waiting = false;
+                        cx.emit(CommandEvent::Cancel)
+                    }
                 }
                 _ => {}
             }
@@ -75,7 +81,13 @@ impl CommandDesk {
             answer: String::new(),
             waiting: false,
             failed: false,
+            model: None,
         }
+    }
+    /// Display the model used to answer questions.
+    pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
+        self.model = Some(model.into());
+        self
     }
     fn filtered(&self, cx: &App) -> Vec<usize> {
         let q = self.edit.read(cx).value().to_lowercase();
@@ -125,6 +137,9 @@ impl CommandDesk {
     }
     fn mode(&mut self, ai: bool, cx: &mut Context<Self>) {
         if self.ai != ai {
+            if self.waiting {
+                cx.emit(CommandEvent::Cancel);
+            }
             self.ai = ai;
             self.ticket += 1;
             self.waiting = false;
@@ -136,22 +151,24 @@ impl Render for CommandDesk {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
         let r = panel(&self.id, 522., cx)
-            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
                 if e.keystroke.key == "tab"
                     && !e.keystroke.modifiers.shift
-                    && s.edit.read(cx).value().is_empty()
+                    && s.edit.read(cx).focus.is_focused(w)
                 {
                     s.mode(!s.ai, cx);
+                    if s.ai && !s.edit.read(cx).value().trim().is_empty() {
+                        s.submit(cx);
+                    }
+                    w.prevent_default();
                     cx.stop_propagation()
                 }
             }))
             .child(
                 row()
                     .child(icon(Glyph::Search, 17., p.secondary))
-                    .child(input(&self.edit, cx)),
-            )
-            .child(
-                row()
+                    .child(div().flex_1().min_w_0().child(input(&self.edit, cx)))
+                    .flex_wrap()
                     .child(btn(
                         "search",
                         tr(cx, "Search", "搜索"),
@@ -236,6 +253,26 @@ impl Render for CommandDesk {
             }
             panes = panes.child(div().absolute().inset_0().opacity(1. - amount).child(rows))
         }
-        r.child(panes)
+        r.child(panes).child(
+            row()
+                .justify_between()
+                .flex_wrap()
+                .child(
+                    row()
+                        .gap(px(6.))
+                        .when_some(self.model.clone(), |row, model| {
+                            row.when_some(brand_mark(&model, 14., cx), |row, mark| row.child(mark))
+                                .child(note(model, cx))
+                        }),
+                )
+                .child(note(
+                    tr(
+                        cx,
+                        "↑↓ Navigate · ↵ Open · Tab Ask AI",
+                        "↑↓ 选择 · ↵ 打开 · Tab 切换 AI",
+                    ),
+                    cx,
+                )),
+        )
     }
 }

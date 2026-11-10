@@ -36,7 +36,7 @@ impl Demo {
             WorkflowStep::new(
                 "classify",
                 t("Classify request", "分类请求"),
-                "Kense AI",
+                "Claude Sonnet 5.5",
                 WorkflowKind::Ai,
             )
             .with_detail(t("Identify urgency and topic", "识别紧急程度和主题")),

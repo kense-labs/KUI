@@ -118,25 +118,36 @@ impl AudioStory {
                 Example::Player(player)
             }
             "voice-recorder" => {
+                let name = "Megan Brooks";
+                let peaks = |count: usize, phase: f32| {
+                    (0..count)
+                        .map(|i| {
+                            let i = i as f32;
+                            (0.1 + 0.66 * (i * 0.27 + phase).sin().abs() * (i * 0.12).cos().abs())
+                                .min(1.)
+                        })
+                        .collect::<Vec<_>>()
+                };
                 let notes = vec![
-                    VoiceMessage::new(
-                        "one",
-                        t("Alex", "小林"),
-                        "9:38",
-                        14.,
-                        vec![0.2, 0.5, 0.8, 0.4, 0.7, 0.3, 0.6, 0.2, 0.5, 0.4],
-                    ),
+                    VoiceMessage::new("one", name, t("9:38 AM", "上午 9:38"), 14., peaks(32, 1.)),
                     VoiceMessage::new(
                         "two",
                         t("You", "你"),
-                        "9:40",
+                        t("9:40 AM", "上午 9:40"),
                         6.,
-                        vec![0.4, 0.7, 0.2, 0.5, 0.8, 0.3],
+                        peaks(22, 2.),
                     )
                     .outgoing(true),
+                    VoiceMessage::new("three", name, t("9:41 AM", "上午 9:41"), 9., peaks(26, 3.)),
                 ];
                 let recorder = cx.new(|_| {
-                    VoiceRecorder::new(t("Sample recorder", "样例录音")).with_messages(notes)
+                    let portrait = Arc::new(Image::from_bytes(
+                        ImageFormat::Svg,
+                        include_bytes!("../../assets/portraits/emma.svg").to_vec(),
+                    ));
+                    VoiceRecorder::new(name)
+                        .with_messages(notes)
+                        .with_contact(portrait, t("Porch renovation", "门廊翻修"))
                 });
                 subs.push(cx.subscribe(
                     &recorder,
@@ -299,15 +310,17 @@ impl Render for AudioStory {
             .gap_4()
             .items_center()
             .justify_center()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Sample audio — no microphone requested",
-                        "样例音频，不会申请麦克风",
-                    )),
-            )
+            .when(!matches!(self.example, Example::Player(_)), |view| {
+                view.child(
+                    div()
+                        .text_sm()
+                        .text_color(p.secondary)
+                        .child(self.language.text(
+                            "Sample audio — no microphone requested",
+                            "样例音频，不会申请麦克风",
+                        )),
+                )
+            })
             .child(div().max_w_full().child(view))
     }
 }

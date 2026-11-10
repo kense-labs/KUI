@@ -31,7 +31,7 @@ impl ProfileExample {
         });
         let image = Arc::new(Image::from_bytes(ImageFormat::Png, PROFILE_ART.to_vec()));
         let card = cx.new(|cx| {
-            GlassCard::new(image, "", "Jasmine Brooks", cx)
+            GlassCard::new(image, "", "Leon Zhu", cx)
                 .with_id("profile-card")
                 .with_subtitle(Box::new(move |_, _| {
                     div()

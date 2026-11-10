@@ -33,16 +33,20 @@ let control = cx.new(|_| GenerationReadout::new("stats","Assistant",Metrics {fir
 
 ## Interaction
 
-Live speed uses the latest finite throughput sample. On completion, average speed is calculated from output tokens and the time after the first token. Cost uses the host’s per-million prices. Details shows the latency split and token rates.
+Read first-token latency, throughput, output tokens and cost. Open Details for latency and per-token cost, and copy the stats as JSON. Failed runs can be retried.
+
 
 ## API
 
 `set_metrics` · `(Metrics, cx)`
 
-Metrics accepts first-token and total milliseconds, input/output counts, rates per million and throughput samples.
+Use Metrics for counts, latency, prices and samples. set_state provides the five run states, set_usage adds cached and reasoning tokens, and variant selects a card or inline readout. RetryGeneration is emitted on Retry.
+
+Event: `RetryGeneration`.
+
 
 ## Motion
 
-The details open over 260ms using measured height and include parent spacing in the same spring. Output token drops snap to a new run; increases interpolate over 100ms. The sparkline uses up to 48 recent samples.
+Details unfolds over 260ms; output counts interpolate over 100ms and snap down on a reset. The sparkline keeps up to 48 samples.
 
 Desktop and web use the same GPUI view.

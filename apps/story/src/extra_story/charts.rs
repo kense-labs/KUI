@@ -5,6 +5,7 @@ use kui::{
         activity_rings::{ActivityDay, ActivityGoal, ActivityRings},
         animated_counter::AnimatedCounter,
         brush_chart::{BrushChart, BrushPoint, BrushPreset},
+        button::Button,
         data_flow::{DataFlow, DataFlowNode, DataFlowSnapshot, DataFlowStatus},
         funnel_chart::{FunnelChart, FunnelSegment, FunnelStage},
         gauge::{Gauge, GaugeTone},
@@ -28,8 +29,10 @@ use kui::{
         waffle_chart::{WaffleCategory, WaffleChart},
     },
     primitives::{
+        Size,
         control::UiLanguage,
         family::{Paint, Tone, face},
+        glyph::Glyph,
         presentation::{column, row},
     },
 };
@@ -81,7 +84,7 @@ enum Content {
     Sunburst(Entity<Sunburst>),
     Sankey(Entity<SankeyFlow>),
     Ticker(Entity<MetricTicker>, Rc<Cell<bool>>),
-    ActivityRings(Entity<ActivityRings>),
+    ActivityRings(Entity<ActivityRings>, Vec<ActivityDay>),
     Training(Entity<ModelTraining>),
     Failover(Entity<MultiRegionFailover>),
     DataFlow(Entity<DataFlow>, Rc<Cell<bool>>),
@@ -230,7 +233,8 @@ impl Demo {
             }
             "sunburst" => {
                 let chart = cx.new(|_| {
-                    Sunburst::new(t("Cloud spend", "云服务开销"), sunburst_data(0, language))
+                    Sunburst::new(t("Cloud spend", "云服务开销"), sunburst_data(1, language))
+                        .with_value_format("$", "K", 1)
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -258,14 +262,19 @@ impl Demo {
                 .detach();
                 Content::Sunburst(chart)
             }
-            "activity-rings" => Content::ActivityRings(cx.new(|cx| {
-                ActivityRings::new(
-                    t("Activity rings", "活动圆环"),
-                    activity_goals(language),
-                    activity_days(language),
-                    cx,
-                )
-            })),
+            "activity-rings" => {
+                let days = activity_days(language);
+                let chart = cx.new(|cx| {
+                    ActivityRings::new(
+                        t("Activity rings", "活动圆环"),
+                        activity_goals(language),
+                        days.clone(),
+                        cx,
+                    )
+                    .with_surface(false)
+                });
+                Content::ActivityRings(chart, days)
+            }
             "vector-search" => {
                 let chart = cx.new(|_| VectorSearch::new(vector_search_data(language)));
                 let weak = chart.downgrade();
@@ -886,23 +895,42 @@ impl Demo {
                 FormOption::new("1", t("Toronto", "多伦多")),
                 FormOption::new("2", t("Austin", "奥斯汀")),
             ],
+            Content::Sunburst(_) => vec![
+                FormOption::new("0", t("Aug", "八月")),
+                FormOption::new("1", t("Sep", "九月")),
+            ],
             _ => vec![],
         };
         let step_limit = match &content {
             Content::Waffle(_) => 4,
+            Content::Sunburst(_) => 2,
             _ => 3,
         };
-        let periods = (!period_options.is_empty()).then(|| {
-            let label = if matches!(content, Content::Radar(_)) {
-                t("Compare with", "对比城市")
-            } else {
-                ""
-            };
-            cx.new(|cx| SegmentedControl::new(label, period_options, w, cx).with_selected(&["0"]))
-        });
+        let sunburst = matches!(content, Content::Sunburst(_));
+        let periods =
+            (!period_options.is_empty()).then(|| {
+                let label = if matches!(content, Content::Radar(_)) {
+                    t("Compare with", "对比城市")
+                } else {
+                    ""
+                };
+                cx.new(|cx| {
+                    SegmentedControl::new(label, period_options, w, cx)
+                        .with_selected(&[if sunburst { "1" } else { "0" }])
+                })
+            });
         if let (Content::Radar(chart), Some(periods)) = (&content, &periods) {
             chart.update(cx, |chart, cx| {
                 chart.set_header_extra(Some(periods.clone().into()), cx)
+            });
+        }
+        if let (Content::Sunburst(chart), Some(periods)) = (&content, &periods) {
+            chart.update(cx, |chart, cx| {
+                chart.set_header(
+                    Some(t("September 2026", "2026 年 9 月").into()),
+                    Some(periods.clone().into()),
+                    cx,
+                )
             });
         }
         let subscription = periods.as_ref().map(|periods| {
@@ -919,7 +947,7 @@ impl Demo {
         });
         Self {
             content,
-            step: 0,
+            step: usize::from(sunburst),
             language,
             periods,
             _period_subscription: subscription,
@@ -992,11 +1020,19 @@ impl Demo {
             Content::Live(_) => {}
             Content::Sunburst(chart) => {
                 let values = sunburst_data(self.step, self.language);
-                chart.update(cx, |chart, cx| chart.set_root(values, cx));
+                let date = if step == 0 {
+                    self.language.text("August 2026", "2026 年 8 月")
+                } else {
+                    self.language.text("September 2026", "2026 年 9 月")
+                };
+                chart.update(cx, |chart, cx| {
+                    chart.set_root(values, cx);
+                    chart.set_header(Some(date.into()), self.periods.clone().map(Into::into), cx);
+                });
             }
             Content::Sankey(_) => {}
             Content::Ticker(_, _) => {}
-            Content::ActivityRings(_) => {}
+            Content::ActivityRings(..) => {}
             Content::Training(_) => {}
             Content::Failover(_) => {}
             Content::DataFlow(_, _) => {}
@@ -1008,6 +1044,69 @@ impl Demo {
 impl Render for Demo {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
+        if let Content::ActivityRings(chart, _) = &self.content {
+            let t = |en, zh| self.language.text(en, zh);
+            let increments = [
+                ("deep", 25., Glyph::Clock, t("25 min", "25 分钟")),
+                ("writing", 250., Glyph::Edit, t("250 words", "250 字")),
+                ("reading", 10., Glyph::Book, t("10 pages", "10 页")),
+            ];
+            let controls = row()
+                .w_full()
+                .justify_center()
+                .flex_wrap()
+                .gap(px(6.))
+                .children(increments.into_iter().enumerate().map(
+                    |(i, (goal, amount, glyph, label))| {
+                        Button::new(("activity-log", i))
+                            .label(label)
+                            .secondary()
+                            .with_size(Size::Sm)
+                            .with_icon(glyph, false)
+                            .on_click(cx.listener(move |s, _, _, cx| {
+                                let Content::ActivityRings(chart, days) = &mut s.content else {
+                                    return;
+                                };
+                                let day = chart.read(cx).selected_day();
+                                if let Some((_, value)) = days.get_mut(day).and_then(|day| {
+                                    day.values.iter_mut().find(|(id, _)| id == goal)
+                                }) {
+                                    *value += amount;
+                                    chart.update(cx, |chart, cx| chart.set_days(days.clone(), cx));
+                                }
+                            }))
+                            .into_themed(cx)
+                    },
+                ))
+                .child(
+                    Button::new("activity-reset")
+                        .label(t("Reset activity", "重置活动"))
+                        .ghost()
+                        .with_size(Size::Sm)
+                        .icon_only(Glyph::Undo)
+                        .on_click(cx.listener(|s, _, _, cx| {
+                            if let Content::ActivityRings(chart, days) = &mut s.content {
+                                *days = activity_days(s.language);
+                                chart.update(cx, |chart, cx| chart.set_days(days.clone(), cx));
+                            }
+                        }))
+                        .into_themed(cx),
+                );
+            return column()
+                .size_full()
+                .p(px(16.))
+                .justify_center()
+                .items_center()
+                .bg(p.stage)
+                .child(
+                    column()
+                        .w_full()
+                        .max_w(px(516.))
+                        .gap(px(12.))
+                        .child(chart.clone())
+                        .child(controls),
+                );
+        }
         let visible = cx
             .try_global::<crate::StoryBridge>()
             .is_none_or(|bridge| (bridge.visible)());
@@ -1100,6 +1199,9 @@ impl Render for Demo {
             .gap(px(28.))
             .w_full()
             .max_w_full()
+            .when(matches!(self.content, Content::Sankey(_)), |view| {
+                view.max_w(px(488.))
+            })
             .children(match &self.content {
                 Content::Gauge(v) => v.iter().cloned().map(Into::into).collect::<Vec<AnyView>>(),
                 Content::Counter(v) => v.iter().cloned().map(Into::into).collect::<Vec<AnyView>>(),
@@ -1117,39 +1219,13 @@ impl Render for Demo {
                 Content::Sunburst(v) => vec![v.clone().into()],
                 Content::Sankey(v) => vec![v.clone().into()],
                 Content::Ticker(v, _) => vec![v.clone().into()],
-                Content::ActivityRings(v) => vec![v.clone().into()],
+                Content::ActivityRings(v, _) => vec![v.clone().into()],
                 Content::Training(v) => vec![v.clone().into()],
                 Content::Failover(v) => vec![v.clone().into()],
                 Content::DataFlow(v, _) => vec![v.clone().into()],
                 Content::VectorSearch(v) => vec![v.clone().into()],
             });
-        let controls = if matches!(self.content, Content::Sunburst(_)) {
-            let options = [
-                self.language.text("August", "八月"),
-                self.language.text("September", "九月"),
-            ];
-            div()
-                .flex()
-                .gap_2()
-                .children(options.into_iter().enumerate().map(|(i, text)| {
-                    face(
-                        ("sunburst-period", i),
-                        text,
-                        36.,
-                        kui::foundation::surface_radius(cx).into(),
-                        if self.step == i {
-                            Tone::Primary
-                        } else {
-                            Tone::Surface
-                        },
-                        cx,
-                    )
-                    .px(px(12.))
-                    .child(text)
-                    .on_click(cx.listener(move |s, _, _, cx| s.choose_step(i, cx)))
-                }))
-                .into_any_element()
-        } else if matches!(self.content, Content::Ridge(_)) {
+        let controls = if matches!(self.content, Content::Ridge(_)) {
             let options = [
                 self.language.text("Zurich", "苏黎世"),
                 self.language.text("Lisbon", "里斯本"),
@@ -1298,7 +1374,10 @@ impl Render for Demo {
                     Content::Live(_)
                         | Content::Sankey(_)
                         | Content::Ticker(_, _)
-                        | Content::ActivityRings(_)
+                        | Content::ActivityRings(..)
+                        | Content::Race(_)
+                        | Content::Sunburst(_)
+                        | Content::Funnel(_)
                         | Content::Training(_)
                         | Content::Failover(_)
                         | Content::DataFlow(_, _)
@@ -1606,27 +1685,32 @@ fn sankey_data(step: usize, language: UiLanguage) -> (Vec<FlowNode>, Vec<FlowLin
 fn sunburst_data(step: usize, language: UiLanguage) -> SunburstNode {
     let t = |en, zh| language.text(en, zh);
     let mut groups = vec![];
-    for (i, (id, en, zh, color)) in [
-        ("platform", "Platform", "平台", 0x997fdb),
-        ("data", "Data", "数据", 0x68a5d6),
-        ("research", "Research", "研究", 0x65be9b),
-        ("product", "Product", "产品", 0xd6aa70),
+    for (i, (id, en, zh, color, total)) in [
+        ("platform", "Platform", "平台", 0x217aca, 49.8),
+        ("data", "Data", "数据", 0x7936aa, 50.1),
+        ("ml", "ML", "机器学习", 0xe99800, 61.8),
+        ("product", "Product", "产品", 0x109d88, 17.6),
+        ("security", "Security", "安全", 0x9b9b9b, 8.9),
     ]
     .into_iter()
     .enumerate()
     {
         let mut branches = vec![];
-        for (j, (sub, en, zh)) in [
-            ("compute", "Compute", "计算"),
-            ("storage", "Storage", "存储"),
-            ("network", "Network", "网络"),
+        for (j, (sub, en, zh, share)) in [
+            ("compute", "Compute", "计算", 0.52),
+            ("storage", "Storage", "存储", 0.31),
+            ("network", "Network", "网络", 0.17),
         ]
         .into_iter()
         .enumerate()
         {
-            let base = (i + 2) as f32
-                * (4 - j) as f32
-                * if step == 0 { 1. } else { 1.1 + i as f32 * 0.08 };
+            let base = total
+                * share
+                * if step == 0 {
+                    0.8 + (i + j) as f32 * 0.026
+                } else {
+                    1.
+                };
             let leaves = [
                 SunburstNode::new(
                     format!("{id}/{sub}/primary"),

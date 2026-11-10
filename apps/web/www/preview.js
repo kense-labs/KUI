@@ -1,6 +1,13 @@
-// Fetch in parallel with the module imports; pass the same response to the
-// WASM initializer so Safari never downloads the large binary twice.
-const wasmDownload = fetch(new URL("./pkg/kui_web_bg.wasm", import.meta.url));
+const wasmUrl = new URL("./pkg/kui_web_bg.wasm", import.meta.url);
+const canStreamGzip = typeof DecompressionStream === "function";
+async function fetchCompressedWasm() {
+  const response = await fetch(new URL("./pkg/kui_web_bg.wasm.gz", import.meta.url));
+  if (!response.ok || !response.body) throw new Error("Compressed preview unavailable");
+  const body = response.body.pipeThrough(new DecompressionStream("gzip"));
+  return new Response(body, { headers: { "Content-Type": "application/wasm" } });
+}
+// Overlap fetching and decoding with loading the generated bindings.
+const wasmDownload = canStreamGzip ? fetchCompressedWasm() : fetch(wasmUrl);
 wasmDownload.catch(() => {}); // The startup handler below reports the failure.
 let start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent, set_holo_preferences, photo_pinch;
 
@@ -484,7 +491,12 @@ status.textContent = selected.lang === "zh" ? "正在加载预览…" : "Loading
 try {
   let init;
   ({ default: init, start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent, set_holo_preferences, photo_pinch } = await import("./pkg/kui_web.js"));
-  await init({ module_or_path: wasmDownload });
+  try {
+    await init({ module_or_path: wasmDownload });
+  } catch (error) {
+    if (!canStreamGzip) throw error;
+    await init({ module_or_path: wasmUrl });
+  }
   mounted = selected;
   set_accent(...accentPair);
   start(mounted.story, dark, reduced, mounted.lang === "zh", embedded);

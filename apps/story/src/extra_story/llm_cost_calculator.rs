@@ -2,7 +2,7 @@
 use gpui::{prelude::*, *};
 use kui::{
     components::llm_cost_calculator::{LlmCostCalculator, LlmModelPrice, LlmUsage},
-    primitives::{control::UiLanguage, family::Paint},
+    primitives::family::Paint,
 };
 pub const IDS: &[&str] = &["llm-cost-calculator"];
 pub fn story(id: &str, _w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
@@ -13,32 +13,11 @@ struct Demo {
 }
 impl Demo {
     fn new(cx: &mut Context<Self>) -> Self {
-        let lang = UiLanguage::current(cx);
-        let t = |en, zh| lang.text(en, zh);
         let models = vec![
-            LlmModelPrice::new(
-                "example-a",
-                t("Example A", "样例 A"),
-                t("Sample provider", "样例提供商"),
-                1.2,
-                4.8,
-            )
-            .with_cached_input(0.25),
-            LlmModelPrice::new(
-                "example-b",
-                t("Example B", "样例 B"),
-                t("Sample provider", "样例提供商"),
-                0.5,
-                3.,
-            )
-            .with_cached_input(0.15),
-            LlmModelPrice::new(
-                "example-c",
-                t("Example C", "样例 C"),
-                t("Sample provider", "样例提供商"),
-                2.5,
-                7.,
-            ),
+            LlmModelPrice::new("claude", "Claude Sonnet 5.5", "Anthropic", 1.2, 4.8)
+                .with_cached_input(0.25),
+            LlmModelPrice::new("gpt", "GPT-6.1 Sol", "OpenAI", 0.5, 3.).with_cached_input(0.15),
+            LlmModelPrice::new("gemini", "Gemini 4 Argon", "Google AI", 2.5, 7.),
         ];
         let mut usage = LlmUsage::new(8_000., 500., 5_000.);
         usage.cache_enabled = true;

@@ -1,5 +1,6 @@
 //! A host-controlled fine-tuning monitor. It never starts or deploys jobs itself.
 use crate::primitives::{
+    brand_mark::brand_mark,
     family::{Paint, Tone, face},
     presentation::{column, hint, row, title, tr},
 };
@@ -583,7 +584,7 @@ impl Render for TrainingRun {
         }
         column()
             .w_full()
-            .max_w(px(640.))
+            .max_w(px(522.))
             .gap(px(16.))
             .pt(px(20.))
             .px(px(20.))
@@ -600,13 +601,20 @@ impl Render for TrainingRun {
                     .justify_between()
                     .gap(px(12.))
                     .child(
-                        column()
-                            .gap(px(2.))
-                            .child(title(snapshot.name.clone(), p))
-                            .child(hint(
-                                format!("{} · {}", snapshot.model, snapshot.details),
-                                p,
-                            )),
+                        row()
+                            .gap(px(10.))
+                            .when_some(brand_mark(&snapshot.model, 24., cx), |row, mark| {
+                                row.child(mark)
+                            })
+                            .child(
+                                column()
+                                    .gap(px(2.))
+                                    .child(title(snapshot.name.clone(), p))
+                                    .child(hint(
+                                        format!("{} · {}", snapshot.model, snapshot.details),
+                                        p,
+                                    )),
+                            ),
                     )
                     .child(hint(status(snapshot.status, cx), p)),
             )
@@ -632,9 +640,6 @@ impl Render for TrainingRun {
             .child(epochs)
             .child(stats)
             .child(events)
-            .when(!snapshot.dataset.is_empty(), |v| {
-                v.child(hint(snapshot.dataset.clone(), p))
-            })
             .when_some(snapshot.error.clone(), |v, error| {
                 v.child(div().text_color(p.danger).child(error))
             })
@@ -653,7 +658,18 @@ impl Render for TrainingRun {
                     p,
                 ))
             })
-            .child(actions)
+            .child(
+                row()
+                    .justify_between()
+                    .flex_wrap()
+                    .border_t_1()
+                    .border_color(p.line)
+                    .pt(px(12.))
+                    .when(!snapshot.dataset.is_empty(), |v| {
+                        v.child(hint(snapshot.dataset.clone(), p))
+                    })
+                    .child(actions),
+            )
             .when(self.simulated, |v| {
                 v.child(hint(tr(cx, "Simulated training data", "模拟训练数据"), p))
             })

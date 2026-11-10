@@ -397,8 +397,8 @@
       "zh": "节点 ID 必须唯一；父节点数值由子节点求和，非有限值和负叶节点值按零计算。"
     },
     "api": {
-      "en": "Use arrow keys to select, Enter to focus, and Escape to return. Upright labels are positioned along arcs; the accessibility table has not yet been tested with a screen reader.",
-      "zh": "使用方向键选择、回车进入、Esc 返回。文字沿弧线排列但保持正立；辅助数据表的读屏效果尚待验证。"
+      "en": "Use arrow keys to select, Enter to focus, and Escape to return. Labels are shaped as whole horizontal words and hidden when the segment is too small.",
+      "zh": "方向键选择、回车进入、Esc 返回。标签整词水平排版；扇区空间不足时隐藏标签。"
     },
     "motion": {
       "en": "Arc geometry and center digits transition between levels; reduced motion updates directly.",
