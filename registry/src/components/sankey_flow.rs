@@ -1,7 +1,10 @@
 //! Host-provided staged flows rendered as proportional, interactive ribbons.
-use crate::primitives::{
-    family::{Paint, PhaseClock, Slide, Tone, disabled_motion, face},
-    presentation::{column, hint, row, title, tr},
+use crate::{
+    components::color_math::oklab_mix,
+    primitives::{
+        family::{Paint, PhaseClock, Slide, Tone, disabled_motion, face, measure},
+        presentation::{column, hint, row, tr},
+    },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
@@ -58,6 +61,11 @@ pub struct FlowInspect {
 pub struct FlowPeriodChange {
     pub index: usize,
 }
+/// A request from the chart's Flow toggle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FlowParticlesChange {
+    pub enabled: bool,
+}
 #[derive(Clone, Copy, Default)]
 struct Bar {
     x: f32,
@@ -82,33 +90,136 @@ struct Layout {
     total: f64,
     vertical: bool,
 }
+impl Layout {
+    fn upright_label_bounds(
+        &self,
+        index: usize,
+        plot_width: f32,
+        text_width: f32,
+        previous_end: f32,
+    ) -> (f32, f32) {
+        let bar = self.bars[index];
+        // The upright layout borrows 8px from the 14px gap after each bar.
+        let right = (bar.y + bar.h + 8.).min(plot_width + 8.);
+        let left = if right >= plot_width + 7.99 {
+            // Use spare space before the last label when it would hit the card edge.
+            bar.y.min((right - text_width).max(previous_end + 6.))
+        } else {
+            bar.y
+        };
+        (left, right.max(left))
+    }
+
+    fn nodes(&self) -> impl DoubleEndedIterator<Item = (usize, usize)> + '_ {
+        self.columns
+            .iter()
+            .zip(&self.bars)
+            .enumerate()
+            .filter_map(|(i, (col, bar))| (bar.h > 0.).then_some((i, *col)))
+    }
+    fn edge_node(&self, last: bool) -> Option<usize> {
+        if last {
+            self.nodes()
+                .max_by_key(|&(i, col)| (col, i))
+                .map(|(i, _)| i)
+        } else {
+            self.nodes()
+                .min_by_key(|&(i, col)| (col, i))
+                .map(|(i, _)| i)
+        }
+    }
+    fn key_node(&self, index: usize, key: &str) -> Option<usize> {
+        let col = *self.columns.get(index)?;
+        let cross = if self.vertical {
+            ("up", "down")
+        } else {
+            ("left", "right")
+        };
+        let within = if self.vertical {
+            ("left", "right")
+        } else {
+            ("up", "down")
+        };
+        if key == within.0 {
+            return self
+                .nodes()
+                .filter(|&(i, c)| c == col && i < index)
+                .map(|(i, _)| i)
+                .next_back()
+                .or(Some(index));
+        }
+        if key == within.1 {
+            return self
+                .nodes()
+                .find(|&(i, c)| c == col && i > index)
+                .map(|(i, _)| i)
+                .or(Some(index));
+        }
+        if key != cross.0 && key != cross.1 {
+            return None;
+        }
+        let center = |i: usize| self.bars[i].y + self.bars[i].h * 0.5;
+        let current = center(index);
+        self.nodes()
+            .filter(|&(_, c)| if key == cross.0 { c < col } else { c > col })
+            .min_by(|&(a, ca), &(b, cb)| {
+                ca.abs_diff(col).cmp(&cb.abs_diff(col)).then_with(|| {
+                    (center(a) - current)
+                        .abs()
+                        .total_cmp(&(center(b) - current).abs())
+                })
+            })
+            .map(|(i, _)| i)
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Focus {
     Node(usize),
     Link(usize),
 }
+struct FlowTip {
+    title: String,
+    value: String,
+    note: String,
+}
+type ValueFormatter = Box<dyn Fn(f64) -> String>;
 pub struct SankeyFlow {
     title: SharedString,
     description: SharedString,
     unit: SharedString,
+    total_label: Option<SharedString>,
     columns: Vec<SharedString>,
     periods: Vec<SharedString>,
+    period_details: Vec<SharedString>,
     period: usize,
     nodes: Vec<FlowNode>,
     links: Vec<FlowLink>,
     table_rows: Vec<String>,
+    node_values: Vec<SharedString>,
+    formatter: Option<ValueFormatter>,
+    empty_label: Option<SharedString>,
+    plot_height: f32,
     layout: Layout,
     old: Layout,
     display: Layout,
     dirty: bool,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     selected: Option<Focus>,
+    focus: Option<FocusHandle>,
+    focus_subscriptions: Vec<Subscription>,
+    node_trace: Vec<Slide>,
+    trace: Vec<Slide>,
+    trace_source: Option<usize>,
+    dim: Slide,
     pointer: Rc<Cell<Option<(f32, f32)>>>,
+    tip_size: Rc<Cell<Size<Pixels>>>,
     tip_x: Slide,
     tip_y: Slide,
     pinned: bool,
     visible: bool,
     particles: bool,
+    particles_controlled: bool,
+    particle_toggle: bool,
     started: PhaseClock,
     elapsed: f32,
     last_age: f32,
@@ -117,30 +228,46 @@ pub struct SankeyFlow {
 }
 impl EventEmitter<FlowInspect> for SankeyFlow {}
 impl EventEmitter<FlowPeriodChange> for SankeyFlow {}
+impl EventEmitter<FlowParticlesChange> for SankeyFlow {}
 impl SankeyFlow {
     pub fn new(title: impl Into<SharedString>, nodes: Vec<FlowNode>, links: Vec<FlowLink>) -> Self {
         Self {
             title: title.into(),
             description: "".into(),
             unit: "".into(),
+            total_label: None,
             columns: vec![],
             periods: vec![],
+            period_details: vec![],
             period: 0,
             nodes,
             links,
             table_rows: Vec::new(),
+            node_values: Vec::new(),
+            formatter: None,
+            empty_label: None,
+            plot_height: 340.,
             layout: Layout::default(),
             old: Layout::default(),
             display: Layout::default(),
             dirty: true,
             bounds: Default::default(),
             selected: None,
+            focus: None,
+            focus_subscriptions: Vec::new(),
+            node_trace: Vec::new(),
+            trace: Vec::new(),
+            trace_source: None,
+            dim: Slide::snappy(0.),
             pointer: Default::default(),
+            tip_size: Default::default(),
             tip_x: Slide::new(0.),
             tip_y: Slide::new(0.),
             pinned: false,
             visible: true,
             particles: true,
+            particles_controlled: false,
+            particle_toggle: true,
             started: PhaseClock::default(),
             elapsed: 0.,
             last_age: 0.,
@@ -161,6 +288,16 @@ impl SankeyFlow {
         self.periods = periods;
         self
     }
+    /// Longer period captions shown in the summary line, such as "Jul to Sep 2026".
+    pub fn with_period_details(mut self, details: Vec<SharedString>) -> Self {
+        self.period_details = details;
+        self
+    }
+    /// Names the first column's total in the summary line, such as "signups".
+    pub fn with_total_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.total_label = Some(label.into());
+        self
+    }
     pub fn set_period(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.periods.len() && self.period != index {
             self.period = index;
@@ -170,6 +307,40 @@ impl SankeyFlow {
     }
     pub fn with_unit(mut self, unit: impl Into<SharedString>) -> Self {
         self.unit = unit.into();
+        self
+    }
+    /// Set the plot height in pixels. Upright plots use at least 480px.
+    pub fn with_height(mut self, height: f32) -> Self {
+        if height.is_finite() && height > 0. {
+            self.plot_height = height;
+        }
+        self
+    }
+    /// Customize value formatting for node labels, tooltips and the flow table.
+    pub fn with_value_formatter(mut self, formatter: impl Fn(f64) -> String + 'static) -> Self {
+        self.formatter = Some(Box::new(formatter));
+        self
+    }
+    /// Override the placeholder for data with no drawable links.
+    pub fn with_empty_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.empty_label = Some(label.into());
+        self
+    }
+    /// Set the initial state of the locally managed particle stream.
+    pub fn with_particles(mut self, enabled: bool) -> Self {
+        self.particles = enabled;
+        self.particles_controlled = false;
+        self
+    }
+    /// Let the host apply toggle requests with `set_particles`.
+    pub fn with_controlled_particles(mut self, enabled: bool) -> Self {
+        self.particles = enabled;
+        self.particles_controlled = true;
+        self
+    }
+    /// Choose whether to show the Flow toggle.
+    pub fn with_particle_toggle(mut self, visible: bool) -> Self {
+        self.particle_toggle = visible;
         self
     }
     pub fn set_data(&mut self, nodes: Vec<FlowNode>, links: Vec<FlowLink>, cx: &mut Context<Self>) {
@@ -205,6 +376,10 @@ impl SankeyFlow {
         self.nodes = nodes;
         self.links = links;
         self.selected = None;
+        self.node_trace.clear();
+        self.trace.clear();
+        self.trace_source = None;
+        self.dim.set(0., cx);
         self.pinned = false;
         self.dirty = true;
         cx.notify();
@@ -227,11 +402,72 @@ impl SankeyFlow {
             cx.notify();
         }
     }
+    fn toggle_particles(&mut self, cx: &mut Context<Self>) {
+        let enabled = !self.particles;
+        if !self.particles_controlled {
+            self.set_particles(enabled, cx);
+        }
+        cx.emit(FlowParticlesChange { enabled });
+    }
+    fn format_value(&self, value: f64) -> String {
+        self.formatter
+            .as_ref()
+            .map_or_else(|| thousands(value), |format| format(value))
+    }
+    fn tip(&self, focus: Focus, cx: &App) -> Option<FlowTip> {
+        let percentage = |value, total| (fraction(value, total) * 100.).round();
+        Some(match focus {
+            Focus::Node(i) => {
+                let value = *self.layout.values.get(i)?;
+                let share = percentage(value, self.layout.total);
+                let label = self
+                    .total_label
+                    .as_deref()
+                    .unwrap_or_else(|| tr(cx, "the total", "总量"));
+                let note = if tr(cx, "en", "zh") == "zh" {
+                    format!("占{label}的 {share}%")
+                } else {
+                    format!("{share}% of {label}")
+                };
+                FlowTip {
+                    title: self.nodes.get(i)?.label.to_string(),
+                    value: format!("{}{}", self.format_value(value), self.unit),
+                    note,
+                }
+            }
+            Focus::Link(i) => {
+                let band = self.layout.bands.get(i)?;
+                let value = f64::from(self.links.get(i)?.value);
+                let source = &self.nodes.get(band.source)?.label;
+                let target = &self.nodes.get(band.target)?.label;
+                let from_share = percentage(value, self.layout.values[band.source]);
+                let to_share = percentage(value, self.layout.values[band.target]);
+                let (title, note) = if tr(cx, "en", "zh") == "zh" {
+                    (
+                        format!("{source} → {target}"),
+                        format!("占{source}的 {from_share}%，占{target}的 {to_share}%"),
+                    )
+                } else {
+                    (
+                        format!("{source} to {target}"),
+                        format!("{from_share}% of {source}, {to_share}% of {target}"),
+                    )
+                };
+                FlowTip {
+                    title,
+                    value: format!("{}{}", self.format_value(value), self.unit),
+                    note,
+                }
+            }
+        })
+    }
     fn set_focus(&mut self, focus: Option<Focus>, cx: &mut Context<Self>) {
         if self.selected == focus {
             return;
         }
         self.selected = focus;
+        self.tip_size.set(Size::default());
+        self.retarget_trace(cx);
         if let Some(focus) = focus {
             match focus {
                 Focus::Node(i) => {
@@ -268,6 +504,25 @@ impl SankeyFlow {
             }
         }
         cx.notify();
+    }
+    fn retarget_trace(&mut self, cx: &App) {
+        let (nodes, shares) = connected(&self.layout, &self.links, self.selected);
+        if let Some(focus) = self.selected {
+            let source = match focus {
+                Focus::Node(i) => Some(i),
+                Focus::Link(i) => self.layout.bands.get(i).map(|band| band.source),
+            };
+            self.trace_source = source.filter(|&i| self.layout.columns.get(i) == Some(&0));
+        }
+        self.node_trace.resize(nodes.len(), Slide::snappy(0.));
+        for (spring, share) in self.node_trace.iter_mut().zip(nodes) {
+            spring.set(share, cx);
+        }
+        self.trace.resize(shares.len(), Slide::snappy(0.));
+        for (spring, share) in self.trace.iter_mut().zip(shares) {
+            spring.set(share, cx);
+        }
+        self.dim.set(f32::from(self.selected.is_some()), cx);
     }
     fn build(&self, width: f32, height: f32) -> Layout {
         let n = self.nodes.len();
@@ -338,19 +593,29 @@ impl SankeyFlow {
         let scale = (0..count)
             .filter(|&c| column_totals[c] > 0.)
             .map(|c| {
-                f64::from((minor - 8. - column_count[c].saturating_sub(1) as f32 * 14.).max(1.))
+                f64::from((minor - 4. - column_count[c].saturating_sub(1) as f32 * 14.).max(1.))
                     / column_totals[c]
             })
             .fold(f64::INFINITY, f64::min);
         let scale = if scale.is_finite() { scale } else { 0. };
-        let mut offset = vec![4f32; count];
+        // Columns align to the bottom edge; shorter columns leave the slack on top.
+        let mut offset: Vec<f32> = (0..count)
+            .map(|c| {
+                let content = column_totals[c] as f32 * scale as f32
+                    + 14. * column_count[c].saturating_sub(1) as f32;
+                (minor - content).max(0.)
+            })
+            .collect();
         let mut bars = vec![];
         for i in 0..n {
             let c = cols[i];
+            // The last column's labels sit to its right; reserve that strip so
+            // the reference stage headers can align with each column's origin.
+            let usable = if vertical { major - 50. } else { major - 110. };
             let pos = if count <= 1 {
                 (major - 10.) / 2.
             } else {
-                c as f32 * (major - 10.).max(1.) / (count - 1) as f32
+                c as f32 * usable.max(1.) / (count - 1) as f32
             };
             let len = (values[i] * scale) as f32;
             bars.push(Bar {
@@ -393,6 +658,23 @@ impl SankeyFlow {
 fn mix(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
+/// Group thousands the way the reference node values read, as in "5,200".
+fn thousands(value: f64) -> String {
+    let rounded = format!("{value:.0}");
+    let (sign, digits) = if let Some(rest) = rounded.strip_prefix('-') {
+        ("-", rest)
+    } else {
+        ("", rounded.as_str())
+    };
+    let mut grouped = String::from(sign);
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    grouped
+}
 fn transition(old: &Layout, new: &Layout, t: f32) -> Layout {
     let mut result = new.clone();
     for (i, bar) in result.bars.iter_mut().enumerate() {
@@ -420,10 +702,10 @@ fn transition(old: &Layout, new: &Layout, t: f32) -> Layout {
     }
     result
 }
-fn connected(layout: &Layout, links: &[FlowLink], focus: Option<Focus>) -> (Vec<bool>, Vec<f32>) {
+fn connected(layout: &Layout, links: &[FlowLink], focus: Option<Focus>) -> (Vec<f32>, Vec<f32>) {
     let n = layout.bars.len();
     if focus.is_none() {
-        return (vec![true; n], vec![1.; layout.bands.len()]);
+        return (vec![0.; n], vec![0.; layout.bands.len()]);
     }
     let mut incoming = vec![0f64; n];
     let mut outgoing = vec![0f64; n];
@@ -476,17 +758,17 @@ fn connected(layout: &Layout, links: &[FlowLink], focus: Option<Focus>) -> (Vec<
             down[band.target] += f64::from(links[i].value) * share;
         }
     }
-    let mut nodes: Vec<_> = up
-        .iter()
-        .zip(&down)
-        .map(|(a, b)| *a > 0. || *b > 0.)
+    let nodes = (0..n)
+        .map(|i| fraction(up[i].max(down[i]), incoming[i].max(outgoing[i])))
         .collect();
-    if let Some(Focus::Node(i)) = focus
-        && i < n
-    {
-        nodes[i] = true;
-    }
     (nodes, trace)
+}
+fn fraction(value: f64, total: f64) -> f32 {
+    if total > 0. {
+        (value / total).clamp(0., 1.) as f32
+    } else {
+        0.
+    }
 }
 fn chart_point(major: f32, minor: f32, vertical: bool, b: Bounds<Pixels>) -> Point<Pixels> {
     if vertical {
@@ -495,7 +777,15 @@ fn chart_point(major: f32, minor: f32, vertical: bool, b: Bounds<Pixels>) -> Poi
         point(b.origin.x + px(major), b.origin.y + px(minor))
     }
 }
-fn curve(a: f32, b: f32, t: f32) -> f32 {
+fn curve(a: f32, b: f32, major_fraction: f32) -> f32 {
+    // Both control points are at the major-axis midpoint. Solve for the
+    // parameter at the pointer's major coordinate before evaluating the edge.
+    let mut t = major_fraction;
+    for _ in 0..3 {
+        let u = t - 0.5;
+        let x = 0.5 + u * (0.75 + u * u);
+        t -= (x - major_fraction) / (0.75 + 3. * u * u);
+    }
     let eased = t * t * (3. - 2. * t);
     mix(a, b, eased)
 }
@@ -549,9 +839,27 @@ fn intersects_viewport(bounds: Bounds<Pixels>, viewport: Size<Pixels>) -> bool {
 impl Render for SankeyFlow {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
+        let focus = self
+            .focus
+            .get_or_insert_with(|| cx.focus_handle().tab_stop(true))
+            .clone();
+        if self.focus_subscriptions.is_empty() {
+            self.focus_subscriptions
+                .push(cx.on_focus(&focus, w, |s, _, cx| {
+                    if s.selected.is_none() && s.pointer.get().is_none() {
+                        s.set_focus(s.layout.edge_node(false).map(Focus::Node), cx);
+                    }
+                }));
+            self.focus_subscriptions
+                .push(cx.on_blur(&focus, w, |s, _, cx| {
+                    if s.pointer.get().is_none() && !s.pinned {
+                        s.set_focus(None, cx);
+                    }
+                }));
+        }
         let bounds = self.bounds.get();
-        let on_screen =
-            self.visible && w.is_visible() && intersects_viewport(bounds, w.viewport_size());
+        let viewport = w.viewport_size();
+        let on_screen = self.visible && w.is_visible() && intersects_viewport(bounds, viewport);
         let measured_width = f32::from(bounds.size.width);
         let measured_height = f32::from(bounds.size.height);
         let width = if measured_width > 0. {
@@ -562,7 +870,7 @@ impl Render for SankeyFlow {
         let height = if measured_height > 0. {
             measured_height
         } else {
-            340.
+            self.plot_height
         };
         if self.dirty || self.last_size != (width, height) {
             self.old = transition(
@@ -571,12 +879,18 @@ impl Render for SankeyFlow {
                 self.animation.value(cx).clamp(0., 1.),
             );
             self.layout = self.build(width, height);
-            let mut outgoing = vec![0f64; self.nodes.len()];
-            for (i, band) in self.layout.bands.iter().enumerate() {
-                if band.thickness > 0. {
-                    outgoing[band.source] += f64::from(self.links[i].value);
-                }
-            }
+            self.node_values = self
+                .layout
+                .values
+                .iter()
+                .map(|&value| {
+                    if self.formatter.is_none() && value >= 1_000_000_000. {
+                        format!("{value:.1e}").into()
+                    } else {
+                        self.format_value(value).into()
+                    }
+                })
+                .collect();
             self.table_rows = self
                 .layout
                 .bands
@@ -589,22 +903,23 @@ impl Render for SankeyFlow {
                     let link = &self.links[i];
                     let source = &self.nodes[band.source].label;
                     let target = &self.nodes[band.target].label;
-                    let share = if outgoing[band.source] > 0. {
-                        f64::from(link.value) / outgoing[band.source] * 100.
-                    } else {
-                        0.
-                    };
+                    let share =
+                        fraction(f64::from(link.value), self.layout.values[band.source]) * 100.;
                     Some(format!(
-                        "{source} → {target} · {:.0}{} · {:.1}%",
-                        link.value, self.unit, share
+                        "{source} → {target} · {}{} · {:.1}%",
+                        self.format_value(f64::from(link.value)),
+                        self.unit,
+                        share
                     ))
                 })
                 .collect();
             self.last_size = (width, height);
             self.dirty = false;
             self.animation.reset(0.);
-            let seconds = if self.old.bars.is_empty() { 0.95 } else { 0.34 };
+            // First reveal grows in (spring.smooth); data swaps morph (spring.morph).
+            let seconds = if self.old.bars.is_empty() { 0.4 } else { 0.42 };
             self.animation.duration(1., seconds, cx);
+            self.retarget_trace(cx);
         }
         let progress = if on_screen {
             self.animation.get(w, cx).clamp(0., 1.)
@@ -613,7 +928,31 @@ impl Render for SankeyFlow {
         };
         let layout = transition(&self.old, &self.layout, progress);
         self.display = layout.clone();
-        let (focus_nodes, focus_bands) = connected(&layout, &self.links, self.selected);
+        let node_values = self.node_values.clone();
+        let now = cx.background_executor().now();
+        let reduced = disabled_motion(cx);
+        let (dim, dim_active) = self.dim.sample_batch(now, reduced);
+        let dim = dim.clamp(0., 1.);
+        let mut trace_active = dim_active;
+        let mut sample_trace = |springs: &[Slide]| {
+            springs
+                .iter()
+                .map(|spring| {
+                    let (share, active) = spring.sample_batch(now, reduced);
+                    trace_active |= active;
+                    share.clamp(0., 1.)
+                })
+                .collect::<Vec<_>>()
+        };
+        let trace = sample_trace(&self.trace);
+        let node_trace = sample_trace(&self.node_trace);
+        let trace_color = self
+            .trace_source
+            .and_then(|i| self.nodes.get(i))
+            .map_or_else(|| oklab_mix(p.panel, p.ink, 0.785), |n| n.color);
+        if on_screen && trace_active {
+            w.request_animation_frame();
+        }
         let moving = on_screen
             && self.particles
             && !disabled_motion(cx)
@@ -635,61 +974,73 @@ impl Render for SankeyFlow {
         let graph_bounds = self.bounds.clone();
         let paint_layout = layout.clone();
         let selected = self.selected;
-        let details = match selected {
-            Some(Focus::Node(i)) => self.nodes.get(i).map(|v| {
-                format!(
-                    "{} · {:.0}{}",
-                    v.label,
-                    layout.values.get(i).copied().unwrap_or(0.),
-                    self.unit
-                )
-            }),
-            Some(Focus::Link(i)) => self.links.get(i).map(|v| {
-                let source = self
-                    .nodes
-                    .iter()
-                    .find(|n| n.id == v.source)
-                    .map_or(v.source.as_ref(), |n| n.label.as_ref());
-                let target = self
-                    .nodes
-                    .iter()
-                    .find(|n| n.id == v.target)
-                    .map_or(v.target.as_ref(), |n| n.label.as_ref());
-                format!("{} → {} · {:.0}{}", source, target, v.value, self.unit)
-            }),
-            None => None,
-        }
-        .unwrap_or_else(|| {
-            tr(cx, "Hover or tap a flow to inspect", "悬停或点击查看流向").to_string()
-        });
-        let chart_height = if width < 420. { 480. } else { 340. };
-        if self.selected.is_some()
-            && let Some((x, y)) = self.pointer.get()
-        {
-            let width = f32::from(self.bounds.get().size.width);
-            let height = f32::from(self.bounds.get().size.height);
-            let mut left = x + 14.;
-            if left + 168. > width {
-                left = (x - 14. - 168.).max(0.);
+        let tip = selected.and_then(|focus| self.tip(focus, cx));
+        let details = tip.as_ref().map_or_else(
+            || tr(cx, "Hover or tap a flow to inspect", "悬停或点击查看流向").to_string(),
+            |tip| format!("{}. {}. {}", tip.title, tip.value, tip.note),
+        );
+        let chart_height = if width < 420. {
+            self.plot_height.max(480.)
+        } else {
+            self.plot_height
+        };
+        let measured_tip = self.tip_size.get();
+        let mut tip_width = f32::from(measured_tip.width).min(width);
+        let tip_height = if measured_tip.height > px(0.) {
+            f32::from(measured_tip.height)
+        } else {
+            82.4
+        };
+        if let Some(tip) = &tip {
+            if tip_width <= 0. {
+                let estimate =
+                    |text: &str, size| measure(&SharedString::from(text.to_owned()), size, w);
+                tip_width = (estimate(&tip.title, 12.)
+                    .max(estimate(&tip.value, 16.))
+                    .max(estimate(&tip.note, 12.))
+                    + 26.)
+                    .min(width);
             }
-            let mut top = y - 14. - 88.;
-            if top < 0. {
-                top = y + 14.;
+            let anchor = self.pointer.get().or_else(|| {
+                let Focus::Node(i) = selected? else {
+                    return None;
+                };
+                let bar = layout.bars.get(i)?;
+                let major = bar.x + bar.w * 0.5;
+                let minor = bar.y + bar.h * 0.5;
+                Some(if layout.vertical {
+                    (minor, major)
+                } else {
+                    (major, minor)
+                })
+            });
+            if let Some((x, y)) = anchor {
+                let left = if x + 14. + tip_width > width {
+                    x - 14. - tip_width
+                } else {
+                    x + 14.
+                };
+                self.tip_x
+                    .set(left.clamp(0., (width - tip_width).max(0.)), cx);
+                self.tip_y.set(
+                    (y - 14. - tip_height).clamp(0., (height - tip_height).max(0.)),
+                    cx,
+                );
             }
-            self.tip_x.duration(left.max(0.), 0.26, cx);
-            self.tip_y
-                .duration(top.clamp(0., (height - 88.).max(0.)), 0.26, cx);
         }
-        let tip_x = self.tip_x.get(w, cx);
-        let tip_y = self.tip_y.get(w, cx);
+        let tip_x = self.tip_x.get(w, cx).clamp(0., (width - tip_width).max(0.));
+        let tip_y = self
+            .tip_y
+            .get(w, cx)
+            .clamp(0., (height - tip_height).max(0.));
         let mut graph = div()
             .id("sankey-flow")
             .role(Role::Figure)
+            .track_focus(&focus)
             .tab_index(0)
             .relative()
             .w_full()
             .h(px(chart_height))
-            .overflow_hidden()
             .aria_label(format!(
                 "{}. {}. {}",
                 self.title,
@@ -701,89 +1052,67 @@ impl Render for SankeyFlow {
                 details.clone()
             ))
             .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
-                let b = s.bounds.get();
-                s.pointer.set(Some((
-                    f32::from(e.position.x - b.origin.x),
-                    f32::from(e.position.y - b.origin.y),
-                )));
                 if !s.pinned {
+                    let b = s.bounds.get();
+                    let previous = s.pointer.replace(Some((
+                        f32::from(e.position.x - b.origin.x),
+                        f32::from(e.position.y - b.origin.y),
+                    )));
                     let value = s.hit(e.position);
+                    if value == s.selected && value.is_some() && previous != s.pointer.get() {
+                        cx.notify();
+                    }
                     s.set_focus(value, cx);
                 }
             }))
             .on_hover(cx.listener(|s, over: &bool, _, cx| {
-                if !over {
-                    s.pointer.set(None);
-                    if !s.pinned {
-                        s.set_focus(None, cx);
-                    }
+                if !over && !s.pinned && s.pointer.take().is_some() {
+                    s.set_focus(None, cx);
                 }
             }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|s, e: &MouseDownEvent, _, cx| {
+                cx.listener(|s, e: &MouseDownEvent, w, cx| {
                     let next = s.hit(e.position);
-                    if s.pinned && s.selected == next {
+                    let b = s.bounds.get();
+                    s.pointer.set(Some((
+                        f32::from(e.position.x - b.origin.x),
+                        f32::from(e.position.y - b.origin.y),
+                    )));
+                    let touch = w.last_input_was_touch();
+                    if touch && s.pinned && s.selected == next {
                         s.pinned = false;
                         s.set_focus(None, cx);
                     } else {
-                        s.pinned = next.is_some();
+                        s.pinned = touch && next.is_some();
                         s.set_focus(next, cx);
                     }
                 }),
             )
             .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
-                if s.nodes.is_empty() {
-                    return;
-                }
-                let index = match s.selected {
-                    Some(Focus::Node(i)) => i,
-                    _ => 0,
-                };
-                let col = s.layout.columns.get(index).copied().unwrap_or(0);
-                let siblings: Vec<usize> = s
-                    .layout
-                    .columns
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, c)| (*c == col).then_some(i))
-                    .collect();
-                let pos = siblings.iter().position(|i| *i == index).unwrap_or(0);
-                let vertical = s.layout.vertical;
                 let key = e.keystroke.key.as_str();
                 let next = match key {
-                    "escape" => {
-                        s.pinned = false;
-                        s.set_focus(None, cx);
-                        w.prevent_default();
-                        cx.stop_propagation();
-                        return;
+                    "escape" => None,
+                    "home" => s.layout.edge_node(false),
+                    "end" => s.layout.edge_node(true),
+                    "left" | "right" | "up" | "down" => {
+                        let Some(i) = s.layout.edge_node(false) else {
+                            return;
+                        };
+                        match s.selected {
+                            Some(Focus::Node(index)) => {
+                                s.layout.key_node(index, key).or(Some(index))
+                            }
+                            _ => Some(i),
+                        }
                     }
-                    k if (k == "up" && !vertical) || (k == "left" && vertical) => {
-                        siblings.get(pos.saturating_sub(1)).copied()
-                    }
-                    k if (k == "down" && !vertical) || (k == "right" && vertical) => siblings
-                        .get((pos + 1).min(siblings.len().saturating_sub(1)))
-                        .copied(),
-                    k if (k == "left" && !vertical) || (k == "up" && vertical) => s
-                        .layout
-                        .columns
-                        .iter()
-                        .enumerate()
-                        .find_map(|(i, c)| (*c == col.saturating_sub(1)).then_some(i)),
-                    k if (k == "right" && !vertical) || (k == "down" && vertical) => s
-                        .layout
-                        .columns
-                        .iter()
-                        .enumerate()
-                        .find_map(|(i, c)| (*c == col + 1).then_some(i)),
-                    "home" => Some(0),
-                    "end" => s.nodes.len().checked_sub(1),
                     _ => return,
                 };
-                if let Some(i) = next {
-                    s.pinned = true;
-                    s.set_focus(Some(Focus::Node(i)), cx);
+                let moved = s.pointer.take().is_some();
+                s.pinned = false;
+                s.set_focus(next.map(Focus::Node), cx);
+                if moved {
+                    cx.notify();
                 }
                 w.prevent_default();
                 cx.stop_propagation();
@@ -813,33 +1142,42 @@ impl Render for SankeyFlow {
                             let mid = (start + end) / 2.;
                             let at =
                                 |major, minor| chart_point(major, minor, paint_layout.vertical, b);
-                            let mut path = PathBuilder::fill();
-                            path.move_to(at(start, band.source_y));
-                            path.cubic_bezier_to(
-                                at(mid, band.source_y),
-                                at(mid, band.target_y),
-                                at(end, band.target_y),
-                            );
-                            path.line_to(at(end, band.target_y + band.thickness));
-                            path.cubic_bezier_to(
-                                at(mid, band.target_y + band.thickness),
-                                at(mid, band.source_y + band.thickness),
-                                at(start, band.source_y + band.thickness),
-                            );
-                            path.close();
+                            let ribbon = |thickness: f32| {
+                                let mut path = PathBuilder::fill();
+                                path.move_to(at(start, band.source_y));
+                                path.cubic_bezier_to(
+                                    at(end, band.target_y),
+                                    at(mid, band.source_y),
+                                    at(mid, band.target_y),
+                                );
+                                path.line_to(at(end, band.target_y + thickness));
+                                path.cubic_bezier_to(
+                                    at(start, band.source_y + thickness),
+                                    at(mid, band.target_y + thickness),
+                                    at(mid, band.source_y + thickness),
+                                );
+                                path.close();
+                                path.build()
+                            };
                             let color = nodes.get(band.source).map_or(p.bright, |n| n.color);
-                            if let Ok(path) = path.build() {
-                                let fill = if selected.is_none() {
-                                    p.ink.opacity(0.09)
-                                } else if focus_bands[i] > 0. {
-                                    color.opacity(0.36)
+                            if let Ok(path) = ribbon(band.thickness) {
+                                let fill = if paint_layout.columns[band.source] == 0 {
+                                    color.opacity(mix(0.22, 0.07, dim))
                                 } else {
-                                    p.ink.opacity(0.05)
+                                    p.ink.opacity(mix(0.09, 0.05, dim))
                                 };
                                 w.paint_path(path, fill);
                             }
-                            if moving && focus_bands[i] > 0. {
-                                let count = ((band.thickness / 8.).ceil() as usize).clamp(1, 12);
+                            let traced_width = band.thickness * trace[i];
+                            if traced_width > 0.001
+                                && let Ok(path) = ribbon(traced_width)
+                            {
+                                w.paint_path(path, trace_color.opacity(0.34));
+                            }
+                            // With nothing selected the stream runs on every ribbon;
+                            // a selection focuses the stream onto its connected bands.
+                            if moving && (selected.is_none() || traced_width > 0.001) {
+                                let count = ((band.thickness / 8.).ceil() as usize).clamp(1, 34);
                                 for j in 0..count {
                                     let t = (phase * 40. / (end - start).max(1.)
                                         + j as f32 / count as f32
@@ -865,7 +1203,12 @@ impl Render for SankeyFlow {
                                     }
                                     dot.close();
                                     if let Ok(dot) = dot.build() {
-                                        w.paint_path(dot, color.opacity(0.8));
+                                        let particle_color = if selected.is_some() {
+                                            trace_color
+                                        } else {
+                                            color
+                                        };
+                                        w.paint_path(dot, particle_color.opacity(0.8));
                                     }
                                 }
                             }
@@ -877,66 +1220,59 @@ impl Render for SankeyFlow {
                             let color = nodes.get(i).map_or(p.bright, |n| n.color);
                             let at =
                                 |major, minor| chart_point(major, minor, paint_layout.vertical, b);
-                            let mut path = PathBuilder::fill();
-                            path.move_to(at(bar.x, bar.y));
-                            path.line_to(at(bar.x + bar.w, bar.y));
-                            path.line_to(at(bar.x + bar.w, bar.y + bar.h));
-                            path.line_to(at(bar.x, bar.y + bar.h));
-                            path.close();
-                            if let Ok(path) = path.build() {
-                                let fill = if selected.is_none() {
-                                    p.panel.blend(p.ink.opacity(0.72))
-                                } else if focus_nodes[i] {
-                                    color
-                                } else {
-                                    p.panel.blend(p.ink.opacity(0.28))
-                                };
-                                w.paint_path(path, fill);
+                            let source_column = paint_layout.columns[i] == 0;
+                            let paint_bar = |height: f32, fill_color, w: &mut Window| {
+                                let bounds = Bounds::from_corners(
+                                    at(bar.x, bar.y),
+                                    at(bar.x + bar.w, bar.y + height),
+                                );
+                                let radius = 2.5f32.min(bar.w * 0.5).min(height * 0.5);
+                                w.paint_quad(fill(bounds, fill_color).corner_radii(px(radius)));
+                            };
+                            let base = if source_column {
+                                oklab_mix(p.panel, color, mix(1., 0.4, dim))
+                            } else {
+                                oklab_mix(p.panel, p.ink, mix(0.72, 0.28, dim))
+                            };
+                            paint_bar(bar.h, base, w);
+                            let traced_height = bar.h * node_trace[i];
+                            if traced_height > 0.001 {
+                                paint_bar(traced_height, trace_color, w);
                             }
-                            if let Some(node) = nodes.get(i) {
-                                let name: String = node.label.chars().take(16).collect();
-                                let name = if node.label.chars().count() > 16 {
-                                    format!("{name}…")
-                                } else {
-                                    name
-                                };
-                                let value = paint_layout.values[i];
-                                let value = if value >= 1_000_000_000. {
-                                    format!("{value:.1e}")
-                                } else {
-                                    format!("{value:.0}")
-                                };
+                            if !paint_layout.vertical
+                                && let Some(node) = nodes.get(i)
+                            {
+                                let name = node.label.clone();
+                                let value = node_values[i].clone();
                                 let short = bar.h < 28.;
-                                let name_color = if focus_nodes[i] { p.ink } else { p.secondary };
+                                let name_color = p.secondary;
                                 let mut name_run = w.text_style().to_run(name.len());
                                 name_run.color = name_color;
-                                let name_line = w.text_system().shape_line(
-                                    name.clone().into(),
-                                    px(12.),
-                                    &[name_run],
-                                    None,
-                                );
+                                let name_line =
+                                    w.text_system().shape_line(name, px(12.), &[name_run], None);
                                 let value_size = if short { 12. } else { 14. };
                                 let mut value_style = w.text_style();
                                 value_style.font_weight = FontWeight::MEDIUM;
                                 let mut value_run = value_style.to_run(value.len());
                                 value_run.color = p.ink;
                                 let value_line = w.text_system().shape_line(
-                                    value.into(),
+                                    value,
                                     px(value_size),
                                     &[value_run],
                                     None,
                                 );
-                                let pos = if paint_layout.vertical {
-                                    at(bar.x + bar.w + 2., bar.y)
+                                let half = if short { 7.2 } else { 16.1 };
+                                let pos =
+                                    at(bar.x + bar.w + 7., (bar.y + bar.h * 0.5 - half).max(0.));
+                                let widest = if short {
+                                    name_line.width() + px(6.) + value_line.width()
                                 } else {
-                                    at(bar.x + bar.w + 4., bar.y)
+                                    name_line.width().max(value_line.width())
                                 };
-                                let widest = name_line.width().max(value_line.width());
-                                let right =
-                                    (f32::from(b.size.width) - f32::from(widest) - 4.).max(4.);
-                                let x = f32::from(pos.x - b.origin.x).clamp(4., right);
-                                let origin = point(b.origin.x + px(x), pos.y);
+                                let x = pos
+                                    .x
+                                    .min((b.right() - widest - px(4.)).max(b.left() + px(4.)));
+                                let origin = point(x, pos.y);
                                 if short {
                                     let _ = name_line.paint(
                                         origin,
@@ -978,15 +1314,51 @@ impl Render for SankeyFlow {
                 )
                 .absolute()
                 .inset_0(),
-            );
-        if self.selected.is_some() {
+            )
+            .when(layout.vertical, |graph| {
+                let mut label_ends = vec![0.; layout.bars.len()];
+                graph.children(layout.nodes().map(|(i, stage)| {
+                    let bar = layout.bars[i];
+                    let name = &self.nodes[i].label;
+                    let value = &self.node_values[i];
+                    let text_width = measure(name, 12., w).max(measure(value, 14., w)).ceil() + 1.;
+                    let (left, right) =
+                        layout.upright_label_bounds(i, width, text_width, label_ends[stage]);
+                    label_ends[stage] = right.min(left + text_width);
+                    column()
+                        .absolute()
+                        .left(px(left))
+                        .top(px(bar.x + bar.w + 6.))
+                        .w(px(right - left))
+                        .gap(px(1.))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(12.))
+                                .line_height(px(14.4))
+                                .text_color(p.secondary)
+                                .child(name.clone()),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(14.))
+                                .line_height(px(16.8))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(value.clone()),
+                        )
+                }))
+            });
+        if let Some(tip) = tip {
+            let tip_size = self.tip_size.clone();
             graph = graph.child(
                 div()
+                    .id("flow-tooltip")
+                    .debug_selector(|| "flow-tooltip".into())
                     .absolute()
                     .left(px(tip_x))
                     .top(px(tip_y))
-                    .min_w(px(168.))
-                    .max_w(px(240.))
+                    .max_w(px(width))
                     .px(px(12.))
                     .py(px(10.))
                     .flex()
@@ -995,24 +1367,89 @@ impl Render for SankeyFlow {
                     .rounded(crate::foundation::surface_radius(cx))
                     .border_1()
                     .border_color(p.line)
-                    .bg(p.panel)
+                    .bg(p.stage)
                     .shadow_lg()
                     .child(
+                        canvas(
+                            move |bounds, w, _| {
+                                let measured =
+                                    size(bounds.size.width + px(2.), bounds.size.height + px(2.));
+                                if tip_size.replace(measured) != measured {
+                                    w.request_animation_frame();
+                                }
+                            },
+                            |_, _, _, _| (),
+                        )
+                        .absolute()
+                        .inset_0(),
+                    )
+                    .child(
                         div()
+                            .truncate()
                             .text_size(px(12.))
-                            .line_height(px(20.))
+                            .line_height(px(16.8))
                             .text_color(p.secondary)
-                            .child(details.clone()),
+                            .child(tip.title),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(16.))
+                            .line_height(px(20.8))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(tip.value),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(12.))
+                            .line_height(px(16.8))
+                            .text_color(p.faint)
+                            .child(tip.note),
                     ),
             );
         }
+        if layout.total <= 0. {
+            let label = self
+                .empty_label
+                .clone()
+                .unwrap_or_else(|| tr(cx, "No flows yet", "暂无流向").into());
+            graph = graph.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(hint(label, p)),
+            );
+        }
         let rows = self.table_rows.clone();
+        // Summary line under the title: "11,200 signups, Jul to Sep 2026".
+        let total = thousands(self.display.total);
+        let total_label = self
+            .total_label
+            .clone()
+            .unwrap_or_else(|| tr(cx, "the total", "总量").to_string().into());
+        let meta = match self.period_details.get(self.period) {
+            Some(detail) => format!("{total} {total_label}, {detail}"),
+            None => format!("{total} {total_label}"),
+        };
+        let column_x = |c: usize| {
+            if self.columns.len() <= 1 {
+                0.
+            } else {
+                c as f32 * (width - 110.).max(1.) / (self.columns.len() - 1) as f32
+            }
+        };
         column()
             .relative()
             .w_full()
-            .max_w(px(760.))
+            .max_w(px(706.))
             .gap(px(20.))
             .p(px(24.))
+            .when(viewport.width < px(420.), |view| view.px(px(16.)))
             .rounded(crate::foundation::surface_radius(cx))
             .bg(p.panel)
             .border_1()
@@ -1026,33 +1463,51 @@ impl Render for SankeyFlow {
                     .flex_wrap()
                     .child(
                         column()
-                            .gap_1()
-                            .child(title(self.title.clone(), p))
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(16.))
+                                    .line_height(px(17.6))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(self.title.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(14.))
+                                    .line_height(px(19.6))
+                                    .text_color(p.secondary)
+                                    .child(meta),
+                            )
                             .when(!self.description.is_empty(), |v| {
                                 v.child(hint(self.description.clone(), p))
                             }),
                     )
                     .when(!self.periods.is_empty(), |v| {
-                        v.child(row().gap_1().children(self.periods.iter().enumerate().map(
-                            |(i, label)| {
-                                face(
-                                    ("flow-period", i),
-                                    label.clone(),
-                                    30.,
-                                    crate::foundation::surface_radius(cx).into(),
-                                    if self.period == i {
-                                        Tone::Primary
-                                    } else {
-                                        Tone::Clear
-                                    },
-                                    cx,
-                                )
-                                .px(px(10.))
-                                .child(label.clone())
-                                .aria_toggled((self.period == i).into())
-                                .on_click(cx.listener(move |s, _, _, cx| s.set_period(i, cx)))
-                                .on_key_down(cx.listener(
-                                    move |s, e: &KeyDownEvent, w, cx| {
+                        v.child(
+                            row()
+                                .p(px(3.))
+                                .gap(px(2.))
+                                .bg(p.tray)
+                                .rounded(crate::foundation::surface_radius(cx))
+                                .children(self.periods.iter().enumerate().map(|(i, label)| {
+                                    face(
+                                        ("flow-period", i),
+                                        label.clone(),
+                                        36.,
+                                        crate::foundation::surface_radius(cx).into(),
+                                        Tone::Clear,
+                                        cx,
+                                    )
+                                    .when(self.period == i, |v| v.bg(p.panel))
+                                    .px(px(12.))
+                                    .text_size(px(14.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(if self.period == i { p.ink } else { p.secondary })
+                                    .hover(|s| s.text_color(p.ink))
+                                    .child(label.clone())
+                                    .aria_toggled((self.period == i).into())
+                                    .on_click(cx.listener(move |s, _, _, cx| s.set_period(i, cx)))
+                                    .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
                                         if matches!(e.keystroke.key.as_str(), "enter" | "space")
                                             && !e.is_held
                                         {
@@ -1060,53 +1515,79 @@ impl Render for SankeyFlow {
                                             w.prevent_default();
                                             cx.stop_propagation();
                                         }
-                                    },
-                                ))
-                            },
-                        )))
+                                    }))
+                                })),
+                        )
                     }),
             )
             .when(width >= 420. && !self.columns.is_empty(), |view| {
-                view.child(
-                    row()
-                        .justify_between()
-                        .children(self.columns.iter().map(|label| hint(label.clone(), p))),
-                )
+                view.child(div().relative().h(px(20.)).mt(px(2.)).children(
+                    self.columns.iter().enumerate().map(|(c, label)| {
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left(px(column_x(c)))
+                            .text_size(px(12.))
+                            .line_height(px(20.))
+                            .text_color(p.faint)
+                            .child(label.clone())
+                    }),
+                ))
             })
-            .child(graph)
-            .child(hint(details, p))
-            .when(!disabled_motion(cx), |view| {
-                view.child(
-                    row().items_center().child(
-                        face(
-                            "flow-particles",
-                            tr(cx, "Flow", "流动"),
-                            34.,
-                            crate::foundation::surface_radius(cx).into(),
-                            if self.particles {
-                                Tone::Primary
-                            } else {
-                                Tone::Surface
-                            },
-                            cx,
-                        )
-                        .px(px(10.))
-                        .child(tr(cx, "Flow", "流动"))
-                        .on_click(cx.listener(|s, _, _, cx| s.set_particles(!s.particles, cx)))
-                        .on_key_down(cx.listener(
-                            |s, e: &KeyDownEvent, w, cx| {
-                                if matches!(e.keystroke.key.as_str(), "enter" | "space")
-                                    && !e.is_held
-                                {
-                                    s.set_particles(!s.particles, cx);
-                                    w.prevent_default();
-                                    cx.stop_propagation();
-                                }
-                            },
-                        )),
-                    ),
-                )
-            })
+            .child(graph.mt(px(-8.)))
+            .when(
+                self.particle_toggle && !reduced && layout.total > 0.,
+                |view| {
+                    // Capsule toggle with a three-bar flow glyph, tucked bottom-right.
+                    let dot = if self.particles { p.ink } else { p.secondary };
+                    view.child(
+                        row().justify_end().mt(px(-8.)).child(
+                            face(
+                                "flow-particles",
+                                tr(cx, "Flow", "流动"),
+                                32.,
+                                999.,
+                                Tone::Clear,
+                                cx,
+                            )
+                            .bg(p.panel)
+                            .rounded_full()
+                            .pl(px(10.))
+                            .pr(px(12.))
+                            .gap(px(8.))
+                            .child(
+                                row()
+                                    .items_center()
+                                    .gap(px(1.))
+                                    .when(self.particles, |r| r.opacity(1.))
+                                    .children((0..3).map(|_| {
+                                        div().w(px(4.)).h(px(3.)).rounded(px(1.)).bg(dot)
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(14.))
+                                    .line_height(px(14.))
+                                    .text_color(p.ink)
+                                    .child(tr(cx, "Flow", "流动")),
+                            )
+                            .aria_toggled(self.particles.into())
+                            .on_click(cx.listener(|s, _, _, cx| s.toggle_particles(cx)))
+                            .on_key_down(cx.listener(
+                                |s, e: &KeyDownEvent, w, cx| {
+                                    if matches!(e.keystroke.key.as_str(), "enter" | "space")
+                                        && !e.is_held
+                                    {
+                                        s.toggle_particles(cx);
+                                        w.prevent_default();
+                                        cx.stop_propagation();
+                                    }
+                                },
+                            )),
+                        ),
+                    )
+                },
+            )
             .child(
                 div()
                     .id("flow-data")
@@ -1127,8 +1608,16 @@ impl Render for SankeyFlow {
 
 #[cfg(test)]
 mod tests {
-    use super::{Band, Bar, FlowLink, FlowNode, Focus, Layout, SankeyFlow, connected};
-    use gpui::{Bounds, point, px, rgb, size};
+    use super::{
+        Band, Bar, FlowLink, FlowNode, Focus, Layout, SankeyFlow, connected, curve, transition,
+    };
+    use gpui::{AppContext, Bounds, TestAppContext, point, px, rgb, size};
+    use std::time::Duration;
+    #[test]
+    fn ribbon_sampling_matches_its_bezier_at_a_quarter_of_the_path() {
+        // At t=0.25 the cubic's normalized major and minor coordinates differ.
+        assert!((curve(0., 100., 0.296_875) - 15.625).abs() < 0.001);
+    }
     #[test]
     fn trace_propagates_mixed_share_through_both_sources() {
         let links = vec![
@@ -1152,8 +1641,116 @@ mod tests {
             total: 100.,
             vertical: false,
         };
-        let (_, shares) = connected(&layout, &links, Some(Focus::Link(2)));
+        let (nodes, shares) = connected(&layout, &links, Some(Focus::Link(2)));
         assert_eq!(shares, vec![0.5, 0.5, 1., 0.]);
+        assert_eq!(nodes, vec![0.5, 0.5, 0.5, 1., 0.]);
+    }
+    #[test]
+    fn trace_pours_a_partial_band_and_drains_from_its_current_width() {
+        let app = TestAppContext::single();
+        app.update(crate::init);
+        let chart = app.update(|cx| {
+            cx.new(|_| {
+                let ink = rgb(0x8899aa).into();
+                let nodes = ["a", "b", "c", "d"]
+                    .into_iter()
+                    .map(|id| FlowNode::new(id, id, ink))
+                    .collect();
+                let mut chart = SankeyFlow::new(
+                    "test",
+                    nodes,
+                    vec![
+                        FlowLink::new("a", "b", 100.),
+                        FlowLink::new("b", "c", 40.),
+                        FlowLink::new("b", "d", 60.),
+                    ],
+                )
+                .with_unit(" people")
+                .with_value_formatter(|value| format!("{value:.1}"));
+                chart.layout = chart.build(600., 340.);
+                chart
+            })
+        });
+        app.update(|cx| chart.update(cx, |chart, cx| chart.set_focus(Some(Focus::Link(1)), cx)));
+        let sample = || app.update(|cx| chart.read(cx).trace[0].value(cx));
+        assert_eq!(sample(), 0.);
+        app.executor().advance_clock(Duration::from_millis(120));
+        let pouring = sample();
+        assert!(pouring > 0. && pouring < 0.4);
+        app.update(|cx| chart.update(cx, |chart, cx| chart.set_focus(None, cx)));
+        assert_eq!(sample(), pouring);
+        app.executor().advance_clock(Duration::from_millis(120));
+        let draining = sample();
+        assert!(draining > 0. && draining < pouring);
+        app.executor().advance_clock(Duration::from_secs(2));
+        assert_eq!(sample(), 0.);
+        app.update(|cx| chart.update(cx, |chart, cx| chart.set_focus(Some(Focus::Link(1)), cx)));
+        app.executor().advance_clock(Duration::from_secs(2));
+        assert_eq!(sample(), 0.4);
+        app.update(|cx| {
+            let state = chart.read(cx);
+            assert_eq!(state.trace_source, None);
+            assert_eq!(state.node_trace[0].value(cx), 0.4);
+            assert_eq!(state.node_trace[2].value(cx), 1.);
+            let tip = state.tip(Focus::Link(1), cx).unwrap();
+            assert_eq!(tip.value, "40.0 people");
+            assert_eq!(tip.note, "40% of b, 100% of c");
+        });
+        app.update(|cx| {
+            chart.update(cx, |chart, cx| {
+                chart.set_focus(Some(Focus::Link(0)), cx);
+                assert_eq!(chart.trace_source, Some(0));
+                chart.set_focus(None, cx);
+                assert_eq!(chart.trace_source, Some(0));
+            });
+        });
+    }
+
+    #[test]
+    fn keyboard_enters_the_plot_and_crosses_to_the_nearest_node() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (chart, window) = app.add_window_view(|_, _| {
+            let color = rgb(0x8899aa).into();
+            let nodes = ["a", "b", "c", "d"]
+                .into_iter()
+                .map(|id| FlowNode::new(id, id, color))
+                .collect();
+            SankeyFlow::new(
+                "Flow",
+                nodes,
+                vec![FlowLink::new("a", "c", 50.), FlowLink::new("b", "d", 50.)],
+            )
+            .with_particles(false)
+        });
+        window.update(|w, cx| {
+            w.activate_window();
+            w.draw(cx).clear(cx);
+        });
+        window.run_until_parked();
+        for (key, expected) in [
+            ("tab", Some(0)),
+            ("down", Some(1)),
+            ("right", Some(3)),
+            ("home", Some(0)),
+            ("end", Some(3)),
+            ("escape", None),
+        ] {
+            if key == "tab" {
+                window.update(|w, cx| w.focus_next(cx));
+            } else {
+                window.simulate_keystrokes(key);
+            }
+            window.update(|w, cx| {
+                w.simulate_next_frame(cx);
+                w.refresh();
+                w.draw(cx).clear(cx);
+            });
+            window.run_until_parked();
+            window.update(|_, cx| {
+                assert_eq!(chart.read(cx).selected, expected.map(Focus::Node), "{key}")
+            });
+        }
     }
     #[test]
     fn layout_ignores_invalid_missing_and_reverse_links() {
@@ -1174,6 +1771,34 @@ mod tests {
         assert_eq!(layout.total, 6.);
         assert!(layout.bands[0].thickness > 0.);
         assert!(layout.bands[1..].iter().all(|band| band.thickness == 0.));
+    }
+    #[test]
+    fn upright_labels_keep_a_gap_through_a_period_change() {
+        let color = rgb(0x8899aa).into();
+        let chart = |pro, team| {
+            SankeyFlow::new(
+                "Journey",
+                vec![
+                    FlowNode::new("a", "Activated", color),
+                    FlowNode::new("p", "Pro", color),
+                    FlowNode::new("t", "Team", color),
+                ],
+                vec![FlowLink::new("a", "p", pro), FlowLink::new("a", "t", team)],
+            )
+        };
+        for width in [238., 310.] {
+            let q2 = chart(1560., 530.).build(width, 480.);
+            let q3 = chart(2310., 840.).build(width, 480.);
+            for progress in [0., 0.25, 0.5, 0.75, 1.] {
+                let plot = transition(&q2, &q3, progress);
+                let (pro_left, pro_right) = plot.upright_label_bounds(1, width, 38., 0.);
+                let pro_end = pro_right.min(pro_left + 38.);
+                let (team_left, team_right) = plot.upright_label_bounds(2, width, 37., pro_end);
+                assert!(team_left - pro_end >= 5.99);
+                assert!(team_right - team_left >= 36.99);
+                assert!(team_right <= width + 8.01);
+            }
+        }
     }
     #[test]
     fn large_links_do_not_overflow_layout() {

@@ -47,6 +47,8 @@ Reveal wipes from the left (380ms), Eclipse expands from the center (430ms), Spl
 The control uses the theme’s `radius.md` (8px by default).
 
 - Event: `ThemeChange { next, mode, trigger }`.
-- API: `with_mode(Transition)`.
+- API: `with_mode(Transition)`, `with_icon_only(bool)` (off by default) and `with_accessible_label(label)`.
+- The icon-only button is 38px square. Its accessible name defaults to the localized switch label.
+- The [Eclipse](./theme-switch-eclipse.md), [Split](./theme-switch-split.md) and [Rise](./theme-switch-rise.md) entries install the same control and show the corresponding host transition.
 - Implementation: `registry/src/components/theme_switch.rs`.
 - Preview: [English](/en/kui/components/theme-switch/) · [中文](/kui/components/theme-switch/).

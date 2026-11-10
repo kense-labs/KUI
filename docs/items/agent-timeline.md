@@ -33,13 +33,15 @@ let control = cx.new(|_| RunLanes::new("run","Release review",vec!["Planner".int
 
 ## Interaction
 
-Place work on a shared time axis. Selecting a span highlights its direct handoff.
+Place work on a shared time axis. Select a span to highlight its direct handoff. Drag the scrubber or use arrow keys to seek by one second; Home and End jump to the first and last frame. Seeking pauses playback. Speed cycles through 0.5×, 1× and 2×.
 
 ## API
 
 `new` · `(id, title, lanes, Vec<Span>)`
 
 Each Span specifies lane, start/end seconds, operation kind and an optional parent index. SpanSelected carries the activated index.
+
+`with_models(Vec<SharedString>)` adds secondary lane labels by index. `with_totals(impl Into<SharedString>)` adds a host-formatted readout.
 
 Event: `SpanSelected`.
 

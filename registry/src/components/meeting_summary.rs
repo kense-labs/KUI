@@ -88,6 +88,7 @@ pub enum MeetingStatus {
     Summarizing,
     Ready,
     Error,
+    NoTranscript,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MeetingSummaryEvent {
@@ -158,7 +159,7 @@ impl MeetingSummary {
         error: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
-        if status == MeetingStatus::Summarizing {
+        if status != MeetingStatus::Ready {
             self.send_states.retain(|_, state| {
                 if let SendState::Pending(ticket) = state {
                     cx.emit(MeetingSummaryEvent::Cancel(*ticket));
@@ -307,6 +308,20 @@ impl Render for MeetingSummary {
                     .line_height(px(22.))
                     .text_color(p.secondary)
                     .child(tr(cx, "Summarizing transcript…", "正在整理会议记录…")),
+            );
+        }
+        if self.status == MeetingStatus::NoTranscript {
+            return root.child(
+                div()
+                    .min_h(px(100.))
+                    .p(px(20.))
+                    .text_size(px(14.))
+                    .text_color(p.secondary)
+                    .child(tr(
+                        cx,
+                        "No transcript is available for this meeting.",
+                        "这场会议没有转录记录。",
+                    )),
             );
         }
         if self.status == MeetingStatus::Error {

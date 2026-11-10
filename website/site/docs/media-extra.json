@@ -145,6 +145,93 @@
     }
   },
   {
+    "id": "keycap-keyboard",
+    "group": "text-effects",
+    "title": {
+      "en": "Keycap keyboard",
+      "zh": "机械键帽键盘"
+    },
+    "rustType": "KeycapKeyboard",
+    "lead": {
+      "en": "Type to press sculpted keycaps and light the board.",
+      "zh": "输入或点击，让机械键帽下沉并亮起。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::keycap_keyboard::{\n    KeycapKeyboard, KeycapLayout, KeycapListen, KeycapValueChanged,\n};\n\nlet control = cx.new(|cx| {\n    KeycapKeyboard::new(cx)\n        .with_layout(KeycapLayout::Compact, cx)\n        .with_listen(KeycapListen::Focus)\n        .with_placeholder(\"Type anything\")\n});\nwindow.subscribe(&control, cx, |_, _: &KeycapValueChanged, _, _| {}).detach();",
+    "method": "with_layout",
+    "signature": "(KeycapLayout, &App) -> Self",
+    "event": "KeycapValueChanged(SharedString)",
+    "rule": {
+      "en": "Focus the readout to type or activate a cap. Tab navigates, and on-screen Shift applies to the next character.",
+      "zh": "聚焦读数区即可键入，也可点击键帽。Tab 移焦，屏幕上的 Shift 作用于下一个字符。"
+    },
+    "api": {
+      "en": "Choose a preset or custom rows, listen in focus or window mode, and read the retained graphemes.",
+      "zh": "可选预设或自定义行，支持焦点和窗口监听，以及按字素保留文字。"
+    },
+    "motion": {
+      "en": "Keycaps sink on press, lift on release, and leave a fading light. Reduced motion keeps the light response.",
+      "zh": "键帽按下下沉，松手回弹并留下余光。减少动效时保留亮光反馈。"
+    }
+  },
+  {
+    "id": "typewriter-terminal",
+    "group": "text-effects",
+    "title": {
+      "en": "Typewriter terminal",
+      "zh": "打字终端"
+    },
+    "rustType": "TypewriterTerminal",
+    "lead": {
+      "en": "Play a terminal transcript with typed commands and a seekable timeline.",
+      "zh": "播放带逐字输入、命令输出和可拖动时间轴的终端会话。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::typewriter_terminal::{\n    TerminalOutput, TerminalStep, TerminalTone, TypewriterTerminal,\n};\n\nlet control = cx.new(|cx| {\n    TypewriterTerminal::new(cx)\n        .with_title(\"Quick start\")\n        .with_steps(vec![\n            TerminalStep::new(\"kui add button\").with_output([\n                TerminalOutput::progress(\"Preparing components\"),\n                TerminalOutput::text(\"Button installed\", TerminalTone::Success),\n            ]),\n            TerminalStep::new(\"cargo check\")\n                .with_cwd(\"~/acme\")\n                .with_output([TerminalOutput::task(\"Checking the workspace\")]),\n        ])\n        .with_rows(8)\n        .with_loop(false)\n});",
+    "method": "with_steps",
+    "signature": "(Vec<TerminalStep>) -> Self",
+    "event": "TerminalAction",
+    "rule": {
+      "en": "Drag the timeline to scrub. Arrow keys jump between commands. Space toggles playback.",
+      "zh": "拖动时间轴定位，方向键跳转命令，空格播放或暂停。"
+    },
+    "api": {
+      "en": "Compose the session from typed commands, output, progress, and tasks. Copy collects the commands in order.",
+      "zh": "用命令、输出、进度和任务组成会话。复制会按顺序收集所有命令。"
+    },
+    "motion": {
+      "en": "Seeded typing and reversible seeking share one clock. Reduced motion starts at the completed transcript.",
+      "zh": "逐字输入与可逆拖动共用时间轴。减少动效时直接显示完成态。"
+    }
+  },
+  {
+    "id": "dot-grid",
+    "group": "media",
+    "title": {
+      "en": "Dot grid",
+      "zh": "交互点阵"
+    },
+    "rustType": "DotGrid",
+    "lead": {
+      "en": "Draw a pointer lens and click ripples behind interactive content.",
+      "zh": "让光标推开点阵，并在点击处向外扩散涟漪。"
+    },
+    "usageRust": "use gpui::{div, prelude::*, px};\nuse kui::components::dot_grid::{DotGrid, DotGridOptions};\n\nlet control = cx.new(|cx| {\n    DotGrid::new(DotGridOptions::default(), cx)\n        .with_style(|root| root.h(px(480.)).flex().items_center().justify_center())\n        .with_content(|_, _| div().child(\"Interfaces with a pulse\"))\n});",
+    "method": "set_options",
+    "signature": "(DotGridOptions, &mut Context<Self>)",
+    "event": "",
+    "rule": {
+      "en": "Use a pointer or tap to interact with the field. The density buttons keep their regular focus and click behavior.",
+      "zh": "移动光标或点按画布即可互动，密度按钮保留正常的焦点与点击行为。"
+    },
+    "api": {
+      "en": "Configure spacing, dot size, lens radius, strength, colors, edge fade and ripples. Overlay regular GPUI content with with_content.",
+      "zh": "可配置间距、点半径、透镜范围、力度、配色、边缘淡出和涟漪。使用 with_content 添加普通 GPUI 内容。"
+    },
+    "motion": {
+      "en": "Each dot settles on a damped spring. Reduced motion tints the field without moving dots or emitting ripples.",
+      "zh": "每个点通过阻尼弹簧回位。减少动效时，只保留点阵颜色反馈。"
+    }
+  },
+  {
     "id": "image-compare",
     "group": "media",
     "title": {
@@ -345,6 +432,93 @@
     "motion": {
       "en": "Photo changes crossfade and the magnifier follows the pointer; reduced motion updates immediately.",
       "zh": "切换图片时交叉淡入淡出，放大镜跟随指针；减少动效时立即更新。"
+    }
+  },
+  {
+    "id": "photo-grid",
+    "group": "media",
+    "title": {
+      "en": "Photo grid",
+      "zh": "照片网格"
+    },
+    "rustType": "PhotoGrid",
+    "lead": {
+      "en": "Browse square photo tiles at three densities, with favorites and an in-place viewer.",
+      "zh": "按三档密度浏览方格照片，打开查看并收藏。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::photo_grid::{GridPhoto, PhotoGrid};\n\nlet photo = GridPhoto::new(\"west\", \"west.jpg\".to_owned(), \"Sunset over a canyon\", \"West canyon\", gpui::size(gpui::px(900.), gpui::px(600.)))\n    .with_detail(\"October 9\")\n    .with_thumbnail(\"west-thumb.jpg\".to_owned());\nlet grid = cx.new(|cx| PhotoGrid::new(\"October\", vec![photo], cx));",
+    "method": "with_zoom_levels",
+    "signature": "(impl IntoIterator<Item = usize>) -> Self",
+    "event": "PhotoGridEvent",
+    "rule": {
+      "en": "Navigate with arrows, Page Up or Page Down. Press Enter to open. Swipe or scrub the filmstrip, then press Escape or pull down to return.",
+      "zh": "方向键和翻页键可选择照片，按回车打开。滑动照片或拖动胶片条切换，按 Escape 或下拉返回。"
+    },
+    "api": {
+      "en": "Provide a stable ID, image source, alt text, title and intrinsic size. Defaults to three columns, with five and two also available.",
+      "zh": "提供稳定 ID、图片来源、替代文字、标题和原始尺寸。默认三列，也可切换五列或两列。"
+    },
+    "motion": {
+      "en": "Density changes preserve a visible anchor. The viewer grows from the selected photo and returns to the current cell.",
+      "zh": "切换密度时保留可见照片锚点，查看器从选中的方格展开，关闭时回到当前照片。"
+    }
+  },
+  {
+    "id": "cover-flow",
+    "group": "media",
+    "title": {
+      "en": "Cover flow",
+      "zh": "封面流"
+    },
+    "rustType": "CoverFlow",
+    "lead": {
+      "en": "Browse a short photo collection on a perspective rail.",
+      "zh": "在带景深的封面轨道中浏览照片。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::cover_flow::{CoverFlow, CoverFlowItem};\n\nlet items = vec![\n    CoverFlowItem::new(\"ridge\", \"Ridge Loop\", \"ridge.jpg\".to_owned())\n        .with_subtitle(\"Coastal Range\")\n        .with_meta(\"8 km\"),\n    CoverFlowItem::new(\"lake\", \"Quiet Lake\", \"lake.jpg\".to_owned()),\n];\nlet rail = cx.new(|cx| CoverFlow::new(\"Autumn hikes\", items, cx));",
+    "method": "set_index",
+    "signature": "(usize, &mut Context<Self>)",
+    "event": "CoverFlowIndexChanged(usize)",
+    "rule": {
+      "en": "Drag or scroll sideways to browse. Click a neighboring cover or a tick. Press Left, Right, Home or End while the rail has focus.",
+      "zh": "横向拖动或滚动可浏览，点按侧卡或位置点可切换。轨道聚焦后可用左右方向键、Home 或 End。"
+    },
+    "api": {
+      "en": "Items accept an image source, title, subtitle, meta and alt text. with_default_index starts at zero by default. with_index enables host control. with_caption accepts a typed item and index.",
+      "zh": "条目接收图片源、标题、副标题、附加信息和替代文字。with_default_index 默认为零，with_index 启用宿主控制，with_caption 可按类型化条目与索引渲染说明。"
+    },
+    "motion": {
+      "en": "Side covers turn and recede with image drift and a quiet reflection. A velocity spring lands the rail on a card. Reduced motion removes the turn, drift and spring.",
+      "zh": "侧卡转向中心并后退，图片轻移并带柔和反射。松手按速度吸附。减少动效时省去转向、视差和弹簧。"
+    }
+  },
+  {
+    "id": "orbit-logos",
+    "group": "media",
+    "title": {
+      "en": "Orbit logos",
+      "zh": "轨道标志"
+    },
+    "rustType": "OrbitLogos",
+    "lead": {
+      "en": "Browse integrations on two moving rings and open their connection details.",
+      "zh": "在两圈旋转轨道中浏览集成，打开详情并连接。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::orbit_logos::{OrbitLogo, OrbitLogos};\n\nlet logos = vec![\n    OrbitLogo::new(\"issues\", \"Issues\")\n        .with_category(\"Development\")\n        .with_description(\"Sync issue updates with your workspace.\"),\n    OrbitLogo::new(\"messages\", \"Messages\")\n        .with_category(\"Communication\")\n        .with_description(\"Send status updates to your team.\")\n        .with_connected(true),\n];\nlet orbit = cx.new(|cx| OrbitLogos::new(logos, cx).with_host_connections());",
+    "method": "finish_connect",
+    "signature": "(u64, bool, &mut Context<Self>) -> bool",
+    "event": "OrbitSelectionChanged, OrbitConnectRequested",
+    "rule": {
+      "en": "Filter by category. Use arrows, Home or End to browse, Enter or Space to open, and Escape to return focus.",
+      "zh": "按类别筛选。方向键、Home 和 End 浏览，回车或空格打开，Esc 关闭并恢复焦点。"
+    },
+    "api": {
+      "en": "Use stable IDs and supply path data, an image source or a custom mark. Host-managed connections remain pending until the matching ticket settles.",
+      "zh": "提供稳定 ID，支持路径、图片或自定义标志。宿主管理的连接按对应请求编号返回成功或失败。"
+    },
+    "motion": {
+      "en": "The two rings turn every 64s and 88s at default speed. Selection parks the logo and expands the card. Reduced motion settles immediately.",
+      "zh": "默认内外圈每 64 秒和 88 秒转一圈。选择时标志停靠并展开卡片；减少动态效果时立即就位。"
     }
   },
   {

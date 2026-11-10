@@ -7,6 +7,7 @@ use std::{collections::HashMap, fmt::Write, sync::LazyLock};
 pub const CSS: &str = include_str!("../docs/docs.css");
 const GROUPS: &[&str] = &[
     "buttons",
+    "theme-switches",
     "gestures",
     "menus",
     "text-fields",
@@ -213,6 +214,10 @@ static ENTRIES: LazyLock<Vec<Entry>> = LazyLock::new(|| {
         include_str!("../docs/agent-cursor-extra.json"),
         include_str!("../docs/link-unfurl-extra.json"),
         include_str!("../docs/tone-tuner-extra.json"),
+        include_str!("../docs/assistant-quickstart-extra.json"),
+        include_str!("../docs/theme-variants.json"),
+        include_str!("../docs/navigation-extra.json"),
+        include_str!("../docs/glass-extra.json"),
     ] {
         entries.extend(
             serde_json::from_str::<Vec<Entry>>(file)
@@ -290,6 +295,12 @@ fn icon(name: &str, size: u8) -> String {
             r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>"#
         }
         "code" => r#"<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>"#,
+        "fit" => {
+            r#"<path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/>"#
+        }
+        "mobile" => r#"<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>"#,
+        "expand" => r#"<path d="M14 4h6v6M20 4l-7 7m-3 9H4v-6m0 6 7-7"/>"#,
+        "collapse" => r#"<path d="M20 4l-7 7m0-6v6h6M4 20l7-7m0 6v-6H5"/>"#,
         "terminal" => r#"<path d="M4 17 10 11 4 5M12 19h8"/>"#,
         "file" => {
             r#"<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/>"#
@@ -492,16 +503,37 @@ fn stage(doc: &Entry, en: bool, revision: &str, example: &str) -> String {
         );
         tabs.push_str(&controls::button(&attrs, &inner));
     }
-    let theme_class = if id == "theme-switch" {
+    let theme_class = if id == "theme-switch" || id.starts_with("theme-switch-") {
         " theme-preview"
     } else {
         ""
     };
     let url = preview_url(id, en, revision);
+    let fit = pick(en, "Fit preview", "自适应预览");
+    let mobile = pick(en, "Mobile preview", "手机预览");
+    let expand = pick(en, "Fullscreen preview", "全屏预览");
+    let collapse = pick(en, "Exit fullscreen preview", "退出全屏预览");
+    let size_switch = [("fit", fit, true), ("mobile", mobile, false)].map(|(mode, label, selected)| {
+        controls::button(
+            &format!(r#"class="preview-control" data-preview-mode="{mode}" aria-label="{label}" title="{label}" aria-pressed="{selected}""#),
+            &icon(mode, 16),
+        )
+    }).join("");
+    let fullscreen = controls::button(
+        &format!(
+            r#"class="preview-control preview-expand" data-preview-expand data-expand-label="{expand}" data-collapse-label="{collapse}" aria-label="{expand}" title="{expand}" aria-pressed="false""#
+        ),
+        &format!(
+            r#"<span data-preview-enter>{}</span><span data-preview-exit>{}</span>"#,
+            icon("expand", 16),
+            icon("collapse", 16)
+        ),
+    );
     let mut html = format!(
-        r#"<section class="stage" data-component-stage><div class="view-bar"><div class="tabs" role="tablist" aria-label="{}">{tabs}<span class="indicator" data-view-indicator aria-hidden="true"></span></div><p class="hint muted">{}</p></div><div class="panel is-active" role="tabpanel" id="stage-panel-preview" data-panel="preview" aria-labelledby="stage-tab-preview"><div data-preview-slot data-preview-src="{url}"><iframe allow="clipboard-write" class="rust-story family-story{theme_class}" data-story="{id}" data-story-key="{id}" data-lang="{locale}" aria-label="{title}" src="{url}"></iframe></div></div><div class="panel" role="tabpanel" id="stage-panel-code" data-panel="code" aria-labelledby="stage-tab-code" hidden>{example}{}</div></section>"#,
+        r#"<section class="stage" data-component-stage><div class="view-bar"><div class="tabs" role="tablist" aria-label="{}">{tabs}<span class="indicator" data-view-indicator aria-hidden="true"></span></div><div class="preview-options" data-preview-options><p class="hint muted">{}</p><div class="preview-modes" role="group" aria-label="{}">{size_switch}</div>{fullscreen}</div></div><div class="panel is-active" role="tabpanel" id="stage-panel-preview" data-panel="preview" aria-labelledby="stage-tab-preview"><div data-preview-slot data-preview-size="fit" data-preview-src="{url}"><iframe allow="clipboard-write" class="rust-story family-story{theme_class}" data-story="{id}" data-story-key="{id}" data-lang="{locale}" aria-label="{title}" src="{url}"></iframe></div></div><div class="panel" role="tabpanel" id="stage-panel-code" data-panel="code" aria-labelledby="stage-tab-code" hidden>{example}{}</div></section>"#,
         t("stage.views", en),
         t("stage.hint", en),
+        pick(en, "Preview size", "预览尺寸"),
         source_picker(id, en)
     );
     if id == "theme-switch" {

@@ -245,16 +245,16 @@
       "zh": "显示可关闭的公告和操作。"
     },
     "rule": {
-      "en": "Messages rotate every seven seconds and pause while hovered or focused. Close the bar or activate its action.",
-      "zh": "多条消息每七秒轮换，鼠标悬停或键盘焦点在公告内时暂停；可关闭公告或执行操作。"
+      "en": "Messages rotate every six seconds and pause while hovered or focused. Close the bar or activate its action.",
+      "zh": "多条消息每六秒轮换，鼠标悬停或键盘焦点在公告内时暂停；可关闭公告或执行操作。"
     },
     "api": {
       "en": "Provide message IDs, optional action labels and countdown durations. AnnouncementEvent reports actions and dismissal. The host persists dismissal and handles navigation.",
       "zh": "提供消息标识、可选操作文案和倒计时时长；AnnouncementEvent 报告操作与关闭。关闭状态持久化和跳转由宿主处理。"
     },
     "motion": {
-      "en": "Messages crossfade; dismissal collapses the bar. Reduced motion applies changes immediately.",
-      "zh": "消息交叉淡入淡出，关闭时公告栏收起；减少动效时立即切换。"
+      "en": "Messages wrap on narrow screens and crossfade on rotation. Dismissal collapses the bar from its measured height. Reduced motion applies changes immediately.",
+      "zh": "窄屏公告自动换行，轮换时交叉淡入淡出，关闭时从实际高度收起。减少动效时立即切换。"
     },
     "method": "reopen",
     "signature": "(&mut Context<Self>)",
@@ -477,8 +477,8 @@
       "zh": "通过共享的动态菜单浏览分组目的地。"
     },
     "rule": {
-      "en": "Hover or activate a section; use arrow keys to navigate, Enter to choose and Escape to close. At narrow widths, the header folds into an accordion sheet.",
-      "zh": "悬停或激活栏目，使用方向键浏览、Enter 选择、Escape 关闭；窄屏时导航折叠为手风琴菜单。"
+      "en": "Hover or activate a section. Use arrow keys to navigate, Enter to choose and Escape to close. Wide menus arrange groups and the feature card in columns. A compact header opens a scrollable accordion.",
+      "zh": "悬停或激活栏目，方向键浏览，Enter 选择，Escape 关闭。宽版将分组和特写卡并排，窄版导航展开为可滚动的手风琴菜单。"
     },
     "api": {
       "en": "Provide sections, groups and stable link IDs; optionally configure a brand destination, primary action and feature card. MegaMenuNavigate reports the chosen ID and the host performs navigation.",
@@ -781,5 +781,92 @@
     "method": "finish_scan",
     "signature": "(u64, Vec<PiiSpan>, &mut Context<Self>) -> bool",
     "event": "PiiEvent"
+  },
+  {
+    "id": "booking-pill",
+    "group": "pickers",
+    "title": {
+      "en": "Booking pill",
+      "zh": "预订胶囊"
+    },
+    "rustType": "BookingPill",
+    "lead": {
+      "en": "Choose a party, date and time in one anchored booking flow.",
+      "zh": "在一个底部对齐的控件中选择人数、日期和时段。"
+    },
+    "usageRust": "use chrono::NaiveDate;\nuse gpui::{Task, prelude::*};\nuse kui::components::booking_pill::{BookingPill, BookingStepChanged};\n\nlet today = NaiveDate::from_ymd_opt(2026, 9, 21).expect(\"valid sample date\");\nlet control = cx.new(|cx| {\n    BookingPill::new(\"Olea\", today, cx)\n        .with_venue_detail(\"432 Octavia Street\")\n        .with_confirm(|booking, _| {\n            let _selected_table = booking;\n            Task::ready(Ok(()))\n        })\n});\nwindow.subscribe(&control, cx, |_, _: &BookingStepChanged, _, _| {}).detach();",
+    "method": "with_confirm",
+    "signature": "(impl Fn(Booking, &mut App) -> Task<Result<(), SharedString>>) -> Self",
+    "event": "BookingStepChanged(BookingStep)",
+    "rule": {
+      "en": "Use the arrows to move days or available slots. Page Up and Page Down move by a week. Enter continues from an available date, and Escape goes back.",
+      "zh": "方向键移动日期或在可订时段之间选择。Page Up 和 Page Down 翻周，Enter 确认日期，Escape 返回。"
+    },
+    "api": {
+      "en": "Supply the first date and optional availability or confirmation callbacks. Rejected confirmations keep the selected ticket open.",
+      "zh": "宿主提供起始日期，并可设置可订规则和确认任务。确认失败会保留票据，供用户重试。"
+    },
+    "motion": {
+      "en": "The faces share a spring-driven bottom edge, and the date strip tracks the pointer before snapping. Reduced motion settles the shape directly.",
+      "zh": "各步骤共用底边，外框以弹簧改变尺寸。日期滑轨跟随指针并吸附；减少动效时直接落位。"
+    }
+  },
+  {
+    "id": "date-reel",
+    "group": "pickers",
+    "title": {
+      "en": "Date reel",
+      "zh": "日期滚轮"
+    },
+    "rustType": "DateReel",
+    "lead": {
+      "en": "Choose a civil date or time on cylindrical reels.",
+      "zh": "用圆柱滚轮选择日期、时间或两者。"
+    },
+    "usageRust": "use chrono::NaiveDate;\nuse gpui::{Task, prelude::*};\nuse kui::components::date_reel::{DateReel, DateReelChanged, MinuteStep};\n\nlet today = NaiveDate::from_ymd_opt(2026, 9, 24).expect(\"valid sample date\");\nlet start = today.succ_opt()\n    .and_then(|day| day.and_hms_opt(9, 0, 0))\n    .expect(\"valid sample time\");\n\nlet control = cx.new(|cx| {\n    DateReel::new(cx)\n        .with_today(today)\n        .with_default_value(start)\n        .with_title(\"Send later\")\n        .with_minute_step(MinuteStep::Five)\n        .with_confirm(|value, _| {\n            let _scheduled_civil_time = value;\n            Task::ready(Ok(()))\n        })\n});\nwindow.subscribe(&control, cx, |_, _: &DateReelChanged, _, _| {}).detach();",
+    "method": "with_mode",
+    "signature": "(DateReelMode) -> Self",
+    "event": "DateReelChanged(NaiveDateTime)",
+    "rule": {
+      "en": "Flick or scroll a reel, use the arrow keys, or choose a quick pick. Confirmation waits for the reels to rest.",
+      "zh": "拖动或滚动一列，也可用方向键或快捷日期。滚轮停稳后可以确认。"
+    },
+    "api": {
+      "en": "Choose a date and time layout, calendar bounds, minute step and hour cycle. A host task handles optional confirmation.",
+      "zh": "可配置滚轮模式、日期范围、分钟步长和时制。可选确认任务由宿主处理。"
+    },
+    "motion": {
+      "en": "The reels follow a cylinder, glide with retained velocity and snap into a fixed lens. Reduced motion lands immediately.",
+      "zh": "圆柱滚轮保留释放速度并吸附到固定选中带。减少动效时直接落位。"
+    }
+  },
+  {
+    "id": "time-dial",
+    "group": "pickers",
+    "title": {
+      "en": "Time dial",
+      "zh": "时间拨盘"
+    },
+    "rustType": "TimeDial",
+    "lead": {
+      "en": "Pick an instant and compare local time across cities.",
+      "zh": "拨动时钟选择同一时刻，比较各城市的当地时间。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::time_dial::{TimeDial, TimeDialCity, TimeDialValueChanged};\n\nlet cities = vec![\n    TimeDialCity::new(\"nyc\", \"New York\", \"NYC\", -240),\n    TimeDialCity::new(\"lon\", \"London\", \"LON\", 60),\n    TimeDialCity::new(\"tyo\", \"Tokyo\", \"TYO\", 540),\n];\nlet control = cx.new(|cx| TimeDial::new(cities, cx)\n    .with_default_value(900)\n    .with_working_hours(540, 1080)\n    .with_label(\"Call time\"));\nwindow.subscribe(&control, cx, |_, _: &TimeDialValueChanged, _, _| {}).detach();",
+    "method": "with_working_hours",
+    "signature": "(u16, u16) -> Self",
+    "event": "TimeDialValueChanged(i32), TimeDialHomeChanged(SharedString)",
+    "rule": {
+      "en": "Drag around the dial, step by quarter hours with the arrows, or choose a home city without changing the selected instant.",
+      "zh": "沿表盘拖动，或用方向键每次移动 15 分钟。切换主城市会保留同一 UTC 时刻。"
+    },
+    "api": {
+      "en": "Supply a date-correct UTC offset for each city. The dial supports controlled time and home city, bounds, weekday, clock format and working hours.",
+      "zh": "为各城市提供适用于参考日期的 UTC 偏移量。可控制时刻与主城市，并设置边界、星期、时制和工作时段。"
+    },
+    "motion": {
+      "en": "The dial snaps to quarter hours, rolls changing digits and eases between city tracks. Reduced motion lands immediately.",
+      "zh": "拨盘吸附到 15 分钟刻度，变化的数字单独滚动，城市标记平滑换轨。减少动效时直接落位。"
+    }
   }
 ]

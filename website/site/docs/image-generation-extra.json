@@ -24,8 +24,8 @@
       "zh": "使用 ticket 调用 set_progress、finish 或 fail；停止后的旧结果会被忽略。变体失败或停止保留原图，失败后可重试或恢复；每张完成图片按其报告的尺寸显示比例。Cmd/Ctrl+Enter 开始一批生成，普通回车换行。"
     },
     "motion": {
-      "en": "Progress follows host updates with a 200 ms transition. The pixel mosaic, upscale sweep and full visual comparison are not yet implemented or verified.",
-      "zh": "进度以 200ms 过渡跟随宿主更新；像素马赛克、放大扫光及完整视觉对照尚未实现或验收。"
+      "en": "Progress follows host updates with a 240 ms transition. The pixel mosaic, upscale sweep and full visual comparison are not yet implemented or verified.",
+      "zh": "进度以 240ms 过渡跟随宿主更新。像素马赛克、放大扫光及完整视觉对照仍待验收。"
     }
   }
 ]

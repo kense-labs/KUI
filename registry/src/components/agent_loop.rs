@@ -272,11 +272,17 @@ impl Render for AgentLoop {
         let angle = -std::f32::consts::FRAC_PI_2 + (station + travel) * std::f32::consts::TAU / 3.;
         let head = p.bright;
         let line = p.line;
+        let width = w.viewport_size().width;
+        let wide = width >= px(720.);
+        let narrow = width < px(460.);
+        let stage_side = (width - px(72.)).clamp(px(174.), px(228.));
+        let radius = (f32::from(stage_side) * 0.5 - 20.).clamp(52., 94.);
+        let self_done = self.done;
         let ring = canvas(
             |_, _, _| (),
             move |bounds, _, w, _| {
                 let center = bounds.center();
-                let radius = f32::from(bounds.size.width.min(bounds.size.height)) * 0.34;
+
                 let mut path = PathBuilder::stroke(px(1.5));
                 for n in 0..=96 {
                     let a = std::f32::consts::TAU * n as f32 / 96.;
@@ -291,9 +297,25 @@ impl Render for AgentLoop {
                     w.paint_path(path, line);
                 }
                 for n in 0..3 {
+                    let a = -std::f32::consts::FRAC_PI_2
+                        + (n as f32 + 0.5) * std::f32::consts::TAU / 3.;
+                    let radial = point(px(a.cos()), px(a.sin()));
+                    let tangent = point(-radial.y, radial.x);
+                    let tip = center + point(radial.x * radius, radial.y * radius);
+                    let back = tip - point(tangent.x * 5., tangent.y * 5.);
+                    let wing = point(radial.x * 4., radial.y * 4.);
+                    let mut arrow = PathBuilder::stroke(px(1.5));
+                    arrow.move_to(back + wing);
+                    arrow.line_to(tip);
+                    arrow.line_to(back - wing);
+                    if let Ok(path) = arrow.build() {
+                        w.paint_path(path, p.faint);
+                    }
+                }
+                for n in 0..3 {
                     let a = -std::f32::consts::FRAC_PI_2 + n as f32 * std::f32::consts::TAU / 3.;
                     let pos = center + point(px(a.cos() * radius), px(a.sin() * radius));
-                    if (station.round() as i32) == n {
+                    if !self_done && (station.round() as i32) == n {
                         w.paint_quad(
                             fill(
                                 Bounds::centered_at(pos, size(px(21.), px(21.))),
@@ -306,6 +328,9 @@ impl Render for AgentLoop {
                         fill(Bounds::centered_at(pos, size(px(10.), px(10.))), line)
                             .corner_radii(px(5.)),
                     );
+                }
+                if self_done {
+                    return;
                 }
                 for n in (1..=12).rev() {
                     let t = n as f32 / 12.;
@@ -345,8 +370,8 @@ impl Render for AgentLoop {
             .role(Role::Group)
             .aria_label(self.title.clone())
             .w_full()
-            .max_w(px(760.))
-            .p_4()
+            .max_w(px(669.))
+            .p(px(if narrow { 16. } else { 24. }))
             .rounded(r)
             .border_1()
             .border_color(p.line)
@@ -377,13 +402,16 @@ impl Render for AgentLoop {
             ));
         let center = div()
             .relative()
-            .size(px(232.))
+            .size(stage_side)
+            .flex_none()
             .child(ring.size_full())
             .child(
                 div()
                     .absolute()
-                    .top(px(0.))
-                    .left(px(65.))
+                    .top(px(-12.))
+                    .left_0()
+                    .right_0()
+                    .text_center()
                     .text_size(px(14.))
                     .text_color(p.secondary)
                     .child(tr(cx, "Gather context", "收集上下文")),
@@ -391,7 +419,7 @@ impl Render for AgentLoop {
             .child(
                 div()
                     .absolute()
-                    .bottom(px(12.))
+                    .top(relative(0.85))
                     .left(px(0.))
                     .text_size(px(14.))
                     .text_color(p.secondary)
@@ -400,7 +428,7 @@ impl Render for AgentLoop {
             .child(
                 div()
                     .absolute()
-                    .bottom(px(12.))
+                    .top(relative(0.85))
                     .right(px(0.))
                     .text_size(px(14.))
                     .text_color(p.secondary)
@@ -426,59 +454,142 @@ impl Render for AgentLoop {
                             )),
                     ),
             );
-        let mut detail = div().flex().flex_col().gap_2().w_full();
-        if let Some(beat) = current {
+        let mut tool = None;
+        let mut check = None;
+        let mut context = div().flex().flex_col().gap_2().w_full();
+        let mut tokens = 0_u64;
+        let ready = !self.playing && !self.done && self.beat == 0 && self.progress == 0.;
+        if let Some(beat) = current.filter(|_| !ready) {
             let item = &self.iterations[beat.iteration];
-            let state = match beat.station {
-                LoopStation::Gather => format!(
-                    "{} · {}",
-                    tr(cx, "Gather context", "收集上下文"),
-                    item.context
-                ),
-                LoopStation::Act => item.calls.get(beat.call).map_or_else(
-                    || tr(cx, "Take action", "执行操作").to_string(),
-                    |c| {
-                        format!(
-                            "{} · {} — {}{}",
-                            c.tool,
-                            c.action,
-                            c.result,
-                            if c.failed {
-                                tr(cx, " · failed", " · 失败")
-                            } else {
-                                ""
-                            }
-                        )
-                    },
-                ),
-                LoopStation::Verify => format!(
-                    "{} · {}",
+            if beat.station != LoopStation::Gather {
+                let call = if beat.station == LoopStation::Verify {
+                    item.calls.last()
+                } else {
+                    item.calls.get(beat.call)
+                };
+                tool = call.map(|call| {
+                    (
+                        format!("{} · {}", call.tool, call.action),
+                        call.result.clone(),
+                        if call.failed { p.danger } else { p.ink },
+                    )
+                });
+            }
+            if beat.station == LoopStation::Verify {
+                check = Some((
                     if item.passed {
                         tr(cx, "Check passed", "检查通过")
                     } else {
                         tr(cx, "Retry", "重试")
-                    },
-                    item.verification
-                ),
-            };
-            detail = detail.child(div().text_color(p.ink).child(state));
-            if beat.station == LoopStation::Gather && !item.detail.is_empty() {
-                detail = detail.child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(p.secondary)
-                        .child(item.detail.clone()),
-                );
+                    }
+                    .to_owned(),
+                    item.verification.clone(),
+                    if item.passed { p.success } else { p.danger },
+                ));
             }
             for item in self.iterations.iter().take(beat.iteration + 1) {
-                detail = detail.child(
+                tokens = tokens.saturating_add(item.tokens);
+                context = context.child(
                     div()
+                        .flex()
+                        .justify_between()
+                        .gap_2()
                         .text_size(px(12.))
-                        .text_color(p.secondary)
-                        .child(format!("{} · {} tokens", item.context, item.tokens)),
+                        .child(div().min_w_0().truncate().child(item.context.clone()))
+                        .child(
+                            div()
+                                .flex_none()
+                                .text_color(p.secondary)
+                                .child(format!("{} tokens", item.tokens)),
+                        ),
                 );
+                if !item.detail.is_empty() {
+                    context = context.child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(p.secondary)
+                            .child(item.detail.clone()),
+                    );
+                }
             }
         }
+        let result = |empty: &str, item: Option<(String, SharedString, Hsla)>| {
+            let mut panel = div()
+                .flex_1()
+                .min_w_0()
+                .min_h(px(60.))
+                .p_2()
+                .rounded(r)
+                .border_1()
+                .border_color(p.line)
+                .flex()
+                .flex_col()
+                .justify_center()
+                .gap_1()
+                .text_size(px(12.));
+            if let Some((title, detail, color)) = item {
+                panel
+                    .child(div().text_color(color).child(title))
+                    .child(div().text_color(p.secondary).child(detail))
+            } else {
+                panel = panel.border_dashed();
+                panel
+                    .items_center()
+                    .text_center()
+                    .text_color(p.secondary)
+                    .child(SharedString::from(empty.to_owned()))
+            }
+        };
+        let details = div().w_full().flex().gap_2();
+        let details = if wide {
+            details
+                .child(result(
+                    tr(cx, "Tool calls land here", "在此显示工具调用"),
+                    tool,
+                ))
+                .child(result(
+                    tr(cx, "Checks land here", "在此显示检查结果"),
+                    check,
+                ))
+        } else {
+            details.child(result(
+                tr(
+                    cx,
+                    "Tool calls and checks appear here",
+                    "在此显示工具调用和检查结果",
+                ),
+                check.or(tool),
+            ))
+        };
+        if ready {
+            context = context.child(div().text_size(px(12.)).text_color(p.secondary).child(tr(
+                cx,
+                "Context collected during the run appears here.",
+                "在此显示运行期间收集的上下文。",
+            )));
+        }
+        let context = div()
+            .w_full()
+            .min_w_0()
+            .flex_1()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .when(!wide, |v| v.border_t_1().border_color(p.line).pt_3())
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .gap_2()
+                    .child(tr(cx, "Context", "上下文"))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(p.secondary)
+                            .child(format!("{tokens} tokens")),
+                    ),
+            )
+            .child(context);
         let viewport = w.viewport_size();
         let weak = cx.weak_entity();
         root = root.child(
@@ -502,8 +613,17 @@ impl Render for AgentLoop {
                 .flex_col()
                 .items_center()
                 .gap_3()
-                .child(center)
-                .child(detail),
+                .child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .gap_3()
+                        .items_center()
+                        .when(!wide, |v| v.flex_col())
+                        .child(center)
+                        .child(context),
+                )
+                .child(details),
         );
         if self.beats.is_empty() {
             return root;

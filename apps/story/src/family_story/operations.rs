@@ -416,6 +416,12 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                     names.map(String::from).to_vec(),
                     spans,
                 )
+                .with_models(
+                    ["Kense", "Kense Mini", "Kense Mini", "Kense", "Kense"]
+                        .map(Into::into)
+                        .to_vec(),
+                )
+                .with_totals(t("12.4k tokens · $0.08", "12.4k 词元 · $0.08"))
             })
             .into()
         }
@@ -736,15 +742,18 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             use generation_stats::*;
             let data = |n: u32| Metrics {
                 first_token_ms: 420,
-                duration_ms: 420 + n * 12,
-                input_tokens: 1187,
+                duration_ms: 420 + (n * 3220 + 142) / 284,
+                input_tokens: 1147,
                 output_tokens: n,
                 input_rate: 3.,
                 output_rate: 15.,
                 running: n < 284,
-                samples: (0..24).map(|j| 65. + ((j * 17 + n) % 27) as f32).collect(),
+                samples: (0..n.div_ceil(14))
+                    .map(|j| 86. + (j as f32 * 0.53).sin() * 8. + (j as f32 * 1.12).sin() * 2.)
+                    .collect(),
             };
-            let e = cx.new(|_| GenerationReadout::new(id, t("Assistant", "助手"), data(284)));
+            let e = cx
+                .new(|_| GenerationReadout::new(id, t("Kense assistant", "Kense 助手"), data(284)));
             let x = e.clone();
             let epoch = Rc::new(std::cell::Cell::new(0u64));
             option!(
@@ -756,7 +765,7 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
                         let epoch = epoch.clone();
                         later(
                             &x,
-                            i * 160,
+                            if i == 0 { 0 } else { 420 + i * 322 },
                             move |s, cx| {
                                 if generation == epoch.get() {
                                     s.set_metrics(data((i * 284 / 10) as u32), cx)

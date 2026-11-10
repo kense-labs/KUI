@@ -23,55 +23,6 @@ pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
     (id == "morph-loader").then(|| cx.new(Demo::new).into())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Demo;
-    use gpui::{Modifiers, TestAppContext, px, size};
-    use kui::components::morph_loader::{LoaderStatus, LoaderVariant};
-    use std::time::Duration;
-
-    #[test]
-    fn selecting_a_shape_after_failure_restarts_the_painted_loader() {
-        let mut app = TestAppContext::single();
-        app.update(kui::init);
-        let (demo, window) = app.add_window_view(|_, cx| Demo::new(cx));
-        window.simulate_resize(size(px(628.), px(520.)));
-        window.run_until_parked();
-        let fail = window.debug_bounds("Fail").unwrap().center();
-        window.simulate_click(fail, Modifiers::default());
-        window.run_until_parked();
-        for _ in 0..60 {
-            window.executor().advance_clock(Duration::from_millis(16));
-            window.update(|window, cx| {
-                window.simulate_next_frame(cx);
-            });
-            window.run_until_parked();
-        }
-        let ring = window.debug_bounds("Ring").unwrap().center();
-        window.simulate_click(ring, Modifiers::default());
-        window.run_until_parked();
-        for _ in 0..120 {
-            window.executor().advance_clock(Duration::from_millis(16));
-            window.update(|window, cx| {
-                window.simulate_next_frame(cx);
-            });
-            window.run_until_parked();
-        }
-        window.update(|_, cx| {
-            let demo = demo.read(cx);
-            let loader = demo.loader.read(cx);
-            assert_eq!(demo.status, LoaderStatus::Loading);
-            assert_eq!(loader.status(), LoaderStatus::Loading);
-            assert_eq!(loader.variant(), LoaderVariant::Ring);
-        });
-        // The loading loop must still request frames, after the obsolete reset timer expires.
-        let callbacks = window.update(|window, cx| window.simulate_next_frame(cx));
-        assert!(
-            callbacks > 0,
-            "loading loop stopped after the result view was cached"
-        );
-    }
-}
 struct Demo {
     loader: Entity<MorphLoader>,
     language: UiLanguage,
@@ -306,5 +257,55 @@ impl Render for Demo {
                             .child(actions),
                     ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Demo;
+    use gpui::{Modifiers, TestAppContext, px, size};
+    use kui::components::morph_loader::{LoaderStatus, LoaderVariant};
+    use std::time::Duration;
+
+    #[test]
+    fn selecting_a_shape_after_failure_restarts_the_painted_loader() {
+        let mut app = TestAppContext::single();
+        app.update(kui::init);
+        let (demo, window) = app.add_window_view(|_, cx| Demo::new(cx));
+        window.simulate_resize(size(px(628.), px(520.)));
+        window.run_until_parked();
+        let fail = window.debug_bounds("Fail").unwrap().center();
+        window.simulate_click(fail, Modifiers::default());
+        window.run_until_parked();
+        for _ in 0..60 {
+            window.executor().advance_clock(Duration::from_millis(16));
+            window.update(|window, cx| {
+                window.simulate_next_frame(cx);
+            });
+            window.run_until_parked();
+        }
+        let ring = window.debug_bounds("Ring").unwrap().center();
+        window.simulate_click(ring, Modifiers::default());
+        window.run_until_parked();
+        for _ in 0..120 {
+            window.executor().advance_clock(Duration::from_millis(16));
+            window.update(|window, cx| {
+                window.simulate_next_frame(cx);
+            });
+            window.run_until_parked();
+        }
+        window.update(|_, cx| {
+            let demo = demo.read(cx);
+            let loader = demo.loader.read(cx);
+            assert_eq!(demo.status, LoaderStatus::Loading);
+            assert_eq!(loader.status(), LoaderStatus::Loading);
+            assert_eq!(loader.variant(), LoaderVariant::Ring);
+        });
+        // The loading loop must still request frames, after the obsolete reset timer expires.
+        let callbacks = window.update(|window, cx| window.simulate_next_frame(cx));
+        assert!(
+            callbacks > 0,
+            "loading loop stopped after the result view was cached"
+        );
     }
 }

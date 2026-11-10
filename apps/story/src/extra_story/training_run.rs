@@ -7,7 +7,8 @@ use kui::{
     },
     primitives::{
         control::UiLanguage,
-        family::{Paint, Tone, face},
+        family::Paint,
+        ops_surface::{btn, row},
     },
 };
 use std::{
@@ -22,27 +23,27 @@ pub fn story(id: &str, _w: &mut Window, cx: &mut Context<crate::StoryHost>) -> O
 struct Demo {
     monitor: Entity<TrainingRun>,
     snapshot: Rc<RefCell<TrainingRunSnapshot>>,
+    failure_scenario: Rc<Cell<bool>>,
+    baseline: TrainingRunSnapshot,
+    generation: Rc<Cell<u64>>,
 }
 impl Demo {
     fn new(cx: &mut Context<Self>) -> Self {
         let lang = UiLanguage::current(cx);
         let t = |en, zh| lang.text(en, zh);
         let mut initial = TrainingRunSnapshot::new(
-            t("Support classifier", "支持请求分类器"),
-            t("Sample model", "样例模型"),
-            1200,
+            "support-triage-v3",
+            t("Kense sample model", "Kense 样例模型"),
+            1860,
             3,
         );
-        initial.status = TrainingRunStatus::Running;
-        initial.details = "LoRA · 2 GPUs".into();
-        initial.dataset = t("Sample dataset · 12,000 examples", "样例数据集 · 12,000 条").into();
+        initial.details = "LoRA r16 · 8× H200".into();
+        initial.dataset = t("Sample dataset · 48,210 examples", "样例数据集 · 48,210 条").into();
         initial.learning_rate = Some(0.0002);
-        initial.eta_seconds = Some(60);
-        initial.events.push(TrainingEvent::new(
-            "start",
-            t("Simulation started", "模拟运行已开始"),
-        ));
-        let state = Rc::new(RefCell::new(initial));
+        initial.eta_seconds = Some(1120);
+        let state = Rc::new(RefCell::new(initial.clone()));
+        let failure_scenario = Rc::new(Cell::new(false));
+        let scenario = failure_scenario.clone();
         let actions = vec![
             TrainingRunAction::Pause,
             TrainingRunAction::Resume,
@@ -59,6 +60,7 @@ impl Demo {
         let weak = monitor.downgrade();
         let clock_state = state.clone();
         cx.spawn(async move |_, cx| {
+            let mut queued = 0;
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(600))
@@ -72,6 +74,20 @@ impl Demo {
                             return;
                         }
                         let mut snapshot = clock_state.borrow_mut();
+                        if snapshot.status == TrainingRunStatus::Queued {
+                            queued += 1;
+                            if queued >= 4 {
+                                snapshot.status = TrainingRunStatus::Running;
+                                snapshot.events.push(TrainingEvent::new(
+                                    "start",
+                                    lang.text("Training started", "训练已开始"),
+                                ));
+                                monitor.set_snapshot(snapshot.clone(), cx);
+                                queued = 0;
+                            }
+                            return;
+                        }
+                        queued = 0;
                         if snapshot.status != TrainingRunStatus::Running {
                             return;
                         }
@@ -99,7 +115,26 @@ impl Demo {
                                 .with_step(step),
                             );
                         }
-                        if snapshot.step == snapshot.total_steps {
+                        if scenario.get()
+                            && step >= 720
+                            && !snapshot
+                                .events
+                                .iter()
+                                .any(|event| event.id.as_ref() == "oom")
+                        {
+                            snapshot.status = TrainingRunStatus::Failed;
+                            snapshot.error = Some(
+                                lang.text(
+                                    "GPU out of memory. Retry with a smaller batch.",
+                                    "GPU 显存不足。请减小批量后重试。",
+                                )
+                                .into(),
+                            );
+                            snapshot.events.push(
+                                TrainingEvent::new("oom", lang.text("Out of memory", "显存不足"))
+                                    .with_step(step),
+                            );
+                        } else if snapshot.step == snapshot.total_steps {
                             snapshot.status = TrainingRunStatus::Completed;
                             snapshot.eta_seconds = Some(0);
                             snapshot.events.push(TrainingEvent::new(
@@ -118,12 +153,16 @@ impl Demo {
         .detach();
         let fail_deploy = Rc::new(Cell::new(true));
         let action_state = state.clone();
+        let generation = Rc::new(Cell::new(0_u64));
+        let guard = generation.clone();
         cx.subscribe(
             &monitor,
             move |_, monitor, request: &TrainingRunRequest, cx| {
                 let id = request.id;
                 let action = request.action;
                 let state = action_state.clone();
+                let generation = guard.clone();
+                let issued = generation.get();
                 let weak = monitor.downgrade();
                 let fail = action == TrainingRunAction::Deploy && fail_deploy.replace(false);
                 cx.spawn(async move |_, cx| {
@@ -131,6 +170,9 @@ impl Demo {
                         .timer(Duration::from_millis(280))
                         .await;
                     let _ = weak.update(cx, |monitor, cx| {
+                        if issued != generation.get() {
+                            return;
+                        }
                         if fail {
                             monitor.resolve(
                                 id,
@@ -182,6 +224,9 @@ impl Demo {
         Self {
             monitor,
             snapshot: state,
+            failure_scenario,
+            baseline: initial,
+            generation,
         }
     }
 }
@@ -189,7 +234,6 @@ impl Render for Demo {
     fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
         let lang = UiLanguage::current(cx);
-        let label = lang.text("Simulate failure", "模拟失败");
         div()
             .size_full()
             .min_h(px(520.))
@@ -203,28 +247,27 @@ impl Render for Demo {
             .text_color(p.ink)
             .child(self.monitor.clone())
             .child(
-                face(
-                    "training-simulate-failure",
-                    label,
-                    36.,
-                    kui::foundation::surface_radius(cx).into(),
-                    Tone::Surface,
-                    cx,
-                )
-                .px(px(10.))
-                .child(label)
-                .on_click(cx.listener(move |s, _, _, cx| {
-                    let mut snapshot = s.snapshot.borrow_mut();
-                    snapshot.status = TrainingRunStatus::Failed;
-                    snapshot.error =
-                        Some(lang.text("Simulated out of memory", "模拟显存不足").into());
-                    snapshot.events.push(TrainingEvent::new(
-                        "failure",
-                        lang.text("Simulated failure", "模拟失败"),
-                    ));
-                    s.monitor
-                        .update(cx, |m, cx| m.set_snapshot(snapshot.clone(), cx));
-                })),
+                row().flex_wrap().justify_center().children(
+                    [("Healthy run", "正常运行"), ("Out of memory", "显存不足")]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, (en, zh))| {
+                            btn(
+                                ("training-scenario", i),
+                                lang.text(en, zh),
+                                self.failure_scenario.get() == (i == 1),
+                                cx,
+                                move |s, _, cx| {
+                                    s.generation.set(s.generation.get().wrapping_add(1));
+                                    s.failure_scenario.set(i == 1);
+                                    *s.snapshot.borrow_mut() = s.baseline.clone();
+                                    s.monitor
+                                        .update(cx, |v, cx| v.set_snapshot(s.baseline.clone(), cx));
+                                    cx.notify();
+                                },
+                            )
+                        }),
+                ),
             )
     }
 }

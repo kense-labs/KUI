@@ -2,13 +2,51 @@
 // WASM initializer so Safari never downloads the large binary twice.
 const wasmDownload = fetch(new URL("./pkg/kui_web_bg.wasm", import.meta.url));
 wasmDownload.catch(() => {}); // The startup handler below reports the failure.
-let start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent;
+let start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent, set_holo_preferences, photo_pinch;
 
 const params = new URLSearchParams(location.search);
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
 const embedded = window !== parent;
 let frame;
 try { frame = window.frameElement; } catch { /* External embedding host. */ }
+
+let restoreArticleScroll;
+window.kuiArticleViewport = () => {
+  if (!frame) return new Float32Array();
+  const rect = frame.getBoundingClientRect();
+  const doc = frame.ownerDocument;
+  const host = doc.defaultView;
+  const header = doc.querySelector("header.topbar");
+  const top = header?.getBoundingClientRect().bottom ?? 0;
+  return new Float32Array([Math.max(0, top - rect.top), Math.min(innerHeight, host.innerHeight - rect.top)]);
+};
+window.kuiArticleModal = open => {
+  if (!open) {
+    restoreArticleScroll?.();
+    restoreArticleScroll = undefined;
+    return;
+  }
+  if (restoreArticleScroll || !frame?.matches('iframe.rust-story[data-story="card-to-article"]')) return;
+  const root = frame.ownerDocument.documentElement;
+  const panel = frame.closest("[data-panel=preview]");
+  let saved;
+  const unlock = () => {
+    if (saved) Object.assign(root.style, saved);
+    saved = undefined;
+  };
+  const sync = () => {
+    if (panel?.hidden) { unlock(); return; }
+    if (saved) return;
+    const { overflowY, scrollbarGutter } = root.style;
+    saved = { overflowY, scrollbarGutter };
+    root.style.scrollbarGutter = "stable";
+    root.style.overflowY = "hidden";
+  };
+  const observer = new MutationObserver(sync);
+  if (panel) observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+  sync();
+  restoreArticleScroll = () => { observer.disconnect(); unlock(); };
+};
 
 let selected = initialSelection();
 let mounted;
@@ -30,6 +68,47 @@ function accent(light, dark) {
   accentPair = [light, dark];
   if (running) set_accent(light, dark);
 }
+const transparency = matchMedia("(prefers-reduced-transparency: reduce)");
+let orientation, orientationOrigin, orientationActive = false, orientationGeneration = 0;
+let orientationFrame;
+function reportHoloPreferences() {
+  if (running && selected.story === "holo-card")
+    set_holo_preferences(orientation?.x ?? 0, orientation?.y ?? 0, !!orientation, transparency.matches);
+}
+function holoOrientation(event) {
+  if (document.hidden || self.kuiStoryInViewport === false || self.kuiStoryPageActive === false || reduced) return;
+  if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+  orientationOrigin ??= { x: event.gamma, y: event.beta };
+  const roll = (screen.orientation?.angle ?? window.orientation ?? 0) * Math.PI / 180;
+  const turn = (a, b) => Math.atan2(Math.sin((a-b)*Math.PI/180), Math.cos((a-b)*Math.PI/180)) * 180 / Math.PI;
+  const x = turn(event.gamma, orientationOrigin.x), y = turn(event.beta, orientationOrigin.y);
+  orientation = { x: (x*Math.cos(roll)+y*Math.sin(roll))/24, y: (y*Math.cos(roll)-x*Math.sin(roll))/24 };
+  orientationFrame ??= requestAnimationFrame(() => {
+    orientationFrame = undefined;
+    reportHoloPreferences();
+  });
+}
+window.kuiRequestHoloOrientation = async () => {
+  if (!window.isSecureContext || orientationActive || !window.DeviceOrientationEvent || selected.story !== "holo-card") return;
+  const generation = orientationGeneration;
+  try {
+    const request = DeviceOrientationEvent.requestPermission;
+    if (typeof request === "function" && await request.call(DeviceOrientationEvent) !== "granted") return;
+    if (generation !== orientationGeneration || selected.story !== "holo-card") return;
+    window.addEventListener("deviceorientation", holoOrientation, { passive: true });
+    orientationActive = true;
+  } catch { /* Finger tilt remains available without a sensor. */ }
+};
+function stopHoloOrientation() {
+  orientationGeneration++;
+  window.removeEventListener("deviceorientation", holoOrientation);
+  if (orientationFrame !== undefined) cancelAnimationFrame(orientationFrame);
+  orientationFrame = orientation = orientationOrigin = undefined;
+  orientationActive = false;
+  reportHoloPreferences();
+}
+transparency.addEventListener("change", reportHoloPreferences);
+
 let paintedDark;
 let paintedStory;
 let paintRevision = 0;
@@ -49,13 +128,49 @@ function retryBootNetworkFailure(error) {
 
 // Only send a wheel event to GPUI when an inner region can consume its dominant axis.
 let editorScroll = [], horizontalScroll = [];
+let orbitTouchRegion, controlDialRegion, photoRegion, photoPinch, ticketRegion;
+window.kuiTicketTouchRegion = (x,y,w,h) => { ticketRegion = {x,y,w,h}; };
+window.kuiControlDialRegion = (x,y,w,h) => { controlDialRegion = w && h ? {x,y,w,h} : undefined; };
+window.kuiOrbitTouchRegion = (x,y,w,h) => { orbitTouchRegion = w && h ? {x,y,w,h} : undefined; };
 window.kuiEditorScroll = (x,y,w,h,up,down) => { if (w && h) editorScroll.push({x,y,w,h,before:up,after:down}); };
 window.kuiHorizontalScroll = (x,y,w,h,left,right) => { if (w && h) horizontalScroll.push({x,y,w,h,before:left,after:right}); };
+window.kuiPhotoScroll = (x,y,w,h,up,down,viewer) => {
+  photoRegion = {x,y,w,h,viewer};
+  if (!viewer) window.kuiEditorScroll(x,y,w,h,up,down);
+};
 const containsScrollPoint = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 const canScroll = (r, delta) => r && (delta < 0 ? r.before : delta > 0 && r.after);
+function photoTouch(event) {
+  if (selected.story !== "photo-grid" || event.touches.length !== 2 || photoRegion?.viewer) return;
+  const [a,b] = event.touches;
+  if (!photoPinch && ![a,b].every(t => containsScrollPoint(photoRegion,t.clientX,t.clientY))) return;
+  const x = Math.max(photoRegion.x, Math.min(photoRegion.x+photoRegion.w-1,(a.clientX+b.clientX)/2));
+  const y = Math.max(photoRegion.y, Math.min(photoRegion.y+photoRegion.h-1,(a.clientY+b.clientY)/2));
+  const distance = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+  if (distance < 1) return;
+  photo_pinch?.(x,y,photoPinch ? distance/photoPinch.distance-1 : 0,photoPinch ? 1 : 0);
+  photoPinch = {x,y,distance};
+  if (event.cancelable) event.preventDefault();
+}
+function finishPhotoTouch(event) {
+  if (!photoPinch || event.touches.length >= 2) return;
+  const {x,y} = photoPinch;
+  photoPinch = undefined;
+  photo_pinch?.(x,y,0,event.type === "touchcancel" ? 3 : 2);
+}
+window.addEventListener("touchstart",photoTouch,{capture:true,passive:false});
+window.addEventListener("touchmove",photoTouch,{capture:true,passive:false});
+window.addEventListener("touchend",finishPhotoTouch,{capture:true,passive:true});
+window.addEventListener("touchcancel",finishPhotoTouch,{capture:true,passive:true});
 if (frame?.matches("iframe.rust-story[data-story]")) {
   document.documentElement.dataset.embeddedStory = "";
+  window.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !event.defaultPrevented && frame.closest("[data-preview-expanded]")) {
+      parent.postMessage({type:"kui:preview-exit"}, location.origin);
+    }
+  });
   window.addEventListener("wheel", event => {
+    if (selected.story === "photo-grid" && event.ctrlKey && !photoRegion?.viewer && containsScrollPoint(photoRegion,event.clientX,event.clientY)) return;
     const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
     const regions = horizontal ? horizontalScroll : editorScroll;
     const delta = horizontal ? event.deltaX : event.deltaY;
@@ -65,21 +180,37 @@ if (frame?.matches("iframe.rust-story[data-story]")) {
 
   // The browser owns gestures on the document and fixed menu chrome. A pan
   // starting on a scrollable row is handled by the GPUI touch recognizer.
-  let listPan;
-  const listPanStories = new Set(["team-switcher", "phone-input"]);
+  let listPan, orbitPan, dialPan, photoPan, ticketPan;
+  const listPanStories = new Set(["team-switcher", "phone-input", "control-center", "mega-menu-morph", "morph-select", "rich-text-editor", "date-reel", "stretch-refresh", "card-to-article", "photo-grid"]);
   window.addEventListener("touchstart", e => {
     const t = e.touches[0];
-    const region = editorScroll.find(r => containsScrollPoint(r, t.clientX, t.clientY));
-    listPan = listPanStories.has(selected.story) && e.touches.length === 1 && region
-      ? { x: t.screenX, y: t.screenY, region, owned: false } : undefined;
+    ticketPan = selected.story === "ticket-tear" && e.touches.length === 1
+      && containsScrollPoint(ticketRegion, t.clientX, t.clientY);
+    photoPan = selected.story === "photo-grid" && photoRegion?.viewer && containsScrollPoint(photoRegion,t.clientX,t.clientY);
+    const orbit = orbitTouchRegion;
+    dialPan = selected.story === "control-center" && e.touches.length === 1
+      && containsScrollPoint(controlDialRegion, t.clientX, t.clientY);
+    orbitPan = selected.story === "orbit-menu" && e.touches.length === 1 && orbit
+      && Math.hypot(t.clientX - orbit.x - orbit.w / 2, t.clientY - orbit.y - orbit.h / 2) <= orbit.w / 2;
+    const sideways = selected.story === "orbit-logos";
+    const region = (sideways ? horizontalScroll : editorScroll).find(r => containsScrollPoint(r, t.clientX, t.clientY));
+    listPan = (sideways || listPanStories.has(selected.story)) && e.touches.length === 1 && region
+      ? { x: t.screenX, y: t.screenY, region, sideways, owned: false } : undefined;
   }, {capture: true, passive: true});
   window.addEventListener("touchmove", e => {
-    if (!listPan || e.touches.length !== 1 || !listPanStories.has(selected.story)) return;
+    if ((orbitPan && selected.story === "orbit-menu" || dialPan && selected.story === "control-center" || photoPan && selected.story === "photo-grid" || ticketPan && selected.story === "ticket-tear") && e.touches.length === 1) {
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    if (!listPan || e.touches.length !== 1 || !(listPan.sideways ? selected.story === "orbit-logos" : listPanStories.has(selected.story))) return;
     const t = e.touches[0];
+    const dx = listPan.x - t.screenX;
     const dy = listPan.y - t.screenY;
+    const delta = listPan.sideways ? dx : dy;
+    const cross = listPan.sideways ? dy : dx;
     if (!listPan.owned) {
-      if (dy === 0) return;
-      if (Math.abs(t.screenX - listPan.x) > Math.abs(dy) || !canScroll(listPan.region, dy)) {
+      if (delta === 0) return;
+      if (Math.abs(cross) > Math.abs(delta) || !canScroll(listPan.region, delta)) {
         listPan = undefined;
         return;
       }
@@ -89,8 +220,14 @@ if (frame?.matches("iframe.rust-story[data-story]")) {
     // Keep the iframe stationary for this gesture. A new outward swipe at
     // the edge belongs to the browser, including its native momentum.
   }, {capture: true, passive: false});
-  window.addEventListener("touchend", () => { listPan = undefined; }, {passive: true});
-  window.addEventListener("touchcancel", () => { listPan = undefined; }, {passive: true});
+  window.addEventListener("touchend", () => { listPan = orbitPan = dialPan = photoPan = ticketPan = undefined; }, {passive: true});
+  window.addEventListener("touchcancel", () => { listPan = orbitPan = dialPan = photoPan = ticketPan = undefined; }, {passive: true});
+  window.addEventListener("pointerdown", e => {
+    if (selected.story === "ticket-tear" && e.isPrimary && e.button === 0
+      && e.target instanceof HTMLCanvasElement && containsScrollPoint(ticketRegion, e.clientX, e.clientY)) {
+      e.target.setPointerCapture(e.pointerId);
+    }
+  }, {capture: true, passive: true});
 
   // After a sidebar navigation the host has DOM focus. GPUI handles a touch
   // tap on a button without focusing its DOM keyboard receiver (it only opens
@@ -161,6 +298,10 @@ let themeTarget;
 let themeRadius;
 let themePointer;
 let consumeActivation = false;
+function themeMode(story) {
+  if (story === "theme-switch") return "reveal";
+  return /^theme-switch[-:](eclipse|split|rise)$/.exec(story)?.[1];
+}
 window.kuiThemeTarget = (x, y, w, h, radius) => {
   themeTarget = new DOMRect(x, y, w, h);
   themeRadius = radius;
@@ -169,7 +310,7 @@ const hitsKey = e => themeTarget && e.clientX >= themeTarget.left && e.clientX <
   e.clientY >= themeTarget.top && e.clientY < themeTarget.bottom;
 function gesture(phase) {
   if (frame) parent.dispatchEvent(new CustomEvent("kui:theme-gesture", {
-    detail: {frame, bounds: themeTarget, mode: selected.story.split(":")[1] || "reveal", phase}
+    detail: {frame, bounds: themeTarget, mode: themeMode(selected.story), phase}
   }));
 }
 function cancelGesture() {
@@ -180,7 +321,7 @@ function cancelGesture() {
 if (frame) {
   let overKey = false;
   window.addEventListener("pointermove", e => {
-    const over = selected.story.split(":")[0] === "theme-switch" && hitsKey(e);
+    const over = Boolean(themeMode(selected.story) && hitsKey(e));
     if (over && !overKey) gesture("warm");
     if (!over && overKey) gesture("cool");
     overKey = over;
@@ -189,7 +330,7 @@ if (frame) {
   window.addEventListener("pointerdown", e => {
     if (!e.isPrimary || e.button !== 0) return;
     consumeActivation = false;
-    if (selected.story.split(":")[0] !== "theme-switch" || !hitsKey(e)) return;
+    if (!themeMode(selected.story) || !hitsKey(e)) return;
     themePointer = e.pointerId;
     gesture("begin");
   }, true);
@@ -227,7 +368,7 @@ function setPageColor() {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 }
 
-const textFieldStories = new Set(["input", "textarea", "password-field", "password-strength", "search-field", "expanding-search", "inline-edit", "combobox", "morph-select", "scrub-input", "number-field", "tag-input", "multi-select", "mention-input", "emoji-picker", "color-picker", "phone-input", "rich-text-editor", "time-picker", "chat-thread", "ai-command", "agent-plan", "comment-thread", "provider-keys", "team-switcher", "share-access", "json-viewer", "data-grid", "confirm-popover", "stepper"]);
+const textFieldStories = new Set(["input", "textarea", "password-field", "password-strength", "search-field", "expanding-search", "inline-edit", "combobox", "morph-select", "scrub-input", "number-field", "tag-input", "multi-select", "mention-input", "emoji-picker", "color-picker", "phone-input", "rich-text-editor", "time-picker", "chat-thread", "ai-command", "agent-plan", "comment-thread", "provider-keys", "team-switcher", "share-access", "json-viewer", "data-grid", "confirm-popover", "stepper", "image-generation", "enrich-column"]);
 let inputFont;
 function warmInputFont(story) {
   if (running && textFieldStories.has(story)) inputFont ??= fetch(new URL("./fonts/KUIInputSans.ttf", import.meta.url))
@@ -237,16 +378,19 @@ function warmInputFont(story) {
 }
 function show(story, lang) {
   warmInputFont(story);
-  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = []; horizontalScroll = []; preparePicture(false); }
+  if (selected.story === "card-to-article" && (selected.story !== story || selected.lang !== lang)) window.kuiArticleModal(false);
+  if (selected.story !== story || selected.lang !== lang) { cancelGesture(); themeTarget = undefined; editorScroll = []; horizontalScroll = []; orbitTouchRegion = controlDialRegion = photoRegion = photoPinch = ticketRegion = undefined; preparePicture(false); }
+  if (selected.story === "holo-card" && story !== "holo-card") stopHoloOrientation();
   selected = { story, lang };
   document.documentElement.dataset.story = story.split(":")[0];
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   if (!running) return;
   if (mounted?.story === story && mounted?.lang === lang) return;
-  if (frame && story.split(":")[0] === "theme-switch") set_icon_intent(dark);
+  if (frame && themeMode(story)) set_icon_intent(dark);
   if (show_story(story, lang === "zh")) {
     delete document.documentElement.dataset.previewError;
     mounted = selected;
+    reportHoloPreferences();
     const address = new URL(location.href);
     address.searchParams.set("story", story);
     address.searchParams.set("lang", lang);
@@ -290,6 +434,7 @@ window.kuiFramePainted = (height, renderedDark) => {
   // during the following paint, so geometry from previous frames cannot linger.
   editorScroll = [];
   horizontalScroll = [];
+  ticketRegion = undefined;
   if (document.documentElement.dataset.previewError) return;
   const nextHeight = frame && height > 0 && frame.classList.contains("rust-story") ? height + "px" : "";
   const resize = nextHeight && frame.style.height !== nextHeight;
@@ -324,14 +469,14 @@ window.kuiPreviewStarted = () => {
 };
 window.kuiPreview = { show, preferences, accent, preparePicture, copyPicture, controlRadius: () => themeRadius, iconIntent: dark => { if (running) set_icon_intent(dark); } };
 motion.addEventListener("change", () => preferences(dark, motion.matches));
-window.addEventListener("pagehide", () => { editorScroll = []; horizontalScroll = []; preparePicture(false); finishWaiters(); }, { once: true });
+window.addEventListener("pagehide", () => { if (orientationActive) stopHoloOrientation(); window.kuiArticleModal(false); editorScroll = []; horizontalScroll = []; preparePicture(false); finishWaiters(); }, { once: true });
 setPageColor();
 show(selected.story, selected.lang);
 status.textContent = selected.lang === "zh" ? "正在加载预览…" : "Loading preview…";
 
 try {
   let init;
-  ({ default: init, start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent } = await import("./pkg/kui_web.js"));
+  ({ default: init, start, show_story, install_input_font, request_snapshot, set_preferences, set_icon_intent, set_accent, set_holo_preferences, photo_pinch } = await import("./pkg/kui_web.js"));
   await init({ module_or_path: wasmDownload });
   mounted = selected;
   set_accent(...accentPair);
@@ -354,13 +499,58 @@ function syncPreviewActivity() {
   lastActivity = active;
   request_snapshot();
 }
-document.addEventListener("visibilitychange", syncPreviewActivity);
-window.addEventListener("pagehide", () => { self.kuiStoryPageActive = false; syncPreviewActivity(); });
-window.addEventListener("pageshow", () => { self.kuiStoryPageActive = true; syncPreviewActivity(); });
-new IntersectionObserver(([entry]) => {
-  self.kuiStoryInViewport = entry.isIntersecting;
+const visibilityHost = frame?.ownerDocument.defaultView;
+let visibilityListeners;
+let visibilityCheck;
+function refreshFrameVisibility() {
+  visibilityCheck = undefined;
+  const bounds = frame.getBoundingClientRect();
+  self.kuiStoryInViewport = bounds.width > 0 && bounds.height > 0
+    && bounds.bottom > 0 && bounds.right > 0
+    && bounds.top < visibilityHost.innerHeight && bounds.left < visibilityHost.innerWidth
+    && !frame.closest("[hidden], details:not([open])");
   syncPreviewActivity();
-}).observe(document.documentElement);
+}
+function scheduleFrameVisibility() {
+  visibilityCheck ??= requestAnimationFrame(refreshFrameVisibility);
+}
+const VisibilityObserver = visibilityHost?.IntersectionObserver ?? IntersectionObserver;
+const visibilityObserver = new VisibilityObserver(entries => {
+  // Embedded document intersections can go false during focus scrolling,
+  // even while the frame is fully on screen. Verify in the host's coordinates.
+  if (visibilityHost) {
+    scheduleFrameVisibility();
+  } else if (entries.length) {
+    self.kuiStoryInViewport = entries.at(-1).isIntersecting;
+    syncPreviewActivity();
+  }
+});
+function watchPreviewVisibility() {
+  visibilityObserver.observe(frame ?? document.documentElement);
+  if (visibilityHost && !visibilityListeners) {
+    visibilityListeners = new AbortController();
+    const options = { capture: true, passive: true, signal: visibilityListeners.signal };
+    visibilityHost.addEventListener("scroll", scheduleFrameVisibility, options);
+    visibilityHost.addEventListener("resize", scheduleFrameVisibility, options);
+    scheduleFrameVisibility();
+  }
+}
+document.addEventListener("visibilitychange", syncPreviewActivity);
+window.addEventListener("pagehide", () => {
+  self.kuiStoryPageActive = false;
+  visibilityObserver.disconnect();
+  visibilityListeners?.abort();
+  visibilityListeners = undefined;
+  if (visibilityCheck !== undefined) cancelAnimationFrame(visibilityCheck);
+  visibilityCheck = undefined;
+  syncPreviewActivity();
+});
+window.addEventListener("pageshow", () => {
+  self.kuiStoryPageActive = true;
+  watchPreviewVisibility();
+  syncPreviewActivity();
+});
+watchPreviewVisibility();
 syncPreviewActivity();
 
 // WebKit may resize the GPU surface before GPUI has consumed the platform

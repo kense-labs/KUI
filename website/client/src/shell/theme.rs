@@ -45,6 +45,9 @@ fn version() -> u32 {
 fn fresh(v: u32) -> bool {
     VERSION.with(Cell::get) == v
 }
+fn theme_frame(frame: &HtmlIFrameElement) -> bool {
+    frame.class_list().contains("theme-preview")
+}
 
 fn show_icon(dark: bool) {
     attr(&root(), "data-kui-theme-intent", name(dark));
@@ -52,10 +55,7 @@ fn show_icon(dark: bool) {
         if intent() != dark {
             return;
         }
-        for f in frames()
-            .into_iter()
-            .filter(|f| f.get_attribute("data-story").as_deref() == Some("theme-switch"))
-        {
+        for f in frames().into_iter().filter(theme_frame) {
             preview(&f, "iconIntent", &Array::of1(&dark.into()));
         }
     });
@@ -286,7 +286,7 @@ fn gesture(ev: Event) -> Option<()> {
     let frame = frames()
         .into_iter()
         .find(|f| f.as_ref() as &JsValue == &source)?;
-    if frame.get_attribute("data-story").as_deref() != Some("theme-switch") {
+    if !theme_frame(&frame) {
         return None;
     }
     match prop(&detail, "phase").as_string()?.as_str() {
@@ -318,7 +318,7 @@ fn message(ev: Event) -> Option<()> {
         f.get_attribute("data-story")?.as_str(),
         prop(&data, "type").as_string()?.as_str(),
     ) {
-        ("theme-switch", "kui:family-theme") => {
+        (_, "kui:family-theme") if theme_frame(&f) => {
             prop(&data, "dark").as_bool()?;
             choose(!intent(), &mode(&m)?, Some(hole(&f, &data, "w", "h")?));
         }

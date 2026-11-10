@@ -116,37 +116,34 @@ fn ring(bounds: Bounds<Pixels>, fraction: f32, color: Hsla, w: &mut Window) {
     let cx = bounds.origin.x + px(width / 2.);
     let cy = bounds.origin.y + px(size / 2.);
     let radius = size * 0.42;
-    let at = |a: f32| point(cx + px(a.sin() * radius), cy - px(a.cos() * radius));
-    let start = -0.75 * PI;
+    let at = |a: f32, r: f32| point(cx + px(a.cos() * r), cy + px(a.sin() * r));
+    let start = -1.25 * PI;
     let span = 1.5 * PI * fraction.clamp(0., 1.);
-    let cap_radius = size * 0.045;
-    let mut stroke = PathBuilder::stroke(px(size * 0.09));
-    stroke.move_to(at(start));
-    for i in 1..=72 {
-        stroke.line_to(at(start + span * i as f32 / 72.));
+    let end = start + span;
+    let half_width = size * 0.045;
+    let outer = radius + half_width;
+    let inner = radius - half_width;
+    let mut path = PathBuilder::fill();
+    path.move_to(at(start, outer));
+    let segments = (72. * fraction).ceil().max(1.) as u32;
+    for i in 1..=segments {
+        path.line_to(at(start + span * i as f32 / segments as f32, outer));
     }
-    if let Ok(path) = stroke.build() {
+    let cap = |path: &mut PathBuilder, angle: f32, phase: f32| {
+        let center = at(angle, radius);
+        for i in 1..=16 {
+            let a = angle + phase + PI * i as f32 / 16.;
+            path.line_to(center + point(px(a.cos() * half_width), px(a.sin() * half_width)));
+        }
+    };
+    cap(&mut path, end, 0.);
+    for i in (0..segments).rev() {
+        path.line_to(at(start + span * i as f32 / segments as f32, inner));
+    }
+    cap(&mut path, start, PI);
+    path.close();
+    if let Ok(path) = path.build() {
         w.paint_path(path, color);
-    }
-    for angle in [start, start + span] {
-        let center = at(angle);
-        let mut cap = PathBuilder::fill();
-        for i in 0..=24 {
-            let a = 2. * PI * i as f32 / 24.;
-            let p = point(
-                center.x + px(cap_radius * a.cos()),
-                center.y + px(cap_radius * a.sin()),
-            );
-            if i == 0 {
-                cap.move_to(p)
-            } else {
-                cap.line_to(p)
-            }
-        }
-        cap.close();
-        if let Ok(path) = cap.build() {
-            w.paint_path(path, color);
-        }
     }
 }
 fn half_visible(bounds: Bounds<Pixels>, viewport: Size<Pixels>) -> bool {

@@ -29,6 +29,8 @@ The host runs rewrites and handles cancellation. The sample is simulated; Copy u
 
 A settings change waits 220 ms, then emits Rewrite with a ticket. Stop or a new edit emits Cancel; finish and fail reject stale results or a changed draft. User edits become the source for future rewrites.
 
+Use `with_recipient(name, subject)` to add the optional recipient header. The Changes switch toggles the highlights without requesting a rewrite.
+
 Event: `ToneTunerEvent`.
 
 ## Motion

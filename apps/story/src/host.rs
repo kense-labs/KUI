@@ -3,6 +3,12 @@ use crate::{ButtonGallery, FAMILY_IDS, FamilyStory};
 use gpui::{Context, Entity, Window, div, prelude::*};
 use kui::{foundation::Theme, primitives::control::action};
 
+const THEME_VARIANTS: [(&str, &str); 3] = [
+    ("theme-switch-eclipse", "theme-switch:eclipse"),
+    ("theme-switch-split", "theme-switch:split"),
+    ("theme-switch-rise", "theme-switch:rise"),
+];
+
 pub struct StoryHost {
     gallery: Entity<ButtonGallery>,
     selected: Option<gpui::AnyView>,
@@ -10,6 +16,10 @@ pub struct StoryHost {
 }
 impl StoryHost {
     fn select(id: &str, w: &mut Window, cx: &mut Context<Self>) -> Option<gpui::AnyView> {
+        let id = THEME_VARIANTS
+            .iter()
+            .find(|(name, _)| *name == id)
+            .map_or(id, |(_, story)| *story);
         if let Some(view) = crate::extra_story::story(id, w, cx) {
             return Some(view);
         }
@@ -70,11 +80,7 @@ impl Render for StoryHost {
             .chain(crate::WORKSPACE_IDS)
             .chain(crate::LIBRARY_IDS)
             .chain(crate::extra_story::ids())
-            .chain([
-                "theme-switch:eclipse",
-                "theme-switch:split",
-                "theme-switch:rise",
-            ])
+            .chain(THEME_VARIANTS.map(|(id, _)| id))
         {
             row = row.child(action(id, id, cx, move |v, w, cx| {
                 v.selected = Self::select(id, w, cx);

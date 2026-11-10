@@ -9,7 +9,7 @@
     "method": "finish_send",
     "signature": "(u64, Result<SharedString, SharedString>, &mut Context<Self>)",
     "event": "MeetingSummaryEvent",
-    "rule": { "en": "The host provides notes, runs regeneration and sends actions; the example simulates sends. Copy writes to the real clipboard and reports success or failure.", "zh": "宿主提供纪要、执行重新生成及发送行动项；示例发送为模拟。复制使用真实剪贴板并报告成功或失败。" },
+    "rule": { "en": "The host provides notes, runs regeneration and sends actions; the example simulates sends. Copy writes to the real clipboard and reports success or failure. The preview offers Live, Error, and No transcript. Use MeetingStatus::NoTranscript for a missing transcript.", "zh": "宿主提供纪要、执行重新生成及发送行动项；示例发送为模拟。复制使用真实剪贴板并报告成功或失败。 预览提供正常、错误和无转录。宿主用 MeetingStatus::NoTranscript 表示没有转录。" },
     "api": { "en": "Handle Send, then finish_send with its ticket. Pending sends are deduplicated and cancelled when data changes. Timestamp buttons expose source quotes; Escape closes a quote.", "zh": "处理 Send 并以 ticket 调用 finish_send；发送中防重复，内容变化时取消待处理发送。时间按钮展开原文，Esc 关闭引用。" },
     "motion": { "en": "States update immediately. Streaming, quote hover intent and detailed transitions are not yet implemented or visually verified.", "zh": "状态当前立即更新；流式呈现、悬停意图及细节动效尚未实现或完成视觉验收。" }
   }

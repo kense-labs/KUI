@@ -167,6 +167,8 @@ pub struct Sunburst {
     dirty: bool,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     counter: Option<Entity<AnimatedCounter>>,
+    graph_focus: Option<FocusHandle>,
+    focus_subscriptions: Vec<Subscription>,
     max_depth: usize,
     visible: bool,
 }
@@ -185,6 +187,8 @@ impl Sunburst {
             dirty: true,
             bounds: Default::default(),
             counter: None,
+            graph_focus: None,
+            focus_subscriptions: vec![],
             max_depth: 3,
             visible: true,
         }
@@ -368,6 +372,8 @@ impl Render for Sunburst {
             .unwrap_or(&self.root)
             .clone();
         let total = root.total();
+        // The reference shows "No data yet" in the centre while the total is zero.
+        let empty = total <= 0.;
         let counter = self
             .counter
             .get_or_insert_with(|| {
@@ -420,10 +426,27 @@ impl Render for Sunburst {
         }
         let tip_x = self.tip_x.get(w, cx);
         let tip_y = self.tip_y.get(w, cx);
+        let graph_focus = self
+            .graph_focus
+            .get_or_insert_with(|| cx.focus_handle())
+            .clone();
+        if self.focus_subscriptions.is_empty() {
+            // The reference highlights the first segment when the chart gains focus.
+            self.focus_subscriptions
+                .push(cx.on_focus(&graph_focus, w, |s, _, cx| {
+                    if s.active.is_none()
+                        && let Some(arc) = s.arcs.iter().find(|arc| !arc.departing)
+                    {
+                        s.active = Some(arc.target.path.clone());
+                        cx.notify();
+                    }
+                }));
+        }
         let mut graph = div()
             .id("sunburst")
             .role(Role::Figure)
             .tab_index(0)
+            .track_focus(&graph_focus)
             .relative()
             .w(px(340.))
             .h(px(340.))
@@ -651,15 +674,23 @@ impl Render for Sunburst {
                     .when(!self.focus.is_empty(), |view| {
                         view.hover(|s| s.bg(p.ink.opacity(0.035)))
                     })
-                    .child(
+                    .child(if empty {
                         div()
                             .text_size(px(12.))
                             .line_height(px(20.))
                             .text_color(p.secondary)
-                            .child(root.label.clone()),
-                    )
-                    .when(total <= 1_000_000_000_000., |view| view.child(counter))
-                    .when(total > 1_000_000_000_000., |view| {
+                            .child(tr(cx, "No data yet", "暂无数据").to_string())
+                    } else {
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(20.))
+                            .text_color(p.secondary)
+                            .child(root.label.clone())
+                    })
+                    .when(!empty && total <= 1_000_000_000_000., |view| {
+                        view.child(counter)
+                    })
+                    .when(!empty && total > 1_000_000_000_000., |view| {
                         view.child(format!("{total:.2e}"))
                     }),
             );

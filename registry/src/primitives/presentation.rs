@@ -159,6 +159,7 @@ pub(crate) struct RollingNumber {
     )>,
     number: f32,
     started: bool,
+    initial_roll: bool,
 }
 impl RollingNumber {
     pub fn new(value: f32) -> Self {
@@ -166,7 +167,12 @@ impl RollingNumber {
             wheels: vec![],
             number: value,
             started: false,
+            initial_roll: true,
         }
+    }
+    pub(crate) fn with_initial_roll(mut self, initial_roll: bool) -> Self {
+        self.initial_roll = initial_roll;
+        self
     }
     pub fn update(&mut self, value: f32, cx: &App) {
         use crate::primitives::family::Slide;
@@ -196,7 +202,9 @@ impl RollingNumber {
                 } else {
                     delta.rem_euclid(10)
                 };
-                if first {
+                if first && !self.initial_roll {
+                    wheel.reset(*target as f32);
+                } else if first {
                     wheel.delayed(
                         *target as f32,
                         0.48,

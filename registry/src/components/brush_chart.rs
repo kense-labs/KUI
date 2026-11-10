@@ -102,6 +102,8 @@ pub struct BrushChart {
 impl EventEmitter<BrushChange> for BrushChart {}
 impl EventEmitter<BrushInspect> for BrushChart {}
 impl BrushChart {
+    /// `minSpan`: the window keeps at least this many points (a week of days).
+    const MIN_SPAN: usize = 7;
     pub fn new(title: impl Into<SharedString>, points: Vec<BrushPoint>) -> Self {
         let end = points.len().saturating_sub(1);
         let start = end.saturating_sub(14);
@@ -154,8 +156,15 @@ impl BrushChart {
     }
     fn update(&mut self, start: usize, end: usize, animate: bool, cx: &mut Context<Self>) {
         let last = self.points.len().saturating_sub(1);
-        let end = end.min(last);
-        let start = start.min(end);
+        let mut end = end.min(last);
+        let mut start = start.min(end);
+        // minSpan: centered growth keeps host-driven windows a week wide.
+        if last >= Self::MIN_SPAN - 1 && end - start < Self::MIN_SPAN - 1 {
+            let floor = Self::MIN_SPAN - 1;
+            start = ((start + end) / 2).saturating_sub(floor / 2);
+            end = (start + floor).min(last);
+            start = end - floor;
+        }
         let changed = (self.start, self.end) != (start, end);
         self.start = start;
         self.end = end;
@@ -224,8 +233,15 @@ impl BrushChart {
         let t = self.fraction(x);
         let index = (t * last as f32).round() as usize;
         match drag {
-            Drag::Start => self.update(index.min(self.end), self.end, false, cx),
-            Drag::End => self.update(self.start, index.max(self.start), false, cx),
+            Drag::Start => {
+                // Dragging an edge stops at minSpan instead of inverting.
+                let cap = self.end.saturating_sub(Self::MIN_SPAN - 1);
+                self.update(index.min(cap), self.end, false, cx)
+            }
+            Drag::End => {
+                let floor = (self.start + Self::MIN_SPAN - 1).min(last);
+                self.update(self.start, index.max(floor), false, cx)
+            }
             Drag::Window => {
                 let width = self.origin.1 - self.origin.0;
                 let delta = ((t - self.grab) * last as f32).round() as isize;
@@ -236,7 +252,18 @@ impl BrushChart {
             }
             Drag::New => {
                 let anchor = (self.grab * last as f32).round() as usize;
-                self.update(anchor.min(index), anchor.max(index), false, cx)
+                let (mut a, mut b) = (anchor.min(index), anchor.max(index));
+                if last >= Self::MIN_SPAN - 1 && b - a < Self::MIN_SPAN - 1 {
+                    // A fresh window grows a week toward the pointer side.
+                    if index >= anchor {
+                        b = (a + Self::MIN_SPAN - 1).min(last);
+                        a = b - (Self::MIN_SPAN - 1);
+                    } else {
+                        a = b.saturating_sub(Self::MIN_SPAN - 1);
+                        b = a + Self::MIN_SPAN - 1;
+                    }
+                }
+                self.update(a, b, false, cx)
             }
         }
     }
@@ -326,6 +353,7 @@ impl Render for BrushChart {
             .id("brush-plot")
             .role(Role::Figure)
             .tab_index(0)
+            .relative()
             .w_full()
             .h(px(240.))
             .aria_label(format!(
@@ -333,6 +361,18 @@ impl Render for BrushChart {
                 self.title,
                 tr(cx, "Use arrow keys to inspect values", "使用方向键查看数据")
             ))
+            // Fewer than two points show the empty label instead of a line.
+            .when(self.points.len() < 2, |v| {
+                v.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(hint(tr(cx, "No data yet", "暂无数据"), p)),
+                )
+            })
             .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
                 if s.points.is_empty() {
                     return;
@@ -368,7 +408,7 @@ impl Render for BrushChart {
                         plot_bounds.set(b);
                     },
                     move |b, _, w, cx| {
-                        if values.is_empty() {
+                        if values.len() < 2 {
                             return;
                         }
                         let span = (high - low).max(1.);
@@ -637,6 +677,7 @@ impl Render for BrushChart {
         let cache = self.overview_cache.clone();
         let revision = self.revision;
         let values = data.clone();
+        let strip_events = self.events.clone();
         let last = n.saturating_sub(1) as f32;
         let l = if last > 0. { left / last } else { 0. };
         let r = if last > 0. { right / last } else { 1. };
@@ -695,11 +736,23 @@ impl Render for BrushChart {
                         let a = (s.start + step).min(last.saturating_sub(width));
                         (a, a + width)
                     }
+                    // PageUp and PageDown pan by half a window, like Shift.
+                    "pageup" => {
+                        let a = s.start.saturating_sub((width / 2).max(1));
+                        (a, a + width)
+                    }
+                    "pagedown" => {
+                        let a = (s.start + (width / 2).max(1)).min(last.saturating_sub(width));
+                        (a, a + width)
+                    }
                     "home" => (0, width),
                     "end" => (last.saturating_sub(width), last),
                     "escape" | "0" => (0, last),
                     "+" | "=" => {
-                        let inset = (width / 10).max(1).min(width / 2);
+                        let inset = (width / 10)
+                            .max(1)
+                            .min(width / 2)
+                            .min((width.saturating_sub(Self::MIN_SPAN - 1)) / 2);
                         (s.start + inset, s.end - inset)
                     }
                     "-" => {
@@ -786,6 +839,23 @@ impl Render for BrushChart {
                             w.paint_path(path.clone(), p.secondary);
                         }
                         drop(cached);
+                        // Events leave a tick on the overview as well as the plot.
+                        if values.len() > 1 {
+                            for (i, event) in strip_events.iter().enumerate() {
+                                if event.is_none() {
+                                    continue;
+                                }
+                                let x =
+                                    b.origin.x + px(width * i as f32 / (values.len() - 1) as f32);
+                                w.paint_quad(fill(
+                                    Bounds {
+                                        origin: point(x - px(1.), b.origin.y + px(3.)),
+                                        size: size(px(2.), px(7.)),
+                                    },
+                                    p.success,
+                                ));
+                            }
+                        }
                         for (x, band_width) in [(0., l * width), (r * width, (1. - r) * width)] {
                             if band_width > 0. {
                                 w.paint_quad(fill(
@@ -867,20 +937,23 @@ impl Render for BrushChart {
                                     .shadow_sm(),
                             )
                             .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                                let last = s.points.len().saturating_sub(1);
+                                // Shift moves a handle by ten points.
+                                let step = if e.keystroke.modifiers.shift { 10 } else { 1 };
                                 let current = if i == 0 { s.start } else { s.end };
                                 let next = match e.keystroke.key.as_str() {
-                                    "left" | "down" => current.saturating_sub(1),
-                                    "right" | "up" => {
-                                        (current + 1).min(s.points.len().saturating_sub(1))
-                                    }
+                                    "left" | "down" => current.saturating_sub(step),
+                                    "right" | "up" => (current + step).min(last),
                                     "home" => 0,
-                                    "end" => s.points.len().saturating_sub(1),
+                                    "end" => last,
                                     _ => return,
                                 };
                                 if i == 0 {
-                                    s.update(next.min(s.end), s.end, true, cx)
+                                    let cap = s.end.saturating_sub(Self::MIN_SPAN - 1);
+                                    s.update(next.min(cap), s.end, true, cx)
                                 } else {
-                                    s.update(s.start, next.max(s.start), true, cx)
+                                    let floor = (s.start + Self::MIN_SPAN - 1).min(last);
+                                    s.update(s.start, next.max(floor), true, cx)
                                 }
                                 cx.stop_propagation();
                                 w.prevent_default();
@@ -975,6 +1048,7 @@ impl Render for BrushChart {
             .map(|(a, b)| format!("{} – {}", a.label, b.label))
             .unwrap_or_default();
         column()
+            .relative()
             .w(px(560.))
             .max_w_full()
             .gap_3()
@@ -1027,6 +1101,32 @@ impl Render for BrushChart {
             .child(plot)
             .child(hint(read, p))
             .child(strip)
+            // A visually hidden table lists every point in the window with its event.
+            .when(self.points.len() >= 2, |v| {
+                v.child(
+                    div()
+                        .id("brush-readings")
+                        .absolute()
+                        .size(px(1.))
+                        .overflow_hidden()
+                        .role(Role::Table)
+                        .aria_label(tr(cx, "Readings in the window", "区间内读数"))
+                        .children((self.start..=self.end).map(|i| {
+                            div()
+                                .id(("brush-reading", i))
+                                .role(Role::Row)
+                                .aria_label(format!(
+                                    "{} {}{}",
+                                    self.points[i].label,
+                                    self.points[i].safe(),
+                                    self.points[i]
+                                        .event
+                                        .as_ref()
+                                        .map_or(String::new(), |e| format!(" · {e}"))
+                                ))
+                        })),
+                )
+            })
     }
 }
 #[cfg(test)]

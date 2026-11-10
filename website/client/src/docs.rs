@@ -233,6 +233,13 @@ fn indicator() -> Option<()> {
 fn set_view(tab: &Element, focus: bool) -> Option<()> {
     let stage = tab.closest("[data-component-stage]").ok()??;
     let view = tab.get_attribute("data-view")?;
+    let collapsed = view != "preview" && stage.has_attribute("data-preview-expanded");
+    if collapsed && let Some(button) = child(&stage, "[data-preview-expand]") {
+        expand_preview(&button, false);
+    }
+    if let Some(options) = child(&stage, "[data-preview-options]") {
+        flag(&options, "hidden", view != "preview");
+    }
     for item in children(&stage, "[data-view]") {
         let selected = item == *tab;
         attr(
@@ -247,16 +254,82 @@ fn set_view(tab: &Element, focus: bool) -> Option<()> {
         flag(&panel, "hidden", !selected);
         let _ = panel.class_list().toggle_with_force("is-active", selected);
     }
-    if focus {
+    if focus || collapsed {
         let _ = tab.dyn_ref::<HtmlElement>()?.focus();
     }
     indicator()
+}
+
+fn set_preview_size(button: &Element) -> Option<()> {
+    let stage = button.closest("[data-component-stage]").ok()??;
+    let mode = button.get_attribute("data-preview-mode")?;
+    let slot = child(&stage, "[data-preview-slot]")?;
+    attr(&slot, "data-preview-size", &mode);
+    for item in children(&stage, "[data-preview-mode]") {
+        attr(
+            &item,
+            "aria-pressed",
+            if item == *button { "true" } else { "false" },
+        );
+    }
+    Some(())
+}
+
+fn expand_preview(button: &Element, open: bool) -> Option<()> {
+    let stage = button.closest("[data-component-stage]").ok()??;
+    flag(&stage, "data-preview-expanded", open);
+    if open {
+        attr(&stage, "role", "dialog");
+        attr(&stage, "aria-modal", "true");
+        attr(
+            &stage,
+            "aria-label",
+            if english() {
+                "Component preview"
+            } else {
+                "组件预览"
+            },
+        );
+    } else {
+        for name in ["role", "aria-modal", "aria-label"] {
+            flag(&stage, name, false);
+        }
+    }
+    attr(button, "aria-pressed", if open { "true" } else { "false" });
+    let label = button.get_attribute(if open {
+        "data-collapse-label"
+    } else {
+        "data-expand-label"
+    })?;
+    attr(button, "aria-label", &label);
+    attr(button, "title", &label);
+    button.dyn_ref::<HtmlElement>()?.focus().ok();
+    indicator()
+}
+
+fn tab_stops(scope: &Element) -> Vec<HtmlElement> {
+    children(scope, "a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,iframe,[tabindex='0']")
+        .into_iter()
+        .filter_map(|element| element.dyn_into::<HtmlElement>().ok())
+        .filter(|element| {
+            element.tab_index() >= 0
+                && element.closest("[inert],[hidden]").ok().flatten().is_none()
+                && element.get_bounding_client_rect().height() > 0.
+        })
+        .collect()
 }
 
 fn click(event: &Event) -> Option<()> {
     let target = target(event)?;
     if let Some(tab) = target.closest("[data-component-stage] [data-view]").ok()? {
         set_view(&tab, false);
+    }
+    if let Some(button) = target.closest("[data-preview-mode]").ok()? {
+        return set_preview_size(&button);
+    }
+    if let Some(button) = target.closest("[data-preview-expand]").ok()? {
+        let open = button.get_attribute("aria-pressed").as_deref() != Some("true");
+        return expand_preview(&button, open);
     }
     if let Some(toggle) = target
         .closest("[data-section-toggle],[data-group-toggle]")
@@ -285,6 +358,31 @@ fn keydown(event: &Event) -> Option<()> {
         .dyn_into::<HtmlInputElement>()
         .ok()?;
     let name = key.key();
+    if name == "Escape"
+        && let Some(button) = query("[data-preview-expanded] [data-preview-expand]")
+    {
+        event.prevent_default();
+        return expand_preview(&button, false);
+    }
+    if name == "Tab"
+        && let Some(stage) = query("[data-preview-expanded]")
+    {
+        let stops = tab_stops(&stage);
+        let edge = if key.shift_key() {
+            stops.first()
+        } else {
+            stops.last()
+        };
+        if edge.is_some_and(|element| element.unchecked_ref::<Element>() == &target) {
+            let next = if key.shift_key() {
+                stops.last()
+            } else {
+                stops.first()
+            }?;
+            event.prevent_default();
+            return next.focus().ok();
+        }
+    }
     if ((key.meta_key() || key.ctrl_key()) && name.eq_ignore_ascii_case("k"))
         || (name == "/"
             && !key.alt_key()
@@ -432,20 +530,26 @@ fn leave_story(event: &Event) -> Option<()> {
         return None;
     }
     let data = message.data();
-    if Reflect::get(&data, &"type".into())
-        .ok()?
-        .as_string()
-        .as_deref()
-        != Some("kui:story-leave")
-    {
+    let kind = Reflect::get(&data, &"type".into()).ok()?.as_string()?;
+    let source = message.source()?;
+    if kind == "kui:preview-exit" {
+        let frame = query("[data-preview-expanded] [data-preview-slot] > iframe")?;
+        let frame: HtmlIFrameElement = frame.unchecked_into();
+        if js_sys::Object::is(frame.content_window()?.as_ref(), source.as_ref()) {
+            return expand_preview(
+                &query("[data-preview-expanded] [data-preview-expand]")?,
+                false,
+            );
+        }
+        return None;
+    }
+    if kind != "kui:story-leave" {
         return None;
     }
     let back = Reflect::get(&data, &"back".into()).ok()?.as_bool()?;
-    let source = message.source()?;
-    let stops:Vec<_>=nodes(document().query_selector_all("a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,iframe,[tabindex='0']").ok()?)
-        .filter_map(|e|e.dyn_into::<HtmlElement>().ok())
-        .filter(|e|e.tab_index()>=0 && e.closest("[inert],[hidden]").ok().flatten().is_none() && e.get_bounding_client_rect().height()>0.0)
-        .collect();
+    let expanded = query("[data-preview-expanded]");
+    let scope = expanded.clone().or_else(|| document().document_element())?;
+    let stops = tab_stops(&scope);
     let index = stops.iter().position(|el| {
         el.dyn_ref::<HtmlIFrameElement>()
             .filter(|f| f.has_attribute("data-story"))
@@ -453,7 +557,11 @@ fn leave_story(event: &Event) -> Option<()> {
             .is_some_and(|win| js_sys::Object::is(win.as_ref(), source.as_ref()))
     })?;
     let next = if back {
-        index.checked_sub(1)?
+        index
+            .checked_sub(1)
+            .or_else(|| expanded.as_ref().map(|_| stops.len() - 1))?
+    } else if expanded.is_some() {
+        (index + 1) % stops.len()
     } else {
         index + 1
     };

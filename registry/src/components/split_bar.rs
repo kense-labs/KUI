@@ -60,6 +60,7 @@ pub struct SplitBar {
     title: SharedString,
     description: SharedString,
     unit: SharedString,
+    total_label: SharedString,
     data: Vec<SplitSegment>,
     hidden: Vec<SharedString>,
     edges: Vec<SegmentEdge>,
@@ -70,7 +71,9 @@ pub struct SplitBar {
     visible: bool,
     lane: Slide,
     hover_share: f32,
-    readout: Option<Entity<AnimatedCounter>>,
+    readout_total: Option<Entity<AnimatedCounter>>,
+    readout_pct: Option<Entity<AnimatedCounter>>,
+    readout_value: Option<Entity<AnimatedCounter>>,
 }
 impl EventEmitter<SplitInspect> for SplitBar {}
 impl SplitBar {
@@ -79,6 +82,7 @@ impl SplitBar {
             title: title.into(),
             description: "".into(),
             unit: "".into(),
+            total_label: "".into(),
             data,
             hidden: vec![],
             edges: vec![],
@@ -89,7 +93,9 @@ impl SplitBar {
             visible: true,
             lane: Slide::new(0.),
             hover_share: 0.,
-            readout: None,
+            readout_total: None,
+            readout_pct: None,
+            readout_value: None,
         }
     }
     pub fn with_description(mut self, description: impl Into<SharedString>) -> Self {
@@ -98,6 +104,11 @@ impl SplitBar {
     }
     pub fn with_unit(mut self, unit: impl Into<SharedString>) -> Self {
         self.unit = unit.into();
+        self
+    }
+    /// Label of the readout when nothing is highlighted; defaults to "Total".
+    pub fn with_total_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.total_label = label.into();
         self
     }
     /// Stop animation scheduling while the embedding host hides the chart.
@@ -182,11 +193,19 @@ impl SplitBar {
         }
         self.active = next;
         self.hover_share = next
-            .and_then(|index| self.data.get(index))
-            .map_or(0., |segment| {
-                (measure(&segment.label, 12., w) + 74.)
+            .map(|index| {
+                let Some(segment) = self.data.get(index) else {
+                    return 0.;
+                };
+                let share = self.shares().get(index).copied().unwrap_or(0.);
+                let pct: SharedString = format!("{:.1}%", share * 100.).into();
+                // Reference: the smallest readable segment holds 10px of
+                // padding, the name, a 5px gap, the percent and 10px again
+                // (plus the cap) — name plus percent plus 59px.
+                (measure(&segment.label, 12., w) + measure(&pct, 12., w) + 59.)
                     / f32::from(self.bounds.get().size.width).max(1.)
-            });
+            })
+            .unwrap_or(0.);
         self.reconcile(cx);
         if let Some(s) = next.and_then(|i| self.data.get(i)) {
             let share = next.map_or(0., |index| self.shares()[index]);
@@ -239,8 +258,8 @@ fn expanded_shares(base: &[f64], active: Option<usize>, minimum: f32) -> Vec<f64
         .collect()
 }
 
-// Pack callouts as a group. A backwards pass reserves room for labels at the
-// right edge instead of clamping every label onto the same final position.
+use crate::components::color_math::oklab_mix;
+
 fn pack_labels(labels: &[(f32, f32)], width: f32, gap: f32) -> Vec<(f32, f32)> {
     let width = width.max(1.);
     let mut result = vec![(0., 0.); labels.len()];
@@ -446,9 +465,22 @@ impl Render for SplitBar {
         let pointer_spans: Vec<_> = pieces.iter().map(|piece| (piece.0, piece.1)).collect();
         let active = self.active;
         let bounds = self.bounds.clone();
-        let radius = crate::foundation::surface_radius(cx);
-        let first_visible = pieces.iter().position(|piece| piece.1 > piece.0);
         let last_visible = pieces.iter().rposition(|piece| piece.1 > piece.0);
+        let first_visible = pieces.iter().position(|piece| piece.1 > piece.0);
+        // Reference surface-muted (the wash a hovered legend key takes) is
+        // exactly the KUI stage grey; leaders and hollow swatches use the
+        // reference border-strong, reproduced as ink over the stage.
+        let legend_wash = p.stage;
+        let leader_stroke = p.ink.opacity(0.19);
+        let styled_label = |label: SharedString, off: bool| {
+            let text = div().text_size(px(14.)).line_height(px(20.));
+            if off {
+                text.line_through().text_color(p.faint)
+            } else {
+                text.text_color(p.secondary)
+            }
+            .child(label)
+        };
         let annotations: Vec<_> = pieces
             .iter()
             .map(|piece| {
@@ -466,13 +498,13 @@ impl Render for SplitBar {
             .collect();
         let mut graph = div()
             .id("split-bar")
-            .role(Role::Figure)
+            .role(Role::Group)
             .tab_index(0)
             .w_full()
             .h(px(44. + lane))
             .relative()
             .aria_label(format!(
-                "{}. {}. {}",
+                "{}: {}. {}",
                 self.title,
                 self.data
                     .iter()
@@ -482,8 +514,8 @@ impl Render for SplitBar {
                     .join(", "),
                 tr(
                     cx,
-                    "Use arrow keys to inspect segments",
-                    "使用方向键查看各部分"
+                    "Use the arrow keys to read each share",
+                    "使用方向键逐段读取占比"
                 )
             ))
             .on_hover(cx.listener(|s, hovered: &bool, w, cx| {
@@ -541,6 +573,17 @@ impl Render for SplitBar {
                     "home" => available.first().copied(),
                     "end" => available.last().copied(),
                     "escape" => None,
+                    // Reference: Enter/Space on the bar switches the
+                    // highlighted segment off.
+                    "enter" | "space" if s.active.is_some() => {
+                        let index = s.active;
+                        w.prevent_default();
+                        cx.stop_propagation();
+                        if let Some(index) = index {
+                            s.toggle(index, cx);
+                        }
+                        return;
+                    }
                     _ => return,
                 };
                 w.prevent_default();
@@ -565,6 +608,12 @@ impl Render for SplitBar {
                     },
                     move |b, _, w, cx| {
                         let width = f32::from(b.size.width);
+                        // Reference surface-muted = the muted strip behind the
+                        // segments; KUI's stage token is exactly that grey.
+                        w.paint_quad(
+                            fill(Bounds::new(b.origin, size(b.size.width, px(44.))), p.stage)
+                                .corner_radii(px(12.)),
+                        );
                         let paint_text = |text: SharedString,
                                           at: Point<Pixels>,
                                           color: Hsla,
@@ -605,32 +654,42 @@ impl Render for SplitBar {
                                 point(b.left() + px(left * width), b.top()),
                                 size(px(piece_width), px(44.)),
                             );
-                            let corners = Corners {
-                                top_left: if Some(i) == first_visible {
-                                    radius
-                                } else {
-                                    px(0.)
+                            // Reference clips every segment round 4px inside a
+                            // 12px-rounded bar, so the outer bar corners show
+                            // through: first/last visible segments take the
+                            // 12px radius on their outer side.
+                            let mix = if active == Some(i) { 0.62 } else { 0.42 };
+                            let outer = px(12.);
+                            let inner = px(4.);
+                            let radii = match (first_visible, last_visible) {
+                                (Some(first), Some(last)) if first == last => Corners {
+                                    top_left: outer,
+                                    top_right: outer,
+                                    bottom_right: outer,
+                                    bottom_left: outer,
                                 },
-                                bottom_left: if Some(i) == first_visible {
-                                    radius
-                                } else {
-                                    px(0.)
+                                (Some(first), _) if i == first => Corners {
+                                    top_left: outer,
+                                    top_right: inner,
+                                    bottom_right: inner,
+                                    bottom_left: outer,
                                 },
-                                top_right: if Some(i) == last_visible {
-                                    radius
-                                } else {
-                                    px(0.)
+                                (_, Some(last)) if i == last => Corners {
+                                    top_left: inner,
+                                    top_right: outer,
+                                    bottom_right: outer,
+                                    bottom_left: inner,
                                 },
-                                bottom_right: if Some(i) == last_visible {
-                                    radius
-                                } else {
-                                    px(0.)
+                                _ => Corners {
+                                    top_left: inner,
+                                    top_right: inner,
+                                    bottom_right: inner,
+                                    bottom_left: inner,
                                 },
                             };
-                            let mix = if active == Some(i) { 0.62 } else { 0.42 };
                             w.paint_quad(
-                                fill(piece, p.stage.blend(color.opacity(mix)).opacity(dim))
-                                    .corner_radii(corners),
+                                fill(piece, oklab_mix(p.panel, *color, mix).opacity(dim))
+                                    .corner_radii(radii),
                             );
                             if Some(i) != last_visible {
                                 w.paint_quad(fill(
@@ -670,24 +729,28 @@ impl Render for SplitBar {
                             if *outside > 0.001 {
                                 let center = (left + right) * width * 0.5;
                                 let end = label_x + label_width * 0.5;
+                                // Reference S curve: from the segment centre,
+                                // first straight down, then easing across to
+                                // the label centre.
                                 let mut path = PathBuilder::stroke(px(1.));
                                 path.move_to(point(b.left() + px(center), b.top() + px(44.)));
                                 path.cubic_bezier_to(
-                                    point(b.left() + px(end), b.top() + px(59. + label_y)),
-                                    point(b.left() + px(center), b.top() + px(54.)),
+                                    point(b.left() + px(center), b.top() + px(54. + label_y)),
                                     point(b.left() + px(end), b.top() + px(50. + label_y)),
+                                    point(b.left() + px(end), b.top() + px(59. + label_y)),
                                 );
                                 if let Ok(path) = path.build() {
                                     w.paint_path(
                                         path,
-                                        p.faint.opacity(outside * if dim < 1. { 0.4 } else { 1. }),
+                                        leader_stroke
+                                            .opacity(outside * if dim < 1. { 0.4 } else { 1. }),
                                     );
                                 }
                                 if *outside_name > 0.001 {
                                     paint_text(
                                         label.clone(),
-                                        point(b.left() + px(*label_x), b.top() + px(60. + label_y)),
-                                        p.ink.opacity(
+                                        point(b.left() + px(*label_x), b.top() + px(62. + label_y)),
+                                        p.secondary.opacity(
                                             outside
                                                 * outside_name
                                                 * if dim < 1. { 0.45 } else { 1. },
@@ -724,7 +787,7 @@ impl Render for SplitBar {
                         .child(
                             div()
                                 .absolute()
-                                .left(px(10. + (measure(&label, 12., w) + 4.) * name))
+                                .left(px(10. + (measure(&label, 12., w) + 5.) * name))
                                 .top(px(15.5))
                                 .opacity(1. - outside)
                                 .child(inside.clone()),
@@ -740,66 +803,143 @@ impl Render for SplitBar {
                 );
         }
         let total = self.total();
-        let value = self
-            .active
-            .map_or(total, |index| self.data[index].safe_value());
-        let readout = self
-            .readout
+        let base_shares = base.clone();
+        let active_segment = self.active.and_then(|index| self.data.get(index));
+        let share = self.active.map(|index| base_shares[index] * 100.);
+        // Reference readout: the total line reads "Total 99,300 sessions";
+        // a highlighted segment reads "Organic search 41.6% 20,340 sessions"
+        // with a small colour swatch leading the name.
+        let total_counter = self
+            .readout_total
             .get_or_insert_with(|| {
                 cx.new(|_| {
-                    AnimatedCounter::new(value)
+                    AnimatedCounter::new(total)
                         .with_size(18.)
                         .with_wheel_style(1.2, 0.18, FontWeight::MEDIUM)
                         .with_accessibility(false)
                 })
             })
             .clone();
-        readout.update(cx, |counter, cx| {
+        total_counter.update(cx, |counter, cx| {
             counter.set_visible(visible, cx);
-            counter.set_value(value, cx);
+            counter.set_value(total, cx);
         });
-        let detail: SharedString = self.active.map_or_else(
-            || tr(cx, "Total", "总计").into(),
-            |index| self.data[index].label.clone(),
+        let pct_counter = self
+            .readout_pct
+            .get_or_insert_with(|| {
+                cx.new(|_| {
+                    AnimatedCounter::new(share.unwrap_or(0.))
+                        .with_suffix("%")
+                        .with_decimals(1)
+                        .with_size(18.)
+                        .with_wheel_style(1.2, 0.18, FontWeight::MEDIUM)
+                        .with_accessibility(false)
+                })
+            })
+            .clone();
+        pct_counter.update(cx, |counter, cx| {
+            counter.set_visible(visible, cx);
+            if let Some(share) = share {
+                counter.set_value(share, cx);
+            }
+        });
+        let highlight_value = active_segment.map(|segment| segment.safe_value());
+        let value_counter = self
+            .readout_value
+            .get_or_insert_with(|| {
+                cx.new(|_| {
+                    AnimatedCounter::new(highlight_value.unwrap_or(0.))
+                        .with_size(14.)
+                        .with_wheel_style(1.2, 0.18, FontWeight::NORMAL)
+                        .with_accessibility(false)
+                })
+            })
+            .clone();
+        value_counter.update(cx, |counter, cx| {
+            counter.set_visible(visible && highlight_value.is_some(), cx);
+            if let Some(value) = highlight_value {
+                counter.set_value(value, cx);
+            }
+        });
+        let detail: SharedString = active_segment.map_or_else(
+            || {
+                if self.total_label.is_empty() {
+                    tr(cx, "Total", "总计").to_owned().into()
+                } else {
+                    self.total_label.clone()
+                }
+            },
+            |segment| segment.label.clone(),
         );
+        let head = row()
+            .flex_wrap()
+            .items_end()
+            .justify_between()
+            .gap(px(8.))
+            .gap_x(px(16.))
+            .child(
+                column()
+                    .gap(px(2.))
+                    .child(title(self.title.clone(), p))
+                    .when(!self.description.is_empty(), |view| {
+                        view.child(
+                            hint(self.description.clone(), p)
+                                .text_size(px(14.))
+                                .line_height(px(19.6)),
+                        )
+                    }),
+            )
+            .child(
+                row()
+                    .id("split-readout")
+                    .items_baseline()
+                    .gap(px(8.))
+                    .when(active_segment.is_some(), |view| {
+                        view.child(
+                            div()
+                                .size(px(8.))
+                                .flex_none()
+                                .self_center()
+                                .rounded(px(2.))
+                                .bg(active_segment.map_or(p.stage, |segment| segment.color)),
+                        )
+                    })
+                    .child(hint(detail, p).text_size(px(14.)).line_height(px(20.)))
+                    .child(if active_segment.is_some() {
+                        pct_counter.into_any_element()
+                    } else {
+                        total_counter.into_any_element()
+                    })
+                    .when(active_segment.is_some(), |view| {
+                        view.child(
+                            row()
+                                .items_baseline()
+                                .gap(px(4.))
+                                .text_color(p.faint)
+                                .child(value_counter)
+                                .when(!self.unit.is_empty(), |unit_row| {
+                                    unit_row.child(
+                                        hint(self.unit.clone(), p)
+                                            .text_size(px(14.))
+                                            .line_height(px(20.)),
+                                    )
+                                }),
+                        )
+                    })
+                    .when(active_segment.is_none() && !self.unit.is_empty(), |view| {
+                        view.child(
+                            hint(self.unit.clone(), p)
+                                .text_size(px(14.))
+                                .line_height(px(20.)),
+                        )
+                    }),
+            );
         column()
-            .w(px(520.))
+            .w_full()
             .max_w_full()
             .gap(px(12.))
             .text_color(p.ink)
-            .child(
-                row()
-                    .flex_wrap()
-                    .justify_between()
-                    .gap(px(12.))
-                    .child(
-                        column()
-                            .gap(px(2.))
-                            .child(title(self.title.clone(), p))
-                            .when(!self.description.is_empty(), |view| {
-                                view.child(
-                                    hint(self.description.clone(), p)
-                                        .text_size(px(14.))
-                                        .line_height(px(19.6)),
-                                )
-                            }),
-                    )
-                    .child(
-                        row()
-                            .items_baseline()
-                            .gap(px(8.))
-                            .child(hint(detail, p).text_size(px(14.)).line_height(px(20.)))
-                            .when(value.is_finite(), |view| view.child(readout))
-                            .when(!value.is_finite(), |view| view.child(">1.8e308"))
-                            .when(!self.unit.is_empty(), |view| {
-                                view.child(
-                                    hint(self.unit.clone(), p)
-                                        .text_size(px(14.))
-                                        .line_height(px(20.)),
-                                )
-                            }),
-                    ),
-            )
+            .child(head)
             .child(graph)
             .child(
                 row()
@@ -809,23 +949,22 @@ impl Render for SplitBar {
                     .gap_y(px(2.))
                     .children(self.data.iter().enumerate().map(|(i, segment)| {
                         let off = self.hidden.contains(&segment.id);
-                        let label = format!(
-                            "{}  {}",
-                            segment.label,
-                            if off {
-                                tr(cx, "Off", "已隐藏").to_owned()
-                            } else {
-                                format!("{:.1}%", base[i] * 100.)
-                            }
-                        );
+                        // Reference: "Organic search, 41.6%", or the name and
+                        // "hidden" once the segment is switched off.
+                        let aria_label = if off {
+                            format!("{}, {}", segment.label, tr(cx, "hidden", "已隐藏"))
+                        } else {
+                            format!("{}, {:.1}%", segment.label, base[i] * 100.)
+                        };
                         face(
                             ("split-segment", i),
-                            label.clone(),
+                            aria_label.clone(),
                             32.,
-                            radius.into(),
+                            10.,
                             Tone::Clear,
                             cx,
                         )
+                        .justify_start()
                         .pl(px(8.))
                         .pr(px(10.))
                         .aria_toggled((!off).into())
@@ -833,16 +972,24 @@ impl Render for SplitBar {
                         .text_size(px(14.))
                         .line_height(px(20.))
                         .font_weight(FontWeight::NORMAL)
-                        .hover(|s| s.bg(p.tray))
+                        .hover(move |s| s.bg(legend_wash))
+                        .when(self.active == Some(i), move |s| s.bg(legend_wash))
+                        .on_key_down(cx.listener(move |s, e: &KeyDownEvent, _, cx| {
+                            if e.keystroke.key == "enter" || e.keystroke.key == "space" {
+                                cx.stop_propagation();
+                                s.toggle(i, cx);
+                            }
+                        }))
                         .child(
                             div()
                                 .relative()
                                 .size(px(12.))
                                 .flex_none()
+                                .self_center()
                                 .rounded(px(3.))
-                                .when(off, |view| view.border(px(1.5)).border_color(p.faint))
+                                .when(off, |view| view.border(px(1.5)).border_color(leader_stroke))
                                 .when(!off, |view| {
-                                    view.bg(p.panel.blend(segment.color.opacity(0.42))).child(
+                                    view.bg(oklab_mix(p.panel, segment.color, 0.42)).child(
                                         div()
                                             .absolute()
                                             .right_0()
@@ -853,8 +1000,14 @@ impl Render for SplitBar {
                                     )
                                 }),
                         )
-                        .child(segment.label.clone())
-                        .when(off, |view| view.child(tr(cx, "Off", "已隐藏")))
+                        .child(styled_label(segment.label.clone(), off))
+                        .when(off, |view| {
+                            view.child(
+                                hint(tr(cx, "Off", "已隐藏"), p)
+                                    .text_size(px(14.))
+                                    .line_height(px(20.)),
+                            )
+                        })
                         .when(!off, |view| view.child(counter_views[i].2.clone()))
                         .on_click(cx.listener(move |s, _, _, cx| s.toggle(i, cx)))
                     })),
@@ -864,6 +1017,26 @@ impl Render for SplitBar {
 #[cfg(test)]
 mod tests {
     use super::{expanded_shares, normalized_shares, pack_labels};
+    use crate::components::color_math::oklab_mix;
+    use gpui::rgb;
+    #[test]
+    fn oklab_wash_matches_the_reference_mix() {
+        // color-mix(in oklab, oklch(0.73 0.15 250) 42%, surface 21.5%) reads
+        // as oklab(0.4313 -0.0215 -0.0592) on the reference page, which is
+        // rgb(52, 83, 113) once converted back; the raised highlight uses 62%.
+        let surface = rgb(0x191919);
+        let series1 = rgb(0x55adff);
+        let washed = oklab_mix(surface.into(), series1.into(), 0.42).to_rgb();
+        assert!((washed.r * 255. - 52.).abs() <= 2., "r {}", washed.r * 255.);
+        assert!((washed.g * 255. - 83.).abs() <= 2., "g {}", washed.g * 255.);
+        assert!(
+            (washed.b * 255. - 113.).abs() <= 2.,
+            "b {}",
+            washed.b * 255.
+        );
+        let raised = oklab_mix(surface.into(), series1.into(), 0.62).to_rgb();
+        assert!(raised.g > washed.g && raised.b > washed.b);
+    }
     #[test]
     fn large_finite_values_keep_their_proportions() {
         let normalized = normalized_shares(&[f64::MAX, f64::MAX, f64::MAX / 2.]);

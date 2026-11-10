@@ -2639,8 +2639,10 @@ dependencies = [
 name = "kense-kui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "gpui-pre",
  "gpui-pre-platform",
+ "image",
  "js-sys",
  "serde_json",
  "unicode-segmentation",
@@ -2734,6 +2736,7 @@ dependencies = [
 name = "kui-story"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "gpui-pre",
  "gpui-pre-platform",
  "kense-kui",

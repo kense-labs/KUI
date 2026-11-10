@@ -1,0 +1,551 @@
+[
+  {
+    "id": "glass-card",
+    "group": "cards",
+    "title": {
+      "en": "Glass card",
+      "zh": "玻璃卡片"
+    },
+    "rustType": "GlassCard",
+    "lead": {
+      "en": "Reveal details on a photo with a glass panel and a pointer-following highlight.",
+      "zh": "用带指针高光的玻璃面板，在照片上展开简短详情。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::glass_card::{GlassCard, GlassCardOpenChanged};\n\nlet card = cx.new(|cx| {\n    GlassCard::new(\"images/jasmine.jpg\", \"Portrait of Jasmine Brooks\", \"Jasmine Brooks\", cx)\n        .with_id(\"featured-profile\")\n        .with_subtitle(Box::new(|_, _| gpui::div().child(\"Design lead, Lisbon\").into_any_element()))\n        .with_aside(Box::new(|_, _| gpui::div().child(\"★ 4.9\").into_any_element()))\n        .with_body(Box::new(|_, _| {\n            gpui::div().child(\"Design systems and motion.\").into_any_element()\n        }))\n        .with_open(false)\n});\nwindow\n    .subscribe(&card, cx, |card, event: &GlassCardOpenChanged, w, cx| {\n        card.update(cx, |card, cx| card.set_open(event.0, w, cx));\n    })\n    .detach();",
+    "method": "with_tilt",
+    "signature": "(f32) -> Self",
+    "event": "GlassCardOpenChanged",
+    "rule": {
+      "en": "Tap the photo or press Enter or Space on the header. Tab reaches the detail actions. Escape returns focus to the header.",
+      "zh": "点照片或在标题上按 Enter、空格展开。Tab 可进入详情操作，Esc 收起并返回标题。"
+    },
+    "api": {
+      "en": "Supply an image, alt text and title with optional subtitle, trailing and detail slots. The tilt defaults to 6°. Set with_open to have the host manage expansion.",
+      "zh": "提供图片、替代文本和标题，可附加副标题、右侧内容及详情。默认倾斜 6°，with_open 可交给宿主管理展开。"
+    },
+    "motion": {
+      "en": "The glass panel grows upward with a spring while the photo zooms to 1.05×. Reduced motion keeps the detail fade and snaps the layout.",
+      "zh": "玻璃面板沿底边向上弹性展开，照片同步放大至 1.05 倍。减少动效时直接切换布局，保留文字淡入。"
+    }
+  },
+  {
+    "id": "glass-tabbar",
+    "group": "navigation",
+    "title": {
+      "en": "Glass tab bar",
+      "zh": "玻璃标签栏"
+    },
+    "rustType": "GlassTabBar",
+    "lead": {
+      "en": "Float a draggable glass lens above scrolling content, with a separate action bubble.",
+      "zh": "在滚动内容上浮动显示可拖动的玻璃镜片和独立操作圆钮。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::glass_tabbar::{\n    GlassTabBar, GlassTabBarCompactChanged, GlassTabBarItem, GlassTabBarValueChanged, GlassTabIcon,\n};\n\nlet scroll = gpui::ScrollHandle::new();\nlet bar = cx.new(|cx| {\n    GlassTabBar::new(\n        vec![\n            GlassTabBarItem::new(\"home\", \"Home\", GlassTabIcon::Home),\n            GlassTabBarItem::new(\"explore\", \"Explore\", GlassTabIcon::Explore),\n            GlassTabBarItem::new(\"saved\", \"Saved\", GlassTabIcon::Saved).with_badge(3),\n            GlassTabBarItem::new(\"profile\", \"Profile\", GlassTabIcon::Profile),\n        ],\n        cx,\n    )\n    .with_label(\"Main\")\n    .with_action(GlassTabBarItem::new(\"search\", \"Search\", GlassTabIcon::Search), cx)\n    .with_scroll_handle(scroll.clone())\n    .with_value(\"home\")\n    .with_compact(false)\n});\ncx.subscribe(&bar, |bar, event: &GlassTabBarValueChanged, cx| {\n    bar.update(cx, |bar, cx| bar.set_value(event.0.clone(), cx));\n}).detach();\ncx.subscribe(&bar, |bar, event: &GlassTabBarCompactChanged, cx| {\n    bar.update(cx, |bar, cx| bar.set_compact(event.0, cx));\n}).detach();",
+    "method": "with_scroll_handle",
+    "signature": "(ScrollHandle) -> Self",
+    "event": "GlassTabBarValueChanged, GlassTabBarCompactChanged",
+    "rule": {
+      "en": "Tap or drag between tabs. Arrow keys include the action in their wrap order. Scroll down to compact and up to expand.",
+      "zh": "点按或拖动切换标签。方向键循环包含独立操作。下滚收起，上滚展开。"
+    },
+    "api": {
+      "en": "Supply stable item values, icons and optional badges. The action is optional. Value and compact state can be controlled independently.",
+      "zh": "提供稳定标识、图标和可选徽标。独立操作可省略，选中值和收起状态可以分别受控。"
+    },
+    "motion": {
+      "en": "The lens lifts and stretches with speed. One spring keeps the lens aligned while the bar and labels change size. Reduced motion switches the geometry immediately.",
+      "zh": "镜片随速度抬升和伸展。栏位和标签缩放时，镜片由同一布局进度定位。减少动效时直接切换。"
+    }
+  },
+  {
+    "id": "action-morph",
+    "group": "navigation",
+    "title": {
+      "en": "Action morph",
+      "zh": "创建动作变形"
+    },
+    "rustType": "ActionMorph",
+    "lead": {
+      "en": "Grow one floating button into a quick action menu and draft-preserving composer.",
+      "zh": "让一个浮动按钮展开动作菜单和表单，保留每个动作的独立草稿。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::action_morph::{\n    ActionMorph, ActionMorphAction, ActionMorphComposer, ActionMorphSubmit,\n};\nuse kui::primitives::glyph::Glyph;\n\nlet create = cx.new(|cx| {\n    ActionMorph::new(\n        vec![ActionMorphAction::new(\n            \"task\",\n            \"Task\",\n            Glyph::Check,\n            ActionMorphComposer::new(\"New task\", \"What needs doing?\", \"Add task\", \"Task added\"),\n        ).with_shortcut('t')],\n        window,\n        cx,\n    )\n    .with_deferred_submit()\n    .with_style(|e| e.absolute().bottom(gpui::px(16.)).right(gpui::px(16.)))\n});\nwindow.subscribe(&create, cx, |control, submission: &ActionMorphSubmit, w, cx| {\n    // This example accepts immediately. Resolve with the persistence result in an app.\n    control.update(cx, |control, cx| {\n        control.complete(submission.ticket, Ok(()), w, cx);\n    });\n}).detach();",
+    "method": "complete",
+    "signature": "(u64, Result<(), ActionMorphFailure>, &mut Window, &mut Context<Self>) -> bool",
+    "event": "ActionMorphSubmit",
+    "rule": {
+      "en": "Open a task, note, or reminder. Arrow keys and letter shortcuts navigate the menu. Escape goes back one step.",
+      "zh": "打开任务、便笺或提醒。可用方向键和字母快捷键操作，Esc 返回上一步。"
+    },
+    "api": {
+      "en": "Each action supplies its own composer and optional choices. Deferred saves resolve by ticket and keep the draft on failure.",
+      "zh": "每项动作配置独立表单和可选选项。延迟保存按编号回传结果，失败保留草稿。"
+    },
+    "motion": {
+      "en": "The surface grows from a fixed bottom corner. The composer slides in and folds back to a drawn check on success.",
+      "zh": "面板从固定底角长出，表单滑入，保存成功后折回并绘出勾选标记。"
+    }
+  },
+  {
+    "id": "wallet-stack",
+    "group": "cards",
+    "title": {
+      "en": "Wallet stack",
+      "zh": "钱包卡片堆"
+    },
+    "rustType": "WalletStack",
+    "lead": {
+      "en": "Fan a stack of payment cards and lift one to see its balance and recent activity.",
+      "zh": "展开成叠的支付卡片，抽出一张查看余额与近期交易。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::wallet_stack::{\n    WalletStack, WalletStackCard, WalletStackSelected, WalletTransaction, WalletVariant,\n};\n\nlet wallet = cx.new(|cx| {\n    WalletStack::new(\n        vec![\n            WalletStackCard::new(\n                \"debit\", \"Fieldnote\", \"Everyday debit\", \"4821\", \"Jordan Hayes\",\n                3248.60, \"Available\",\n            )\n            .with_expiration(\"09/29\")\n            .with_transactions(vec![WalletTransaction::new(\n                \"split\", \"Ryan Mitchell\", \"Dinner split · Today\", 36.50,\n            )]),\n            WalletStackCard::new(\n                \"credit\", \"Meridian\", \"Reserve credit\", \"0917\", \"Jordan Hayes\",\n                1286.44, \"Spent in September\",\n            )\n            .with_variant(WalletVariant::Black),\n        ],\n        cx,\n    )\n    .with_label(\"Jordan’s cards\")\n});\ncx.subscribe(&wallet, |_, event: &WalletStackSelected, _| {\n    let selected_id = event.0.as_ref().map(|card| card.id.as_ref());\n    println!(\"Opened card: {selected_id:?}\");\n}).detach();",
+    "rule": {
+      "en": "Hover to fan. Drag down or up to browse. Open a card to view its balance and activity, or press Esc to put it back.",
+      "zh": "悬停展开卡片。上下拖动浏览。打开卡片查看余额与交易，按 Esc 收回。"
+    },
+    "copy": {
+      "en": {
+        "when": [
+          "Show balances and activity for a small set of cards, passes or memberships."
+        ],
+        "apiLead": "The entity owns selection and accepts cards with masked suffixes, materials, balances and activity.",
+        "props": [
+          {
+            "name": "new",
+            "type": "(Vec<WalletStackCard>, &mut Context<Self>) -> Self",
+            "default": "Required",
+            "description": "Supply cards in stack order. The first card starts in front."
+          },
+          {
+            "name": "with_id",
+            "type": "(impl Into<ElementId>) -> Self",
+            "default": "Entity-derived",
+            "description": "Set a stable root element ID."
+          },
+          {
+            "name": "with_label",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "Wallet",
+            "description": "Set the visible heading and accessible group name."
+          },
+          {
+            "name": "with_currency",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "USD",
+            "description": "Use this ISO currency code for balances and transactions."
+          },
+          {
+            "name": "with_locale",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "en-US",
+            "description": "Select separators and the currency format."
+          },
+          {
+            "name": "with_amount_formatter",
+            "type": "(impl Fn(f64, &str, &str) -> String + 'static) -> Self",
+            "default": "Built-in",
+            "description": "Format an amount using currency and locale."
+          },
+          {
+            "name": "with_style",
+            "type": "(impl Fn(Div) -> Div + 'static) -> Self",
+            "default": "None",
+            "description": "Refine the root GPUI layout."
+          },
+          {
+            "name": "front_card",
+            "type": "(&self) -> Option<&WalletStackCard>",
+            "default": "First card",
+            "description": "Read the front card whether open or closed."
+          },
+          {
+            "name": "selected_card",
+            "type": "(&self) -> Option<&WalletStackCard>",
+            "default": "None",
+            "description": "Read the open card."
+          },
+          {
+            "name": "set_device_light",
+            "type": "(Option<[f32; 2]>, &mut Context<Self>)",
+            "default": "None",
+            "description": "Set normalized light axes or return to pointer control."
+          },
+          {
+            "name": "WalletStackSelected",
+            "type": "Option<WalletStackCard>",
+            "default": "No initial event",
+            "description": "Reports the opened card or no selection when closed."
+          },
+          {
+            "name": "WalletStackCard::with_variant",
+            "type": "(WalletVariant) -> Self",
+            "default": "Metal",
+            "description": "Choose Metal, Black, Glass or Color."
+          },
+          {
+            "name": "WalletStackCard::with_network",
+            "type": "(WalletNetwork) -> Self",
+            "default": "Fictional",
+            "description": "Show the fictional mark, hide it, or supply a label or SVG."
+          },
+          {
+            "name": "WalletStackCard::with_transactions",
+            "type": "(Vec<WalletTransaction>) -> Self",
+            "default": "Empty",
+            "description": "The first three transactions appear in order. A transaction avatar takes priority over its glyph."
+          }
+        ],
+        "motion": [
+          "Direct manipulation and spring motion share one stack position. In the open state the selected card scales to 88%.",
+          "Balance counts up after the card moves, and the first three transactions reveal in order. Reduced motion applies the final geometry immediately."
+        ],
+        "ai": [
+          "kui add wallet-stack",
+          "Pass only card suffixes and use stable IDs."
+        ],
+        "not": [
+          "For generic swipeable content, use Card stack. For many accounts, use a list or data grid."
+        ]
+      },
+      "zh": {
+        "when": [
+          "为少量支付卡、通行证或会员卡显示余额与交易。"
+        ],
+        "apiLead": "由实体管理选中状态，卡片可配置尾号、材质、余额和交易。",
+        "props": [
+          {
+            "name": "new",
+            "type": "(Vec<WalletStackCard>, &mut Context<Self>) -> Self",
+            "default": "必填",
+            "description": "传入按顺序排列的卡片。初始显示第一张。"
+          },
+          {
+            "name": "with_id",
+            "type": "(impl Into<ElementId>) -> Self",
+            "default": "由实体生成",
+            "description": "设置稳定的根元素标识。"
+          },
+          {
+            "name": "with_label",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "钱包",
+            "description": "设置标题和无障碍分组名称。"
+          },
+          {
+            "name": "with_currency",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "USD",
+            "description": "余额和交易使用此 ISO 货币代码。"
+          },
+          {
+            "name": "with_locale",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "en-US",
+            "description": "选择数字分隔符和货币格式。"
+          },
+          {
+            "name": "with_amount_formatter",
+            "type": "(impl Fn(f64, &str, &str) -> String + 'static) -> Self",
+            "default": "内置格式",
+            "description": "按货币和地区格式化金额。"
+          },
+          {
+            "name": "with_style",
+            "type": "(impl Fn(Div) -> Div + 'static) -> Self",
+            "default": "无",
+            "description": "调整 GPUI 根布局。"
+          },
+          {
+            "name": "front_card",
+            "type": "(&self) -> Option<&WalletStackCard>",
+            "default": "第一张",
+            "description": "读取当前位于最前的卡片。"
+          },
+          {
+            "name": "selected_card",
+            "type": "(&self) -> Option<&WalletStackCard>",
+            "default": "无",
+            "description": "读取已经展开的卡片。"
+          },
+          {
+            "name": "set_device_light",
+            "type": "(Option<[f32; 2]>, &mut Context<Self>)",
+            "default": "无",
+            "description": "设置归一化光照轴，传入空值恢复鼠标控制。"
+          },
+          {
+            "name": "WalletStackSelected",
+            "type": "Option<WalletStackCard>",
+            "default": "初始无事件",
+            "description": "报告展开的卡片，收起时报告空值。"
+          },
+          {
+            "name": "WalletStackCard::with_variant",
+            "type": "(WalletVariant) -> Self",
+            "default": "Metal",
+            "description": "选择 Metal、Black、Glass 或 Color。"
+          },
+          {
+            "name": "WalletStackCard::with_network",
+            "type": "(WalletNetwork) -> Self",
+            "default": "Fictional",
+            "description": "可使用虚构标记、隐藏、传入文案或 SVG。"
+          },
+          {
+            "name": "WalletStackCard::with_transactions",
+            "type": "(Vec<WalletTransaction>) -> Self",
+            "default": "空",
+            "description": "按顺序展示前三笔交易。头像优先于图标。"
+          }
+        ],
+        "motion": [
+          "直接拖动和弹簧使用同一组位置。展开时选中卡片缩到 88%。",
+          "卡片移动后余额递增，前三笔交易依次显现。减少动效时直接应用最终位置。"
+        ],
+        "ai": [
+          "kui add wallet-stack",
+          "只传卡片尾号，并使用稳定标识。"
+        ],
+        "not": [
+          "普通滑动内容用 Card stack。大量账户用列表或数据表格。"
+        ]
+      }
+    }
+  },
+  {
+    "id": "control-center",
+    "group": "cards",
+    "title": {
+      "en": "Control center",
+      "zh": "控制中心"
+    },
+    "rustType": "ControlCenter",
+    "lead": {
+      "en": "Open workspace controls for focus, notifications, presenting, volume and text size.",
+      "zh": "在一块面板中管理专注、通知、演示、音量和字号。"
+    },
+    "rule": {
+      "en": "Open a tile’s detail with its chevron. Drag the meters or use the arrow and page keys. Esc closes detail and returns focus.",
+      "zh": "点箭头展开设置详情。可拖动滑轨，或使用方向键和翻页键。Esc 关闭详情并恢复焦点。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::control_center::{ControlCenter, ControlCenterChanged, FocusMode, NotificationChannel};\nuse kui::primitives::glyph::Glyph;\n\nlet settings = cx.new(|cx| {\n    ControlCenter::new(\n        vec![\n            FocusMode::new(\"deep\", \"Deep work\", Glyph::Lock, \"Only mentions get through\", 50),\n            FocusMode::new(\"meeting\", \"Meetings\", Glyph::Clock, \"Keep calendar alerts\", 30),\n        ],\n        vec![\n            NotificationChannel::new(\"mentions\", \"Mentions\").with_default_on(true),\n            NotificationChannel::new(\"deploys\", \"Deploy alerts\"),\n        ],\n        cx,\n    )\n});\ncx.subscribe(&settings, |_, event: &ControlCenterChanged, _| {\n    // Persist the settings and apply notification, presenting and text preferences in the host.\n    let settings = &event.0;\n    println!(\"Alert volume: {}\", settings.volume);\n}).detach();",
+    "copy": {
+      "en": {
+        "when": [
+          "Provide a compact group of workspace settings and focus presets."
+        ],
+        "not": [
+          "Use regular switches or sliders for an ordinary form."
+        ],
+        "apiLead": "The control owns settings. Hosts receive full snapshots to persist and apply their preferences.",
+        "props": [
+          {
+            "name": "new",
+            "type": "(Vec<FocusMode>, Vec<NotificationChannel>, &mut Context<Self>) -> Self",
+            "default": "Required",
+            "description": "Supply stable preset and channel IDs."
+          },
+          {
+            "name": "with_id",
+            "type": "(impl Into<ElementId>) -> Self",
+            "default": "Entity-derived",
+            "description": "Identify the panel in the GPUI tree."
+          },
+          {
+            "name": "with_people",
+            "type": "(Vec<FocusPerson>) -> Self",
+            "default": "Empty",
+            "description": "Names and image sources for people allowed to reach a focused user."
+          },
+          {
+            "name": "with_default_volume",
+            "type": "(u8) -> Self",
+            "default": "60",
+            "description": "Alert volume from 0 to 100, in steps of 1."
+          },
+          {
+            "name": "with_default_text_size",
+            "type": "(u8) -> Self",
+            "default": "100",
+            "description": "Text size from 85 to 130, in steps of 5."
+          },
+          {
+            "name": "with_format_time",
+            "type": "(impl Fn(DateTime<Local>) -> SharedString + 'static) -> Self",
+            "default": "Local 12-hour clock",
+            "description": "Format a draft or committed session end time."
+          },
+          {
+            "name": "with_label",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "Quick settings",
+            "description": "Accessible name of the group."
+          },
+          {
+            "name": "with_style",
+            "type": "(impl Fn(Div) -> Div + 'static) -> Self",
+            "default": "None",
+            "description": "Refine the outer GPUI layout."
+          },
+          {
+            "name": "state",
+            "type": "(&self) -> &ControlCenterState",
+            "default": "Focus off, notifications on, presenting off",
+            "description": "Read the entire settings snapshot."
+          },
+          {
+            "name": "ControlCenterChanged",
+            "type": "ControlCenterState",
+            "default": "No initial event",
+            "description": "Reports a committed change or a distinct meter step."
+          }
+        ],
+        "motion": [
+          "Details expand from the originating tile. Meters follow the pointer from the original value and return from resisted edges.",
+          "The dial continues through twelve o’clock and settles at five-minute increments. Reduced motion snaps geometry and keeps opacity changes."
+        ],
+        "ai": [
+          "kui add control-center",
+          "Apply focus and notification rules in your application."
+        ]
+      },
+      "zh": {
+        "when": [
+          "在紧凑面板中提供工作区设置和专注预设。"
+        ],
+        "not": [
+          "常规表单使用普通开关或滑轨。"
+        ],
+        "apiLead": "控件管理设置，宿主接收完整快照并保存或应用对应偏好。",
+        "props": [
+          {
+            "name": "new",
+            "type": "(Vec<FocusMode>, Vec<NotificationChannel>, &mut Context<Self>) -> Self",
+            "default": "必填",
+            "description": "传入具有稳定标识的专注预设和通知频道。"
+          },
+          {
+            "name": "with_id",
+            "type": "(impl Into<ElementId>) -> Self",
+            "default": "由实体生成",
+            "description": "指定 GPUI 树中的面板标识。"
+          },
+          {
+            "name": "with_people",
+            "type": "(Vec<FocusPerson>) -> Self",
+            "default": "空",
+            "description": "可在专注期间联系用户的人员姓名和头像来源。"
+          },
+          {
+            "name": "with_default_volume",
+            "type": "(u8) -> Self",
+            "default": "60",
+            "description": "提示音量 0–100，步进 1。"
+          },
+          {
+            "name": "with_default_text_size",
+            "type": "(u8) -> Self",
+            "default": "100",
+            "description": "文字大小 85–130，步进 5。"
+          },
+          {
+            "name": "with_format_time",
+            "type": "(impl Fn(DateTime<Local>) -> SharedString + 'static) -> Self",
+            "default": "本地 12 小时制",
+            "description": "格式化草稿和已提交会话的结束时间。"
+          },
+          {
+            "name": "with_label",
+            "type": "(impl Into<SharedString>) -> Self",
+            "default": "快捷设置",
+            "description": "无障碍分组名称。"
+          },
+          {
+            "name": "with_style",
+            "type": "(impl Fn(Div) -> Div + 'static) -> Self",
+            "default": "无",
+            "description": "调整外层 GPUI 布局。"
+          },
+          {
+            "name": "state",
+            "type": "(&self) -> &ControlCenterState",
+            "default": "关闭专注、开启通知、关闭演示",
+            "description": "读取完整设置快照。"
+          },
+          {
+            "name": "ControlCenterChanged",
+            "type": "ControlCenterState",
+            "default": "初始无事件",
+            "description": "报告已提交的变化或不同的滑轨档位。"
+          }
+        ],
+        "motion": [
+          "详情从对应卡片展开。滑轨从原值跟随拖动，越界时产生阻尼并回弹。",
+          "拨盘跨过十二点继续累计，松手后吸附到 5 分钟档。减少动效时直接切换几何位置，保留淡入淡出。"
+        ],
+        "ai": [
+          "kui add control-center",
+          "在宿主应用中应用专注和通知规则。"
+        ]
+      }
+    }
+  },
+  {
+    "id": "card-to-article",
+    "group": "cards",
+    "title": {
+      "en": "Card to article",
+      "zh": "卡片展开为文章"
+    },
+    "rustType": "CardToArticle",
+    "lead": {
+      "en": "Open a story card as a full article and pull it back into the grid.",
+      "zh": "将故事卡片展开为文章，下拉即可收回原位。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::card_to_article::{ArticleItem, CardToArticle};\n\nlet item = ArticleItem::new(\"journal\", \"The journal\", \"story.jpg\".to_owned(), \"An open notebook\", |_, _| {\n    gpui::div().child(\"A first paragraph.\").into_any_element()\n})\n.with_tag(\"Journal\")\n.with_meta(\"3 min read\");\nlet control = cx.new(|cx| CardToArticle::new(vec![item], cx));",
+    "method": "set_value",
+    "signature": "(Option<&str>, &mut Window, &mut Context<Self>)",
+    "event": "ArticleValueChanged",
+    "rule": {
+      "en": "Click a card, or use Enter or Space. Escape closes and restores focus. Scroll to read, or pull down from the top to dismiss.",
+      "zh": "点击卡片或按 Enter、空格打开。Escape 关闭并恢复焦点。滚动阅读，在顶部下拉关闭。"
+    },
+    "api": {
+      "en": "Provide an image, alternate text and a GPUI article body for each stable ID. Use controlled or default selection, a 4:3 hero, and a customizable close label.",
+      "zh": "为稳定 ID 提供图片、替代文本和 GPUI 正文。支持受控或默认打开项，封面默认 4:3，关闭名称可配置。"
+    },
+    "motion": {
+      "en": "The shared hero and title expand to the sheet and close into the measured slot. A short pull returns without dismissing.",
+      "zh": "封面与标题共同展开，关闭时回到实测卡位。短距离下拉会复位。"
+    }
+  },
+  {
+    "id": "holo-card",
+    "group": "cards",
+    "title": {
+      "en": "Holo card",
+      "zh": "全息卡片"
+    },
+    "rustType": "HoloCard",
+    "lead": {
+      "en": "Tilt a membership card under moving foil and flip to its reverse.",
+      "zh": "倾斜会员卡时带动箔面与反光，点按即可翻到背面。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::holo_card::{HoloCard, HoloCardFlipped, HoloFace};\n\nlet card = cx.new(|cx| {\n    let front = HoloFace::new(\"Jasmine Brooks, member\", |_, _| {\n        gpui::div().size_full().p_4().child(\"Jasmine Brooks\").into_any_element()\n    });\n    let back = HoloFace::new(\"Member since 2023\", |_, _| {\n        gpui::div().size_full().p_4().child(\"Member since 2023\").into_any_element()\n    });\n    HoloCard::new(front, cx).with_back(back).with_flipped(false)\n});\ncx.subscribe(&card, |card, event: &HoloCardFlipped, cx| {\n    card.update(cx, |card, cx| card.set_flipped(event.0, cx));\n}).detach();",
+    "method": "with_max_tilt",
+    "signature": "(f32) -> Self",
+    "event": "HoloCardFlipped, HoloCardOrientationRequested",
+    "rule": {
+      "en": "Move the pointer to tilt. Click or press Enter or Space to flip. Drag a finger when device tilt is unavailable.",
+      "zh": "移动鼠标可倾斜卡片。点击或按 Enter、空格翻面。设备倾斜不可用时可用手指拖动。"
+    },
+    "api": {
+      "en": "Supply a front and optional reverse. Default width is 300px at 5:7, tilt is 14° and intensity is 1. Use with_flipped to control the side and set_device_tilt to provide host orientation.",
+      "zh": "传入正面及可选背面。默认宽 300px，比例为 5:7，倾斜 14°，反光强度为 1。用 with_flipped 管理翻面状态，用 set_device_tilt 接入宿主方向数据。"
+    },
+    "motion": {
+      "en": "A spring rotates the card by half a turn, preserving velocity on reversal. The glare trails the tilt. Reduced motion crossfades painted faces.",
+      "zh": "翻面沿弹簧旋转半圈，中途反向保留当前速度。反光稍后跟上倾斜。减少动效时使用正反面淡入淡出。"
+    }
+  }
+]

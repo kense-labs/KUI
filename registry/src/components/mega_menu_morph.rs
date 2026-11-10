@@ -91,6 +91,61 @@ impl MegaMenuSection {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MegaMenuNavigate(pub SharedString);
+
+const PANEL_PADDING: f32 = 12.;
+const COLUMN_GAP: f32 = 8.;
+const GROUP_WIDTH: f32 = 250.;
+const GROUP_MIN_WIDTH: f32 = 156.;
+const FEATURE_WIDTH: f32 = 216.;
+
+fn panel_layout(section: &MegaMenuSection, viewport: f32) -> (f32, bool) {
+    let groups = section.groups.len() as f32;
+    let feature = if section.feature.is_some() {
+        FEATURE_WIDTH
+    } else {
+        0.
+    };
+    let columns = groups + f32::from(section.feature.is_some());
+    let fixed = feature + (columns - 1.).max(0.) * COLUMN_GAP + PANEL_PADDING * 2. + 2.;
+    let width = (groups * GROUP_WIDTH + fixed)
+        .max(320.)
+        .min((viewport - 16.).max(0.));
+    (
+        width,
+        columns > 1. && width >= groups * GROUP_MIN_WIDTH + fixed,
+    )
+}
+
+fn panel_left(anchor: f32, width: f32, viewport: f32) -> f32 {
+    (anchor - width * 0.5).clamp(8., (viewport - width - 8.).max(8.))
+}
+
+fn feature_background(p: Paint, cx: &App) -> Hsla {
+    if crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark {
+        p.tray
+    } else {
+        p.stage
+    }
+}
+
+fn scroll_report(scroll: ScrollHandle) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |_, _, _, cx| {
+            if let Some(host) = cx.try_global::<crate::primitives::editor::EditorScrollRegion>() {
+                let top = -scroll.offset().y;
+                (host.0)(
+                    scroll.bounds(),
+                    top > px(0.1),
+                    top + px(0.1) < scroll.max_offset().y,
+                );
+            }
+        },
+    )
+    .absolute()
+    .size(px(0.))
+}
+
 /// A navigation surface with hover intent, keyboard operation and a compact sheet.
 pub struct MegaMenuMorph {
     brand: SharedString,
@@ -110,12 +165,13 @@ pub struct MegaMenuMorph {
     caret: Slide,
     switch: PhaseClock,
     direction: f32,
-    viewport_width: Pixels,
     hover_epoch: u64,
     panel_hovered: bool,
     pointer: Point<Pixels>,
     previous_pointer: Point<Pixels>,
     panel_bounds: Rc<Cell<Bounds<Pixels>>>,
+    panel_content_height: Vec<Rc<Cell<Pixels>>>,
+    panel_scroll: ScrollHandle,
     root_bounds: Rc<Cell<Bounds<Pixels>>>,
     trigger_bounds: Vec<Rc<Cell<Bounds<Pixels>>>>,
     root_focus: FocusHandle,
@@ -134,6 +190,10 @@ impl MegaMenuMorph {
             .collect();
         let trigger_bounds = (0..sections.len())
             .map(|_| Rc::new(Cell::new(Bounds::default())))
+            .collect();
+        let panel_content_height = vec![(); sections.len()]
+            .into_iter()
+            .map(|()| Rc::new(Cell::new(px(0.))))
             .collect();
         let panel_focus = sections
             .iter()
@@ -168,12 +228,13 @@ impl MegaMenuMorph {
             caret: Slide::snappy(0.),
             switch: Default::default(),
             direction: 1.,
-            viewport_width: px(0.),
             hover_epoch: 0,
             panel_hovered: false,
             pointer: Point::default(),
             previous_pointer: Point::default(),
             panel_bounds: Default::default(),
+            panel_content_height,
+            panel_scroll: ScrollHandle::new(),
             root_bounds: Default::default(),
             trigger_bounds,
             root_focus: cx.focus_handle(),
@@ -204,14 +265,29 @@ impl MegaMenuMorph {
             return;
         }
         if self.open != Some(i) {
-            self.previous = self.open;
-            self.direction = if self.open.is_some_and(|old| i < old) {
+            let old = self.open.or(self.previous);
+            let from_closed = self.presence.value(cx) <= 0.001;
+            self.previous = if from_closed { None } else { old };
+            self.panel_scroll.set_offset(Point::default());
+            self.direction = if self.previous.is_some_and(|old| i < old) {
                 -1.
             } else {
                 1.
             };
             self.open = Some(i);
-            self.switch.restart(cx);
+            if from_closed {
+                let root = self.root_bounds.get();
+                let trigger = self.trigger_bounds[i].get();
+                let viewport = f32::from(root.size.width);
+                let (width, _) = panel_layout(&self.sections[i], viewport);
+                let anchor = f32::from(trigger.center().x - root.left());
+                self.width.reset(width);
+                self.position.reset(panel_left(anchor, width, viewport));
+                self.caret.reset(anchor);
+                self.switch = PhaseClock::default();
+            } else if old != Some(i) {
+                self.switch.restart(cx);
+            }
             self.presence.duration(1., 0.24, cx);
         }
         cx.notify();
@@ -399,10 +475,172 @@ impl MegaMenuMorph {
         cx.stop_propagation();
         w.prevent_default();
     }
+
+    fn panel_body(&self, i: usize, viewport: f32, active: bool, cx: &mut Context<Self>) -> Div {
+        let section = &self.sections[i];
+        let (width, horizontal) = panel_layout(section, viewport);
+        let p = Paint::get(cx);
+        let feature_bg = feature_background(p, cx);
+        let radius = crate::foundation::surface_radius(cx);
+        let mut body = div()
+            .w(px((width - 2.).max(0.)))
+            .flex()
+            .gap(px(COLUMN_GAP))
+            .p(px(PANEL_PADDING))
+            .when(!horizontal, |d| d.flex_col());
+        let mut index = 0;
+        for group in &section.groups {
+            let mut column = div()
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .when(horizontal, |d| d.flex_1().min_w_0())
+                .child(
+                    div()
+                        .pt(px(6.))
+                        .pb(px(4.))
+                        .px(px(12.))
+                        .text_size(px(12.))
+                        .text_color(p.faint)
+                        .child(group.title.clone()),
+                );
+            for link in &group.links {
+                let content = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(1.))
+                    .w_full()
+                    .px(px(12.))
+                    .py(px(9.))
+                    .text_size(px(14.))
+                    .line_height(px(19.6))
+                    .whitespace_normal()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(link.label.clone()),
+                    )
+                    .when(!link.description.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(20.))
+                                .text_color(p.faint)
+                                .font_weight(FontWeight::NORMAL)
+                                .child(link.description.clone()),
+                        )
+                    });
+                let at = index;
+                index += 1;
+                column = if active {
+                    let id = link.id.clone();
+                    column.child(
+                        face(
+                            (ElementId::Name("mega-link".into()), id.clone()),
+                            link.label.clone(),
+                            48.,
+                            radius.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .w_full()
+                        .h_auto()
+                        .track_focus(&self.panel_focus[i][at])
+                        .hover(move |s| s.bg(p.ink.opacity(0.045)))
+                        .child(content)
+                        .on_click(cx.listener(move |s, _, _, cx| {
+                            cx.emit(MegaMenuNavigate(id.clone()));
+                            s.close(cx);
+                        }))
+                        .on_key_down(cx.listener(
+                            move |s, e: &KeyDownEvent, w, cx| s.link_key(i, at, e, w, cx),
+                        )),
+                    )
+                } else {
+                    column.child(content)
+                };
+            }
+            body = body.child(column);
+        }
+        if let Some(feature) = &section.feature {
+            let content = div()
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .p(px(14.))
+                .w_full()
+                .text_size(px(14.))
+                .line_height(px(19.6))
+                .whitespace_normal()
+                .child(
+                    div()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(feature.title.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(p.secondary)
+                        .font_weight(FontWeight::NORMAL)
+                        .child(feature.description.clone()),
+                )
+                .child(
+                    div()
+                        .pt(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(feature.action.clone())
+                        .child(icon(Glyph::Arrow, 12., p.ink)),
+                );
+            let width = if horizontal {
+                px(FEATURE_WIDTH)
+            } else {
+                px((width - PANEL_PADDING * 2. - 2.).max(0.))
+            };
+            body =
+                if active {
+                    let id = feature.id.clone();
+                    body.child(
+                        face(
+                            (ElementId::Name("mega-feature".into()), id.clone()),
+                            feature.title.clone(),
+                            84.,
+                            radius.into(),
+                            Tone::Surface,
+                            cx,
+                        )
+                        .w(width)
+                        .h_auto()
+                        .min_h(px(0.))
+                        .items_start()
+                        .justify_start()
+                        .bg(feature_bg)
+                        .hover(move |s| s.bg(feature_bg.blend(p.ink.opacity(0.05))))
+                        .track_focus(&self.panel_focus[i][index])
+                        .child(content)
+                        .on_click(cx.listener(move |s, _, _, cx| {
+                            cx.emit(MegaMenuNavigate(id.clone()));
+                            s.close(cx);
+                        }))
+                        .on_key_down(cx.listener(
+                            move |s, e: &KeyDownEvent, w, cx| s.link_key(i, index, e, w, cx),
+                        )),
+                    )
+                } else {
+                    body.child(div().w(width).rounded(radius).bg(feature_bg).child(content))
+                };
+        }
+        body
+    }
 }
 impl Render for MegaMenuMorph {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.focus_subscriptions.is_empty() {
+            self.focus_subscriptions
+                .push(cx.observe_window_bounds(w, |_, _, cx| cx.notify()));
             self.focus_subscriptions
                 .push(cx.on_focus_in(&self.root_focus, w, |s, _, _| s.focused = true));
             self.focus_subscriptions
@@ -416,10 +654,12 @@ impl Render for MegaMenuMorph {
         let p = Paint::get(cx);
         let dark = crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark;
         let radius = crate::foundation::surface_radius(cx);
-        let viewport = if self.viewport_width > px(0.) {
-            f32::from(self.viewport_width)
+        let measured = self.root_bounds.get().size.width;
+        let window = w.viewport_size().width;
+        let viewport = if measured > px(0.) && window > px(0.) {
+            f32::from(measured.min(window))
         } else {
-            f32::from(w.viewport_size().width)
+            f32::from(measured.max(window))
         };
         let natural = measure(&self.brand, 15., w)
             + 40.
@@ -642,10 +882,15 @@ impl Render for MegaMenuMorph {
                 );
             }
         }
-        let weak = cx.weak_entity();
-        let previous_width = self.viewport_width;
         let root_bounds = self.root_bounds.clone();
         let mut root = div()
+            .on_children_prepainted(move |children, w, _| {
+                if let Some(&bar) = children.first()
+                    && (root_bounds.replace(bar).size.width - bar.size.width).abs() > px(0.1)
+                {
+                    w.request_animation_frame();
+                }
+            })
             .id("mega-menu")
             .relative()
             .role(Role::Navigation)
@@ -667,22 +912,6 @@ impl Render for MegaMenuMorph {
                     cx.notify()
                 }
             }))
-            .child(
-                canvas(
-                    move |b, _, cx| {
-                        root_bounds.set(b);
-                        if (b.size.width - previous_width).abs() > px(0.1) {
-                            let _ = weak.update(cx, |s, cx| {
-                                s.viewport_width = b.size.width;
-                                cx.notify()
-                            });
-                        }
-                    },
-                    |_, _, _, _| (),
-                )
-                .absolute()
-                .inset_0(),
-            )
             .child(bar);
         if compact && self.compact_open {
             let mut sheet = div()
@@ -692,6 +921,7 @@ impl Render for MegaMenuMorph {
                 .w_full()
                 .max_h(px(360.))
                 .overflow_y_scroll()
+                .track_scroll(&self.panel_scroll)
                 .pt(px(6.))
                 .px(px(8.))
                 .pb(px(12.))
@@ -810,7 +1040,7 @@ impl Render for MegaMenuMorph {
                             .justify_start()
                             .border_1()
                             .border_color(p.line)
-                            .bg(p.tray)
+                            .bg(feature_background(p, cx))
                             .track_focus(&focus)
                             .child(
                                 div()
@@ -860,27 +1090,38 @@ impl Render for MegaMenuMorph {
                     }
                 }
             }
-            root = root.child(sheet);
+            root = root.child(sheet.child(scroll_report(self.panel_scroll.clone())));
         }
         if !compact
             && visible > 0.
             && let Some(i) = index
         {
             let section = &self.sections[i];
-            let count = section.groups.iter().map(|g| g.links.len()).sum::<usize>();
-            let panel_h = (count as f32 * 50.
-                + section.groups.len() as f32 * 26.
-                + if section.feature.is_some() { 94. } else { 0. }
-                + 18.)
-                .clamp(64., 320.);
-            self.height
-                .duration(if self.open.is_some() { panel_h } else { 0. }, 0.25, cx);
-            let desired_w: f32 = if section.feature.is_some() {
-                360.
+            let (target_width, horizontal) = panel_layout(section, viewport);
+            let groups = section
+                .groups
+                .iter()
+                .map(|group| 26. + group.links.len() as f32 * 62.);
+            let estimate = if horizontal {
+                groups.fold(if section.feature.is_some() { 110. } else { 0. }, f32::max)
             } else {
-                320.
-            };
-            let target_width = desired_w.min((viewport - 16.).max(0.));
+                groups.sum::<f32>() + if section.feature.is_some() { 110. } else { 0. }
+            } + PANEL_PADDING * 2.
+                + 2.;
+            let measured = self.panel_content_height[i].get();
+            let panel_h = if measured > px(0.) {
+                f32::from(measured) + 2.
+            } else {
+                estimate
+            }
+            .clamp(64., 320.);
+            if self.open.is_some() {
+                if self.previous.is_none() {
+                    self.height.reset(panel_h);
+                } else {
+                    self.height.duration(panel_h, 0.25, cx);
+                }
+            }
             self.width.duration(target_width, 0.25, cx);
             let trigger = self.trigger_bounds[i].get();
             let root_bounds = self.root_bounds.get();
@@ -890,212 +1131,46 @@ impl Render for MegaMenuMorph {
                 i as f32 * 92. + 100.
             };
             self.caret.duration(anchor, 0.25, cx);
-            self.position.duration(
-                (anchor - target_width * 0.5).clamp(8., (viewport - target_width - 8.).max(8.)),
-                0.25,
-                cx,
-            );
+            self.position
+                .duration(panel_left(anchor, target_width, viewport), 0.25, cx);
             let h = self.height.get(w, cx);
-            let width = self.width.get(w, cx);
-            let left = self.position.get(w, cx);
+            let width = self.width.get(w, cx).min((viewport - 16.).max(0.));
+            let left = self
+                .position
+                .get(w, cx)
+                .clamp(8., (viewport - width - 8.).max(8.));
             let caret_x = self.caret.get(w, cx);
             let phase = ease(self.switch.time(0.24, w, cx) / 0.24);
-            let mut content = div()
-                .flex()
-                .flex_col()
-                .gap(px(8.))
-                .p(px(12.))
+            let content = self
+                .panel_body(i, viewport, self.open.is_some(), cx)
                 .opacity(phase)
                 .relative()
                 .left(px((1. - phase) * self.direction * 18.));
-            let mut n = 0;
-            for group in &section.groups {
-                content = content.child(
-                    div()
-                        .pt(px(6.))
-                        .pb(px(4.))
-                        .px(px(12.))
-                        .flex()
-                        .items_center()
-                        .text_size(px(12.))
-                        .text_color(p.faint)
-                        .child(group.title.clone()),
-                );
-                for link in &group.links {
-                    let id = link.id.clone();
-                    let focus = self.panel_focus[i][n].clone();
-                    let at = n;
-                    n += 1;
-                    content = content.child(
-                        face(
-                            (ElementId::Name("mega-link".into()), id.clone()),
-                            link.label.clone(),
-                            48.,
-                            radius.into(),
-                            Tone::Clear,
-                            cx,
-                        )
-                        .w_full()
-                        .h_auto()
-                        .min_h(px(0.))
-                        .px(px(12.))
-                        .py(px(9.))
-                        .items_start()
-                        .justify_start()
-                        .track_focus(&focus)
-                        .hover(move |s| s.bg(p.ink.opacity(0.045)))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(1.))
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(link.label.clone()),
-                                )
-                                .when(!link.description.is_empty(), |d| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .line_height(px(20.))
-                                            .text_color(p.faint)
-                                            .child(link.description.clone()),
-                                    )
-                                }),
-                        )
-                        .on_click(cx.listener(move |s, _, _, cx| {
-                            cx.emit(MegaMenuNavigate(id.clone()));
-                            s.close(cx)
-                        }))
-                        .on_key_down(cx.listener(
-                            move |s, e: &KeyDownEvent, w, cx| s.link_key(i, at, e, w, cx),
-                        )),
-                    );
-                }
-            }
-            if let Some(feature) = &section.feature {
-                let id = feature.id.clone();
-                let focus = self.panel_focus[i][n].clone();
-                let at = n;
-                content = content.child(
-                    face(
-                        (ElementId::Name("mega-feature".into()), id.clone()),
-                        feature.title.clone(),
-                        84.,
-                        radius.into(),
-                        Tone::Surface,
-                        cx,
-                    )
-                    .w_full()
-                    .h_auto()
-                    .w(px(216.))
-                    .min_h(px(0.))
-                    .mt(px(4.))
-                    .p(px(14.))
-                    .justify_start()
-                    .bg(p.tray)
-                    .hover(move |s| s.bg(p.tray.blend(p.faint.opacity(0.3))))
-                    .track_focus(&focus)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(4.))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(feature.title.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(p.secondary)
-                                    .child(feature.description.clone()),
-                            )
-                            .child(
-                                div()
-                                    .pt(px(8.))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(4.))
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(feature.action.clone())
-                                    .child(icon(Glyph::Arrow, 12., p.ink)),
-                            ),
-                    )
-                    .on_click(cx.listener(move |s, _, _, cx| {
-                        cx.emit(MegaMenuNavigate(id.clone()));
-                        s.close(cx)
-                    }))
-                    .on_key_down(
-                        cx.listener(move |s, e: &KeyDownEvent, w, cx| s.link_key(i, at, e, w, cx)),
-                    ),
-                );
-            }
-            let mut surface = div().relative().child(content);
+            let measured = self.panel_content_height[i].clone();
+            let mut surface = div()
+                .relative()
+                .on_children_prepainted(move |children, w, _| {
+                    if let Some(content) = children.first()
+                        && measured.replace(content.size.height) != content.size.height
+                    {
+                        w.request_animation_frame();
+                    }
+                })
+                .child(content);
             if phase < 1.
                 && self.open.is_some()
                 && let Some(old) = self.previous.filter(|old| *old != i)
-                && let Some(previous) = self.sections.get(old)
             {
-                let mut leaving = div()
-                    .absolute()
-                    .top_0()
-                    .left(px(-self.direction * 18. * phase))
-                    .right_0()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.))
-                    .p(px(12.))
-                    .opacity(1. - phase);
-                for group in &previous.groups {
-                    leaving = leaving.child(
-                        div()
-                            .pt(px(6.))
-                            .pb(px(4.))
-                            .px(px(12.))
-                            .text_size(px(12.))
-                            .text_color(p.faint)
-                            .child(group.title.clone()),
-                    );
-                    for link in &group.links {
-                        leaving = leaving.child(
-                            div()
-                                .px(px(12.))
-                                .py(px(9.))
-                                .flex()
-                                .flex_col()
-                                .gap(px(1.))
-                                .child(link.label.clone())
-                                .when(!link.description.is_empty(), |d| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .line_height(px(20.))
-                                            .text_color(p.faint)
-                                            .child(link.description.clone()),
-                                    )
-                                }),
-                        );
-                    }
-                }
-                surface = surface.child(leaving);
+                surface = surface.child(
+                    self.panel_body(old, viewport, false, cx)
+                        .absolute()
+                        .top_0()
+                        .left(px(-self.direction * 18. * phase))
+                        .opacity(1. - phase),
+                );
             }
             let bounds = self.panel_bounds.clone();
             root = root
-                .child(
-                    div()
-                        .absolute()
-                        .top(px(54.))
-                        .left(px(caret_x - 6.))
-                        .w(px(12.))
-                        .h(px(12.))
-                        .rounded_full()
-                        .bg(p.bright)
-                        .opacity(visible),
-                )
                 .child(
                     div()
                         .id("mega-panel")
@@ -1110,27 +1185,14 @@ impl Render for MegaMenuMorph {
                         .border_color(p.line)
                         .bg(p.panel)
                         .shadow(vec![
-                            gpui::BoxShadow {
-                                color: black().opacity(if dark { 0.3 } else { 0.04 }),
-                                offset: gpui::point(px(0.), px(1.)),
-                                blur_radius: px(2.),
-                                spread_radius: px(0.),
-                                inset: false,
-                            },
-                            gpui::BoxShadow {
-                                color: black().opacity(if dark { 0.42 } else { 0.1 }),
-                                offset: gpui::point(px(0.), px(if dark { 22. } else { 18. })),
-                                blur_radius: px(if dark { 55. } else { 44. }),
-                                spread_radius: px(0.),
-                                inset: false,
-                            },
-                            gpui::BoxShadow {
-                                color: black().opacity(if dark { 0. } else { 0.04 }),
-                                offset: gpui::point(px(0.), px(4.)),
-                                blur_radius: px(12.),
-                                spread_radius: px(0.),
-                                inset: false,
-                            },
+                            BoxShadow::new(px(0.), px(2.), black().opacity(0.06))
+                                .blur_radius(px(6.)),
+                            BoxShadow::new(
+                                px(0.),
+                                px(10.),
+                                black().opacity(if dark { 0.30 } else { 0.10 }),
+                            )
+                            .blur_radius(px(26.)),
                         ])
                         .opacity(visible)
                         .child(
@@ -1151,10 +1213,65 @@ impl Render for MegaMenuMorph {
                                 .id("mega-scroll")
                                 .h_full()
                                 .overflow_y_scroll()
-                                .child(surface),
+                                .track_scroll(&self.panel_scroll)
+                                .child(surface)
+                                .child(scroll_report(self.panel_scroll.clone())),
                         ),
+                )
+                .child(
+                    canvas(
+                        |_, _, _| (),
+                        move |bounds, _, w, _| {
+                            let tip = point(bounds.center().x, bounds.top());
+                            let left = point(bounds.left(), bounds.bottom());
+                            let right = point(bounds.right(), bounds.bottom());
+                            let mut fill = PathBuilder::fill();
+                            fill.move_to(left);
+                            fill.line_to(tip);
+                            fill.line_to(right);
+                            fill.close();
+                            if let Ok(path) = fill.build() {
+                                w.paint_path(path, p.panel.opacity(visible));
+                            }
+                            let mut rim = PathBuilder::stroke(px(1.));
+                            rim.move_to(left);
+                            rim.line_to(tip);
+                            rim.line_to(right);
+                            if let Ok(path) = rim.build() {
+                                w.paint_path(path, p.line.opacity(visible));
+                            }
+                        },
+                    )
+                    .absolute()
+                    .top(px(54.))
+                    .left(px(caret_x
+                        .clamp(left + 12., (left + width - 12.).max(left + 12.))
+                        - 6.))
+                    .w(px(12.))
+                    .h(px(7.)),
                 );
         }
         root
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MegaMenuFeature, MegaMenuGroup, MegaMenuLink, MegaMenuSection, panel_layout};
+
+    #[test]
+    fn menu_stacks_when_two_groups_and_the_feature_no_longer_fit() {
+        let section = MegaMenuSection::new("products", "Products")
+            .with_groups(vec![
+                MegaMenuGroup::new("Build", vec![MegaMenuLink::new("one", "One")]),
+                MegaMenuGroup::new("Targets", vec![MegaMenuLink::new("two", "Two")]),
+            ])
+            .with_feature(MegaMenuFeature::new("news", "News", "Read more"));
+        let (wide, horizontal) = panel_layout(&section, 600.);
+        assert!(horizontal);
+        assert!(wide <= 584.);
+        let (narrow, horizontal) = panel_layout(&section, 520.);
+        assert!(!horizontal);
+        assert!(narrow <= 504.);
     }
 }

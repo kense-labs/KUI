@@ -5,23 +5,91 @@ use kui::{
         AgentHandoff, AgentHandoffEvent, HandoffAuthor, HandoffMessage, HandoffStage,
         HandoffSummary,
     },
-    primitives::{control::UiLanguage, family::Paint},
+    primitives::{
+        control::UiLanguage,
+        family::Paint,
+        ops_surface::{btn, row},
+    },
 };
 use std::time::Duration;
 pub const IDS: &[&str] = &["agent-handoff"];
 pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
     IDS.contains(&id)
-        .then(|| cx.new(|cx| Example::new(w, cx)).into())
+        .then(|| cx.new(|cx| Preview::new(w, cx)).into())
 }
+struct Preview {
+    example: Entity<Example>,
+    unavailable: bool,
+}
+
+impl Preview {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self {
+            example: cx.new(|cx| Example::new(false, w, cx)),
+            unavailable: false,
+        }
+    }
+}
+
+impl Render for Preview {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Paint::get(cx);
+        let lang = UiLanguage::current(cx);
+        div()
+            .size_full()
+            .min_h(px(684.))
+            .p_4()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_3()
+            .bg(p.stage)
+            .text_color(p.ink)
+            .child(
+                row().justify_center().flex_wrap().children(
+                    [
+                        (false, lang.text("Person joins", "人工接入")),
+                        (true, lang.text("No one available", "暂无客服")),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (unavailable, label))| {
+                        btn(
+                            ("handoff-scenario", i),
+                            label,
+                            self.unavailable == unavailable,
+                            cx,
+                            move |v, w, cx| {
+                                v.unavailable = unavailable;
+                                v.example = cx.new(|cx| Example::new(unavailable, w, cx));
+                                cx.notify();
+                            },
+                        )
+                    }),
+                ),
+            )
+            .child(self.example.clone())
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(p.secondary)
+                    .child(lang.text(
+                        "Simulated handoff — no messages are sent",
+                        "模拟转接，不会发送消息",
+                    )),
+            )
+    }
+}
+
 struct Example {
     view: Entity<AgentHandoff>,
     language: UiLanguage,
-    transfer_failed: bool,
-    send_failed: bool,
+    unavailable: bool,
     _sub: Subscription,
 }
 impl Example {
-    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(unavailable: bool, w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
         let t = |en, zh| language.text(en, zh);
         let mut summary = HandoffSummary::new(t(
@@ -34,8 +102,8 @@ impl Example {
         )];
         let view = cx.new(|cx| {
             AgentHandoff::new(
-                t("Support conversation", "支持会话"),
-                t("Order 1042", "订单 1042"),
+                t("Order NW-48213", "订单 NW-48213"),
+                t("Order delivery", "订单配送"),
                 summary,
                 w,
                 cx,
@@ -69,8 +137,7 @@ impl Example {
             |s: &mut Self, view, event: &AgentHandoffEvent, w, cx| match event {
                 AgentHandoffEvent::Request { ticket } => {
                     let ticket = *ticket;
-                    let fail = !s.transfer_failed;
-                    s.transfer_failed = true;
+                    let fail = s.unavailable;
                     let language = s.language;
                     let weak = view.downgrade();
                     cx.spawn(async move |_, cx| {
@@ -82,8 +149,8 @@ impl Example {
                                 v.fail_transfer(
                                     ticket,
                                     language.text(
-                                        "Sample transfer failed; try again.",
-                                        "样例转接失败，请重试。",
+                                        "Everyone is busy right now. You can keep chatting or retry later.",
+                                        "客服都在忙。可以继续聊天，或稍后重试。",
                                     ),
                                     cx,
                                 );
@@ -106,34 +173,16 @@ impl Example {
                     .detach();
                 }
                 AgentHandoffEvent::Send { ticket, text } => {
-                    let fail = !s.send_failed;
-                    s.send_failed = true;
                     let ticket = *ticket;
                     let text = text.clone();
-                    let language = s.language;
                     view.update(cx, |v, cx| {
-                        if fail {
-                            v.finish_send(
-                                ticket,
-                                Err(language
-                                    .text("Sample send failed; retry.", "样例发送失败，请重试。")
-                                    .into()),
-                                w,
-                                cx,
+                        let after = v.stage() != HandoffStage::Assistant;
+                        if v.finish_send(ticket, Ok(()), w, cx) {
+                            let mut message = HandoffMessage::new(
+                                format!("message-{ticket}"), HandoffAuthor::Customer, text,
                             );
-                        } else {
-                            let after = v.stage() != HandoffStage::Assistant;
-                            if v.finish_send(ticket, Ok(()), w, cx) {
-                                let mut msg = HandoffMessage::new(
-                                    format!("message-{ticket}"),
-                                    HandoffAuthor::Customer,
-                                    text,
-                                );
-                                if after {
-                                    msg = msg.after_handoff();
-                                }
-                                v.append_message(msg, cx);
-                            }
+                            if after { message = message.after_handoff(); }
+                            v.append_message(message, cx);
                         }
                     });
                 }
@@ -143,35 +192,13 @@ impl Example {
         Self {
             view,
             language,
-            transfer_failed: false,
-            send_failed: false,
+            unavailable,
             _sub: sub,
         }
     }
 }
 impl Render for Example {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = Paint::get(cx);
-        div()
-            .size_full()
-            .min_h(px(680.))
-            .p_4()
-            .bg(p.stage)
-            .text_color(p.ink)
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap_3()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Simulated handoff — no messages are sent",
-                        "模拟转接，不会发送消息",
-                    )),
-            )
-            .child(div().w_full().max_w(px(560.)).child(self.view.clone()))
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().w_full().max_w(px(560.)).child(self.view.clone())
     }
 }

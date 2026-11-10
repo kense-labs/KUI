@@ -6,6 +6,9 @@ pub mod gallery;
 pub use gallery::ButtonGallery;
 
 mod extra_story;
+pub use extra_story::{
+    ControlCenterPreviewHost, HoloPreviewHost, HoloPreviewPreferences, OrbitPhotoHost,
+};
 mod host;
 /// Focus and size integration for an embedded GPUI story.
 pub struct StoryBridge {
@@ -29,3 +32,16 @@ pub use family_story::workspace::IDS as WORKSPACE_IDS;
 pub struct InputFontLoaded;
 impl gpui::Global for InputFontLoaded {}
 pub use family_story::LIBRARY_IDS;
+
+fn ensure_story_fonts(cx: &mut gpui::App) {
+    struct StoryFonts;
+    impl gpui::Global for StoryFonts {}
+    if !cx.has_global::<StoryFonts>() {
+        let _ = cx.text_system().add_fonts(vec![
+            std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinRegular.ttf")),
+            std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinMedium.ttf")),
+            std::borrow::Cow::Borrowed(include_bytes!("../assets/FiraCode-Regular.ttf")),
+        ]);
+        cx.set_global(StoryFonts);
+    }
+}

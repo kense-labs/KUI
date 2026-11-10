@@ -33,6 +33,8 @@ gpui = { workspace = true, default-features = false }
 gpui_platform = { workspace = true, optional = true }
 
 web-time = "1"
+chrono = "0.4"
+image = { version = "0.25", default-features = false }
 unicode-segmentation = "1"
 serde_json.workspace = true
 

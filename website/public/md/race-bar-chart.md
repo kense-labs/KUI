@@ -14,10 +14,14 @@ Initialize KUI with `kui::init(cx)` before opening a window. To copy this compon
 
 ```rust
 use gpui::prelude::*;
-use kui::components::race_bar_chart::{RaceBarChart, RaceEntry};
+use kui::components::race_bar_chart::{RaceBarChart, RaceEntry, RaceFrame};
 
-let data = vec![RaceEntry::new("first", "First", 68.0, gpui::rgb(0x9d83e8).into()), RaceEntry::new("second", "Second", 32.0, gpui::rgb(0x62b5d0).into())];
-let control = cx.new(|_| RaceBarChart::new("Values", data));
+let entries = vec![RaceEntry::new("first", "First"), RaceEntry::new("second", "Second")];
+let frames = vec![
+    RaceFrame::new("Q1", vec![("first".into(), 68.0), ("second".into(), 32.0)]),
+    RaceFrame::new("Q2", vec![("first".into(), 54.0), ("second".into(), 72.0)]),
+];
+let control = cx.new(|_| RaceBarChart::new("Values", entries).with_frames(frames));
 ```
 
 ## Interaction

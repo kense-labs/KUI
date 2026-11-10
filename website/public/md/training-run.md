@@ -22,6 +22,8 @@ let control = cx.new(|_| TrainingRun::new(job));
 
 ## Interaction
 
+The preview begins in Queued and offers Healthy run and Out of memory. Selecting either starts a fresh simulated run.
+
 Status, metrics, events, errors and endpoint come from the host; the component does not train or deploy. Actions are opt-in and must be resolved by request ID. Cancel requires two presses within three seconds.
 
 ## API

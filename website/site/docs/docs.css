@@ -486,6 +486,60 @@
   margin: 0;
   font-size: 0.75rem;
 }
+.stage .preview-options,
+.stage .preview-modes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stage .preview-options { gap: 8px; }
+.stage .preview-options[hidden] { display: none; }
+.stage .preview-modes {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.stage .preview-control {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.stage .preview-control:is(:hover, [aria-pressed="true"]) {
+  color: var(--ink);
+  background: var(--bg);
+}
+.stage [data-preview-exit],
+.stage[data-preview-expanded] [data-preview-enter] { display: none; }
+.stage[data-preview-expanded] [data-preview-exit] { display: flex; }
+.stage [data-preview-enter] { align-items: center; }
+.stage [data-preview-size="mobile"] > iframe { max-width: 390px; }
+.stage[data-preview-expanded] {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: clamp(12px, 3vw, 32px);
+  background: var(--bg);
+}
+.stage[data-preview-expanded] > [data-panel="preview"] {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.stage[data-preview-expanded] [data-preview-size="fit"] > iframe { max-width: 1100px; }
+html:has(.stage[data-preview-expanded]) { overflow: hidden; scrollbar-gutter: stable; }
 .stage .panel[hidden] {
   display: none !important;
 }
@@ -521,11 +575,60 @@
 .doc .family-story {
   max-width:628px; margin-inline:auto; height:520px; border-radius:var(--radius-panel); background:var(--surface-muted);
 }
+@media (min-width: 1440px) {
+  .docs-pad:has(.doc[data-doc-id="morph-nav"]),
+  .docs-pad:has(.doc[data-doc-id="dns-resolution"]),
+  .docs-pad:has(.doc[data-doc-id="branch-graph"]),
+  .docs-pad:has(.doc[data-doc-id="charge-session"]),
+  .docs-pad:has(.doc[data-doc-id="payment-flow"]),
+  .docs-pad:has(.doc[data-doc-id="skeleton-morph"]),
+  .docs-pad:has(.doc[data-doc-id="referral-card"]),
+  .docs-pad:has(.doc[data-doc-id="social-proof-toast"]),
+  .docs-pad:has(.doc[data-doc-id="dot-grid"]) {
+    width:min(824px, calc(100% - 2rem));
+  }
+  .doc .family-story[data-story="morph-nav"],
+  .doc .family-story[data-story="dns-resolution"],
+  .doc .family-story[data-story="branch-graph"],
+  .doc .family-story[data-story="charge-session"],
+  .doc .family-story[data-story="payment-flow"],
+  .doc .family-story[data-story="dot-grid"] {
+    max-width:824px;
+  }
+}
+.doc .family-story[data-story="skeleton-morph"] {
+  max-width:760px;
+  height:516px;
+}
+.doc .family-story[data-story="social-proof-toast"] {
+  max-width:744px;
+  height:300px;
+}
+.doc .family-story[data-story="referral-card"] {
+  max-width:744px;
+  height:708px;
+}
+.doc .family-story[data-story="share-sheet"] {
+  max-width:640px;
+  height:660px;
+}
+.doc .family-story[data-story="stretch-refresh"] {
+  height:428px;
+}
+.doc .family-story[data-story="charge-session"] {
+  height:810px;
+}
+@media (max-width: 450px) {
+  .doc .family-story[data-story="charge-session"] { height:780px; }
+}
 .doc .family-story.theme-preview {
   height:220px
 }
 .doc .family-story[data-story="json-viewer"] {
   height:646px
+}
+.doc .family-story[data-story="branch-graph"] {
+  height:564px
 }
 .doc .family-story[data-story="reasoning-block"] {
   height:670px
@@ -544,6 +647,24 @@
 }
 .doc [data-preview-slot] {
   container-type:inline-size
+}
+@container (max-width: 520px) {
+  .doc .family-story[data-story="referral-card"] {
+    height:784px;
+  }
+  .doc .family-story[data-story="share-sheet"] {
+    height:520px;
+  }
+}
+@container (width < 608px) {
+  .doc .family-story[data-story="skeleton-morph"] {
+    height:600px;
+  }
+}
+@container (max-width: 575px) {
+  .doc .family-story[data-story="branch-graph"] {
+    height:620px
+  }
 }
 @container (max-width: 531px) {
   .doc .family-story[data-story="provider-keys"] {

@@ -38,15 +38,22 @@ impl NumberField {
         let value = value.clamp(min, max);
         let edit = cx.new(|cx| {
             let mut e = Editor::new(label.clone(), InputMode::Single, w, cx);
+            e.center_text = true;
             e.set_value(value.to_string(), w, cx);
             e
         });
-        let sub = cx.subscribe_in(&edit, w, |s: &mut Self, e, ev: &EditEvent, w, cx| {
-            if matches!(ev, EditEvent::Submitted | EditEvent::Blurred) {
-                let n = e.read(cx).value().parse::<f64>().unwrap_or(s.value);
-                s.set(n, w, cx)
-            }
-        });
+        let sub = cx.subscribe_in(
+            &edit,
+            w,
+            |s: &mut Self, e, ev: &EditEvent, w, cx| match ev {
+                EditEvent::Submitted | EditEvent::Blurred => {
+                    let n = e.read(cx).value().parse::<f64>().unwrap_or(s.value);
+                    s.set(n, w, cx);
+                }
+                EditEvent::Changed if e.read(cx).focus.is_focused(w) => cx.notify(),
+                _ => {}
+            },
+        );
         Self {
             label,
             min,
@@ -127,29 +134,43 @@ impl Render for NumberField {
         let bump = self.limit.time(0.32, w, cx) / 0.32;
         let moving =
             self.change.time(0.24, w, cx) < 0.24 && !self.edit.read(cx).focus.is_focused(w);
+        let value = self.value.to_string();
+        let value_width = crate::primitives::family::measure(&value.clone().into(), 14., w);
+        let editor_width = if self.edit.read(cx).focus.is_focused(w) {
+            let draft = self.edit.read(cx).value();
+            value_width.max(crate::primitives::family::measure(
+                &draft.to_owned().into(),
+                14.,
+                w,
+            ))
+        } else {
+            value_width
+        };
         let mut strip = row()
-            .gap(px(4.))
-            .justify_between()
+            .min_h(px(44.))
+            .gap(px(2.))
             .rounded(crate::foundation::surface_radius(cx))
             .bg(p.panel)
             .border_1()
             .border_color(p.line)
-            .p(px(4.));
+            .p(px(3.));
         for i in 0..3 {
             if i == 1 {
                 strip = strip.child(
                     row()
+                        .flex_1()
+                        .min_w_0()
+                        .gap(px(3.))
                         .justify_center()
                         .child({
-                            let label =
-                                self.rolling
-                                    .label(self.value.to_string(), self.direction, w, cx);
+                            let label = self.rolling.label(value.clone(), self.direction, w, cx);
                             div()
                                 .relative()
                                 .top(px(-self.direction
                                     * (bump * std::f32::consts::PI).sin()
                                     * 2.5))
-                                .w(px(34.))
+                                .w(px((editor_width + 4.).max(12.)))
+                                .min_w_0()
                                 .h(px(28.))
                                 .child(
                                     div()
@@ -158,10 +179,25 @@ impl Render for NumberField {
                                         .child(self.edit.clone()),
                                 )
                                 .when(moving, |d| {
-                                    d.child(div().absolute().left_0().top(px(4.)).child(label))
+                                    d.child(
+                                        div()
+                                            .absolute()
+                                            .inset_0()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .child(label),
+                                    )
                                 })
                         })
-                        .child(self.suffix.clone()),
+                        .when(!self.suffix.is_empty(), |row| {
+                            row.child(
+                                div()
+                                    .flex_none()
+                                    .text_color(p.secondary)
+                                    .child(self.suffix.clone()),
+                            )
+                        }),
                 );
                 continue;
             }
@@ -182,7 +218,10 @@ impl Render for NumberField {
                 cx,
             );
             strip = strip.child(
-                e.when(!enabled, |d| d.opacity(0.45))
+                e.flex_none()
+                    .size(px(34.))
+                    .rounded(px(4.))
+                    .when(!enabled, |d| d.opacity(0.32))
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |s, _, w, cx| {
@@ -214,7 +253,7 @@ impl Render for NumberField {
                     })),
             )
         }
-        section(240., cx)
+        section(196., cx)
             .id("number")
             .capture_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
                 let n = match e.keystroke.key.as_str() {

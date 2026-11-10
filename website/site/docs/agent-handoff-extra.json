@@ -9,7 +9,7 @@
     "method": "connect",
     "signature": "(u64, impl Into<SharedString>, &mut Context<Self>) -> bool",
     "event": "AgentHandoffEvent",
-    "rule": { "en": "The host owns the conversation and transfer service. The preview simulates all transfers and sends; nothing is sent.", "zh": "宿主负责会话与转接服务。预览中的转接与发送均为模拟，不会发送数据。" },
+    "rule": { "en": "The host owns the conversation and transfer service. The preview simulates all transfers and sends; nothing is sent. Choose Person joins or No one available to reset and test either transfer outcome.", "zh": "宿主负责会话与转接服务。预览中的转接与发送均为模拟，不会发送数据。 选择「人工接入」或「暂无客服」，重置并体验对应的转接结果。" },
     "api": { "en": "Handle Request with connect or fail_transfer using its ticket; Cancel invalidates that request. Handle Send with finish_send using its ticket; failure preserves the draft, CancelSend invalidates it, and successful messages are appended by the host with unique IDs. Mark messages after_handoff to display them after the summary card.", "zh": "处理 Request 后以对应 ticket 调用 connect 或 fail_transfer；Cancel 会使该请求失效。处理 Send 后以 ticket 调用 finish_send；失败保留草稿，CancelSend 使请求失效，成功消息由宿主用唯一 ID 追加。转接后的消息使用 after_handoff 显示在摘要卡之后。" },
     "motion": { "en": "The shared summary expands on a 240 ms spring, respecting reduced motion. Streaming, traveling timeline dot and complete visual comparison remain unimplemented or unverified.", "zh": "共享摘要以 240ms 弹簧展开，并遵循减少动效。流式文字、时间线行进点与完整视觉对照尚未实现或验收。" }
   }

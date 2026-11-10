@@ -238,6 +238,9 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         | "icon-morph"
         | "confirm-morph"
         | "theme-switch"
+        | "theme-switch-eclipse"
+        | "theme-switch-split"
+        | "theme-switch-rise"
         | "hold-to-confirm"
         | "swipe-actions"
         | "reactions"
@@ -259,7 +262,12 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
         | "switch"
         | "resizable-panels"
         | "empty-state" => {
-            let mut files = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
+            let module = if id.starts_with("theme-switch-") {
+                "theme_switch".to_owned()
+            } else {
+                id.replace('-', "_")
+            };
+            let mut files = vec![format!("src/components/{module}.rs")];
             let mut primitives = vec!["control", "family", "glyph"];
             cargo.push("web-time@1".into());
             match id {
@@ -313,6 +321,9 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
             let mut paths = vec![format!("src/components/{}.rs", id.replace('-', "_"))];
             if id == "range-histogram-slider" {
                 paths.push("src/components/histogram_range_track.rs".into());
+            }
+            if matches!(id, "sankey-flow" | "split-bar" | "waffle-chart") {
+                paths.push("src/components/color_math.rs".into());
             }
             paths.extend(
                 entry

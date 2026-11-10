@@ -11,6 +11,7 @@ pub use sizing::Size;
 pub mod clipboard;
 pub mod commit;
 pub mod control;
+pub(crate) mod currency;
 pub mod direct_touch;
 pub mod family;
 pub mod glyph;

@@ -23,7 +23,7 @@ let control = cx.new(|_| AiWorkflow::new("Request triage", "Review incoming requ
 
 ## Interaction
 
-The host executes steps and resolves matching request IDs. Stop emits Cancel and rejects late responses; Retry resumes the failed step. Branch results must reference a supplied path. The example is simulated and sends nothing.
+The host executes steps and resolves matching request IDs. Stop emits Cancel and rejects late responses; Retry resumes the failed step. Branch results must reference a supplied path. The simulated preview sends nothing and offers Passes, Fails, Loading and Empty scenarios. In the empty example, Add step offers a trigger; triggers in configured workflows cannot be removed through the step list.
 
 ## API
 

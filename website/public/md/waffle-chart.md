@@ -16,7 +16,10 @@ Initialize KUI with `kui::init(cx)` before opening a window. To copy this compon
 use gpui::prelude::*;
 use kui::components::waffle_chart::{WaffleCategory, WaffleChart};
 
-let items = vec![WaffleCategory::new("search", "Search", 42.0, gpui::rgb(0x578ce2).into()), WaffleCategory::new("direct", "Direct", 58.0, gpui::rgb(0x47ab8b).into())];
+let items = vec![
+    WaffleCategory::new("search", "Search", 42.0),
+    WaffleCategory::new("direct", "Direct", 58.0),
+];
 let control = cx.new(|_| WaffleChart::new("Visitors", items));
 ```
 
@@ -28,7 +31,7 @@ Legend toggles filter categories; at least one remains visible. Arrow keys inspe
 
 `set_categories` · `(Vec<WaffleCategory>, &mut Context<Self>)`
 
-Supply stable category ids, labels, values and colors; subscribe to WaffleInspect for the active category.
+Supply stable category IDs, labels and values. The theme assigns series colors by default. Use `WaffleCategory::with_color(Hsla)` to override a category color. Subscribe to `WaffleInspect` for the active category.
 
 Event: `WaffleInspect`.
 

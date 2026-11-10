@@ -2,15 +2,30 @@
   {
     "id": "speculative-decoding",
     "group": "intelligence",
-    "title": {"en": "Speculative decoding", "zh": "推测解码示意"},
+    "title": {
+      "en": "Speculative decoding",
+      "zh": "推测解码示意"
+    },
     "rustType": "SpeculativeDecoding",
-    "lead": {"en": "Replay host-supplied draft and verification rounds.", "zh": "回放宿主提供的草稿和验证轮次。"},
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::speculative_decoding::{DecodeRound, SpeculativeDecoding};\n\nlet rounds = vec![DecodeRound::new(vec![\"The\".into(), \" build\".into(), \" failed\".into()], 2, Some(\" passed\".into()))];\nlet control = cx.new(|_| SpeculativeDecoding::new(rounds).with_recorded(true));",
+    "lead": {
+      "en": "Simulate or replay how a draft model and a target model write an answer.",
+      "zh": "模拟或回放草稿模型和目标模型协同写出答案的过程。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::speculative_decoding::{DecodeToken, SpeculativeDecoding};\n\nlet tokens = vec![\n    DecodeToken::new(\"The\"),\n    DecodeToken::new(\" build\").with_ease(0.6).with_miss(\" deploy\"),\n    DecodeToken::new(\" passed\"),\n    DecodeToken::new(\".\"),\n];\nlet control = cx.new(|_| SpeculativeDecoding::from_tokens(tokens).with_default_compare(true));",
     "method": "set_rounds",
     "signature": "(Vec<DecodeRound>, &mut Context<Self>)",
-    "event": "DecodeCompleted, DecodeRetry, DecodePlaybackChanged",
-    "rule": {"en": "The host supplies the rounds; recorded and illustrative runs are explicitly labelled. Leading token spaces are preserved, acceptance is bounded, and speedup is an estimate based on configured draft cost.", "zh": "轮次由宿主提供，记录与示意数据明确区分；保留 token 前导空格、限制接受数量，并按配置的草稿成本估算加速比。"},
-    "api": {"en": "Play, pause, restart or enable the illustrative target-only comparison; set_visible stops off-screen playback. The host controls loading, failure and retry.", "zh": "支持播放、暂停、重新开始及示意性的单目标模型对照；set_visible 停止屏外播放。加载、失败和重试由宿主管理。"},
-    "motion": {"en": "Drafts fade and slide in, verification sweeps across each chip, and accepted tokens appear in sequence; reduced motion steps directly. Full cross-position token flight and rolling statistics remain different from the reference; visual, touch and accessibility validation remain pending.", "zh": "草稿依次淡入滑入，验证逐项扫过，接受的 token 错峰显示；减少动效时直接切换。跨位置飞行和滚动统计仍与参考站不同；视觉、触屏和无障碍验收仍待完成。"}
+    "event": "DecodeCompleted, DecodeRetry, DecodePlaybackChanged, DecodeDraftLengthChanged, DecodeCompareChanged",
+    "rule": {
+      "en": "Play, pause or restart. Use arrows, Home and End to change the draft length. Toggle comparison to race the target-only line.",
+      "zh": "播放、暂停或重播。用方向键、Home 和 End 调整草稿长度，开启对照比较仅目标模型的进度。"
+    },
+    "api": {
+      "en": "Replay supplied rounds or simulate from tokens. The simulation uses a seed and preserves leading spaces. Changing the draft length replans from the start.",
+      "zh": "支持宿主轮次回放与基于词元的确定性模拟，保留前导空格。调整草稿长度后从头重新播放。"
+    },
+    "motion": {
+      "en": "Draft chips appear in sequence. The target sweeps across each cell and sends accepted and replacement tokens into fixed answer positions. Statistics roll after each pass.",
+      "zh": "草稿依次出现，目标模型逐项验证；接受和替换的词元飞入预留位置。每轮结束后滚动更新统计。"
+    }
   }
 ]

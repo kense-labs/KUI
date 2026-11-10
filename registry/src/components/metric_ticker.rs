@@ -1,7 +1,8 @@
 //! Host-driven live metrics with rolling values and recent-history details.
 use crate::components::animated_counter::AnimatedCounter;
 use crate::primitives::{
-    family::{Paint, PhaseClock, Slide, disabled_motion},
+    control::UiLanguage,
+    family::{Paint, PhaseClock, Slide, disabled_motion, ease},
     presentation::{column, hint, row, title, tr},
 };
 use gpui::{prelude::*, *};
@@ -86,6 +87,7 @@ pub struct MetricTicker {
     label: SharedString,
     entries: Vec<Entry>,
     selected: Option<usize>,
+    last_selected: Option<usize>,
     pinned: bool,
     repeated: bool,
     hover: bool,
@@ -100,6 +102,7 @@ pub struct MetricTicker {
     last_time: f32,
     measured: Rc<Cell<Bounds<Pixels>>>,
     marquee: bool,
+    counter_size: f32,
 }
 impl EventEmitter<TickerInspect> for MetricTicker {}
 impl MetricTicker {
@@ -112,6 +115,7 @@ impl MetricTicker {
             label: label.into(),
             entries: vec![],
             selected: None,
+            last_selected: None,
             pinned: false,
             repeated: false,
             hover: false,
@@ -126,6 +130,7 @@ impl MetricTicker {
             last_time: 0.,
             measured: Default::default(),
             marquee: true,
+            counter_size: 18.,
         };
         result.set_metrics(metrics, cx);
         result
@@ -263,8 +268,14 @@ impl MetricTicker {
         if self.selected == index {
             return;
         }
+        // The panel grows out of the metric that opens it; gliding between
+        // metrics keeps it open, so the reveal only replays after a close.
+        let was_open = self.selected.is_some();
         self.selected = index;
-        if index.is_some() {
+        if let Some(index) = index {
+            self.last_selected = Some(index);
+        }
+        if index.is_some() && !was_open {
             self.panel_reveal.reset(0.);
             self.panel_reveal.duration(1., 0.42, cx);
         }
@@ -279,39 +290,79 @@ impl MetricTicker {
         cx.notify();
     }
 }
-fn delta_text(entry: &Entry) -> (String, bool) {
+fn delta_text(entry: &Entry) -> (&'static str, String, bool) {
     change_text(entry.previous, &entry.metric)
 }
-fn delta_chip(text: String, good: bool, flash: bool, p: Paint) -> Div {
+fn delta_chip(arrow: &'static str, amount: &str, good: bool, age: f32, p: Paint) -> Div {
     let tone = if good { p.success } else { p.danger };
     let wash = if good { 0.14 } else { 0.13 };
+    let flash = age < 1.6;
+    // The arrow slides in from the direction of travel, then rests.
+    let enter = ((0.3 - age.min(0.3)) / 0.3).max(0.);
+    let offset = match arrow {
+        "↑" => enter * 3.,
+        "↓" => -enter * 3.,
+        _ => 0.,
+    };
     div()
-        .flex()
-        .items_center()
-        .gap(px(2.))
-        .pt(px(1.))
-        .pb(px(1.))
-        .pl(px(4.))
-        .pr(px(6.))
-        .rounded(px(8.))
-        .text_size(px(12.))
-        .line_height(px(16.8))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(if flash {
-            tone
-        } else {
-            p.faint.blend(tone.opacity(0.7))
+        .relative()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(2.))
+                .pt(px(1.))
+                .pb(px(1.))
+                .pl(px(4.))
+                .pr(px(6.))
+                .rounded(px(8.))
+                .text_size(px(12.))
+                .line_height(px(16.8))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(if flash {
+                    tone
+                } else {
+                    p.faint.blend(tone.opacity(0.7))
+                })
+                .when(flash, |chip| chip.bg(tone.opacity(wash)))
+                .child(div().mt(px(offset)).child(arrow))
+                .child(amount.to_owned()),
+        )
+        // A thin ring expands out of the chip once and fades with the flash.
+        .when(flash && age < 0.45, |chip| {
+            let t = age / 0.45;
+            chip.child(
+                canvas(
+                    move |_, _, _| {},
+                    move |b, _, w, _| {
+                        let grow = px(1. + t * 5.);
+                        let bounds = Bounds {
+                            origin: point(b.origin.x - grow, b.origin.y - grow),
+                            size: size(b.size.width + grow * 2., b.size.height + grow * 2.),
+                        };
+                        w.paint_quad(quad(
+                            bounds,
+                            px(8. + t * 5.),
+                            Hsla::transparent_black(),
+                            Edges::all(px(1.)),
+                            tone.opacity((1. - t) * 0.9),
+                            BorderStyle::Solid,
+                        ));
+                        w.request_animation_frame();
+                    },
+                )
+                .absolute()
+                .inset_0(),
+            )
         })
-        .when(flash, |chip| chip.bg(tone.opacity(wash)))
-        .child(text)
 }
-fn change_text(previous: Option<f64>, metric: &TickerMetric) -> (String, bool) {
+fn change_text(previous: Option<f64>, metric: &TickerMetric) -> (&'static str, String, bool) {
     let Some(previous) = previous else {
-        return ("—".into(), true);
+        return ("→", "—".into(), true);
     };
     let diff = metric.value - previous;
     if previous == 0. && metric.delta == TickerDelta::Percent {
-        return ("—".into(), true);
+        return ("→", "—".into(), true);
     }
     let good = if metric.good == TickerGood::Up {
         diff >= 0.
@@ -337,7 +388,7 @@ fn change_text(previous: Option<f64>, metric: &TickerMetric) -> (String, bool) {
             },
         ),
     };
-    (format!("{arrow} {value:.1}{suffix}"), good)
+    (arrow, format!("{value:.1}{suffix}"), good)
 }
 fn display_value(metric: &TickerMetric) -> String {
     let number = format!("{:.*}", metric.decimals, metric.value.abs());
@@ -366,7 +417,12 @@ impl Render for MetricTicker {
         let p = Paint::get(cx);
         let focused = self.focus.is_focused(w);
         if focused && !self.was_focused && self.selected.is_none() && !self.entries.is_empty() {
-            self.select(Some(0), cx);
+            // Tab lands on the metric that last held focus, falling back to the first.
+            let restore = self
+                .last_selected
+                .filter(|&i| i < self.entries.len())
+                .or(Some(0));
+            self.select(restore, cx);
         }
         if !focused && self.was_focused && !self.pinned && !self.hover {
             self.select(None, cx);
@@ -375,6 +431,33 @@ impl Render for MetricTicker {
         let measured = self.measured.get();
         let width = f32::from(measured.size.width).max(1.);
         let compact = width < 420.;
+        // Below 420px values drop to the base size; the counters are rebuilt
+        // only when the strip crosses that line, not on every frame.
+        let wanted = if compact { 16. } else { 18. };
+        if (self.counter_size - wanted).abs() > 0.01 {
+            for entry in &mut self.entries {
+                let value = entry.metric.value;
+                let prefix = entry.metric.prefix.clone();
+                let suffix = entry.metric.suffix.clone();
+                let decimals = entry.metric.decimals;
+                entry.counter = cx.new(|_| {
+                    AnimatedCounter::new(value)
+                        .with_prefix(prefix.clone())
+                        .with_suffix(suffix.clone())
+                        .with_decimals(decimals)
+                        .with_size(wanted)
+                });
+                entry.duplicate = cx.new(|_| {
+                    AnimatedCounter::new(value)
+                        .with_prefix(prefix)
+                        .with_suffix(suffix)
+                        .with_decimals(decimals)
+                        .with_size(wanted)
+                        .with_accessibility(false)
+                });
+            }
+            self.counter_size = wanted;
+        }
         let min_width = if compact { 155. } else { 190. };
         let count = self.entries.len().max(1);
         let cell_width = (width / count as f32).max(min_width);
@@ -419,7 +502,12 @@ impl Render for MetricTicker {
             .iter()
             .enumerate()
             .map(|(i, entry)| {
-                let (delta, good) = delta_text(entry);
+                let (arrow, amount, good) = delta_text(entry);
+                let change = if amount == "—" {
+                    amount.clone()
+                } else {
+                    format!("{arrow} {amount}")
+                };
                 let age = if self.visible {
                     entry.flash.time(1.6, w, cx)
                 } else {
@@ -435,7 +523,7 @@ impl Render for MetricTicker {
                         "{} · {} · {}",
                         entry.metric.label,
                         display_value(&entry.metric),
-                        delta
+                        change
                     ))
                     .flex_none()
                     .relative()
@@ -453,7 +541,7 @@ impl Render for MetricTicker {
                             .items_baseline()
                             .gap(px(8.))
                             .child(entry.counter.clone())
-                            .child(delta_chip(delta, good, age < 1.6, p)),
+                            .child(delta_chip(arrow, &amount, good, age, p)),
                     )
                     .child(
                         div()
@@ -490,7 +578,7 @@ impl Render for MetricTicker {
                 .iter()
                 .enumerate()
                 .map(|(i, entry)| {
-                    let (delta, good) = delta_text(entry);
+                    let (arrow, amount, good) = delta_text(entry);
                     div()
                         .id(("ticker-repeat", i))
                         .flex_none()
@@ -509,7 +597,7 @@ impl Render for MetricTicker {
                                 .items_baseline()
                                 .gap(px(8.))
                                 .child(entry.duplicate.clone())
-                                .child(delta_chip(delta, good, false, p)),
+                                .child(delta_chip(arrow, &amount, good, 1.6, p)),
                         )
                         .child(
                             div()
@@ -609,7 +697,54 @@ impl Render for MetricTicker {
                     .track_scroll(&scroll)
                     .children(cells)
                     .children(duplicates),
-            );
+            )
+            // The marquee feathers its ends while the border stays crisp; a
+            // plain canvas paints the fade and stays out of hit testing.
+            .when(repeat, |strip| {
+                let panel = p.panel;
+                strip.child(
+                    canvas(
+                        move |_, _, _| {},
+                        move |b, _, w, _| {
+                            let feather = px(28.);
+                            let left = Bounds {
+                                origin: b.origin,
+                                size: size(feather, b.size.height),
+                            };
+                            let right = Bounds {
+                                origin: point(b.origin.x + b.size.width - feather, b.origin.y),
+                                size: size(feather, b.size.height),
+                            };
+                            w.paint_quad(quad(
+                                left,
+                                0.,
+                                linear_gradient(
+                                    90.,
+                                    linear_color_stop(panel.opacity(0.95), 0.),
+                                    linear_color_stop(panel.opacity(0.), 1.),
+                                ),
+                                Edges::all(px(0.)),
+                                Hsla::transparent_black(),
+                                BorderStyle::Solid,
+                            ));
+                            w.paint_quad(quad(
+                                right,
+                                0.,
+                                linear_gradient(
+                                    270.,
+                                    linear_color_stop(panel.opacity(0.95), 0.),
+                                    linear_color_stop(panel.opacity(0.), 1.),
+                                ),
+                                Edges::all(px(0.)),
+                                Hsla::transparent_black(),
+                                BorderStyle::Solid,
+                            ));
+                        },
+                    )
+                    .absolute()
+                    .inset_0(),
+                )
+            });
         let reveal = if self.visible && w.is_visible() {
             self.panel_reveal.get(w, cx)
         } else {
@@ -624,7 +759,10 @@ impl Render for MetricTicker {
                 let low = if min.is_finite() { min } else { 0. };
                 let high = if max.is_finite() { max } else { 0. };
                 let caption = if entry.metric.caption.is_empty() {
-                    tr(cx, "Recent updates", "近期变化").into()
+                    let count = values.len();
+                    let english = format!("Last {count} updates");
+                    let chinese = format!("近 {count} 次更新");
+                    UiLanguage::current(cx).text(&english, &chinese).into()
                 } else {
                     entry.metric.caption.clone()
                 };
@@ -693,6 +831,9 @@ impl Render for MetricTicker {
                 )
                 .w_full()
                 .h(px(56.));
+                // The panel grows out of the metric row that opened it; GPUI
+                // has no element scale, so the grow is a height reveal.
+                let open = ease(reveal);
                 column()
                     .w(px(248.))
                     .max_w_full()
@@ -704,6 +845,8 @@ impl Render for MetricTicker {
                     .bg(p.tray)
                     .border_1()
                     .border_color(p.line)
+                    .opacity(0.01 + 0.99 * open)
+                    .when(open < 1., |v| v.h(px(58. + 106. * open)).overflow_hidden())
                     .child(
                         row()
                             .justify_between()
@@ -773,18 +916,18 @@ mod tests {
             .with_format("", " ms", 0);
         assert_eq!(
             change_text(Some(100.), &metric),
-            ("↑ 10.0 ms".to_string(), false)
+            ("↑", "10.0 ms".to_string(), false)
         );
         metric.value = 90.;
         assert_eq!(
             change_text(Some(100.), &metric),
-            ("↓ 10.0 ms".to_string(), true)
+            ("↓", "10.0 ms".to_string(), true)
         );
         metric.delta = TickerDelta::Percent;
-        assert_eq!(change_text(Some(0.), &metric).0, "—");
+        assert_eq!(change_text(Some(0.), &metric).1, "—");
         metric.delta = TickerDelta::Absolute;
         metric.suffix = "%".into();
-        assert_eq!(change_text(Some(100.), &metric).0, "↓ 10.0 pts");
+        assert_eq!(change_text(Some(100.), &metric).1, "10.0 pts");
     }
     #[test]
     fn duplicate_matches_grouped_value() {

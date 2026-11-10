@@ -11,6 +11,6 @@
     "event": "PromptCacheAction",
     "rule": {"en": "The host supplies outcomes, token counts, costs, latency and cache lifetime. Requests require matching IDs; failures preserve prior results and stale responses are ignored. Simulated values must be labelled.", "zh": "结果、token 数、费用、耗时和缓存期限由宿主提供；请求需匹配 ID，失败时保留已有结果并忽略过期响应。模拟数值必须明确标注。"},
     "api": {"en": "Next request emits PromptCacheAction; resolve supplies the result or error. An optional changed segment can be armed before sending.", "zh": "下一次请求发出 PromptCacheAction，宿主用 resolve 返回结果或错误；发送前可选择性标记变更的前缀段。"},
-    "motion": {"en": "Confirmed result bars transition into view. The reference's automatic playback, cache-flight and countdown animation are not yet implemented; visual and accessibility validation remain pending.", "zh": "确认后的结果条平滑显示；参考站的自动播放、缓存飞行和倒计时动画尚未实现，视觉和无障碍验收仍待完成。"}
+    "motion": {"en": "Confirmed result bars transition into view. The sample offers play, step, reset and an expiry countdown. Cache-flight and continuous visual comparison are pending.", "zh": "确认的结果条带渐显。样例可播放、单步、重置并显示缓存倒计时；缓存飞行动画与连续画面对照待验。"}
   }
 ]

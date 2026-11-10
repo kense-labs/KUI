@@ -37,6 +37,10 @@ impl Example {
                 cx,
             )
         });
+        view.update(cx, |tree, cx| {
+            tree.step(cx);
+            tree.set_playing(true, cx);
+        });
         Self { view, language }
     }
 }

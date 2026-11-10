@@ -231,7 +231,7 @@ impl Slide {
         self.to = v;
         self.start = Some(now);
     }
-    fn sample(&self, now: Instant) -> (f32, f32, bool) {
+    pub(crate) fn sample(&self, now: Instant) -> (f32, f32, bool) {
         let Some(start) = self.start else {
             return (self.to, 0., false);
         };

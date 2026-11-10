@@ -10,7 +10,7 @@
     "signature": "(u64, impl Into<String>, &Window, &mut Context<Self>) -> bool",
     "event": "ToneTunerEvent",
     "rule": { "en": "The host runs rewrites and handles cancellation. The sample is simulated; Copy uses the real clipboard.", "zh": "宿主负责改写与取消。示例为模拟数据；复制使用真实剪贴板。" },
-    "api": { "en": "A settings change waits 220 ms, then emits Rewrite with a ticket. Stop or a new edit emits Cancel; finish and fail reject stale results or a changed draft. User edits become the source for future rewrites.", "zh": "设置变化后等待 220ms，随后发出带 ticket 的 Rewrite。停止或继续编辑会发出 Cancel；finish 与 fail 忽略过期结果及已改变的草稿。用户编辑会成为后续改写的来源。" },
+    "api": { "en": "A settings change waits 220 ms, then emits Rewrite with a ticket. Stop or a new edit emits Cancel; finish and fail reject stale results or a changed draft. User edits become the source for future rewrites. Use with_recipient(name, subject) to add the optional recipient header.", "zh": "设置变化后等待 220ms，随后发出带 ticket 的 Rewrite。停止或继续编辑会发出 Cancel；finish 与 fail 忽略过期结果及已改变的草稿。用户编辑会成为后续改写的来源。 使用 with_recipient(name, subject) 设置可选的收件人栏。" },
     "motion": { "en": "Sliders use shared KUI motion and changed words can be highlighted. Sentence crossfades and full reference comparison remain unimplemented or unverified.", "zh": "滑块采用 KUI 共用动效，并可突出显示变化的词句。逐句淡入淡出及完整参考对照尚未实现或验收。" }
   }
 ]

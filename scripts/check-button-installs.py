@@ -17,18 +17,21 @@ def run(*args, cwd):
 
 
 def verify(work):
+    run("python3", str(ROOT / "scripts/check-site-inputs.py"), cwd=ROOT)
     run("cargo", "build", "-p", "kui-cli", cwd=ROOT)
     catalog = json.loads((ROOT / "website/public/r/catalog.json").read_text())
-    items = [item["name"] for item in catalog if item["kind"] == "component" and item["name"] != "button"]
-    lib = ROOT / "website/site/docs"
-    documents = ["button"]
-    for name in ("family", "collection", "text-field", "workspace", "library"):
-        documents.extend(x["id"] for x in json.loads((lib / f"{name}-docs.json").read_text()))
-    for name in ("inputs-extra", "charts-extra", "media-extra", "loader-extra", "provider-extra", "ghost-extra", "feedback-extra", "agent-loop-extra", "reasoning-tree-extra", "image-generation-extra", "speculative-extra", "image-reveal-extra", "prompt-cache-extra", "meeting-summary-extra", "ai-workflow-extra", "training-run-extra", "mixture-of-experts-extra", "agent-handoff-extra", "llm-cost-calculator-extra", "agent-cursor-extra", "link-unfurl-extra", "tone-tuner-extra"):
-        documents.extend(x["id"] for x in json.loads((lib / f"{name}.json").read_text()))
-    assert ["button", *items] == documents
-    assert len(documents) == len(set(documents))
-    manifests = ["button", *items, "all-components"]
+    items = [item["name"] for item in catalog if item["kind"] == "component"]
+    site = ROOT / "website/site"
+    files = re.findall(r'include_str!\("\.\./docs/([^"/]+\.json)"\)', (site / "src/docs.rs").read_text())
+    documents = []
+    for filename in files:
+        data = json.loads((site / "docs" / filename).read_text())
+        if isinstance(data, list):
+            documents.extend(row["id"] for row in data)
+        elif "id" in data:
+            documents.append(data["id"])
+    assert items == documents, "Rebuild the generated registry to match the site documents."
+    manifests = [*items, "all-components"]
     (work / "Cargo.toml").write_text('[workspace]\nresolver = "2"\nmembers = ' + json.dumps(manifests))
     shutil.copyfile(ROOT / "Cargo.lock", work / "Cargo.lock")
     for index, name in enumerate(manifests):
@@ -38,7 +41,7 @@ def verify(work):
         run(BINARY, "init", "--path", app, "--registry", ROOT / "registry", cwd=work)
         if name == "all-components":
             (app / "ui/foundation/mod.rs").write_text("pub mod init;\npub mod motion;\npub mod theme;\npub mod tokens;\n")
-        ids = ["button", *items] if name == "all-components" else [name]
+        ids = items if name == "all-components" else [name]
         # Exercise both registry entry points: packaged JSON and local source.
         run(BINARY, "add", *ids, "--path", app, cwd=ROOT if index % 2 == 0 else work)
         run(BINARY, "sync-mod", "--path", app, cwd=work)
@@ -49,7 +52,7 @@ def verify(work):
                 continue
             doc = (ROOT / f"docs/items/{item}.md").read_text()
             snippet = re.search(r'```rust\n(.*?)\n```', doc, re.S).group(1).replace("kui::", "crate::ui::")
-            code.append(f'pub fn mount_{item.replace("-", "_")}(#[allow(unused_variables)] window: &mut gpui::Window, cx: &mut gpui::App) {{\n{snippet}\nlet _ = control;\n}}')
+            code.append(f'#[allow(unused_variables)]\npub fn mount_{item.replace("-", "_")}(window: &mut gpui::Window, cx: &mut gpui::App) {{\n{snippet}\n}}')
         (app / "lib.rs").write_text('\n'.join(code))
     for target in ([], ["--target", "wasm32-unknown-unknown"]):
         run("cargo", "check", "--workspace", *target, cwd=work)

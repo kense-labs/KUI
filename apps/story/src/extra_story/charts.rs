@@ -30,6 +30,7 @@ use kui::{
     primitives::{
         control::UiLanguage,
         family::{Paint, Tone, face},
+        presentation::{column, row},
     },
 };
 use std::{cell::Cell, rc::Rc};
@@ -159,8 +160,10 @@ impl Demo {
                 Content::Gauge(meters)
             }
             "waffle-chart" => {
-                let chart = cx
-                    .new(|_| WaffleChart::new(t("Visitors", "访问来源"), waffle_data(0, language)));
+                let chart = cx.new(|_| {
+                    WaffleChart::new(waffle_label(0), waffle_data(0, language))
+                        .with_unit(t("TWh", "太瓦时"))
+                });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
                     .is_none_or(|bridge| (bridge.visible)());
@@ -255,13 +258,13 @@ impl Demo {
                 .detach();
                 Content::Sunburst(chart)
             }
-            "activity-rings" => Content::ActivityRings(cx.new(|_| {
+            "activity-rings" => Content::ActivityRings(cx.new(|cx| {
                 ActivityRings::new(
-                    t("Daily activity", "每日活动"),
+                    t("Activity rings", "活动圆环"),
                     activity_goals(language),
                     activity_days(language),
+                    cx,
                 )
-                .with_day(5)
             })),
             "vector-search" => {
                 let chart = cx.new(|_| VectorSearch::new(vector_search_data(language)));
@@ -308,6 +311,13 @@ impl Demo {
                         destinations,
                         DataFlowSnapshot::new(12_480, DataFlowStatus::Running),
                     )
+                    .with_node_icon("app", kui::primitives::glyph::Glyph::Monitor)
+                    .with_node_icon("db", kui::primitives::glyph::Glyph::Archive)
+                    .with_node_icon("events", kui::primitives::glyph::Glyph::Send)
+                    .with_node_icon("core", kui::primitives::glyph::Glyph::Settings)
+                    .with_node_icon("store", kui::primitives::glyph::Glyph::Folder)
+                    .with_node_icon("dash", kui::primitives::glyph::Glyph::FolderKanban)
+                    .with_node_icon("alerts", kui::primitives::glyph::Glyph::Bell)
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -486,7 +496,8 @@ impl Demo {
                 let (nodes, links) = sankey_data(1, language);
                 let chart = cx.new(|_| {
                     SankeyFlow::new(t("Signup journey", "注册旅程"), nodes, links)
-                        .with_description(t("Signups by stage", "各阶段的注册人数"))
+                        .with_unit(t(" people", "人"))
+                        .with_total_label(t("signups", "注册"))
                         .with_columns(vec![
                             t("Source", "来源").into(),
                             t("Activation", "激活").into(),
@@ -494,6 +505,10 @@ impl Demo {
                             t("90 days", "90 天").into(),
                         ])
                         .with_periods(vec!["Q2".into(), "Q3".into()], 1)
+                        .with_period_details(vec![
+                            t("Apr to Jun 2026", "2026 年 4 至 6 月").into(),
+                            t("Jul to Sep 2026", "2026 年 7 至 9 月").into(),
+                        ])
                 });
                 cx.subscribe(&chart, move |s, chart, period: &FlowPeriodChange, cx| {
                     let (nodes, links) = sankey_data(period.index, language);
@@ -637,10 +652,11 @@ impl Demo {
             "streamgraph" => {
                 let chart = cx.new(|_| {
                     Streamgraph::new(
-                        t("Weekly activity", "每周活动"),
+                        t("Support tickets by topic", "各主题工单量"),
                         stream_layers(language),
                         stream_data(0, language),
                     )
+                    .with_unit(t("tickets", "单"))
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -668,41 +684,64 @@ impl Demo {
                 .detach();
                 Content::Stream(chart)
             }
-            "funnel-chart" => Content::Funnel(cx.new(|_| {
-                FunnelChart::new(
-                    t("Checkout funnel", "结账转化"),
-                    funnel_data(0, language),
-                    vec![
-                        FunnelSegment::new("mobile", t("Mobile", "移动端")),
-                        FunnelSegment::new("desktop", t("Desktop", "桌面端")),
-                    ],
-                )
-            })),
+            "funnel-chart" => {
+                let chart = cx.new(|cx| {
+                    FunnelChart::new(
+                        t("Checkout funnel", "结账转化"),
+                        funnel_data(0, language),
+                        vec![
+                            FunnelSegment::new("mobile", t("Mobile", "移动端")),
+                            FunnelSegment::new("desktop", t("Desktop", "桌面端")),
+                        ],
+                        cx,
+                    )
+                    .with_period(t("Last 30 days", "近 30 天"))
+                    .with_unit(t("sessions", "次会话"))
+                });
+                let visible = cx
+                    .try_global::<crate::StoryBridge>()
+                    .is_none_or(|bridge| (bridge.visible)());
+                chart.update(cx, |chart, cx| chart.set_visible(visible, cx));
+                let weak = chart.downgrade();
+                cx.spawn(async move |_, cx| {
+                    loop {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(250))
+                            .await;
+                        if weak
+                            .update(cx, |chart, cx| {
+                                let visible = cx
+                                    .try_global::<crate::StoryBridge>()
+                                    .is_none_or(|bridge| (bridge.visible)());
+                                chart.set_visible(visible, cx);
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                })
+                .detach();
+                Content::Funnel(chart)
+            }
             "split-bar" => Content::Split(cx.new(|_| {
                 SplitBar::new(t("Traffic by source", "流量来源"), split_data(0, language))
                     .with_description(t("Sessions on northwind.shop", "northwind.shop 的访问会话"))
                     .with_unit(t("sessions", "次会话"))
             })),
             "race-bar-chart" => {
-                let labels = [
-                    t("January", "一月"),
-                    t("February", "二月"),
-                    t("March", "三月"),
-                ];
-                let frames = labels
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, label)| {
-                        let values = race_data(index, language)
-                            .into_iter()
-                            .map(|entry| (entry.id, entry.value))
-                            .collect();
-                        RaceFrame::new(label, values)
-                    })
-                    .collect();
                 let chart = cx.new(|_| {
-                    RaceBarChart::new(t("Team ranking", "团队排名"), race_data(0, language))
-                        .with_frames(frames)
+                    RaceBarChart::new(t("Revenue by product", "产品收入"), race_items(language))
+                        .with_meta(t("Year to date, 2025", "2025 年至今"))
+                        .with_groups(vec![
+                            ("furniture".into(), t("Furniture", "家具").into()),
+                            ("lighting".into(), t("Lighting", "灯具").into()),
+                            ("textiles".into(), t("Textiles", "纺织品").into()),
+                            ("tableware".into(), t("Tableware", "餐具").into()),
+                        ])
+                        .with_value_prefix("$")
+                        .with_highlight("chair")
+                        .with_frames(race_frames(language))
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -733,10 +772,14 @@ impl Demo {
             "radar-chart" => {
                 let chart = cx.new(|_| {
                     RadarChart::new(
-                        t("City comparison", "城市比较"),
+                        t("Lisbon compared with", "里斯本对比"),
                         radar_axes(language),
                         radar_data(0, language),
                     )
+                    .with_meta(t(
+                        "Second office shortlist, scored out of 100",
+                        "第二办公室候选名单,满分 100 分",
+                    ))
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -766,7 +809,15 @@ impl Demo {
             }
             "slope-chart" => {
                 let chart = cx.new(|_| {
-                    SlopeChart::new(t("Team progress", "团队进度"), slope_data(0, language))
+                    SlopeChart::new(
+                        t("Conversion by channel", "各渠道转化率"),
+                        slope_data(0, language),
+                    )
+                    .with_meta(t("Q1 to Q2, 2025", "2025 年第一至第二季度"))
+                    .with_start_label(t("Q1", "一季度"))
+                    .with_end_label(t("Q2", "二季度"))
+                    .with_value_suffix("%")
+                    .with_highlight("email")
                 });
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
@@ -816,28 +867,51 @@ impl Demo {
                 Content::Counter(counters)
             }
         };
-        let periods = matches!(content, Content::Split(_)).then(|| {
-            cx.new(|cx| {
-                SegmentedControl::new(
-                    "",
-                    vec![
-                        FormOption::new("0", t("7 days", "7 天")),
-                        FormOption::new("1", t("30 days", "30 天")),
-                        FormOption::new("2", t("90 days", "90 天")),
-                    ],
-                    w,
-                    cx,
-                )
-                .with_selected(&["0"])
-            })
+        let period_options = match &content {
+            Content::Split(_) => vec![
+                FormOption::new("0", t("7 days", "7 天")),
+                FormOption::new("1", t("30 days", "30 天")),
+                FormOption::new("2", t("90 days", "90 天")),
+            ],
+            // The reference demo compares countries in one grid.
+            Content::Waffle(_) => vec![
+                FormOption::new("0", t("Germany", "德国")),
+                FormOption::new("1", t("France", "法国")),
+                FormOption::new("2", t("United Kingdom", "英国")),
+                FormOption::new("3", t("United States", "美国")),
+            ],
+            // The reference demo compares Lisbon with one rival at a time.
+            Content::Radar(_) => vec![
+                FormOption::new("0", t("Berlin", "柏林")),
+                FormOption::new("1", t("Toronto", "多伦多")),
+                FormOption::new("2", t("Austin", "奥斯汀")),
+            ],
+            _ => vec![],
+        };
+        let step_limit = match &content {
+            Content::Waffle(_) => 4,
+            _ => 3,
+        };
+        let periods = (!period_options.is_empty()).then(|| {
+            let label = if matches!(content, Content::Radar(_)) {
+                t("Compare with", "对比城市")
+            } else {
+                ""
+            };
+            cx.new(|cx| SegmentedControl::new(label, period_options, w, cx).with_selected(&["0"]))
         });
+        if let (Content::Radar(chart), Some(periods)) = (&content, &periods) {
+            chart.update(cx, |chart, cx| {
+                chart.set_header_extra(Some(periods.clone().into()), cx)
+            });
+        }
         let subscription = periods.as_ref().map(|periods| {
-            cx.subscribe(periods, |s, _, event: &SelectionChanged, cx| {
+            cx.subscribe(periods, move |s, _, event: &SelectionChanged, cx| {
                 if let Some(step) = event
                     .0
                     .first()
                     .and_then(|key| key.parse::<usize>().ok())
-                    .filter(|step| *step < 3)
+                    .filter(|step| *step < step_limit)
                 {
                     s.choose_step(step, cx);
                 }
@@ -875,7 +949,10 @@ impl Demo {
             }
             Content::Waffle(chart) => {
                 let values = waffle_data(self.step, self.language);
-                chart.update(cx, |chart, cx| chart.set_categories(values, cx));
+                chart.update(cx, |chart, cx| {
+                    chart.set_categories(values, cx);
+                    chart.set_label(waffle_label(self.step), cx);
+                });
             }
             Content::Brush(chart) => {
                 let values = brush_data(self.step, self.language);
@@ -929,7 +1006,7 @@ impl Demo {
     }
 }
 impl Render for Demo {
-    fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
         let visible = cx
             .try_global::<crate::StoryBridge>()
@@ -951,7 +1028,7 @@ impl Render for Demo {
         if let Content::Split(chart) = &self.content {
             return div()
                 .w_full()
-                .max_w(px(568.))
+                .max_w(px(720.))
                 .min_h(px(380.))
                 .p(px(24.))
                 .flex()
@@ -961,6 +1038,59 @@ impl Render for Demo {
                 .when_some(self.periods.clone(), |view, periods| view.child(periods))
                 .child(chart.clone());
         }
+        if let Content::Waffle(chart) = &self.content {
+            chart.update(cx, |chart, cx| chart.set_visible(visible, cx));
+            let (country, total) = waffle_country(self.step);
+            return div()
+                .w_full()
+                .max_w(px(640.))
+                .bg(p.panel)
+                .border_1()
+                .border_color(p.line)
+                .rounded(kui::foundation::surface_radius(cx))
+                .p(px(24.))
+                .flex()
+                .flex_col()
+                .gap(px(24.))
+                .child(
+                    row()
+                        .flex_wrap()
+                        .items_start()
+                        .justify_between()
+                        .gap(px(12.))
+                        .child(
+                            column()
+                                .gap(px(2.))
+                                .child(
+                                    div()
+                                        .text_size(px(16.))
+                                        .line_height(px(22.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(
+                                            self.language.text(
+                                                "Electricity generation, 2023",
+                                                "2023 年发电量",
+                                            ),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(14.))
+                                        .line_height(px(20.))
+                                        .text_color(p.faint)
+                                        .child(format!(
+                                            "{}, {} {}",
+                                            country,
+                                            total,
+                                            self.language.text("TWh", "太瓦时")
+                                        )),
+                                ),
+                        )
+                        .when_some(self.periods.clone(), |view, periods| view.child(periods)),
+                )
+                .child(chart.clone());
+        }
         let label = self.language.text("Change values", "切换数值");
         let values = div()
             .flex()
@@ -968,6 +1098,7 @@ impl Render for Demo {
             .justify_center()
             .items_center()
             .gap(px(28.))
+            .w_full()
             .max_w_full()
             .children(match &self.content {
                 Content::Gauge(v) => v.iter().cloned().map(Into::into).collect::<Vec<AnyView>>(),
@@ -1018,20 +1149,12 @@ impl Render for Demo {
                     .on_click(cx.listener(move |s, _, _, cx| s.choose_step(i, cx)))
                 }))
                 .into_any_element()
-        } else if matches!(self.content, Content::Radar(_) | Content::Ridge(_)) {
-            let options = if matches!(self.content, Content::Radar(_)) {
-                [
-                    self.language.text("Berlin", "柏林"),
-                    self.language.text("Toronto", "多伦多"),
-                    self.language.text("Austin", "奥斯汀"),
-                ]
-            } else {
-                [
-                    self.language.text("Zurich", "苏黎世"),
-                    self.language.text("Lisbon", "里斯本"),
-                    self.language.text("Denver", "丹佛"),
-                ]
-            };
+        } else if matches!(self.content, Content::Ridge(_)) {
+            let options = [
+                self.language.text("Zurich", "苏黎世"),
+                self.language.text("Lisbon", "里斯本"),
+                self.language.text("Denver", "丹佛"),
+            ];
             div()
                 .flex()
                 .gap_2()
@@ -1154,6 +1277,13 @@ impl Render for Demo {
             .justify_center()
             .gap(px(34.))
             .p(px(20.))
+            .when(
+                matches!(self.content, Content::Sankey(_)) && w.viewport_size().width < px(420.),
+                |view| {
+                    let width = f32::from(w.viewport_size().width);
+                    view.px(px(((width - 344.) * 0.5).clamp(8., 23.)))
+                },
+            )
             .bg(p.stage)
             .text_color(p.ink)
             .when_some(ticker_header, |view, header| view.child(header))
@@ -1173,6 +1303,7 @@ impl Render for Demo {
                         | Content::Failover(_)
                         | Content::DataFlow(_, _)
                         | Content::VectorSearch(_)
+                        | Content::Radar(_)
                 ),
                 |view| view.child(controls),
             )
@@ -1330,38 +1461,38 @@ fn activity_goals(language: UiLanguage) -> Vec<ActivityGoal> {
     let t = |en, zh| language.text(en, zh);
     vec![
         ActivityGoal::new(
-            "move",
-            t("Move", "活动"),
-            500.,
-            "kcal",
-            rgb(0xe96080).into(),
-        ),
-        ActivityGoal::new(
-            "exercise",
-            t("Exercise", "锻炼"),
-            30.,
+            "deep",
+            t("Deep work", "深度工作"),
+            180.,
             t("min", "分钟"),
-            rgb(0x87c956).into(),
+            rgb(0x6572e4).into(),
         ),
         ActivityGoal::new(
-            "stand",
-            t("Stand", "站立"),
-            12.,
-            t("hr", "小时"),
-            rgb(0x62b7d1).into(),
+            "writing",
+            t("Writing", "写作"),
+            1200.,
+            t("words", "字"),
+            rgb(0xeb992e).into(),
+        ),
+        ActivityGoal::new(
+            "reading",
+            t("Reading", "阅读"),
+            40.,
+            t("pages", "页"),
+            rgb(0x5da37f).into(),
         ),
     ]
 }
 fn activity_days(language: UiLanguage) -> Vec<ActivityDay> {
     let t = |en, zh| language.text(en, zh);
     [
-        ("mon", t("Mon", "周一"), [380., 22., 10.]),
-        ("tue", t("Tue", "周二"), [520., 31., 12.]),
-        ("wed", t("Wed", "周三"), [410., 28., 9.]),
-        ("thu", t("Thu", "周四"), [610., 42., 14.]),
-        ("fri", t("Fri", "周五"), [465., 33., 11.]),
-        ("sat", t("Sat", "周六"), [645., 38., 12.]),
-        ("sun", t("Sun", "周日"), [320., 18., 8.]),
+        ("mon", t("Mon", "周一"), [180., 1200., 32.]),
+        ("tue", t("Tue", "周二"), [120., 860., 40.]),
+        ("wed", t("Wed", "周三"), [180., 1200., 18.]),
+        ("thu", t("Thu", "周四"), [165., 1190., 40.]),
+        ("fri", t("Fri", "周五"), [95., 540., 26.]),
+        ("sat", t("Sat", "周六"), [60., 300., 40.]),
+        ("sun", t("Sun", "周日"), [130., 940., 22.]),
     ]
     .into_iter()
     .map(|(id, label, values)| {
@@ -1369,9 +1500,9 @@ fn activity_days(language: UiLanguage) -> Vec<ActivityDay> {
             id,
             label,
             vec![
-                ("move".into(), values[0]),
-                ("exercise".into(), values[1]),
-                ("stand".into(), values[2]),
+                ("deep".into(), values[0]),
+                ("writing".into(), values[1]),
+                ("reading".into(), values[2]),
             ],
         )
     })
@@ -1408,40 +1539,68 @@ fn ticker_data(step: usize, language: UiLanguage) -> Vec<TickerMetric> {
 
 fn sankey_data(step: usize, language: UiLanguage) -> (Vec<FlowNode>, Vec<FlowLink>) {
     let t = |en, zh| language.text(en, zh);
+    // Mirrors the reference demo: sources wear the series palette, later
+    // columns render neutral, values close end to end (11,200 / 9,600).
     let nodes = [
-        ("organic", t("Organic", "自然流量"), 0, 0x6a9fe5),
-        ("paid", t("Paid", "付费"), 0, 0x9a82d3),
-        ("direct", t("Direct", "直接访问"), 0, 0xd6a26f),
+        ("organic", t("Organic", "自然流量"), 0, 0x55adff),
+        ("paid", t("Paid", "付费"), 0, 0x9c37be),
+        ("referral", t("Referral", "引荐"), 0, 0xe76e00),
         ("active", t("Activated", "已激活"), 1, 0xa8acb4),
-        ("inactive", t("Inactive", "未激活"), 1, 0x858b95),
+        ("inactive", t("Not activated", "未激活"), 1, 0x858b95),
         ("free", t("Free", "免费"), 2, 0xa8acb4),
-        ("pro", t("Paid plan", "付费方案"), 2, 0xa8acb4),
+        ("pro", t("Pro", "专业版"), 2, 0xa8acb4),
+        ("team", t("Team", "团队版"), 2, 0xa8acb4),
         ("retained", t("Retained", "留存"), 3, 0xa8acb4),
         ("churned", t("Churned", "流失"), 3, 0x858b95),
     ]
     .into_iter()
     .map(|(id, label, col, color)| FlowNode::new(id, label, rgb(color).into()).with_column(col))
     .collect();
-    let factor = if step == 0 { 0.85 } else { 1. };
-    let links = [
-        ("organic", "active", 1500.),
-        ("organic", "inactive", 900.),
-        ("paid", "active", 1200.),
-        ("paid", "inactive", 800.),
-        ("direct", "active", 900.),
-        ("direct", "inactive", 700.),
-        ("active", "free", 2200.),
-        ("active", "pro", 1400.),
-        ("inactive", "churned", 2400.),
-        ("free", "retained", 1200.),
-        ("free", "churned", 1000.),
-        ("pro", "retained", 1000.),
-        ("pro", "churned", 400.),
-    ]
-    .into_iter()
-    .map(|(source, target, value)| FlowLink::new(source, target, value * factor))
-    .collect();
-    (nodes, links)
+    let q3 = step != 0;
+    let links: [(&str, &str, f32); 15] = if q3 {
+        [
+            ("organic", "active", 3380.),
+            ("organic", "inactive", 1820.),
+            ("paid", "active", 1990.),
+            ("paid", "inactive", 1910.),
+            ("referral", "active", 1640.),
+            ("referral", "inactive", 460.),
+            ("active", "free", 3860.),
+            ("active", "pro", 2310.),
+            ("active", "team", 840.),
+            ("free", "retained", 2120.),
+            ("free", "churned", 1740.),
+            ("pro", "retained", 1960.),
+            ("pro", "churned", 350.),
+            ("team", "retained", 790.),
+            ("team", "churned", 50.),
+        ]
+    } else {
+        [
+            ("organic", "active", 2860.),
+            ("organic", "inactive", 1740.),
+            ("paid", "active", 1420.),
+            ("paid", "inactive", 2080.),
+            ("referral", "active", 1120.),
+            ("referral", "inactive", 380.),
+            ("active", "free", 3310.),
+            ("active", "pro", 1560.),
+            ("active", "team", 530.),
+            ("free", "retained", 1690.),
+            ("free", "churned", 1620.),
+            ("pro", "retained", 1240.),
+            ("pro", "churned", 320.),
+            ("team", "retained", 480.),
+            ("team", "churned", 50.),
+        ]
+    };
+    (
+        nodes,
+        links
+            .into_iter()
+            .map(|(source, target, value)| FlowLink::new(source, target, value))
+            .collect(),
+    )
 }
 
 fn sunburst_data(step: usize, language: UiLanguage) -> SunburstNode {
@@ -1494,42 +1653,71 @@ fn sunburst_data(step: usize, language: UiLanguage) -> SunburstNode {
         .with_children(groups)
 }
 
+/// The reference demo: electricity generation by source for four countries.
+/// Values are back-solved from the official shares (each country's blocks
+/// tile 43/4/1/15/26/11, 14/12/65/6/1/2, 34/2/14/35/1/14 and
+/// 14/6/19/43/16/2) and sum to the published totals.
+fn waffle_country(step: usize) -> (SharedString, SharedString) {
+    let (country, total): (&str, i64) = match step {
+        1 => ("France", 494),
+        2 => ("United Kingdom", 285),
+        3 => ("United States", 4178),
+        _ => ("Germany", 507),
+    };
+    let text = {
+        let digits = total.abs().to_string();
+        let mut grouped = String::new();
+        for (i, ch) in digits.chars().enumerate() {
+            if i > 0 && (digits.len() - i).is_multiple_of(3) {
+                grouped.push(',');
+            }
+            grouped.push(ch);
+        }
+        grouped
+    };
+    (country.into(), text.into())
+}
+fn waffle_label(step: usize) -> SharedString {
+    let (country, _) = waffle_country(step);
+    format!("Electricity generation by source, {country}, 2023").into()
+}
 fn waffle_data(step: usize, language: UiLanguage) -> Vec<WaffleCategory> {
     let values = [
-        [42., 28., 19., 11.],
-        [28., 34., 15., 23.],
-        [51., 16., 25., 8.],
-    ][step];
+        [218., 20., 5., 76., 132., 56.],
+        [69., 59., 321., 30., 5., 10.],
+        [97., 6., 40., 100., 3., 39.],
+        [585., 251., 794., 1796., 668., 84.],
+    ][step.min(3)];
     [
-        ("search", "Search", "搜索", 0x578ce2),
-        ("direct", "Direct", "直接访问", 0x47ab8b),
-        ("social", "Social", "社交", 0xe3aa54),
-        ("other", "Other", "其他", 0x9983d3),
+        ("wind-solar", "Wind and solar", "风能与太阳能"),
+        ("hydro", "Hydro", "水电"),
+        ("nuclear", "Nuclear", "核电"),
+        ("gas", "Gas", "燃气"),
+        ("coal", "Coal", "煤电"),
+        ("other", "Other", "其他"),
     ]
     .into_iter()
     .zip(values)
-    .map(|((id, en, zh, color), value)| {
-        WaffleCategory::new(id, language.text(en, zh), value, rgb(color).into())
-    })
+    .map(|((id, en, zh), value)| WaffleCategory::new(id, language.text(en, zh), value))
     .collect()
 }
 
 fn slope_data(step: usize, language: UiLanguage) -> Vec<SlopeSeries> {
     let values = [
-        [(40., 70.), (55., 45.), (25., 60.), (70., 82.)],
-        [(50., 85.), (44., 70.), (28., 35.), (80., 66.)],
-        [(30., 51.), (68., 52.), (47., 65.), (85., 90.)],
+        [(3.1, 4.6), (3.4, 3.6), (1.9, 1.3), (2.2, 3.9)],
+        [(3.6, 5.2), (3.1, 2.8), (1.6, 2.4), (2.0, 3.1)],
+        [(2.8, 3.3), (3.8, 4.1), (2.4, 1.8), (2.6, 2.2)],
     ][step];
     [
-        ("design", "Design", "设计", 0x578ce2),
-        ("product", "Product", "产品", 0x47ab8b),
-        ("support", "Support", "支持", 0xe3aa54),
-        ("platform", "Platform", "平台", 0x9983d3),
+        ("email", "Email", "邮件"),
+        ("search", "Organic search", "自然搜索"),
+        ("social", "Paid social", "付费社交"),
+        ("referral", "Referral", "引荐流量"),
     ]
     .into_iter()
     .zip(values)
-    .map(|((id, en, zh, color), (before, after))| {
-        SlopeSeries::new(id, language.text(en, zh), before, after, rgb(color).into())
+    .map(|((id, en, zh), (before, after))| {
+        SlopeSeries::new(id, language.text(en, zh), before, after)
     })
     .collect()
 }
@@ -1537,12 +1725,12 @@ fn slope_data(step: usize, language: UiLanguage) -> Vec<SlopeSeries> {
 fn radar_axes(language: UiLanguage) -> Vec<RadarAxis> {
     let t = |en, zh| language.text(en, zh);
     [
-        ("talent", t("Talent", "人才")),
+        ("talent", t("Talent pool", "人才库")),
         ("cost", t("Affordability", "成本")),
         ("transit", t("Transit", "交通")),
-        ("time", t("Time zone", "时区")),
+        ("time", t("Time zone fit", "时区契合")),
         ("life", t("Quality of life", "生活质量")),
-        ("tax", t("Tax climate", "税务")),
+        ("tax", t("Tax climate", "税务环境")),
     ]
     .into_iter()
     .map(|(id, label)| RadarAxis::new(id, label))
@@ -1551,8 +1739,8 @@ fn radar_axes(language: UiLanguage) -> Vec<RadarAxis> {
 fn radar_data(step: usize, language: UiLanguage) -> Vec<RadarProfile> {
     let rivals = [
         [86., 58., 92., 80., 78., 46.],
-        [80., 50., 75., 66., 82., 60.],
-        [78., 68., 52., 62., 80., 74.],
+        [81., 42., 64., 72., 82., 55.],
+        [74., 54., 26., 60., 71., 84.],
     ];
     let labels = [
         language.text("Berlin", "柏林"),
@@ -1564,30 +1752,32 @@ fn radar_data(step: usize, language: UiLanguage) -> Vec<RadarProfile> {
             "baseline",
             language.text("Lisbon", "里斯本"),
             vec![64., 78., 71., 88., 86., 66.],
-            rgb(0x9d83e8).into(),
+            rgb(0x55adff).into(),
         ),
         RadarProfile::new(
             "rival",
             labels[step],
             rivals[step].to_vec(),
-            rgb(0x62b5d0).into(),
+            rgb(0x9c37be).into(),
         ),
     ]
 }
 
 fn split_data(step: usize, language: UiLanguage) -> Vec<SplitSegment> {
+    // Reference demo figures: 7/30/90-day windows on northwind.shop. The
+    // last two shares wear the neutral muted and border-strong colours.
     let values = [
-        [41300., 24600., 19000., 9800., 3100., 1500.],
-        [158000., 121000., 76000., 54000., 19000., 7000.],
-        [464000., 357000., 285000., 163000., 68000., 31000.],
+        [41_300., 24_600., 19_000., 9_800., 3_100., 1_500.],
+        [168_400., 88_900., 97_300., 51_200., 9_700., 5_600.],
+        [462_900., 301_400., 234_800., 93_700., 38_200., 13_130.],
     ];
     [
-        ("organic", "Organic search", "自然搜索", 0x59aaf4),
-        ("direct", "Direct", "直接访问", 0xbe69db),
-        ("paid", "Paid search", "付费搜索", 0xe79d28),
-        ("social", "Social", "社交", 0x44b287),
-        ("referral", "Referral", "引荐", 0x9a9a9a),
-        ("other", "Other", "其他", 0x646464),
+        ("organic", "Organic search", "自然搜索", 0x55adff),
+        ("direct", "Direct", "直接访问", 0x9c37be),
+        ("paid", "Paid search", "付费搜索", 0xe66e00),
+        ("social", "Social", "社交", 0x00a861),
+        ("referral", "Referral", "引荐", 0x8c8c8c),
+        ("other", "Other", "其他", 0x484848),
     ]
     .into_iter()
     .enumerate()
@@ -1601,29 +1791,141 @@ fn split_data(step: usize, language: UiLanguage) -> Vec<SplitSegment> {
     })
     .collect()
 }
-fn race_data(step: usize, language: UiLanguage) -> Vec<RaceEntry> {
-    let values = [
-        [84., 67., 52., 38.],
-        [68., 88., 73., 42.],
-        [91., 75., 95., 70.],
+/// Demo race data: ten products, twelve months, cumulative year to date.
+const RACE_TABLE: [(&str, &str, &str, &str, [f32; 12]); 10] = [
+    (
+        "chair",
+        "Oak lounge chair",
+        "橡木休闲椅",
+        "furniture",
+        [
+            14_000., 30_000., 52_000., 86_000., 138_000., 208_000., 296_000., 400_000., 520_000.,
+            658_000., 814_000., 992_000.,
+        ],
+    ),
+    (
+        "throw",
+        "Linen throw",
+        "亚麻毯",
+        "textiles",
+        [
+            92_000., 170_000., 222_000., 256_000., 280_000., 296_000., 310_000., 326_000.,
+            352_000., 400_000., 480_000., 598_000.,
+        ],
+    ),
+    (
+        "lamp",
+        "Mushroom lamp",
+        "蘑菇台灯",
+        "lighting",
+        [
+            66_000., 128_000., 186_000., 240_000., 291_000., 339_000., 385_000., 435_000.,
+            492_000., 560_000., 638_000., 728_000.,
+        ],
+    ),
+    (
+        "carafe",
+        "Glass carafe",
+        "玻璃水瓶",
+        "tableware",
+        [
+            10_000., 22_000., 40_000., 70_000., 122_000., 206_000., 304_000., 394_000., 448_000.,
+            474_000., 492_000., 522_000.,
+        ],
+    ),
+    (
+        "cups",
+        "Stoneware cups",
+        "陶土杯",
+        "tableware",
+        [
+            44_000., 86_000., 130_000., 171_000., 213_000., 253_000., 291_000., 331_000., 373_000.,
+            418_000., 470_000., 540_000.,
+        ],
+    ),
+    (
+        "bowls",
+        "Stacked bowls",
+        "叠放碗",
+        "tableware",
+        [
+            27_000., 53_000., 81_000., 110_000., 137_000., 165_000., 191_000., 218_000., 247_000.,
+            277_000., 313_000., 360_000.,
+        ],
+    ),
+    (
+        "ceramic",
+        "Ceramic lamp",
+        "陶瓷台灯",
+        "lighting",
+        [
+            18_000., 38_000., 59_000., 79_000., 101_000., 122_000., 144_000., 168_000., 194_000.,
+            222_000., 253_000., 287_000.,
+        ],
+    ),
+    (
+        "sideboard",
+        "Walnut sideboard",
+        "胡桃木边柜",
+        "furniture",
+        [
+            75_000., 138_000., 195_000., 246_000., 291_000., 330_000., 366_000., 399_000.,
+            438_000., 483_000., 534_000., 588_000.,
+        ],
+    ),
+    (
+        "pillow",
+        "Striped pillow",
+        "条纹抱枕",
+        "textiles",
+        [
+            10_000., 21_000., 34_000., 50_000., 67_000., 85_000., 104_000., 121_000., 137_000.,
+            153_000., 171_000., 194_000.,
+        ],
+    ),
+    (
+        "rug",
+        "Wool rug",
+        "羊毛地毯",
+        "textiles",
+        [
+            40_000., 74_000., 102_000., 122_000., 137_000., 148_000., 157_000., 168_000., 186_000.,
+            216_000., 256_000., 306_000.,
+        ],
+    ),
+];
+fn race_items(language: UiLanguage) -> Vec<RaceEntry> {
+    RACE_TABLE
+        .into_iter()
+        .map(|(id, en, zh, group, _)| RaceEntry::new(id, language.text(en, zh)).with_group(group))
+        .collect()
+}
+fn race_frames(language: UiLanguage) -> Vec<RaceFrame> {
+    const MONTHS: [(&str, &str); 12] = [
+        ("January", "一月"),
+        ("February", "二月"),
+        ("March", "三月"),
+        ("April", "四月"),
+        ("May", "五月"),
+        ("June", "六月"),
+        ("July", "七月"),
+        ("August", "八月"),
+        ("September", "九月"),
+        ("October", "十月"),
+        ("November", "十一月"),
+        ("December", "十二月"),
     ];
-    [
-        ("north", "North", "北区", 0x9d83e8),
-        ("west", "West", "西区", 0x62b5d0),
-        ("east", "East", "东区", 0x58bd91),
-        ("south", "South", "南区", 0xd1a263),
-    ]
-    .into_iter()
-    .enumerate()
-    .map(|(i, (id, en, zh, color))| {
-        RaceEntry::new(
-            id,
-            language.text(en, zh),
-            values[step][i],
-            rgb(color).into(),
-        )
-    })
-    .collect()
+    MONTHS
+        .into_iter()
+        .enumerate()
+        .map(|(index, (en, zh))| {
+            let values = RACE_TABLE
+                .into_iter()
+                .map(|(id, _, _, _, series)| (SharedString::from(id), series[index]))
+                .collect();
+            RaceFrame::new(language.text(en, zh), values)
+        })
+        .collect()
 }
 
 fn funnel_data(step: usize, language: UiLanguage) -> Vec<FunnelStage> {
@@ -1665,16 +1967,22 @@ fn funnel_data(step: usize, language: UiLanguage) -> Vec<FunnelStage> {
 
 fn stream_layers(language: UiLanguage) -> Vec<StreamLayer> {
     [
-        ("product", "Product", "产品", 0x8f7ad4),
-        ("design", "Design", "设计", 0x62b5d0),
-        ("support", "Support", "支持", 0x58bd91),
-        ("growth", "Growth", "增长", 0xd1a263),
+        ("bugs", "Bugs", "缺陷", 0x55adff),
+        ("billing", "Billing", "账单", 0x9c37be),
+        ("onboarding", "Onboarding", "新手引导", 0xe66e00),
+        ("account", "Account", "账户", 0x00a861),
     ]
     .into_iter()
     .map(|(id, en, zh, color)| StreamLayer::new(id, language.text(en, zh), rgb(color).into()))
     .collect()
 }
 fn stream_data(step: usize, language: UiLanguage) -> Vec<StreamPoint> {
+    let months = [
+        ("Mar", "3月"),
+        ("Apr", "4月"),
+        ("May", "5月"),
+        ("Jun", "6月"),
+    ];
     (0..12)
         .map(|week| {
             let values = (0..4)
@@ -1684,7 +1992,16 @@ fn stream_data(step: usize, language: UiLanguage) -> Vec<StreamPoint> {
                 })
                 .collect();
             let label = format!("{} {}", language.text("Week", "周"), week + 1);
-            StreamPoint::new(label, values)
+            // Months open on their first week; the axis drops labels that do not fit.
+            let axis = (week % 4 == 0)
+                .then(|| {
+                    months
+                        .get(week / 4)
+                        .map(|(en, zh)| language.text(en, zh).to_string())
+                })
+                .flatten()
+                .map(SharedString::from);
+            StreamPoint::new(label, values).with_axis_label(axis)
         })
         .collect()
 }
@@ -1717,7 +2034,9 @@ fn treemap_data(step: usize, language: UiLanguage) -> Vec<TreeTile> {
                 .with_metrics(vec![revenue, revenue * (1.2 + i as f32 * 0.3)])
                 .with_shade_values(vec![
                     4. + i as f32 * 3. + part * 6.,
-                    76. + i as f32 * 5. + part * 5.,
+                    // Retention spreads across the scale so switching the
+                    // shading measure visibly re-grades every branch.
+                    [70., 74., 89., 96.5][i] + part * 2.,
                 ])
             })
             .collect();

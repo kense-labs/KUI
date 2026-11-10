@@ -216,7 +216,9 @@ pub struct Editor {
     pub focus: FocusHandle,
     pub revealed: bool,
     pub disabled: bool,
+    read_only: bool,
     pub font_size: f32,
+    pub(crate) center_text: bool,
     pub description: SharedString,
     layout: Option<Layout>,
     scroll: Point<Pixels>,
@@ -311,7 +313,9 @@ impl Editor {
             focus,
             revealed: false,
             disabled: false,
+            read_only: false,
             font_size: 14.,
+            center_text: false,
             description: "".into(),
             layout: None,
             scroll: Default::default(),
@@ -414,6 +418,15 @@ impl Editor {
     pub fn set_placeholder(&mut self, s: impl Into<SharedString>) {
         self.placeholder = s.into()
     }
+    /// Keeps keyboard focus and selection while preventing user edits.
+    pub fn set_read_only(&mut self, read_only: bool, w: &Window, cx: &mut Context<Self>) {
+        if self.read_only != read_only {
+            self.read_only = read_only;
+            self.marked = None;
+            w.notify_text_input_changed(&self.focus);
+            cx.notify();
+        }
+    }
     pub fn set_value(&mut self, s: impl Into<String>, w: &Window, cx: &mut Context<Self>) {
         let value = self.normalize(&s.into());
         if self.value == value {
@@ -495,7 +508,7 @@ impl Editor {
         w: &Window,
         cx: &mut Context<Self>,
     ) {
-        if self.disabled {
+        if self.disabled || self.read_only {
             return;
         }
         if self.ghost_fade_out.is_some() {
@@ -525,6 +538,9 @@ impl Editor {
         self.changed(w, cx)
     }
     fn undo(&mut self, forward: bool, w: &Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
         let old = if forward {
             self.redo.pop()
         } else {
@@ -680,7 +696,7 @@ impl Editor {
                 };
                 self.select(to, m.shift, w, cx)
             }
-            "backspace" | "delete" => {
+            "backspace" | "delete" if !self.read_only => {
                 if r.is_empty() {
                     self.anchor = self.boundary(k == "delete", m.alt || m.control)
                 }
@@ -820,7 +836,7 @@ impl EntityInputHandler for Editor {
         Some(self.units(n..n).start)
     }
     fn accepts_text_input(&self, _: &mut Window, _: &mut Context<Self>) -> bool {
-        !self.disabled
+        !self.disabled && !self.read_only
     }
     fn text_input_configuration(
         &mut self,
@@ -932,6 +948,9 @@ impl Editor {
         } else {
             None
         };
+        let has_run_backgrounds = styled
+            .as_ref()
+            .is_some_and(|runs| runs.iter().any(|run| run.background_color.is_some()));
         let rows = w
             .text_system()
             .shape_text(
@@ -951,7 +970,17 @@ impl Editor {
         } else {
             b.top() + (b.size.height - line) * 0.5
         };
-        let origin = point(b.left(), top);
+        let longest = rows
+            .iter()
+            .map(|row| row.size(line).width)
+            .max()
+            .unwrap_or(px(0.));
+        let inset = if self.center_text && !multi {
+            ((b.size.width - longest) / 2.).max(px(0.))
+        } else {
+            px(0.)
+        };
+        let origin = point(b.left() + inset, top);
         let mut layout = Layout {
             bounds: b,
             origin,
@@ -974,12 +1003,6 @@ impl Editor {
         }
         // A newly mounted flex child can first paint at width zero; never retain
         // that transient horizontal offset once the real width is known.
-        let longest = layout
-            .rows
-            .iter()
-            .map(|row| row.size(line).width)
-            .max()
-            .unwrap_or(px(0.));
         self.scroll.x = self
             .scroll
             .x
@@ -996,6 +1019,13 @@ impl Editor {
         }
         layout.origin -= self.scroll;
         w.with_content_mask(Some(ContentMask { bounds: b }), |w| {
+            if has_run_backgrounds {
+                let mut pos = layout.origin;
+                for row in &layout.rows {
+                    let _ = row.paint_background(pos, line, TextAlign::Left, None, w, cx);
+                    pos.y += row.size(line).height;
+                }
+            }
             if focused && !self.selected().is_empty() {
                 for rect in layout.rects(self.selected()) {
                     w.paint_quad(fill(rect, p.ink.opacity(0.19)))

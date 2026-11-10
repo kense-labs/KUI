@@ -1,6 +1,6 @@
 //! Host-driven read-only document review with an illustrative collaborator cursor.
 use crate::primitives::{
-    family::{Paint, Slide, Tone, disabled_motion, face},
+    family::{Paint, Slide, Tone, face},
     flyout::TriggerBounds,
     glyph::{Glyph, icon},
     nav::tr,
@@ -81,6 +81,9 @@ impl RequestGate {
 pub struct AgentCursor {
     label: SharedString,
     agent: SharedString,
+    collaborator: Option<(SharedString, Hsla)>,
+    selection_motion: Slide,
+    meta: Option<SharedString>,
     color: Option<Hsla>,
     blocks: Vec<DocBlock>,
     original: Vec<DocBlock>,
@@ -88,6 +91,7 @@ pub struct AgentCursor {
     error: SharedString,
     gate: RequestGate,
     target: Option<SharedString>,
+    selection: bool,
     x: Slide,
     y: Slide,
     visible: bool,
@@ -102,6 +106,9 @@ impl AgentCursor {
         Self {
             label: label.into(),
             agent: "Kense".into(),
+            collaborator: None,
+            selection_motion: Slide::new(0.),
+            meta: None,
             color: None,
             original: blocks.clone(),
             blocks,
@@ -109,6 +116,7 @@ impl AgentCursor {
             error: "".into(),
             gate: RequestGate::default(),
             target: None,
+            selection: false,
             x: Slide::new(0.),
             y: Slide::new(0.),
             visible: true,
@@ -123,6 +131,16 @@ impl AgentCursor {
         self.color = Some(color);
         self
     }
+    /// Show a second, decorative cursor while the agent is editing the document.
+    pub fn with_collaborator(mut self, name: impl Into<SharedString>, color: Hsla) -> Self {
+        self.collaborator = Some((name.into(), color));
+        self
+    }
+    /// Adds a muted byline below the first title.
+    pub fn with_meta(mut self, meta: impl Into<SharedString>) -> Self {
+        self.meta = Some(meta.into());
+        self
+    }
     pub fn status(&self) -> AgentCursorStatus {
         self.status
     }
@@ -134,6 +152,10 @@ impl AgentCursor {
             self.visible = visible;
             cx.notify();
         }
+    }
+    /// Whether the host and the current viewport both allow playback.
+    pub fn is_visible(&self) -> bool {
+        self.visible && self.in_view
     }
     /// Replace host data only when no edit is in flight or awaiting review.
     pub fn set_blocks(&mut self, blocks: Vec<DocBlock>, cx: &mut Context<Self>) -> bool {
@@ -148,6 +170,7 @@ impl AgentCursor {
     /// Positions are local to the document surface, in logical pixels.
     pub fn set_position(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
         self.target = None;
+        self.selection = false;
         self.last_target.set(None);
         self.move_to(position, cx);
     }
@@ -183,6 +206,7 @@ impl AgentCursor {
     /// The cursor follows this block's measured position as the container changes size.
     pub fn set_target(&mut self, id: impl Into<SharedString>, cx: &mut Context<Self>) {
         self.target = Some(id.into());
+        self.selection = false;
         self.last_target.set(None);
         cx.notify();
     }
@@ -196,6 +220,21 @@ impl AgentCursor {
             return false;
         }
         self.set_target(id, cx);
+        true
+    }
+    /// Selects the target's text for the active run before a streamed replacement.
+    pub fn select_target_for(
+        &mut self,
+        ticket: u64,
+        id: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.set_target_for(ticket, id, cx) {
+            return false;
+        }
+        self.selection = true;
+        self.selection_motion.reset(0.);
+        self.selection_motion.duration(1., 0.28, cx);
         true
     }
     pub fn set_status_for(
@@ -227,6 +266,7 @@ impl AgentCursor {
             return false;
         }
         self.blocks = blocks;
+        self.selection = false;
         self.status = AgentCursorStatus::Editing;
         cx.notify();
         true
@@ -237,6 +277,10 @@ impl AgentCursor {
         }
         self.original = self.blocks.clone();
         self.error = "".into();
+        self.target = None;
+        self.selection = false;
+        self.x.reset(16.);
+        self.y.reset(0.);
         self.status = AgentCursorStatus::Thinking;
         let ticket = self.gate.begin();
         cx.emit(AgentCursorEvent::Run { ticket });
@@ -306,7 +350,18 @@ impl Render for AgentCursor {
         let radius = crate::foundation::surface_radius(cx);
         let ink = self.color.unwrap_or(p.bright);
         let active = self.gate.active.is_some();
-        let visible = self.visible && self.in_view && w.is_visible();
+        let visible = self.is_visible() && w.is_visible();
+        let review = self.status == AgentCursorStatus::Review;
+        let inset = if self.doc_size.get().width > px(0.) && self.doc_size.get().width < px(480.) {
+            px(16.)
+        } else {
+            px(32.)
+        };
+        let selection_progress = if visible && self.selection {
+            self.selection_motion.get(w, cx).clamp(0., 1.)
+        } else {
+            0.
+        };
         let x = if visible {
             self.x.get(w, cx)
         } else {
@@ -319,14 +374,15 @@ impl Render for AgentCursor {
         };
         let status = match self.status {
             AgentCursorStatus::Idle => tr(cx, "Ready", "准备就绪"),
-            AgentCursorStatus::Thinking => tr(cx, "Thinking", "思考中"),
+            AgentCursorStatus::Thinking if self.selection => tr(cx, "Selecting text", "选择文字"),
+            AgentCursorStatus::Thinking => tr(cx, "Reading the document", "正在阅读文档"),
             AgentCursorStatus::Editing => tr(cx, "Editing", "编辑中"),
             AgentCursorStatus::Review => tr(cx, "Review changes", "审核修改"),
             AgentCursorStatus::Accepted => tr(cx, "Accepted", "已接受"),
             AgentCursorStatus::Reverted => tr(cx, "Undone", "已撤销"),
             AgentCursorStatus::Stopped => tr(cx, "Stopped", "已停止"),
             AgentCursorStatus::Empty => tr(cx, "No changes", "没有修改"),
-            AgentCursorStatus::Error => tr(cx, "Failed", "失败"),
+            AgentCursorStatus::Error => tr(cx, "Connection lost", "连接中断"),
         };
         let viewport = w.viewport_size();
         let weak = cx.weak_entity();
@@ -392,30 +448,37 @@ impl Render for AgentCursor {
                     div()
                         .id("cursor-status")
                         .role(Role::Status)
-                        .h(px(20.))
+                        .min_w_0()
+                        .flex_1()
                         .flex()
                         .items_center()
                         .text_size(px(13.))
                         .line_height(px(20.))
                         .text_color(p.secondary)
-                        .child(format!("{} · {}", self.agent, status)),
+                        .child(status),
                 )
-                .child(
-                    face("cursor-run", action, 32., 8., Tone::Surface, cx)
-                        .px_2()
-                        .child(action)
-                        .on_click(cx.listener(
-                            move |s, _, _, cx| if active { s.stop(cx) } else { s.run(cx) },
-                        )),
-                ),
+                .when(!review, |header| {
+                    header.child(
+                        face("cursor-run", action, 36., 8., Tone::Surface, cx)
+                            .flex_none()
+                            .px_2()
+                            .child(action)
+                            .on_click(cx.listener(
+                                move |s, _, _, cx| if active { s.stop(cx) } else { s.run(cx) },
+                            )),
+                    )
+                }),
         );
         if self.status == AgentCursorStatus::Error {
             root = root.child(
                 div()
                     .id("cursor-error")
                     .role(Role::Alert)
+                    .px(inset)
+                    .pt(px(12.))
                     .text_color(p.danger)
-                    .text_size(px(12.))
+                    .text_size(px(13.))
+                    .line_height(px(20.))
                     .child(self.error.clone()),
             );
         }
@@ -424,7 +487,7 @@ impl Render for AgentCursor {
             .relative()
             .w_full()
             .pt(px(24.))
-            .px(px(32.))
+            .px(inset)
             .pb(px(80.))
             .flex()
             .flex_col()
@@ -466,18 +529,47 @@ impl Render for AgentCursor {
                 .iter()
                 .find(|original| original.id == block.id)
                 .is_none_or(|original| original.text != block.text || original.kind != block.kind);
+            let selected = active && target && self.selection;
+            let label = StyledText::new(block.text.clone());
+            let label = if (changed || selected) && !block.text.is_empty() {
+                label.with_highlights([(
+                    0..if selected {
+                        let count = block.text.chars().count();
+                        block
+                            .text
+                            .char_indices()
+                            .nth((count as f32 * selection_progress).ceil() as usize)
+                            .map_or(block.text.len(), |(index, _)| index)
+                    } else {
+                        block.text.len()
+                    },
+                    HighlightStyle {
+                        background_color: Some(ink.opacity(if selected { 0.28 } else { 0.16 })),
+                        ..Default::default()
+                    },
+                )])
+            } else {
+                label
+            };
+            let layout = label.layout().clone();
+            let track_tail = target && active && self.status == AgentCursorStatus::Editing;
+            let text_end = block.text.len();
             let line = div()
                 .on_children_prepainted(move |children, _, cx| {
                     if target && let Some(b) = children.first() {
                         let origin = doc_bounds.get().origin;
-                        let position = b.origin - origin;
+                        let position = if track_tail {
+                            layout.position_for_index(text_end).unwrap_or(b.origin) - origin
+                        } else {
+                            b.origin - origin
+                        };
                         if last.get() != Some(position) {
                             last.set(Some(position));
                             let _ = weak.update(cx, |s, cx| s.move_to(position, cx));
                         }
                     }
                 })
-                .id(("cursor-block", i))
+                .id((ElementId::from("cursor-block"), block.id.clone()))
                 .role(match block.kind {
                     DocBlockKind::Title | DocBlockKind::Heading => Role::Heading,
                     DocBlockKind::Paragraph => Role::Paragraph,
@@ -488,24 +580,36 @@ impl Render for AgentCursor {
                 .text_size(px(size))
                 .line_height(px(line))
                 .text_color(p.ink)
-                .when(changed, |e| e.bg(ink.opacity(0.24)).rounded(px(3.)))
-                .child(block.text.clone());
+                .when(block.kind != DocBlockKind::Paragraph, |e| {
+                    e.font_weight(FontWeight::SEMIBOLD)
+                })
+                .child(label);
             doc = doc.child(line);
+            if i == 0
+                && block.kind == DocBlockKind::Title
+                && let Some(meta) = &self.meta
+            {
+                doc = doc.child(
+                    div()
+                        .pt(px(4.))
+                        .text_size(px(13.))
+                        .line_height(px(20.))
+                        .text_color(p.secondary)
+                        .child(meta.clone()),
+                );
+            }
         }
         if active && visible {
             let bounds = self.doc_bounds.get();
-            let max_x = (f32::from(bounds.size.width) - 80.).max(0.);
-            let max_y = (f32::from(bounds.size.height) - 24.).max(0.);
-            let px_x = x.clamp(0., max_x);
-            let px_y = y.clamp(0., max_y);
-            doc = doc.child(
+            let width = f32::from(bounds.size.width);
+            let height = f32::from(bounds.size.height);
+            let marker = |x: f32, y: f32, label: SharedString, color: Hsla| {
+                let x = x.clamp(0., (width - 20.).max(0.));
+                let y = y.clamp(0., (height - 44.).max(0.));
                 div()
                     .absolute()
-                    .left(px(px_x))
-                    .top(px(px_y))
-                    .flex()
-                    .items_start()
-                    .gap_1()
+                    .left(px(x))
+                    .top(px(y))
                     .child(
                         canvas(
                             |_, _, _| (),
@@ -513,12 +617,12 @@ impl Render for AgentCursor {
                                 let o = bounds.origin;
                                 let mut path = PathBuilder::fill();
                                 path.move_to(o);
-                                path.line_to(o + point(px(2. * 20. / 14.), px(15. * 20. / 14.)));
-                                path.line_to(o + point(px(6. * 20. / 14.), px(11. * 20. / 14.)));
-                                path.line_to(o + point(px(12. * 20. / 14.), px(9. * 20. / 14.)));
+                                path.line_to(o + point(px(2.8), px(20.)));
+                                path.line_to(o + point(px(8.6), px(14.)));
+                                path.line_to(o + point(px(17.), px(11.5)));
                                 path.close();
                                 if let Ok(path) = path.build() {
-                                    w.paint_path(path, ink);
+                                    w.paint_path(path, color);
                                 }
                             },
                         )
@@ -527,34 +631,64 @@ impl Render for AgentCursor {
                     .child(
                         div()
                             .absolute()
-                            .left(px(12.))
                             .top(px(18.))
+                            .when(x + 96. > width, |v| v.right(px(6.)))
+                            .when(x + 96. <= width, |v| v.left(px(12.)))
                             .h(px(24.))
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .pl(px(5.))
-                            .pr(px(9.))
-                            .rounded(px(8.))
+                            .max_w(px(88.))
+                            .px_2()
+                            .rounded(radius)
                             .border_1()
-                            .border_color(p.line.blend(ink.opacity(0.34)))
-                            .bg(p.panel.blend(ink.opacity(0.12)))
+                            .border_color(p.line.blend(color.opacity(0.34)))
+                            .bg(p.panel.blend(color.opacity(0.14)))
                             .shadow_sm()
                             .text_color(p.ink)
-                            .text_size(px(13.))
-                            .line_height(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(self.agent.clone()),
-                    ),
-            );
+                            .text_size(px(12.))
+                            .line_height(px(24.))
+                            .whitespace_nowrap()
+                            .child(label),
+                    )
+            };
+            if let Some((name, color)) = &self.collaborator {
+                doc = doc.child(marker(width * 0.72, height * 0.66, name.clone(), *color));
+            }
+            doc = doc.child(marker(x, y, self.agent.clone(), ink));
         }
-        root = root.child(doc);
-        if self.status == AgentCursorStatus::Review {
-            root = root.child(
+        if review {
+            let count = self
+                .blocks
+                .iter()
+                .filter(|block| !self.original.contains(block))
+                .count()
+                + self
+                    .original
+                    .iter()
+                    .filter(|original| !self.blocks.iter().any(|block| block.id == original.id))
+                    .count();
+            doc = doc.child(
                 div()
+                    .absolute()
+                    .left(inset)
+                    .right(inset)
+                    .bottom(px(16.))
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(p.line)
+                    .bg(p.panel)
+                    .shadow_sm()
+                    .p_1()
                     .flex()
                     .flex_wrap()
+                    .items_center()
                     .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .px_2()
+                            .text_sm()
+                            .text_color(p.secondary)
+                            .child(format!("{count} {}", tr(cx, "changes", "项修改"))),
+                    )
                     .child(
                         face(
                             "cursor-undo",
@@ -583,14 +717,7 @@ impl Render for AgentCursor {
                     ),
             );
         }
-        if disabled_motion(cx) && active {
-            root = root.child(div().text_size(px(11.)).text_color(p.secondary).child(tr(
-                cx,
-                "Reduced motion",
-                "减少动效",
-            )));
-        }
-        root
+        root.child(doc)
     }
 }
 #[cfg(test)]

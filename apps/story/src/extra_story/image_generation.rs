@@ -30,7 +30,28 @@ fn sample(index: usize) -> ImageSource {
 impl Example {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
-        let view = cx.new(|cx| ImageGeneration::new(w, cx));
+        let view = cx.new(|cx| {
+            ImageGeneration::new(w, cx).with_suggestions(vec![
+                language
+                    .text(
+                        "Terracotta architecture under a clear blue sky",
+                        "蓝天下的赤陶建筑",
+                    )
+                    .into(),
+                language
+                    .text(
+                        "Glazed cups on a pale table in soft daylight",
+                        "柔光下浅色桌面上的釉色茶杯",
+                    )
+                    .into(),
+                language
+                    .text(
+                        "A reading corner with oak and woven linen",
+                        "橡木与亚麻布布置的阅读角",
+                    )
+                    .into(),
+            ])
+        });
         view.update(cx, |v, cx| {
             v.set_prompt(
                 language.text("A quiet room in morning light", "晨光中的安静房间"),

@@ -28,6 +28,8 @@ The host supplies the processed count and service state; the illustration never 
 
 ## API
 
+`with_node_icon` · `(impl Into<SharedString>, Glyph) -> Self`. Associates a KUI glyph with a node ID. Nodes display their text by default.
+
 `set_snapshot` · `(DataFlowSnapshot, &mut Context<Self>)`
 
 Use arrows, Home and End to inspect nodes; set_visible stops off-screen animation and set_paused controls illustration playback. The demo uses explicitly labelled sample data.

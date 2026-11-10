@@ -1,0 +1,89 @@
+[
+  {
+    "id": "theme-switch-eclipse",
+    "group": "theme-switches",
+    "title": {
+      "en": "Eclipse",
+      "zh": "日蚀"
+    },
+    "rustType": "ThemeSwitch",
+    "lead": {
+      "en": "Open the new theme with an expanding ellipse.",
+      "zh": "用扩张的椭圆揭示新主题。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::theme_switch::{ThemeChange, ThemeSwitch, Transition};\n\nlet control = cx.new(|_| ThemeSwitch::new(\"appearance\").with_mode(Transition::Eclipse));\ncx.subscribe(&control, |_, request: &ThemeChange, cx| {\n    kui::foundation::Theme::global_mut(cx).set_mode(request.next);\n    cx.refresh_windows();\n}).detach();",
+    "method": "with_mode",
+    "signature": "(Transition) -> Self",
+    "event": "ThemeChange",
+    "rule": {
+      "en": "Click or press Enter or Space to request the opposite theme. The host receives the requested mode and trigger bounds.",
+      "zh": "点击或按 Enter、空格请求切换主题。宿主收到目标主题、过渡模式与触发区域。"
+    },
+    "api": {
+      "en": "The sun and moon rotate and fade around the same center.",
+      "zh": "日月图标共用同一个旋转和淡入淡出中心。"
+    },
+    "motion": {
+      "en": "The KUI website uses a 430ms document transition. Reduced motion applies the theme immediately.",
+      "zh": "KUI 网站的整页过渡时长为 430ms。减少动效时直接切换主题。"
+    }
+  },
+  {
+    "id": "theme-switch-split",
+    "group": "theme-switches",
+    "title": {
+      "en": "Split",
+      "zh": "中缝"
+    },
+    "rustType": "ThemeSwitch",
+    "lead": {
+      "en": "Open the new theme from a horizontal center seam.",
+      "zh": "从中线向上下揭示新主题。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::theme_switch::{ThemeChange, ThemeSwitch, Transition};\n\nlet control = cx.new(|_| ThemeSwitch::new(\"appearance\").with_mode(Transition::Split));\ncx.subscribe(&control, |_, request: &ThemeChange, cx| {\n    kui::foundation::Theme::global_mut(cx).set_mode(request.next);\n    cx.refresh_windows();\n}).detach();",
+    "method": "with_mode",
+    "signature": "(Transition) -> Self",
+    "event": "ThemeChange",
+    "rule": {
+      "en": "Click or press Enter or Space to request the opposite theme. The host receives the requested mode and trigger bounds.",
+      "zh": "点击或按 Enter、空格请求切换主题。宿主收到目标主题、过渡模式与触发区域。"
+    },
+    "api": {
+      "en": "The sun and moon rotate and fade around the same center.",
+      "zh": "日月图标共用同一个旋转和淡入淡出中心。"
+    },
+    "motion": {
+      "en": "The KUI website uses a 390ms document transition. Reduced motion applies the theme immediately.",
+      "zh": "KUI 网站的整页过渡时长为 390ms。减少动效时直接切换主题。"
+    }
+  },
+  {
+    "id": "theme-switch-rise",
+    "group": "theme-switches",
+    "title": {
+      "en": "Rise",
+      "zh": "升起"
+    },
+    "rustType": "ThemeSwitch",
+    "lead": {
+      "en": "Reveal the new theme from the bottom.",
+      "zh": "从底边向上揭示新主题。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::theme_switch::{ThemeChange, ThemeSwitch, Transition};\n\nlet control = cx.new(|_| ThemeSwitch::new(\"appearance\").with_mode(Transition::Rise).with_icon_only(true));\ncx.subscribe(&control, |_, request: &ThemeChange, cx| {\n    kui::foundation::Theme::global_mut(cx).set_mode(request.next);\n    cx.refresh_windows();\n}).detach();",
+    "method": "with_mode",
+    "signature": "(Transition) -> Self",
+    "event": "ThemeChange",
+    "rule": {
+      "en": "Click or press Enter or Space to request the opposite theme. The host receives the requested mode and trigger bounds.",
+      "zh": "点击或按 Enter、空格请求切换主题。宿主收到目标主题、过渡模式与触发区域。"
+    },
+    "api": {
+      "en": "The sun and moon rotate and fade around the same center. The icon-only option uses a 38px square trigger.",
+      "zh": "日月图标共用同一个旋转和淡入淡出中心。可选的纯图标形式使用 38px 方形触发键。"
+    },
+    "motion": {
+      "en": "The KUI website uses a 360ms document transition. Reduced motion applies the theme immediately.",
+      "zh": "KUI 网站的整页过渡时长为 360ms。减少动效时直接切换主题。"
+    }
+  }
+]

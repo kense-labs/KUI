@@ -1,5 +1,34 @@
 [
   {
+    "id": "stretch-refresh",
+    "group": "progress",
+    "title": {
+      "en": "Stretch refresh",
+      "zh": "弹性刷新"
+    },
+    "rustType": "StretchRefresh",
+    "lead": {
+      "en": "Pull down at the top of a feed to refresh it.",
+      "zh": "在列表顶部下拉，松手后刷新动态。"
+    },
+    "usageRust": "use gpui::{div, prelude::*, px, SharedString, Task};\nuse kui::components::stretch_refresh::StretchRefresh;\n\nlet feed = cx.new(|cx| StretchRefresh::new(\n    \"Activity\",\n    vec![SharedString::from(\"Build passed\")],\n    |item| item.clone(),\n    |item, _, _| div().p(px(12.)).child(item.clone()).into_any_element(),\n    |_, _| Task::ready(Ok(None)),\n    cx,\n).with_subtitle(\"Updated just now\"));",
+    "method": "with_threshold",
+    "signature": "(Pixels) -> Self",
+    "event": "",
+    "rule": {
+      "en": "Pull past the line and release, or focus the refresh button and press Enter or Space. The feed scrolls independently inside a sized parent.",
+      "zh": "拉过进度线后松手，或在刷新键上按 Enter 或空格。给父容器设置高度，列表在内部独立滚动。"
+    },
+    "api": {
+      "en": "Supply rows, stable keys, a GPUI row renderer and an asynchronous refresh operation. The default threshold is 72px after resistance.",
+      "zh": "提供行数据、稳定键、GPUI 行渲染函数和异步刷新操作。默认阈值为阻尼后的 72px。"
+    },
+    "motion": {
+      "en": "A short pull settles back. While refreshing, the line runs above the feed; new rows enter by expanding their measured height. Reduced motion keeps the feed stationary.",
+      "zh": "未过阈值时回弹。刷新时进度线在列表上方移动，新行按实测高度展开。减少动效时列表保持原位。"
+    }
+  },
+  {
     "id": "morph-loader",
     "group": "progress",
     "title": {
@@ -165,6 +194,93 @@
           "已挂载但隐藏的视图调用 set_visible(false)。尺寸和线宽接收正有限数。"
         ]
       }
+    }
+  },
+  {
+    "id": "skeleton-morph",
+    "group": "progress",
+    "title": {
+      "en": "Skeleton morph",
+      "zh": "骨架形变"
+    },
+    "rustType": "SkeletonMorph",
+    "lead": {
+      "en": "Resolve keyed placeholder blocks into measured GPUI content.",
+      "zh": "把占位块依次过渡到实测尺寸的 GPUI 内容。"
+    },
+    "usageRust": "use gpui::{div, prelude::*, px};\nuse kui::components::skeleton_morph::{MorphBlock, SkeletonMorph};\n\nlet profile = cx.new(|cx| SkeletonMorph::new(\n    \"profile-loading\",\n    true,\n    |layout| div().child(layout.block(\n        MorphBlock::new(\"profile-name\").with_width(px(120.)).with_lines(1),\n        |_, _| div().line_height(px(20.)).child(\"Riley Morgan\").into_any_element(),\n    )).into_any_element(),\n    cx,\n));",
+    "method": "set_loading",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "",
+    "rule": {
+      "en": "Use the same keys and layout for the skeleton and ready states. Set loading to false once the data arrives.",
+      "zh": "骨架和完成态使用相同的键和布局。数据到达时调用 set_loading(false)。"
+    },
+    "api": {
+      "en": "Set placeholder width, height, radius, lines and line height with MorphBlock. Configure the region’s stagger, label and style on SkeletonMorph.",
+      "zh": "在 MorphBlock 上设置宽、高、圆角、行数与行高。在 SkeletonMorph 上配置逐块间隔、加载名称和容器样式。"
+    },
+    "motion": {
+      "en": "Blocks reveal in reading order, 40ms apart by default. The card clips to an eased measured height. Reduced motion uses a short crossfade.",
+      "zh": "按阅读顺序逐块显现，默认间隔 40ms。卡片按实测高度缓动并裁切。减少动效时使用短交叉淡入。"
+    }
+  },
+  {
+    "id": "charge-session",
+    "group": "progress",
+    "title": {
+      "en": "Charge session",
+      "zh": "充电会话"
+    },
+    "rustType": "ChargeSession",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::charge_session::{ChargeSession, ChargeSessionOptions};\n\nlet charger = cx.new(|cx| ChargeSession::new(\n    ChargeSessionOptions {\n        title: \"Bay 12, depot charger\".into(),\n        location: \"North yard, 350 kW\".into(),\n        capacity: 98.,\n        max_power: 350.,\n        start_charge: 22.,\n        default_limit: 85.,\n        rate: 0.38,\n        currency: \"EUR\".into(),\n        locale: \"de-DE\".into(),\n        ..Default::default()\n    },\n    cx,\n));",
+    "lead": {
+      "en": "Simulate a charge session with an adjustable limit and live power, energy and cost.",
+      "zh": "模拟一次充电，拖动限值并查看功率、电量、耗时和费用。"
+    },
+    "rule": {
+      "en": "Drag the pack or curve. On the slider, use arrows for 1%, Shift plus arrows or Page Up and Page Down for 10%, and Home and End for the endpoints.",
+      "zh": "可在电池或曲线上拖动。限值滑块的方向键步长为 1%，Shift 加方向键及 Page Up／Down 步长为 10%，Home 和 End 跳到两端。"
+    },
+    "method": "set_paused",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "ChargeSessionStateChanged, ChargeSessionLimitChanged",
+    "api": {
+      "en": "Use ChargeSessionOptions for the battery, charger, price, locale, limit range, pace, and accent. Subscribe to the two events to observe settled changes.",
+      "zh": "通过 ChargeSessionOptions 配置电池、充电桩、价格、区域、限值范围、速度和强调色。订阅状态和限值事件获取已提交的变更。"
+    },
+    "motion": {
+      "en": "The battery fills at the simulated power curve. Stop drains the cable flow and drops the live point to the baseline. Reduced motion holds the charge still.",
+      "zh": "电池按模拟的功率曲线充电。停止后电缆流动渐弱，曲线读数落到基线。减少动效模式保持电量静止。"
+    }
+  },
+  {
+    "id": "ticket-tear",
+    "group": "media",
+    "title": {
+      "en": "Ticket tear",
+      "zh": "票根撕开"
+    },
+    "rustType": "TicketTear",
+    "lead": {
+      "en": "Pull a perforated ticket stub to check in.",
+      "zh": "沿穿孔拉下票根，完成一次签到。"
+    },
+    "usageRust": "use gpui::{div, prelude::*, px};\nuse kui::components::ticket_tear::TicketTear;\n\nlet ticket = cx.new(|cx| {\n    TicketTear::new(\n        |_, _| div().p_5().h(px(211.)).child(\"Kense Day\").into_any_element(),\n        |_, _| div().size_full().flex().items_center().justify_center().child(\"Seat 12\").into_any_element(),\n        cx,\n    )\n    .with_stub_width(px(96.))\n    .with_label(\"Tear off stub to check in\")\n});",
+    "method": "with_stub_width",
+    "signature": "(Pixels) -> Self",
+    "event": "TicketTornChanged",
+    "rule": {
+      "en": "Pull the stub right or down. A short pull leaves the tear in place. Press Enter or Space on the stub to finish, then choose New ticket to reset.",
+      "zh": "向右或向下拉票根。短拖松手会留下撕痕。聚焦票根后按 Enter 或空格可撕完，再选「换一张票」重置。"
+    },
+    "api": {
+      "en": "Supply two GPUI render functions. The default stub width is 104px and the sample uses 96px. Use with_paper to override the paper color, and set_torn to set or reset the state. TicketTornChanged(true) is emitted once on a user detachment.",
+      "zh": "传入两个 GPUI 渲染函数。票根默认宽 104px，示例用 96px。with_paper 可改票面颜色，set_torn 可设置或重置状态。用户撕下票根时仅发出一次 TicketTornChanged(true)。"
+    },
+    "motion": {
+      "en": "The tear moves through the holes while the paper bends. After release the detached stub drops and fades in about half a second. Reduced motion uses a stationary 160ms fade.",
+      "zh": "撕裂沿穿孔推进，松手后纸面回弹。票根分离后约半秒内坠落淡出。减少动效时原位淡出 160ms。"
     }
   },
   {

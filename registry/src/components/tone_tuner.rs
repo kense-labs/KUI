@@ -4,8 +4,9 @@ use crate::{
     primitives::{
         clipboard,
         editor::{EditEvent, Editor, InputMode},
-        family::{Paint, Tone, face},
+        family::{Paint, Slide, Tone, face},
         nav::tr,
+        ops_surface::{avatar, note, row},
     },
 };
 use gpui::{prelude::*, *};
@@ -135,6 +136,9 @@ fn can_apply(
 }
 pub struct ToneTuner {
     label: SharedString,
+    recipient: Option<(SharedString, SharedString)>,
+    changes_count: usize,
+    changes_motion: Slide,
     editor: Entity<Editor>,
     formality: Entity<Slider>,
     detail: Entity<Slider>,
@@ -206,6 +210,7 @@ impl ToneTuner {
                     s.revision = s.revision.wrapping_add(1);
                     s.cancel_pending(cx);
                     s.status = ToneStatus::Original;
+                    s.changes_count = 0;
                     s.copied = None;
                     cx.emit(ToneTunerEvent::Changed(value.into()));
                     cx.notify();
@@ -224,6 +229,9 @@ impl ToneTuner {
         });
         Self {
             label,
+            recipient: None,
+            changes_count: 0,
+            changes_motion: Slide::new(1.),
             editor,
             formality,
             detail,
@@ -242,6 +250,15 @@ impl ToneTuner {
             copied: None,
             _subscriptions: vec![edits, formal_sub, detail_sub],
         }
+    }
+    /// Optional recipient name and subject shown above the editable draft.
+    pub fn with_recipient(
+        mut self,
+        name: impl Into<SharedString>,
+        subject: impl Into<SharedString>,
+    ) -> Self {
+        self.recipient = Some((name.into(), subject.into()));
+        self
     }
     /// Replace the source draft explicitly, cancelling any pending rewrite.
     pub fn set_text(&mut self, text: impl Into<String>, w: &Window, cx: &mut Context<Self>) {
@@ -378,8 +395,9 @@ impl ToneTuner {
         let original = self.source.clone();
         let expected = self.rendered.clone();
         let ranges = changed_words(&original, &expected);
+        self.changes_count = ranges.iter().filter(|(_, changed)| *changed).count();
         let show = self.show_changes;
-        let tint = Paint::get(cx).bright.opacity(0.18);
+        let tint = Paint::get(cx).success.opacity(0.19);
         self.editor.update(cx, |editor, cx| {
             editor.set_run_styler(Rc::new(move |text, base| {
                 if !show || text != expected {
@@ -420,9 +438,13 @@ impl ToneTuner {
     }
 }
 impl Render for ToneTuner {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
+        let compact = w.viewport_size().width < px(552.);
+        let inset = if compact { 16. } else { 24. };
+        let words = self.rendered.unicode_words().count();
+        let switches = self.changes_motion.get(w, cx).clamp(0., 1.);
         let status = match self.status {
             ToneStatus::Original => tr(cx, "Original draft", "原始草稿"),
             ToneStatus::Waiting | ToneStatus::Rewriting => tr(cx, "Rewriting…", "正在调整…"),
@@ -444,42 +466,51 @@ impl Render for ToneTuner {
             .flex()
             .flex_col()
             .child(
-                div()
-                    .flex()
-                    .items_center()
+                row()
+                    .min_h(px(64.))
                     .justify_between()
-                    .gap(px(12.))
-                    .py(px(16.))
-                    .px(px(24.))
+                    .gap_3()
+                    .py_2()
+                    .px(px(inset))
                     .border_b_1()
                     .border_color(p.line)
-                    .child(self.label.clone())
-                    .child(
-                        div()
-                            .id("tone-status")
-                            .role(Role::Status)
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .text_color(p.secondary)
-                            .when(self.status == ToneStatus::Rewritten, |v| {
-                                v.child(
-                                    div()
-                                        .size(px(10.))
-                                        .rounded(px(3.))
-                                        .bg(p.bright.opacity(0.18))
-                                        .border_1()
-                                        .border_color(p.bright.opacity(0.35)),
-                                )
-                            })
-                            .child(status),
-                    ),
+                    .child(if let Some((name, subject)) = &self.recipient {
+                        row()
+                            .flex_1()
+                            .min_w_0()
+                            .child(avatar(name, 0, cx).flex_none())
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(div().truncate().child(name.clone()))
+                                    .child(note(subject.clone(), cx).truncate()),
+                            )
+                    } else {
+                        row().flex_1().child(self.label.clone())
+                    })
+                    .when(!compact, |v| {
+                        v.child(
+                            note(
+                                format!(
+                                    "{} {} · {} {}",
+                                    self.changes_count,
+                                    tr(cx, "changed", "处修改"),
+                                    words,
+                                    tr(cx, "words", "词")
+                                ),
+                                cx,
+                            )
+                            .flex_none(),
+                        )
+                    }),
             )
             .child(
                 div()
                     .w_full()
+                    .h(px(if compact { 260. } else { 240. }))
                     .pt(px(20.))
-                    .px(px(24.))
+                    .px(px(inset))
                     .pb(px(24.))
                     .text_size(px(16.))
                     .line_height(px(25.6))
@@ -508,6 +539,7 @@ impl Render for ToneTuner {
             chips = chips.child(
                 face(("tone-voice", i), name, 36., 8., Tone::Clear, cx)
                     .h(px(36.))
+                    .when(compact, |v| v.flex_1().min_w_0())
                     .px(px(12.))
                     .gap(px(6.))
                     .rounded(px(8.))
@@ -559,7 +591,7 @@ impl Render for ToneTuner {
                 .flex_col()
                 .gap(px(16.))
                 .pt(px(16.))
-                .px(px(24.))
+                .px(px(inset))
                 .pb(px(12.))
                 .border_t_1()
                 .border_color(p.line)
@@ -567,10 +599,34 @@ impl Render for ToneTuner {
                 .child(
                     div()
                         .flex()
-                        .flex_wrap()
-                        .gap(px(24.))
-                        .child(div().flex_1().min_w(px(160.)).child(self.formality.clone()))
-                        .child(div().flex_1().min_w(px(160.)).child(self.detail.clone())),
+                        .when(compact, |v| v.flex_col())
+                        .gap(px(if compact { 12. } else { 24. }))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(160.))
+                                .child(self.formality.clone())
+                                .child(
+                                    row()
+                                        .justify_between()
+                                        .child(note(tr(cx, "Casual", "随和"), cx))
+                                        .child(note(tr(cx, "Neutral", "中性"), cx))
+                                        .child(note(tr(cx, "Formal", "正式"), cx)),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(160.))
+                                .child(self.detail.clone())
+                                .child(
+                                    row()
+                                        .justify_between()
+                                        .child(note(tr(cx, "Concise", "简洁"), cx))
+                                        .child(note(tr(cx, "Balanced", "均衡"), cx))
+                                        .child(note(tr(cx, "Detailed", "详尽"), cx)),
+                                ),
+                        ),
                 ),
         );
         let copy = match self.copied {
@@ -578,6 +634,7 @@ impl Render for ToneTuner {
             Some(false) => tr(cx, "Copy failed — retry", "复制失败，重试"),
             None => tr(cx, "Copy", "复制"),
         };
+        let changes_label = tr(cx, "Changes", "显示修改");
         let mut actions = div()
             .min_h(px(56.))
             .flex()
@@ -585,26 +642,39 @@ impl Render for ToneTuner {
             .items_center()
             .gap(px(12.))
             .py(px(12.))
-            .px(px(24.))
+            .px(px(inset))
             .border_t_1()
             .border_color(p.line)
             .child(
-                face(
-                    "tone-changes",
-                    tr(cx, "Highlight changes", "突出显示修改"),
-                    32.,
-                    8.,
-                    Tone::Clear,
-                    cx,
-                )
-                .aria_toggled(self.show_changes.into())
-                .px_2()
-                .child(tr(cx, "Highlight changes", "突出显示修改"))
-                .on_click(cx.listener(|s, _, _, cx| {
-                    s.show_changes = !s.show_changes;
-                    s.apply_highlight(cx);
-                    cx.notify();
-                })),
+                face("tone-changes", changes_label, 32., 8., Tone::Clear, cx)
+                    .role(Role::Switch)
+                    .aria_toggled(self.show_changes.into())
+                    .gap_2()
+                    .child(
+                        div()
+                            .relative()
+                            .w(px(42.))
+                            .h(px(24.))
+                            .rounded_full()
+                            .bg(p.stage.blend(p.bright.opacity(switches)))
+                            .child(
+                                div()
+                                    .absolute()
+                                    .left(px(3. + 18. * switches))
+                                    .top(px(3.))
+                                    .size(px(18.))
+                                    .rounded_full()
+                                    .bg(p.ink.blend(p.inverse.opacity(switches))),
+                            ),
+                    )
+                    .child(changes_label)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        s.show_changes = !s.show_changes;
+                        s.changes_motion
+                            .duration(f32::from(s.show_changes), 0.18, cx);
+                        s.apply_highlight(cx);
+                        cx.notify();
+                    })),
             )
             .child(
                 face("tone-copy", copy, 32., 8., Tone::Surface, cx)
@@ -632,7 +702,7 @@ impl Render for ToneTuner {
                     "tone-retry",
                     tr(cx, "Retry", "重试"),
                     28.,
-                    999.,
+                    8.,
                     Tone::Surface,
                     cx,
                 )
@@ -641,7 +711,14 @@ impl Render for ToneTuner {
                 .on_click(cx.listener(|s, _, _, cx| s.rewrite(cx))),
             );
         }
-        root.child(actions)
+        root.child(
+            actions.child(
+                note(status, cx)
+                    .id("tone-status")
+                    .role(Role::Status)
+                    .ml_auto(),
+            ),
+        )
     }
 }
 #[cfg(test)]

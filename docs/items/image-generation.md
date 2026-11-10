@@ -21,11 +21,13 @@ let control = cx.new(|cx| ImageGeneration::new(window, cx));
 
 ## Interaction
 
-The host performs generation, upscale and download. Respond to each ticket independently and cancel work when asked. The preview uses local simulated data.
+The host performs generation, upscale and download. Respond to each ticket independently and cancel work when asked. The preview uses local simulated data. Selecting a suggestion fills the prompt so it can be edited before generation.
 
 ## API
 
 `finish` · `(u64, GeneratedImage, &mut Context<Self>)`
+
+`with_suggestions` · `(Vec<SharedString>) -> Self`. Defaults to an empty list.
 
 Call set_progress, finish or fail with the ticket. Stale results after Stop are ignored. A failed or stopped variation keeps its original, and a failure can be retried or restored. Each completed image uses its own reported dimensions. Cmd/Ctrl+Enter starts a batch; plain Enter inserts a newline.
 

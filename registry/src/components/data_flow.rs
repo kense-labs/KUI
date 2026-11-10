@@ -2,10 +2,11 @@
 use crate::components::animated_counter::AnimatedCounter;
 use crate::primitives::{
     family::{Paint, PhaseClock, Tone, disabled_motion, face},
+    glyph::{Glyph, icon},
     presentation::{column, hint, row, title, tr},
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, f32::consts::TAU, rc::Rc};
+use std::{cell::Cell, collections::HashMap, f32::consts::TAU, rc::Rc};
 #[derive(Clone, Debug)]
 pub struct DataFlowNode {
     pub id: SharedString,
@@ -79,6 +80,7 @@ pub struct DataFlow {
     core: DataFlowNode,
     destinations: Vec<DataFlowNode>,
     snapshot: DataFlowSnapshot,
+    icons: HashMap<SharedString, Glyph>,
     counter: Option<Entity<AnimatedCounter>>,
     selected: Option<usize>,
     hovered: Option<usize>,
@@ -103,6 +105,7 @@ impl DataFlow {
             core,
             destinations,
             snapshot,
+            icons: HashMap::new(),
             counter: None,
             selected: None,
             hovered: None,
@@ -113,6 +116,11 @@ impl DataFlow {
             last_age: 0.,
             bounds: Default::default(),
         }
+    }
+    /// Supplies an optional icon for a host-defined node ID.
+    pub fn with_node_icon(mut self, id: impl Into<SharedString>, glyph: Glyph) -> Self {
+        self.icons.insert(id.into(), glyph);
+        self
     }
     pub fn set_snapshot(&mut self, snapshot: DataFlowSnapshot, cx: &mut Context<Self>) {
         if self.snapshot.processed == snapshot.processed
@@ -233,7 +241,8 @@ fn chip_rect(
 fn between(a: Point<Pixels>, b: Point<Pixels>, t: f32, vertical: bool) -> Point<Pixels> {
     let k = t * t * (3. - 2. * t);
     if vertical {
-        point(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * t)
+        let y = 1.5 * t * (1. - t) + t * t * t;
+        point(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * y)
     } else {
         point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * k)
     }
@@ -404,7 +413,13 @@ impl Render for DataFlow {
                                         * 2.
                                         * 14_f32.min(core_box.2 * 0.16)
                                 };
-                                let endpoint = if side == 0 {
+                                let endpoint = if narrow {
+                                    point(
+                                        b.origin.x + px(rect.0 + rect.2 / 2.),
+                                        b.origin.y
+                                            + px(if side == 0 { rect.1 + rect.3 } else { rect.1 }),
+                                    )
+                                } else if side == 0 {
                                     point(
                                         b.origin.x + px(rect.0 + rect.2),
                                         b.origin.y + px(rect.1 + rect.3 / 2.),
@@ -415,14 +430,26 @@ impl Render for DataFlow {
                                         b.origin.y + px(rect.1 + rect.3 / 2.),
                                     )
                                 };
-                                let core = point(
-                                    if side == 0 {
-                                        b.origin.x + px(core_box.0)
-                                    } else {
-                                        b.origin.x + px(core_box.0 + core_box.2)
-                                    },
-                                    core_mid.y + px(fan),
-                                );
+                                let core = if narrow {
+                                    point(
+                                        core_mid.x + px(fan),
+                                        b.origin.y
+                                            + px(if side == 0 {
+                                                core_box.1
+                                            } else {
+                                                core_box.1 + core_box.3
+                                            }),
+                                    )
+                                } else {
+                                    point(
+                                        if side == 0 {
+                                            b.origin.x + px(core_box.0)
+                                        } else {
+                                            b.origin.x + px(core_box.0 + core_box.2)
+                                        },
+                                        core_mid.y + px(fan),
+                                    )
+                                };
                                 let (a, z) = if side == 0 {
                                     (endpoint, core)
                                 } else {
@@ -443,6 +470,7 @@ impl Render for DataFlow {
                                 if let Ok(path) = path.build() {
                                     w.paint_path(path, p.line.blend(p.bright.opacity(alpha)));
                                 }
+                                marker(endpoint, false, p.secondary.opacity(0.42), w);
                                 {
                                     for packet in 0..6 {
                                         let phase = if reduced {
@@ -512,11 +540,7 @@ impl Render for DataFlow {
                     .top(px(rect.1))
                     .w(px(rect.2))
                     .h(px(rect.3))
-                    .rounded(if side == 1 {
-                        px(rect.2.min(rect.3) * 0.28)
-                    } else {
-                        crate::foundation::surface_radius(cx)
-                    })
+                    .rounded(crate::foundation::surface_radius(cx))
                     .bg(p.panel)
                     .border_1()
                     .border_color(if self.selected == Some(index) {
@@ -537,8 +561,13 @@ impl Render for DataFlow {
                     .when(observed.is_some() && observed != Some(index), |v| {
                         v.opacity(0.5)
                     })
+                    .when_some(self.icons.get(&node.id).copied(), |node, glyph| {
+                        node.child(icon(glyph, 16., p.secondary))
+                    })
                     .child(
                         div()
+                            .max_w_full()
+                            .truncate()
                             .text_size(px(if narrow { 12. } else { 14. }))
                             .line_height(px(if narrow { 16. } else { 20. }))
                             .font_weight(FontWeight::MEDIUM)

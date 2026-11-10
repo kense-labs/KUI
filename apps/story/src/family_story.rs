@@ -271,16 +271,7 @@ impl FamilyStory {
         .detach();
     }
     pub fn new(key: &str, w: &mut Window, cx: &mut Context<Self>) -> Self {
-        struct StoryFonts;
-        impl gpui::Global for StoryFonts {}
-        if !cx.has_global::<StoryFonts>() {
-            let _ = cx.text_system().add_fonts(vec![
-                std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinRegular.ttf")),
-                std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinMedium.ttf")),
-                std::borrow::Cow::Borrowed(include_bytes!("../assets/FiraCode-Regular.ttf")),
-            ]);
-            cx.set_global(StoryFonts);
-        }
+        crate::ensure_story_fonts(cx);
         let (id, variant) = key.split_once(':').unwrap_or((key, "reveal"));
         let l = UiLanguage::current(cx);
         let t = |en, zh| l.text(en, zh);

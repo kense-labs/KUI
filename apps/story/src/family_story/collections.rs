@@ -50,7 +50,7 @@ pub struct CollectionStory {
     done: bool,
     undo: Option<SharedString>,
 }
-pub(super) fn portrait_image(seed: usize) -> std::sync::Arc<Image> {
+pub(crate) fn portrait_image(seed: usize) -> std::sync::Arc<Image> {
     static IMAGES: std::sync::OnceLock<[std::sync::Arc<Image>; 4]> = std::sync::OnceLock::new();
     let data: [&[u8]; 4] = [
         include_bytes!("../../assets/portraits/emma.svg"),

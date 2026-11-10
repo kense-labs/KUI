@@ -12,6 +12,42 @@ fn app() -> TestAppContext {
 }
 
 #[test]
+fn theme_variant_routes_report_their_modes_and_trigger_bounds() {
+    use super::ThemeBridge;
+    use crate::StoryHost;
+    use kui::components::theme_switch::{ThemeChange, Transition};
+    use kui::foundation::ThemeMode;
+    use std::cell::Cell;
+
+    thread_local! {
+        static REQUEST: Cell<Option<ThemeChange>> = const { Cell::new(None) };
+    }
+    for (id, mode) in [
+        ("theme-switch-eclipse", Transition::Eclipse),
+        ("theme-switch-split", Transition::Split),
+        ("theme-switch-rise", Transition::Rise),
+    ] {
+        let mut app = app();
+        app.update(|cx| {
+            Theme::global_mut(cx).set_mode(ThemeMode::Light);
+            cx.set_global(ThemeBridge(|request| REQUEST.set(Some(request))));
+        });
+        let (_, window) = app.add_window_view(|w, cx| StoryHost::new(Some(id), w, cx));
+        let bounds = window.debug_bounds("Switch to dark mode").expect(id);
+        assert_eq!(bounds.size.height, px(36.));
+        window.update(|w, cx| w.focus_next(cx));
+        press_key(window, "enter");
+        let request = REQUEST.take().expect("theme request from keyboard");
+        assert_eq!(request.next, ThemeMode::Dark);
+        assert_eq!(request.mode, mode);
+        assert_eq!(request.trigger, bounds);
+        click(window, "Switch to dark mode");
+        let request = REQUEST.take().expect("theme request from pointer");
+        assert_eq!(request.mode, mode);
+    }
+}
+
+#[test]
 fn custom_accent_paints_the_saved_hex_on_the_mounted_primary_button() {
     use kui::foundation::{AccentPalette, ThemeMode};
     for (mode, hex) in [

@@ -420,11 +420,31 @@ impl Render for AgentHandoff {
                         .pb(px(12.))
                         .pl(px(16.))
                         .flex()
-                        .flex_col()
-                        .justify_center()
+                        .items_center()
+                        .gap_2()
                         .text_size(px(14.))
                         .line_height(px(20.))
                         .text_color(p.ink)
+                        .child(
+                            div()
+                                .size(px(28.))
+                                .rounded(radius)
+                                .bg(p.stage)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .flex_none()
+                                .child(icon(
+                                    match self.stage {
+                                        HandoffStage::Transferring => Glyph::Clock,
+                                        HandoffStage::Unavailable => Glyph::Alert,
+                                        HandoffStage::Resolved => Glyph::Check,
+                                        _ => Glyph::User,
+                                    },
+                                    16.,
+                                    p.secondary,
+                                )),
+                        )
                         .child(label),
                 );
             if self.stage == HandoffStage::Transferring {
@@ -433,6 +453,7 @@ impl Render for AgentHandoff {
                         div()
                             .text_size(px(12.))
                             .text_color(p.secondary)
+                            .px(px(16.))
                             .child(self.estimate.clone()),
                     )
                     .child(
@@ -456,6 +477,8 @@ impl Render for AgentHandoff {
                             .id("handoff-error")
                             .role(Role::Alert)
                             .text_color(p.danger)
+                            .text_size(px(12.))
+                            .px(px(16.))
                             .child(self.error.clone()),
                     )
                     .child(
@@ -477,6 +500,7 @@ impl Render for AgentHandoff {
                     div()
                         .text_size(px(12.))
                         .text_color(p.secondary)
+                        .px(px(16.))
                         .child(self.agent.clone()),
                 );
             }
@@ -599,10 +623,21 @@ impl Render for AgentHandoff {
                             .h(px(32.))
                             .flex()
                             .items_center()
-                            .px(px(4.))
+                            .px(px(8.))
+                            .gap_2()
+                            .rounded(radius)
+                            .bg(p.stage)
                             .text_size(px(12.))
                             .line_height(px(16.))
                             .text_color(p.secondary)
+                            .child(div().size(px(6.)).flex_none().rounded_full().bg(
+                                match self.stage {
+                                    HandoffStage::Connected | HandoffStage::Resolved => p.success,
+                                    HandoffStage::Unavailable => p.danger,
+                                    HandoffStage::Transferring => p.bright,
+                                    _ => p.secondary,
+                                },
+                            ))
                             .child(label),
                     ),
             )
@@ -610,7 +645,8 @@ impl Render for AgentHandoff {
                 div()
                     .text_size(px(12.))
                     .text_color(p.secondary)
-                    .px_3()
+                    .px(px(20.))
+                    .pt(px(8.))
                     .child(self.task.clone()),
             )
             .child(thread);
@@ -633,7 +669,13 @@ impl Render for AgentHandoff {
                 .rounded(radius)
                 .border_1()
                 .border_color(p.line)
-                .child(div().flex_1().min_w(px(0.)).child(self.composer.clone()))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .h_full()
+                        .child(self.composer.clone()),
+                )
                 .child(
                     face("handoff-send", action, 32., 8., Tone::Surface, cx)
                         .size(px(32.))

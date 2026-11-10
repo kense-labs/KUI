@@ -97,6 +97,7 @@ pub struct BillingToggle {
     badge_clock: PhaseClock,
     focus: [FocusHandle; 2],
     disabled: bool,
+    inline_badge: bool,
 }
 impl EventEmitter<BillingChanged> for BillingToggle {}
 impl BillingToggle {
@@ -116,6 +117,7 @@ impl BillingToggle {
                 cx.focus_handle().tab_stop(true),
             ],
             disabled: false,
+            inline_badge: false,
         }
     }
     pub fn with_hide_label(mut self, hide_label: bool) -> Self {
@@ -146,6 +148,18 @@ impl BillingToggle {
     pub fn with_disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
+    }
+    #[allow(dead_code)]
+    pub(crate) fn with_inline_badge(mut self) -> Self {
+        self.inline_badge = true;
+        self
+    }
+    #[allow(dead_code)]
+    pub(crate) fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>) {
+        if self.disabled != disabled {
+            self.disabled = disabled;
+            cx.notify();
+        }
     }
     pub fn period(&self) -> BillingPeriod {
         self.period
@@ -190,7 +204,11 @@ impl Render for BillingToggle {
             .rounded(radius)
             .border_1()
             .border_color(p.line)
-            .bg(p.tray)
+            .bg(if self.inline_badge {
+                p.panel.blend(p.ink.opacity(0.05))
+            } else {
+                p.tray
+            })
             .child(
                 canvas(
                     |_, _, _| (),
@@ -287,13 +305,21 @@ impl Render for BillingToggle {
             let mut item = face(
                 ("billing-period", i),
                 aria_text,
-                34.,
+                if self.inline_badge { 36. } else { 34. },
                 radius.into(),
                 Tone::Clear,
                 cx,
             )
-            .pl(px(14.))
-            .pr(px(if has_badge { 5. } else { 14. }))
+            .pl(px(if self.inline_badge { 12. } else { 14. }))
+            .pr(px(if self.inline_badge && has_badge {
+                16.
+            } else if self.inline_badge {
+                12.
+            } else if has_badge {
+                5.
+            } else {
+                14.
+            }))
             .gap(px(8.))
             .track_focus(&self.focus[i])
             .tab_index(if active && !self.disabled { 0 } else { -1 })
@@ -346,7 +372,15 @@ impl Render for BillingToggle {
                             .child(prev_badge),
                     );
                 }
-                item = item.child(badge_pill);
+                item = item.child(if self.inline_badge {
+                    div()
+                        .flex_none()
+                        .text_size(px(12.))
+                        .text_color(p.secondary)
+                        .child(shown_badge)
+                } else {
+                    badge_pill
+                });
             }
             if !self.disabled {
                 item = item

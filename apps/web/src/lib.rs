@@ -9,11 +9,17 @@
 mod web {
     use gpui::prelude::*;
     use gpui::{App, Bounds, WindowBounds, WindowHandle, WindowOptions, px, size};
-    use kui::components::theme_switch::Transition;
+    use kui::components::{
+        card_to_article::ArticlePreviewHost, photo_grid::PhotoGridScrollRegion,
+        theme_switch::Transition, ticket_tear::TicketTearPlatform,
+    };
     use kui::foundation::init;
     use kui::foundation::{AccentPalette, Theme, ThemeMode};
     use kui::primitives::control::{UiDirection, UiLanguage};
-    use kui_story::{StoryBridge, StoryHost, ThemeBridge};
+    use kui_story::{
+        ControlCenterPreviewHost, HoloPreviewHost, HoloPreviewPreferences, OrbitPhotoHost,
+        StoryBridge, StoryHost, ThemeBridge,
+    };
     use std::cell::{Cell, RefCell};
     use wasm_bindgen::prelude::wasm_bindgen;
     struct Preview {
@@ -140,17 +146,64 @@ mod web {
         })
     }
 
+    #[wasm_bindgen]
+    pub fn set_holo_preferences(x: f32, y: f32, active: bool, reduced_transparency: bool) {
+        PREVIEW.with_borrow(|preview| {
+            if let Some(preview) = preview {
+                preview.app.update(|cx| {
+                    let input = HoloPreviewPreferences {
+                        tilt: active.then_some(gpui::point(x, y)),
+                        reduced_transparency,
+                    };
+                    if cx.try_global::<HoloPreviewPreferences>() != Some(&input) {
+                        cx.set_global(input);
+                    }
+                });
+            }
+        });
+    }
+
+    #[wasm_bindgen]
+    pub fn photo_pinch(x: f32, y: f32, delta: f32, phase: u8) {
+        use gpui::{PinchEvent, PlatformInput, TouchPhase, point};
+        PREVIEW.with_borrow(|preview| {
+            if let Some(preview) = preview {
+                preview.app.update(|cx| {
+                    let _ = preview.window.update(cx, |_, w, cx| {
+                        w.dispatch_event(
+                            PlatformInput::Pinch(PinchEvent {
+                                position: point(px(x), px(y)),
+                                delta,
+                                phase: match phase {
+                                    0 => TouchPhase::Started,
+                                    2 => TouchPhase::Ended,
+                                    3 => TouchPhase::Cancelled,
+                                    _ => TouchPhase::Moved,
+                                },
+                                modifiers: Default::default(),
+                            }),
+                            cx,
+                        );
+                    });
+                });
+            }
+        });
+    }
+
     // The host owns browser integration; neither the story nor installed controls depend on JS.
     #[wasm_bindgen(inline_js = "
-        export function compactHost(){try{return (window.frameElement?.ownerDocument.defaultView ?? window).matchMedia('(max-width:639px)').matches}catch{return innerWidth<640}}
+        export function compactHost(){try{const f=window.frameElement;return f?.parentElement?.dataset.previewSize==='mobile'||(f?.ownerDocument.defaultView??window).matchMedia('(max-width:639px)').matches}catch{return innerWidth<640}}
         export function storedAppearance(){try{return ({light:0,dark:1})[localStorage.getItem('theme')] ?? 2}catch{return 2}}
         export function accountAppearance(mode){parent.postMessage({type:'kui:account-appearance',mode},location.origin)}
         export function previewStarted() { queueMicrotask(() => window.kuiPreviewStarted?.()); }
         export function reportThemeTarget(x,y,w,h,radius) { window.kuiThemeTarget?.(x,y,w,h,radius); }
         export function horizontalRegion(x,y,w,h,left,right) { window.kuiHorizontalScroll?.(x,y,w,h,left,right); }
         export function editorRegion(x,y,w,h,up,down) { window.kuiEditorScroll?.(x,y,w,h,up,down); }
-        export function downloadCsv(name, csv) {
-            const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+        export function photoRegion(x,y,w,h,up,down,viewer) { window.kuiPhotoScroll?.(x,y,w,h,up,down,viewer); }
+        export function articleViewport() { return window.kuiArticleViewport?.() ?? new Float32Array(); }
+        export function articleModal(open) { window.kuiArticleModal?.(open); }
+        function downloadBlob(name, blob) {
+            const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.download = name;
@@ -159,6 +212,14 @@ mod web {
             link.remove();
             setTimeout(() => URL.revokeObjectURL(url), 30000);
         }
+        export function downloadCsv(name, csv) { downloadBlob(name, new Blob([csv], {type: 'text/csv;charset=utf-8'})); }
+        export function downloadOrbitPhoto(name, bytes) { downloadBlob(name, new Blob([bytes], {type: 'image/jpeg'})); }
+        export function controlDialRegion(x,y,w,h) { window.kuiControlDialRegion?.(x,y,w,h); }
+        export function orbitTouchRegion(x,y,w,h) { window.kuiOrbitTouchRegion?.(x,y,w,h); }
+        export function ticketTouchRegion(x,y,w,h) { window.kuiTicketTouchRegion?.(x,y,w,h); }
+        export function ticketPulse() { window.navigator.vibrate?.(6); }
+        export function requestHoloOrientation() { window.kuiRequestHoloOrientation?.(); }
+        export function reducedTransparency() { return matchMedia('(prefers-reduced-transparency: reduce)').matches; }
         export function reportFrame(height, dark) {
             window.kuiFramePainted?.(Math.ceil(height), dark);
         }
@@ -192,8 +253,28 @@ mod web {
         fn horizontal_region(x: f32, y: f32, w: f32, h: f32, left: bool, right: bool);
         #[wasm_bindgen(js_name=editorRegion)]
         fn editor_region(x: f32, y: f32, w: f32, h: f32, up: bool, down: bool);
+        #[wasm_bindgen(js_name=photoRegion)]
+        fn photo_region(x: f32, y: f32, w: f32, h: f32, up: bool, down: bool, viewer: bool);
+        #[wasm_bindgen(js_name=articleViewport)]
+        fn article_viewport() -> Vec<f32>;
+        #[wasm_bindgen(js_name=articleModal)]
+        fn article_modal(open: bool);
         #[wasm_bindgen(js_name=downloadCsv)]
         fn download_csv(name: &str, csv: &str);
+        #[wasm_bindgen(js_name=downloadOrbitPhoto)]
+        fn download_orbit_photo(name: &str, bytes: &[u8]);
+        #[wasm_bindgen(js_name=controlDialRegion)]
+        fn control_dial_region(x: f32, y: f32, w: f32, h: f32);
+        #[wasm_bindgen(js_name=orbitTouchRegion)]
+        fn orbit_touch_region(x: f32, y: f32, w: f32, h: f32);
+        #[wasm_bindgen(js_name=ticketTouchRegion)]
+        fn ticket_touch_region(x: f32, y: f32, w: f32, h: f32);
+        #[wasm_bindgen(js_name=ticketPulse)]
+        fn ticket_pulse();
+        #[wasm_bindgen(js_name=requestHoloOrientation)]
+        fn request_holo_orientation();
+        #[wasm_bindgen(js_name=reducedTransparency)]
+        fn reduced_transparency() -> bool;
         #[wasm_bindgen(js_name=reportFrame)]
         fn report_frame(height: f32, dark: bool);
         #[wasm_bindgen(js_name=buttonTheme)]
@@ -209,6 +290,7 @@ mod web {
     }
 
     fn run_gallery(id: String, dark: bool, reduced: bool, chinese: bool, embedded: bool) {
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         gpui_platform::application().run(move |cx: &mut App| {
             // The web text system starts empty and cannot enumerate OS fonts.
             cx.text_system()
@@ -232,7 +314,70 @@ mod web {
                 UiDirection::Ltr
             });
             cx.set_global(kui::components::data_grid::CsvDownload(download_csv));
+            cx.set_global(HoloPreviewHost(request_holo_orientation));
+            cx.set_global(PhotoGridScrollRegion(|b, up, down, viewer| {
+                photo_region(
+                    b.left().into(),
+                    b.top().into(),
+                    b.size.width.into(),
+                    b.size.height.into(),
+                    up,
+                    down,
+                    viewer,
+                );
+            }));
+            cx.set_global(HoloPreviewPreferences {
+                tilt: None,
+                reduced_transparency: reduced_transparency(),
+            });
+            cx.set_global(OrbitPhotoHost {
+                download: download_orbit_photo,
+                gesture_region: |b| {
+                    orbit_touch_region(
+                        b.left().into(),
+                        b.top().into(),
+                        b.size.width.into(),
+                        b.size.height.into(),
+                    )
+                },
+            });
+            cx.set_global(TicketTearPlatform {
+                touch_region: |b| {
+                    ticket_touch_region(
+                        b.left().into(),
+                        b.top().into(),
+                        b.size.width.into(),
+                        b.size.height.into(),
+                    )
+                },
+                pulse: ticket_pulse,
+            });
             if embedded {
+                cx.set_global(ArticlePreviewHost {
+                    visible_y: || match article_viewport().as_slice() {
+                        [top, bottom] if bottom - top >= 100. => Some((px(*top), px(*bottom))),
+                        _ => None,
+                    },
+                    modal: article_modal,
+                    scroll_region: |b| {
+                        editor_region(
+                            b.left().into(),
+                            b.top().into(),
+                            b.size.width.into(),
+                            b.size.height.into(),
+                            true,
+                            true,
+                        )
+                    },
+                });
+                cx.set_global(ControlCenterPreviewHost(|b| {
+                    control_dial_region(
+                        b.left().into(),
+                        b.top().into(),
+                        b.size.width.into(),
+                        b.size.height.into(),
+                    );
+                }));
                 cx.set_global(kui::primitives::editor::EditorScrollRegion(
                     |b, up, down| {
                         editor_region(

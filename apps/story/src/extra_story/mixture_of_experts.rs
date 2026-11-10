@@ -28,28 +28,65 @@ impl Demo {
                 t("Quantities and operators", "数量与运算符"),
             ),
             MoeExpert::new(
-                "language",
-                t("Language", "语言"),
-                t("Natural language", "自然语言"),
+                "punctuation",
+                t("Punctuation", "标点"),
+                t("Punctuation and delimiters", "标点与分隔符"),
+            ),
+            MoeExpert::new(
+                "names",
+                t("Names", "名称"),
+                t("Names and entities", "名称与实体"),
+            ),
+            MoeExpert::new(
+                "grammar",
+                t("Grammar", "语法"),
+                t("Sentence structure", "句子结构"),
+            ),
+            MoeExpert::new(
+                "verbs",
+                t("Verbs", "动词"),
+                t("Actions and verbs", "动作与动词"),
+            ),
+            MoeExpert::new(
+                "dates",
+                t("Dates", "日期"),
+                t("Dates and times", "日期与时间"),
             ),
             MoeExpert::new(
                 "symbols",
                 t("Symbols", "符号"),
-                t("Punctuation and symbols", "标点与符号"),
+                t("Operators and symbols", "运算符与符号"),
             ),
         ];
-        let tokens = vec![
-            MoeToken::new("let", vec![0.65, 0.05, 0.2, 0.1]),
-            MoeToken::new(" total", vec![0.45, 0.2, 0.3, 0.05]),
-            MoeToken::new(" =", vec![0.25, 0.15, 0.05, 0.55]),
-            MoeToken::new(" 42", vec![0.2, 0.6, 0.15, 0.05]),
-            MoeToken::new(" +", vec![0.15, 0.35, 0.05, 0.45]),
-            MoeToken::new(" cost", vec![0.3, 0.1, 0.55, 0.05]),
-        ];
+        let tokens = [
+            ("Maya", 3, 4),
+            (" paid", 5, 4),
+            (" $", 7, 1),
+            ("1", 1, 7),
+            (",", 2, 1),
+            ("240", 1, 7),
+            (" on", 4, 6),
+            (" Oct", 6, 3),
+            (" 21", 6, 1),
+            (",", 2, 4),
+            (" then", 4, 5),
+            (" ran", 5, 4),
+            (" npm", 0, 3),
+            (" test", 0, 5),
+            (".", 2, 4),
+        ]
+        .into_iter()
+        .map(|(token, first, second)| {
+            let mut scores = vec![0.02; 8];
+            scores[first] = 0.67;
+            scores[second] = 0.21;
+            MoeToken::new(token, scores)
+        })
+        .collect();
         let diagram = cx.new(|_| {
             MixtureOfExperts::new(experts, tokens)
                 .with_capacity_factor(0.8)
-                .with_parameters(120., 5., 12.)
+                .with_parameters(671., 5., 16.)
                 .with_simulated(true)
         });
         let visible = cx

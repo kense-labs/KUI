@@ -35,6 +35,8 @@ let control = cx.new(|cx| RichTextEditor::new("Release notes", "# Notes", window
 
 Edit formatted blocks directly. Select text for inline marks or links, type / for blocks, and undo edits in the document history.
 
+The Markdown and HTML output scroll independently. With the output focused, use arrow keys, Page Up, Page Down, Home or End to read longer exports. Switching formats returns to the first line.
+
 ## API
 
 `document` · `() -> &RichDocument`

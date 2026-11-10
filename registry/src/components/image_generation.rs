@@ -138,6 +138,7 @@ fn stop_tile(tile: &mut Tile) {
 pub struct ImageGeneration {
     editor: Entity<Editor>,
     prompt: String,
+    suggestions: Vec<SharedString>,
     models: Vec<SharedString>,
     model: usize,
     aspects: Vec<SharedString>,
@@ -181,6 +182,7 @@ impl ImageGeneration {
         Self {
             editor,
             prompt: String::new(),
+            suggestions: Vec::new(),
             models: vec!["Kense".into()],
             model: 0,
             aspects: vec!["1:1".into(), "4:5".into(), "16:9".into()],
@@ -199,6 +201,10 @@ impl ImageGeneration {
             self.models = models;
             self.model = 0;
         }
+        self
+    }
+    pub fn with_suggestions(mut self, suggestions: Vec<SharedString>) -> Self {
+        self.suggestions = suggestions;
         self
     }
     pub fn set_prompt(&mut self, prompt: impl Into<String>, w: &Window, cx: &mut Context<Self>) {
@@ -329,14 +335,14 @@ impl Render for ImageGeneration {
         let r = crate::foundation::surface_radius(cx);
         let measured = self.width.get();
         let side = if measured > px(0.) {
-            measured - px(24.)
+            measured - px(34.)
         } else {
             w.viewport_size().width - px(80.)
         }
-        .min(px(616.))
+        .min(px(440.))
         .max(px(1.));
         let measured_width = self.width.clone();
-        let tile_size = (side - px(6.)) / 2.;
+        let tile_size = (side - px(8.)) / 2.;
         let busy = self
             .tiles
             .iter()
@@ -382,19 +388,18 @@ impl Render for ImageGeneration {
             .text_color(p.ink)
             .flex()
             .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .min_h(px(70.))
-                    .max_h(px(142.))
-                    .w_full()
-                    .pt(px(16.))
-                    .px(px(18.))
-                    .pb(px(6.))
-                    .text_size(px(16.))
-                    .line_height(px(22.))
-                    .child(self.editor.clone()),
-            );
+            .gap_3();
+        let prompt = div()
+            .h(px(76.))
+            .w_full()
+            .p(px(12.))
+            .rounded(r)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.tray)
+            .text_size(px(14.))
+            .line_height(px(20.))
+            .child(self.editor.clone());
         let mut options = div().flex().flex_wrap().items_center().gap_2();
         for (i, name) in self.models.iter().enumerate() {
             options = options.child(
@@ -460,13 +465,14 @@ impl Render for ImageGeneration {
                     cx.listener(move |s, _, _, cx| if busy { s.stop(cx) } else { s.generate(cx) }),
                 ),
         );
-        root = root.child(options);
         let mut grid = div()
             .id("image-grid")
             .track_focus(&self.tile_focus)
             .tab_stop(true)
             .role(Role::Group)
             .aria_label(tr(cx, "Generated images", "生成的图片"))
+            .w(side)
+            .self_center()
             .flex()
             .flex_wrap()
             .gap_2()
@@ -496,10 +502,17 @@ impl Render for ImageGeneration {
                 cx.notify();
                 cx.stop_propagation();
             }));
-        let tile_indices: Vec<usize> = self
-            .selected
-            .filter(|i| self.tiles[*i].status == TileStatus::Upscaling)
-            .map_or_else(|| (0..4).collect(), |i| vec![i]);
+        let idle = self
+            .tiles
+            .iter()
+            .all(|tile| tile.status == TileStatus::Empty);
+        let tile_indices: Vec<usize> = if idle {
+            Vec::new()
+        } else {
+            self.selected
+                .filter(|i| self.tiles[*i].status == TileStatus::Upscaling)
+                .map_or_else(|| (0..4).collect(), |i| vec![i])
+        };
         for i in tile_indices {
             let tile = &self.tiles[i];
             let progress = tile.visual.get(w, cx).clamp(0., 1.);
@@ -519,8 +532,11 @@ impl Render for ImageGeneration {
                 tile_size
             };
             let ratio = tile.aspect;
-            let height = (width / ratio).min(px(210.));
-            let width = height * ratio;
+            let height = if tile.status == TileStatus::Upscaling {
+                (width / ratio).min(px(320.))
+            } else {
+                (tile_size / ratio).min(px(260.))
+            };
             let mut tile_view = div()
                 .id(("image-tile", i))
                 .role(Role::Button)
@@ -534,7 +550,7 @@ impl Render for ImageGeneration {
                 .h(height)
                 .relative()
                 .overflow_hidden()
-                .rounded(px(0.))
+                .rounded(r)
                 .border(px(if selected || cursor { 2. } else { 1. }))
                 .border_color(if selected || cursor {
                     p.bright
@@ -551,6 +567,7 @@ impl Render for ImageGeneration {
                     img(image.source.clone())
                         .absolute()
                         .size_full()
+                        .rounded(r)
                         .object_fit(ObjectFit::Cover),
                 );
             }
@@ -689,7 +706,107 @@ impl Render for ImageGeneration {
             }
             grid = grid.child(tile_view.on_click(cx.listener(move |s, _, _, cx| s.select(i, cx))));
         }
-        root = root.child(grid);
+        if idle {
+            let dot_field = canvas(
+                |_, _, _| (),
+                move |b, _, w, _| {
+                    let center = b.center();
+                    let mut y = b.top() + px(5.);
+                    while y < b.bottom() - px(4.) {
+                        let mut x = b.left() + px(5.);
+                        while x < b.right() - px(4.) {
+                            let distance = ((x - center.x) / b.size.width)
+                                .hypot((y - center.y) / b.size.height);
+                            let strength = (1. - distance * 1.9).clamp(0., 1.);
+                            let diameter = px(1.25 + strength * 3.);
+                            w.paint_quad(
+                                fill(
+                                    Bounds::centered_at(point(x, y), size(diameter, diameter)),
+                                    p.secondary.opacity(0.14 + strength * 0.40),
+                                )
+                                .corner_radii(diameter / 2.),
+                            );
+                            x += px(8.);
+                        }
+                        y += px(8.);
+                    }
+                },
+            )
+            .absolute()
+            .inset_0();
+            root = root.child(
+                div()
+                    .id("image-idle")
+                    .w(side)
+                    .h(side)
+                    .self_center()
+                    .relative()
+                    .rounded(r)
+                    .border_1()
+                    .border_color(p.line)
+                    .bg(p.tray)
+                    .child(dot_field)
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(9.))
+                            .right(px(10.))
+                            .text_size(px(11.))
+                            .text_color(p.secondary)
+                            .child(match self.aspects[self.aspect].as_ref() {
+                                "4:5" => "1024 × 1280",
+                                "16:9" => "1536 × 864",
+                                _ => "1024 × 1024",
+                            }),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(8.))
+                            .right(px(8.))
+                            .bottom(px(8.))
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_center()
+                                    .text_size(px(13.))
+                                    .text_color(p.secondary)
+                                    .child(tr(
+                                        cx,
+                                        "Describe an image, then generate",
+                                        "描述图片后开始生成",
+                                    )),
+                            )
+                            .children(self.suggestions.iter().enumerate().map(|(i, text)| {
+                                let value = text.clone();
+                                face(
+                                    ("image-suggestion", i),
+                                    text.clone(),
+                                    30.,
+                                    r.into(),
+                                    Tone::Surface,
+                                    cx,
+                                )
+                                .w_full()
+                                .justify_start()
+                                .px_2()
+                                .text_size(px(12.))
+                                .min_w_0()
+                                .child(div().min_w_0().truncate().child(text.clone()))
+                                .on_click(cx.listener(
+                                    move |s, _, w, cx| {
+                                        s.set_prompt(value.to_string(), w, cx);
+                                        s.editor.read(cx).focus.clone().focus(w, cx);
+                                    },
+                                ))
+                            })),
+                    ),
+            );
+        } else {
+            root = root.child(grid);
+        }
         if let Some(i) = self.selected
             && let Some(image) = self.tiles[i].image.as_ref()
         {
@@ -747,7 +864,7 @@ impl Render for ImageGeneration {
             }
             root = root.child(actions);
         }
-        root
+        root.child(prompt).child(options)
     }
 }
 

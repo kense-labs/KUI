@@ -4,143 +4,228 @@ use kui::{
     components::agent_cursor::{
         AgentCursor, AgentCursorEvent, AgentCursorStatus, DocBlock, DocBlockKind,
     },
-    primitives::{control::UiLanguage, family::Paint},
+    primitives::{
+        control::UiLanguage,
+        family::{Paint, Tone, disabled_motion, face},
+    },
 };
 use std::time::Duration;
+
 pub const IDS: &[&str] = &["agent-cursor"];
+
 pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
     IDS.contains(&id).then(|| cx.new(Example::new).into())
 }
+
 struct Example {
     view: Entity<AgentCursor>,
     language: UiLanguage,
-    failed: bool,
-    _sub: Subscription,
+    fail_next: bool,
+    playback: Option<Task<()>>,
+    _subscription: Subscription,
+    _autoplay: Task<()>,
 }
-fn blocks(language: UiLanguage, edited: bool) -> Vec<DocBlock> {
+
+fn draft(language: UiLanguage) -> Vec<DocBlock> {
+    use DocBlockKind::{Heading, Paragraph, Title};
     let t = |en, zh| language.text(en, zh);
     vec![
-        DocBlock::new("title", DocBlockKind::Title, t("Release notes", "发布说明")),
-        DocBlock::new("heading", DocBlockKind::Heading, t("Plan", "计划")),
+        DocBlock::new(
+            "title",
+            Title,
+            t("Workspace launch brief", "工作区发布计划"),
+        ),
+        DocBlock::new(
+            "intro",
+            Paragraph,
+            t(
+                "The next release brings a shared activity view to every Team workspace.",
+                "下个版本将加入共享活动视图。",
+            ),
+        ),
+        DocBlock::new("heading", Heading, t("Goals", "发布目标")),
         DocBlock::new(
             "body",
-            DocBlockKind::Paragraph,
-            if edited {
-                t(
-                    "Begin with a small release, check the results, and then expand to everyone.",
-                    "先小范围发布，检查结果后再逐步开放给所有用户。",
-                )
-            } else {
-                t(
-                    "Release to a few people first and see if it works before telling everybody.",
-                    "先给少量用户发布，确认可用后再通知所有人。",
-                )
-            },
+            Paragraph,
+            t(
+                "We want people to be able to find out what changed without needing to ask someone, since the last update led to a lot of questions and nobody was sure where to look.",
+                "上次更新后有很多同事来问发生了什么，大家也不知道要到哪里找。我们希望这次大家可以自己看到有些什么变化，减少重复询问。",
+            ),
         ),
         DocBlock::new(
             "next",
-            DocBlockKind::Paragraph,
+            Paragraph,
             t(
-                "The team will review progress on Friday.",
-                "团队将在周五检查进度。",
+                "Start with five workpsaces and review the feedback on Friday.",
+                "先在五个工区开放，周五检查反馈。",
             ),
         ),
     ]
 }
+
+async fn wait_visible(delay_ms: u64, view: &WeakEntity<AgentCursor>, cx: &mut AsyncApp) -> bool {
+    let timer = cx.background_executor().clone();
+    timer.timer(Duration::from_millis(delay_ms)).await;
+    loop {
+        match view.update(cx, |v, cx| {
+            let visible = cx
+                .try_global::<crate::StoryBridge>()
+                .is_none_or(|bridge| (bridge.visible)());
+            v.set_visible(visible, cx);
+            v.is_visible()
+        }) {
+            Ok(true) => return true,
+            Err(_) => return false,
+            Ok(false) => timer.timer(Duration::from_millis(200)).await,
+        }
+    }
+}
+
 impl Example {
     fn new(cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
         let view = cx.new(|_| {
             AgentCursor::new(
                 language.text("Sample document", "样例文档"),
-                blocks(language, false),
+                draft(language),
             )
+            .with_meta(language.text("Maya Lee · Launch planning", "Maya Lee · 发布筹备"))
+            .with_collaborator("Maya", rgb(0x58a995).into())
         });
-        let initial = cx
-            .try_global::<crate::StoryBridge>()
-            .is_none_or(|bridge| (bridge.visible)());
-        view.update(cx, |v, cx| v.set_visible(initial, cx));
         let weak = view.downgrade();
-        cx.spawn(async move |_, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(200))
-                    .await;
-                if weak
-                    .update(cx, |v, cx| {
-                        let visible = cx
-                            .try_global::<crate::StoryBridge>()
-                            .is_none_or(|bridge| (bridge.visible)());
-                        v.set_visible(visible, cx);
-                    })
-                    .is_err()
-                {
-                    break;
-                }
+        let autoplay = cx.spawn(async move |_, cx| {
+            if wait_visible(200, &weak, cx).await {
+                let _ = weak.update(cx, |view, cx| {
+                    if !disabled_motion(cx) && view.status() == AgentCursorStatus::Idle {
+                        view.run(cx);
+                    }
+                });
             }
-        })
-        .detach();
-        let sub = cx.subscribe(&view, |s: &mut Self, view, event: &AgentCursorEvent, cx| {
-            if let AgentCursorEvent::Run { ticket } = event {
+        });
+        let subscription =
+            cx.subscribe(&view, |s: &mut Self, view, event: &AgentCursorEvent, cx| {
+                let AgentCursorEvent::Run { ticket } = event else {
+                    if matches!(event, AgentCursorEvent::Stop { .. }) {
+                        s.playback = None;
+                    }
+                    return;
+                };
                 let ticket = *ticket;
-                let fail = !s.failed;
-                s.failed = true;
+                let fail = std::mem::take(&mut s.fail_next);
                 let language = s.language;
                 let weak = view.downgrade();
-                cx.spawn(async move |_, cx| {
-                    cx.background_executor()
-                        .timer(Duration::from_millis(300))
-                        .await;
-                    if weak
-                        .update(cx, |v, cx| {
-                            v.set_status_for(ticket, AgentCursorStatus::Editing, cx);
-                            v.set_target_for(ticket, "body", cx);
-                        })
-                        .is_err()
-                    {
+                let reduced = disabled_motion(cx);
+                s.playback = Some(cx.spawn(async move |_, cx| {
+                    if !wait_visible(if reduced { 0 } else { 420 }, &weak, cx).await {
                         return;
                     }
-                    cx.background_executor()
-                        .timer(Duration::from_millis(700))
-                        .await;
-                    if weak
-                        .update(cx, |v, cx| {
-                            v.set_blocks_for(ticket, blocks(language, true), cx);
-                        })
-                        .is_err()
-                    {
-                        return;
-                    }
-                    cx.background_executor()
-                        .timer(Duration::from_millis(700))
-                        .await;
-                    let _ = weak.update(cx, |v, cx| {
-                        if fail {
-                            v.fail(
+                    if fail {
+                        let _ = weak.update(cx, |view, cx| {
+                            view.fail(
                                 ticket,
-                                language
-                                    .text("Sample run failed; retry.", "样例修改失败，请重试。"),
+                                language.text(
+                                    "The connection dropped. Your draft is unchanged.",
+                                    "连接已中断，原文已保留。可以重试。",
+                                ),
                                 cx,
                             );
-                        } else {
-                            v.finish(ticket, blocks(language, true), cx);
+                        });
+                        return;
+                    }
+                    let mut blocks = draft(language);
+                    let chunks: &[&str] = match language {
+                        UiLanguage::Chinese => &[
+                            "让团队随时查看",
+                            "工作区的最新变化，",
+                            "并在一个页面找到",
+                            "需要跟进的事项。",
+                        ],
+                        _ => &[
+                            "Make workspace changes easy",
+                            " to find. A shared",
+                            " activity view gives everyone",
+                            " one place to see",
+                            " updates and follow-up tasks.",
+                        ],
+                    };
+                    if !reduced {
+                        if !weak
+                            .update(cx, |view, cx| view.select_target_for(ticket, "body", cx))
+                            .unwrap_or(false)
+                            || !wait_visible(450, &weak, cx).await
+                        {
+                            return;
                         }
-                    });
-                })
-                .detach();
-            }
-        });
+                        let mut text = String::new();
+                        for chunk in chunks {
+                            text.push_str(chunk);
+                            blocks[3].text = text.clone().into();
+                            if !weak
+                                .update(cx, |view, cx| {
+                                    view.set_blocks_for(ticket, blocks.clone(), cx)
+                                })
+                                .unwrap_or(false)
+                                || !wait_visible(34, &weak, cx).await
+                            {
+                                return;
+                            }
+                        }
+                    }
+                    blocks[3].text = chunks.concat().into();
+                    blocks.insert(
+                        4,
+                        DocBlock::new(
+                            "rollout",
+                            DocBlockKind::Heading,
+                            language.text("Rollout", "发布节奏"),
+                        ),
+                    );
+                    if !reduced
+                        && (!weak
+                            .update(cx, |view, cx| {
+                                view.set_target_for(ticket, "rollout", cx)
+                                    && view.set_blocks_for(ticket, blocks.clone(), cx)
+                            })
+                            .unwrap_or(false)
+                            || !wait_visible(380, &weak, cx).await)
+                    {
+                        return;
+                    }
+                    blocks[5].text = language
+                        .text(
+                            "Start with five workspaces and review the feedback on Friday.",
+                            "先在五个工作区开放，周五检查反馈。",
+                        )
+                        .into();
+                    let _ = weak.update(cx, |view, cx| view.finish(ticket, blocks, cx));
+                }));
+            });
         Self {
             view,
             language,
-            failed: false,
-            _sub: sub,
+            fail_next: false,
+            playback: None,
+            _subscription: subscription,
+            _autoplay: autoplay,
         }
     }
+
+    fn replay(&mut self, fail: bool, cx: &mut Context<Self>) {
+        self.fail_next = fail;
+        let language = self.language;
+        self.view.update(cx, |view, cx| {
+            view.stop(cx);
+            view.undo(cx);
+            view.set_blocks(draft(language), cx);
+            view.run(cx);
+        });
+    }
 }
+
 impl Render for Example {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
+        let t = |en, zh| self.language.text(en, zh);
         div()
             .size_full()
             .min_h(px(540.))
@@ -152,12 +237,43 @@ impl Render for Example {
             .items_center()
             .justify_center()
             .gap_3()
-            .child(
-                div().text_size(px(12.)).text_color(p.secondary).child(
-                    self.language
-                        .text("Simulated edits — nothing is saved", "模拟修改，不会保存"),
-                ),
-            )
             .child(div().w_full().max_w(px(680.)).child(self.view.clone()))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .justify_center()
+                    .gap_2()
+                    .child(
+                        face(
+                            "cursor-sim-success",
+                            t("Edits land", "模拟成功"),
+                            32.,
+                            8.,
+                            Tone::Surface,
+                            cx,
+                        )
+                        .px_2()
+                        .child(t("Edits land", "模拟成功"))
+                        .on_click(cx.listener(|s, _, _, cx| s.replay(false, cx))),
+                    )
+                    .child(
+                        face(
+                            "cursor-sim-error",
+                            t("Connection drops", "模拟断线"),
+                            32.,
+                            8.,
+                            Tone::Surface,
+                            cx,
+                        )
+                        .px_2()
+                        .child(t("Connection drops", "模拟断线"))
+                        .on_click(cx.listener(|s, _, _, cx| s.replay(true, cx))),
+                    ),
+            )
+            .child(div().text_size(px(12.)).text_color(p.secondary).child(t(
+                "Simulated edits — nothing is saved",
+                "模拟修改，不会保存",
+            )))
     }
 }

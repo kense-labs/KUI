@@ -17,6 +17,7 @@ pub struct AnimatedCounter {
     decimals: usize,
     size: f32,
     line_height: f32,
+    wheel_seconds: f32,
     feather: f32,
     font_weight: FontWeight,
     digits: Vec<Digit>,
@@ -37,6 +38,7 @@ impl AnimatedCounter {
             decimals: 0,
             size: 30.,
             line_height: 1.,
+            wheel_seconds: 0.4,
             feather: 0.16,
             font_weight: FontWeight::MEDIUM,
             digits: vec![],
@@ -69,6 +71,16 @@ impl AnimatedCounter {
             self.size = size.clamp(10., 96.);
         }
         self
+    }
+    #[allow(dead_code)]
+    pub(crate) fn with_wheel_duration(mut self, seconds: f32) -> Self {
+        self.wheel_seconds = seconds;
+        self
+    }
+    // Optional sibling controls can resize the wheel without restarting its digits.
+    #[allow(dead_code)]
+    pub(crate) fn set_wheel_size(&mut self, size: f32) {
+        self.size = size;
     }
     // Optional sibling controls use this when installed alongside the counter.
     #[allow(dead_code)]
@@ -178,7 +190,9 @@ impl AnimatedCounter {
                         digit.position.translate(-(shift as f32));
                     }
                     digit.target = wheel_target(digit.target, next, up);
-                    digit.position.duration(digit.target as f32, 0.4, cx);
+                    digit
+                        .position
+                        .duration(digit.target as f32, self.wheel_seconds, cx);
                 }
             }
         }

@@ -1,0 +1,147 @@
+[
+  {
+    "id": "share-sheet",
+    "group": "navigation",
+    "title": {
+      "en": "Share sheet",
+      "zh": "分享面板"
+    },
+    "rustType": "ShareSheet",
+    "lead": {
+      "en": "Share a link, change access and send to recent recipients.",
+      "zh": "复制链接、设置访问权限并发送给最近联系人。"
+    },
+    "usageRust": "use gpui::{Task, prelude::*};\nuse kui::components::share_sheet::{ShareChannel, SharePerson, ShareSheet, ShareSheetAccess};\n\nlet control = cx.new(|cx| ShareSheet::new(\n    \"Release plan\",\n    \"https://example.com/docs/release-plan\",\n    vec![SharePerson::new(\"riley\", \"Riley Morgan\")],\n    vec![\n        ShareSheetAccess::new(\"team\", \"Workspace members\").with_description(\"Can comment\"),\n        ShareSheetAccess::new(\"link\", \"Anyone with the link\").with_description(\"Can view\"),\n    ],\n    cx,\n)\n.with_channels(vec![ShareChannel::new(\"email\", \"Email\").with_done_label(\"Sent\")])\n.on_send(|submission, _, _| {\n    // Pass the selected people and access value to the application's share service.\n    let _ = submission;\n    Task::ready(Ok(()))\n}));",
+    "method": "on_send",
+    "signature": "Fn(ShareSubmission, &mut Window, &mut App) -> Task<Result<(), SharedString>>",
+    "event": "",
+    "rule": {
+      "en": "Open Share, select access and recipients, then send. Escape closes the access list before the panel.",
+      "zh": "打开分享，选择权限和收件人后发送。Esc 优先关闭权限列表。"
+    },
+    "api": {
+      "en": "Set people, access, channels, trigger label and alignment. Delivery callbacks resolve asynchronously. Copy reports the selected access only after a confirmed write.",
+      "zh": "配置联系人、访问级别、渠道、按钮文案和对齐。发送等待宿主结果，复制写入成功后回调所选权限。"
+    },
+    "motion": {
+      "en": "The shared surface springs between trigger, panel and confirmation. Picked avatars travel to the recipient row. At 520px and below the panel opens from the bottom.",
+      "zh": "同一外框在触发键、面板和确认卡之间缓动，选中的头像移入收件人行。520px 及以下从底部展开。"
+    }
+  },
+  {
+    "id": "morph-nav",
+    "group": "navigation",
+    "title": {
+      "en": "Morph nav",
+      "zh": "伸缩导航"
+    },
+    "rustType": "MorphNav",
+    "lead": {
+      "en": "Expand a responsive navigation bar into grouped destinations or local search.",
+      "zh": "在同一个导航栏内展开栏目、搜索或紧凑菜单。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::morph_nav::{MorphNav, MorphNavItem, MorphNavLink, MorphNavSearchItem};\n\nlet docs = MorphNavLink::new(\"docs\", \"Documentation\")\n    .with_description(\"Guides and API reference\")\n    .with_href(\"/docs\");\nlet search = MorphNavSearchItem::new(docs.clone()).with_section(\"resources\");\nlet control = cx.new(|cx| {\n    MorphNav::new(\"KUI\", vec![\n        MorphNavItem::new(\"resources\", \"Resources\").with_links(vec![docs]),\n        MorphNavItem::new(\"pricing\", \"Pricing\").with_href(\"/pricing\"),\n    ], window, cx)\n        .with_label(\"Main\")\n        .with_search(\"Search KUI\", vec![search], window, cx)\n});",
+    "method": "set_compact",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "MorphNavNavigate",
+    "rule": {
+      "en": "Hover a section to expand it. On narrow screens, open Menu to browse groups. Open Search to filter the local index. Escape restores focus.",
+      "zh": "悬停展开栏目。窄屏可打开菜单查看分组，也可使用搜索筛选。Esc 关闭并恢复焦点。"
+    },
+    "api": {
+      "en": "Provide stable destination IDs and route the emitted event. Container width below 720px defaults to a grouped menu. Search takes an optional independent index.",
+      "zh": "使用稳定的目标 ID，并由宿主处理导航事件。容器宽度低于 720px 时默认显示分组菜单。搜索可接入独立索引。"
+    },
+    "motion": {
+      "en": "Hover opens after 60ms and closes after 180ms on exit. Panel size and highlight retarget from their current position.",
+      "zh": "悬停 60ms 展开，移出 180ms 后收起。面板尺寸和高亮从当前位置继续过渡。"
+    }
+  },
+  {
+    "id": "dock",
+    "group": "navigation",
+    "title": {
+      "en": "Dock",
+      "zh": "浮动工具栏"
+    },
+    "rustType": "Dock",
+    "lead": {
+      "en": "Switch editor tools in a floating dock with group trays and optional reordering.",
+      "zh": "在浮动工具栏切换编辑工具、展开分组托盘和调整顺序。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::dock::{Dock, DockIcon, DockItem, DockSelected};\n\nlet items = vec![\n    DockItem::new(\"move\", \"Move\", DockIcon::Pointer).with_shortcut(\"V\"),\n    DockItem::new(\"shapes\", \"Shapes\", DockIcon::Rectangle).with_items(vec![\n        DockItem::new(\"rectangle\", \"Rectangle\", DockIcon::Rectangle).with_shortcut(\"R\"),\n        DockItem::new(\"ellipse\", \"Ellipse\", DockIcon::Ellipse).with_shortcut(\"O\"),\n    ]),\n];\nlet control = cx.new(|cx| Dock::new(items, cx).with_value(\"move\", cx));\ncx.subscribe(&control, |control, event: &DockSelected, cx| {\n    control.update(cx, |dock, cx| dock.set_value(Some(event.0.clone()), cx));\n}).detach();",
+    "method": "set_value",
+    "signature": "(Option<SharedString>, &mut Context<Self>)",
+    "event": "DockSelected / DockReordered",
+    "rule": {
+      "en": "Pick a tool, open Shapes or move a slot. The example board owns the shortcut keys and editing actions.",
+      "zh": "选择工具、打开形状托盘或拖动排序。快捷键和编辑操作由画板宿主处理。"
+    },
+    "api": {
+      "en": "Supply stable tool IDs and an optional selected value. Apply reorder events by passing the accepted order back to set_items.",
+      "zh": "提供稳定的工具 ID 和可选的选中值。收到重排事件后，用 set_items 传回接受的顺序。"
+    },
+    "motion": {
+      "en": "Selection and labels glide between fixed 40px slots. Trays rise above the bar and show their tools in sequence.",
+      "zh": "选中底片和标签在 40px 槽位间滑动。托盘从工具栏上方展开，依次显示工具。"
+    }
+  },
+  {
+    "id": "liquid-tab-bar",
+    "group": "navigation",
+    "title": {
+      "en": "Liquid tab bar",
+      "zh": "液态标签栏"
+    },
+    "rustType": "LiquidTabBar",
+    "lead": {
+      "en": "Switch app sections with a draggable lens, measured labels, and rolling badges.",
+      "zh": "用可拖动的镜片切换栏目，经过图标时局部反色，并显示滚动徽标。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::liquid_tab_bar::{\n    LiquidTabBar, LiquidTabChanged, LiquidTabIcon, LiquidTabItem, liquid_panel_id,\n};\n\nlet control = cx.new(|cx| {\n    LiquidTabBar::new(\n        vec![\n            LiquidTabItem::new(\"home\", \"Home\", LiquidTabIcon::Home),\n            LiquidTabItem::new(\"saved\", \"Saved\", LiquidTabIcon::Bookmark),\n            LiquidTabItem::new(\"inbox\", \"Inbox\", LiquidTabIcon::Inbox)\n                .with_badge(2)\n                .with_badge_label(\"2 unread\"),\n        ],\n        \"home\",\n        cx,\n    )\n    .with_id(\"main-sections\")\n});\ncx.subscribe(&control, |bar, event: &LiquidTabChanged, cx| {\n    // Update the corresponding host panel as part of accepting the new section.\n    bar.update(cx, |bar, cx| bar.set_value(event.0.clone(), cx));\n}).detach();\nlet home_panel_id = liquid_panel_id(\"main-sections\", \"home\");",
+    "method": "set_labels",
+    "signature": "(LiquidTabLabels, &mut Context<Self>)",
+    "event": "LiquidTabChanged",
+    "rule": {
+      "en": "Tap a section, drag the selected lens, or use Arrow Left and Right, Home, and End.",
+      "zh": "点按栏目、拖动选中镜片，或用左右方向键、Home 和 End 切换。"
+    },
+    "api": {
+      "en": "Supply stable values and accept the selection in the host. Choose Active, Always, or None for captions. Each item can supply an alternate icon and an accessible badge label.",
+      "zh": "为每项提供稳定值，由宿主接收选择。标签可显示当前项、全部或仅图标，支持独立选中图标和徽标播报。"
+    },
+    "motion": {
+      "en": "A 420ms morph spring retargets the lens. The previous caption fades as the new caption waits for the lens. Reduced motion settles the layout immediately.",
+      "zh": "镜片使用 420ms 弹簧。原标签先淡出，新标签等镜片到达再显现。减少动态效果时直接切换。"
+    }
+  },
+  {
+    "id": "orbit-menu",
+    "group": "navigation",
+    "title": {
+      "en": "Orbit menu",
+      "zh": "环形菜单"
+    },
+    "rustType": "OrbitMenu",
+    "lead": {
+      "en": "Open a radial menu and pick a photo action with one press and drag.",
+      "zh": "点按展开环形菜单，或按住并拖向照片操作。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::orbit_menu::{OrbitAction, OrbitIcon, OrbitInvoked, OrbitMenu, OrbitTone};\nuse kui::primitives::glyph::Glyph;\n\nlet menu = cx.new(|cx| {\n    OrbitMenu::new(\n        vec![\n            OrbitAction::new(\"pin\", \"Pin\", Glyph::Pin).with_done(\"Pinned\"),\n            OrbitAction::new(\"share\", \"Share\", OrbitIcon::Share),\n            OrbitAction::new(\"remove\", \"Remove\", Glyph::Trash).with_tone(OrbitTone::Danger),\n        ],\n        window,\n        cx,\n    )\n    .with_label(\"Note actions\")\n});\ncx.subscribe(&menu, |_, event: &OrbitInvoked, _| {\n    // Dispatch event.0 to the host's action handler.\n    let action = &event.0;\n    debug_assert!(matches!(action.as_ref(), \"pin\" | \"share\" | \"remove\"));\n}).detach();",
+    "method": "with_radius",
+    "signature": "(f32) -> Self",
+    "event": "OrbitInvoked",
+    "rule": {
+      "en": "Tap to keep the arc open. Press and drag to an action, then release. Escape cancels.",
+      "zh": "短按可保留菜单。按住拖向动作后松手即可触发，按 Esc 或拖出弧区可取消。"
+    },
+    "api": {
+      "en": "Supply actions with stable IDs, optional confirmations and a danger tone. The host handles each invocation.",
+      "zh": "为每个动作提供稳定 ID、可选回执和危险样式，由宿主处理动作。"
+    },
+    "motion": {
+      "en": "The actions swirl out and collapse in reverse. A single highlight follows the pointer and the confirmation lasts 1.4 seconds.",
+      "zh": "动作沿弧线依次展开，按反序收起。高亮随目标移动，回执显示 1.4 秒。"
+    }
+  }
+]

@@ -2,9 +2,11 @@
 use crate::primitives::{
     clipboard,
     control::UiLanguage,
-    family::{Paint, Tone, face},
+    family::{Paint, Slide, Tone, face},
+    glyph::{Glyph, icon},
 };
 use gpui::{prelude::*, *};
+use std::{cell::Cell, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallCommand {
@@ -88,6 +90,7 @@ pub enum InstallSnippetEvent {
         framework: SharedString,
         step: SharedString,
         success: bool,
+        value: Option<SharedString>,
     },
     ConfirmCancelled(u64),
     ConfirmRequested {
@@ -99,9 +102,17 @@ pub enum InstallSnippetEvent {
 /// Frameworks and snippets are supplied by the host. Tokens `{{API_KEY}}` are filled only after explicit key generation.
 pub struct InstallSnippet {
     frameworks: Vec<InstallFramework>,
+    title: Option<SharedString>,
+    description: SharedString,
+    version: Option<SharedString>,
+    key_placeholder: SharedString,
+    provided_key: bool,
+    confirm_steps: bool,
     selected: usize,
     manager: usize,
     framework_focus: Vec<FocusHandle>,
+    framework_marker: Slide,
+    tab_width: Rc<Cell<Pixels>>,
     manager_focus: Vec<FocusHandle>,
     sequence: u64,
     active_key: Option<(u64, usize, usize)>,
@@ -130,9 +141,17 @@ impl InstallSnippet {
             .collect();
         Self {
             frameworks,
+            title: None,
+            description: "".into(),
+            version: None,
+            key_placeholder: "YOUR_API_KEY".into(),
+            provided_key: false,
+            confirm_steps: false,
             selected: 0,
             manager: 0,
             framework_focus,
+            framework_marker: Slide::new(0.),
+            tab_width: Default::default(),
             manager_focus,
             sequence: 0,
             active_key: None,
@@ -143,6 +162,33 @@ impl InstallSnippet {
             copied: None,
             copy_epoch: 0,
         }
+    }
+    pub fn with_title(mut self, title: impl Into<SharedString>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+    pub fn with_description(mut self, description: impl Into<SharedString>) -> Self {
+        self.description = description.into();
+        self
+    }
+    pub fn with_version(mut self, version: impl Into<SharedString>) -> Self {
+        self.version = Some(version.into());
+        self
+    }
+    pub fn with_key_placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
+        self.key_placeholder = placeholder.into();
+        self
+    }
+    /// Display a key already supplied by the host and hide key generation.
+    pub fn with_api_key(mut self, key: impl Into<SharedString>) -> Self {
+        let key = key.into();
+        self.provided_key = !key.is_empty();
+        self.key = self.provided_key.then_some(key);
+        self
+    }
+    pub fn with_step_confirmation(mut self, enabled: bool) -> Self {
+        self.confirm_steps = enabled;
+        self
     }
     pub fn active_key(&self) -> Option<u64> {
         self.active_key.map(|v| v.0)
@@ -158,7 +204,12 @@ impl InstallSnippet {
         self.cancel_key(cx);
         self.cancel_confirmation(cx);
         self.selected = index;
-        self.manager = 0;
+        self.framework_marker.duration(index as f32, 0.24, cx);
+        let manager_count = self.frameworks[index]
+            .steps
+            .first()
+            .map_or(0, |s| s.snippets.len());
+        self.manager = self.manager.min(manager_count.saturating_sub(1));
         self.error = "".into();
         self.copied = None;
         self.copy_epoch = self.copy_epoch.wrapping_add(1);
@@ -186,10 +237,10 @@ impl InstallSnippet {
             .snippets
             .get(self.manager)
             .or_else(|| step.snippets.first())?;
-        Some(match &self.key {
-            Some(key) => snippet.text.replace("{{API_KEY}}", key),
-            None => snippet.text.to_string(),
-        })
+        Some(snippet.text.replace(
+            "{{API_KEY}}",
+            self.key.as_ref().unwrap_or(&self.key_placeholder),
+        ))
     }
     pub fn request_key(&mut self, step: usize, cx: &mut Context<Self>) -> bool {
         let Some(item) = self
@@ -199,7 +250,7 @@ impl InstallSnippet {
         else {
             return false;
         };
-        if !item.generate_key || self.active_key.is_some() {
+        if !item.generate_key || self.active_key.is_some() || self.provided_key {
             return false;
         }
         let framework = self.frameworks[self.selected].id.clone();
@@ -227,10 +278,10 @@ impl InstallSnippet {
         value: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self
-            .active_key
-            .is_some_and(|(active, framework, _)| active == id && framework == self.selected)
-        {
+        let Some((active, framework, step)) = self.active_key else {
+            return false;
+        };
+        if active != id || framework != self.selected {
             return false;
         }
         let value = value.into();
@@ -239,6 +290,9 @@ impl InstallSnippet {
         }
         self.active_key = None;
         self.key = Some(value);
+        if !self.confirm_steps && !self.done.contains(&(framework, step)) {
+            self.done.push((framework, step));
+        }
         self.error = "".into();
         self.copied = None;
         self.copy_epoch = self.copy_epoch.wrapping_add(1);
@@ -320,6 +374,7 @@ impl InstallSnippet {
         };
         let framework = self.frameworks[self.selected].id.clone();
         let step_id = self.frameworks[self.selected].steps[step].id.clone();
+        let selection = self.selected;
         self.copy_epoch = self.copy_epoch.wrapping_add(1);
         let epoch = self.copy_epoch;
         let task = clipboard::write(&text, cx);
@@ -330,7 +385,12 @@ impl InstallSnippet {
                     framework,
                     step: step_id,
                     success,
+                    value: success.then(|| text.into()),
                 });
+                if success && !this.confirm_steps && !this.done.contains(&(selection, step)) {
+                    this.done.push((selection, step));
+                    cx.notify();
+                }
                 if this.copy_epoch == epoch {
                     this.copied = Some((step, success));
                     cx.notify();
@@ -352,21 +412,63 @@ impl InstallSnippet {
 }
 
 impl Render for InstallSnippet {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
         let lang = UiLanguage::current(cx);
         let t = |en: &'static str, zh: &'static str| lang.text(en, zh);
         let radius = crate::foundation::surface_radius(cx);
+        let framework_count = self.frameworks.len();
+        let width = f32::from(self.tab_width.get());
+        let compact = width > 0. && width < 348.;
+        let cells = framework_count.max(1);
+        let cell_width = ((width - 6. - 2. * (cells - 1) as f32) / cells as f32).max(0.);
+        let marker = self.framework_marker.get(window, cx);
+        let tab_width = self.tab_width.clone();
         let mut tabs = div()
             .id("install-frameworks")
             .role(Role::TabList)
             .aria_label(t("Framework", "框架"))
+            .relative()
             .flex()
-            .flex_wrap()
-            .gap(px(4.));
-        let framework_count = self.frameworks.len();
+            .gap(px(2.))
+            .p(px(3.))
+            .rounded(radius)
+            .bg(p.stage)
+            .child(
+                canvas(
+                    move |b, w, _| {
+                        if tab_width.replace(b.size.width) != b.size.width {
+                            w.request_animation_frame();
+                        }
+                    },
+                    |_, _, _, _| (),
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .when(cell_width > 0., |v| {
+                v.child(
+                    div()
+                        .absolute()
+                        .top(px(3.))
+                        .left(px(3. + marker * (cell_width + 2.)))
+                        .w(px(cell_width))
+                        .h(px(34.))
+                        .rounded(radius)
+                        .bg(p.panel)
+                        .border_1()
+                        .border_color(p.line),
+                )
+            });
         for (i, item) in self.frameworks.iter().enumerate() {
             let label = item.label.clone();
+            let mark = match item.id.as_ref() {
+                "desktop" => Some(Glyph::Monitor),
+                "web" => Some(Glyph::Globe),
+                "library" => Some(Glyph::Book),
+                "cli" => Some(Glyph::Arrow),
+                _ => None,
+            };
             tabs = tabs.child(
                 face(
                     ("install-framework", i),
@@ -377,14 +479,21 @@ impl Render for InstallSnippet {
                     cx,
                 )
                 .role(Role::Tab)
-                .tab_index(if i == self.selected { 0 } else { -1 })
-                .track_focus(&self.framework_focus[i])
+                .track_focus(&self.framework_focus[i].clone().tab_stop(i == self.selected))
                 .aria_selected(i == self.selected)
-                .when(i == self.selected, |v| v.bg(p.hover))
-                .px(px(10.))
+                .when(cell_width <= 0. && i == self.selected, |v| v.bg(p.panel))
+                .flex_1()
+                .min_w_0()
+                .text_ellipsis()
+                .px(px(4.))
+                .gap(px(6.))
+                .when_some(mark.filter(|_| !compact), |v, mark| {
+                    v.child(icon(mark, 14., p.secondary))
+                })
                 .child(label)
-                .on_click(cx.listener(move |s, _, _, cx| {
+                .on_click(cx.listener(move |s, _, w, cx| {
                     s.select_framework(i, cx);
+                    s.framework_focus[i].focus(w, cx);
                 }))
                 .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
                     let next = match e.keystroke.key.as_str() {
@@ -435,8 +544,7 @@ impl Render for InstallSnippet {
                             cx,
                         )
                         .role(Role::Tab)
-                        .tab_index(if i == self.manager { 0 } else { -1 })
-                        .track_focus(&self.manager_focus[i])
+                        .track_focus(&self.manager_focus[i].clone().tab_stop(i == self.manager))
                         .aria_selected(i == self.manager)
                         .when(i == self.manager, |v| v.bg(p.hover))
                         .px(px(8.))
@@ -461,8 +569,8 @@ impl Render for InstallSnippet {
                         )),
                     );
                 }
-                content = content.child(manager_tabs);
             }
+            let mut manager_tabs = (manager_count > 1).then_some(manager_tabs);
             let mut step_list = div()
                 .id("install-list")
                 .role(Role::List)
@@ -480,38 +588,47 @@ impl Render for InstallSnippet {
                     .active_confirm
                     .is_some_and(|(_, f, index)| f == self.selected && index == i);
                 let mut actions = div().flex().flex_wrap().gap(px(6.));
+                let mut key_action = None;
                 let copied = match self.copied {
                     Some((index, true)) if index == i => t("Copied", "已复制"),
                     Some((index, false)) if index == i => t("Copy failed; retry", "复制失败，重试"),
                     _ => t("Copy", "复制"),
                 };
-                actions = actions.child(
-                    face(
-                        ("install-copy", i),
-                        copied,
-                        32.,
-                        radius.into(),
-                        Tone::Clear,
-                        cx,
-                    )
-                    .px(px(8.))
-                    .child(copied)
-                    .on_click(cx.listener(move |s, _, _, cx| {
-                        s.copy_step(i, cx);
-                    })),
-                );
-                if step.generate_key {
+                let copy = face(
+                    ("install-copy", i),
+                    copied,
+                    30.,
+                    radius.into(),
+                    Tone::Clear,
+                    cx,
+                )
+                .px(px(7.))
+                .child(icon(
+                    if self.copied == Some((i, true)) {
+                        Glyph::Check
+                    } else {
+                        Glyph::Copy
+                    },
+                    14.,
+                    p.secondary,
+                ))
+                .on_click(cx.listener(move |s, _, _, cx| {
+                    s.copy_step(i, cx);
+                }));
+                if step.generate_key && !self.provided_key {
                     let key_pending = self
                         .active_key
                         .is_some_and(|(_, f, index)| f == self.selected && index == i);
                     let label = if key_pending {
                         t("Cancel", "取消")
+                    } else if !self.error.is_empty() {
+                        t("Try again", "重试")
                     } else if self.key.is_some() {
                         t("Generate another key", "重新生成密钥")
                     } else {
                         t("Generate key", "生成密钥")
                     };
-                    actions = actions.child(
+                    key_action = Some(
                         face(
                             ("install-key", i),
                             label,
@@ -531,7 +648,7 @@ impl Render for InstallSnippet {
                         })),
                     );
                 }
-                if !done {
+                if self.confirm_steps && !done {
                     let label = if confirm_pending {
                         t("Cancel confirmation", "取消确认")
                     } else {
@@ -558,63 +675,167 @@ impl Render for InstallSnippet {
                     });
                 }
                 let snippet = self.snippet(i).unwrap_or_default();
+                let reserved_lines = self
+                    .frameworks
+                    .iter()
+                    .filter_map(|f| f.steps.get(i))
+                    .flat_map(|step| &step.snippets)
+                    .map(|command| command.text.lines().count())
+                    .max()
+                    .unwrap_or(1);
                 let item = div()
                     .id(("install-step", i))
                     .role(Role::ListItem)
+                    .aria_label(if done {
+                        format!("{}, {}", step.title, t("done", "已完成"))
+                    } else {
+                        step.title.to_string()
+                    })
                     .flex()
-                    .flex_col()
-                    .gap(px(8.))
+                    .items_start()
+                    .gap(px(10.))
                     .child(
                         div()
+                            .size(px(24.))
+                            .flex_none()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(p.line)
+                            .bg(if done {
+                                p.success.opacity(0.14)
+                            } else {
+                                p.panel
+                            })
                             .flex()
                             .items_center()
+                            .justify_center()
+                            .text_size(px(12.))
+                            .child(marker),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
                             .gap(px(8.))
                             .child(
                                 div()
-                                    .size(px(28.))
-                                    .rounded(radius)
-                                    .bg(p.hover)
                                     .flex()
+                                    .gap_2()
+                                    .justify_between()
                                     .items_center()
-                                    .justify_center()
-                                    .child(marker),
+                                    .when(compact, |v| v.flex_wrap())
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .flex()
+                                            .flex_col()
+                                            .child(
+                                                div()
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(p.ink)
+                                                    .child(step.title.clone()),
+                                            )
+                                            .when(!step.description.is_empty(), |v| {
+                                                v.child(
+                                                    div()
+                                                        .text_size(px(13.))
+                                                        .text_color(p.secondary)
+                                                        .child(step.description.clone()),
+                                                )
+                                            }),
+                                    )
+                                    .when_some(key_action, |v, action| v.child(action.flex_none())),
                             )
-                            .child(div().text_color(p.ink).child(step.title.clone()))
-                            .when(done, |v| {
-                                v.child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(p.muted)
-                                        .child(t("Done", "已完成")),
-                                )
-                            }),
-                    )
-                    .when(!step.description.is_empty(), |v| {
-                        v.child(
-                            div()
-                                .text_size(px(13.))
-                                .text_color(p.muted)
-                                .child(step.description.clone()),
-                        )
-                    })
-                    .when(!step.filename.is_empty(), |v| {
-                        v.child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(p.muted)
-                                .child(step.filename.clone()),
-                        )
-                    })
-                    .child(
-                        div().w_full().rounded(radius).bg(p.tray).p(px(10.)).child(
-                            div()
-                                .id(("install-code", i))
-                                .w_full()
-                                .overflow_x_scroll()
-                                .child(div().whitespace_nowrap().text_size(px(13.)).child(snippet)),
-                        ),
-                    )
-                    .child(actions);
+                            .child(
+                                div()
+                                    .w_full()
+                                    .rounded(radius)
+                                    .border_1()
+                                    .border_color(p.line)
+                                    .bg(p.stage)
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .justify_between()
+                                            .gap(px(6.))
+                                            .px(px(6.))
+                                            .border_b_1()
+                                            .border_color(p.line)
+                                            .when_some(manager_tabs.take(), |v, tabs| v.child(tabs))
+                                            .when(!step.filename.is_empty(), |v| {
+                                                v.child(
+                                                    div()
+                                                        .text_size(px(12.))
+                                                        .text_color(p.secondary)
+                                                        .child(step.filename.clone()),
+                                                )
+                                            })
+                                            .child(copy.ml_auto()),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(("install-code", i))
+                                            .w_full()
+                                            .min_h(px(reserved_lines as f32 * 19. + 20.))
+                                            .px(px(10.))
+                                            .py(px(9.))
+                                            .overflow_x_scroll()
+                                            .child(
+                                                div()
+                                                    .font_family("monospace")
+                                                    .text_size(px(13.))
+                                                    .line_height(px(19.))
+                                                    .children(snippet.lines().enumerate().map(
+                                                        |(line, text)| {
+                                                            let mut styled = StyledText::new(
+                                                                SharedString::from(text.to_owned()),
+                                                            );
+                                                            let verb = text
+                                                                .find(char::is_whitespace)
+                                                                .unwrap_or(text.len());
+                                                            if i == 0 && verb > 0 {
+                                                                styled =
+                                                                    styled.with_highlights([(
+                                                                        0..verb,
+                                                                        HighlightStyle {
+                                                                            color: Some(p.bright),
+                                                                            ..Default::default()
+                                                                        },
+                                                                    )]);
+                                                            }
+                                                            div()
+                                                                .flex()
+                                                                .gap_2()
+                                                                .whitespace_nowrap()
+                                                                .when(
+                                                                    i == 2 && reserved_lines > 1,
+                                                                    |v| {
+                                                                        v.child(
+                                                                            div()
+                                                                                .w(px(18.))
+                                                                                .flex_none()
+                                                                                .text_right()
+                                                                                .text_color(p.faint)
+                                                                                .child(
+                                                                                    (line + 1)
+                                                                                        .to_string(
+                                                                                        ),
+                                                                                ),
+                                                                        )
+                                                                    },
+                                                                )
+                                                                .child(styled)
+                                                        },
+                                                    )),
+                                            ),
+                                    ),
+                            )
+                            .child(actions),
+                    );
                 step_list = step_list.child(item);
             }
             content = content.child(step_list);
@@ -629,15 +850,53 @@ impl Render for InstallSnippet {
             .border_1()
             .border_color(p.line)
             .bg(p.panel)
-            .p(px(16.))
+            .p(px(if compact { 14. } else { 20. }))
             .flex()
             .flex_col()
             .gap(px(16.))
             .child(
                 div()
-                    .text_size(px(16.))
-                    .text_color(p.ink)
-                    .child(t("Get started", "快速开始")),
+                    .flex()
+                    .justify_between()
+                    .items_start()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(
+                                        self.title
+                                            .clone()
+                                            .unwrap_or_else(|| t("Get started", "快速开始").into()),
+                                    ),
+                            )
+                            .when(!self.description.is_empty(), |view| {
+                                view.child(
+                                    div()
+                                        .text_size(px(14.))
+                                        .text_color(p.secondary)
+                                        .child(self.description.clone()),
+                                )
+                            }),
+                    )
+                    .when_some(
+                        self.version.clone().filter(|_| !compact),
+                        |view, version| {
+                            view.child(
+                                div()
+                                    .flex_none()
+                                    .text_size(px(12.))
+                                    .text_color(p.faint)
+                                    .child(version),
+                            )
+                        },
+                    ),
             )
             .child(tabs)
             .child(content)
@@ -655,7 +914,8 @@ impl Render for InstallSnippet {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{InstallCommand, InstallFramework, InstallSnippet, InstallStep};
+    use gpui::TestAppContext;
 
     fn examples() -> Vec<InstallFramework> {
         vec![
@@ -687,7 +947,9 @@ mod tests {
     fn ignores_late_host_results_and_supports_retry() {
         let mut app = TestAppContext::single();
         app.update(crate::init);
-        let (view, w) = app.add_window_view(|_, cx| InstallSnippet::new(examples(), cx));
+        let (view, w) = app.add_window_view(|_, cx| {
+            InstallSnippet::new(examples(), cx).with_step_confirmation(true)
+        });
         w.update(|_, cx| {
             view.update(cx, |s, cx| {
                 assert!(s.request_key(0, cx));

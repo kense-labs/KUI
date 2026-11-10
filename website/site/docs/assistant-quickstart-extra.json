@@ -1,0 +1,175 @@
+[
+  {
+    "id": "ai-mascot",
+    "group": "intelligence",
+    "title": { "en": "AI mascot", "zh": "智能吉祥物" },
+    "rustType": "AiMascot",
+    "lead": { "en": "Show an assistant's activity through a vector mascot and companion dot.", "zh": "用矢量角色的表情和伴随圆点展示助手状态。" },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::ai_mascot::{AiMascot, MascotStatus};\n\nlet control = cx.new(|_| AiMascot::new(\"Kense\").with_status(MascotStatus::Thinking).with_size(24.0).follow_pointer(false));",
+    "method": "set_status",
+    "signature": "(MascotStatus, &mut Context<Self>)",
+    "event": "",
+    "rule": { "en": "The host supplies the status. The preview cycles example states and can be paused or switched manually.", "zh": "由宿主提供状态。预览会循环展示样例，可暂停或手动选择。" },
+    "api": { "en": "Sizes from 24 to 160px are supported, with compact framing below 56px. Set body and eye colors, choose a tone and optionally disable the companion or pointer following.", "zh": "尺寸支持 24–160px，低于 56px 使用紧凑绘制。可设置角色及眼睛颜色、色调，或关闭伴随圆点和指针跟随。" },
+    "motion": { "en": "State changes blend from the current pose over 420ms. Reduced motion displays a static pose.", "zh": "状态从当前姿态融合到新姿态，时长 420ms。减少动效时显示静态姿态。" }
+  },
+  {
+    "id": "install-snippet",
+    "group": "intelligence",
+    "title": { "en": "Install snippet", "zh": "安装片段" },
+    "rustType": "InstallSnippet",
+    "lead": { "en": "Guide readers through framework-specific setup with copyable snippets.", "zh": "用可复制的代码片段引导不同环境的安装流程。" },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::install_snippet::{InstallCommand, InstallFramework, InstallSnippet, InstallStep};\n\nlet steps = vec![InstallStep::new(\"install\", \"Install\", vec![InstallCommand::new(\"Cargo\", \"cargo add kense-kui --rename kui\")])];\nlet control = cx.new(|cx| InstallSnippet::new(vec![InstallFramework::new(\"rust\", \"Rust\", steps)], cx));",
+    "method": "finish_key",
+    "signature": "(u64, impl Into<SharedString>, &mut Context<Self>) -> bool",
+    "event": "InstallSnippetEvent",
+    "rule": { "en": "The preview generates a sample key in memory. Copy uses the actual clipboard.", "zh": "预览仅在内存中生成样例密钥。复制使用真实剪贴板。" },
+    "api": { "en": "Use arrow keys, Home or End within either tab list. Provide real keys through the host with a matching request ID. Late or cancelled requests are discarded.", "zh": "标签栏支持方向键、Home 和 End。宿主用匹配的请求 ID 提供密钥，过期或取消的结果会被丢弃。" },
+    "motion": { "en": "The selected framework highlight moves on a 240ms spring. The host can complete or fail key requests. Code crossfades and the key wipe still need implementation and comparison.", "zh": "框架高亮以 240ms 弹簧移动。宿主可完成密钥请求或返回失败。代码交叉淡入淡出和密钥揭示仍待实现及对照。" }
+  },
+  {
+    "id": "upgrade-prompt",
+    "group": "intelligence",
+    "title": {
+      "en": "Upgrade prompt",
+      "zh": "用量升级提示"
+    },
+    "rustType": "UpgradePrompt",
+    "lead": {
+      "en": "Explain a usage limit and offer monthly or yearly billing.",
+      "zh": "说明用量上限，并提供月付或年付升级。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::upgrade_prompt::{UpgradePrompt, UpgradePromptOptions};\n\nlet control = cx.new(|cx| UpgradePrompt::new(UpgradePromptOptions::default(), cx));",
+    "method": "with_upgrade",
+    "signature": "(impl Fn(UpgradeSelection, &mut App) -> Task<Result<(), SharedString>> + 'static) -> Self",
+    "event": "UpgradeEvent",
+    "rule": {
+      "en": "Use the billing selector and confirm, or choose Maybe later and return from the reminder. The preview simulates billing.",
+      "zh": "可切换计费周期并确认，或稍后再说并从提醒返回。预览使用模拟账单。"
+    },
+    "api": {
+      "en": "Provide usage, reset date, prices in hundredths of the currency, features and the new limits. The optional upgrade task reports success or a retryable error.",
+      "zh": "提供用量、恢复日期、以货币百分之一为单位的价格、功能和新额度。可选的升级任务返回成功或可重试错误。"
+    },
+    "motion": {
+      "en": "The price rolls over 280ms and the meter settles over 500ms. Panels share a stable footer.",
+      "zh": "价格数字滚动 280ms，用量条以 500ms 弹簧变化，各状态共用固定位置的底部操作。"
+    }
+  },
+  {
+    "id": "referral-card",
+    "group": "intelligence",
+    "title": {
+      "en": "Referral card",
+      "zh": "邀请奖励卡"
+    },
+    "rustType": "ReferralCard",
+    "lead": {
+      "en": "Copy an invite link, collect email addresses, and see paid referral progress.",
+      "zh": "复制邀请链接、添加邮件地址，并查看付费推荐进度。"
+    },
+    "usageRust": "use gpui::{Task, prelude::*};\nuse kui::components::referral_card::{\n    ReferralCard, ReferralCardOptions, ReferralMilestone,\n};\n\nlet control = cx.new(|cx| {\n    ReferralCard::new(\n        ReferralCardOptions {\n            link: \"https://example.com/r/kense20\".into(),\n            referrals: Some(Vec::new()),\n            milestone: ReferralMilestone::new(5, \"3 months free\"),\n            ..Default::default()\n        },\n        window,\n        cx,\n    )\n    .on_invite(|invite, _, _| {\n        // Hand invite.emails and invite.signal to the host's delivery service.\n        let _ = invite;\n        Task::ready(Ok(()))\n    })\n});",
+    "method": "set_referrals",
+    "signature": "(Vec<Referral>, &mut Context<Self>)",
+    "event": "",
+    "rule": {
+      "en": "Enter adds an address. Enter again in an empty field sends the chips. Replay resets the sample program.",
+      "zh": "回车添加地址。输入框为空时回车发送已选地址。重播恢复样例。"
+    },
+    "api": {
+      "en": "Supply referral snapshots and an optional delivery task. Failed sends preserve the addresses and can be retried.",
+      "zh": "传入推荐记录和可选的发送任务。发送失败保留地址，可再次提交。"
+    },
+    "motion": {
+      "en": "Counters roll over 600ms. Milestone segments fill in 240ms and new rows expand inside a fixed-height list.",
+      "zh": "数值以 600ms 滚动，进度分段以 240ms 填充。新增名单行在固定高度的列表中展开。"
+    }
+  },
+  {
+    "id": "trial-banner",
+    "group": "intelligence",
+    "title": {
+      "en": "Trial banner",
+      "zh": "试用横幅"
+    },
+    "rustType": "TrialBanner",
+    "lead": {
+      "en": "Show trial status and let people manage billing or snooze the reminder.",
+      "zh": "展示试用进度，并提供账单和稍后提醒入口。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::trial_banner::{CivilDate, TrialBanner, TrialVariant};\n\nlet today = CivilDate::new(2026, 10, 27).expect(\"valid example date\");\nlet ends_at = today.add_days(9);\nlet control = cx.new(|cx| {\n    TrialBanner::new(\"workspace-trial\", cx)\n        .with_variant(TrialVariant::Banner)\n        .with_schedule(today, ends_at, 9, 14)\n});",
+    "method": "set_schedule",
+    "signature": "(CivilDate, CivilDate, i32, u32, &mut Context<Self>)",
+    "event": "TrialEvent",
+    "rule": {
+      "en": "Switch between banner, sidebar card and pill. The preview simulates billing without making a request.",
+      "zh": "可切换横幅、侧栏卡片和胶囊三种外观。预览仅模拟账单流程。"
+    },
+    "api": {
+      "en": "The host supplies billing dates and an optional payment task. Use the snooze event to persist the selected reminder date.",
+      "zh": "由宿主提供试用日期与可选的付款任务。通过稍后提醒事件保存用户所选日期。"
+    },
+    "motion": {
+      "en": "The ring retargets on a 240ms spring. Copy exits in 100ms and enters in 160ms. Reduced motion settles immediately.",
+      "zh": "进度环以 240ms 弹簧过渡。文案在 100ms 内淡出，160ms 内淡入。减少动效时立即更新。"
+    }
+  },
+  {
+    "id": "live-visitors",
+    "group": "intelligence",
+    "title": {
+      "en": "Live visitors",
+      "zh": "实时访客"
+    },
+    "rustType": "LiveVisitors",
+    "lead": {
+      "en": "Show a live count, map arrivals, popular pages and conversions.",
+      "zh": "同时展示实时人数、访客地图、热门页面和转化。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::live_visitors::{\n    LivePage, LiveVisitors, LiveVisitorsPaused, LiveVisitorsSnapshot,\n};\n\nlet control = cx.new(|cx| {\n    LiveVisitors::new(cx)\n        .with_snapshot(LiveVisitorsSnapshot {\n            count: 128,\n            pages: vec![LivePage::new(\"/pricing\", 31)],\n            ..Default::default()\n        })\n        .with_paused(false)\n});\ncx.subscribe(&control, |control, event: &LiveVisitorsPaused, cx| {\n    control.update(cx, |control, cx| control.set_paused(event.0, cx));\n}).detach();",
+    "method": "set_snapshot",
+    "signature": "(LiveVisitorsSnapshot, &mut Context<Self>)",
+    "event": "LiveVisitorsPaused",
+    "rule": {
+      "en": "Tab to Pause, then press Enter or Space. The preview plays a local sample stream.",
+      "zh": "用 Tab 聚焦暂停键，按 Enter 或空格切换。预览播放本地样例数据。"
+    },
+    "api": {
+      "en": "Provide a snapshot and a connection state from your own feed. Pause holds the displayed snapshot and applies only the latest queued data on resume.",
+      "zh": "由宿主传入快照与连接状态。暂停保留画面，恢复时只应用最新的一份待更新快照。"
+    },
+    "motion": {
+      "en": "The digits, ranks and bars retarget in 280ms. Arrival rings play for 900ms. Reduced motion keeps the data updates and settles the visuals immediately.",
+      "zh": "数字、榜单和条形在 280ms 内过渡，访客波纹持续 900ms。减少动效时，数据继续更新，画面直接就位。"
+    }
+  },
+  {
+    "id": "social-proof-toast",
+    "group": "intelligence",
+    "title": {
+      "en": "Social proof toast",
+      "zh": "近期活动通知"
+    },
+    "rustType": "SocialProofToast",
+    "lead": {
+      "en": "Cycle recent activity through a dismissible stack. This preview uses fictitious events.",
+      "zh": "轮播可关闭的近期活动通知。预览使用虚构样例。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::social_proof_toast::{\n    SocialProofEvent, SocialProofOptions, SocialProofPosition, SocialProofToast,\n};\n\nlet control = cx.new(|cx| {\n    SocialProofToast::new(\n        SocialProofOptions {\n            events: Some(vec![\n                SocialProofEvent::new(\"example-1\", \"Taylor\", \"started a trial\")\n                    .with_meta(\"Lisbon\"),\n            ]),\n            position: SocialProofPosition::BottomLeft,\n            looping: false,\n            limit: Some(6),\n            ..Default::default()\n        },\n        window,\n        cx,\n    )\n    .on_show(|event, _| eprintln!(\"Shown {}\", event.id))\n});",
+    "method": "set_paused",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "",
+    "rule": {
+      "en": "Hover or focus to pause and fan out. Escape dismisses the focused or front toast.",
+      "zh": "悬停或聚焦时暂停轮播并展开。Esc 关闭当前聚焦或最前面的通知。"
+    },
+    "api": {
+      "en": "Supply events oldest first. Configure initial delay, interval, visible count, prefill, placement and session limit.",
+      "zh": "按时间从旧到新提供事件。可配置初始延迟、间隔、可见数、预填充、位置和会话上限。"
+    },
+    "motion": {
+      "en": "Cards rise 16px, tuck 10px per layer, and fan out with an 8px gap. Reduced motion keeps the fades.",
+      "zh": "卡片升起 16px，收拢时逐层退后 10px，展开后间隔 8px。减少动效时保留淡入淡出。"
+    }
+  }
+]

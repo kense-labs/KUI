@@ -323,12 +323,40 @@ impl Render for TrainingRun {
             .inspected
             .and_then(|i| snapshot.loss.get(i))
             .or_else(|| snapshot.loss.last());
-        let current_train = selected.and_then(|s| s.train);
-        let current_val = selected.and_then(|s| s.validation);
+        let current_train = if self.inspected.is_some() {
+            selected.and_then(|s| s.train)
+        } else {
+            snapshot
+                .loss
+                .iter()
+                .rev()
+                .filter_map(|s| s.train)
+                .find(|v| v.is_finite())
+        };
+        let current_val = if self.inspected.is_some() {
+            selected.and_then(|s| s.validation)
+        } else {
+            snapshot
+                .loss
+                .iter()
+                .rev()
+                .filter_map(|s| s.validation)
+                .find(|v| v.is_finite())
+        };
         let step = selected.map_or(snapshot.step, |s| s.step);
         let samples = snapshot.loss.clone();
         let total = snapshot.total_steps.max(1);
         let ceiling = self.ceiling;
+        let dark = crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark;
+        let train_color: Hsla = rgb(if dark { 0x60a5fa } else { 0x2563eb }).into();
+        let validation_color: Hsla = rgb(if dark { 0xc084fc } else { 0x9333ea }).into();
+        let legend = |label: String, color| {
+            row()
+                .items_center()
+                .gap_2()
+                .child(div().w(px(12.)).h(px(2.)).rounded_full().bg(color))
+                .child(hint(label, p))
+        };
         let chart_label = format!(
             "{} {} / {}, {} {}, {} {}",
             tr(cx, "Step", "步骤"),
@@ -345,9 +373,8 @@ impl Render for TrainingRun {
             .tab_index(0)
             .aria_label(chart_label)
             .w_full()
-            .h(px(156.))
+            .h(px(190.))
             .relative()
-            .bg(p.stage)
             .rounded(crate::foundation::surface_radius(cx))
             .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
                 s.inspect(e.keystroke.key.as_str(), e.keystroke.modifiers.shift, cx);
@@ -355,26 +382,93 @@ impl Render for TrainingRun {
             .child(
                 canvas(
                     |_, _, _| (),
-                    move |b, _, w, _| {
-                        draw_line(&samples, total, ceiling, false, p.bright, b, w);
-                        draw_line(&samples, total, ceiling, true, p.success, b, w);
+                    move |bounds, _, w, _| {
+                        let b = Bounds::new(
+                            bounds.origin + point(px(32.), px(12.)),
+                            size(
+                                (bounds.size.width - px(44.)).max(px(1.)),
+                                (bounds.size.height - px(28.)).max(px(1.)),
+                            ),
+                        );
+                        for level in [0., 0.5, 1.] {
+                            let y = b.origin.y + b.size.height * level;
+                            w.paint_quad(fill(
+                                Bounds::new(point(b.origin.x, y), size(b.size.width, px(1.))),
+                                p.line,
+                            ));
+                        }
+                        draw_line(&samples, total, ceiling, false, train_color, b, w);
+                        draw_line(&samples, total, ceiling, true, validation_color, b, w);
                     },
                 )
                 .absolute()
                 .inset_0(),
-            );
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top(px(3.))
+                    .child(hint(format!("{ceiling:.1}"), p)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top(relative(0.5))
+                    .mt(px(-10.))
+                    .child(hint(format!("{:.1}", ceiling / 2.), p)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .bottom(px(7.))
+                    .child(hint("0.0", p)),
+            )
+            .when(snapshot.loss.is_empty(), |graph| {
+                graph.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(hint(
+                            if snapshot.status == TrainingRunStatus::Queued {
+                                tr(cx, "Waiting for GPUs", "等待 GPU 资源")
+                            } else {
+                                tr(cx, "Waiting for training samples", "等待训练样本")
+                            },
+                            p,
+                        )),
+                )
+            });
         let progress = (snapshot.step.min(total) as f32 / total as f32).clamp(0., 1.);
         let epoch_count = snapshot.epochs.clamp(1, 20);
         let mut epochs = row().w_full().gap(px(4.));
         for index in 0..epoch_count {
             let part = (progress * epoch_count as f32 - index as f32).clamp(0., 1.);
             epochs = epochs.child(
-                div()
+                column()
                     .flex_1()
-                    .h(px(4.))
-                    .rounded(px(2.))
-                    .bg(p.line)
-                    .child(div().h_full().w(relative(part)).bg(p.bright)),
+                    .min_w_0()
+                    .gap_1()
+                    .child(
+                        div().h(px(4.)).rounded(px(2.)).bg(p.line).child(
+                            div()
+                                .h_full()
+                                .w(relative(part))
+                                .rounded(px(2.))
+                                .bg(train_color),
+                        ),
+                    )
+                    .when(epoch_count <= 4, |epoch| {
+                        epoch.child(hint(
+                            format!("{} {}", tr(cx, "Epoch", "轮次"), index + 1),
+                            p,
+                        ))
+                    }),
             );
         }
         let stats = row()
@@ -466,7 +560,17 @@ impl Render for TrainingRun {
                 })),
             );
         }
-        let mut events = column().h(px(96.)).gap(px(0.));
+        let mut events = column().min_h(px(68.)).gap(px(0.));
+        if snapshot.events.is_empty() {
+            events = events.child(div().pt_2().child(hint(
+                tr(
+                    cx,
+                    "Evals and checkpoints show here",
+                    "在此显示评估和检查点",
+                ),
+                p,
+            )));
+        }
         for event in snapshot.events.iter().rev().take(3) {
             events = events.child(div().h(px(32.)).flex().items_center().child(hint(
                 format!(
@@ -511,13 +615,13 @@ impl Render for TrainingRun {
                     .justify_between()
                     .flex_wrap()
                     .gap_2()
-                    .child(hint(
+                    .child(legend(
                         format!("{} {}", tr(cx, "Train", "训练"), latest(current_train)),
-                        p,
+                        train_color,
                     ))
-                    .child(hint(
+                    .child(legend(
                         format!("{} {}", tr(cx, "Validation", "验证"), latest(current_val)),
-                        p,
+                        validation_color,
                     ))
                     .child(hint(
                         format!("{} {step} / {total}", tr(cx, "Step", "步骤")),

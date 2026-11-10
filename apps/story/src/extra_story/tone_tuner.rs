@@ -13,13 +13,21 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 struct Example {
     view: Entity<ToneTuner>,
     language: UiLanguage,
-    fail_once: bool,
     _sub: Subscription,
 }
 impl Example {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let language = UiLanguage::current(cx);
-        let view=cx.new(|cx|ToneTuner::new(language.text("Reply draft","回复草稿"),language.text("Thanks for letting us know. We have received your request and will follow up soon.","感谢你告诉我们。我们已收到你的请求，会尽快跟进。"),w,cx));
+        let view = cx.new(|cx| {
+            ToneTuner::new(
+                language.text("Reply draft", "回复草稿"),
+                language.text(
+                    "Hi Sofia,\n\nWe found a duplicate charge of $1,240 on invoice INV-20481. We have issued a refund to your original payment method. It may take 5–10 business days to appear.\n\nPlease reply if you need anything else.\n\nBest,\nJordan",
+                    "Sofia，你好。\n\n我们查到发票 INV-20481 上重复扣了 1,240 美元，已原路退款。款项预计在 5–10 个工作日内到账。\n\n如需其他帮助，请直接回复。\n\nJordan",
+                ),
+                w, cx,
+            ).with_recipient("Sofia Ramirez", language.text("Re: Duplicate charge on INV-20481", "回复：发票 INV-20481 重复扣款"))
+        });
         let sub = cx.subscribe_in(
             &view,
             w,
@@ -32,10 +40,9 @@ impl Example {
                 {
                     let ticket = *ticket;
                     let text = text.to_string();
+                    let settings = *settings;
                     let voice = settings.voice;
                     let language = s.language;
-                    let fail = s.fail_once;
-                    s.fail_once = false;
                     let weak = view.downgrade();
                     cx.spawn_in(w, async move |_, cx| {
                         cx.background_executor()
@@ -43,29 +50,38 @@ impl Example {
                             .await;
                         let _ = cx.update(|w, cx| {
                             let _ = weak.update(cx, |v, cx| {
-                                if fail {
-                                    v.fail(
-                                        ticket,
+                                let greeting = match (settings.formality, voice) {
+                                    (2, _) => language.text("Dear Sofia,", "Sofia，您好："),
+                                    (_, VoiceTone::Friendly) => {
+                                        language.text("Hi Sofia!", "Sofia，你好！")
+                                    }
+                                    (_, VoiceTone::Empathetic) => language.text(
+                                        "Hi Sofia, I'm sorry for the duplicate charge.",
+                                        "Sofia，你好。很抱歉给你带来了重复扣款的困扰。",
+                                    ),
+                                    _ => language.text("Hi Sofia,", "Sofia，你好。"),
+                                };
+                                let body = text
+                                    .strip_prefix(language.text("Hi Sofia,", "Sofia，你好。"))
+                                    .unwrap_or(&text)
+                                    .trim_start();
+                                let detail = match settings.detail {
+                                    0 => body
+                                        .split_inclusive(language.text(". ", "。"))
+                                        .take(2)
+                                        .collect::<String>(),
+                                    2 => format!(
+                                        "{} {}",
+                                        body,
                                         language.text(
-                                            "Sample rewrite failed; retry.",
-                                            "样例改写失败，请重试。",
-                                        ),
-                                        cx,
-                                    );
-                                } else {
-                                    let suffix = match voice {
-                                        VoiceTone::Friendly => language
-                                            .text(" We're happy to help.", " 我们很乐意帮助你。"),
-                                        VoiceTone::Confident => language
-                                            .text(" We will take care of it.", " 我们会妥善处理。"),
-                                        VoiceTone::Empathetic => language.text(
-                                            " We understand this matters to you.",
-                                            " 我们理解这对你很重要。",
-                                        ),
-                                        VoiceTone::Neutral => "",
-                                    };
-                                    v.finish(ticket, format!("{text}{suffix}"), w, cx);
-                                }
+                                            "You do not need to take any further action.",
+                                            "你无需执行其他操作。",
+                                        )
+                                    ),
+                                    _ => body.to_owned(),
+                                };
+                                let output = format!("{greeting}\n\n{}", detail.trim_end());
+                                v.finish(ticket, output, w, cx);
                             });
                         });
                     })
@@ -76,7 +92,6 @@ impl Example {
         Self {
             view,
             language,
-            fail_once: true,
             _sub: sub,
         }
     }

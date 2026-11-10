@@ -361,10 +361,10 @@ impl Render for PresenceStack {
         }
         self.fan.duration(expanded as u8 as f32, 0.4, cx);
         let fan = self.fan.get(w, cx).clamp(0., 1.);
-        let step = d * (0.68 + 0.38 * fan);
+        let step = d * (0.67 + 0.39 * fan);
         let count = self.people.len().min(self.max);
         let extra = self.people.len().saturating_sub(self.max);
-        let reserve = d + self.max as f32 * d * 0.68;
+        let reserve = d + (count.saturating_sub(1) + usize::from(extra > 0)) as f32 * d * 0.67;
         let used = d + (count.saturating_sub(1) + usize::from(extra > 0)) as f32 * step;
         let origin = if self.align == PresenceAlign::End {
             reserve - used
@@ -382,6 +382,7 @@ impl Render for PresenceStack {
             w.request_animation_frame();
         }
         let age = self.clock.age(cx);
+        let mut marks = Vec::with_capacity(count);
         for slot in &mut self.slots {
             let index = slot.position.get(w, cx).max(0.);
             let progress = slot.visible.get(w, cx).clamp(0., 1.);
@@ -397,14 +398,23 @@ impl Render for PresenceStack {
                 PresenceStatus::Active | PresenceStatus::Typing => p.success,
                 PresenceStatus::Idle => p.faint,
             };
+            let left = origin + index * step;
+            let top = if is_active { -2. } else { 0. };
             let mut mark = div()
                 .absolute()
-                .bottom(px(-1.))
-                .right(px(if person.status == PresenceStatus::Typing {
-                    -4.
-                } else {
-                    -1.
-                }))
+                .top(px(top + d
+                    - if person.status == PresenceStatus::Typing {
+                        10.
+                    } else {
+                        9.
+                    }))
+                .left(px(left + d
+                    - if person.status == PresenceStatus::Typing {
+                        17.
+                    } else {
+                        10.
+                    }))
+                .opacity(progress)
                 .h(px(if person.status == PresenceStatus::Typing {
                     12.
                 } else {
@@ -448,16 +458,20 @@ impl Render for PresenceStack {
                     );
                 }
             }
+            marks.push(mark);
             stack = stack.child(
                 div()
                     .id(SharedString::from(format!("presence-{id}")))
                     .absolute()
-                    .left(px(origin + index * step))
-                    .top(px(if is_active { -2. } else { 0. }))
+                    .left(px(left))
+                    .top(px(top))
                     .size(px(d))
                     .rounded_full()
                     .border_2()
                     .border_color(p.stage)
+                    .flex()
+                    .items_center()
+                    .justify_center()
                     .opacity(progress)
                     .on_hover(cx.listener(move |s, over: &bool, _, cx| {
                         if *over {
@@ -467,15 +481,14 @@ impl Render for PresenceStack {
                         }
                     }))
                     .child(
-                        Avatar::portrait(&portrait, d * (0.4 + 0.6 * progress), p).opacity(
+                        Avatar::portrait(&portrait, (d - 4.) * (0.4 + 0.6 * progress), p).opacity(
                             if person.status == PresenceStatus::Idle {
                                 0.55
                             } else {
                                 1.
                             },
                         ),
-                    )
-                    .child(mark),
+                    ),
             );
         }
         if extra > 0 {
@@ -498,6 +511,7 @@ impl Render for PresenceStack {
                     .child(self.overflow.render(d * 0.34, w, cx)),
             );
         }
+        stack = stack.children(marks);
         if expanded
             && let Some(i) = self
                 .people

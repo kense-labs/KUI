@@ -22,6 +22,8 @@ let control = cx.new(|cx| AgentHandoff::new("Support", "Order 1042", summary, wi
 
 ## Interaction
 
+The preview provides separate Person joins and No one available scenarios. Switching scenarios resets the sample conversation.
+
 The host owns the conversation and transfer service. The preview simulates all transfers and sends; nothing is sent.
 
 ## API

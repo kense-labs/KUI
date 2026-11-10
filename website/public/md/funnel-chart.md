@@ -18,7 +18,7 @@ use kui::components::funnel_chart::{FunnelChart, FunnelSegment, FunnelStage};
 
 let segments = vec![FunnelSegment::new("mobile", "Mobile"), FunnelSegment::new("desktop", "Desktop")];
 let stages = vec![FunnelStage::new("visit", "Visit", vec![600.0, 400.0]), FunnelStage::new("buy", "Buy", vec![120.0, 80.0])];
-let control = cx.new(|_| FunnelChart::new("Checkout", stages, segments));
+let control = cx.new(|cx| FunnelChart::new("Checkout", stages, segments, cx));
 ```
 
 ## Interaction

@@ -21,6 +21,8 @@ let control = cx.new(|_| MeetingSummary::new(MeetingData::new("Release review"))
 
 ## Interaction
 
+The preview offers Live, Error and No transcript. Use `MeetingStatus::NoTranscript` when the host has no source transcript.
+
 The host provides notes, runs regeneration and sends actions; the example simulates sends. Copy writes to the real clipboard and reports success or failure.
 
 ## API

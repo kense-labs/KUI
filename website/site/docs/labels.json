@@ -211,6 +211,10 @@
     "zh": "按钮",
     "en": "Buttons"
   },
+  "sidebar.group.theme-switches": {
+    "zh": "主题过渡",
+    "en": "Theme transitions"
+  },
   "sidebar.group.gestures": {
     "zh": "手势",
     "en": "Gestures"

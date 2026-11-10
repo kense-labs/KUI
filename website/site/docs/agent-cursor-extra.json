@@ -16,16 +16,16 @@
     "signature": "(u64, impl Into<SharedString>, &mut Context<Self>) -> bool",
     "event": "AgentCursorEvent",
     "rule": {
-      "en": "The host supplies document blocks, target positions, run results and persistence. The preview simulates edits and saves nothing.",
-      "zh": "宿主负责文档、光标目标、运行结果和持久化。预览仅模拟修改，不会保存。"
+      "en": "The sample plays a successful edit. Choose Connection drops to test recovery. Retry keeps the original draft. No edits are saved. Optionally show a second cursor with with_collaborator(name, color). The cursor tag flips at the document edge.",
+      "zh": "默认演示成功修改。可选择模拟断线，检查原文保留和重试过程。演示不保存修改。 用 with_collaborator(name, color) 显示第二个光标；标签到文档边缘会翻转。"
     },
     "api": {
-      "en": "Handle Run using its ticket with set_target_for, set_position_for, set_status_for and set_blocks_for; finish or fail the same ticket. Stop invalidates it and restores the original. Review exposes Accept and Undo events. set_position uses local logical pixels; set_visible controls off-screen work.",
-      "zh": "处理 Run 时使用 ticket 调用 set_target_for、set_position_for、set_status_for 和 set_blocks_for，再对同一 ticket 调用 finish 或 fail。Stop 使 ticket 失效并恢复原文。审核阶段提供 Accept 与 Undo 事件；set_position 使用文档内逻辑像素，set_visible 控制离屏工作。"
+      "en": "Handle Run using its ticket with set_target_for, set_position_for, set_status_for and set_blocks_for; finish or fail the same ticket. Stop invalidates it and restores the original. Review exposes Accept and Undo events. set_position uses local logical pixels; set_visible controls off-screen work. Use select_target_for before a streamed replacement and with_meta for a byline. is_visible combines viewport and host visibility.",
+      "zh": "处理 Run 时使用 ticket 调用 set_target_for、set_position_for、set_status_for 和 set_blocks_for，再对同一 ticket 调用 finish 或 fail。Stop 使 ticket 失效并恢复原文。审核阶段提供 Accept 与 Undo 事件；set_position 使用文档内逻辑像素，set_visible 控制离屏工作。 select_target_for 在流式替换前选中文档块，with_meta 设置副标题，is_visible 返回视口和宿主共同决定的可见性。"
     },
     "motion": {
-      "en": "The cursor follows measured block targets with a spring; reduced motion jumps to the target and off-screen animation stops. Word-by-word streaming, selection effects and full reference comparison remain unimplemented or unverified.",
-      "zh": "光标以弹簧跟随实测的文档块位置；减少动效时直接跳转，离屏停止动画。逐字流、选择效果及完整参考对照尚未实现或验收。"
+      "en": "The cursor follows measured text positions. The sample selects a paragraph, streams replacement chunks, inserts a heading and fixes a typo. Reduced motion applies the result together. Playback waits while the preview is off screen.",
+      "zh": "光标跟随实测文字位置。演示选中一段文字、分批写入替换内容、插入标题并修正错字。减少动效模式一次性显示结果，预览离屏时暂停。"
     }
   }
 ]

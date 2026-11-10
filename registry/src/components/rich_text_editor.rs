@@ -7,7 +7,11 @@ use crate::primitives::{
     glyph::Glyph,
 };
 use gpui::{prelude::*, *};
-use std::{cell::RefCell, ops::Range, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    ops::Range,
+    rc::Rc,
+};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RichDocument {
     pub markdown: String,
@@ -431,6 +435,9 @@ pub struct RichTextEditor {
     slash_reveal: FormReveal,
     last_slash: Vec<(Kind, SharedString)>,
     notice: SharedString,
+    document_width: Rc<Cell<Pixels>>,
+    source_scroll: ScrollHandle,
+    source_focus: FocusHandle,
 }
 impl EventEmitter<RichDocument> for RichTextEditor {}
 impl RichTextEditor {
@@ -474,6 +481,9 @@ impl RichTextEditor {
             slash_reveal: FormReveal::new(false),
             last_slash: vec![],
             notice: "".into(),
+            document_width: Default::default(),
+            source_scroll: ScrollHandle::new(),
+            source_focus: cx.focus_handle().tab_stop(true),
         };
         for b in parse_doc(markdown) {
             let line = s.create(b, w, cx);
@@ -905,6 +915,12 @@ impl Render for RichTextEditor {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
         let width = (f32::from(w.viewport_size().width) - 32.).clamp(112., 500.);
+        let measured_width = f32::from(self.document_width.get());
+        let document_width = if measured_width > 0. {
+            measured_width
+        } else {
+            width
+        };
         let mut head = row().gap(px(3.));
         for (i, (g, en, zh, enabled)) in [
             (Glyph::Undo, "Undo", "撤销", !self.history.is_empty()),
@@ -959,10 +975,15 @@ impl Render for RichTextEditor {
             let b = l.data.borrow();
             let text = b.text.clone();
             let sz = b.kind.size();
-            let indent = if b.kind.list() || b.kind == Kind::Quote {
-                19. + f32::from(b.depth) * 12.
+            let indent = f32::from(b.depth) * 12.;
+            let chrome = if b.kind.list() {
+                21. + indent
+            } else if b.kind == Kind::Quote {
+                2. + indent.max(7.)
+            } else if b.kind == Kind::Code {
+                10. + indent
             } else {
-                0.
+                indent
             };
             let runs = runs_for(&b, &text, &w.text_style().to_run(text.len()));
             let line = px(sz + 7.);
@@ -974,7 +995,7 @@ impl Render for RichTextEditor {
                         text.into(),
                         px(sz),
                         &runs,
-                        Some(px((width - 30. - indent).max(1.))),
+                        Some(px((document_width - 26. - chrome).max(1.))),
                         None,
                     )
                     .map(|rows| rows.iter().fold(px(0.), |n, r| n + r.size(line).height))
@@ -1004,6 +1025,7 @@ impl Render for RichTextEditor {
                 block = block.child(
                     div()
                         .w(px(16.))
+                        .flex_none()
                         .text_center()
                         .text_color(p.secondary)
                         .child(if b.kind == Kind::List {
@@ -1125,6 +1147,7 @@ impl Render for RichTextEditor {
                     .when(self.html == (i == 1), |b| b.bg(p.hover))
                     .on_click(cx.listener(move |s, _, _, cx| {
                         s.html = i == 1;
+                        s.source_scroll.set_offset(Point::default());
                         cx.notify()
                     })),
             )
@@ -1150,7 +1173,16 @@ impl Render for RichTextEditor {
                     .detach()
                 })),
             );
+        let source_scroll = self.source_scroll.clone();
+        let document_width = self.document_width.clone();
         section(width, cx)
+            .on_children_prepainted(move |children, w, _| {
+                if let Some(child) = children.first()
+                    && document_width.replace(child.size.width) != child.size.width
+                {
+                    w.request_animation_frame();
+                }
+            })
             .child(
                 shell
                     .id("rich-document")
@@ -1160,12 +1192,64 @@ impl Render for RichTextEditor {
             .child(
                 div()
                     .id("source")
-                    .max_h(px(142.))
+                    .track_focus(&self.source_focus)
+                    .tab_index(0)
+                    .role(Role::Region)
+                    .aria_label(if self.html { "HTML" } else { "Markdown" })
+                    .relative()
+                    .max_h(px(260.))
                     .overflow_y_scroll()
+                    .track_scroll(&self.source_scroll)
+                    .on_key_down(cx.listener(|s, event: &KeyDownEvent, w, cx| {
+                        let scroll = &s.source_scroll;
+                        let offset = scroll.offset();
+                        let max = scroll.max_offset().y;
+                        let page = (scroll.bounds().size.height - px(19.)).max(px(19.));
+                        let y = match event.keystroke.key.as_str() {
+                            "up" => offset.y + px(19.),
+                            "down" => offset.y - px(19.),
+                            "pageup" => offset.y + page,
+                            "pagedown" => offset.y - page,
+                            "home" => px(0.),
+                            "end" => -max,
+                            _ => return,
+                        }
+                        .clamp(-max, px(0.));
+                        if y != offset.y {
+                            scroll.set_offset(point(offset.x, y));
+                            w.prevent_default();
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .rounded(crate::foundation::surface_radius(cx))
-                    .p(px(8.))
+                    .border_1()
+                    .border_color(transparent_black())
+                    .focus_visible(move |style| style.border_color(p.focus))
+                    .px(px(12.))
+                    .py(px(10.))
                     .bg(p.tray)
                     .text_size(px(12.))
+                    .line_height(px(19.))
+                    .child(
+                        canvas(
+                            |_, _, _| (),
+                            move |_, _, _, cx| {
+                                if let Some(host) =
+                                    cx.try_global::<crate::primitives::editor::EditorScrollRegion>()
+                                {
+                                    let top = -source_scroll.offset().y;
+                                    (host.0)(
+                                        source_scroll.bounds(),
+                                        top > px(0.1),
+                                        top + px(0.1) < source_scroll.max_offset().y,
+                                    );
+                                }
+                            },
+                        )
+                        .absolute()
+                        .size(px(0.)),
+                    )
                     .child(if self.html {
                         self.doc.html.clone()
                     } else {
@@ -1179,7 +1263,31 @@ impl Render for RichTextEditor {
 }
 #[cfg(test)]
 mod tests {
-    use super::{Block, Inline, Mark, RichDocument, parse_doc, safe_url};
+    use super::{Block, Inline, Mark, RichDocument, RichTextEditor, parse_doc, safe_url};
+    use gpui::{TestAppContext, px};
+
+    #[test]
+    fn keyboard_reaches_the_end_of_long_exports_and_returns_to_top() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let text = "Long paragraph with a line that wraps. ".repeat(55);
+        let (editor, window) =
+            app.add_window_view(|w, cx| RichTextEditor::new("Notes", &text, w, cx));
+        window.update(|w, cx| editor.read(cx).source_focus.clone().focus(w, cx));
+        window.run_until_parked();
+        let max = window.update(|_, cx| editor.read(cx).source_scroll.max_offset().y);
+        assert!(max > px(0.));
+        window.simulate_keystrokes("end");
+        assert_eq!(
+            window.update(|_, cx| editor.read(cx).source_scroll.offset().y),
+            -max
+        );
+        window.simulate_keystrokes("home");
+        assert_eq!(
+            window.update(|_, cx| editor.read(cx).source_scroll.offset().y),
+            px(0.)
+        );
+    }
     #[test]
     fn preserves_markup_without_injecting_html() {
         let doc = RichDocument::from_markdown("# Title\n- <tag>\n- **last**\n> quote");

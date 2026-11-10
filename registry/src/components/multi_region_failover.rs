@@ -201,6 +201,45 @@ fn dot(center: Point<Pixels>, radius: f32, color: Hsla, w: &mut Window) {
         w.paint_path(path, color);
     }
 }
+fn cube(center: Point<Pixels>, width: f32, tint: Hsla, p: Paint, w: &mut Window) {
+    let at = |x, y| center + point(px(x * width), px(y * width));
+    let north = at(0., -0.25);
+    let west = at(-0.5, 0.);
+    let south = at(0., 0.25);
+    let east = at(0.5, 0.);
+    for (corners, color) in [
+        (
+            [west, south, at(0., 0.49), at(-0.5, 0.24)],
+            p.tray.blend(tint.opacity(0.16)),
+        ),
+        (
+            [south, east, at(0.5, 0.24), at(0., 0.49)],
+            p.panel.blend(tint.opacity(0.23)),
+        ),
+        (
+            [north, east, south, west],
+            p.panel.blend(tint.opacity(0.08)),
+        ),
+    ] {
+        for (mut path, ink) in [
+            (PathBuilder::fill(), color),
+            (
+                PathBuilder::stroke(px(1.)),
+                p.line.blend(tint.opacity(0.36)),
+            ),
+        ] {
+            path.move_to(corners[0]);
+            for pt in &corners[1..] {
+                path.line_to(*pt);
+            }
+            path.close();
+            if let Ok(path) = path.build() {
+                w.paint_path(path, ink);
+            }
+        }
+    }
+    dot(center, 3.4, tint, w);
+}
 impl Render for MultiRegionFailover {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
@@ -253,7 +292,13 @@ impl Render for MultiRegionFailover {
         let bounds = self.bounds.clone();
         let stage_w = f32::from(bounds.get().size.width);
         let narrow = stage_w > 0. && stage_w < 640.;
-        let stage_h = if stage_w > 1. { stage_w * 0.6 } else { 240. };
+        let stage_h = if narrow {
+            (stage_w * 1.46).clamp(370., 790.)
+        } else if stage_w > 1. {
+            stage_w * 0.62
+        } else {
+            460.
+        };
         let diagram = div()
             .id("failover-diagram")
             .role(Role::Image)
@@ -276,7 +321,7 @@ impl Render for MultiRegionFailover {
                             point(b.origin.x + px(x * width), b.origin.y + px(y * height))
                         };
                         let (user, balancer, a, z) = if narrow {
-                            (at(0.5, 0.12), at(0.5, 0.42), at(0.24, 0.78), at(0.76, 0.78))
+                            (at(0.5, 0.17), at(0.5, 0.43), at(0.25, 0.76), at(0.75, 0.76))
                         } else {
                             (at(0.08, 0.5), at(0.36, 0.5), at(0.78, 0.25), at(0.78, 0.75))
                         };
@@ -301,19 +346,21 @@ impl Render for MultiRegionFailover {
                             }
                         }
                         for (index, pos) in [user, balancer, a, z].into_iter().enumerate() {
-                            dot(pos, if index < 2 { 9. } else { 11. }, p.panel, w);
-                            dot(
-                                pos,
-                                if index < 2 { 5. } else { 7. },
-                                if (index == 2 && health[0] == RegionHealth::Unhealthy)
-                                    || (index == 3 && health[1] == RegionHealth::Unhealthy)
-                                {
-                                    p.danger
-                                } else {
-                                    p.bright
-                                },
-                                w,
-                            );
+                            let color = if index < 2 {
+                                p.bright
+                            } else {
+                                match health[index - 2] {
+                                    RegionHealth::Unhealthy => p.danger,
+                                    RegionHealth::Degraded | RegionHealth::Recovering => p.faint,
+                                    RegionHealth::Healthy => p.success,
+                                }
+                            };
+                            let footprint = if index < 2 {
+                                width * 0.23
+                            } else {
+                                width * 0.32
+                            };
+                            cube(pos, footprint.clamp(48., 140.), color, p, w);
                         }
                     },
                 )
@@ -323,29 +370,37 @@ impl Render for MultiRegionFailover {
             .child(
                 div()
                     .absolute()
-                    .left(relative(if narrow { 0.40 } else { 0.01 }))
-                    .top(relative(if narrow { 0.01 } else { 0.57 }))
+                    .left(relative(if narrow { 0.25 } else { 0.01 }))
+                    .w(relative(if narrow { 0.50 } else { 0.14 }))
+                    .text_center()
+                    .top(relative(if narrow { 0.05 } else { 0.66 }))
                     .child(hint(tr(cx, "Users", "用户"), p)),
             )
             .child(
                 div()
                     .absolute()
-                    .left(relative(if narrow { 0.36 } else { 0.27 }))
-                    .top(relative(if narrow { 0.48 } else { 0.57 }))
+                    .left(relative(if narrow { 0.25 } else { 0.22 }))
+                    .w(relative(if narrow { 0.50 } else { 0.28 }))
+                    .text_center()
+                    .top(relative(if narrow { 0.54 } else { 0.66 }))
                     .child(hint(tr(cx, "Balancer", "负载均衡"), p)),
             )
             .child(
                 div()
                     .absolute()
-                    .left(relative(if narrow { 0.05 } else { 0.60 }))
-                    .top(relative(if narrow { 0.83 } else { 0.08 }))
+                    .left(relative(if narrow { 0.01 } else { 0.56 }))
+                    .w(relative(if narrow { 0.48 } else { 0.44 }))
+                    .text_center()
+                    .top(relative(if narrow { 0.89 } else { 0.44 }))
                     .child(hint(format!("{primary} · {h0}"), p)),
             )
             .child(
                 div()
                     .absolute()
-                    .left(relative(if narrow { 0.58 } else { 0.60 }))
-                    .top(relative(if narrow { 0.83 } else { 0.77 }))
+                    .left(relative(if narrow { 0.51 } else { 0.56 }))
+                    .w(relative(if narrow { 0.48 } else { 0.44 }))
+                    .text_center()
+                    .top(relative(if narrow { 0.89 } else { 0.94 }))
                     .child(hint(format!("{secondary} · {h1}"), p)),
             );
         let busy = self.pending.is_some();

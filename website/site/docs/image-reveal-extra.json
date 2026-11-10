@@ -10,7 +10,7 @@
     "signature": "(u64, f32, &mut Context<Self>)",
     "event": "ImageRevealEvent",
     "rule": { "en": "The host begins each run with a unique ID, optionally supplies a preview, and reports progress, completion or failure. The example is simulated.", "zh": "宿主为每次任务提供唯一 ID，可设置预览，并报告进度、完成或失败。示例为模拟数据。" },
-    "api": { "en": "begin, set_preview, set_progress, finish and fail ignore replies from older or finished runs. Retry is emitted to the host.", "zh": "begin、set_preview、set_progress、finish 和 fail 忽略旧任务或已结束任务的回调；重试事件交给宿主处理。" },
-    "motion": { "en": "Progress follows updates over 200 ms and reveals the preview from top to bottom. Image blur, grain and soft-edge effects are not yet implemented or visually verified.", "zh": "进度以 200ms 跟随更新，预览从上到下显现；模糊、颗粒与柔边效果尚未实现或完成视觉验收。" }
+    "api": { "en": "Preview, progress, completion and failure updates ignore replies from older or finished runs. with_steps(u32) enables step labels; zero uses the default percentage. Retry is emitted to the host.", "zh": "预览、进度、完成与失败的更新会忽略旧任务或已结束任务的回调。with_steps(u32) 设置总步数，传零时使用默认百分比。重试事件交给宿主。" },
+    "motion": { "en": "Progress follows updates over 160 ms and reveals the preview from top to bottom with a feathered edge.", "zh": "进度以 160ms 跟随更新，预览从上到下沿柔化边缘显现。" }
   }
 ]

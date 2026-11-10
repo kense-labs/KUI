@@ -1,6 +1,6 @@
-//! Layered time series with smoothly changing data and inspectable points.
+//! Layered streams on a wiggle baseline that morph between ranges.
 use crate::primitives::{
-    family::{Paint, Slide, Tone, disabled_motion, face},
+    family::{Paint, Slide, Tone, disabled_motion, face, measure},
     presentation::{column, hint, row, title, tr},
 };
 use gpui::{prelude::*, *};
@@ -8,6 +8,18 @@ use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
 const GRID: usize = 161;
+const PAD: f32 = 10.;
+const PLOT_H: f32 = 260.;
+const AXIS_H: f32 = 26.;
+const TIP_GAP: f32 = 14.;
+/// How the stack is centred: `Wiggle` flows, `Silhouette` centres, `Zero` is flat.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StreamOffset {
+    #[default]
+    Wiggle,
+    Silhouette,
+    Zero,
+}
 #[derive(Clone, Debug)]
 pub struct StreamLayer {
     pub id: SharedString,
@@ -27,14 +39,21 @@ impl StreamLayer {
 #[derive(Clone, Debug)]
 pub struct StreamPoint {
     pub label: SharedString,
+    /// Short label on the time axis; points without one keep the axis quiet.
+    pub axis_label: Option<SharedString>,
     pub values: Vec<f32>,
 }
 impl StreamPoint {
     pub fn new(label: impl Into<SharedString>, values: Vec<f32>) -> Self {
         Self {
             label: label.into(),
+            axis_label: None,
             values,
         }
+    }
+    pub fn with_axis_label(mut self, label: Option<SharedString>) -> Self {
+        self.axis_label = label;
+        self
     }
 }
 #[derive(Clone, Debug)]
@@ -46,15 +65,27 @@ pub struct StreamInspect {
 }
 pub struct Streamgraph {
     title: SharedString,
+    unit: SharedString,
     layers: Vec<StreamLayer>,
     points: Vec<StreamPoint>,
     hidden: Vec<SharedString>,
+    offset: StreamOffset,
+    direct_labels: bool,
     samples: Vec<Vec<Slide>>,
     reveal: Slide,
     revealed: bool,
     active: Option<usize>,
+    active_layer: Option<usize>,
+    legend_focus: Option<usize>,
+    pointer: Option<(f32, f32)>,
+    spots: Vec<Option<usize>>,
     cursor: Slide,
+    tip_x: Slide,
+    tip_y: Slide,
+    tip_show: Slide,
     dragging: bool,
+    focus: Option<FocusHandle>,
+    focus_subscriptions: Vec<Subscription>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     touching: Rc<Cell<bool>>,
     initialized: bool,
@@ -69,20 +100,46 @@ impl Streamgraph {
     ) -> Self {
         Self {
             title: title.into(),
+            unit: "".into(),
             layers,
             points,
             hidden: vec![],
+            offset: StreamOffset::default(),
+            direct_labels: true,
             samples: vec![],
             reveal: Slide::new(0.),
             revealed: false,
             active: None,
+            active_layer: None,
+            legend_focus: None,
+            pointer: None,
+            spots: vec![],
             cursor: Slide::new(0.),
+            tip_x: Slide::new(0.),
+            tip_y: Slide::new(0.),
+            tip_show: Slide::new(0.),
             dragging: false,
+            focus: None,
+            focus_subscriptions: vec![],
             bounds: Default::default(),
             touching: Default::default(),
             initialized: false,
             visible: true,
         }
+    }
+    /// Unit printed after each value, such as "tickets".
+    pub fn with_unit(mut self, unit: impl Into<SharedString>) -> Self {
+        self.unit = unit.into();
+        self
+    }
+    pub fn with_offset(mut self, offset: StreamOffset) -> Self {
+        self.offset = offset;
+        self
+    }
+    /// Names each layer inside its widest stretch (on by default).
+    pub fn with_direct_labels(mut self, enabled: bool) -> Self {
+        self.direct_labels = enabled;
+        self
     }
     pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         if self.visible != visible {
@@ -93,29 +150,65 @@ impl Streamgraph {
     pub fn set_points(&mut self, points: Vec<StreamPoint>, cx: &mut Context<Self>) {
         self.points = points;
         self.active = None;
+        self.active_layer = None;
         self.reconcile(cx);
         cx.notify();
     }
-    fn sample(points: &[StreamPoint], layer: usize, t: f32) -> f32 {
-        if points.is_empty() {
-            return 0.;
+    /// Fritsch–Carlson monotone cubic resample onto the shared grid: curves
+    /// never swing past their neighbouring samples or below zero.
+    fn resample(points: &[StreamPoint], layer: usize) -> Vec<f32> {
+        let raw: Vec<f64> = points
+            .iter()
+            .map(|p| {
+                p.values
+                    .get(layer)
+                    .copied()
+                    .filter(|v| v.is_finite())
+                    .unwrap_or(0.)
+                    .max(0.) as f64
+            })
+            .collect();
+        let mut out = vec![0f32; GRID];
+        if raw.is_empty() {
+            return out;
         }
-        let at = |i: usize| {
-            points[i]
-                .values
-                .get(layer)
-                .copied()
-                .filter(|v| v.is_finite())
-                .unwrap_or(0.)
-                .max(0.)
-        };
-        if points.len() == 1 {
-            return at(0);
+        if raw.len() == 1 {
+            out.fill(raw[0] as f32);
+            return out;
         }
-        let pos = t * (points.len() - 1) as f32;
-        let i = (pos.floor() as usize).min(points.len() - 2);
-        let f = pos - i as f32;
-        at(i) + (at(i + 1) - at(i)) * f
+        let last = raw.len() - 1;
+        let slopes: Vec<f64> = raw.windows(2).map(|w| w[1] - w[0]).collect();
+        let mut tangents = vec![0f64; raw.len()];
+        for i in 1..last {
+            let (s0, s1) = (slopes[i - 1], slopes[i]);
+            let combo = s0.signum() + s1.signum();
+            tangents[i] = if combo == 0. {
+                0.
+            } else {
+                combo * ((s0 + s1).abs() / 4.).min(s0.abs()).min(s1.abs())
+            };
+        }
+        if last > 1 {
+            tangents[0] = (3. * slopes[0] - tangents[1]) / 2.;
+            tangents[last] = (3. * slopes[last - 1] - tangents[last - 1]) / 2.;
+        } else {
+            tangents[0] = slopes[0];
+            tangents[1] = slopes[0];
+        }
+        for (k, cell) in out.iter_mut().enumerate() {
+            let at = k as f64 / (GRID - 1) as f64 * last as f64;
+            let seg = (at.floor() as usize).min(last - 1);
+            let t = at - seg as f64;
+            let t2 = t * t;
+            let t3 = t2 * t;
+            let (a, b) = (raw[seg], raw[seg + 1]);
+            let value = (2. * t3 - 3. * t2 + 1.) * a
+                + (t3 - 2. * t2 + t) * tangents[seg]
+                + (-2. * t3 + 3. * t2) * b
+                + (t3 - t2) * tangents[seg + 1];
+            *cell = value.clamp(a.min(b), a.max(b)) as f32;
+        }
+        out
     }
     fn reconcile(&mut self, cx: &App) {
         while self.samples.len() < self.layers.len() {
@@ -123,33 +216,41 @@ impl Streamgraph {
                 .push((0..GRID).map(|_| Slide::new(0.)).collect());
         }
         self.samples.truncate(self.layers.len());
-        for (i, layer) in self.layers.iter().enumerate() {
-            let visible = !self.hidden.contains(&layer.id);
-            for j in 0..GRID {
-                let target = if visible {
-                    Self::sample(&self.points, i, j as f32 / (GRID - 1) as f32)
-                } else {
-                    0.
-                };
-                self.samples[i][j].duration(target, 0.4, cx);
+        self.spots.resize(self.layers.len(), None);
+        for i in 0..self.layers.len() {
+            let visible = !self.hidden.contains(&self.layers[i].id);
+            let target = if visible {
+                Self::resample(&self.points, i)
+            } else {
+                vec![0.; GRID]
+            };
+            for (j, slide) in self.samples[i].iter_mut().enumerate() {
+                slide.duration(target[j], 0.4, cx);
             }
         }
         self.initialized = true;
     }
+    fn visible_layers(&self) -> Vec<usize> {
+        (0..self.layers.len())
+            .filter(|&i| !self.hidden.contains(&self.layers[i].id))
+            .collect()
+    }
     fn select(&mut self, next: Option<usize>, cx: &mut Context<Self>) {
-        if self.active == next {
+        self.select_layer(next, self.active_layer, cx);
+    }
+    fn select_layer(&mut self, next: Option<usize>, layer: Option<usize>, cx: &mut Context<Self>) {
+        if self.active == next && self.active_layer == layer {
             return;
         }
         self.active = next;
+        self.active_layer = layer;
         if let Some((i, point)) = next.and_then(|i| self.points.get(i).map(|p| (i, p))) {
             let values: Vec<_> = self
-                .layers
-                .iter()
-                .enumerate()
-                .filter(|(_, l)| !self.hidden.contains(&l.id))
-                .map(|(l, layer)| {
+                .visible_layers()
+                .into_iter()
+                .map(|l| {
                     (
-                        layer.id.clone(),
+                        self.layers[l].id.clone(),
                         point
                             .values
                             .get(l)
@@ -182,6 +283,101 @@ impl Streamgraph {
             cx.notify();
         }
     }
+    fn format_value(&self, value: f32) -> String {
+        let text = grouped(f64::from(value.max(0.)));
+        if self.unit.is_empty() {
+            text
+        } else {
+            format!("{text} {}", self.unit)
+        }
+    }
+}
+/// The paint order of layers: the first sits in the middle of the stream and
+/// the rest alternate above and below it; a flat baseline stacks in order.
+fn stack_order(count: usize, mode: StreamOffset) -> Vec<usize> {
+    if mode == StreamOffset::Zero {
+        return (0..count).collect();
+    }
+    let mut list: Vec<usize> = vec![];
+    for index in 0..count {
+        if index == 0 || index % 2 == 1 {
+            list.push(index);
+        } else {
+            list.insert(0, index);
+        }
+    }
+    list
+}
+/// The baseline under the stack. Wiggle follows Byron and Wattenberg, then
+/// removes its linear drift so the stream stays level across the plot.
+fn baseline(layers: &[&[f32]], mode: StreamOffset) -> Vec<f32> {
+    let totals: Vec<f64> = (0..GRID)
+        .map(|j| layers.iter().map(|l| f64::from(l[j])).sum())
+        .collect();
+    let mut g = vec![0f64; GRID];
+    if layers.is_empty() || mode == StreamOffset::Zero {
+        return vec![0.; GRID];
+    }
+    if mode == StreamOffset::Silhouette {
+        return totals.iter().map(|t| (-t / 2.) as f32).collect();
+    }
+    for j in 1..GRID {
+        let mut s1 = 0.;
+        let mut s2 = 0.;
+        let mut below = 0.;
+        for layer in layers {
+            let change = f64::from(layer[j]) - f64::from(layer[j - 1]);
+            s1 += f64::from(layer[j]);
+            s2 += (below + change / 2.) * f64::from(layer[j]);
+            below += change;
+        }
+        g[j] = g[j - 1] - if s1 != 0. { s2 / s1 } else { 0. };
+    }
+    // Least squares line through the centre of the stream, subtracted so the
+    // stream never tilts off the plot.
+    let centers: Vec<f64> = g
+        .iter()
+        .zip(&totals)
+        .map(|(value, total)| value + total / 2.)
+        .collect();
+    let mx = (GRID - 1) as f64 / 2.;
+    let my = centers.iter().sum::<f64>() / GRID as f64;
+    let mut num = 0.;
+    let mut den = 0.;
+    for (j, value) in centers.iter().enumerate() {
+        num += (j as f64 - mx) * (value - my);
+        den += (j as f64 - mx).powi(2);
+    }
+    let slope = if den != 0. { num / den } else { 0. };
+    g.iter()
+        .enumerate()
+        .map(|(j, value)| value - (my + slope * (j as f64 - mx)))
+        .map(|v| v as f32)
+        .collect()
+}
+/// Axis labels that fit: at most one per 72 pixels, counted back from the latest.
+fn axis_picks(points: &[StreamPoint], width: f32) -> Vec<usize> {
+    let labeled: Vec<usize> = points
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.axis_label.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    if width <= 0. || labeled.is_empty() {
+        return vec![];
+    }
+    if labeled.len() == 1 {
+        return labeled;
+    }
+    let stride = ((labeled.len() as f32) / (width / 72.).floor().max(2.)).ceil() as usize;
+    labeled
+        .iter()
+        .rev()
+        .enumerate()
+        .filter(|(rank, _)| rank % stride.max(1) == 0)
+        .map(|(_, &i)| i)
+        .rev()
+        .collect()
 }
 fn sample_layers(
     samples: &[Vec<Slide>],
@@ -220,8 +416,36 @@ fn intersects_viewport(bounds: Bounds<Pixels>, viewport: Size<Pixels>) -> bool {
         && bounds.origin.x + bounds.size.width > px(0.)
         && bounds.origin.y + bounds.size.height > px(0.)
 }
+/// Grouped thousands with at most one fraction digit (`18,400`, `345.6`).
+fn grouped(v: f64) -> String {
+    let rounded = (v * 10.).round() / 10.;
+    let int = rounded.trunc().abs() as i64;
+    let mut digits = int.to_string();
+    let mut insert = 3;
+    while digits.len() > insert {
+        digits.insert(digits.len() - insert, ',');
+        insert += 4;
+    }
+    let sign = if rounded < 0. { "-" } else { "" };
+    let frac = (rounded - rounded.trunc()).abs();
+    if frac > 1e-9 {
+        format!("{sign}{digits}.{}", (frac * 10.).round() as u64)
+    } else {
+        format!("{sign}{digits}")
+    }
+}
 impl Render for Streamgraph {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
+        if self.focus_subscriptions.is_empty() {
+            // The reference opens on the latest point when the plot is focused.
+            self.focus_subscriptions
+                .push(cx.on_focus(&focus, w, |s, _, cx| {
+                    if s.active.is_none() && !s.points.is_empty() && s.pointer.is_none() {
+                        s.select(Some(s.points.len() - 1), cx);
+                    }
+                }));
+        }
         if !self.initialized {
             self.reconcile(cx);
         }
@@ -241,7 +465,137 @@ impl Render for Streamgraph {
         request_if_active(on_screen, revealing || changing, || {
             w.request_animation_frame()
         });
+        let empty = self.points.is_empty();
+        // The stack geometry for this frame, shared by painting, hover, labels.
+        let stack = stack_order(self.layers.len(), self.offset);
+        let refs: Vec<&[f32]> = layers.iter().map(|(v, _)| v.as_slice()).collect();
+        let g = baseline(&refs, self.offset);
+        let mut lower = vec![vec![0f32; GRID]; self.layers.len()];
+        let mut upper = vec![vec![0f32; GRID]; self.layers.len()];
+        let mut running = g.clone();
+        for &i in &stack {
+            lower[i] = running.clone();
+            for (j, cell) in running.iter_mut().enumerate() {
+                *cell += layers[i].0[j];
+            }
+            upper[i] = running.clone();
+        }
+        let mut lo = f32::INFINITY;
+        let mut hi = f32::NEG_INFINITY;
+        for j in 0..GRID {
+            lo = lo.min(g[j]);
+            hi = hi.max(running[j]);
+        }
+        if !(lo.is_finite() && hi.is_finite()) || hi - lo < 1e-9 {
+            lo = -1.;
+            hi = 1.;
+        }
+        let span = hi - lo;
+        let centers: Vec<f32> = (0..GRID).map(|j| (g[j] + running[j]) / 2.).collect();
+        let to_y = |value: f32| PAD + (1. - (value - lo) / span) * (PLOT_H - PAD * 2.);
+        let plot_w = f32::from(measured.size.width);
+        let n = self.points.len();
+        // The layer under the pointer, found in the frame that is on screen.
+        let (hover_index, hover_layer) = match self.pointer.filter(|_| !empty && plot_w > 0.) {
+            Some((x, y)) => {
+                let share = (x / plot_w).clamp(0., 1.);
+                let j = (share * (GRID - 1) as f32).round() as usize;
+                let mut hit: Option<usize> = None;
+                for i in 0..self.layers.len() {
+                    if self.hidden.contains(&self.layers[i].id) {
+                        continue;
+                    }
+                    let top = to_y(upper[i][j]);
+                    let bottom = to_y(lower[i][j]);
+                    if y >= top - 1. && y <= bottom + 1. {
+                        hit = Some(i);
+                    }
+                }
+                (
+                    Some((share * n.saturating_sub(1) as f32).round() as usize),
+                    hit,
+                )
+            }
+            None => (None, None),
+        };
+        // Hover wins while the pointer is inside; the legend and keyboard follow.
+        let display_layer = hover_layer
+            .or(self.legend_focus)
+            .or(self.active_layer)
+            .filter(|&i| !self.hidden.contains(&self.layers[i].id));
+        let reading = hover_index.or(self.active).filter(|_| !empty);
         let labels: Vec<SharedString> = self.layers.iter().map(|l| l.label.clone()).collect();
+        // The label sits where its layer is thickest, and holds its spot until
+        // another stretch is clearly thicker.
+        let mut label_pos: Vec<(f32, f32, bool)> = vec![];
+        if self.direct_labels {
+            for i in 0..self.layers.len() {
+                let mut best = 4;
+                for j in 4..GRID - 4 {
+                    if upper[i][j] - lower[i][j] > upper[i][best] - lower[i][best] {
+                        best = j;
+                    }
+                }
+                let held = self.spots.get(i).copied().flatten().filter(|&h| {
+                    upper[i][h] - lower[i][h] >= (upper[i][best] - lower[i][best]) * 0.8
+                });
+                let j = held.unwrap_or(best);
+                self.spots[i] = Some(j);
+                let thickness = (upper[i][j] - lower[i][j]) / span * (PLOT_H - PAD * 2.) * reveal;
+                let text_w = if plot_w > 0. {
+                    measure(&labels[i], 12., w)
+                } else {
+                    0.
+                };
+                let show = !self.hidden.contains(&self.layers[i].id)
+                    && thickness >= 19.
+                    && text_w + 16. < plot_w;
+                let x = if plot_w > 0. {
+                    (plot_w * j as f32 / (GRID - 1) as f32).clamp(
+                        text_w / 2. + 6.,
+                        (plot_w - text_w / 2. - 6.).max(text_w / 2. + 6.),
+                    )
+                } else {
+                    0.
+                };
+                let y = to_y((upper[i][j] + lower[i][j]) * 0.5);
+                label_pos.push((x, y, show));
+            }
+        }
+        // The crosshair glides between points; the tooltip follows on its own
+        // spring and never leaves the plot.
+        if let Some(i) = reading.filter(|_| plot_w > 0. && n > 0) {
+            let x = if n > 1 {
+                plot_w * i as f32 / (n - 1) as f32
+            } else {
+                plot_w / 2.
+            };
+            self.cursor.duration(x, 0.26, cx);
+            let visible_rows = self.visible_layers().len();
+            let th = 40. + visible_rows as f32 * 24.;
+            // The tooltip rides the middle of the focused layer at the crosshair.
+            let share = (self.cursor.value(cx) / plot_w.max(1.)).clamp(0., 1.);
+            let j = (share * (GRID - 1) as f32).round() as usize;
+            let focus_y = display_layer
+                .map(|l| to_y((upper[l][j] + lower[l][j]) * 0.5))
+                .unwrap_or(PLOT_H / 2.);
+            let ty = (focus_y - th / 2.).clamp(0., (PLOT_H - th).max(0.));
+            let tw = 156.;
+            let mut left = self.cursor.value(cx) + TIP_GAP;
+            if left + tw > plot_w {
+                left = (self.cursor.value(cx) - TIP_GAP - tw).max(0.);
+            }
+            left = left.clamp(0., (plot_w - tw).max(0.));
+            self.tip_x.duration(left, 0.26, cx);
+            self.tip_y.duration(ty, 0.26, cx);
+            self.tip_show.duration(1., 0.16, cx);
+        } else {
+            self.tip_show.duration(0., 0.16, cx);
+        }
+        let cursor_x = self.cursor.get(w, cx);
+        let tip_x = self.tip_x.get(w, cx);
+        let tip_y = self.tip_y.get(w, cx);
+        let tip_t = self.tip_show.get(w, cx).clamp(0., 1.);
         let bounds = self.bounds.clone();
         let touching = self.touching.clone();
         let touch = cx.listener(|s, e: &TouchDragEvent, _, cx| {
@@ -256,37 +610,39 @@ impl Render for Streamgraph {
                 cx,
             );
         });
-        let n = self.points.len();
-        let active = self.active;
-        let plot_w = f32::from(self.bounds.get().size.width);
-        if let Some(i) = active.filter(|_| n > 0 && plot_w > 0.) {
-            let x = if n > 1 {
-                plot_w * i as f32 / (n - 1) as f32
-            } else {
-                plot_w / 2.
-            };
-            self.cursor.duration(x, 0.26, cx);
-        }
-        let cursor_x = self.cursor.get(w, cx);
-        let mut graph = div()
+        let paint_layers = layers;
+        let paint_lower = lower;
+        let paint_upper = upper;
+        let paint_centers = centers;
+        let paint_labels = labels.clone();
+        let paint_spots = label_pos;
+        let paint_dim = display_layer;
+        let paint_min = lo;
+        let paint_span = span;
+        let active_reading = reading;
+        let graph = div()
             .id("streamgraph")
             .role(Role::Figure)
-            .tab_index(0)
+            .tab_index(if empty { -1 } else { 0 })
+            .track_focus(&focus)
             .relative()
             .w_full()
-            .h(px(260.))
+            .h(px(PLOT_H))
             .aria_label(format!(
                 "{}. {}",
                 self.title,
                 tr(
                     cx,
-                    "Use left and right to inspect points",
-                    "使用左右方向键查看数据"
+                    "Use left and right arrows to move through time, up and down to change layer",
+                    "使用左右方向键移动时间，上下方向键切换图层",
                 )
             ))
-            .on_hover(cx.listener(|s, h: &bool, _, cx| {
-                if !h {
-                    s.select(None, cx)
+            .on_hover(cx.listener(|s, h: &bool, w, cx| {
+                // Keyboard focus suppresses gpui hover, so a keypress would
+                // otherwise clear a reading the reference keeps.
+                if !*h && !w.last_input_was_keyboard() {
+                    s.pointer = None;
+                    s.select_layer(None, None, cx);
                 }
             }))
             .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
@@ -294,12 +650,19 @@ impl Render for Streamgraph {
                     return;
                 }
                 let b = s.bounds.get();
-                let width = f32::from(b.size.width).max(1.);
-                let t = (f32::from(e.position.x - b.origin.x) / width).clamp(0., 1.);
-                s.select(
-                    Some((t * s.points.len().saturating_sub(1) as f32).round() as usize),
-                    cx,
+                let local = (
+                    f32::from(e.position.x - b.origin.x),
+                    f32::from(e.position.y - b.origin.y),
                 );
+                if s.pointer != Some(local) {
+                    s.pointer = Some(local);
+                    let width = f32::from(b.size.width).max(1.);
+                    let t = (local.0 / width).clamp(0., 1.);
+                    s.select(
+                        Some((t * s.points.len().saturating_sub(1) as f32).round() as usize),
+                        cx,
+                    );
+                }
             }))
             .on_mouse_down(
                 MouseButton::Left,
@@ -369,23 +732,65 @@ impl Render for Streamgraph {
                     .size(px(0.)),
                 )
             })
-            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
                 let n = s.points.len();
                 if n == 0 {
                     return;
                 }
-                let i = s.active.unwrap_or(0);
-                let next = match e.keystroke.key.as_str() {
-                    "right" | "down" => Some((i + 1).min(n - 1)),
-                    "left" | "up" => Some(i.saturating_sub(1)),
-                    "home" => Some(0),
-                    "end" => Some(n - 1),
-                    "escape" => None,
+                let from = s.active.unwrap_or(n - 1);
+                let keys = s.visible_layers();
+                let at = s
+                    .active_layer
+                    .and_then(|l| keys.iter().position(|&k| k == l));
+                let page = ((n as f32) / 6.).round().max(1.) as usize;
+                let key = e.keystroke.key.as_str();
+                let next: Option<(Option<usize>, Option<usize>)> = match key {
+                    "left" => Some((Some(from.saturating_sub(1).min(n - 1)), s.active_layer)),
+                    "right" => Some((
+                        Some(if s.active.is_none() {
+                            n - 1
+                        } else {
+                            (from + 1).min(n - 1)
+                        }),
+                        s.active_layer,
+                    )),
+                    "pageup" => Some((Some((from + page).min(n - 1)), s.active_layer)),
+                    "pagedown" => Some((Some(from.saturating_sub(page)), s.active_layer)),
+                    "home" => Some((Some(0), s.active_layer)),
+                    "end" => Some((Some(n - 1), s.active_layer)),
+                    "up" => {
+                        let target = at.map_or(keys.len() - 1, |a| (a + 1).min(keys.len() - 1));
+                        Some((Some(from), keys.get(target).copied()))
+                    }
+                    "down" => {
+                        let target = at.map_or(0, |a| a.saturating_sub(1));
+                        Some((Some(from), keys.get(target).copied()))
+                    }
+                    "escape" if s.active.is_some() || s.active_layer.is_some() => {
+                        Some((None, None))
+                    }
                     _ => return,
                 };
-                cx.stop_propagation();
-                s.select(next, cx);
+                if let Some((index, layer)) = next {
+                    w.prevent_default();
+                    cx.stop_propagation();
+                    s.pointer = None;
+                    s.select_layer(index, layer, cx);
+                }
             }))
+            .when(empty, |graph| {
+                graph.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(13.))
+                        .text_color(p.faint)
+                        .child(tr(cx, "No data for this range", "该范围暂无数据")),
+                )
+            })
             .child(
                 canvas(
                     move |b, w, _| {
@@ -401,85 +806,108 @@ impl Render for Streamgraph {
                     },
                     move |b, _, w, cx| {
                         let width = f32::from(b.size.width);
-                        let height = f32::from(b.size.height);
-                        let totals: Vec<f32> = (0..GRID)
-                            .map(|i| layers.iter().map(|(v, _)| v[i]).sum())
-                            .collect();
-                        // A slope-weighted centreline reduces wiggle while keeping the stream within the plot.
-                        let mut baseline = vec![0f32; GRID];
-                        for i in 1..GRID {
-                            let total = totals[i].max(0.001);
-                            let mut below = 0.;
-                            let mut weighted = 0.;
-                            for (values, _) in &layers {
-                                let slope = values[i] - values[i - 1];
-                                weighted += (below + values[i] * 0.5) * slope;
-                                below += values[i];
-                            }
-                            baseline[i] = baseline[i - 1] - weighted / total;
-                        }
-                        let min = baseline.iter().copied().fold(f32::INFINITY, f32::min);
-                        let max = (0..GRID)
-                            .map(|i| baseline[i] + totals[i])
-                            .fold(f32::NEG_INFINITY, f32::max);
-                        let span = (max - min).max(1.);
-                        let centers: Vec<f32> =
-                            (0..GRID).map(|i| baseline[i] + totals[i] * 0.5).collect();
+                        let origin = b.origin;
                         let pt = |i: usize, y: f32| {
-                            let shown = centers[i] + (y - centers[i]) * reveal;
+                            let shown = paint_centers[i] + (y - paint_centers[i]) * reveal;
                             point(
-                                b.origin.x + px(width * i as f32 / (GRID - 1) as f32),
-                                b.origin.y + px(10. + (height - 20.) * (1. - (shown - min) / span)),
+                                origin.x + px(width * i as f32 / (GRID - 1) as f32),
+                                origin.y
+                                    + px(PAD
+                                        + (1. - (shown - paint_min) / paint_span)
+                                            * (PLOT_H - PAD * 2.)),
                             )
                         };
-                        let mut lower = baseline;
-                        for (layer_index, (values, color)) in layers.iter().enumerate() {
-                            let upper: Vec<f32> = (0..GRID).map(|i| lower[i] + values[i]).collect();
-                            let mut path = PathBuilder::fill();
-                            path.move_to(pt(0, lower[0]));
-                            for (i, &y) in upper.iter().enumerate() {
-                                path.line_to(pt(i, y));
+                        // Neighbouring layers are separated by a 2px surface stroke.
+                        for (i, (_, color)) in paint_layers.iter().enumerate() {
+                            let mut fill = PathBuilder::fill();
+                            fill.move_to(pt(0, paint_lower[i][0]));
+                            for (j, &y) in paint_upper[i].iter().enumerate() {
+                                fill.line_to(pt(j, y));
                             }
-                            for i in (0..GRID).rev() {
-                                path.line_to(pt(i, lower[i]));
+                            for (j, &y) in paint_lower[i].iter().enumerate().rev() {
+                                fill.line_to(pt(j, y));
                             }
-                            path.close();
-                            if let Ok(path) = path.build() {
-                                w.paint_path(path, color.opacity(0.82));
+                            fill.close();
+                            let dim = paint_dim.is_some() && paint_dim != Some(i);
+                            let alpha = if paint_dim == Some(i) {
+                                1.
+                            } else if dim {
+                                0.82 * 0.34
+                            } else {
+                                0.82
+                            };
+                            if let Ok(path) = fill.build() {
+                                w.paint_path(path, color.opacity(alpha));
                             }
-                            let mid = (0..GRID)
-                                .max_by(|&a, &b| {
-                                    (upper[a] - lower[a]).total_cmp(&(upper[b] - lower[b]))
-                                })
-                                .unwrap_or(GRID / 2);
-                            let thickness =
-                                (upper[mid] - lower[mid]) * (height - 20.) / span * reveal;
-                            if width >= 360. && thickness >= 19. {
-                                let label = labels[layer_index].clone();
-                                let mut style = w.text_style();
-                                style.font_weight = FontWeight::MEDIUM;
-                                let mut run = style.to_run(label.len());
-                                run.color = p.ink;
-                                let shaped =
-                                    w.text_system().shape_line(label, px(12.), &[run], None);
-                                let center = pt(mid, (upper[mid] + lower[mid]) * 0.5);
-                                if shaped.width < px(width * 0.4) {
-                                    let _ = shaped.paint(
-                                        point(center.x - shaped.width / 2., center.y - px(8.)),
-                                        px(16.),
-                                        TextAlign::Left,
-                                        None,
-                                        w,
-                                        cx,
-                                    );
-                                }
+                            let mut gap = PathBuilder::stroke(px(2.));
+                            gap.move_to(pt(0, paint_upper[i][0]));
+                            for (j, &y) in paint_upper[i].iter().enumerate() {
+                                gap.line_to(pt(j, y));
                             }
-                            lower = upper;
+                            for (j, &y) in paint_lower[i].iter().enumerate().rev() {
+                                gap.line_to(pt(j, y));
+                            }
+                            gap.close();
+                            if let Ok(path) = gap.build() {
+                                w.paint_path(path, p.panel);
+                            }
                         }
-                        if active.is_some() && n > 0 {
+                        // Direct labels ride the thickest stretch of each layer,
+                        // outlined so they read over any neighbour.
+                        let mut style = w.text_style();
+                        style.font_weight = FontWeight::MEDIUM;
+                        for (i, (x, y, show)) in paint_spots.iter().enumerate() {
+                            if !show {
+                                continue;
+                            }
+                            let label = paint_labels[i].clone();
+                            let center = point(origin.x + px(*x), origin.y + px(*y) - px(8.));
+                            let mut outline_run = style.to_run(label.len());
+                            outline_run.color = p.panel;
+                            let outline = w.text_system().shape_line(
+                                label.clone(),
+                                px(12.),
+                                &[outline_run],
+                                None,
+                            );
+                            for (dx, dy) in [
+                                (0., -2.2),
+                                (0., 2.2),
+                                (-2.2, 0.),
+                                (2.2, 0.),
+                                (-1.6, -1.6),
+                                (1.6, -1.6),
+                                (-1.6, 1.6),
+                                (1.6, 1.6),
+                            ] {
+                                let _ = outline.paint(
+                                    point(
+                                        center.x - outline.width / 2. + px(dx),
+                                        center.y + px(dy),
+                                    ),
+                                    px(16.),
+                                    TextAlign::Left,
+                                    None,
+                                    w,
+                                    cx,
+                                );
+                            }
+                            let mut run = style.to_run(label.len());
+                            run.color = p.ink;
+                            let shaped = w.text_system().shape_line(label, px(12.), &[run], None);
+                            let _ = shaped.paint(
+                                point(center.x - shaped.width / 2., center.y),
+                                px(16.),
+                                TextAlign::Left,
+                                None,
+                                w,
+                                cx,
+                            );
+                        }
+                        if active_reading.is_some() && width > 0. {
                             let mut line = PathBuilder::stroke(px(1.));
-                            line.move_to(point(b.origin.x + px(cursor_x), b.origin.y));
-                            line.line_to(point(b.origin.x + px(cursor_x), b.origin.y + px(height)));
+                            line.move_to(point(origin.x + px(cursor_x), origin.y));
+                            line.line_to(point(origin.x + px(cursor_x), origin.y + px(PLOT_H)));
                             if let Ok(path) = line.build() {
                                 w.paint_path(path, p.ink.opacity(0.5));
                             }
@@ -520,50 +948,46 @@ impl Render for Streamgraph {
                 .absolute()
                 .inset_0(),
             );
-        if let Some(i) = active.and_then(|i| self.points.get(i).map(|_| i)) {
-            let point = &self.points[i];
-            let mut tip = div()
-                .absolute()
-                .top(px(78.))
-                .left(px({
-                    let left = cursor_x + 14.;
-                    if plot_w > 0. && left + 156. > plot_w {
-                        (cursor_x - 14. - 156.).max(0.)
-                    } else {
-                        left.max(0.)
-                    }
-                }))
-                .min_w(px(156.))
-                .max_w(px(256.))
-                .px(px(12.))
-                .py(px(10.))
-                .flex()
-                .flex_col()
-                .gap(px(4.))
-                .rounded(crate::foundation::surface_radius(cx))
-                .border_1()
-                .border_color(p.line)
-                .bg(p.panel)
-                .shadow_lg()
-                .child(
-                    div()
-                        .mb(px(2.))
-                        .text_size(px(12.))
-                        .line_height(px(20.))
-                        .text_color(p.secondary)
-                        .child(point.label.clone()),
-                );
-            for (layer_index, layer) in self.layers.iter().enumerate() {
-                if self.hidden.contains(&layer.id) {
+        // The tooltip trails the crosshair, listing layers top to bottom.
+        let mut tip = div()
+            .absolute()
+            .top(px(tip_y))
+            .left(px(tip_x))
+            .min_w(px(156.))
+            .max_w(px(256.))
+            .px(px(12.))
+            .py(px(10.))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .rounded(px(14.))
+            .border_1()
+            .border_color(p.line)
+            .bg(p.tray)
+            .shadow_lg()
+            .opacity(tip_t);
+        if let Some(point) = reading.and_then(|i| self.points.get(i)) {
+            tip = tip.child(
+                div()
+                    .mb(px(2.))
+                    .text_size(px(12.))
+                    .line_height(px(20.))
+                    .text_color(p.secondary)
+                    .child(point.label.clone()),
+            );
+            for &li in stack.iter().rev() {
+                if self.hidden.contains(&self.layers[li].id) {
                     continue;
                 }
+                let layer = &self.layers[li];
                 let value = point
                     .values
-                    .get(layer_index)
+                    .get(li)
                     .copied()
                     .filter(|v| v.is_finite())
                     .unwrap_or(0.)
                     .max(0.);
+                let dim = display_layer.is_some() && display_layer != Some(li);
                 tip = tip.child(
                     div()
                         .flex()
@@ -571,12 +995,17 @@ impl Render for Streamgraph {
                         .gap(px(8.))
                         .text_size(px(14.))
                         .line_height(px(20.))
+                        .opacity(if dim { 0.5 } else { 1. })
                         .child(div().w(px(10.)).h(px(2.5)).rounded(px(2.)).bg(layer.color))
                         .child(
                             div()
                                 .flex_1()
-                                .min_w(px(0.))
-                                .text_color(p.secondary)
+                                .min_w_0()
+                                .text_color(if display_layer == Some(li) {
+                                    p.ink
+                                } else {
+                                    p.secondary
+                                })
                                 .child(layer.label.clone()),
                         )
                         .child(
@@ -584,32 +1013,111 @@ impl Render for Streamgraph {
                                 .ml(px(8.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.ink)
-                                .child(format!("{value:.0}")),
+                                .child(self.format_value(value)),
                         ),
                 );
             }
-            graph = graph.child(tip);
         }
-        let detail = self
-            .active
+        let graph = graph.child(tip);
+        // The time axis stays quiet except where labels fit.
+        let picks = axis_picks(&self.points, plot_w);
+        let axis = div()
+            .relative()
+            .w_full()
+            .h(px(AXIS_H))
+            .children(picks.into_iter().map(|at| {
+                let share = if n > 1 {
+                    at as f32 / (n - 1) as f32
+                } else {
+                    0.5
+                };
+                let text = self.points[at].axis_label.clone().unwrap_or_default();
+                let text_w = measure(&text, 12., w);
+                let left = if plot_w > 0. {
+                    (plot_w * share - text_w / 2.).clamp(0., (plot_w - text_w).max(0.))
+                } else {
+                    0.
+                };
+                div()
+                    .absolute()
+                    .top(px(8.))
+                    .left(px(left))
+                    .text_size(px(12.))
+                    .line_height(px(12.))
+                    .text_color(p.faint)
+                    .child(text)
+            }));
+        let legend = row()
+            .flex_wrap()
+            .gap_1()
+            .children(self.layers.iter().enumerate().map(|(i, l)| {
+                let hidden = self.hidden.contains(&l.id);
+                let focused = display_layer == Some(i);
+                let dim = display_layer.is_some() && display_layer != Some(i);
+                face(
+                    ("stream-layer", i),
+                    l.label.clone(),
+                    32.,
+                    crate::foundation::surface_radius(cx).into(),
+                    Tone::Clear,
+                    cx,
+                )
+                .pl(px(8.))
+                .pr(px(10.))
+                .line_height(px(20.))
+                .text_size(px(14.))
+                .text_color(if hidden {
+                    p.faint
+                } else if focused {
+                    p.ink
+                } else {
+                    p.secondary
+                })
+                .when(focused, |pill| pill.bg(p.ink.opacity(0.05)))
+                .when(dim, |pill| pill.opacity(0.56))
+                .when(hidden, |pill| pill.line_through())
+                .hover(|s| s.text_color(p.ink))
+                .aria_toggled((!hidden).into())
+                .gap(px(8.))
+                .child(
+                    div()
+                        .size(px(10.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .size(px(if hidden { 6. } else { 10. }))
+                                .rounded(px(if hidden { 2. } else { 3. }))
+                                .bg(l.color.opacity(if hidden { 0.35 } else { 1. })),
+                        ),
+                )
+                .child(l.label.clone())
+                .on_click(cx.listener(move |s, _, _, cx| s.toggle(i, cx)))
+                .on_hover(cx.listener(move |s, h: &bool, _, cx| {
+                    s.legend_focus = if *h { Some(i) } else { None };
+                    cx.notify();
+                }))
+            }));
+        let detail = reading
             .and_then(|i| self.points.get(i))
             .map(|point| {
                 let data = self
-                    .layers
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, layer)| !self.hidden.contains(&layer.id))
-                    .map(|(i, l)| {
+                    .visible_layers()
+                    .into_iter()
+                    .map(|li| {
                         format!(
-                            "{} {:.0}",
-                            l.label,
-                            point
-                                .values
-                                .get(i)
-                                .copied()
-                                .filter(|v| v.is_finite())
-                                .unwrap_or(0.)
-                                .max(0.)
+                            "{} {}",
+                            self.layers[li].label,
+                            grouped(f64::from(
+                                point
+                                    .values
+                                    .get(li)
+                                    .copied()
+                                    .filter(|v| v.is_finite())
+                                    .unwrap_or(0.)
+                                    .max(0.)
+                            ))
                         )
                     })
                     .collect::<Vec<_>>()
@@ -617,6 +1125,39 @@ impl Render for Streamgraph {
                 format!("{}  {}", point.label, data)
             })
             .unwrap_or_else(|| tr(cx, "Select a point to inspect", "选择数据点查看").to_string());
+        let readings = div()
+            .id("stream-readings")
+            .absolute()
+            .size(px(1.))
+            .overflow_hidden()
+            .role(Role::Table)
+            .aria_label(self.title.clone())
+            .children(self.points.iter().enumerate().map(|(i, point)| {
+                let data = self
+                    .visible_layers()
+                    .into_iter()
+                    .map(|li| {
+                        format!(
+                            "{} {}",
+                            self.layers[li].label,
+                            grouped(f64::from(
+                                point
+                                    .values
+                                    .get(li)
+                                    .copied()
+                                    .filter(|v| v.is_finite())
+                                    .unwrap_or(0.)
+                                    .max(0.)
+                            ))
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                div()
+                    .id(("stream-reading", i))
+                    .role(Role::Row)
+                    .aria_label(format!("{}. {}", point.label, data))
+            }));
         column()
             .w(px(560.))
             .max_w_full()
@@ -628,52 +1169,89 @@ impl Render for Streamgraph {
             .border_color(p.line)
             .text_color(p.ink)
             .child(title(self.title.clone(), p))
-            .child(graph)
+            .child(legend)
+            .child(column().gap(px(4.)).child(graph).child(axis))
             .child(hint(detail, p))
-            .child(
-                row()
-                    .flex_wrap()
-                    .gap_2()
-                    .children(self.layers.iter().enumerate().map(|(i, l)| {
-                        let hidden = self.hidden.contains(&l.id);
-                        let text = if hidden {
-                            format!("{} · {}", l.label, tr(cx, "Off", "已隐藏"))
-                        } else {
-                            l.label.to_string()
-                        };
-                        face(
-                            ("stream-layer", i),
-                            text.clone(),
-                            32.,
-                            crate::foundation::surface_radius(cx).into(),
-                            Tone::Clear,
-                            cx,
-                        )
-                        .pl(px(8.))
-                        .pr(px(10.))
-                        .line_height(px(20.))
-                        .text_color(if hidden { p.secondary } else { p.ink })
-                        .hover(|s| s.text_color(p.ink))
-                        .aria_toggled((!hidden).into())
-                        .gap(px(8.))
-                        .child(div().size(px(10.)).rounded(px(3.)).bg(if hidden {
-                            p.line
-                        } else {
-                            l.color
-                        }))
-                        .child(text)
-                        .on_click(cx.listener(move |s, _, _, cx| s.toggle(i, cx)))
-                    })),
-            )
+            .when(!empty, |card| card.child(readings))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{GRID, StreamLayer, request_if_active, sample_layers};
+    use super::{
+        GRID, StreamLayer, StreamOffset, StreamPoint, axis_picks, baseline, request_if_active,
+        sample_layers, stack_order,
+    };
     use crate::primitives::family::Slide;
     use gpui::{TestAppContext, rgb};
     use std::time::Duration;
+
+    #[test]
+    fn resample_stays_inside_its_samples() {
+        let points: Vec<StreamPoint> = (0..8)
+            .map(|i| {
+                StreamPoint::new(
+                    format!("p{i}"),
+                    vec![if i == 3 { 90. } else { 10. + i as f32 * 2. }],
+                )
+            })
+            .collect();
+        let curve = super::Streamgraph::resample(&points, 0);
+        assert_eq!(curve.len(), GRID);
+        assert_eq!(curve[0], 10.);
+        assert_eq!(curve[GRID - 1], 24.);
+        // The monotone clamp keeps the spike inside its neighbours' range.
+        assert!(curve.iter().all(|v| (0. ..=90.).contains(v)));
+        assert!(curve.iter().copied().fold(f32::NEG_INFINITY, f32::max) >= 89.);
+    }
+    #[test]
+    fn wiggle_baseline_stays_level() {
+        let ramp: Vec<Vec<f32>> = (0..3)
+            .map(|l| {
+                (0..GRID)
+                    .map(|j| 10. + l as f32 * 5. + j as f32 * 0.4)
+                    .collect()
+            })
+            .collect();
+        let refs: Vec<&[f32]> = ramp.iter().map(|v| v.as_slice()).collect();
+        let g = baseline(&refs, StreamOffset::Wiggle);
+        let centers: Vec<f32> = (0..GRID)
+            .map(|j| {
+                let total: f32 = ramp.iter().map(|l| l[j]).sum();
+                g[j] + total / 2.
+            })
+            .collect();
+        let drift = (centers[0] - centers[GRID - 1]).abs();
+        assert!(
+            drift < 2.,
+            "linear drift should be removed, got {drift} across {GRID} samples"
+        );
+        let flat = baseline(&refs, StreamOffset::Zero);
+        assert!(flat.iter().all(|v| *v == 0.));
+        let sil = baseline(&refs, StreamOffset::Silhouette);
+        let total0: f32 = ramp.iter().map(|l| l[0]).sum();
+        assert!((sil[0] + total0 / 2.).abs() < 1e-4);
+    }
+    #[test]
+    fn stack_order_alternates_around_the_first_layer() {
+        assert_eq!(stack_order(4, StreamOffset::Zero), vec![0, 1, 2, 3]);
+        assert_eq!(stack_order(4, StreamOffset::Wiggle), vec![2, 0, 1, 3]);
+        assert_eq!(stack_order(5, StreamOffset::Wiggle), vec![4, 2, 0, 1, 3]);
+    }
+    #[test]
+    fn axis_picks_keep_a_72px_stride_from_the_latest() {
+        let points: Vec<StreamPoint> = (0..12)
+            .map(|i| {
+                StreamPoint::new(format!("p{i}"), vec![1.])
+                    .with_axis_label(Some(format!("a{i}").into()))
+            })
+            .collect();
+        let picks = axis_picks(&points, 850.);
+        assert!(!picks.is_empty() && picks.len() <= 12);
+        assert_eq!(picks.last().copied().unwrap_or(0), 11);
+        let wide = axis_picks(&points, 100.);
+        assert!(wide.len() < picks.len(), "narrow plots drop labels");
+    }
     #[test]
     fn many_active_springs_schedule_once_and_hidden_schedules_none() {
         let app = TestAppContext::single();

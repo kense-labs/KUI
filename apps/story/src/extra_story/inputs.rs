@@ -774,10 +774,14 @@ impl EnrichExample {
             EnrichRow::new("northstar", "Northstar").with_domain("northstar.example"),
             EnrichRow::new("orion", "Orion").with_domain("orion.example"),
             EnrichRow::new("river", "River").with_domain("river.example"),
+            EnrichRow::new("studio", "Studio").with_domain("studio.example"),
+            EnrichRow::new("canopy", "Canopy").with_domain("canopy.example"),
+            EnrichRow::new("atlas", "Atlas").with_domain("atlas.example"),
+            EnrichRow::new("haven", "Haven").with_domain("haven.example"),
         ];
         let control = cx.new(|cx| {
             EnrichColumn::new(
-                language.text("Accounts", "客户列表"),
+                language.text("Company", "公司"),
                 rows,
                 language.text(
                     "Find a short description for each company",
@@ -819,6 +823,12 @@ impl EnrichExample {
                                     let value = match row.id.as_ref() {
                                         "northstar" => l.text("Design tools", "设计工具"),
                                         "orion" => l.text("Analytics platform", "数据分析平台"),
+                                        "studio" => {
+                                            l.text("Digital product studio", "数字产品工作室")
+                                        }
+                                        "canopy" => l.text("Cloud infrastructure", "云基础设施"),
+                                        "atlas" => l.text("Data visualization", "数据可视化"),
+                                        "haven" => l.text("Team operations", "团队运营工具"),
                                         _ => l.text("Collaboration software", "协作软件"),
                                     };
                                     column.finish(
@@ -1035,10 +1045,16 @@ struct PresenceExample {
 impl PresenceExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let people = vec![
-            PresencePerson::new("me", "Alex Chen"),
-            PresencePerson::new("em", "Emma Lin").with_status(PresenceStatus::Typing),
-            PresencePerson::new("sam", "Sam Park").with_status(PresenceStatus::Idle),
-            PresencePerson::new("lee", "Lee Kim"),
+            PresencePerson::new("me", "Alex Chen")
+                .with_image(crate::family_story::collections::portrait_image(2)),
+            PresencePerson::new("em", "Emma Lin")
+                .with_image(crate::family_story::collections::portrait_image(0))
+                .with_status(PresenceStatus::Typing),
+            PresencePerson::new("sam", "Sam Park")
+                .with_image(crate::family_story::collections::portrait_image(1))
+                .with_status(PresenceStatus::Idle),
+            PresencePerson::new("lee", "Lee Kim")
+                .with_image(crate::family_story::collections::portrait_image(3)),
             PresencePerson::new("mia", "Mia Evans"),
             PresencePerson::new("kai", "Kai Liu"),
         ];
@@ -1101,10 +1117,43 @@ impl Render for PresenceExample {
             .gap(px(18.))
             .child(
                 div()
-                    .text_color(p.ink)
-                    .child(l.text("Project plan", "项目计划")),
+                    .w_full()
+                    .min_h(px(78.))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .p(px(16.))
+                    .rounded(kui::foundation::surface_radius(cx))
+                    .border_1()
+                    .border_color(p.line)
+                    .bg(p.panel)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(l.text("Project plan", "项目计划")),
+                            )
+                            .child(div().text_size(px(13.)).text_color(p.secondary).child(
+                                match l {
+                                    UiLanguage::Chinese => format!(
+                                        "你和另外 {} 人",
+                                        self.people.len().saturating_sub(1)
+                                    ),
+                                    _ => format!(
+                                        "You and {} others",
+                                        self.people.len().saturating_sub(1)
+                                    ),
+                                },
+                            )),
+                    )
+                    .child(self.control.clone()),
             )
-            .child(self.control.clone())
             .child(
                 div()
                     .flex()
@@ -1385,7 +1434,7 @@ impl Render for MegaExample {
             .w_full()
             .flex()
             .flex_col()
-            .gap(px(310.))
+            .gap(px(344.))
             .child(self.menu.clone())
             .child(div().text_size(px(13.)).child(note))
     }
@@ -1721,15 +1770,41 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
         "glass-segmented" => views.push(cx.new(|cx| GlassExample::new(w, cx)).into()),
         "mega-menu-morph" => {
             let products = MegaMenuSection::new("products", t("Products", "产品"))
-                .with_groups(vec![MegaMenuGroup::new(
-                    t("Build", "开发"),
-                    vec![
-                        MegaMenuLink::new("components", t("Components", "组件"))
-                            .with_description(t("Explore the interface library", "探索界面组件库")),
-                        MegaMenuLink::new("themes", t("Themes", "主题"))
-                            .with_description(t("Adapt colors and appearance", "调整颜色和外观")),
-                    ],
-                )])
+                .with_groups(vec![
+                    MegaMenuGroup::new(
+                        t("Build", "开发"),
+                        vec![
+                            MegaMenuLink::new("components", t("Components", "组件"))
+                                .with_description(t(
+                                    "Explore the interface library",
+                                    "探索界面组件库",
+                                )),
+                            MegaMenuLink::new("themes", t("Themes", "主题")).with_description(t(
+                                "Adapt colors and appearance",
+                                "调整颜色和外观",
+                            )),
+                            MegaMenuLink::new("install", t("Installation", "安装"))
+                                .with_description(t(
+                                    "Add KUI to a Rust project",
+                                    "将 KUI 加入 Rust 项目",
+                                )),
+                        ],
+                    ),
+                    MegaMenuGroup::new(
+                        t("Targets", "运行平台"),
+                        vec![
+                            MegaMenuLink::new("desktop", t("Desktop", "桌面"))
+                                .with_description(t("Build native interfaces", "构建原生界面")),
+                            MegaMenuLink::new("web", t("Web", "网页"))
+                                .with_description(t("Run KUI in the browser", "在浏览器运行 KUI")),
+                            MegaMenuLink::new("accessibility", t("Accessibility", "无障碍"))
+                                .with_description(t(
+                                    "Support keyboard and focus",
+                                    "支持键盘和焦点",
+                                )),
+                        ],
+                    ),
+                ])
                 .with_feature(
                     MegaMenuFeature::new(
                         "updates",
@@ -1831,15 +1906,7 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
                     "launch",
                     t("Meet the new KUI components", "发现全新的 KUI 组件"),
                 )
-                .with_action(t("Learn more", "了解更多"))
-                .with_countdown(std::time::Duration::from_secs(720)),
-                Announcement::new(
-                    "updates",
-                    t(
-                        "Build once for desktop and web",
-                        "一套代码，构建桌面与网页应用",
-                    ),
-                ),
+                .with_action(t("Learn more", "了解更多")),
             ];
             views.push(cx.new(|cx| AnnouncementBar::new(messages, cx)).into());
         }
@@ -1929,6 +1996,8 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
     }
     let width = if id == "mega-menu-morph" {
         760.
+    } else if matches!(id, "announcement-bar" | "presence-stack") {
+        554.
     } else if id == "tree-table"
         || id == "tldr-toggle"
         || id == "smart-form-fill"

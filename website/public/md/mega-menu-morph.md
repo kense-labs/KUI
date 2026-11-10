@@ -22,7 +22,7 @@ let control = cx.new(|cx| MegaMenuMorph::new("Kense", sections, cx).with_primary
 
 ## Interaction
 
-Hover or activate a section; use arrow keys to navigate, Enter to choose and Escape to close. At narrow widths, the header folds into an accordion sheet.
+Hover or activate a section. Use arrow keys to navigate, Enter to choose and Escape to close. Groups and the feature card sit in columns when there is room. Narrow panels stack their content, and the compact header opens a scrollable accordion sheet.
 
 ## API
 

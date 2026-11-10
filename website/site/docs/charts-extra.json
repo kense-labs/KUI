@@ -69,7 +69,7 @@
       "en": "Compare category shares in a 100-cell grid.",
       "zh": "以 100 个单元格比较各分类占比。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::waffle_chart::{WaffleCategory, WaffleChart};\n\nlet items = vec![WaffleCategory::new(\"search\", \"Search\", 42.0, gpui::rgb(0x578ce2).into()), WaffleCategory::new(\"direct\", \"Direct\", 58.0, gpui::rgb(0x47ab8b).into())];\nlet control = cx.new(|_| WaffleChart::new(\"Visitors\", items));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::waffle_chart::{WaffleCategory, WaffleChart};\n\nlet items = vec![\n    WaffleCategory::new(\"search\", \"Search\", 42.0),\n    WaffleCategory::new(\"direct\", \"Direct\", 58.0),\n];\nlet control = cx.new(|_| WaffleChart::new(\"Visitors\", items));",
     "method": "set_categories",
     "signature": "(Vec<WaffleCategory>, &mut Context<Self>)",
     "event": "WaffleInspect",
@@ -98,7 +98,7 @@
       "en": "Compare paired measurements across two points.",
       "zh": "比较多个数据系列的前后变化。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::slope_chart::{SlopeChart, SlopeSeries};\n\nlet series = vec![SlopeSeries::new(\"design\", \"Design\", 40.0, 70.0, gpui::rgb(0x578ce2).into()), SlopeSeries::new(\"product\", \"Product\", 55.0, 45.0, gpui::rgb(0x47ab8b).into())];\nlet control = cx.new(|_| SlopeChart::new(\"Progress\", series));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::slope_chart::{SlopeChart, SlopeSeries};\n\nlet series = vec![\n    SlopeSeries::new(\"design\", \"Design\", 40.0, 70.0),\n    SlopeSeries::new(\"product\", \"Product\", 55.0, 45.0),\n];\nlet control = cx.new(|_| SlopeChart::new(\"Progress\", series));",
     "method": "set_series",
     "signature": "(Vec<SlopeSeries>, &mut Context<Self>)",
     "event": "SlopeInspect",
@@ -107,8 +107,8 @@
       "zh": "悬停线条、选择图例或使用方向键查看数据。"
     },
     "api": {
-      "en": "Provide stable series ids, labels, paired values and colors; subscribe to SlopeInspect.",
-      "zh": "提供稳定系列 ID、名称、前后数值与颜色；可订阅 SlopeInspect。"
+      "en": "Provide stable series IDs, labels and paired values. Use with_highlight to choose the initial highlight and subscribe to SlopeInspect.",
+      "zh": "提供稳定系列 ID、名称和前后数值。使用 with_highlight 设定初始高亮，订阅 SlopeInspect 读取焦点系列。"
     },
     "motion": {
       "en": "Existing series interpolate from their current positions when new values arrive.",
@@ -185,7 +185,7 @@
       "en": "Inspect and compare changing data.",
       "zh": "查看和比较变化的数据。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::race_bar_chart::{RaceBarChart, RaceEntry, RaceFrame};\n\nlet entries = vec![RaceEntry::new(\"a\", \"First\", 0.0, gpui::rgb(0x9d83e8).into())];\nlet frames = vec![RaceFrame::new(\"January\", vec![(\"a\".into(), 68.0)]), RaceFrame::new(\"February\", vec![(\"a\".into(), 90.0)])];\nlet control = cx.new(|_| RaceBarChart::new(\"Values\", entries).with_frames(frames));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::race_bar_chart::{RaceBarChart, RaceEntry, RaceFrame};\n\nlet entries = vec![RaceEntry::new(\"first\", \"First\"), RaceEntry::new(\"second\", \"Second\")];\nlet frames = vec![\n    RaceFrame::new(\"Q1\", vec![(\"first\".into(), 68.0), (\"second\".into(), 32.0)]),\n    RaceFrame::new(\"Q2\", vec![(\"first\".into(), 54.0), (\"second\".into(), 72.0)]),\n];\nlet control = cx.new(|_| RaceBarChart::new(\"Values\", entries).with_frames(frames));",
     "method": "set_entries",
     "signature": "(Vec<RaceEntry>, &mut Context<Self>)",
     "event": "RaceInspect",
@@ -214,7 +214,7 @@
       "en": "Inspect conversion across ordered stages and compare two segments.",
       "zh": "查看各阶段的转化率并对比两个细分组。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::funnel_chart::{FunnelChart, FunnelSegment, FunnelStage};\n\nlet segments = vec![FunnelSegment::new(\"mobile\", \"Mobile\"), FunnelSegment::new(\"desktop\", \"Desktop\")];\nlet stages = vec![FunnelStage::new(\"visit\", \"Visit\", vec![600.0, 400.0]), FunnelStage::new(\"buy\", \"Buy\", vec![120.0, 80.0])];\nlet control = cx.new(|_| FunnelChart::new(\"Checkout\", stages, segments));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::funnel_chart::{FunnelChart, FunnelSegment, FunnelStage};\n\nlet segments = vec![FunnelSegment::new(\"mobile\", \"Mobile\"), FunnelSegment::new(\"desktop\", \"Desktop\")];\nlet stages = vec![FunnelStage::new(\"visit\", \"Visit\", vec![600.0, 400.0]), FunnelStage::new(\"buy\", \"Buy\", vec![120.0, 80.0])];\nlet control = cx.new(|cx| FunnelChart::new(\"Checkout\", stages, segments, cx));",
     "method": "set_stages",
     "signature": "(Vec<FunnelStage>, &mut Context<Self>)",
     "event": "FunnelInspect",
@@ -364,16 +364,16 @@
     "signature": "(StreamReading, &mut Context<Self>)",
     "event": "LiveInspect",
     "rule": {
-      "en": "The host owns the data source and should set visibility when the chart leaves its viewport; non-finite values are ignored.",
-      "zh": "数据源由宿主管理；图表离开视口时应更新可见状态；非有限值会被忽略。"
+      "en": "Focus the plot to hold the latest visible reading. Use the arrows, Page Up, Page Down, Home and End to inspect. Space or Enter toggles pause, and Escape clears inspection. On narrow cards the pause button moves beside the title. The host owns the feed and tracks visibility.",
+      "zh": "键盘焦点进入图表时暂停在最新可见读数。用方向键、Page Up、Page Down、Home 和 End 查看。空格或 Enter 切换暂停，Escape 清除读数。窄卡片上的暂停按钮位于标题旁。数据源和可见性由宿主管理。"
     },
     "api": {
       "en": "Use set_visible and set_paused to control rendering; an optional anomaly label identifies unusual readings.",
       "zh": "使用 set_visible 与 set_paused 控制显示；异常数据可附加标签。"
     },
     "motion": {
-      "en": "New observations slide into a rescaling chart; hover freezes the display for inspection. Reduced motion updates directly.",
-      "zh": "新数据滑入，数值轴平滑调整；悬停时暂停画面便于查看。减少动效时直接更新。"
+      "en": "New observations slide in as the axis resizes. The unit follows the rolling digits as their width changes. Hover freezes the chart, and reduced motion updates directly.",
+      "zh": "新数据滑入时数值轴平滑调整，单位随数字宽度平滑移动。悬停暂停画面，减少动效时直接更新。"
     }
   },
   {
@@ -420,18 +420,18 @@
     "usageRust": "use gpui::prelude::*;\nuse kui::components::sankey_flow::{FlowLink, FlowNode, SankeyFlow};\n\nlet nodes = vec![FlowNode::new(\"a\", \"Source\", gpui::rgb(0x6a9fe5).into()), FlowNode::new(\"b\", \"Activated\", gpui::rgb(0xa8acb4).into())];\nlet links = vec![FlowLink::new(\"a\", \"b\", 42.0)];\nlet control = cx.new(|_| SankeyFlow::new(\"Journey\", nodes, links));",
     "method": "set_data",
     "signature": "(Vec<FlowNode>, Vec<FlowLink>, &mut Context<Self>)",
-    "event": "FlowInspect, FlowPeriodChange",
+    "event": "FlowInspect, FlowPeriodChange, FlowParticlesChange",
     "rule": {
       "en": "Use unique node IDs and forward links. Non-finite, non-positive, missing-node and reverse links are ignored. Set visibility from the host to stop particle frames off screen.",
       "zh": "节点 ID 须唯一，连接须向后续列前进；非有限值、非正值、缺失节点及逆向连接会被忽略。宿主应同步可见性以停止屏外粒子帧。"
     },
     "api": {
-      "en": "Hover, tap or use arrow keys to inspect; period selections emit FlowPeriodChange for the host to update data. Touch and screen-reader behavior still need real-device verification.",
-      "zh": "可通过悬停、点击或方向键查看；切换周期会向宿主发出 FlowPeriodChange。触屏和读屏行为仍待实机验收。"
+      "en": "Tab inspects the first node. Arrow keys navigate the plot and Escape clears the trace. Use with_height, with_value_formatter and with_empty_label to customize the plot. The host can accept FlowParticlesChange requests with set_particles.",
+      "zh": "Tab 进入首个节点，方向键在图中导航，Esc 清除追踪。可用 with_height、with_value_formatter 和 with_empty_label 设置图高、数值格式和空状态。宿主可用 set_particles 响应 FlowParticlesChange 请求。"
     },
     "motion": {
-      "en": "Proportional ribbons and nodes transition between datasets, with optional particles; reduced motion removes particles. Frame-by-frame visual comparison is pending.",
-      "zh": "数据变化时按比例过渡流带和节点，并可开关粒子；减少动效时不播放粒子。逐帧视觉对照尚未完成。"
+      "en": "Ribbons and nodes morph between datasets. Inspecting a flow fills the traced share on a 0.26s spring, and clearing the highlight drains it. Reduced motion applies the trace immediately and removes particles.",
+      "zh": "切换数据时流带和节点连续变形。查看流向时，按追踪比例在 0.26 秒弹簧中填充流带，清除后回退。减少动效时立即显示追踪结果并关闭粒子。"
     }
   },
   {
@@ -475,7 +475,7 @@
       "en": "Compare daily goals on concentric progress rings.",
       "zh": "通过同心圆环比较每日目标进度。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::activity_rings::{ActivityDay, ActivityGoal, ActivityRings};\n\nlet goals = vec![ActivityGoal::new(\"move\", \"Move\", 500.0, \"kcal\", gpui::rgb(0xe96080).into())];\nlet days = vec![ActivityDay::new(\"today\", \"Today\", vec![(\"move\".into(), 420.0)])];\nlet control = cx.new(|_| ActivityRings::new(\"Daily activity\", goals, days));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::activity_rings::{ActivityDay, ActivityGoal, ActivityRings};\n\nlet goals = vec![ActivityGoal::new(\"move\", \"Move\", 500.0, \"kcal\", gpui::rgb(0xe96080).into())];\nlet days = vec![ActivityDay::new(\"today\", \"Today\", vec![(\"move\".into(), 420.0)])];\nlet control = cx.new(|cx| ActivityRings::new(\"Daily activity\", goals, days, cx));",
     "method": "set_days",
     "signature": "(Vec<ActivityDay>, &mut Context<Self>)",
     "event": "ActivityDayChanged, ActivityGoalClosed",
@@ -484,8 +484,8 @@
       "zh": "目标和日期应使用稳定 ID；无效或非正目标按零进度显示，超过 100% 的部分以第二圈显示，绘制上限为 200%。"
     },
     "api": {
-      "en": "Select a day with the radio group or set_day; legend buttons highlight a goal. Real-device touch, keyboard focus and screen-reader behavior remain to be checked.",
-      "zh": "通过日期选择组或 set_day 选择日期；图例按钮可突出目标。触屏、键盘焦点和读屏仍需实机检查。"
+      "en": "Use arrow keys to move focus and selection through the week. set_days preserves the selected day by ID and emits ActivityGoalClosed when a value on that day crosses its goal.",
+      "zh": "方向键在一周内同时移动日期选择和键盘焦点。set_days 按 ID 保留所选日期，同一天的数值从低于目标升至达标时发出 ActivityGoalClosed。"
     },
     "motion": {
       "en": "Rings and values retarget from their current state; reduced motion updates directly. Visual frame comparison is pending.",
@@ -580,6 +580,64 @@
     }
   },
   {
+    "id": "payment-flow",
+    "group": "intelligence",
+    "title": {
+      "en": "Payment flow",
+      "zh": "付款流程"
+    },
+    "rustType": "PaymentFlow",
+    "lead": {
+      "en": "Follow a simulated card payment through authorization, settlement and payout.",
+      "zh": "查看一笔模拟刷卡付款如何完成授权、结算和入账。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::payment_flow::{PaymentFlow, PaymentFlowOptions};\n\nlet options = PaymentFlowOptions {\n    amount: 42.50,\n    fee: 1.53,\n    balance: 1284.10,\n    ..Default::default()\n};\nlet control = cx.new(|cx| PaymentFlow::new(options, cx));",
+    "method": "set_paused",
+    "signature": "(bool, &mut Context<Self>)",
+    "event": "",
+    "rule": {
+      "en": "Amounts are in major currency units. The figure simulates a card payment without contacting a payment service.",
+      "zh": "金额以主货币单位传入。示意图模拟刷卡流程，无需连接支付服务。"
+    },
+    "api": {
+      "en": "Set the amount, fee, balance, currency, locale, authorization duration, node overrides, labels, accent and playback in PaymentFlowOptions. Use with_mark for custom GPUI art and with_money_formatter for other locale formats.",
+      "zh": "通过 PaymentFlowOptions 配置金额、手续费、余额、货币、区域、授权耗时、节点、文案、强调色和播放。用 with_mark 提供自定义 GPUI 图形，with_money_formatter 接入其他区域格式。"
+    },
+    "motion": {
+      "en": "The chip returns with approval, then the settlement rail deducts the fee. The balance accumulates payouts. Under 700px the diagram is vertical. Reduced motion shows the net payout in transit.",
+      "zh": "授权结果沿原路返回。结算轨道扣除手续费，余额逐轮累加。宽度小于 700px 时图形竖排，减少动效时停在净额入账前。"
+    }
+  },
+  {
+    "id": "dns-resolution",
+    "group": "intelligence",
+    "title": {
+      "en": "DNS resolution",
+      "zh": "DNS 解析"
+    },
+    "rustType": "DnsResolution",
+    "lead": {
+      "en": "Follow a simulated DNS lookup through referrals, connection and a cached response.",
+      "zh": "跟随一次模拟 DNS 查询，查看服务器转介、建立连接和缓存应答。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::dns_resolution::{DnsResolution, DnsResolutionOptions};\n\nlet options = DnsResolutionOptions {\n    domain: \"app.acme.dev\".into(),\n    address: \"203.0.113.24\".into(),\n    ..Default::default()\n};\nlet control = cx.new(|cx| DnsResolution::new(options, cx));",
+    "method": "seek",
+    "signature": "(usize, &mut Context<Self>)",
+    "event": "",
+    "rule": {
+      "en": "The domain and answer are sample records. The figure makes no network requests.",
+      "zh": "域名和地址是示例记录，示意图不会发送网络请求。"
+    },
+    "api": {
+      "en": "Configure the domain, address, TTL, lookup time, cached time, node details, accent, speed and visible controls with DnsResolutionOptions.",
+      "zh": "通过 DnsResolutionOptions 配置域名、地址、TTL、查询和缓存耗时、节点详情、强调色、播放速度与可见控件。"
+    },
+    "motion": {
+      "en": "Seek with the six step buttons, Left, Right, Home or End. Reduced motion shows still phases.",
+      "zh": "六个步骤可直接跳转，也可用左右方向键、Home 或 End。减少动效时只显示静态阶段。"
+    }
+  },
+  {
     "id": "vector-search",
     "group": "intelligence",
     "title": {
@@ -606,6 +664,35 @@
     "motion": {
       "en": "The illustration progresses through embedding, indexing, query and results; reduced motion shows a still frame. The reference's 2.5D geometry and detailed transitions are not yet reproduced, and device/accessibility validation remains pending.",
       "zh": "示意过程依次展示嵌入、索引、查询与结果；减少动效时显示静态画面。参考站的 2.5D 几何和细节动效尚未完整实现，设备及无障碍验收仍待完成。"
+    }
+  },
+  {
+    "id": "branch-graph",
+    "group": "intelligence",
+    "title": {
+      "en": "Branch graph",
+      "zh": "分支图"
+    },
+    "rustType": "BranchGraph",
+    "lead": {
+      "en": "Inspect Git history and preview merge, rebase, and squash strategies.",
+      "zh": "查看 Git 提交历史，并预览合并、变基和压缩策略。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::branch_graph::{BranchGraph, BranchGraphOptions, BranchStrategy};\n\nlet options = BranchGraphOptions {\n    default_strategy: BranchStrategy::Open,\n    autoplay: false,\n    ..Default::default()\n};\nlet control = cx.new(|cx| BranchGraph::new(options, cx));",
+    "method": "set_strategy",
+    "signature": "(BranchStrategy, &mut Context<Self>)",
+    "event": "BranchStrategyChange",
+    "rule": {
+      "en": "Use the arrows and Home or End in the strategy picker or commit list. Escape closes details.",
+      "zh": "在策略选择器或提交列表中使用方向键、Home 或 End。按 Esc 关闭详情。"
+    },
+    "api": {
+      "en": "Provide commits newest first, lane order, and a pull request. Controlled hosts subscribe to BranchStrategyChange and apply set_strategy.",
+      "zh": "传入按时间倒序排列的提交、轨道顺序和合并请求。受控模式订阅 BranchStrategyChange，并调用 set_strategy 回写。"
+    },
+    "motion": {
+      "en": "Connectors follow commits as histories change. Reduced motion switches instantly and stops autoplay.",
+      "zh": "历史切换时，连线随提交移动。减少动效时直接切换并停止自动播放。"
     }
   }
 ]

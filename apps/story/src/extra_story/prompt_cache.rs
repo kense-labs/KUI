@@ -5,9 +5,12 @@ use kui::{
         CacheOutcome, CacheRequest, CacheResult, CacheSegment, CacheSnapshot, CacheState,
         PromptCache, PromptCacheAction,
     },
-    primitives::{control::UiLanguage, family::Paint},
+    primitives::{
+        control::UiLanguage,
+        family::{Paint, disabled_motion},
+    },
 };
-use std::{cell::Cell, rc::Rc};
+use std::time::Duration;
 pub const IDS: &[&str] = &["prompt-cache"];
 pub fn story(id: &str, _w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
     IDS.contains(&id).then(|| cx.new(Demo::new).into())
@@ -35,21 +38,46 @@ impl Demo {
                 rgb(0xd4a875).into(),
             ),
         ];
-        let requests = (1..=4)
-            .map(|i| {
+        let requests = [180, 240, 410, 150]
+            .into_iter()
+            .enumerate()
+            .map(|(i, tokens)| {
                 CacheRequest::new(
-                    format!("request-{i}"),
-                    format!("{} {i}", t("Request", "请求")),
-                    180 + i * 30,
+                    format!("request-{}", i + 1),
+                    format!("{} {}", t("Request", "请求"), i + 1),
+                    tokens,
                 )
             })
             .collect();
+        let autoplay = !disabled_motion(cx);
         let chart = cx.new(|_| {
-            PromptCache::new(segments, CacheSnapshot::new(requests)).with_change_segment("system")
+            PromptCache::new(segments, CacheSnapshot::new(requests))
+                .with_change_segment("system")
+                .with_sample_playback(autoplay)
         });
-        let failed = Rc::new(Cell::new(false));
+        let weak = chart.downgrade();
+        cx.spawn(async move |_, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+                if weak
+                    .update(cx, |chart, cx| {
+                        if cx
+                            .try_global::<crate::StoryBridge>()
+                            .is_none_or(|bridge| (bridge.visible)())
+                        {
+                            chart.advance_sample(cx);
+                        }
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
         cx.subscribe(&chart, move |_, chart, action: &PromptCacheAction, cx| {
-            let fail = !failed.replace(true);
             let id = action.id;
             let request = action.request.clone();
             let changed = action.change_segment.is_some();
@@ -59,26 +87,13 @@ impl Demo {
                     .timer(std::time::Duration::from_millis(420))
                     .await;
                 let _ = weak.update(cx, |chart, cx| {
-                    if fail {
-                        chart.resolve(
-                            id,
-                            Err(lang
-                                .text(
-                                    "Simulated request failed; retry to continue",
-                                    "模拟请求失败，请重试",
-                                )
-                                .into()),
-                            cx,
-                        );
-                        return;
-                    }
                     let index = request
                         .as_ref()
                         .strip_prefix("request-")
                         .and_then(|v| v.parse::<u64>().ok())
                         .unwrap_or(1);
                     let prefix = 48_400u64;
-                    let message = 180 + index * 30;
+                    let message = [180, 240, 410, 150][index.saturating_sub(1).min(3) as usize];
                     let (kind, cached) = if index == 1 {
                         (CacheOutcome::Write, 0)
                     } else if changed {

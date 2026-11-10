@@ -35,6 +35,6 @@ Event: `PromptCacheAction`.
 
 ## Motion
 
-Confirmed result bars transition into view. The reference's automatic playback, cache-flight and countdown animation are not yet implemented; visual and accessibility validation remain pending.
+Confirmed result bars transition into view. The local sample supports play, pause, step and reset, with a simulated expiry countdown. For a host-driven component, playback is optional via `with_sample_playback(autoplay)`; call `advance_sample(cx)` on visible 250ms ticks. The cache-flight animation and full visual comparison are pending.
 
 Desktop and web use the same GPUI view.

@@ -1,6 +1,8 @@
 //! A host-driven workflow preview and editor. No actions are executed internally.
 use crate::primitives::{
+    control::activate,
     family::{Paint, Slide, Tone, face},
+    glyph::{Glyph, icon},
     presentation::{column, hint, row, tr},
 };
 use gpui::{prelude::*, *};
@@ -179,6 +181,8 @@ impl AiWorkflow {
     pub fn set_steps(&mut self, steps: Vec<WorkflowStep>, cx: &mut Context<Self>) {
         self.stop(cx);
         self.steps = steps;
+        self.selected_path = self.paths.first().map(|path| path.id.clone());
+        self.menu_open = false;
         cx.notify();
     }
     fn active(&self, step: &WorkflowStep) -> bool {
@@ -309,7 +313,12 @@ impl AiWorkflow {
         }
     }
     fn remove(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.running || index >= self.steps.len() {
+        if self.running
+            || self
+                .steps
+                .get(index)
+                .is_none_or(|step| step.kind == WorkflowKind::Trigger)
+        {
             return;
         }
         let branch = self.steps[index].kind == WorkflowKind::Branch;
@@ -329,6 +338,9 @@ impl AiWorkflow {
         let Some(mut step) = self.catalog.get(index).cloned() else {
             return;
         };
+        if (step.kind == WorkflowKind::Trigger) != self.steps.is_empty() {
+            return;
+        }
         self.serial = self.serial.wrapping_add(1);
         step.id = format!("{}-{}", step.id, self.serial).into();
         if self.steps.iter().any(|s| s.kind == WorkflowKind::Branch) {
@@ -348,6 +360,13 @@ fn kind(kind: WorkflowKind, cx: &App) -> &'static str {
         WorkflowKind::Ai => tr(cx, "AI step", "AI 步骤"),
         WorkflowKind::Branch => tr(cx, "Branch", "分支"),
         WorkflowKind::Action => tr(cx, "Action", "操作"),
+    }
+}
+fn row_center(compact: bool, step: &WorkflowStep) -> f32 {
+    if compact && !step.detail.is_empty() {
+        22.
+    } else {
+        16.
     }
 }
 fn state(status: WorkflowStatus, cx: &App) -> &'static str {
@@ -372,11 +391,12 @@ impl Render for AiWorkflow {
             .path_focus
             .get_or_insert_with(|| cx.focus_handle().tab_stop(true))
             .clone();
+        let compact = w.viewport_size().width < px(520.);
         let mut list = column()
             .id("workflow-steps")
             .w_full()
-            .gap(px(16.))
-            .py(px(12.))
+            .gap(px(4.))
+            .py(px(8.))
             .px(px(8.))
             .role(Role::List);
         for (index, step) in self.steps.iter().enumerate() {
@@ -404,7 +424,8 @@ impl Render for AiWorkflow {
                 .relative()
                 .role(Role::ListItem)
                 .aria_label(step_label)
-                .gap_1();
+                .gap_1()
+                .when(step.path.is_some(), |v| v.pl(px(18.)));
             if has_next {
                 let filled = match step.status {
                     WorkflowStatus::Done => 1.,
@@ -414,8 +435,8 @@ impl Render for AiWorkflow {
                 entry = entry.child(
                     div()
                         .absolute()
-                        .left(px(15.5))
-                        .top(px(16.))
+                        .left(px(if step.path.is_some() { 33.5 } else { 15.5 }))
+                        .top(px(row_center(compact, step)))
                         .bottom(px(-4.))
                         .w(px(1.))
                         .bg(p.line)
@@ -445,62 +466,78 @@ impl Render for AiWorkflow {
                 );
             }
             let status = state(step.status, cx);
+            let row_height = row_center(compact, step) * 2.;
+            let step_icon = match step.kind {
+                WorkflowKind::Trigger => Glyph::Comment,
+                WorkflowKind::Ai => Glyph::Bulb,
+                WorkflowKind::Branch => Glyph::Down,
+                WorkflowKind::Action => Glyph::Arrow,
+            };
+            let detail = hint(step.detail.clone(), p).truncate();
+            let label = if compact {
+                column()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0()
+                    .child(div().truncate().child(step.title.clone()))
+                    .when(!step.detail.is_empty(), |v| v.child(detail))
+            } else {
+                row()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_2()
+                    .child(div().flex_none().child(step.title.clone()))
+                    .when(!step.detail.is_empty(), |v| v.child(detail))
+            };
             let content = row()
                 .w_full()
-                .h(px(32.))
+                .h(px(row_height))
                 .items_center()
-                .gap(px(10.))
-                .pl(px(8.))
-                .pr(px(4.))
+                .gap(px(8.))
+                .px(px(8.))
                 .rounded(crate::foundation::surface_radius(cx))
+                .hover(|v| v.bg(p.stage))
                 .child(
                     div()
                         .relative()
-                        .w(px(16.))
+                        .flex_none()
+                        .size(px(16.))
                         .bg(p.panel)
-                        .text_center()
-                        .text_color(accent)
-                        .child(mark),
+                        .child(icon(step_icon, 16., p.secondary)),
                 )
-                .child(div().min_w(px(0.)).flex_1().child(step.title.clone()))
-                .child(hint(step.app.clone(), p))
+                .child(label)
+                .when(!compact, |v| v.child(hint(step.app.clone(), p).truncate()))
                 .child(
-                    div()
-                        .w(px(72.))
-                        .text_right()
+                    row()
+                        .flex_none()
+                        .w(px(if compact { 60. } else { 76. }))
+                        .gap_1()
+                        .justify_end()
                         .text_sm()
                         .text_color(accent)
+                        .child(mark)
                         .child(status),
                 )
-                .when(!self.running, |v| {
-                    v.child(
-                        face(
-                            ("workflow-remove", index),
-                            format!("{} {}", tr(cx, "Remove", "移除"), step.title),
-                            30.,
-                            crate::foundation::surface_radius(cx).into(),
-                            Tone::Surface,
+                .child(div().size(px(24.)).flex_none().when(
+                    !self.running && step.kind != WorkflowKind::Trigger,
+                    |v| {
+                        v.child(activate(
+                            face(
+                                ("workflow-remove", index),
+                                format!("{} {}", tr(cx, "Remove", "移除"), step.title),
+                                24.,
+                                crate::foundation::surface_radius(cx).into(),
+                                Tone::Clear,
+                                cx,
+                            )
+                            .size(px(24.))
+                            .child("×"),
                             cx,
-                        )
-                        .px(px(8.))
-                        .child("×")
-                        .on_click(cx.listener(move |s, _, _, cx| s.remove(index, cx)))
-                        .on_key_down(cx.listener(
-                            move |s, e: &KeyDownEvent, _, cx| {
-                                if matches!(e.keystroke.key.as_str(), "enter" | "space")
-                                    && !e.is_held
-                                {
-                                    s.remove(index, cx);
-                                    cx.stop_propagation();
-                                }
-                            },
-                        )),
-                    )
-                });
+                            move |s, _, cx| s.remove(index, cx),
+                        ))
+                    },
+                ));
             entry = entry.child(content);
-            if !step.detail.is_empty() {
-                entry = entry.child(div().pl(px(34.)).child(hint(step.detail.clone(), p)));
-            }
             if let Some(output) = step.output.clone() {
                 entry = entry.child(
                     div()
@@ -663,15 +700,23 @@ impl Render for AiWorkflow {
                             ),
                     )
                     .child(
-                        face("workflow-run", action_label, 28., 10., Tone::Primary, cx)
-                            .min_w(px(96.))
-                            .px(px(10.))
-                            .text_size(px(13.))
-                            .child(action_label)
-                            .on_click(cx.listener(
-                                |s, _, _, cx| if s.running { s.stop(cx) } else { s.start(cx) },
-                            ))
-                            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
+                        face(
+                            "workflow-run",
+                            action_label,
+                            28.,
+                            crate::foundation::surface_radius(cx).into(),
+                            Tone::Primary,
+                            cx,
+                        )
+                        .min_w(px(96.))
+                        .px(px(10.))
+                        .text_size(px(13.))
+                        .child(action_label)
+                        .on_click(cx.listener(
+                            |s, _, _, cx| if s.running { s.stop(cx) } else { s.start(cx) },
+                        ))
+                        .on_key_down(cx.listener(
+                            |s, e: &KeyDownEvent, _, cx| {
                                 if matches!(e.keystroke.key.as_str(), "enter" | "space")
                                     && !e.is_held
                                 {
@@ -682,7 +727,8 @@ impl Render for AiWorkflow {
                                     }
                                     cx.stop_propagation();
                                 }
-                            })),
+                            },
+                        )),
                     ),
             )
             .child(list);
@@ -729,7 +775,8 @@ impl Render for AiWorkflow {
             );
             if self.menu_open {
                 let mut options = column()
-                    .w(px(300.))
+                    .w_full()
+                    .max_w(px(300.))
                     .gap(px(0.))
                     .p(px(4.))
                     .rounded(crate::foundation::surface_radius(cx))
@@ -737,6 +784,9 @@ impl Render for AiWorkflow {
                     .border_1()
                     .border_color(p.line);
                 for (index, item) in self.catalog.iter().enumerate() {
+                    if (item.kind == WorkflowKind::Trigger) != self.steps.is_empty() {
+                        continue;
+                    }
                     options = options.child(
                         face(
                             ("workflow-option", index),
@@ -769,17 +819,27 @@ impl Render for AiWorkflow {
                 body = body.child(options);
             }
         }
-        body.child(hint(
-            if self.simulated {
-                tr(
-                    cx,
-                    "Simulated run · nothing is sent",
-                    "模拟运行 · 不会发送任何内容",
-                )
-            } else {
-                tr(cx, "Actions are provided by the host", "操作由宿主提供")
-            },
-            p,
-        ))
+        body.child(
+            row()
+                .w_full()
+                .px(px(16.))
+                .py(px(10.))
+                .border_t_1()
+                .border_color(p.line)
+                .justify_between()
+                .flex_wrap()
+                .child(hint(
+                    format!("{} {}", self.steps.len(), tr(cx, "steps", "个步骤")),
+                    p,
+                ))
+                .child(hint(
+                    if self.simulated {
+                        tr(cx, "Test runs are simulated", "测试运行使用模拟数据")
+                    } else {
+                        tr(cx, "Actions are provided by the host", "操作由宿主提供")
+                    },
+                    p,
+                )),
+        )
     }
 }

@@ -17,32 +17,32 @@ impl Example {
         let language = UiLanguage::current(cx);
         let t = |en, zh| language.text(en, zh);
         let mut one = LoopIteration::new(
-            t("Review logs", "查看日志"),
+            t("Checkout events", "结账事件"),
             1200,
             false,
             t("Check needs another pass", "检查需要再次执行"),
         );
         one.calls.push(LoopCall::new(
             "Workspace",
-            t("Inspect build", "检查构建"),
-            t("A dependency is stale", "依赖需要更新"),
+            t("Check decline codes", "检查拒付代码"),
+            t("EU issuer declines increased", "欧洲发卡行拒付上升"),
         ));
         let mut two = LoopIteration::new(
-            t("Configuration", "读取配置"),
+            t("Payment provider logs", "支付服务商日志"),
             800,
             true,
-            t("Build is healthy", "构建正常"),
+            t("Verified against payment events", "已与支付事件核对"),
         );
         two.calls.push(LoopCall::new(
             "Workspace",
-            t("Update and verify", "更新并验证"),
+            t("Compare card routes", "对比银行卡路由"),
             t("Checks passed", "检查通过"),
         ));
         let view = cx.new(|_| {
             AgentLoop::new(
                 t(
-                    "Investigate a build and verify the fix.",
-                    "排查构建问题并验证修复。",
+                    "Find out why EU cards are declined at checkout, then update the team.",
+                    "查明欧洲银行卡在结账时被拒的原因，再向团队汇报。",
                 ),
                 vec![one, two],
             )

@@ -21,7 +21,9 @@ let control = cx.new(|_| RealtimeStream::new("Requests").with_capacity(60).with_
 
 ## Interaction
 
-The host owns the data source and should set visibility when the chart leaves its viewport; non-finite values are ignored.
+The host owns the data source and should set visibility when the chart leaves its viewport. Non-finite values are ignored. Focusing the plot holds the newest visible point. Arrow keys inspect readings, Page Up and Page Down move ten readings, and Home and End go to the visible endpoints. Space or Enter toggles a pinned pause. Escape clears inspection and returns to live when the pointer leaves the plot.
+
+On a narrow card, the pause button sits beside the title so the reading and unit have their own row.
 
 ## API
 
@@ -33,6 +35,6 @@ Event: `LiveInspect`.
 
 ## Motion
 
-New observations slide into a rescaling chart; hover freezes the display for inspection. Reduced motion updates directly.
+New observations slide into a rescaling chart. Hover freezes the display for inspection. The unit follows the animated width of the rolling digits. Reduced motion updates directly.
 
 Desktop and web use the same GPUI view.

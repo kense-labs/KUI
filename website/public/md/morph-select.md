@@ -24,6 +24,8 @@ let control = cx.new(|cx| MorphSelect::new("Status", options, window, cx).with_v
 
 Open the control, search by label, group, detail or keyword, and use arrows or Page Up/Down to move among enabled results. Enter selects; Escape closes.
 
+Home and End move to the first and last enabled options when the search is empty. With a query, they move the text cursor. Alt+Up commits the active option from the search field.
+
 ## API
 
 `with_searchable` · `(bool) -> Self`
@@ -34,6 +36,6 @@ Event: `MorphSelectionChanged`.
 
 ## Motion
 
-The surface changes width and height on springs, the active highlight glides, and changed labels roll and fade. Reduced motion applies changes immediately.
+The surface changes width and height on springs below a fixed trigger anchor, the active highlight glides, and changed labels roll and fade. Reduced motion applies changes immediately.
 
 Desktop and web use the same GPUI view.

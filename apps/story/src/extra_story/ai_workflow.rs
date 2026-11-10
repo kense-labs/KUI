@@ -4,7 +4,11 @@ use kui::{
     components::ai_workflow::{
         AiWorkflow, WorkflowEvent, WorkflowKind, WorkflowPath, WorkflowResult, WorkflowStep,
     },
-    primitives::{control::UiLanguage, family::Paint},
+    primitives::{
+        control::UiLanguage,
+        family::Paint,
+        ops_surface::{btn, row},
+    },
 };
 use std::{cell::Cell, rc::Rc, time::Duration};
 pub const IDS: &[&str] = &["ai-workflow"];
@@ -13,6 +17,9 @@ pub fn story(id: &str, _w: &mut Window, cx: &mut Context<crate::StoryHost>) -> O
 }
 struct Demo {
     workflow: Entity<AiWorkflow>,
+    steps: Vec<WorkflowStep>,
+    scenario: Rc<Cell<usize>>,
+    failed: Rc<Cell<bool>>,
 }
 impl Demo {
     fn new(cx: &mut Context<Self>) -> Self {
@@ -71,6 +78,12 @@ impl Demo {
         ];
         let catalog = vec![
             WorkflowStep::new(
+                "incoming",
+                t("Receive request", "收到请求"),
+                "Gmail",
+                WorkflowKind::Trigger,
+            ),
+            WorkflowStep::new(
                 "note",
                 t("Add a note", "添加备注"),
                 t("Notes", "笔记"),
@@ -90,7 +103,7 @@ impl Demo {
                     "A short trigger, AI step and two action paths",
                     "触发器、AI 步骤和两条操作分支",
                 ),
-                steps,
+                steps.clone(),
                 paths,
             )
             .with_catalog(catalog)
@@ -121,6 +134,9 @@ impl Demo {
         })
         .detach();
         let failed = Rc::new(Cell::new(false));
+        let scenario = Rc::new(Cell::new(0));
+        let mode = scenario.clone();
+        let failure = failed.clone();
         cx.subscribe(&workflow, move |_, workflow, event: &WorkflowEvent, cx| {
             let WorkflowEvent::RunStep {
                 request_id, step, ..
@@ -130,11 +146,12 @@ impl Demo {
             };
             let id = *request_id;
             let step_id = step.id.clone();
-            let fail = step_id.as_ref() == "task" && !failed.replace(true);
+            let fail = mode.get() == 1 && step_id.as_ref() == "task" && !failure.replace(true);
+            let duration = if mode.get() == 2 { 1500 } else { 420 };
             let weak = workflow.downgrade();
             cx.spawn(async move |_, cx| {
                 cx.background_executor()
-                    .timer(Duration::from_millis(420))
+                    .timer(Duration::from_millis(duration))
                     .await;
                 let _ = weak.update(cx, |workflow, cx| {
                     if fail {
@@ -159,7 +176,7 @@ impl Demo {
                         "archive" => lang.text("Sample saved for review", "样例已保存待审核"),
                         _ => lang.text("Sample action completed", "样例操作已完成"),
                     };
-                    let result = WorkflowResult::new(output).with_duration(420);
+                    let result = WorkflowResult::new(output).with_duration(duration);
                     workflow.resolve(
                         id,
                         Ok(if step_id.as_ref() == "route" {
@@ -174,7 +191,12 @@ impl Demo {
             .detach();
         })
         .detach();
-        Self { workflow }
+        Self {
+            workflow,
+            steps,
+            scenario,
+            failed,
+        }
     }
 }
 impl Render for Demo {
@@ -191,6 +213,38 @@ impl Render for Demo {
             .p(px(20.))
             .bg(p.stage)
             .text_color(p.ink)
+            .child(
+                row().justify_center().flex_wrap().children(
+                    [
+                        ("Passes", "成功"),
+                        ("Fails", "失败"),
+                        ("Loading", "运行中"),
+                        ("Empty", "空状态"),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (en, zh))| {
+                        btn(
+                            ("workflow-scenario", i),
+                            UiLanguage::current(cx).text(en, zh),
+                            self.scenario.get() == i,
+                            cx,
+                            move |s, _, cx| {
+                                s.scenario.set(i);
+                                s.failed.set(false);
+                                let steps = if i == 3 { Vec::new() } else { s.steps.clone() };
+                                s.workflow.update(cx, |workflow, cx| {
+                                    workflow.set_steps(steps, cx);
+                                    if i == 2 {
+                                        workflow.start(cx);
+                                    }
+                                });
+                                cx.notify();
+                            },
+                        )
+                    }),
+                ),
+            )
             .child(self.workflow.clone())
     }
 }

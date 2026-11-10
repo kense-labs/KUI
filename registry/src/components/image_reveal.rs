@@ -25,6 +25,7 @@ pub struct ImageReveal {
     run: u64,
     status: RevealStatus,
     progress: Slide,
+    steps: Option<u32>,
     aspect: f32,
     error: SharedString,
     width: Rc<Cell<Pixels>>,
@@ -39,6 +40,7 @@ impl ImageReveal {
             run: 0,
             status: RevealStatus::Queued,
             progress: Slide::new(0.),
+            steps: None,
             aspect: if aspect.is_finite() {
                 aspect.clamp(0.2, 5.)
             } else {
@@ -49,11 +51,16 @@ impl ImageReveal {
             in_view: true,
         }
     }
+    /// Optionally display completed sampler steps alongside the progress ring.
+    pub fn with_steps(mut self, steps: u32) -> Self {
+        self.steps = (steps > 0).then_some(steps);
+        self
+    }
     /// Begin a fresh host job; later updates are accepted only for this ID.
     pub fn begin(&mut self, run: u64, cx: &mut Context<Self>) {
         self.run = run;
         self.status = RevealStatus::Queued;
-        self.progress.duration(0., 0.16, cx);
+        self.progress.reset(0.);
         self.source = None;
         self.error = "".into();
         cx.notify();
@@ -149,7 +156,9 @@ impl Render for ImageReveal {
             .relative()
             .w_full()
             .max_w(px(560.))
-            .h(height)
+            .aspect_ratio(self.aspect)
+            .min_h(px(80.))
+            .max_h(px(600.))
             .rounded(radius)
             .overflow_hidden()
             .bg(p.tray)
@@ -174,29 +183,56 @@ impl Render for ImageReveal {
             .inset_0()
             .overflow_hidden();
         if let Some(source) = &self.source {
-            visual = visual
-                .child(
+            if progress >= 0.999 {
+                visual = visual.child(
                     img(source.clone())
                         .absolute()
                         .size_full()
+                        .rounded(radius)
+                        .object_fit(ObjectFit::Cover),
+                );
+            } else {
+                visual = visual.child(
+                    img(source.clone())
+                        .absolute()
+                        .size_full()
+                        .rounded(radius)
                         .object_fit(ObjectFit::Cover)
                         .opacity(0.35),
-                )
-                .child(
-                    div()
-                        .absolute()
-                        .top(px(0.))
-                        .left(px(0.))
-                        .w_full()
-                        .h(height * progress)
-                        .overflow_hidden()
-                        .child(
-                            img(source.clone())
-                                .w_full()
-                                .h(height)
-                                .object_fit(ObjectFit::Cover),
-                        ),
                 );
+                let front = height * progress;
+                let feather = px(18.).min(front);
+                let sharp = front - feather;
+                for (top, band, opacity) in [
+                    (px(0.), sharp, 1.),
+                    (sharp, feather / 4., 0.86),
+                    (sharp + feather / 4., feather / 4., 0.64),
+                    (sharp + feather / 2., feather / 4., 0.40),
+                    (sharp + feather * 0.75, feather / 4., 0.16),
+                ] {
+                    if band <= px(0.) {
+                        continue;
+                    }
+                    visual = visual.child(
+                        div()
+                            .absolute()
+                            .top(top)
+                            .w_full()
+                            .h(band)
+                            .overflow_hidden()
+                            .child(
+                                img(source.clone())
+                                    .absolute()
+                                    .top(-top)
+                                    .w_full()
+                                    .h(height)
+                                    .rounded(radius)
+                                    .object_fit(ObjectFit::Cover)
+                                    .opacity(opacity),
+                            ),
+                    );
+                }
+            }
         }
         frame = frame.child(visual);
         if self.status == RevealStatus::Error {
@@ -204,6 +240,7 @@ impl Render for ImageReveal {
                 div()
                     .absolute()
                     .inset_0()
+                    .rounded(radius)
                     .flex()
                     .flex_col()
                     .items_center()
@@ -250,14 +287,47 @@ impl Render for ImageReveal {
                     .text_size(px(13.))
                     .text_color(p.ink)
                     .child(
-                        div()
-                            .size(px(14.))
-                            .rounded_full()
-                            .border_1()
-                            .border_color(p.ink.opacity(0.14)),
+                        canvas(
+                            |_, _, _| (),
+                            move |b, _, w, _| {
+                                let center = b.center();
+                                let draw = |end: f32, color: Hsla, w: &mut Window| {
+                                    let mut path = PathBuilder::stroke(px(1.5));
+                                    for index in 0..=24 {
+                                        let a = std::f32::consts::TAU * end * index as f32 / 24.
+                                            - std::f32::consts::FRAC_PI_2;
+                                        let point =
+                                            center + point(px(5.5 * a.cos()), px(5.5 * a.sin()));
+                                        if index == 0 {
+                                            path.move_to(point);
+                                        } else {
+                                            path.line_to(point);
+                                        }
+                                    }
+                                    if let Ok(path) = path.build() {
+                                        w.paint_path(path, color);
+                                    }
+                                };
+                                draw(1., p.ink.opacity(0.16), w);
+                                if progress > 0. {
+                                    draw(progress, p.ink, w);
+                                }
+                            },
+                        )
+                        .size(px(14.))
+                        .flex_none(),
                     )
                     .child(if self.status == RevealStatus::Generating {
-                        format!("{} · {:.0}%", name, progress * 100.)
+                        if let Some(steps) = self.steps {
+                            let count = (progress * steps as f32).round() as u32;
+                            if width < px(300.) {
+                                format!("{count} / {steps}")
+                            } else {
+                                format!("{name} · {count} / {steps}")
+                            }
+                        } else {
+                            format!("{} · {:.0}%", name, progress * 100.)
+                        }
                     } else {
                         name.to_string()
                     }),

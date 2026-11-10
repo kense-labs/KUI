@@ -539,14 +539,38 @@ impl Render for EnrichColumn {
             let mut value = div()
                 .id(("enrich-cell", i))
                 .role(Role::Cell)
-                .min_w(px(180.))
+                .min_w_0()
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap(px(4.))
-                .child(cell.input.clone())
-                .child(
+                .gap(px(4.));
+            let result_editor = cell.input.read(cx).editor();
+            let editing = result_editor.read(cx).focus.is_focused(w);
+            let has_value = !cell.input.read(cx).value(cx).is_empty();
+            let mut cell_face = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .min_h(px(30.));
+            if editing || has_value {
+                cell_face = cell_face.child(
                     div()
+                        .w_full()
+                        .h(px(30.))
+                        .min_w_0()
+                        .flex_1()
+                        .child(result_editor.clone()),
+                );
+            } else {
+                cell_face = cell_face.child(
+                    div()
+                        .id(("enrich-edit", i))
+                        .role(Role::Button)
+                        .tab_index(0)
+                        .min_w_0()
+                        .flex_1()
+                        .cursor_pointer()
                         .text_size(px(12.))
                         .text_color(if cell.status == EnrichStatus::Failed {
                             p.danger
@@ -554,8 +578,45 @@ impl Render for EnrichColumn {
                             p.secondary
                         })
                         .opacity(fade)
+                        .child(status)
+                        .on_click(cx.listener(move |s, _, w, cx| {
+                            s.cells[i]
+                                .input
+                                .read(cx)
+                                .editor()
+                                .read(cx)
+                                .focus
+                                .clone()
+                                .focus(w, cx);
+                            cx.notify();
+                        }))
+                        .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                            if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                                s.cells[i]
+                                    .input
+                                    .read(cx)
+                                    .editor()
+                                    .read(cx)
+                                    .focus
+                                    .clone()
+                                    .focus(w, cx);
+                                w.prevent_default();
+                                cx.stop_propagation();
+                                cx.notify();
+                            }
+                        })),
+                );
+            }
+            value = value.child(cell_face);
+            if has_value && !matches!(cell.status, EnrichStatus::Done | EnrichStatus::Idle) {
+                value = value.child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(p.secondary)
+                        .opacity(fade)
                         .child(status),
                 );
+            }
             if cell.status == EnrichStatus::Failed && !cell.error.is_empty() {
                 value = value.child(
                     div()
@@ -656,7 +717,7 @@ impl Render for EnrichColumn {
                         cx,
                     )
                     .px(px(8.))
-                    .opacity(if self.hovered_row == Some(i) { 1. } else { 0. })
+                    .flex_none()
                     .hover(move |s| s.bg(p.tray).text_color(p.ink))
                     .child(if cell.status == EnrichStatus::Failed {
                         t("Retry", "重试")
@@ -673,15 +734,19 @@ impl Render for EnrichColumn {
                     .id(("enrich-row", i))
                     .role(Role::Row)
                     .w_full()
-                    .h(px(44.))
+                    .min_h(px(45.))
                     .flex()
+                    .flex_row()
                     .items_center()
-                    .gap(px(8.))
+                    .gap(px(12.))
+                    .px(px(12.))
+                    .py(px(6.))
                     .border_t_1()
                     .border_color(p.line)
                     .bg(match cell.status {
                         EnrichStatus::Running => p.bright.opacity(0.05),
                         EnrichStatus::Failed => p.danger.opacity(0.04),
+                        _ if self.hovered_row == Some(i) => p.hover.opacity(0.32),
                         _ => p.panel.opacity(0.),
                     })
                     .on_hover(cx.listener(move |s, over: &bool, _, cx| {
@@ -695,24 +760,26 @@ impl Render for EnrichColumn {
                         div()
                             .id(("enrich-name", i))
                             .role(Role::RowHeader)
-                            .h_full()
-                            .pl(px(20.))
-                            .pr(px(12.))
-                            .w(px(150.))
-                            .min_w(px(100.))
+                            .w(relative(0.30))
+                            .min_w_0()
+                            .flex_none()
                             .flex()
-                            .items_center()
-                            .gap(px(8.))
+                            .flex_col()
+                            .border_r_1()
+                            .border_color(p.line)
+                            .pr_2()
                             .text_size(px(14.))
+                            .line_height(px(17.))
                             .text_color(p.ink)
                             .font_weight(FontWeight::MEDIUM)
-                            .child(cell.row.name.clone())
+                            .child(div().truncate().child(cell.row.name.clone()))
                             .when(!cell.row.domain.is_empty(), |v| {
                                 v.child(
                                     div()
                                         .text_size(px(12.))
-                                        .line_height(px(16.))
+                                        .line_height(px(14.))
                                         .text_color(p.secondary)
+                                        .truncate()
                                         .child(cell.row.domain.clone()),
                                 )
                             }),
@@ -787,6 +854,7 @@ impl Render for EnrichColumn {
             .child(t("Undo", "撤销"))
             .on_click(cx.listener(|s, _, w, cx| s.undo(w, cx))),
         );
+        let instruction = self.prompt.read(cx).value(cx).to_owned();
         div()
             .id("enrich-column")
             .role(Role::Table)
@@ -804,28 +872,44 @@ impl Render for EnrichColumn {
                     .id("enrich-header")
                     .role(Role::Row)
                     .flex()
-                    .flex_wrap()
                     .items_center()
-                    .justify_between()
                     .min_h(px(60.))
-                    .pl(px(20.))
-                    .pr(px(12.))
-                    .py(px(12.))
+                    .px(px(12.))
+                    .py(px(6.))
                     .gap(px(12.))
                     .child(
                         div()
                             .id("enrich-title")
                             .role(Role::ColumnHeader)
-                            .flex()
-                            .items_baseline()
-                            .gap(px(8.))
-                            .text_size(px(16.))
-                            .line_height(px(24.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
+                            .w(relative(0.30))
+                            .flex_none()
+                            .min_w_0()
+                            .pr_2()
+                            .border_r_1()
+                            .border_color(p.line)
+                            .text_size(px(12.))
+                            .text_color(p.secondary)
+                            .truncate()
                             .child(self.title.clone()),
                     )
-                    .child(actions),
+                    .child(
+                        div()
+                            .id("enrich-result-header")
+                            .role(Role::ColumnHeader)
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .text_size(px(14.))
+                            .child(t("Enrichment", "补全结果"))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.secondary)
+                                    .truncate()
+                                    .child(instruction),
+                            ),
+                    ),
             )
             .when(editor_h > 0.001, |v| {
                 v.child(
@@ -839,6 +923,7 @@ impl Render for EnrichColumn {
                 )
             })
             .child(rows)
+            .child(div().border_t_1().border_color(p.line).p_2().child(actions))
     }
 }
 

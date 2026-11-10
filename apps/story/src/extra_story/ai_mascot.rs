@@ -1,14 +1,67 @@
-//! Host-driven Kense mascot showcase; activity states are simulated.
+//! Kense assistant activity showcase.
 use gpui::{prelude::*, *};
 use kui::{
     components::ai_mascot::{AiMascot, MascotStatus},
     primitives::{
         control::UiLanguage,
-        family::{Paint, Tone, face},
+        family::{Paint, Tone, disabled_motion, face},
+        glyph::{Glyph, icon},
     },
 };
 use std::time::Duration;
+
 pub const IDS: &[&str] = &["ai-mascot"];
+const STATES: [(MascotStatus, &str, &str, &str, &str, u32); 6] = [
+    (
+        MascotStatus::Idle,
+        "Idle",
+        "空闲",
+        "Kense is ready when you are",
+        "Kense 已就绪",
+        2000,
+    ),
+    (
+        MascotStatus::Listening,
+        "Listening",
+        "聆听",
+        "Listening",
+        "正在聆听",
+        1800,
+    ),
+    (
+        MascotStatus::Thinking,
+        "Thinking",
+        "思考",
+        "Thinking",
+        "正在思考",
+        2300,
+    ),
+    (
+        MascotStatus::Writing,
+        "Writing",
+        "生成",
+        "Writing a reply",
+        "正在生成回复",
+        2200,
+    ),
+    (
+        MascotStatus::Done,
+        "Done",
+        "完成",
+        "Reply ready, 214 words",
+        "回复已就绪 · 214 字",
+        1500,
+    ),
+    (
+        MascotStatus::Error,
+        "Error",
+        "出错",
+        "Could not finish the reply",
+        "未能完成回复",
+        1400,
+    ),
+];
+
 pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
     IDS.contains(&id).then(|| cx.new(Example::new).into())
 }
@@ -16,43 +69,20 @@ struct Example {
     mascot: Entity<AiMascot>,
     compact: Entity<AiMascot>,
     language: UiLanguage,
-    status: MascotStatus,
-    paused: bool,
+    selected: usize,
+    playing: bool,
+    elapsed: u32,
 }
 impl Example {
     fn new(cx: &mut Context<Self>) -> Self {
-        let language = UiLanguage::current(cx);
-        let mascot = cx.new(|_| AiMascot::new("Kense").with_size(128.));
-        let compact = cx.new(|_| AiMascot::new("Kense").with_size(32.));
-        let visible = cx
-            .try_global::<crate::StoryBridge>()
-            .is_none_or(|bridge| (bridge.visible)());
-        mascot.update(cx, |v, cx| v.set_visible(visible, cx));
-        compact.update(cx, |v, cx| v.set_visible(visible, cx));
-        let large = mascot.downgrade();
-        let small = compact.downgrade();
-        cx.spawn(async move |_, cx| {
+        let mascot = cx.new(|_| AiMascot::new("Kense").with_size(148.));
+        let compact = cx.new(|_| AiMascot::new("Kense").with_size(24.).follow_pointer(false));
+        cx.spawn(async |this, cx| {
             loop {
                 cx.background_executor()
-                    .timer(Duration::from_millis(200))
+                    .timer(Duration::from_millis(100))
                     .await;
-                let large_alive = large
-                    .update(cx, |v, cx| {
-                        let visible = cx
-                            .try_global::<crate::StoryBridge>()
-                            .is_none_or(|bridge| (bridge.visible)());
-                        v.set_visible(visible, cx);
-                    })
-                    .is_ok();
-                let small_alive = small
-                    .update(cx, |v, cx| {
-                        let visible = cx
-                            .try_global::<crate::StoryBridge>()
-                            .is_none_or(|bridge| (bridge.visible)());
-                        v.set_visible(visible, cx);
-                    })
-                    .is_ok();
-                if !large_alive && !small_alive {
+                if this.update(cx, |view, cx| view.tick(cx)).is_err() {
                     break;
                 }
             }
@@ -61,93 +91,151 @@ impl Example {
         Self {
             mascot,
             compact,
-            language,
-            status: MascotStatus::Idle,
-            paused: false,
+            language: UiLanguage::current(cx),
+            selected: 0,
+            playing: !disabled_motion(cx),
+            elapsed: 0,
         }
+    }
+    fn tick(&mut self, cx: &mut Context<Self>) {
+        let visible = cx
+            .try_global::<crate::StoryBridge>()
+            .is_none_or(|bridge| (bridge.visible)());
+        self.mascot
+            .update(cx, |view, cx| view.set_visible(visible, cx));
+        self.compact
+            .update(cx, |view, cx| view.set_visible(visible, cx));
+        if visible && self.playing && !disabled_motion(cx) {
+            self.elapsed += 100;
+            if self.elapsed >= STATES[self.selected].5 {
+                self.select((self.selected + 1) % STATES.len(), cx);
+            }
+        }
+    }
+    fn select(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.selected = index;
+        self.elapsed = 0;
+        let status = STATES[index].0;
+        self.mascot
+            .update(cx, |view, cx| view.set_status(status, cx));
+        self.compact
+            .update(cx, |view, cx| view.set_status(status, cx));
+        cx.notify();
     }
 }
 impl Render for Example {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
         let t = |en, zh| self.language.text(en, zh);
-        let mut controls = div().flex().flex_wrap().justify_center().gap_2();
-        for (i, (status, label)) in [
-            (MascotStatus::Idle, t("Idle", "空闲")),
-            (MascotStatus::Listening, t("Listening", "聆听")),
-            (MascotStatus::Thinking, t("Thinking", "思考")),
-            (MascotStatus::Writing, t("Writing", "生成")),
-            (MascotStatus::Done, t("Done", "完成")),
-            (MascotStatus::Error, t("Error", "出错")),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            controls = controls.child(
+        let mut states = div()
+            .id("mascot-states")
+            .flex()
+            .min_w_0()
+            .overflow_x_scroll()
+            .gap(px(2.))
+            .p(px(3.))
+            .rounded(radius)
+            .bg(p.stage);
+        for (i, (_, en, zh, _, _, _)) in STATES.into_iter().enumerate() {
+            let label = t(en, zh);
+            states = states.child(
                 face(
                     ("mascot-state", i),
                     label,
-                    32.,
-                    8.,
-                    if self.status == status {
-                        Tone::Primary
-                    } else {
-                        Tone::Surface
-                    },
+                    36.,
+                    radius.into(),
+                    Tone::Clear,
                     cx,
                 )
-                .px_2()
+                .px(px(10.))
+                .aria_toggled((self.selected == i).into())
+                .when(self.selected == i, |view| view.bg(p.panel))
                 .child(label)
                 .on_click(cx.listener(move |s, _, _, cx| {
-                    s.status = status;
-                    s.mascot.update(cx, |v, cx| v.set_status(status, cx));
-                    s.compact.update(cx, |v, cx| v.set_status(status, cx));
-                    cx.notify();
+                    s.playing = false;
+                    s.select(i, cx);
                 })),
             );
         }
-        let pause = if self.paused {
-            t("Resume", "继续")
+        let playing = self.playing && !disabled_motion(cx);
+        let (play_label, play_icon) = if playing {
+            (t("Pause", "暂停"), Glyph::Pause)
         } else {
-            t("Pause", "暂停")
+            (t("Play", "播放"), Glyph::Play)
         };
-        controls = controls.child(
-            face("mascot-pause", pause, 32., 8., Tone::Surface, cx)
-                .px_2()
-                .child(pause)
-                .on_click(cx.listener(|s, _, _, cx| {
-                    s.paused = !s.paused;
-                    s.mascot.update(cx, |v, cx| v.set_paused(s.paused, cx));
-                    s.compact.update(cx, |v, cx| v.set_paused(s.paused, cx));
-                    cx.notify();
-                })),
-        );
+        let (_, _, _, en, zh, _) = STATES[self.selected];
         div()
-            .size_full()
+            .w_full()
             .min_h(px(520.))
-            .p_4()
-            .bg(p.stage)
-            .text_color(p.ink)
+            .p(px(16.))
             .flex()
             .flex_col()
-            .items_center()
             .justify_center()
-            .gap_4()
+            .items_center()
             .child(
                 div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(t("Simulated activity states", "模拟活动状态")),
-            )
-            .child(self.mascot.clone())
-            .child(
-                div()
+                    .w_full()
+                    .max_w(px(490.))
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(p.line)
+                    .bg(p.panel)
+                    .p(px(8.))
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(self.compact.clone())
-                    .child("Kense"),
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .h(px(208.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(self.mascot.clone()),
+                    )
+                    .child(
+                        div()
+                            .h(px(48.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.))
+                            .text_size(px(14.))
+                            .text_color(p.secondary)
+                            .child(self.compact.clone())
+                            .child(t(en, zh)),
+                    )
+                    .child(
+                        div()
+                            .border_t_1()
+                            .border_color(p.line)
+                            .pt(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(states.flex_1())
+                            .when(!disabled_motion(cx), |row| {
+                                row.child(
+                                    face(
+                                        "mascot-play",
+                                        play_label,
+                                        36.,
+                                        radius.into(),
+                                        Tone::Clear,
+                                        cx,
+                                    )
+                                    .px(px(10.))
+                                    .child(icon(play_icon, 14., p.ink))
+                                    .child(play_label)
+                                    .on_click(cx.listener(
+                                        |s, _, _, cx| {
+                                            s.playing = !s.playing;
+                                            cx.notify();
+                                        },
+                                    )),
+                                )
+                            }),
+                    ),
             )
-            .child(controls)
     }
 }

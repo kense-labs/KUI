@@ -33,7 +33,7 @@ let control = cx.new(|_| GenerationReadout::new("stats","Assistant",Metrics {fir
 
 ## Interaction
 
-Compute speed after the first token and cost using the host’s per-million prices.
+Live speed uses the latest finite throughput sample. On completion, average speed is calculated from output tokens and the time after the first token. Cost uses the host’s per-million prices. Details shows the latency split and token rates.
 
 ## API
 
@@ -43,6 +43,6 @@ Metrics accepts first-token and total milliseconds, input/output counts, rates p
 
 ## Motion
 
-The details use measured height and include parent spacing in the same spring. Output token drops snap to a new run; increases interpolate over 180ms.
+The details open over 260ms using measured height and include parent spacing in the same spring. Output token drops snap to a new run; increases interpolate over 100ms. The sparkline uses up to 48 recent samples.
 
 Desktop and web use the same GPUI view.

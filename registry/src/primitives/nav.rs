@@ -466,7 +466,7 @@ pub(crate) struct Fade {
     seconds: f32,
 }
 impl Fade {
-    fn visible() -> Self {
+    pub(crate) fn visible() -> Self {
         Self {
             from: 1.,
             to: 1.,

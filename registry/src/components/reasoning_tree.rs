@@ -108,6 +108,11 @@ fn search(
             }
         }
     }
+    if let Some(last) = stages.last() {
+        for &index in last {
+            nodes[index].kept = Some(index) == best;
+        }
+    }
     (nodes, stages, best)
 }
 /// Stable tree positions based on the full data, so a new stage does not move old nodes.
@@ -307,16 +312,12 @@ impl Render for ReasoningTree {
         let viewport = w.viewport_size();
         let weak = cx.weak_entity();
         let measured = self.width.get();
-        let wide = if measured > px(0.) {
-            measured >= px(670.)
-        } else {
-            viewport.width >= px(670.)
-        };
         let graph_width = if measured > px(0.) {
-            (measured - px(32.)).max(px(1.))
+            (measured - px(42.)).max(px(1.))
         } else {
             (viewport.width - px(64.)).min(px(728.)).max(px(1.))
         };
+        let wide = graph_width + px(42.) >= px(670.);
         let capture = self.width.clone();
         let animation: Vec<f32> = self
             .stage_motion
@@ -393,8 +394,15 @@ impl Render for ReasoningTree {
                 )
                 .child(
                     div()
+                        .w_full()
+                        .px(px(12.))
+                        .py(px(10.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.tray)
                         .text_size(px(13.))
-                        .text_color(p.secondary)
+                        .text_color(p.ink)
                         .child(self.question.clone()),
                 );
         if let Some(error) = &self.error {
@@ -488,7 +496,15 @@ impl Render for ReasoningTree {
                 cx.notify();
             }));
         let column = f32::from(graph_width) / 3.;
-        let node_width = (column - 20.).clamp(120., 210.);
+        let node_width = (column - 12.).clamp(120., 210.);
+        let mut answer_path = Vec::new();
+        if completed {
+            let mut current = self.answer;
+            while let Some(index) = current {
+                answer_path.push(index);
+                current = self.nodes[index].parent;
+            }
+        }
         if wide {
             let graph_height = px(rows * 56. + 12.);
             let edges: Vec<(f32, f32, f32, f32, f32)> = visible
@@ -528,6 +544,51 @@ impl Render for ReasoningTree {
                 .absolute()
                 .inset_0(),
             );
+        } else {
+            let edges = visible
+                .iter()
+                .enumerate()
+                .map(|(row, &index)| {
+                    let node = &self.nodes[index];
+                    let parent = node.parent.and_then(|parent| {
+                        visible.iter().position(|&candidate| parent == candidate)
+                    });
+                    (
+                        node.depth as f32 * 16. + 9.,
+                        parent.map_or(-12., |row| row as f32 * 50. + 44.),
+                        row as f32 * 50. + 22.,
+                        animation[node.depth].clamp(0., 1.),
+                        answer_path.contains(&index),
+                    )
+                })
+                .collect::<Vec<_>>();
+            tree = tree
+                .relative()
+                .gap(px(6.))
+                .min_h(px(self.nodes.len() as f32 * 50.))
+                .child(
+                    canvas(
+                        |_, _, _| (),
+                        move |bounds, _, w, _| {
+                            for (x, start, end, opacity, answer) in &edges {
+                                let mut path = PathBuilder::stroke(px(1.25));
+                                path.move_to(bounds.origin + point(px(*x), px(*start)));
+                                path.line_to(bounds.origin + point(px(*x), px(*end - 4.)));
+                                path.line_to(bounds.origin + point(px(*x + 4.), px(*end)));
+                                path.line_to(bounds.origin + point(px(*x + 7.), px(*end)));
+                                if let Ok(path) = path.build() {
+                                    w.paint_path(
+                                        path,
+                                        if *answer { p.bright } else { p.secondary }
+                                            .opacity(*opacity * 0.55),
+                                    );
+                                }
+                            }
+                        },
+                    )
+                    .absolute()
+                    .inset_0(),
+                );
         }
         for (position, index) in visible.iter().copied().enumerate() {
             let node = &self.nodes[index];
@@ -557,8 +618,20 @@ impl Render for ReasoningTree {
                     row.aria_active_descendant()
                 })
                 .when(has_children, |row| row.aria_expanded(!folded))
-                .ml(px(if wide { 0. } else { (node.depth * 18) as f32 }))
-                .rounded(px(8.))
+                .ml(px(if wide {
+                    0.
+                } else {
+                    ((node.depth + 1) * 16) as f32
+                }))
+                .h(px(44.))
+                .flex_none()
+                .rounded(radius)
+                .border_1()
+                .border_color(if answer_path.contains(&index) {
+                    p.bright.opacity(0.55)
+                } else {
+                    p.line
+                })
                 .bg(if position == self.selected {
                     p.hover
                 } else {
@@ -570,20 +643,44 @@ impl Render for ReasoningTree {
                 .items_center()
                 .gap_2()
                 .cursor_pointer()
-                .child(if has_children {
+                .child(if completed && self.answer == Some(index) {
+                    "✓"
+                } else if has_children {
                     if folded { "›" } else { "⌄" }
                 } else {
                     "·"
                 })
-                .child(div().flex_1().child(title))
                 .child(
-                    div().w(px(54.)).h(px(3.)).rounded_full().bg(p.line).child(
-                        div()
-                            .h_full()
-                            .w(relative(node.score * node_animation))
-                            .rounded_full()
-                            .bg(if node.kept { p.bright } else { p.secondary }),
-                    ),
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_size(px(12.))
+                        .truncate()
+                        .child(node.thought.label.clone()),
+                )
+                .child(
+                    div()
+                        .w(px(30.))
+                        .flex_none()
+                        .text_right()
+                        .text_size(px(11.))
+                        .text_color(p.secondary)
+                        .child(format!("{:.0}%", node.score * node_animation * 100.)),
+                )
+                .child(
+                    div()
+                        .w(px(if wide { 24. } else { 46. }))
+                        .h(px(3.))
+                        .flex_none()
+                        .rounded_full()
+                        .bg(p.line)
+                        .child(
+                            div()
+                                .h_full()
+                                .w(relative(node.score * node_animation))
+                                .rounded_full()
+                                .bg(if node.kept { p.bright } else { p.secondary }),
+                        ),
                 )
                 .on_click(cx.listener(move |s, _, w, cx| {
                     s.selected = position;

@@ -1,11 +1,18 @@
 //! A compact selection surface that morphs into a searchable option list.
 use crate::primitives::{
     control::UiLanguage,
-    editor::{EditEvent, Editor, InputMode},
+    editor::{EditEvent, Editor, EditorScrollRegion, InputMode},
     family::{Paint, PhaseClock, Slide, ease, measure},
     glyph::{Glyph, icon},
 };
 use gpui::{prelude::*, *};
+use std::{cell::Cell, rc::Rc};
+
+const TRIGGER_HEIGHT: f32 = 44.;
+const MAX_LIST_HEIGHT: f32 = 296.;
+const OPTION_HEIGHT: f32 = 36.;
+const OPTION_GAP: f32 = 2.;
+const GROUP_LABEL_HEIGHT: f32 = 28.;
 
 #[derive(Clone, Debug)]
 pub struct MorphOption {
@@ -72,8 +79,9 @@ pub struct MorphSelect {
     _subscription: Subscription,
     query: String,
     scroll: ScrollHandle,
+    anchor: Rc<Cell<Bounds<Pixels>>>,
     size: Slide,
-    width: Slide,
+    width: Option<Slide>,
     highlight: Slide,
     old: SharedString,
     direction: f32,
@@ -129,14 +137,15 @@ impl MorphSelect {
             open: false,
             disabled: false,
             searchable,
-            panel_width: 264.,
+            panel_width: 272.,
             focus: cx.focus_handle().tab_stop(true),
             editor,
             _subscription: subscription,
             query: String::new(),
             scroll: Default::default(),
+            anchor: Default::default(),
             size: Slide::snappy(0.),
-            width: Slide::snappy(140.),
+            width: None,
             highlight: Slide::snappy(0.),
             old: "".into(),
             direction: 1.,
@@ -189,16 +198,16 @@ impl MorphSelect {
                 if group.is_some() {
                     y += 4.;
                 }
-                y += 28.;
+                y += GROUP_LABEL_HEIGHT + OPTION_GAP;
             }
             group = Some(next);
             result.push(y);
-            y += 36.;
+            y += OPTION_HEIGHT;
             if result.len() < self.visible.len() {
-                y += 2.;
+                y += OPTION_GAP;
             }
         }
-        (result, y.max(36.))
+        (result, y.max(OPTION_HEIGHT))
     }
     fn set_active(&mut self, index: Option<usize>, cx: &mut Context<Self>) {
         self.active = index;
@@ -208,12 +217,17 @@ impl MorphSelect {
             let (offsets, _) = self.offsets();
             self.highlight.duration(offsets[position], 0.28, cx);
             let visible_start = -f32::from(self.scroll.offset().y);
-            let visible_height = self.offsets().1.min(240.);
+            let measured = f32::from(self.scroll.bounds().size.height);
+            let visible_height = if measured > 0. {
+                (measured - 12.).max(1.)
+            } else {
+                self.offsets().1.min(MAX_LIST_HEIGHT - 12.)
+            };
             let target = offsets[position];
             let next = if target < visible_start {
                 target
-            } else if target + 36. > visible_start + visible_height {
-                target + 36. - visible_height
+            } else if target + OPTION_HEIGHT > visible_start + visible_height {
+                target + OPTION_HEIGHT - visible_height
             } else {
                 visible_start
             };
@@ -310,6 +324,19 @@ impl MorphSelect {
         let next = (pos as isize + delta).rem_euclid(enabled.len() as isize) as usize;
         self.set_active(Some(enabled[next]), cx);
     }
+    fn activate_edge(&mut self, first: bool, cx: &mut Context<Self>) {
+        let mut enabled = self
+            .visible
+            .iter()
+            .copied()
+            .filter(|&i| !self.options[i].disabled);
+        let edge = if first {
+            enabled.next()
+        } else {
+            enabled.next_back()
+        };
+        self.set_active(edge, cx);
+    }
     fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         if self.disabled {
             return;
@@ -319,13 +346,24 @@ impl MorphSelect {
             if self.editor.read(cx).is_composing() {
                 return;
             }
-            if k == "tab" {
-                self.close(cx);
-            } else if matches!(k, "pageup" | "pagedown") {
-                self.step(if k == "pageup" { -8 } else { 8 }, cx);
-                cx.stop_propagation();
-                w.prevent_default();
+            match k {
+                "tab" => {
+                    self.close(cx);
+                    return;
+                }
+                "pageup" | "pagedown" => self.step(if k == "pageup" { -8 } else { 8 }, cx),
+                "home" | "end" if self.editor.read(cx).value().is_empty() => {
+                    self.activate_edge(k == "home", cx);
+                }
+                "up" if e.keystroke.modifiers.alt => {
+                    if let Some(index) = self.active {
+                        self.choose(index, w, cx);
+                    }
+                }
+                _ => return,
             }
+            cx.stop_propagation();
+            w.prevent_default();
             return;
         }
         match k {
@@ -355,28 +393,11 @@ impl MorphSelect {
             "pageup" | "pagedown" if self.open => {
                 self.step(if k == "pageup" { -8 } else { 8 }, cx);
             }
-            "home" => {
+            "home" | "end" => {
                 if !self.open {
                     self.show(w, cx)
                 }
-                let first = self
-                    .visible
-                    .iter()
-                    .copied()
-                    .find(|&i| !self.options[i].disabled);
-                self.set_active(first, cx);
-            }
-            "end" => {
-                if !self.open {
-                    self.show(w, cx)
-                }
-                let last = self
-                    .visible
-                    .iter()
-                    .rev()
-                    .copied()
-                    .find(|&i| !self.options[i].disabled);
-                self.set_active(last, cx);
+                self.activate_edge(k == "home", cx);
             }
             "escape" if self.open => {
                 self.close(cx);
@@ -428,15 +449,33 @@ impl Render for MorphSelect {
         let p = Paint::get(cx);
         let radius = crate::foundation::surface_radius(cx);
         let caption = self.caption();
-        let closed = (measure(&caption, 14., w) + 74.).clamp(124., 240.);
-        self.width
-            .duration(if self.open { self.panel_width } else { closed }, 0.42, cx);
-        let width = self.width.get(w, cx);
+        let closed = (measure(&caption, 14., w) + 52.).clamp(78., 320.);
+        let anchor = self.anchor.get();
+        let viewport = w.viewport_size();
+        let available_width = f32::from(viewport.width - anchor.left() - px(8.)).max(1.);
+        let closed_width = if anchor.size.width > px(0.) {
+            closed.min(f32::from(anchor.size.width))
+        } else {
+            closed
+        };
+        let target_width = if self.open {
+            self.panel_width.max(closed_width)
+        } else {
+            closed_width
+        };
+        let target_width = target_width.min(available_width);
+        let width = self
+            .width
+            .get_or_insert_with(|| Slide::snappy(target_width));
+        width.duration(target_width, 0.42, cx);
+        let width = width.get(w, cx).min(available_width);
         let progress = self.size.get(w, cx).clamp(0., 1.);
         let (offsets, contents_h) = self.offsets();
-        let list_h = contents_h.min(240.);
-        let h = 44. + progress * (list_h + 12.);
+        let room = f32::from(viewport.height - anchor.top()) - TRIGGER_HEIGHT - 8.;
+        let list_h = (contents_h + 12.).min(MAX_LIST_HEIGHT).min(room.max(44.));
+        let h = TRIGGER_HEIGHT + progress * (list_h + 2.);
         let highlight = self.highlight.get(w, cx);
+        let scroll = self.scroll.clone();
         let mut list = div()
             .id("morph-options")
             .relative()
@@ -448,16 +487,40 @@ impl Render for MorphSelect {
             .w_full()
             .px(px(6.))
             .pt(px(6.))
-            .pb(px(6.));
-        let mut content = div().relative().flex().flex_col().w_full();
+            .pb(px(6.))
+            .child(
+                canvas(
+                    |_, _, _| (),
+                    move |_, _, _, cx| {
+                        if let Some(host) = cx.try_global::<EditorScrollRegion>() {
+                            let top = -scroll.offset().y;
+                            (host.0)(
+                                scroll.bounds(),
+                                top > px(0.1),
+                                top + px(0.1) < scroll.max_offset().y,
+                            );
+                        }
+                    },
+                )
+                .absolute()
+                .size(px(0.)),
+            );
+        let mut content = div()
+            .relative()
+            .flex()
+            .flex_col()
+            .gap(px(OPTION_GAP))
+            .w_full();
         if self.active.is_some() {
             content = content.child(
                 div()
+                    .id("morph-highlight")
+                    .debug_selector(|| "morph-highlight".into())
                     .absolute()
                     .left(px(0.))
                     .right(px(0.))
                     .top(px(highlight))
-                    .h(px(36.))
+                    .h(px(OPTION_HEIGHT))
                     .rounded(radius)
                     .bg(p.ink.opacity(0.065)),
             );
@@ -480,7 +543,7 @@ impl Render for MorphSelect {
             if !option.group.is_empty() && last_group.as_ref() != Some(&option.group) {
                 content = content.child(
                     div()
-                        .h(px(28.))
+                        .h(px(GROUP_LABEL_HEIGHT))
                         .pt(px(8.))
                         .pb(px(4.))
                         .px(px(10.))
@@ -498,6 +561,7 @@ impl Render for MorphSelect {
             let is_active = self.active == Some(i);
             let mut item = div()
                 .id(("morph-option", i))
+                .debug_selector(|| format!("morph-option-{i}"))
                 .relative()
                 .role(Role::ListBoxOption)
                 .aria_label(option.label.clone())
@@ -508,7 +572,7 @@ impl Render for MorphSelect {
                 .when(option.disabled, |item| {
                     item.aria_description(UiLanguage::current(cx).text("Disabled", "不可用"))
                 })
-                .h(px(36.))
+                .h(px(OPTION_HEIGHT))
                 .pl(px(8.))
                 .pr(px(10.))
                 .flex()
@@ -569,9 +633,10 @@ impl Render for MorphSelect {
         list = list.child(content);
         let mut root = div()
             .id("morph-select")
-            .relative()
+            .absolute()
+            .left_0()
+            .top_0()
             .w(px(width))
-            .max_w_full()
             .h(px(h))
             .rounded(radius)
             .border_1()
@@ -594,7 +659,7 @@ impl Render for MorphSelect {
                 root.aria_description(UiLanguage::current(cx).text("Disabled", "不可用"))
             })
             .focus_visible(move |s| s.border_color(p.focus))
-            .on_key_down(cx.listener(Self::key))
+            .capture_key_down(cx.listener(Self::key))
             .on_mouse_down_out(cx.listener(|s, _, _, cx| {
                 if s.open {
                     s.close(cx)
@@ -628,10 +693,10 @@ impl Render for MorphSelect {
         }
         let header = div()
             .id("morph-trigger")
-            .h(px(44.))
+            .h(px(TRIGGER_HEIGHT))
             .w_full()
             .pl(px(14.))
-            .pr(px(36.))
+            .pr(px(12.))
             .flex()
             .items_center()
             .justify_between()
@@ -654,6 +719,10 @@ impl Render for MorphSelect {
                 div()
                     .id("morph-caret")
                     .flex_none()
+                    .size(px(16.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
                     .child(icon(
                         if self.open { Glyph::Up } else { Glyph::Down },
                         14.,
@@ -680,7 +749,27 @@ impl Render for MorphSelect {
                     .child(list),
             );
         }
-        root.when(self.disabled, |d| d.opacity(0.5))
+        let anchor = self.anchor.clone();
+        let expanded = progress > 0. || self.open;
+        div()
+            .relative()
+            .w(px(closed))
+            .max_w_full()
+            .h(px(TRIGGER_HEIGHT))
+            .child(
+                canvas(
+                    move |bounds, w, _| {
+                        let old = anchor.replace(bounds);
+                        if old.size != bounds.size || (expanded && old.origin != bounds.origin) {
+                            w.request_animation_frame();
+                        }
+                    },
+                    |_, _, _, _| (),
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .child(deferred(root.when(self.disabled, |d| d.opacity(0.5))).with_priority(2))
     }
 }
 
@@ -688,6 +777,7 @@ impl Render for MorphSelect {
 mod tests {
     use super::{MorphOption, MorphSelect};
     use gpui::{EntityInputHandler, TestAppContext};
+    use std::time::Duration;
     #[test]
     fn matches_label_group_details_and_keywords() {
         let option = MorphOption::new("id", "Alpha")
@@ -698,6 +788,48 @@ mod tests {
             assert!(option.matches(query));
         }
         assert!(!option.matches("sales"));
+    }
+    #[test]
+    fn active_highlight_tracks_the_laid_out_option_across_group_gaps() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let options = vec![
+            MorphOption::new("a", "Alpha").with_group("One"),
+            MorphOption::new("b", "Bravo").with_group("One"),
+            MorphOption::new("c", "Charlie").with_group("Two"),
+            MorphOption::new("d", "Delta").with_group("Two"),
+        ];
+        let (control, w) = app
+            .add_window_view(|w, cx| MorphSelect::new("Options", options, w, cx).with_value("d"));
+        w.update(|w, cx| control.update(cx, |control, cx| control.show(w, cx)));
+        w.executor().advance_clock(Duration::from_secs(1));
+        w.update(|w, _| w.refresh());
+        w.run_until_parked();
+        let row = w.debug_bounds("morph-option-3").unwrap();
+        let highlight = w.debug_bounds("morph-highlight").unwrap();
+        assert_eq!(highlight.top(), row.top());
+        assert_eq!(highlight.size.height, row.size.height);
+    }
+    #[test]
+    fn empty_search_uses_home_and_end_to_navigate_enabled_options() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let options = vec![
+            MorphOption::new("first", "First"),
+            MorphOption::new("last", "Last"),
+            MorphOption::new("disabled", "Unavailable").with_disabled(true),
+        ];
+        let (control, w) = app.add_window_view(|w, cx| {
+            MorphSelect::new("Options", options, w, cx).with_searchable(true)
+        });
+        w.update(|w, cx| control.update(cx, |control, cx| control.show(w, cx)));
+        w.executor().advance_clock(Duration::from_secs(1));
+        w.update(|w, _| w.refresh());
+        w.run_until_parked();
+        w.simulate_keystrokes("end");
+        assert_eq!(w.update(|_, cx| control.read(cx).active), Some(1));
+        w.simulate_keystrokes("home");
+        assert_eq!(w.update(|_, cx| control.read(cx).active), Some(0));
     }
     #[test]
     fn page_keys_do_not_move_selection_during_ime_composition() {

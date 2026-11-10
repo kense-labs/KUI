@@ -1089,6 +1089,30 @@
   },
   {
     "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "booking-pill",
+    "title": "BookingPill"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "date-reel",
+    "title": "DateReel"
+  },
+  {
+    "categories": [
+      "pickers"
+    ],
+    "kind": "component",
+    "name": "time-dial",
+    "title": "TimeDial"
+  },
+  {
+    "categories": [
       "charts"
     ],
     "kind": "component",
@@ -1252,8 +1276,32 @@
       "intelligence"
     ],
     "kind": "component",
+    "name": "payment-flow",
+    "title": "PaymentFlow"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "dns-resolution",
+    "title": "DnsResolution"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
     "name": "vector-search",
     "title": "VectorSearch"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "branch-graph",
+    "title": "BranchGraph"
   },
   {
     "categories": [
@@ -1294,6 +1342,30 @@
     "kind": "component",
     "name": "slot-text",
     "title": "SlotText"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "keycap-keyboard",
+    "title": "KeycapKeyboard"
+  },
+  {
+    "categories": [
+      "text-effects"
+    ],
+    "kind": "component",
+    "name": "typewriter-terminal",
+    "title": "TypewriterTerminal"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "dot-grid",
+    "title": "DotGrid"
   },
   {
     "categories": [
@@ -1356,6 +1428,30 @@
       "media"
     ],
     "kind": "component",
+    "name": "photo-grid",
+    "title": "PhotoGrid"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "cover-flow",
+    "title": "CoverFlow"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "orbit-logos",
+    "title": "OrbitLogos"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
     "name": "voice-orb",
     "title": "VoiceOrb"
   },
@@ -1396,8 +1492,40 @@
       "progress"
     ],
     "kind": "component",
+    "name": "stretch-refresh",
+    "title": "StretchRefresh"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
     "name": "morph-loader",
     "title": "MorphLoader"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "skeleton-morph",
+    "title": "SkeletonMorph"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "charge-session",
+    "title": "ChargeSession"
+  },
+  {
+    "categories": [
+      "media"
+    ],
+    "kind": "component",
+    "name": "ticket-tear",
+    "title": "TicketTear"
   },
   {
     "categories": [
@@ -1550,5 +1678,181 @@
     "kind": "component",
     "name": "tone-tuner",
     "title": "ToneTuner"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ai-mascot",
+    "title": "AiMascot"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "install-snippet",
+    "title": "InstallSnippet"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "upgrade-prompt",
+    "title": "UpgradePrompt"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "referral-card",
+    "title": "ReferralCard"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "trial-banner",
+    "title": "TrialBanner"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "live-visitors",
+    "title": "LiveVisitors"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "social-proof-toast",
+    "title": "SocialProofToast"
+  },
+  {
+    "categories": [
+      "theme-switches"
+    ],
+    "kind": "component",
+    "name": "theme-switch-eclipse",
+    "title": "ThemeSwitch"
+  },
+  {
+    "categories": [
+      "theme-switches"
+    ],
+    "kind": "component",
+    "name": "theme-switch-split",
+    "title": "ThemeSwitch"
+  },
+  {
+    "categories": [
+      "theme-switches"
+    ],
+    "kind": "component",
+    "name": "theme-switch-rise",
+    "title": "ThemeSwitch"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "share-sheet",
+    "title": "ShareSheet"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "morph-nav",
+    "title": "MorphNav"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "dock",
+    "title": "Dock"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "liquid-tab-bar",
+    "title": "LiquidTabBar"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "orbit-menu",
+    "title": "OrbitMenu"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "glass-card",
+    "title": "GlassCard"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "glass-tabbar",
+    "title": "GlassTabBar"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "action-morph",
+    "title": "ActionMorph"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "wallet-stack",
+    "title": "WalletStack"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "control-center",
+    "title": "ControlCenter"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "card-to-article",
+    "title": "CardToArticle"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "holo-card",
+    "title": "HoloCard"
   }
 ]

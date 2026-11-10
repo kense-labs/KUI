@@ -509,8 +509,8 @@
     "signature": "() -> &RichDocument",
     "event": "RichDocument",
     "rule": {
-      "en": "Edit formatted blocks directly. Select text for inline marks or links, type / for blocks, and undo edits in the document history.",
-      "zh": "直接编辑格式化内容。选区可设置样式与链接，输入 / 选择块类型，文档支持撤销和重做。"
+      "en": "Edit formatted blocks directly. Select text for inline marks or links, type / for blocks, and undo edits in the document history. Focus the export to scroll with arrows, Page Up, Page Down, Home or End.",
+      "zh": "直接编辑格式化内容。选区可设置样式与链接，输入 / 选择块类型，文档支持撤销和重做。焦点进入导出区后，可用方向键、Page Up、Page Down、Home 或 End 滚动。"
     },
     "api": {
       "en": "Edit formatted blocks directly. Select text for inline marks or links, type / for blocks, and undo edits in the document history.",
@@ -683,8 +683,8 @@
     "signature": "(id, title, lanes, Vec<Span>)",
     "event": "SpanSelected",
     "rule": {
-      "en": "Place work on a shared time axis. Selecting a span highlights its direct handoff.",
-      "zh": "各泳道共用时间轴，选中片段会高亮其直接交接来源。"
+      "en": "Place work on a shared time axis. Selecting a span highlights its direct handoff. Drag or use the arrow keys to scrub. Home and End jump to the start and finish; seeking pauses playback.",
+      "zh": "各泳道共用时间轴，选中片段会高亮其直接交接来源。 拖动或按方向键定位，Home 和 End 跳到首尾；定位会暂停播放。"
     },
     "api": {
       "en": "Each Span specifies lane, start/end seconds, operation kind and an optional parent index. SpanSelected carries the activated index.",
@@ -886,16 +886,16 @@
     "signature": "(Metrics, cx)",
     "event": "",
     "rule": {
-      "en": "Compute speed after the first token and cost using the host’s per-million prices.",
-      "zh": "首个词元之后计算速度，用宿主提供的每百万价格计算费用。"
+      "en": "Show the latest throughput sample while streaming and the average speed after completion. Details shows the latency split and token rates.",
+      "zh": "生成中显示最新速度样本，完成后显示平均速度。详细信息展示延迟拆分和词元费率。"
     },
     "api": {
       "en": "Metrics accepts first-token and total milliseconds, input/output counts, rates per million and throughput samples.",
       "zh": "Metrics 接收首词元和总耗时（毫秒）、输入输出数量、每百万费率与速度样本。"
     },
     "motion": {
-      "en": "The details use measured height and include parent spacing in the same spring. Output token drops snap to a new run; increases interpolate over 180ms.",
-      "zh": "详情面板将内容高度和父级间距纳入同一弹簧。新请求的计数下降直接复位，增加时在 180ms 内插值。"
+      "en": "Details opens over 260 ms using measured height. Output tokens count up over 100 ms and reset when the count drops. The sparkline uses up to 48 recent samples.",
+      "zh": "详情面板按实测高度在 260ms 内展开。输出词元增加时在 100ms 内插值，下降时直接复位。趋势线最多读取最近 48 个样本。"
     }
   },
   {

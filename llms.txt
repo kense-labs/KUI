@@ -156,6 +156,9 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [reply-draft](./md/reply-draft.md): ReplyDraft
 - [ask-your-data](./md/ask-your-data.md): AskYourData
 - [pii-redaction](./md/pii-redaction.md): PiiRedaction
+- [booking-pill](./md/booking-pill.md): BookingPill
+- [date-reel](./md/date-reel.md): DateReel
+- [time-dial](./md/time-dial.md): TimeDial
 - [gauge](./md/gauge.md): Gauge
 - [animated-counter](./md/animated-counter.md): AnimatedCounter
 - [waffle-chart](./md/waffle-chart.md): WaffleChart
@@ -176,12 +179,18 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [model-training](./md/model-training.md): ModelTraining
 - [multi-region-failover](./md/multi-region-failover.md): MultiRegionFailover
 - [data-flow](./md/data-flow.md): DataFlow
+- [payment-flow](./md/payment-flow.md): PaymentFlow
+- [dns-resolution](./md/dns-resolution.md): DnsResolution
 - [vector-search](./md/vector-search.md): VectorSearch
+- [branch-graph](./md/branch-graph.md): BranchGraph
 - [text-reveal](./md/text-reveal.md): TextReveal
 - [in-view-title](./md/in-view-title.md): InViewTitle
 - [text-morph](./md/text-morph.md): TextMorph
 - [text-shimmer](./md/text-shimmer.md): TextShimmer
 - [slot-text](./md/slot-text.md): SlotText
+- [keycap-keyboard](./md/keycap-keyboard.md): KeycapKeyboard
+- [typewriter-terminal](./md/typewriter-terminal.md): TypewriterTerminal
+- [dot-grid](./md/dot-grid.md): DotGrid
 - [image-compare](./md/image-compare.md): ImageCompare
 - [carousel](./md/carousel.md): Carousel
 - [card-stack](./md/card-stack.md): CardStack
@@ -189,12 +198,19 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [bottom-sheet](./md/bottom-sheet.md): BottomSheet
 - [sheet-stack](./md/sheet-stack.md): SheetStack
 - [product-gallery](./md/product-gallery.md): ProductGallery
+- [photo-grid](./md/photo-grid.md): PhotoGrid
+- [cover-flow](./md/cover-flow.md): CoverFlow
+- [orbit-logos](./md/orbit-logos.md): OrbitLogos
 - [voice-orb](./md/voice-orb.md): VoiceOrb
 - [now-playing](./md/now-playing.md): NowPlaying
 - [voice-recorder](./md/voice-recorder.md): VoiceRecorder
 - [dictation-button](./md/dictation-button.md): DictationButton
 - [speech-player](./md/speech-player.md): SpeechPlayer
+- [stretch-refresh](./md/stretch-refresh.md): StretchRefresh
 - [morph-loader](./md/morph-loader.md): MorphLoader
+- [skeleton-morph](./md/skeleton-morph.md): SkeletonMorph
+- [charge-session](./md/charge-session.md): ChargeSession
+- [ticket-tear](./md/ticket-tear.md): TicketTear
 - [ai-spark](./md/ai-spark.md): AiSpark
 - [provider-status](./md/provider-status.md): ProviderStatus
 - [ghost-text](./md/ghost-text.md): GhostText
@@ -214,6 +230,28 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [agent-cursor](./md/agent-cursor.md): AgentCursor
 - [link-unfurl](./md/link-unfurl.md): LinkUnfurl
 - [tone-tuner](./md/tone-tuner.md): ToneTuner
+- [ai-mascot](./md/ai-mascot.md): AiMascot
+- [install-snippet](./md/install-snippet.md): InstallSnippet
+- [upgrade-prompt](./md/upgrade-prompt.md): UpgradePrompt
+- [referral-card](./md/referral-card.md): ReferralCard
+- [trial-banner](./md/trial-banner.md): TrialBanner
+- [live-visitors](./md/live-visitors.md): LiveVisitors
+- [social-proof-toast](./md/social-proof-toast.md): SocialProofToast
+- [theme-switch-eclipse](./md/theme-switch-eclipse.md): ThemeSwitch
+- [theme-switch-split](./md/theme-switch-split.md): ThemeSwitch
+- [theme-switch-rise](./md/theme-switch-rise.md): ThemeSwitch
+- [share-sheet](./md/share-sheet.md): ShareSheet
+- [morph-nav](./md/morph-nav.md): MorphNav
+- [dock](./md/dock.md): Dock
+- [liquid-tab-bar](./md/liquid-tab-bar.md): LiquidTabBar
+- [orbit-menu](./md/orbit-menu.md): OrbitMenu
+- [glass-card](./md/glass-card.md): GlassCard
+- [glass-tabbar](./md/glass-tabbar.md): GlassTabBar
+- [action-morph](./md/action-morph.md): ActionMorph
+- [wallet-stack](./md/wallet-stack.md): WalletStack
+- [control-center](./md/control-center.md): ControlCenter
+- [card-to-article](./md/card-to-article.md): CardToArticle
+- [holo-card](./md/holo-card.md): HoloCard
 
 ## Registry JSON
 
@@ -354,6 +392,9 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [reply-draft](./r/reply-draft.json)
 - [ask-your-data](./r/ask-your-data.json)
 - [pii-redaction](./r/pii-redaction.json)
+- [booking-pill](./r/booking-pill.json)
+- [date-reel](./r/date-reel.json)
+- [time-dial](./r/time-dial.json)
 - [gauge](./r/gauge.json)
 - [animated-counter](./r/animated-counter.json)
 - [waffle-chart](./r/waffle-chart.json)
@@ -374,12 +415,18 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [model-training](./r/model-training.json)
 - [multi-region-failover](./r/multi-region-failover.json)
 - [data-flow](./r/data-flow.json)
+- [payment-flow](./r/payment-flow.json)
+- [dns-resolution](./r/dns-resolution.json)
 - [vector-search](./r/vector-search.json)
+- [branch-graph](./r/branch-graph.json)
 - [text-reveal](./r/text-reveal.json)
 - [in-view-title](./r/in-view-title.json)
 - [text-morph](./r/text-morph.json)
 - [text-shimmer](./r/text-shimmer.json)
 - [slot-text](./r/slot-text.json)
+- [keycap-keyboard](./r/keycap-keyboard.json)
+- [typewriter-terminal](./r/typewriter-terminal.json)
+- [dot-grid](./r/dot-grid.json)
 - [image-compare](./r/image-compare.json)
 - [carousel](./r/carousel.json)
 - [card-stack](./r/card-stack.json)
@@ -387,12 +434,19 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [bottom-sheet](./r/bottom-sheet.json)
 - [sheet-stack](./r/sheet-stack.json)
 - [product-gallery](./r/product-gallery.json)
+- [photo-grid](./r/photo-grid.json)
+- [cover-flow](./r/cover-flow.json)
+- [orbit-logos](./r/orbit-logos.json)
 - [voice-orb](./r/voice-orb.json)
 - [now-playing](./r/now-playing.json)
 - [voice-recorder](./r/voice-recorder.json)
 - [dictation-button](./r/dictation-button.json)
 - [speech-player](./r/speech-player.json)
+- [stretch-refresh](./r/stretch-refresh.json)
 - [morph-loader](./r/morph-loader.json)
+- [skeleton-morph](./r/skeleton-morph.json)
+- [charge-session](./r/charge-session.json)
+- [ticket-tear](./r/ticket-tear.json)
 - [ai-spark](./r/ai-spark.json)
 - [provider-status](./r/provider-status.json)
 - [ghost-text](./r/ghost-text.json)
@@ -412,3 +466,25 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [agent-cursor](./r/agent-cursor.json)
 - [link-unfurl](./r/link-unfurl.json)
 - [tone-tuner](./r/tone-tuner.json)
+- [ai-mascot](./r/ai-mascot.json)
+- [install-snippet](./r/install-snippet.json)
+- [upgrade-prompt](./r/upgrade-prompt.json)
+- [referral-card](./r/referral-card.json)
+- [trial-banner](./r/trial-banner.json)
+- [live-visitors](./r/live-visitors.json)
+- [social-proof-toast](./r/social-proof-toast.json)
+- [theme-switch-eclipse](./r/theme-switch-eclipse.json)
+- [theme-switch-split](./r/theme-switch-split.json)
+- [theme-switch-rise](./r/theme-switch-rise.json)
+- [share-sheet](./r/share-sheet.json)
+- [morph-nav](./r/morph-nav.json)
+- [dock](./r/dock.json)
+- [liquid-tab-bar](./r/liquid-tab-bar.json)
+- [orbit-menu](./r/orbit-menu.json)
+- [glass-card](./r/glass-card.json)
+- [glass-tabbar](./r/glass-tabbar.json)
+- [action-morph](./r/action-morph.json)
+- [wallet-stack](./r/wallet-stack.json)
+- [control-center](./r/control-center.json)
+- [card-to-article](./r/card-to-article.json)
+- [holo-card](./r/holo-card.json)
