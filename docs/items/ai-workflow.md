@@ -23,7 +23,7 @@ let control = cx.new(|_| AiWorkflow::new("Request triage", "Review incoming requ
 
 ## Interaction
 
-The host executes steps and resolves matching request IDs. Stop emits Cancel and rejects late responses; Retry resumes the failed step. Branch results must reference a supplied path. The simulated preview sends nothing and offers Passes, Fails, Loading and Empty scenarios. In the empty example, Add step offers a trigger; triggers in configured workflows cannot be removed through the step list.
+The host executes steps and resolves matching request IDs. Stop emits Cancel and rejects late responses; Retry resumes the failed step. Branch results must reference a supplied path. The simulated preview sends nothing and offers Passes, Fails, Loading and Empty scenarios. The empty example lists available triggers; triggers in configured workflows cannot be removed through the step list.
 
 ## API
 
@@ -31,10 +31,12 @@ The host executes steps and resolves matching request IDs. Stop emits Cancel and
 
 Subscribe to RunStep (which contains Box<WorkflowStep>) and Cancel; call resolve with an output, duration and branch path when applicable. Changed reports editor updates. Provide stable unique step and path IDs.
 
+Use set_loading(bool, cx) for a loading skeleton. Loading cancels any pending run. The step picker searches title, app, and detail. Use Up or Down to move, Enter to add, and Escape to close.
+
 Event: `WorkflowEvent`.
 
 ## Motion
 
-A 200 ms connector fill and marker indicate the active step; reduced motion shows the end state and hidden previews do not request animation frames. Path crossfades, measured-height expansion and searchable command menu remain unimplemented. Desktop, Web, screen-reader and visual acceptance are pending.
+A 240 ms marker traces the incoming connector as a step starts. Completed results expand to their measured height and fade in under their step over 240 ms. Reduced motion shows each state immediately. The branch list switches immediately.
 
 Desktop and web use the same GPUI view.

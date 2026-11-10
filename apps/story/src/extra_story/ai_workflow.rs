@@ -6,7 +6,7 @@ use kui::{
     },
     primitives::{
         control::UiLanguage,
-        family::Paint,
+        family::{Paint, disabled_motion},
         ops_surface::{btn, row},
     },
 };
@@ -29,7 +29,7 @@ impl Demo {
             WorkflowStep::new(
                 "incoming",
                 t("Receive request", "收到请求"),
-                t("Inbox", "收件箱"),
+                "Gmail",
                 WorkflowKind::Trigger,
             )
             .with_detail(t("Watch the support inbox", "监听支持收件箱")),
@@ -53,16 +53,18 @@ impl Demo {
             WorkflowStep::new(
                 "notify",
                 t("Notify the team", "通知团队"),
-                t("Messages", "消息"),
+                "Slack",
                 WorkflowKind::Action,
             )
+            .with_detail(t("Send to #support-urgent", "发送到紧急支持频道"))
             .with_path("urgent"),
             WorkflowStep::new(
                 "task",
                 t("Create a task", "创建任务"),
-                t("Tasks", "任务"),
+                "Linear",
                 WorkflowKind::Action,
             )
+            .with_detail(t("Create in Support", "在支持项目中创建"))
             .with_path("urgent"),
             WorkflowStep::new(
                 "archive",
@@ -77,23 +79,36 @@ impl Demo {
             WorkflowPath::new("other", t("Other", "其他")),
         ];
         let catalog = vec![
+            steps[0].clone(),
             WorkflowStep::new(
-                "incoming",
-                t("Receive request", "收到请求"),
-                "Gmail",
+                "schedule",
+                t("On a schedule", "定时触发"),
+                "KUI",
+                WorkflowKind::Trigger,
+            ),
+            WorkflowStep::new(
+                "webhook",
+                t("Receive a webhook", "接收 Webhook"),
+                "HTTP",
                 WorkflowKind::Trigger,
             ),
             WorkflowStep::new(
                 "note",
                 t("Add a note", "添加备注"),
-                t("Notes", "笔记"),
+                "Notion",
                 WorkflowKind::Action,
             ),
             WorkflowStep::new(
                 "update",
                 t("Update a task", "更新任务"),
-                t("Tasks", "任务"),
+                "Linear",
                 WorkflowKind::Action,
+            ),
+            WorkflowStep::new(
+                "reply",
+                t("Draft a reply", "拟定回复"),
+                "Kense",
+                WorkflowKind::Ai,
             ),
         ];
         let workflow = cx.new(|_| {
@@ -113,26 +128,6 @@ impl Demo {
             .try_global::<crate::StoryBridge>()
             .is_none_or(|bridge| (bridge.visible)());
         workflow.update(cx, |workflow, cx| workflow.set_visible(visible, cx));
-        let weak = workflow.downgrade();
-        cx.spawn(async move |_, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(250))
-                    .await;
-                if weak
-                    .update(cx, |workflow, cx| {
-                        let visible = cx
-                            .try_global::<crate::StoryBridge>()
-                            .is_none_or(|bridge| (bridge.visible)());
-                        workflow.set_visible(visible, cx);
-                    })
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        })
-        .detach();
         let failed = Rc::new(Cell::new(false));
         let scenario = Rc::new(Cell::new(0));
         let mode = scenario.clone();
@@ -147,11 +142,19 @@ impl Demo {
             let id = *request_id;
             let step_id = step.id.clone();
             let fail = mode.get() == 1 && step_id.as_ref() == "task" && !failure.replace(true);
-            let duration = if mode.get() == 2 { 1500 } else { 420 };
+            let duration = match step_id.as_ref() {
+                "incoming" => 386,
+                "classify" => 1126,
+                "route" => 280,
+                "notify" => 571,
+                "task" => 746,
+                _ => 395,
+            };
+            let delay = if disabled_motion(cx) { 0 } else { duration };
             let weak = workflow.downgrade();
             cx.spawn(async move |_, cx| {
                 cx.background_executor()
-                    .timer(Duration::from_millis(duration))
+                    .timer(Duration::from_millis(delay))
                     .await;
                 let _ = weak.update(cx, |workflow, cx| {
                     if fail {
@@ -168,12 +171,12 @@ impl Demo {
                         return;
                     }
                     let output = match step_id.as_ref() {
-                        "incoming" => lang.text("Sample request received", "已收到样例请求"),
-                        "classify" => lang.text("Urgent · account access", "紧急 · 账户访问"),
-                        "route" => lang.text("Selected urgent path", "已选择紧急分支"),
-                        "notify" => lang.text("Sample notification prepared", "已准备样例通知"),
-                        "task" => lang.text("Sample task prepared", "已准备样例任务"),
-                        "archive" => lang.text("Sample saved for review", "样例已保存待审核"),
+                        "incoming" => lang.text("Login blocked after team migration\nNora Chen · support@example.test\nOur teammates cannot sign in since we moved to the new workspace.", "团队迁移后无法登录\nNora Chen · support@example.test\n迁入新工作区后，团队成员无法登录。"),
+                        "classify" => lang.text("Urgent · Account access · 96% confidence\nMultiple teammates are blocked from entering the workspace.", "紧急 · 账户访问 · 置信度 96%\n多名团队成员无法进入工作区。"),
+                        "route" => "",
+                        "notify" => lang.text("#support-urgent\nLogin is blocked for several teammates. Please check the migration.", "#support-urgent\n多名成员无法登录，请检查工作区迁移。"),
+                        "task" => lang.text("SUP-241 · Investigate sign-in after migration\nPriority: Urgent · Support", "SUP-241 · 调查迁移后的登录问题\n优先级：紧急 · 支持"),
+                        "archive" => lang.text("Saved for the next support review", "已保存至下一次支持审核"),
                         _ => lang.text("Sample action completed", "样例操作已完成"),
                     };
                     let result = WorkflowResult::new(output).with_duration(duration);
@@ -189,6 +192,29 @@ impl Demo {
                 });
             })
             .detach();
+        })
+        .detach();
+        let weak = workflow.downgrade();
+        let initial_mode = scenario.clone();
+        cx.spawn(async move |_, cx| {
+            while initial_mode.get() == 0 {
+                let visible = weak.update(cx, |workflow, cx| {
+                    let visible = cx
+                        .try_global::<crate::StoryBridge>()
+                        .is_none_or(|bridge| (bridge.visible)());
+                    workflow.set_visible(visible, cx);
+                    if visible {
+                        workflow.start(cx);
+                    }
+                    visible
+                });
+                if !matches!(visible, Ok(false)) {
+                    break;
+                }
+                cx.background_executor()
+                    .timer(Duration::from_millis(200))
+                    .await;
+            }
         })
         .detach();
         Self {
@@ -209,42 +235,52 @@ impl Render for Demo {
             .flex_col()
             .gap_3()
             .items_center()
-            .justify_center()
-            .p(px(20.))
+            .justify_start()
+            .p(px(16.))
             .bg(p.stage)
             .text_color(p.ink)
             .child(
-                row().justify_center().flex_wrap().children(
-                    [
-                        ("Passes", "成功"),
-                        ("Fails", "失败"),
-                        ("Loading", "运行中"),
-                        ("Empty", "空状态"),
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, (en, zh))| {
-                        btn(
-                            ("workflow-scenario", i),
-                            UiLanguage::current(cx).text(en, zh),
-                            self.scenario.get() == i,
-                            cx,
-                            move |s, _, cx| {
-                                s.scenario.set(i);
-                                s.failed.set(false);
-                                let steps = if i == 3 { Vec::new() } else { s.steps.clone() };
-                                s.workflow.update(cx, |workflow, cx| {
-                                    workflow.set_steps(steps, cx);
-                                    if i == 2 {
-                                        workflow.start(cx);
-                                    }
-                                });
-                                cx.notify();
-                            },
-                        )
-                    }),
-                ),
+                row()
+                    .justify_center()
+                    .flex_wrap()
+                    .gap(px(3.))
+                    .p(px(4.))
+                    .bg(p.panel)
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(p.line)
+                    .children(
+                        [
+                            ("Passes", "成功"),
+                            ("Fails", "失败"),
+                            ("Loading", "加载中"),
+                            ("Empty", "空状态"),
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, (en, zh))| {
+                            btn(
+                                ("workflow-scenario", i),
+                                UiLanguage::current(cx).text(en, zh),
+                                self.scenario.get() == i,
+                                cx,
+                                move |s, _, cx| {
+                                    s.scenario.set(i);
+                                    s.failed.set(false);
+                                    let steps = if i == 3 { Vec::new() } else { s.steps.clone() };
+                                    s.workflow.update(cx, |workflow, cx| {
+                                        workflow.set_steps(steps, cx);
+                                        workflow.set_loading(i == 2, cx);
+                                        if i <= 1 {
+                                            workflow.start(cx);
+                                        }
+                                    });
+                                    cx.notify();
+                                },
+                            )
+                        }),
+                    ),
             )
-            .child(self.workflow.clone())
+            .child(div().w_full().max_w(px(522.)).child(self.workflow.clone()))
     }
 }

@@ -1754,9 +1754,9 @@ pub(super) const LIBRARY: &[Item] = &[
         title: "AiWorkflow",
         description: "Build and test a short host-driven automation with a branch.",
         category: "intelligence",
-        primitives: &["control", "family", "presentation", "glyph"],
+        primitives: &["control", "editor", "family", "presentation", "glyph"],
         components: &[],
-        cargo: &["web-time@1"],
+        cargo: &["unicode-segmentation@1", "wasm-bindgen@0.2", "web-time@1"],
     },
     Item {
         id: "training-run",

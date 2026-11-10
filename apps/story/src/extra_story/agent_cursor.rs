@@ -21,6 +21,7 @@ struct Example {
     view: Entity<AgentCursor>,
     language: UiLanguage,
     fail_next: bool,
+    failure_scenario: bool,
     playback: Option<Task<()>>,
     _subscription: Subscription,
     _autoplay: Task<()>,
@@ -90,7 +91,8 @@ impl Example {
                 draft(language),
             )
             .with_meta(language.text("Maya Lee · Launch planning", "Maya Lee · 发布筹备"))
-            .with_collaborator("Maya", rgb(0x58a995).into())
+            .agent("Kense", rgb(0xc47148).into())
+            .with_collaborator("Maya", rgb(0x8b70c7).into())
         });
         let weak = view.downgrade();
         let autoplay = cx.spawn(async move |_, cx| {
@@ -150,12 +152,29 @@ impl Example {
                     };
                     if !reduced {
                         if !weak
-                            .update(cx, |view, cx| view.select_target_for(ticket, "body", cx))
+                            .update(cx, |view, cx| {
+                                view.set_activity_for(
+                                    ticket,
+                                    language.text("Reviewing the goals", "正在查看发布目标"),
+                                    cx,
+                                ) && view.set_target_for(ticket, "body", cx)
+                            })
                             .unwrap_or(false)
-                            || !wait_visible(450, &weak, cx).await
+                            || !wait_visible(320, &weak, cx).await
+                            || !weak
+                                .update(cx, |view, cx| view.select_target_for(ticket, "body", cx))
+                                .unwrap_or(false)
+                            || !wait_visible(420, &weak, cx).await
                         {
                             return;
                         }
+                        let _ = weak.update(cx, |view, cx| {
+                            view.set_activity_for(
+                                ticket,
+                                language.text("Tightening the goal statement", "正在精简发布目标"),
+                                cx,
+                            )
+                        });
                         let mut text = String::new();
                         for chunk in chunks {
                             text.push_str(chunk);
@@ -171,6 +190,9 @@ impl Example {
                             }
                         }
                     }
+                    if !reduced && !wait_visible(180, &weak, cx).await {
+                        return;
+                    }
                     blocks[3].text = chunks.concat().into();
                     blocks.insert(
                         4,
@@ -183,7 +205,12 @@ impl Example {
                     if !reduced
                         && (!weak
                             .update(cx, |view, cx| {
-                                view.set_target_for(ticket, "rollout", cx)
+                                view.set_activity_for(
+                                    ticket,
+                                    language
+                                        .text("Adding a rollout heading", "正在添加发布节奏标题"),
+                                    cx,
+                                ) && view.set_target_for(ticket, "rollout", cx)
                                     && view.set_blocks_for(ticket, blocks.clone(), cx)
                             })
                             .unwrap_or(false)
@@ -191,12 +218,44 @@ impl Example {
                     {
                         return;
                     }
+                    if !reduced {
+                        let typo = language.text("workpsaces", "工区");
+                        if let Some(start) = blocks[5].text.find(typo)
+                            && (!weak
+                                .update(cx, |view, cx| {
+                                    view.set_activity_for(
+                                        ticket,
+                                        language.text("Fixing a typo", "正在修正错字"),
+                                        cx,
+                                    ) && view.mark_correction_for(
+                                        ticket,
+                                        "next",
+                                        start..start + typo.len(),
+                                        cx,
+                                    )
+                                })
+                                .unwrap_or(false)
+                                || !wait_visible(520, &weak, cx).await)
+                        {
+                            return;
+                        }
+                    }
                     blocks[5].text = language
                         .text(
                             "Start with five workspaces and review the feedback on Friday.",
                             "先在五个工作区开放，周五检查反馈。",
                         )
                         .into();
+                    if !reduced
+                        && (!weak
+                            .update(cx, |view, cx| {
+                                view.set_blocks_for(ticket, blocks.clone(), cx)
+                            })
+                            .unwrap_or(false)
+                            || !wait_visible(210, &weak, cx).await)
+                    {
+                        return;
+                    }
                     let _ = weak.update(cx, |view, cx| view.finish(ticket, blocks, cx));
                 }));
             });
@@ -204,6 +263,7 @@ impl Example {
             view,
             language,
             fail_next: false,
+            failure_scenario: false,
             playback: None,
             _subscription: subscription,
             _autoplay: autoplay,
@@ -212,6 +272,8 @@ impl Example {
 
     fn replay(&mut self, fail: bool, cx: &mut Context<Self>) {
         self.fail_next = fail;
+        self.failure_scenario = fail;
+        cx.notify();
         let language = self.language;
         self.view.update(cx, |view, cx| {
             view.stop(cx);
@@ -235,22 +297,30 @@ impl Render for Example {
             .flex()
             .flex_col()
             .items_center()
-            .justify_center()
+            .justify_start()
             .gap_3()
-            .child(div().w_full().max_w(px(680.)).child(self.view.clone()))
+            .child(div().w_full().max_w(px(522.)).child(self.view.clone()))
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .justify_center()
-                    .gap_2()
+                    .gap(px(3.))
+                    .p(px(4.))
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(p.line)
                     .child(
                         face(
                             "cursor-sim-success",
                             t("Edits land", "模拟成功"),
                             32.,
                             8.,
-                            Tone::Surface,
+                            if self.failure_scenario {
+                                Tone::Clear
+                            } else {
+                                Tone::Surface
+                            },
                             cx,
                         )
                         .px_2()
@@ -263,7 +333,11 @@ impl Render for Example {
                             t("Connection drops", "模拟断线"),
                             32.,
                             8.,
-                            Tone::Surface,
+                            if self.failure_scenario {
+                                Tone::Surface
+                            } else {
+                                Tone::Clear
+                            },
                             cx,
                         )
                         .px_2()

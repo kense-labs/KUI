@@ -20,12 +20,12 @@
       "zh": "默认演示成功修改。可选择模拟断线，检查原文保留和重试过程。演示不保存修改。 用 with_collaborator(name, color) 显示第二个光标；标签到文档边缘会翻转。"
     },
     "api": {
-      "en": "Handle Run using its ticket with set_target_for, set_position_for, set_status_for and set_blocks_for; finish or fail the same ticket. Stop invalidates it and restores the original. Review exposes Accept and Undo events. set_position uses local logical pixels; set_visible controls off-screen work. Use select_target_for before a streamed replacement and with_meta for a byline. is_visible combines viewport and host visibility.",
-      "zh": "处理 Run 时使用 ticket 调用 set_target_for、set_position_for、set_status_for 和 set_blocks_for，再对同一 ticket 调用 finish 或 fail。Stop 使 ticket 失效并恢复原文。审核阶段提供 Accept 与 Undo 事件；set_position 使用文档内逻辑像素，set_visible 控制离屏工作。 select_target_for 在流式替换前选中文档块，with_meta 设置副标题，is_visible 返回视口和宿主共同决定的可见性。"
+      "en": "Handle Run using its ticket with set_target_for, set_position_for, set_status_for and set_blocks_for; finish or fail the same ticket. Stop invalidates it and restores the original. Review exposes Accept and Undo events. set_position uses local logical pixels; set_visible controls off-screen work. Use select_target_for before a streamed replacement and with_meta for a byline. is_visible combines viewport and host visibility. Use set_activity_for to set the current action in the header and mark_correction_for to underline a UTF-8 byte range before replacing it. Both methods require the active Run ticket. Stop restores the draft and invalidates the ticket.",
+      "zh": "处理 Run 时使用 ticket 调用 set_target_for、set_position_for、set_status_for 和 set_blocks_for，再对同一 ticket 调用 finish 或 fail。Stop 使 ticket 失效并恢复原文。审核阶段提供 Accept 与 Undo 事件；set_position 使用文档内逻辑像素，set_visible 控制离屏工作。 select_target_for 在流式替换前选中文档块，with_meta 设置副标题，is_visible 返回视口和宿主共同决定的可见性。 用 set_activity_for 更新栏内的操作说明，mark_correction_for 在替换前给 UTF-8 字节范围加下划线。两者都需要当前 Run 的 ticket。停止会恢复原文并使 ticket 失效。"
     },
     "motion": {
-      "en": "The cursor follows measured text positions. The sample selects a paragraph, streams replacement chunks, inserts a heading and fixes a typo. Reduced motion applies the result together. Playback waits while the preview is off screen.",
-      "zh": "光标跟随实测文字位置。演示选中一段文字、分批写入替换内容、插入标题并修正错字。减少动效模式一次性显示结果，预览离屏时暂停。"
+      "en": "The cursor tracks the measured selection endpoint. Newly written text fades in over 140 ms, and the review bar rises 8 px in 200 ms. Reduced motion shows the result without transitions.",
+      "zh": "光标跟随实测的选区终点。新增文字用 140ms 淡入，审核条在 200ms 内上移 8px。减少动效时直接显示结果。"
     }
   }
 ]

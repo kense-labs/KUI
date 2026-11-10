@@ -17,15 +17,15 @@
     "event": "WorkflowEvent",
     "rule": {
       "en": "The host executes steps and resolves matching request IDs. Stop emits Cancel and rejects late responses; Retry resumes the failed step. Branch results must reference a supplied path. The example is simulated and sends nothing. The preview offers Passes, Fails, Loading and Empty scenarios; it sends nothing.",
-      "zh": "步骤由宿主执行，并按请求 ID 返回结果；停止会发出取消事件并忽略迟到的响应，重试从失败步骤继续。分支结果必须引用已提供的路径。示例为模拟，不发送任何内容。 预览可切换成功、失败、运行中和空状态，不会发送数据。"
+      "zh": "步骤由宿主执行，并按请求 ID 返回结果；停止会发出取消事件并忽略迟到的响应，重试从失败步骤继续。分支结果必须引用已提供的路径。示例为模拟，不发送任何内容。 预览可切换成功、失败、加载中和空状态，不会发送数据。"
     },
     "api": {
-      "en": "Subscribe to RunStep (which contains Box<WorkflowStep>) and Cancel; call resolve with an output, duration and branch path when applicable. Changed reports editor updates. Provide stable unique step and path IDs.",
-      "zh": "订阅 RunStep（包含 Box<WorkflowStep>） 与 Cancel，通过 resolve 提供输出、耗时及分支路径；编辑时发出 Changed。步骤和分支须使用稳定且唯一的 ID。"
+      "en": "Subscribe to RunStep (which contains Box<WorkflowStep>) and Cancel; call resolve with an output, duration and branch path when applicable. Changed reports editor updates. Provide stable unique step and path IDs. Use set_loading(bool, cx) for a loading skeleton. Loading cancels any pending run. The step picker searches title, app, and detail. Use Up or Down to move, Enter to add, and Escape to close.",
+      "zh": "订阅 RunStep（包含 Box<WorkflowStep>） 与 Cancel，通过 resolve 提供输出、耗时及分支路径；编辑时发出 Changed。步骤和分支须使用稳定且唯一的 ID。 用 set_loading(bool, cx) 显示加载骨架。进入加载会取消待处理的运行。步骤选择器按标题、应用和描述搜索，上下键移动，回车添加，Esc 关闭。"
     },
     "motion": {
-      "en": "A 200 ms connector fill and marker indicate the active step; reduced motion shows the end state and hidden previews do not request animation frames. Path crossfades, measured-height expansion and searchable command menu remain unimplemented. Desktop, Web, screen-reader and visual acceptance are pending.",
-      "zh": "运行步骤的连线和标记以 200ms 填充；减少动效时直接显示终态，隐藏预览时不请求动画帧。分支淡入淡出、高度过渡和可搜索菜单仍未实现；桌面、网页、读屏与视觉验收待完成。"
+      "en": "The incoming connector traces for 240 ms. New step results expand to their measured height and fade in over 240 ms. Reduced motion applies the state immediately.",
+      "zh": "节点开始时，沿入线移动的标记持续 240ms。新结果在 240ms 内淡入并展开到实测高度。减少动效时直接显示状态。"
     }
   }
 ]

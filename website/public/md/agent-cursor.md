@@ -32,10 +32,12 @@ Handle `Run` using its ticket with `set_target_for`, `set_position_for`, `set_st
 
 `with_collaborator(name, color)` enables an optional second cursor. Selection fills progressively using UTF-8 character boundaries.
 
+Use set_activity_for to set the current action in the header and mark_correction_for to underline a UTF-8 byte range before replacing it. Both methods require the active Run ticket. Stop restores the draft and invalidates the ticket.
+
 Event: `AgentCursorEvent`.
 
 ## Motion
 
-The cursor follows measured text positions with a spring. The sample selects a paragraph, adds replacement text in chunks, inserts a heading and fixes a typo. Reduced motion applies the finished edit together. Playback waits while the preview is off screen.
+The agent cursor follows measured text positions. It follows the selection endpoint directly and otherwise travels with a spring. New text fades in over 140 ms. A correction can underline a valid UTF-8 range. The review strip fades and slides up 8 px over 200 ms. Reduced motion applies the final state without these transitions.
 
 Desktop and web use the same GPUI view.

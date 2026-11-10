@@ -31,10 +31,12 @@ The host provides notes, runs regeneration and sends actions; the example simula
 
 Handle Send, then finish_send with its ticket. Pending sends are deduplicated and cancelled when data changes. Timestamp buttons expose source quotes; Escape closes a quote.
 
+Use with_transcript(credit, words) to display attribution and transcript size. Timestamp buttons open quotes. Escape closes the quote. Send and finish_send use the same ticket.
+
 Event: `MeetingSummaryEvent`.
 
 ## Motion
 
-States update immediately. Streaming, quote hover intent and detailed transitions are not yet implemented or visually verified.
+When data arrives after Summarizing, summary points, decisions and actions reveal in order. Each row starts 170 ms after the previous one, and its text appears in five groups. The body follows its measured height with a critically damped 240 ms visual transition. Reduced motion displays all content immediately.
 
 Desktop and web use the same GPUI view.
