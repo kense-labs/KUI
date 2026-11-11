@@ -195,7 +195,7 @@ if (frame?.matches("iframe.rust-story[data-story]")) {
   // The browser owns gestures on the document and fixed menu chrome. A pan
   // starting on a scrollable row is handled by the GPUI touch recognizer.
   let listPan, orbitPan, dialPan, photoPan, ticketPan;
-  const listPanStories = new Set(["team-switcher", "phone-input", "control-center", "mega-menu-morph", "morph-select", "rich-text-editor", "date-reel", "stretch-refresh", "card-to-article", "photo-grid"]);
+  const listPanStories = new Set(["team-switcher", "phone-input", "control-center", "mega-menu-morph", "morph-select", "rich-text-editor", "date-reel", "stretch-refresh", "card-to-article", "photo-grid", "code-suggestion", "ask-your-data"]);
   window.addEventListener("touchstart", e => {
     const t = e.touches[0];
     ticketPan = selected.story === "ticket-tear" && e.touches.length === 1
@@ -206,25 +206,27 @@ if (frame?.matches("iframe.rust-story[data-story]")) {
       && containsScrollPoint(controlDialRegion, t.clientX, t.clientY);
     orbitPan = selected.story === "orbit-menu" && e.touches.length === 1 && orbit
       && Math.hypot(t.clientX - orbit.x - orbit.w / 2, t.clientY - orbit.y - orbit.h / 2) <= orbit.w / 2;
-    const sideways = selected.story === "orbit-logos";
-    const region = (sideways ? horizontalScroll : editorScroll).find(r => containsScrollPoint(r, t.clientX, t.clientY));
-    listPan = (sideways || listPanStories.has(selected.story)) && e.touches.length === 1 && region
-      ? { x: t.screenX, y: t.screenY, region, sideways, owned: false } : undefined;
+    const atTouch = r => containsScrollPoint(r, t.clientX, t.clientY);
+    const horizontal = (["orbit-logos", "code-suggestion", "ask-your-data"].includes(selected.story))
+      ? horizontalScroll.find(atTouch) : undefined;
+    const vertical = listPanStories.has(selected.story) ? editorScroll.find(atTouch) : undefined;
+    listPan = e.touches.length === 1 && (horizontal || vertical)
+      ? { story: selected.story, x: t.screenX, y: t.screenY, horizontal, vertical, owned: false } : undefined;
   }, {capture: true, passive: true});
   window.addEventListener("touchmove", e => {
     if ((orbitPan && selected.story === "orbit-menu" || dialPan && selected.story === "control-center" || photoPan && selected.story === "photo-grid" || ticketPan && selected.story === "ticket-tear") && e.touches.length === 1) {
       if (e.cancelable) e.preventDefault();
       return;
     }
-    if (!listPan || e.touches.length !== 1 || !(listPan.sideways ? selected.story === "orbit-logos" : listPanStories.has(selected.story))) return;
+    if (!listPan || listPan.story !== selected.story || e.touches.length !== 1) return;
     const t = e.touches[0];
     const dx = listPan.x - t.screenX;
     const dy = listPan.y - t.screenY;
-    const delta = listPan.sideways ? dx : dy;
-    const cross = listPan.sideways ? dy : dx;
     if (!listPan.owned) {
+      const sideways = Math.abs(dx) > Math.abs(dy);
+      const delta = sideways ? dx : dy;
       if (delta === 0) return;
-      if (Math.abs(cross) > Math.abs(delta) || !canScroll(listPan.region, delta)) {
+      if (!canScroll(sideways ? listPan.horizontal : listPan.vertical, delta)) {
         listPan = undefined;
         return;
       }

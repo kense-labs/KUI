@@ -11,6 +11,7 @@ use kui::{
 };
 use std::{rc::Rc, time::Duration};
 mod keys;
+mod patch_demo;
 mod reasoning;
 
 type DemoAction = Rc<dyn Fn(&mut Window, &mut Context<Demo>)>;
@@ -1204,58 +1205,17 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
             e.into()
         }
         "code-suggestion" => {
-            use code_suggestion::*;
-            let hunks = || {
-                vec![
-                    Hunk {
-                        line: 4,
-                        before: vec!["let response = send(request).await?;".into()],
-                        after: vec![
-                            "const MAX_ATTEMPTS: usize = 4;".into(),
-                            "let mut response = send(request.clone()).await?;".into(),
-                            "for attempt in 1..MAX_ATTEMPTS {".into(),
-                            "    if !response.is_retryable() { break; }".into(),
-                            "    sleep(Duration::from_millis(250 << (attempt - 1))).await;".into(),
-                            "    response = send(request.clone()).await?;".into(),
-                            "}".into(),
-                        ],
-                        decision: Decision::Pending,
-                    },
-                    Hunk {
-                        line: 12,
-                        before: vec!["return response.body();".into()],
-                        after: vec!["response.ensure_success()?.body()".into()],
-                        decision: Decision::Pending,
-                    },
-                ]
-            };
-            let e = cx.new(|cx| {
-                let mut s = PatchReview::new(id, "fetch_invoice.rs", hunks(), cx)
-                    .with_model("Claude Sonnet 5.5");
-                s.summary = t("Add retry with backoff", "添加退避重试").into();
-                s
-            });
-            for (mode, label) in [
-                (0, t("Suggestion", "建议")),
-                (1, t("No changes", "无改动")),
-                (2, t("Error", "错误")),
-            ] {
-                let x = e.clone();
-                option!(label, move |_, cx| x.update(cx, |s, cx| {
-                    s.hunks = if mode == 0 { hunks() } else { vec![] };
-                    s.summary = match mode {
-                        1 => t("No changes needed", "无需修改"),
-                        2 => t(
-                            "Request failed. Select Suggestion to retry.",
-                            "请求失败，选择「建议」可重试。",
-                        ),
-                        _ => t("Add retry with backoff", "添加退避重试"),
-                    }
-                    .into();
-                    cx.notify()
-                }))
-            }
-            e.into()
+            let demo = cx.new(|cx| patch_demo::PatchDemo::new(w, cx));
+            let suggestion = demo.clone();
+            let empty = demo.clone();
+            let error = demo.clone();
+            option!(t("Suggestion", "建议"), move |_, cx| suggestion
+                .update(cx, |s, cx| s.start(cx)));
+            option!(t("No changes", "无改动"), move |_, cx| empty
+                .update(cx, |s, cx| s.show_empty(cx)));
+            option!(t("Error", "错误"), move |_, cx| error
+                .update(cx, |s, cx| s.show_error(cx)));
+            demo.into()
         }
         "model-card" => {
             use model_card::*;
@@ -1605,6 +1565,7 @@ fn build(id: &str, w: &mut Window, cx: &mut Context<Demo>) -> Demo {
         showcase_cap: match id {
             "ai-translate" => Some(620.),
             "tool-call" | "agent-plan" => Some(560.),
+            "code-suggestion" => Some(720.),
             "generation-stats" => Some(760.),
             _ => None,
         },

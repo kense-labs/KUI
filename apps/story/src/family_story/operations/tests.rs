@@ -1,5 +1,5 @@
 //! Regression scenarios for the same workspace examples used in the browser.
-use super::{build, code_suggestion, connector_setup, provider_keys, team_switcher};
+use super::{build, code_suggestion, connector_setup, patch_demo, provider_keys, team_switcher};
 use gpui::{Modifiers, TestAppContext, VisualTestContext};
 use std::time::Duration;
 pub(super) fn click(w: &mut VisualTestContext, label: &'static str) {
@@ -103,17 +103,23 @@ fn operations_failure_retry_and_confirm_disconnect() {
 #[test]
 fn operations_patch_accept_and_reject_exclude_decided_hunks() {
     let mut app = TestAppContext::single();
-    app.update(kui::foundation::init);
+    app.update(|cx| {
+        kui::foundation::init(cx);
+        kui::Theme::global_mut(cx).reduced_motion = true;
+    });
     let (demo, w) = app.add_window_view(|w, cx| build("code-suggestion", w, cx));
     let control = w.update(|_, cx| {
         demo.read(cx)
             .view
             .clone()
-            .downcast::<code_suggestion::PatchReview>()
+            .downcast::<patch_demo::PatchDemo>()
             .ok()
             .unwrap()
+            .read(cx)
+            .review()
+            .clone()
     });
-    click(w, "Accept");
+    click(w, "Accept change at line 3");
     click(w, "Reject all");
     w.update(|_, cx| {
         let hunks = &control.read(cx).hunks;
@@ -129,9 +135,45 @@ fn operations_patch_accept_and_reject_exclude_decided_hunks() {
                 .iter()
                 .filter(|h| h.decision == code_suggestion::Decision::Rejected)
                 .count(),
-            1
+            2
         )
     });
+}
+
+#[test]
+fn operations_patch_stop_drops_incomplete_lines_and_retry_starts_fresh() {
+    use code_suggestion::PatchPhase;
+    let mut app = TestAppContext::single();
+    app.update(kui::foundation::init);
+    let (demo, w) = app.add_window_view(|w, cx| build("code-suggestion", w, cx));
+    let control = w.update(|_, cx| {
+        demo.read(cx)
+            .view
+            .clone()
+            .downcast::<patch_demo::PatchDemo>()
+            .ok()
+            .unwrap()
+            .read(cx)
+            .review()
+            .clone()
+    });
+    frame(w, 0);
+    frame(w, 800);
+    frame(w, 38);
+    w.update(|_, cx| {
+        let review = control.read(cx);
+        assert_eq!(review.phase(), &PatchPhase::Streaming);
+        assert_eq!(review.hunks[0].after.len(), 1);
+    });
+    click(w, "Stop");
+    frame(w, 500);
+    w.update(|_, cx| {
+        assert_eq!(control.read(cx).phase(), &PatchPhase::Ready);
+        assert!(control.read(cx).hunks.is_empty());
+    });
+    click(w, "Error");
+    click(w, "Retry");
+    w.update(|_, cx| assert_eq!(control.read(cx).phase(), &PatchPhase::Thinking));
 }
 #[test]
 fn operations_workspace_selection_closes_menu() {
@@ -173,7 +215,7 @@ fn operations_mount_and_click_from_each_gallery_entry() {
         ("source-cards", "Failed", "Retry"),
         ("generation-stats", "Details", "Details"),
         ("comment-thread", "Resolve", "Reopen"),
-        ("code-suggestion", "Accept", "Reject all"),
+        ("code-suggestion", "Accept change at line 3", "Reject all"),
         ("model-card", "Compare", "Compare"),
         ("provider-keys", "Rotate key · Anthropic", "Save provider 0"),
         ("connector-setup", "Connected", "Disconnect"),
@@ -183,7 +225,12 @@ fn operations_mount_and_click_from_each_gallery_entry() {
     ];
     for (id, action, after) in scenarios {
         let mut app = TestAppContext::single();
-        app.update(kui::foundation::init);
+        app.update(|cx| {
+            kui::foundation::init(cx);
+            if id == "code-suggestion" {
+                kui::Theme::global_mut(cx).reduced_motion = true;
+            }
+        });
         let (_view, w) = app.add_window_view(|w, cx| FamilyStory::new(id, w, cx));
         click(w, action);
         frame(w, 185);

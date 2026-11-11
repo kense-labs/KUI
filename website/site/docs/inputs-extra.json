@@ -680,16 +680,16 @@
       "zh": "对工单进行分类，复核不确定结果，并通过宿主完成分配。"
     },
     "rule": {
-      "en": "Start or pause processing; retry failures. Review uncertain suggestions and choose a destination. Assignment is shown only after host confirmation.",
-      "zh": "开始或暂停处理，逐项重试失败工单；复核不确定的建议并选择队列。宿主确认后才显示已分配。"
+      "en": "Start or pause with Enter or Space. Retry a failed ticket or send it to manual review. Each compact queue page shows two rows and keeps older entries reachable.",
+      "zh": "按 Enter 或空格开始或暂停。失败后可重试或送交人工审核。紧凑队列每页显示两条，较早的工单可翻页查看。"
     },
     "api": {
-      "en": "Handle ClassifyRequested, RouteRequested and Cancelled events. Return matching request IDs through classified, routed or failed. set_ticket cancels work based on older content.",
-      "zh": "宿主处理 ClassifyRequested、RouteRequested 和 Cancelled，并携请求 ID 调用 classified、routed 或 failed。set_ticket 会取消基于旧内容的任务。"
+      "en": "Handle ClassifyRequested, RouteRequested and Cancelled. with_history restores assigned and review tickets. with_portraits associates an assignee with an image. set_visible suspends pending requests while hidden.",
+      "zh": "宿主处理 ClassifyRequested、RouteRequested 和 Cancelled。with_history 恢复已分配和待审核工单，with_portraits 提供分配对象的头像，set_visible 在隐藏时挂起请求。"
     },
     "motion": {
-      "en": "Ticket state changes fade in; reduced motion removes the transition.",
-      "zh": "工单状态变化时淡入；减少动效时直接显示。"
+      "en": "The first ticket enters in 220ms. Classification labels appear 50ms apart and the wide connector pulse runs for 240ms. Reduced motion shows the states immediately.",
+      "zh": "首封工单在 220ms 内进入，分类标签间隔 50ms 出现，宽屏路径上的脉冲播放 240ms。减少动效模式立即显示状态。"
     },
     "method": "classified",
     "signature": "(u64, TicketDecision, &mut Context<Self>) -> bool",
@@ -738,16 +738,16 @@
       "zh": "输入问题，并查看宿主提供的查询和结果。"
     },
     "rule": {
-      "en": "Submit a question, inspect or copy the generated SQL, then switch between bars, lines and a table. Stop and retry are available. The preview uses fixed sample data.",
-      "zh": "提交问题，查看或复制生成的查询，再切换柱状图、折线图和表格；支持停止与重试。预览使用固定样例数据。"
+      "en": "Submit with Enter. Stop with Escape or the Stop button. Inspect or copy SQL, then switch between bars, lines and a table. Use Left, Right, Home or End on the view switch or plot. Retry uses the current question. The preview uses fixed sample data.",
+      "zh": "按 Enter 提交，按 Escape 或「停止」取消。可查看或复制 SQL，再切换柱状图、折线图和表格。视图选择与图表支持方向键、Home 和 End。重试使用当前问题，演示使用固定样例。"
     },
     "api": {
-      "en": "The host handles GenerateSql, RunQuery and Cancelled. Pass matching IDs to append_sql, finish_sql, progress, finish_query or fail. The component does not connect to a database.",
-      "zh": "宿主处理 GenerateSql、RunQuery 和 Cancelled，并携对应请求 ID 调用 append_sql、finish_sql、progress、finish_query 或 fail。组件不会自行连接数据库。"
+      "en": "The host handles GenerateSql, RunQuery and Cancelled. Pass matching IDs to reserve_sql_lines, append_sql, finish_sql, progress, finish_query or fail. Use finish_query_presented for labels, opening view, legend values and value formatting. The host owns read-only query validation and execution.",
+      "zh": "宿主处理 GenerateSql、RunQuery 和 Cancelled，并携请求 ID 调用 reserve_sql_lines、append_sql、finish_sql、progress、finish_query 或 fail。使用 finish_query_presented 设置标签、初始视图、图例数值与格式。宿主负责只读查询的校验和执行。"
     },
     "motion": {
-      "en": "Bars grow and lines are progressively drawn; reduced motion displays the final result immediately.",
-      "zh": "柱形逐渐生长，折线逐步绘制；减少动效时直接显示最终结果。"
+      "en": "The SQL panel settles over approximately 300ms and new chunks fade in over 140ms. Bars rise over 320ms with up to 180ms stagger and lines draw over 460ms. View changes fade out for 100ms and in for 160ms in a fixed 216px area. Reduced motion settles the result immediately.",
+      "zh": "SQL 面板约 300ms 收放，新片段 140ms 淡入。柱形 320ms 入场，交错最多 180ms；折线在 460ms 内画出。视图在固定的 216px 区域内 100ms 淡出、160ms 淡入。减少动效时立即呈现。"
     },
     "method": "finish_query",
     "signature": "(u64, AskDataResult, &mut Context<Self>) -> bool",
@@ -761,22 +761,22 @@
       "zh": "敏感信息脱敏"
     },
     "rustType": "PiiRedaction",
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::pii_redaction::PiiRedaction;\n\nlet control = cx.new(|cx| PiiRedaction::new(window, cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::pii_redaction::PiiRedaction;\n\nlet control = cx.new(|cx| {\n    PiiRedaction::new(window, cx)\n        .with_model(\"Claude Sonnet 5.5\")\n        .with_reply()\n});",
     "lead": {
-      "en": "Review and edit host-provided sensitive text ranges before copying a masked preview.",
-      "zh": "核对并编辑宿主提供的敏感文本范围，再复制脱敏预览。"
+      "en": "Review masked messages and restore model replies using local values.",
+      "zh": "核对脱敏消息，在本地恢复模型回复中的原始信息。"
     },
     "rule": {
-      "en": "Select text to add ranges, remove or undo them, then explicitly review before copying. The preview only matches fixed fictional values and does not send text or detect real PII.",
-      "zh": "选择文本可添加范围，也可移除和撤销；核对后才能复制。预览只匹配固定虚构样例，不会传输文本，也不能识别真实敏感信息。"
+      "en": "Scan and review the message, compare its masked and original forms, then send the masked prompt to the host. Stop and retry are available. Edits cancel pending replies. The preview uses a local simulation.",
+      "zh": "扫描并核对消息，对比脱敏文本与原文后，将脱敏提示词交给宿主。支持停止和重试，编辑会取消待处理回复。预览使用本地模拟。"
     },
     "api": {
-      "en": "Handle ScanRequested and Cancelled in the host. Pass the matching ID and non-overlapping UTF-8 byte ranges aligned to Unicode graphemes to finish_scan, or call fail_scan. Edits and cancellation invalidate old results.",
-      "zh": "宿主处理 ScanRequested 和 Cancelled，携对应 ID 调用 finish_scan 或 fail_scan。范围使用 UTF-8 字节偏移，须与字素边界对齐且互不重叠；编辑或取消会使旧结果失效。"
+      "en": "with_reply() enables replies. Handle PiiReplyEvent::Requested and Cancelled in the host. Use matching IDs with append_reply, finish_reply or fail_reply. finish_reply restores this request’s known tokens locally. PiiEvent continues to drive detection.",
+      "zh": "with_reply() 启用回复流程。宿主处理 PiiReplyEvent::Requested 和 Cancelled，并携匹配 ID 调用 append_reply、finish_reply 或 fail_reply。完成时在本地恢复当前请求的已知占位符。识别继续由 PiiEvent 驱动。"
     },
     "motion": {
-      "en": "The demo keeps feedback immediate and does not require motion.",
-      "zh": "演示即时反馈，操作不依赖动效。"
+      "en": "The original-message switch settles over approximately 160ms. Flow dots travel for 460ms. The placeholder reply fades out for 100ms and the restored reply fades in for 160ms in the same reply well. Reduced motion shows the result immediately.",
+      "zh": "原文开关约 160ms 收尾，流程圆点移动 460ms。占位符回复在同一回复区内 100ms 淡出，恢复后的回复 160ms 淡入。减少动效时直接显示结果。"
     },
     "method": "finish_scan",
     "signature": "(u64, Vec<PiiSpan>, &mut Context<Self>) -> bool",

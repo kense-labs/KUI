@@ -6,8 +6,58 @@ use crate::primitives::{
     presentation::ChangingText,
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, collections::HashSet, rc::Rc};
-const TICKETS_PER_PAGE: usize = 4;
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
+const CONNECTOR_MIN_WIDTH: Pixels = px(600.);
+const ROUTE_TRAVEL_SECONDS: f32 = 0.24;
+
+fn tickets_per_page(width: Pixels) -> usize {
+    if width >= CONNECTOR_MIN_WIDTH { 3 } else { 2 }
+}
+
+fn activate_key(event: &KeyDownEvent) -> bool {
+    !event.is_held && matches!(event.keystroke.key.as_str(), "enter" | "space")
+}
+
+fn connector(columns: usize, pulse: Option<(usize, f32)>, p: Paint) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, (), w, _| {
+            let column_width = (bounds.size.width - px(8.) * (columns - 1) as f32) / columns as f32;
+            let start = bounds.center().x;
+            for i in 0..columns {
+                let end = bounds.left() + column_width * (i as f32 + 0.5) + px(8.) * i as f32;
+                let sample = |t: f32| {
+                    let x = t * t * (3. - 2. * t);
+                    point(
+                        start + (end - start) * x,
+                        bounds.top() + bounds.size.height * t,
+                    )
+                };
+                let draw = |from: f32, to: f32, color, w: &mut Window| {
+                    let mut path = PathBuilder::stroke(px(1.));
+                    path.move_to(sample(from));
+                    for step in 1..=16 {
+                        path.line_to(sample(from + (to - from) * step as f32 / 16.));
+                    }
+                    if let Ok(path) = path.build() {
+                        w.paint_path(path, color);
+                    }
+                };
+                draw(0., 1., p.line, w);
+                if let Some((_, t)) = pulse.filter(|(lane, _)| *lane == i && i + 1 < columns) {
+                    draw((t - 0.14).max(0.), t, p.bright, w);
+                }
+            }
+        },
+    )
+    .w_full()
+    .h(px(24.))
+    .flex_none()
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ticket {
@@ -66,11 +116,7 @@ impl TicketDecision {
         Self {
             intent: "".into(),
             sentiment: "".into(),
-            confidence: if confidence.is_finite() {
-                confidence.clamp(0., 1.)
-            } else {
-                0.
-            },
+            confidence: finite_confidence(confidence),
             lane: lane.into(),
             assignee: "".into(),
         }
@@ -86,6 +132,13 @@ impl TicketDecision {
     pub fn with_assignee(mut self, value: impl Into<SharedString>) -> Self {
         self.assignee = value.into();
         self
+    }
+}
+fn finite_confidence(confidence: f32) -> f32 {
+    if confidence.is_finite() {
+        confidence.clamp(0., 1.)
+    } else {
+        0.
     }
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -122,10 +175,24 @@ struct Entry {
     route_failed: bool,
     clock: PhaseClock,
 }
+impl Entry {
+    fn new(ticket: Ticket, status: TicketStatus) -> Self {
+        Self {
+            ticket,
+            status,
+            request: None,
+            decision: None,
+            error: "".into(),
+            route_failed: false,
+            clock: PhaseClock::default(),
+        }
+    }
+}
 /// Requests are emitted to the host; a ticket is marked routed only after host confirmation.
 pub struct TicketRouter {
     title: SharedString,
     model: Option<SharedString>,
+    portraits: HashMap<SharedString, ImageSource>,
     lanes: Vec<TicketLane>,
     entries: Vec<Entry>,
     threshold: f32,
@@ -136,6 +203,7 @@ pub struct TicketRouter {
     lane_counts: Vec<ChangingText>,
     lane_pages: Vec<usize>,
     review_count: ChangingText,
+    review_options: Option<SharedString>,
     content_width: Rc<Cell<Pixels>>,
 }
 impl EventEmitter<TicketRouterEvent> for TicketRouter {}
@@ -154,21 +222,14 @@ impl TicketRouter {
         let entries = tickets
             .into_iter()
             .filter(|t| ids.insert(t.id.clone()))
-            .map(|ticket| Entry {
-                ticket,
-                status: TicketStatus::Idle,
-                request: None,
-                decision: None,
-                error: "".into(),
-                route_failed: false,
-                clock: Default::default(),
-            })
+            .map(|ticket| Entry::new(ticket, TicketStatus::Idle))
             .collect();
         let lane_counts = lanes.iter().map(|_| ChangingText::new("0")).collect();
-        let lane_pages = vec![0; lanes.len()];
+        let lane_pages = vec![0; lanes.len() + 1];
         Self {
             title: title.into(),
             model: None,
+            portraits: HashMap::new(),
             lanes,
             entries,
             threshold: 0.75,
@@ -179,12 +240,80 @@ impl TicketRouter {
             lane_counts,
             lane_pages,
             review_count: ChangingText::new("0"),
+            review_options: None,
             content_width: Default::default(),
         }
     }
     /// Name the host-selected classification model in the header.
     pub fn with_model(mut self, model: impl Into<SharedString>) -> Self {
         self.model = Some(model.into());
+        self
+    }
+    /// Restore acknowledged assignments and pending reviews, oldest first.
+    /// Incoming tickets take precedence over duplicate historical IDs.
+    pub fn with_history(
+        mut self,
+        assigned: Vec<(Ticket, TicketDecision)>,
+        review: Vec<(Ticket, TicketDecision)>,
+    ) -> Self {
+        let mut ids: HashSet<_> = self
+            .entries
+            .iter()
+            .map(|entry| entry.ticket.id.clone())
+            .collect();
+        let restored = assigned
+            .into_iter()
+            .map(|pair| (pair, TicketStatus::Routed))
+            .chain(review.into_iter().map(|pair| (pair, TicketStatus::Review)))
+            .filter_map(|((ticket, mut decision), status)| {
+                if !self.lanes.iter().any(|lane| lane.id == decision.lane)
+                    || !ids.insert(ticket.id.clone())
+                {
+                    return None;
+                }
+                decision.confidence = finite_confidence(decision.confidence);
+                let mut entry = Entry::new(ticket, status);
+                entry.decision = Some(decision);
+                Some(entry)
+            })
+            .collect::<Vec<_>>();
+        self.entries.splice(..0, restored);
+        Self {
+            review_count: ChangingText::new(
+                self.entries
+                    .iter()
+                    .filter(|entry| entry.status == TicketStatus::Review)
+                    .count()
+                    .to_string(),
+            ),
+            lane_counts: self
+                .lanes
+                .iter()
+                .map(|lane| {
+                    ChangingText::new(
+                        self.entries
+                            .iter()
+                            .filter(|entry| {
+                                entry.status == TicketStatus::Routed
+                                    && entry
+                                        .decision
+                                        .as_ref()
+                                        .is_some_and(|decision| decision.lane == lane.id)
+                            })
+                            .count()
+                            .to_string(),
+                    )
+                })
+                .collect(),
+            ..self
+        }
+    }
+    /// Attach host-provided portraits to assignee names.
+    pub fn with_portraits(
+        mut self,
+        portraits: impl IntoIterator<Item = (SharedString, ImageSource)>,
+    ) -> Self {
+        self.portraits.extend(portraits);
         self
     }
     pub fn with_review_threshold(mut self, threshold: f32) -> Self {
@@ -210,7 +339,7 @@ impl TicketRouter {
             .and_then(|e| e.request)
     }
     fn pump(&mut self, cx: &mut Context<Self>) {
-        if self.paused {
+        if self.paused || !self.visible {
             return;
         }
         let mut slots = self
@@ -267,6 +396,10 @@ impl TicketRouter {
     /// Pause both types of in-flight work and retain tickets for a later resume.
     pub fn pause(&mut self, cx: &mut Context<Self>) {
         self.paused = true;
+        self.suspend_work(cx);
+        cx.notify();
+    }
+    fn suspend_work(&mut self, cx: &mut Context<Self>) {
         for entry in &mut self.entries {
             if let Some(request) = entry.request.take() {
                 cx.emit(TicketRouterEvent::Cancelled(request));
@@ -277,37 +410,100 @@ impl TicketRouter {
                 state => state,
             };
         }
-        cx.notify();
     }
     pub fn is_paused(&self) -> bool {
         self.paused
     }
-    /// Hosts embedding an off-screen preview can stop scheduling animation frames.
+    /// Suspend requests and frame scheduling while the embedded view is off screen.
+    /// Showing it again resumes work unless the user paused it.
     pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         if self.visible != visible {
             self.visible = visible;
             if visible {
-                cx.notify();
+                self.pump(cx);
+            } else {
+                self.suspend_work(cx);
             }
+            cx.notify();
         }
     }
     fn change_page(&mut self, lane: usize, direction: isize, cx: &mut Context<Self>) {
-        let Some(spec) = self.lanes.get(lane) else {
+        let Some(page) = self.lane_pages.get_mut(lane) else {
             return;
         };
+        let destination = self.lanes.get(lane);
         let total = self
             .entries
             .iter()
-            .filter(|entry| {
-                entry.status == TicketStatus::Routed
-                    && entry.decision.as_ref().is_some_and(|d| d.lane == spec.id)
+            .filter(|entry| match destination {
+                Some(spec) => {
+                    entry.status == TicketStatus::Routed
+                        && entry.decision.as_ref().is_some_and(|d| d.lane == spec.id)
+                }
+                None => entry.status == TicketStatus::Review,
             })
             .count();
-        let last = total.saturating_sub(1) / TICKETS_PER_PAGE;
-        self.lane_pages[lane] = self.lane_pages[lane]
-            .saturating_add_signed(direction)
-            .min(last);
+        let last = total.saturating_sub(1) / tickets_per_page(self.content_width.get());
+        *page = page.saturating_add_signed(direction).min(last);
+        if destination.is_none() {
+            self.review_options = None;
+        }
         cx.notify();
+    }
+
+    fn page_controls(
+        &self,
+        lane: usize,
+        label: &str,
+        page: usize,
+        last: usize,
+        cx: &Context<Self>,
+    ) -> Option<Div> {
+        if last == 0 {
+            return None;
+        }
+        let l = UiLanguage::current(cx);
+        let p = Paint::get(cx);
+        let radius = crate::foundation::surface_radius(cx).into();
+        let button = |id, caption, delta| {
+            face(
+                (id, lane),
+                format!("{caption} {label}"),
+                32.,
+                radius,
+                Tone::Clear,
+                cx,
+            )
+            .px(px(6.))
+            .child(caption)
+            .on_click(cx.listener(move |s, _, _, cx| s.change_page(lane, delta, cx)))
+            .on_key_down(cx.listener(move |s, event: &KeyDownEvent, w, cx| {
+                if activate_key(event) {
+                    s.change_page(lane, delta, cx);
+                    w.prevent_default();
+                    cx.stop_propagation();
+                }
+            }))
+        };
+        Some(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(4.))
+                .when(page > 0, |row| {
+                    row.child(button("ticket-newer", l.text("Newer", "较新"), -1))
+                })
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(p.secondary)
+                        .child(format!("{} / {}", page + 1, last + 1)),
+                )
+                .when(page < last, |row| {
+                    row.child(button("ticket-older", l.text("Older", "较早"), 1))
+                }),
+        )
     }
     pub fn resume(&mut self, cx: &mut Context<Self>) {
         self.paused = false;
@@ -340,15 +536,7 @@ impl TicketRouter {
                 TicketStatus::Idle
             };
         } else {
-            self.entries.push(Entry {
-                ticket,
-                status: TicketStatus::Queued,
-                request: None,
-                decision: None,
-                error: "".into(),
-                route_failed: false,
-                clock: Default::default(),
-            });
+            self.entries.push(Entry::new(ticket, TicketStatus::Queued));
         }
         self.pump(cx);
         cx.notify();
@@ -367,11 +555,7 @@ impl TicketRouter {
         else {
             return false;
         };
-        decision.confidence = if decision.confidence.is_finite() {
-            decision.confidence.clamp(0., 1.)
-        } else {
-            0.
-        };
+        decision.confidence = finite_confidence(decision.confidence);
         if !self.lanes.iter().any(|l| l.id == decision.lane) {
             let Some(first) = self.lanes.first() else {
                 self.entries[i].request = None;
@@ -492,6 +676,45 @@ impl TicketRouter {
         cx.notify();
         true
     }
+
+    /// Move a failed ticket to manual review without acknowledging an assignment.
+    pub fn send_to_review(&mut self, ticket: &str, cx: &mut Context<Self>) -> bool {
+        let Some(lane) = self.lanes.first() else {
+            return false;
+        };
+        let Some(entry) = self.entries.iter_mut().find(|entry| {
+            entry.ticket.id.as_ref() == ticket && entry.status == TicketStatus::Failed
+        }) else {
+            return false;
+        };
+        entry
+            .decision
+            .get_or_insert_with(|| TicketDecision::new(lane.id.clone(), 0.));
+        entry.status = TicketStatus::Review;
+        entry.error = "".into();
+        entry.route_failed = false;
+        entry.clock.restart(cx);
+        cx.notify();
+        true
+    }
+
+    fn toggle_run(&mut self, cx: &mut Context<Self>) {
+        if self.paused {
+            self.resume(cx);
+        } else if self.entries.iter().any(|entry| {
+            matches!(
+                entry.status,
+                TicketStatus::Queued
+                    | TicketStatus::Classifying
+                    | TicketStatus::RouteQueued
+                    | TicketStatus::Routing
+            )
+        }) {
+            self.pause(cx);
+        } else {
+            self.run(cx);
+        }
+    }
 }
 impl Render for TicketRouter {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -500,6 +723,17 @@ impl Render for TicketRouter {
         let radius = crate::foundation::surface_radius(cx);
         let animate = self.visible && w.is_visible() && !disabled_motion(cx);
         let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let width = if self.content_width.get() > px(0.) {
+            self.content_width.get()
+        } else {
+            w.viewport_size().width - px(34.)
+        };
+        let wide = width >= CONNECTOR_MIN_WIDTH && self.lanes.len() <= 3;
+        let completed = self
+            .entries
+            .iter()
+            .filter(|entry| entry.status == TicketStatus::Routed)
+            .count();
         let working = self
             .entries
             .iter()
@@ -525,10 +759,10 @@ impl Render for TicketRouter {
             .items_center()
             .justify_between()
             .min_h(px(48.))
-            .pl(px(12.))
             .gap(px(8.))
             .child(
                 div()
+                    .min_w_0()
                     .text_size(px(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.ink)
@@ -541,13 +775,23 @@ impl Render for TicketRouter {
                             .as_ref()
                             .and_then(|model| brand_mark(model, 14., cx)),
                     )
-                    .child(self.title.clone())
-                    .when_some(self.model.clone(), |header, model| {
+                    .child(div().min_w_0().truncate().child(self.title.clone()))
+                    .when(width >= px(400.), |header| {
+                        header.children(self.model.clone().map(|model| {
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(px(12.))
+                                .text_color(p.secondary)
+                                .child(model)
+                        }))
+                    })
+                    .when(wide, |header| {
                         header.child(
                             div()
                                 .text_size(px(12.))
-                                .text_color(p.secondary)
-                                .child(model),
+                                .text_color(p.faint)
+                                .child(format!("{completed} {}", t("routed", "已分配"))),
                         )
                     }),
             )
@@ -563,22 +807,22 @@ impl Render for TicketRouter {
                 .px(px(8.))
                 .border_1()
                 .border_color(p.line)
+                .child(
+                    div()
+                        .text_color(p.secondary)
+                        .child(if !self.paused && working > 0 {
+                            "Ⅱ"
+                        } else {
+                            "▷"
+                        }),
+                )
                 .child(button_label)
-                .on_click(cx.listener(|s, _, _, cx| {
-                    if s.paused {
-                        s.resume(cx);
-                    } else if s.entries.iter().any(|e| {
-                        matches!(
-                            e.status,
-                            TicketStatus::Queued
-                                | TicketStatus::Classifying
-                                | TicketStatus::RouteQueued
-                                | TicketStatus::Routing
-                        )
-                    }) {
-                        s.pause(cx);
-                    } else {
-                        s.run(cx);
+                .on_click(cx.listener(|s, _, _, cx| s.toggle_run(cx)))
+                .on_key_down(cx.listener(|s, event: &KeyDownEvent, w, cx| {
+                    if activate_key(event) {
+                        s.toggle_run(cx);
+                        w.prevent_default();
+                        cx.stop_propagation();
                     }
                 })),
             );
@@ -589,14 +833,59 @@ impl Render for TicketRouter {
                 TicketStatus::Classifying | TicketStatus::Routing
             )
         });
-        let settled = self
+        let departing = if animate {
+            self.entries
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| {
+                    matches!(entry.status, TicketStatus::Routed | TicketStatus::Review)
+                        && entry.clock.age(cx) < 0.26
+                })
+                .min_by(|(_, first), (_, second)| {
+                    first.clock.age(cx).total_cmp(&second.clock.age(cx))
+                })
+                .map(|(index, entry)| (index, entry.clock.time(0.26, w, cx)))
+        } else {
+            None
+        };
+        let outgoing = departing.filter(|(_, age)| *age < 0.10);
+        let featured = outgoing.map(|(index, _)| index).or(active).or_else(|| {
+            self.entries.iter().position(|entry| {
+                matches!(
+                    entry.status,
+                    TicketStatus::Idle | TicketStatus::Queued | TicketStatus::RouteQueued
+                )
+            })
+        });
+        if featured.is_none()
+            && !self
+                .entries
+                .iter()
+                .any(|entry| entry.status == TicketStatus::Failed)
+        {
+            queue = queue.child(
+                div()
+                    .id("ticket-caught-up")
+                    .role(Role::Status)
+                    .w_full()
+                    .min_h(px(160.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(p.line)
+                    .text_size(px(13.))
+                    .text_color(p.secondary)
+                    .child(t("All caught up", "已处理完毕")),
+            );
+        }
+        for (i, entry) in self
             .entries
             .iter()
-            .all(|entry| matches!(entry.status, TicketStatus::Routed | TicketStatus::Review));
-        for (i, entry) in self.entries.iter().enumerate().filter(|(i, e)| {
-            (settled && *i + 1 == self.entries.len())
-                || !matches!(e.status, TicketStatus::Routed | TicketStatus::Review)
-        }) {
+            .enumerate()
+            .filter(|(i, e)| Some(*i) == featured || e.status == TicketStatus::Failed)
+        {
             let status = match entry.status {
                 TicketStatus::Idle => t("Waiting", "等待中"),
                 TicketStatus::Queued => t("Queued", "排队中"),
@@ -608,8 +897,14 @@ impl Render for TicketRouter {
                 TicketStatus::Routed => t("Assigned", "已分配"),
             };
             let key = entry.ticket.id.clone();
-            let fade = if animate {
-                ease(entry.clock.time(0.16, w, cx) / 0.16)
+            let fade = if let Some((index, age)) = departing.filter(|_| Some(i) == featured) {
+                if index == i {
+                    1. - ease(age / 0.10)
+                } else {
+                    ease(((age - 0.10) / 0.16).clamp(0., 1.))
+                }
+            } else if animate && entry.status == TicketStatus::Classifying {
+                ease(entry.clock.time(0.22, w, cx) / 0.22)
             } else {
                 1.
             };
@@ -626,16 +921,8 @@ impl Render for TicketRouter {
                 1.
             };
             let mut row = div()
-                .id(("ticket-entry", i))
                 .w_full()
-                .rounded(radius)
-                .border_1()
-                .border_color(if active == Some(i) {
-                    p.ink.opacity(0.16)
-                } else {
-                    p.line
-                })
-                .bg(p.panel)
+                .min_h(px(160.))
                 .p(px(12.))
                 .flex()
                 .flex_wrap()
@@ -643,9 +930,12 @@ impl Render for TicketRouter {
                 .justify_between()
                 .gap(px(6.))
                 .opacity(fade)
+                .relative()
+                .top(px(3. * (1. - fade)))
                 .child(
                     div()
-                        .min_w(px(120.))
+                        .min_w_0()
+                        .w_full()
                         .flex_1()
                         .text_size(px(13.))
                         .text_color(p.ink)
@@ -661,24 +951,33 @@ impl Render for TicketRouter {
                                     .text_size(px(12.))
                                     .text_color(p.secondary)
                                     .children(brand_mark(&entry.ticket.channel, 13., cx))
-                                    .child(entry.ticket.sender.clone()),
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .truncate()
+                                            .child(entry.ticket.sender.clone()),
+                                    ),
                             )
                         })
                         .child(
                             div()
                                 .font_weight(FontWeight::MEDIUM)
+                                .truncate()
                                 .child(entry.ticket.subject.clone()),
                         )
                         .child(
                             div()
                                 .text_size(px(12.))
                                 .line_height(px(18.))
+                                .line_clamp(2)
                                 .text_color(p.secondary)
                                 .child(entry.ticket.body.clone()),
                         ),
                 )
                 .child(
                     div()
+                        .id(("ticket-active-status", i))
+                        .role(Role::Status)
                         .text_size(px(12.))
                         .text_color(if entry.status == TicketStatus::Failed {
                             p.danger
@@ -689,6 +988,11 @@ impl Render for TicketRouter {
                         .child(status),
                 );
             if let Some(decision) = &entry.decision {
+                let label_age = if animate && entry.status == TicketStatus::Routing {
+                    entry.clock.time(0.15, w, cx)
+                } else {
+                    0.15
+                };
                 row = row.child(
                     div()
                         .w_full()
@@ -706,19 +1010,42 @@ impl Render for TicketRouter {
                                 format!("{:.0}%", decision.confidence * 100.).into(),
                             ]
                             .into_iter()
-                            .filter(|value| !value.is_empty())
-                            .map(|value| {
+                            .enumerate()
+                            .filter(|(_, value)| !value.is_empty())
+                            .map(|(index, value)| {
                                 div()
                                     .px(px(6.))
                                     .py(px(2.))
                                     .rounded(px(4.))
-                                    .bg(p.tray)
+                                    .bg(p.stage)
+                                    .opacity(ease(
+                                        ((label_age - index as f32 * 0.05) / 0.05).clamp(0., 1.),
+                                    ))
                                     .text_size(px(12.))
                                     .text_color(p.secondary)
                                     .child(value)
                             }),
                         ),
                 );
+                if let Some(lane) = self.lanes.iter().find(|lane| lane.id == decision.lane) {
+                    row = row.child(
+                        div()
+                            .w_full()
+                            .text_size(px(12.))
+                            .text_color(p.secondary)
+                            .min_w_0()
+                            .truncate()
+                            .child(format!(
+                                "→ {}{}",
+                                lane.label,
+                                if decision.assignee.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(" · {}", decision.assignee)
+                                }
+                            )),
+                    );
+                }
             }
             if entry.status == TicketStatus::Failed {
                 let label = format!("{} {}", t("Retry", "重试"), entry.ticket.subject);
@@ -742,33 +1069,90 @@ impl Render for TicketRouter {
                         .child(t("Retry", "重试"))
                         .on_click(cx.listener(move |s, _, _, cx| {
                             s.retry(key.as_ref(), cx);
+                        }))
+                        .on_key_down(cx.listener({
+                            let key = entry.ticket.id.clone();
+                            move |s, event: &KeyDownEvent, w, cx| {
+                                if activate_key(event) {
+                                    s.retry(key.as_ref(), cx);
+                                    w.prevent_default();
+                                    cx.stop_propagation();
+                                }
+                            }
                         })),
                     );
+                let send = {
+                    let id = entry.ticket.id.clone();
+                    move |s: &mut Self, cx: &mut Context<Self>| {
+                        s.send_to_review(id.as_ref(), cx);
+                    }
+                };
+                row = row.when(!self.lanes.is_empty(), |row| {
+                    row.child(
+                        face(
+                            ("ticket-manual-review", i),
+                            t("Send to review", "送交审核"),
+                            32.,
+                            radius.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .px(px(8.))
+                        .child(t("Send to review", "送交审核"))
+                        .on_click(cx.listener({
+                            let send = send.clone();
+                            move |s, _, _, cx| send(s, cx)
+                        }))
+                        .on_key_down(cx.listener(
+                            move |s, event: &KeyDownEvent, w, cx| {
+                                if activate_key(event) {
+                                    send(s, cx);
+                                    w.prevent_default();
+                                    cx.stop_propagation();
+                                }
+                            },
+                        )),
+                    )
+                });
             }
-            queue = queue.child(row);
+            queue = queue.child(
+                div()
+                    .id(("ticket-entry", i))
+                    .w_full()
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(if active == Some(i) {
+                        p.ink.opacity(0.16)
+                    } else {
+                        p.line
+                    })
+                    .bg(p.panel)
+                    .overflow_hidden()
+                    .child(row),
+            );
         }
-        let width = if self.content_width.get() > px(0.) {
-            self.content_width.get()
+        let pulse = active.and_then(|index| {
+            let entry = &self.entries[index];
+            if !animate || !wide || entry.status != TicketStatus::Routing {
+                return None;
+            }
+            let decision = entry.decision.as_ref()?;
+            let lane = self
+                .lanes
+                .iter()
+                .position(|lane| lane.id == decision.lane)?;
+            let age = entry.clock.time(0.15 + ROUTE_TRAVEL_SECONDS, w, cx);
+            let phase = (age - 0.15) / ROUTE_TRAVEL_SECONDS;
+            (phase > 0. && phase < 1.).then(|| (lane, ease(phase)))
+        });
+        let columns = if wide {
+            (self.lanes.len() + 1).min(4) as u16
+        } else if width >= px(256.) {
+            2
         } else {
-            w.viewport_size().width
+            1
         };
-        let pulse = if animate && width >= px(600.) {
-            self.entries.iter().rev().find_map(|entry| {
-                if entry.status != TicketStatus::Routed || entry.clock.age(cx) >= 0.24 {
-                    return None;
-                }
-                let lane = entry
-                    .decision
-                    .as_ref()
-                    .and_then(|d| self.lanes.iter().position(|l| l.id == d.lane))?;
-                let progress = ease(entry.clock.time(0.24, w, cx) / 0.24);
-                let destination = (lane as f32 + 0.5) / (self.lanes.len() + 1) as f32;
-                Some((progress, destination))
-            })
-        } else {
-            None
-        };
-        let columns = if width >= px(350.) { 2 } else { 1 };
+        let per_page = tickets_per_page(width);
         let mut lanes = div().w_full().grid().grid_cols(columns).gap(px(8.));
         for (i, lane) in self.lanes.iter().enumerate() {
             let total = self
@@ -779,7 +1163,7 @@ impl Render for TicketRouter {
                         && e.decision.as_ref().is_some_and(|d| d.lane == lane.id)
                 })
                 .count();
-            let last_page = total.saturating_sub(1) / TICKETS_PER_PAGE;
+            let last_page = total.saturating_sub(1) / per_page;
             let page = self.lane_pages[i].min(last_page);
             self.lane_pages[i] = page;
             let items: Vec<_> = self
@@ -790,8 +1174,8 @@ impl Render for TicketRouter {
                         && e.decision.as_ref().is_some_and(|d| d.lane == lane.id)
                 })
                 .rev()
-                .skip(page * TICKETS_PER_PAGE)
-                .take(TICKETS_PER_PAGE)
+                .skip(page * per_page)
+                .take(per_page)
                 .collect();
             let label = format!("{} · {}", lane.label, total);
             let old = self.lane_counts[i].current.parse::<usize>().unwrap_or(0);
@@ -806,7 +1190,7 @@ impl Render for TicketRouter {
                 .role(Role::List)
                 .aria_label(label.clone())
                 .min_w_0()
-                .min_h(px(84.))
+                .min_h(px(136.))
                 .rounded(radius)
                 .bg(p.stage)
                 .p(px(3.))
@@ -835,7 +1219,7 @@ impl Render for TicketRouter {
                 let decision = entry.decision.as_ref().unwrap();
                 let subject = entry.ticket.subject.clone();
                 let landing = if animate {
-                    ease(entry.clock.time(0.24, w, cx) / 0.24)
+                    ease(entry.clock.time(ROUTE_TRAVEL_SECONDS, w, cx) / ROUTE_TRAVEL_SECONDS)
                 } else {
                     1.
                 };
@@ -847,7 +1231,7 @@ impl Render for TicketRouter {
                         .relative()
                         .top(px(3. * (1. - landing)))
                         .opacity(landing)
-                        .h(px(56.))
+                        .h(px(52.))
                         .px(px(8.))
                         .rounded(radius)
                         .flex()
@@ -875,11 +1259,15 @@ impl Render for TicketRouter {
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(8.))
+                                .gap(px(6.))
+                                .children(self.portraits.get(&decision.assignee).map(|source| {
+                                    img(source.clone()).size(px(14.)).flex_none().rounded_full()
+                                }))
                                 .child(
                                     div()
                                         .flex_1()
                                         .min_w(px(0.))
+                                        .truncate()
                                         .text_size(px(12.))
                                         .line_height(px(18.))
                                         .text_color(p.secondary)
@@ -895,47 +1283,13 @@ impl Render for TicketRouter {
                         ),
                 );
             }
-            if last_page > 0 {
-                let mut pages = div().flex().flex_wrap().items_center().gap(px(4.));
-                if page > 0 {
-                    pages = pages.child(
-                        face(
-                            ("ticket-newer", i),
-                            format!("{} {}", t("Newer", "较新"), lane.label),
-                            32.,
-                            radius.into(),
-                            Tone::Clear,
-                            cx,
-                        )
-                        .px(px(6.))
-                        .child(t("Newer", "较新"))
-                        .on_click(cx.listener(move |s, _, _, cx| s.change_page(i, -1, cx))),
-                    );
-                }
-                pages = pages.child(
-                    div()
-                        .text_size(px(11.))
-                        .text_color(p.secondary)
-                        .child(format!("{} / {}", page + 1, last_page + 1)),
-                );
-                if page < last_page {
-                    pages = pages.child(
-                        face(
-                            ("ticket-older", i),
-                            format!("{} {}", t("Older", "较早"), lane.label),
-                            32.,
-                            radius.into(),
-                            Tone::Clear,
-                            cx,
-                        )
-                        .px(px(6.))
-                        .child(t("Older", "较早"))
-                        .on_click(cx.listener(move |s, _, _, cx| s.change_page(i, 1, cx))),
-                    );
-                }
-                panel = panel.child(pages);
-            }
-            lanes = lanes.child(panel);
+            lanes = lanes.child(panel.children(self.page_controls(
+                i,
+                lane.label.as_ref(),
+                page,
+                last_page,
+                cx,
+            )));
         }
         let review: Vec<_> = self
             .entries
@@ -954,6 +1308,11 @@ impl Render for TicketRouter {
         } else {
             div().child(review.len().to_string())
         };
+        let review_lane = self.lanes.len();
+        let review_last = review.len().saturating_sub(1) / per_page;
+        let review_page = self.lane_pages[review_lane].min(review_last);
+        self.lane_pages[review_lane] = review_page;
+        let review_label = t("Needs review", "待审核");
         let mut review_panel = div()
             .id("ticket-review")
             .role(Role::List)
@@ -963,7 +1322,7 @@ impl Render for TicketRouter {
                 review.len()
             ))
             .min_w_0()
-            .min_h(px(84.))
+            .min_h(px(136.))
             .rounded(radius)
             .bg(p.stage)
             .p(px(3.))
@@ -988,7 +1347,12 @@ impl Render for TicketRouter {
                             .child(review_count_view),
                     ),
             );
-        for (i, entry) in review {
+        for (i, entry) in review
+            .into_iter()
+            .rev()
+            .skip(review_page * per_page)
+            .take(per_page)
+        {
             let decision = entry.decision.as_ref().unwrap();
             let ticket = entry.ticket.id.clone();
             let lane = decision.lane.clone();
@@ -998,92 +1362,179 @@ impl Render for TicketRouter {
                 .find(|l| l.id == lane)
                 .map(|l| l.label.clone())
                 .unwrap_or_default();
+            let label = format!(
+                "{} {}, {:.0}%: {}",
+                t("Route", "分配"),
+                entry.ticket.subject,
+                decision.confidence * 100.,
+                suggested
+            );
+            let assign = {
+                let ticket = ticket.clone();
+                move |s: &mut Self, cx: &mut Context<Self>| {
+                    s.review_options = None;
+                    s.route_to(ticket.as_ref(), lane.as_ref(), cx);
+                }
+            };
+            let expanded = self.review_options.as_ref() == Some(&ticket);
             let mut card = div()
                 .id(("ticket-review-item", i))
                 .role(Role::ListItem)
-                .min_h(px(56.))
-                .px(px(8.))
-                .py(px(6.))
-                .rounded(radius)
-                .bg(p.panel)
-                .flex()
-                .flex_col()
-                .justify_center()
-                .gap(px(2.))
-                .hover(|s| s.bg(p.ink.opacity(0.05)))
+                .min_w_0()
                 .child(
                     div()
-                        .text_size(px(14.))
-                        .line_height(px(20.))
-                        .text_color(p.ink)
-                        .child(entry.ticket.subject.clone()),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .line_height(px(18.))
-                        .text_color(p.secondary)
-                        .child(format!(
-                            "{} · {} · {:.0}%",
-                            decision.intent,
-                            decision.sentiment,
-                            decision.confidence * 100.
-                        )),
+                        .flex()
+                        .items_center()
+                        .min_w_0()
+                        .gap(px(2.))
+                        .child(
+                            face(
+                                ("ticket-confirm", i),
+                                label,
+                                52.,
+                                radius.into(),
+                                Tone::Clear,
+                                cx,
+                            )
+                            .flex_1()
+                            .min_w_0()
+                            .px(px(8.))
+                            .items_start()
+                            .flex_col()
+                            .gap(px(2.))
+                            .hover(|style| style.bg(p.ink.opacity(0.05)))
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .children(brand_mark(&entry.ticket.channel, 12., cx))
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .truncate()
+                                            .child(entry.ticket.subject.clone()),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(4.))
+                                    .text_size(px(12.))
+                                    .text_color(p.secondary)
+                                    .child(
+                                        div().min_w_0().truncate().child(format!("{}?", suggested)),
+                                    )
+                                    .child(format!("{:.0}%", decision.confidence * 100.)),
+                            )
+                            .on_click(cx.listener({
+                                let assign = assign.clone();
+                                move |s, _, _, cx| assign(s, cx)
+                            }))
+                            .on_key_down(cx.listener(
+                                move |s, event: &KeyDownEvent, w, cx| {
+                                    if activate_key(event) {
+                                        assign(s, cx);
+                                        w.prevent_default();
+                                        cx.stop_propagation();
+                                    }
+                                },
+                            )),
+                        )
+                        .when(self.lanes.len() > 1, |row| {
+                            let toggle = {
+                                let ticket = ticket.clone();
+                                move |s: &mut Self, cx: &mut Context<Self>| {
+                                    s.review_options = (s.review_options.as_ref() != Some(&ticket))
+                                        .then(|| ticket.clone());
+                                    cx.notify();
+                                }
+                            };
+                            row.child(
+                                face(
+                                    ("ticket-review-options", i),
+                                    t("Other destinations", "其他队列"),
+                                    28.,
+                                    radius.into(),
+                                    Tone::Clear,
+                                    cx,
+                                )
+                                .w(px(28.))
+                                .text_color(p.secondary)
+                                .aria_expanded(expanded)
+                                .child("…")
+                                .on_click(cx.listener({
+                                    let toggle = toggle.clone();
+                                    move |s, _, _, cx| toggle(s, cx)
+                                }))
+                                .on_key_down(cx.listener(
+                                    move |s, event: &KeyDownEvent, w, cx| {
+                                        if activate_key(event) {
+                                            toggle(s, cx);
+                                            w.prevent_default();
+                                            cx.stop_propagation();
+                                        }
+                                    },
+                                )),
+                            )
+                        }),
                 );
-            let label = format!(
-                "{} {}: {}",
-                t("Route", "分配"),
-                entry.ticket.subject,
-                suggested
-            );
-            card = card.child(
-                face(
-                    ("ticket-confirm", i),
-                    label,
-                    32.,
-                    radius.into(),
-                    Tone::Surface,
-                    cx,
-                )
-                .px(px(8.))
-                .child(format!("{} {}", t("Route to", "分配到"), suggested))
-                .on_click(cx.listener(move |s, _, _, cx| {
-                    s.route_to(ticket.as_ref(), lane.as_ref(), cx);
-                })),
-            );
-            for (j, alternative) in self
-                .lanes
-                .iter()
-                .enumerate()
-                .filter(|(_, v)| v.id != decision.lane)
-            {
-                let ticket = entry.ticket.id.clone();
-                let lane = alternative.id.clone();
-                let label = format!(
-                    "{} {}: {}",
-                    t("Route", "分配"),
-                    entry.ticket.subject,
-                    alternative.label
-                );
-                card = card.child(
-                    face(
-                        ("ticket-alternative", i * 1000 + j),
-                        label,
-                        32.,
-                        radius.into(),
-                        Tone::Clear,
-                        cx,
-                    )
-                    .px(px(8.))
-                    .child(alternative.label.clone())
-                    .on_click(cx.listener(move |s, _, _, cx| {
+            if expanded {
+                let mut alternatives = div().flex().flex_wrap().gap(px(3.)).px(px(5.)).pb(px(5.));
+                for (j, alternative) in self
+                    .lanes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, lane)| lane.id != decision.lane)
+                {
+                    let ticket = ticket.clone();
+                    let lane = alternative.id.clone();
+                    let route = move |s: &mut Self, cx: &mut Context<Self>| {
+                        s.review_options = None;
                         s.route_to(ticket.as_ref(), lane.as_ref(), cx);
-                    })),
-                );
+                    };
+                    alternatives = alternatives.child(
+                        face(
+                            ("ticket-alternative", i * 1000 + j),
+                            alternative.label.clone(),
+                            28.,
+                            radius.into(),
+                            Tone::Surface,
+                            cx,
+                        )
+                        .px(px(6.))
+                        .text_size(px(12.))
+                        .child(alternative.label.clone())
+                        .on_click(cx.listener({
+                            let route = route.clone();
+                            move |s, _, _, cx| route(s, cx)
+                        }))
+                        .on_key_down(cx.listener(
+                            move |s, event: &KeyDownEvent, w, cx| {
+                                if activate_key(event) {
+                                    route(s, cx);
+                                    w.prevent_default();
+                                    cx.stop_propagation();
+                                }
+                            },
+                        )),
+                    );
+                }
+                card = card.child(alternatives);
             }
             review_panel = review_panel.child(card);
         }
-        lanes = lanes.child(review_panel);
+        lanes = lanes.child(review_panel.children(self.page_controls(
+            review_lane,
+            review_label,
+            review_page,
+            review_last,
+            cx,
+        )));
         let content_width = self.content_width.clone();
         let weak = cx.weak_entity();
         let card = div()
@@ -1102,38 +1553,23 @@ impl Render for TicketRouter {
             .gap(px(12.))
             .child(header)
             .child(queue)
-            .when_some(pulse, |v, (progress, destination)| {
-                v.child(
-                    div()
-                        .relative()
-                        .w_full()
-                        .h(px(3.))
-                        .rounded_full()
-                        .bg(p.line)
-                        .child(
-                            div()
-                                .absolute()
-                                .left_0()
-                                .top_0()
-                                .h_full()
-                                .w(relative((progress * destination).clamp(0., 1.)))
-                                .rounded_full()
-                                .bg(p.focus),
-                        ),
-                )
-            })
+            .when(wide, |v| v.child(connector(usize::from(columns), pulse, p)))
             .child(lanes);
         div()
             .w_full()
             .max_w(px(840.))
             .child(card)
-            .on_children_prepainted(move |bounds, _, cx| {
+            .on_children_prepainted(move |bounds, w, _| {
                 if let Some(bounds) = bounds.first()
-                    && (content_width.get() - (bounds.size.width - px(32.)).max(px(0.))).abs()
+                    && (content_width.get() - (bounds.size.width - px(34.)).max(px(0.))).abs()
                         > px(0.5)
                 {
-                    content_width.set((bounds.size.width - px(32.)).max(px(0.)));
-                    let _ = weak.update(cx, |_, cx| cx.notify());
+                    content_width.set((bounds.size.width - px(34.)).max(px(0.)));
+                    let weak = weak.clone();
+                    w.on_next_frame(move |_, cx| {
+                        let _ = weak.update(cx, |_, cx| cx.notify());
+                    });
+                    w.request_animation_frame();
                 }
             })
     }
@@ -1181,12 +1617,11 @@ mod tests {
         tick(&mut w, 400);
         assert!(w.debug_bounds("Ticket 9").is_some());
         assert!(w.debug_bounds("Ticket 0").is_none());
-        for _ in 0..2 {
-            let older = w
-                .debug_bounds("Older Support")
-                .expect("older tickets")
-                .center();
-            w.simulate_click(older, Modifiers::default());
+        for _ in 0..10 {
+            let Some(older) = w.debug_bounds("Older Support") else {
+                break;
+            };
+            w.simulate_click(older.center(), Modifiers::default());
             tick(&mut w, 100);
         }
         assert!(w.debug_bounds("Ticket 0").is_some());
@@ -1197,7 +1632,83 @@ mod tests {
             .center();
         w.simulate_click(newer, Modifiers::default());
         tick(&mut w, 100);
-        assert!(w.debug_bounds("Ticket 5").is_some());
+        assert!(w.debug_bounds("Ticket 0").is_none());
+        assert!(w.debug_bounds("Ticket 1").is_some() || w.debug_bounds("Ticket 2").is_some());
+    }
+
+    #[test]
+    fn narrow_review_pages_keep_the_oldest_ticket_reachable() {
+        use gpui::{px, size};
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let review = (0..3)
+            .map(|i| {
+                (
+                    Ticket::new(format!("review-{i}"), format!("Review {i}"), ""),
+                    TicketDecision::new("support", 0.49),
+                )
+            })
+            .collect();
+        let (_, mut w) = app.add_window_view(|_, _| {
+            TicketRouter::new("Inbox", vec![TicketLane::new("support", "Support")], vec![])
+                .with_history(vec![], review)
+        });
+        w.simulate_resize(size(px(312.), px(780.)));
+        tick(&mut w, 400);
+        assert!(w.debug_bounds("Route Review 2, 49%: Support").is_some());
+        assert!(w.debug_bounds("Route Review 1, 49%: Support").is_some());
+        assert!(w.debug_bounds("Route Review 0, 49%: Support").is_none());
+        let older = w.debug_bounds("Older Needs review").unwrap().center();
+        w.simulate_click(older, Modifiers::default());
+        tick(&mut w, 100);
+        assert!(w.debug_bounds("Route Review 0, 49%: Support").is_some());
+        assert!(w.debug_bounds("Route Review 2, 49%: Support").is_none());
+        let newer = w.debug_bounds("Newer Needs review").unwrap().center();
+        w.simulate_click(newer, Modifiers::default());
+        tick(&mut w, 100);
+        assert!(w.debug_bounds("Route Review 2, 49%: Support").is_some());
+    }
+
+    #[test]
+    fn restored_assignments_survive_visibility_and_failure_recovery() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (control, w) = app.add_window_view(|_, _| {
+            TicketRouter::new(
+                "Inbox",
+                vec![TicketLane::new("support", "Support")],
+                vec![Ticket::new("incoming", "New message", "Body")],
+            )
+            .with_history(
+                vec![(
+                    Ticket::new("history", "Old message", ""),
+                    TicketDecision::new("support", 0.97),
+                )],
+                vec![(
+                    Ticket::new("review", "Old review", ""),
+                    TicketDecision::new("support", 0.48),
+                )],
+            )
+        });
+        w.update(|_, cx| {
+            control.update(cx, |router, cx| {
+                router.run(cx);
+                assert_eq!(router.status("history"), Some(TicketStatus::Routed));
+                assert_eq!(router.status("review"), Some(TicketStatus::Review));
+                let original = router.active_request("incoming").unwrap();
+                router.set_visible(false, cx);
+                assert_eq!(router.status("incoming"), Some(TicketStatus::Queued));
+                assert!(!router.failed(original, "Stale failure", cx));
+                router.set_visible(true, cx);
+                let resumed = router.active_request("incoming").unwrap();
+                assert_ne!(resumed, original);
+                assert!(router.failed(resumed, "Try again", cx));
+                assert!(router.send_to_review("incoming", cx));
+                assert_eq!(router.status("incoming"), Some(TicketStatus::Review));
+                assert!(router.route_to("incoming", "support", cx));
+                assert_eq!(router.status("incoming"), Some(TicketStatus::Routing));
+            })
+        });
     }
     #[test]
     fn classification_review_route_ack_retry_and_stale_results() {

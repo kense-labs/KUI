@@ -3,7 +3,10 @@ use gpui::{prelude::*, *};
 use kui::{
     components::{
         announcement_bar::{Announcement, AnnouncementBar},
-        ask_your_data::{AskDataEvent, AskDataResult, AskDataSeries, AskDataStatus, AskYourData},
+        ask_your_data::{
+            AskDataEvent, AskDataLegend, AskDataPresentation, AskDataResult, AskDataSeries,
+            AskDataView, AskYourData,
+        },
         billing_toggle::BillingToggle,
         cookie_consent::{ConsentCategory, CookieConsent},
         countdown::Countdown,
@@ -17,7 +20,7 @@ use kui::{
         },
         money_input::MoneyInput,
         morph_select::{MorphOption, MorphSelect},
-        pii_redaction::{PiiEvent, PiiKind, PiiRedaction, PiiSpan},
+        pii_redaction::{PiiEvent, PiiKind, PiiRedaction, PiiReplyEvent, PiiSpan, PiiStatus},
         presence_stack::{
             PresenceAlign, PresencePerson, PresenceSelected, PresenceStack, PresenceStatus,
         },
@@ -41,6 +44,7 @@ use kui::{
         glyph::{Glyph, icon},
     },
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 pub const IDS: &[&str] = &[
     "rating",
@@ -291,6 +295,7 @@ SELECT
   sum(monthly_amount) AS recurring_revenue
 FROM sample_revenue
 WHERE recorded_at >= DATE '2026-01-01'
+  AND recorded_at < DATE '2026-10-01'
 GROUP BY month, region
 ORDER BY month, region;"
             }
@@ -302,6 +307,8 @@ SELECT
   avg(churn_pct) AS churn_rate
 FROM sample_churn
 WHERE recorded_at >= DATE '2026-05-01'
+  AND recorded_at < DATE '2026-10-01'
+  AND plan IN ('Pro', 'Team', 'Enterprise')
 GROUP BY month, plan
 ORDER BY month, plan;"
             }
@@ -329,28 +336,31 @@ ORDER BY month, plan;"
                 vec![
                     AskDataSeries::new(
                         t("Free", "免费"),
-                        vec![59., 61., 62., 59., 48., 55., 60., 59., 60., 58., 60., 60.],
+                        vec![58., 61., 55., 63., 45., 60., 64., 59., 62., 57., 61., 56.],
                     ),
                     AskDataSeries::new(
                         "Pro",
-                        vec![24., 26., 28., 29., 27., 31., 33., 34., 34., 35., 37., 40.],
+                        vec![24., 26., 27., 29., 25., 31., 33., 34., 36., 35., 38., 40.],
                     ),
                     AskDataSeries::new(
                         t("Team", "团队"),
-                        vec![9., 10., 11., 11., 12., 13., 13., 14., 16., 17., 18., 21.],
+                        vec![9., 10., 11., 11., 12., 13., 14., 15., 16., 17., 18., 19.],
                     ),
                     AskDataSeries::new(
                         t("Enterprise", "企业"),
-                        vec![2., 2., 3., 2., 3., 3., 3., 3., 4., 4., 5., 6.],
+                        vec![2., 2., 3., 2., 3., 3., 4., 3., 4., 4., 5., 5.],
                     ),
                 ],
                 t(
-                    "Weekly Pro signups rose from 24 to 40. Team rose from 9 to 21, while Free stayed close to 60 after the late-August dip.",
-                    "Pro 每周注册量从 24 增至 40，团队套餐从 9 增至 21。免费套餐在八月底回落后回到 60 左右。",
+                    "Pro grew 67%, from 24 to 40 weekly signups, and Team more than doubled. Free hovered near 60 except for a dip around Labor Day.",
+                    "Pro 每周注册量从 24 增至 40，增长 67%，团队套餐则增加了一倍多。免费套餐保持在 60 左右，劳动节前后一度回落。",
                 ),
             ),
             Self::Revenue => (
-                t("Recurring revenue by region", "各地区经常性收入"),
+                t(
+                    "Monthly recurring revenue by region",
+                    "各地区每月经常性收入",
+                ),
                 vec![
                     t("Jan", "一月"),
                     t("Feb", "二月"),
@@ -358,18 +368,27 @@ ORDER BY month, plan;"
                     t("Apr", "四月"),
                     t("May", "五月"),
                     t("Jun", "六月"),
+                    t("Jul", "七月"),
+                    t("Aug", "八月"),
+                    t("Sep", "九月"),
                 ],
                 vec![
-                    AskDataSeries::new(t("Americas", "美洲"), vec![69., 73., 84., 88., 92., 97.]),
-                    AskDataSeries::new(t("Europe", "欧洲"), vec![42., 44., 51., 58., 61., 67.]),
+                    AskDataSeries::new(
+                        t("North America", "北美"),
+                        vec![182., 189., 197., 204., 215., 223., 236., 244., 258.],
+                    ),
+                    AskDataSeries::new(
+                        t("Europe", "欧洲"),
+                        vec![96., 101., 104., 111., 117., 124., 129., 138., 146.],
+                    ),
                     AskDataSeries::new(
                         t("Asia Pacific", "亚太"),
-                        vec![30., 36., 38., 43., 46., 54.],
+                        vec![31., 34., 38., 41., 47., 52., 58., 63., 71.],
                     ),
                 ],
                 t(
-                    "Europe added 25 units and Asia Pacific added 24. The Americas stayed the largest region through June.",
-                    "欧洲增加 25，亚太增加 24。截至六月，美洲仍是收入最高的地区。",
+                    "Asia Pacific grew from $31k to $71k. September MRR was $475k, 54% above January.",
+                    "亚太收入由 3.1 万美元增至 7.1 万美元。九月经常性收入为 47.5 万美元，较一月增长 54%。",
                 ),
             ),
             Self::Churn => (
@@ -380,23 +399,70 @@ ORDER BY month, plan;"
                     t("Jul", "七月"),
                     t("Aug", "八月"),
                     t("Sep", "九月"),
-                    t("Oct", "十月"),
                 ],
                 vec![
-                    AskDataSeries::new(t("Free", "免费"), vec![6.2, 6.0, 5.8, 5.5, 5.2, 5.0]),
-                    AskDataSeries::new("Pro", vec![4.7, 4.2, 4.1, 4.0, 3.7, 3.4]),
-                    AskDataSeries::new(t("Team", "团队"), vec![3.2, 3.1, 3.0, 3.0, 2.7, 2.6]),
+                    AskDataSeries::new("Pro", vec![4.8, 4.6, 4.9, 4.2, 3.9]),
+                    AskDataSeries::new(t("Team", "团队"), vec![3.1, 2.9, 2.7, 2.6, 2.3]),
+                    AskDataSeries::new(t("Enterprise", "企业"), vec![1.2, 0.9, 1.1, 0.8, 0.7]),
                 ],
                 t(
-                    "Free, Pro and Team all improved. Pro fell from 4.7% to 3.4%.",
-                    "免费、Pro 和团队套餐的流失率均下降。Pro 从 4.7% 降到 3.4%。",
+                    "Churn fell across all paid plans. In September Pro reached 3.9% and Team reached 2.3%.",
+                    "付费套餐的流失率均下降。九月 Pro 降至 3.9%，团队套餐降至 2.3%。",
                 ),
             ),
         };
         let count = months.len() * series.len();
+        let duration_ms = match self {
+            Self::Signups => 214,
+            Self::Revenue => 386,
+            Self::Churn => 172,
+        };
         AskDataResult::new(title, months.into_iter().map(Into::into).collect(), series)
-            .with_meta(count, 214)
+            .with_meta(count, duration_ms)
             .with_insight(insight)
+    }
+
+    fn presentation(self, l: UiLanguage) -> AskDataPresentation {
+        match self {
+            Self::Signups => AskDataPresentation {
+                subtitle: Some(
+                    l.text(
+                        "Aug 3 to Oct 25 · 1,284 signups",
+                        "8月3日至10月25日 · 1,284 次注册",
+                    )
+                    .into(),
+                ),
+                category_label: Some(l.text("Week", "周").into()),
+                view: Some(AskDataView::Bars),
+                ..Default::default()
+            },
+            Self::Revenue => AskDataPresentation {
+                subtitle: Some(
+                    l.text(
+                        "Jan to Sep 2026 · monthly revenue",
+                        "2026 年 1 至 9 月 · 月度收入",
+                    )
+                    .into(),
+                ),
+                category_label: Some(l.text("Month", "月").into()),
+                view: Some(AskDataView::Lines),
+                legend: AskDataLegend::Last,
+                format_value: Some(|value| format!("${value:.0}k")),
+            },
+            Self::Churn => AskDataPresentation {
+                subtitle: Some(
+                    l.text(
+                        "May to Sep 2026 · paid plans",
+                        "2026 年 5 至 9 月 · 付费套餐",
+                    )
+                    .into(),
+                ),
+                category_label: Some(l.text("Month", "月").into()),
+                view: Some(AskDataView::Lines),
+                format_value: Some(|value| format!("{value:.1}%")),
+                ..Default::default()
+            },
+        }
     }
 }
 struct AskDataExample {
@@ -408,7 +474,16 @@ struct AskDataExample {
 impl AskDataExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
-        let control = cx.new(|cx| AskYourData::new("analytics", w, cx).with_dialect("PostgreSQL"));
+        let control = cx.new(|cx| {
+            AskYourData::new("analytics", w, cx)
+                .with_dialect("PostgreSQL")
+                .with_suggestions(
+                    AskSample::questions(l)
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                )
+        });
         let input = control.read(cx).question();
         input.update(cx, |field, cx| {
             field.set_value(AskSample::questions(l)[0], w, cx)
@@ -427,9 +502,21 @@ impl AskDataExample {
                         };
                         s.sample = sample;
                         let id = *id;
+                        let reduced = kui::foundation::Theme::global(cx).reduced_motion;
                         let entity = entity.clone();
                         cx.spawn(async move |_, cx| {
                             let sql = sample.sql();
+                            if !entity.update(cx, |view, cx| view.reserve_sql_lines(id, sql.lines().count(), cx)) {
+                                return;
+                            }
+                            if reduced {
+                                entity.update(cx, |view, cx| {
+                                    if view.append_sql(id, sql, cx) {
+                                        view.finish_sql(id, cx);
+                                    }
+                                });
+                                return;
+                            }
                             let mut cursor = 0;
                             let mut ends = sql.match_indices(char::is_whitespace)
                                 .filter(|(i, _)| *i > 0 && !sql.as_bytes()[i - 1].is_ascii_whitespace())
@@ -460,7 +547,7 @@ impl AskDataExample {
                                 if fail {
                                     view.fail(id, language.text("Sample query failed. Try again.", "样例查询失败，请重试。"), cx)
                                 } else {
-                                    let finished = view.finish_query(id, result, cx);
+                                    let finished = view.finish_query_presented(id, result, sample.presentation(language), cx);
                                     if finished {
                                         view.set_stacked(!matches!(sample, AskSample::Churn), cx);
                                     }
@@ -487,11 +574,6 @@ impl AskDataExample {
 impl Render for AskDataExample {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let l = UiLanguage::current(cx);
-        let show_suggestions = matches!(
-            self.control.read(cx).status(),
-            AskDataStatus::Idle | AskDataStatus::Failed | AskDataStatus::Stopped
-        );
-        let radius = f32::from(kui::foundation::surface_radius(cx));
         let failure = if self.fail_next {
             l.text("Next sample query will fail", "下次样例查询将失败")
         } else {
@@ -504,42 +586,6 @@ impl Render for AskDataExample {
             .items_center()
             .gap(px(10.))
             .child(self.control.clone())
-            .when(show_suggestions, |root| {
-                root.child(
-                    div()
-                        .w_full()
-                        .max_w(px(522.))
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(6.))
-                        .children(AskSample::questions(l).into_iter().enumerate().map(
-                            |(i, question)| {
-                                face(
-                                    ("ask-example-suggestion", i),
-                                    question,
-                                    32.,
-                                    radius,
-                                    Tone::Surface,
-                                    cx,
-                                )
-                                .px(px(9.))
-                                .text_size(px(12.))
-                                .child(div().min_w_0().truncate().child(question))
-                                .on_click(cx.listener(
-                                    move |s, _, w, cx| {
-                                        let field = s.control.read(cx).question();
-                                        field.update(cx, |field, cx| {
-                                            field.set_value(question, w, cx)
-                                        });
-                                        s.control.update(cx, |view, cx| {
-                                            view.run(w, cx);
-                                        });
-                                    },
-                                ))
-                            },
-                        )),
-                )
-            })
             .child(div().text_size(px(12.)).child(l.text(
                 "Example only: fixed SQL and sample data; no database is queried.",
                 "仅为示例：使用固定查询和样例数据，不会连接数据库。",
@@ -571,19 +617,59 @@ impl Render for AskDataExample {
 struct PiiExample {
     control: Entity<PiiRedaction>,
     fail_next: bool,
+    auto_start: bool,
+    auto_reply: bool,
     _subscription: Subscription,
+    _reply_subscription: Subscription,
+}
+fn pii_sample(lang: UiLanguage) -> &'static str {
+    lang.text(
+        "Hi, this is Sofia Ramirez. I was charged twice for my order on card 4242 4242 4242 4242. Please contact me at sofia@example.com or +1 415 555 0100.",
+        "你好，我是 Sofia Ramirez。我的银行卡 4242 4242 4242 4242 被重复扣款。请联系 sofia@example.com 或 +1 415 555 0100。",
+    )
+}
+fn pii_sample_reply(prompt: &str, lang: UiLanguage) -> String {
+    let mut reply = if prompt.contains("[NAME_1]") {
+        lang.text("Hi [NAME_1], ", "你好，[NAME_1]。").to_owned()
+    } else {
+        lang.text("Thanks for writing. ", "谢谢你联系我们。")
+            .to_owned()
+    };
+    reply.push_str(if prompt.contains("[CARD_1]") {
+        lang.text(
+            "I can help check the duplicate charge for [CARD_1]. ",
+            "我可以帮你核对 [CARD_1] 的重复扣款。",
+        )
+    } else {
+        lang.text(
+            "I can help review the details. ",
+            "我可以帮你核对详细信息。",
+        )
+    });
+    if prompt.contains("[EMAIL_1]") {
+        reply.push_str(lang.text(
+            "I can share the update with [EMAIL_1]. ",
+            "处理进展可以发送至 [EMAIL_1]。",
+        ));
+    }
+    if prompt.contains("[PHONE_1]") {
+        reply.push_str(lang.text(
+            "The contact number on the request is [PHONE_1].",
+            "请求中留下的联系电话是 [PHONE_1]。",
+        ));
+    }
+    reply.trim_end().to_owned()
 }
 impl PiiExample {
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let lang = UiLanguage::current(cx);
-        let control = cx.new(|cx| PiiRedaction::new(w, cx).with_model("Claude Sonnet 5.5"));
-        let source = control.read(cx).source();
-        source.update(cx, |field, cx| {
-            field.set_value(lang.text(
-                "Hi, this is Sofia Ramirez. I was charged twice for my order on card 4242 4242 4242 4242. Please contact me at sofia@example.com or +1 415 555 0100.",
-                "你好，我是 Sofia Ramirez。我的银行卡 4242 4242 4242 4242 被重复扣款。请联系 sofia@example.com 或 +1 415 555 0100。"
-            ), w, cx)
+        let control = cx.new(|cx| {
+            PiiRedaction::new(w, cx)
+                .with_model("Claude Sonnet 5.5")
+                .with_reply()
         });
+        let source = control.read(cx).source();
+        source.update(cx, |field, cx| field.set_value(pii_sample(lang), w, cx));
         let subscription = cx.subscribe_in(
             &control,
             w,
@@ -592,9 +678,10 @@ impl PiiExample {
                     let id = *id;
                     let text = text.to_string();
                     let entity = entity.clone();
-                    let fail = s.fail_next;
-                    s.fail_next = false;
+                    let fail = std::mem::take(&mut s.fail_next);
                     let lang = UiLanguage::current(cx);
+                    let auto_reply = std::mem::take(&mut s.auto_reply) && text == pii_sample(lang);
+                    cx.notify();
                     cx.spawn(async move |_, cx| {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(600))
@@ -620,8 +707,11 @@ impl PiiExample {
                                     ),
                                     cx,
                                 );
-                            } else {
-                                control.finish_scan(id, spans, cx);
+                            } else if control.finish_scan(id, spans, cx)
+                                && auto_reply
+                                && control.set_reviewed(true, cx)
+                            {
+                                control.request_reply(cx);
                             }
                         });
                     })
@@ -630,38 +720,132 @@ impl PiiExample {
                 PiiEvent::Cancelled(_) => {}
             },
         );
-        control.update(cx, |control, cx| {
-            control.scan(cx);
-        });
+        let reply_subscription = cx.subscribe_in(
+            &control,
+            w,
+            |s: &mut Self, entity, event: &PiiReplyEvent, _, cx| {
+                let PiiReplyEvent::Requested { id, prompt } = event else {
+                    return;
+                };
+                let id = *id;
+                let lang = UiLanguage::current(cx);
+                let text = pii_sample_reply(prompt, lang);
+                let entity = entity.clone();
+                let fail = std::mem::take(&mut s.fail_next);
+                let reduced = kui::primitives::family::disabled_motion(cx);
+                cx.notify();
+                cx.spawn(async move |_, cx| {
+                    if !reduced {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(460))
+                            .await;
+                    }
+                    if fail {
+                        entity.update(cx, |control, cx| {
+                            control.fail_reply(
+                                id,
+                                lang.text(
+                                    "Sample reply failed. Try again.",
+                                    "样例回复失败，请重试。",
+                                ),
+                                cx,
+                            )
+                        });
+                        return;
+                    }
+                    let mut start = 0;
+                    let boundaries = text
+                        .split_word_bound_indices()
+                        .filter(|(_, word)| !word.trim().is_empty())
+                        .map(|(index, _)| index)
+                        .skip(4)
+                        .step_by(4)
+                        .filter(|_| !reduced)
+                        .chain(std::iter::once(text.len()));
+                    for end in boundaries {
+                        let accepted = entity.update(cx, |control, cx| {
+                            control.append_reply(id, &text[start..end], cx)
+                        });
+                        if !accepted {
+                            return;
+                        }
+                        start = end;
+                        if end < text.len() {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(34))
+                                .await;
+                        }
+                    }
+                    entity.update(cx, |control, cx| control.finish_reply(id, cx));
+                })
+                .detach();
+            },
+        );
+        let auto_start = !kui::primitives::family::disabled_motion(cx);
         Self {
             control,
             fail_next: false,
+            auto_start,
+            auto_reply: auto_start,
             _subscription: subscription,
+            _reply_subscription: reply_subscription,
         }
     }
 }
 impl Render for PiiExample {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.auto_start
+            && cx
+                .try_global::<crate::StoryBridge>()
+                .is_none_or(|bridge| (bridge.visible)())
+        {
+            self.auto_start = false;
+            cx.defer_in(w, |s, _, cx| {
+                s.control.update(cx, |control, cx| {
+                    if control.status() == PiiStatus::Idle {
+                        control.scan(cx);
+                    }
+                });
+            });
+        }
         let l = UiLanguage::current(cx);
         let failure = if self.fail_next {
-            l.text("Next sample scan will fail", "下次样例识别将失败")
+            l.text("Next sample request will fail", "下次样例请求将失败")
         } else {
-            l.text("Simulate a failed scan", "模拟一次识别失败")
+            l.text("Simulate a failed request", "模拟一次请求失败")
         };
-        div().w_full().flex().flex_col().gap(px(10.))
+        div()
+            .w_full()
+            .max_w(px(522.))
+            .flex()
+            .flex_col()
+            .gap(px(10.))
             .child(self.control.clone())
             .child(div().text_size(px(12.)).child(l.text(
-                "Simulated demo: matches only the four fixed example values. No text is transmitted. Do not use this demo as a real detector.",
-                "模拟演示：只匹配四个固定样例，不会传输文本；不能作为真实识别工具。",
+                "Local simulation using four fictional example values.",
+                "本地模拟使用四个虚构样例值。",
             )))
-            .child(div().id("pii-example-fail").role(Role::Button).tab_index(0).cursor_pointer().text_size(px(12.))
-                .child(failure)
-                .on_click(cx.listener(|s, _, _, cx| { s.fail_next = !s.fail_next; cx.notify(); }))
-                .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
-                    if matches!(e.keystroke.key.as_str(), "enter" | "space") {
-                        s.fail_next = !s.fail_next; cx.notify(); w.prevent_default(); cx.stop_propagation();
-                    }
-                })))
+            .child(
+                div()
+                    .id("pii-example-fail")
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .child(failure)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        s.fail_next = !s.fail_next;
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
+                        if matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                            s.fail_next = !s.fail_next;
+                            cx.notify();
+                            w.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    })),
+            )
     }
 }
 
@@ -800,10 +984,31 @@ struct TicketExample {
     fail_classification: bool,
     fail_route: bool,
     next: usize,
-    note: SharedString,
+    request_task: Option<(u64, Task<()>)>,
     _subscription: Subscription,
 }
 impl TicketExample {
+    fn add_sample(&mut self, cx: &mut Context<Self>) {
+        let number = self.next;
+        self.next += 1;
+        let l = UiLanguage::current(cx);
+        let ticket = Ticket::new(
+            format!("sample-{number}"),
+            format!(
+                "{} {number}",
+                l.text("Sample billing question", "样例账务咨询")
+            ),
+            l.text(
+                "Could you confirm the amount on our next invoice?",
+                "可以确认下一张账单的金额吗？",
+            ),
+        )
+        .with_sender("Morgan Reed")
+        .with_channel("Gmail");
+        self.control
+            .update(cx, |router, cx| router.set_ticket(ticket, cx));
+    }
+
     fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
         let l = UiLanguage::current(cx);
         let lanes = vec![
@@ -821,17 +1026,99 @@ impl TicketExample {
                 "login",
                 l.text("Cannot sign in", "无法登录"),
                 l.text("Our SAML login loops back to the sign-in screen after authentication.", "验证后会跳回登录界面。"),
-            ).with_sender("Daniel Kim").with_channel("Gmail"),
+            ).with_sender("Daniel Kim").with_channel("Slack"),
             Ticket::new(
                 "feature",
                 l.text("Feature request", "功能建议"),
                 l.text("Can we export all changes as a CSV for the team report?", "可以导出 CSV 供团队报告使用吗？"),
-            ).with_sender("Avery Chen").with_channel("Gmail"),
+            ).with_sender("Avery Chen").with_channel("Intercom"),
+            Ticket::new(
+                "shipment",
+                l.text("Where can I find the delivery receipt?", "在哪里查看送达回执？"),
+                l.text("The order arrived this morning, but the receipt is missing in my account.", "订单今早已送达，但账户里找不到回执。"),
+            ).with_sender("Maya Patel").with_channel("Zendesk"),
         ];
+        let history = [
+            (
+                "billing-1",
+                "Update the card on file",
+                "更新付款卡",
+                "Intercom",
+                "billing",
+                "Sofia",
+                0.96,
+            ),
+            (
+                "billing-2",
+                "Company address missing on receipt",
+                "回执缺少公司地址",
+                "Gmail",
+                "billing",
+                "Andre",
+                0.92,
+            ),
+            (
+                "engineering-1",
+                "SAML sign-in keeps looping",
+                "SAML 登录反复跳转",
+                "Slack",
+                "support",
+                "Olivia",
+                0.95,
+            ),
+            (
+                "engineering-2",
+                "API returns 429 on export",
+                "导出 API 返回 429",
+                "Zendesk",
+                "support",
+                "Daniel",
+                0.93,
+            ),
+            (
+                "success-1",
+                "Dark mode for the mobile app",
+                "移动应用的深色模式",
+                "Intercom",
+                "product",
+                "Jordan",
+                0.90,
+            ),
+        ]
+        .into_iter()
+        .map(|(id, en, zh, channel, lane, assignee, confidence)| {
+            (
+                Ticket::new(id, l.text(en, zh), "").with_channel(channel),
+                TicketDecision::new(lane, confidence).with_assignee(assignee),
+            )
+        })
+        .collect();
+        let review = vec![(
+            Ticket::new(
+                "account",
+                l.text("A question about our account", "关于账户的咨询"),
+                "",
+            )
+            .with_channel("Gmail"),
+            TicketDecision::new("product", 0.48)
+                .with_assignee("Jordan")
+                .with_intent(l.text("Account", "账户")),
+        )];
+        let portraits = ["Sofia", "Andre", "Olivia", "Daniel", "Jordan"]
+            .into_iter()
+            .enumerate()
+            .map(|(i, name)| {
+                (
+                    SharedString::from(name),
+                    crate::family_story::collections::portrait_image(i).into(),
+                )
+            });
         let control = cx.new(|_| {
             TicketRouter::new(l.text("Ticket routing", "工单分流"), lanes, tickets)
-                .with_concurrency(2)
                 .with_model("Claude Haiku 5.5")
+                .with_review_threshold(0.7)
+                .with_history(history, review)
+                .with_portraits(portraits)
         });
         let weak = control.downgrade();
         cx.spawn(async move |_, cx| {
@@ -863,13 +1150,10 @@ impl TicketExample {
                         let request = *request;
                         let ticket = ticket.clone();
                         let entity = entity.clone();
-                        let fail = ticket.id.as_ref() == "login" && s.fail_classification;
-                        if fail {
-                            s.fail_classification = false;
-                        }
-                        cx.spawn(async move |_, cx| {
+                        let fail = std::mem::take(&mut s.fail_classification);
+                        let task = cx.spawn(async move |_, cx| {
                             cx.background_executor()
-                                .timer(std::time::Duration::from_millis(550))
+                                .timer(std::time::Duration::from_millis(960))
                                 .await;
                             entity.update(cx, |router, cx| {
                                 if fail {
@@ -879,41 +1163,57 @@ impl TicketExample {
                                         cx,
                                     );
                                 } else {
-                                    let lane = match ticket.id.as_ref() {
-                                        "invoice" => "billing",
-                                        "feature" => "product",
-                                        _ => "support",
-                                    };
-                                    let confidence = if ticket.id.as_ref() == "feature" {
-                                        0.63
-                                    } else {
-                                        0.92
-                                    };
+                                    let (lane, assignee, confidence, intent, sentiment) =
+                                        match ticket.channel.as_ref() {
+                                            "Gmail" => (
+                                                "billing",
+                                                "Andre",
+                                                0.97,
+                                                l.text("Billing", "账务"),
+                                                l.text("Frustrated", "不满"),
+                                            ),
+                                            "Slack" => (
+                                                "support",
+                                                "Daniel",
+                                                0.93,
+                                                l.text("Bug", "故障"),
+                                                l.text("Neutral", "中性"),
+                                            ),
+                                            "Intercom" => (
+                                                "product",
+                                                "Jordan",
+                                                0.64,
+                                                l.text("Feature", "功能"),
+                                                l.text("Neutral", "中性"),
+                                            ),
+                                            _ => (
+                                                "product",
+                                                "Sofia",
+                                                0.86,
+                                                l.text("Delivery", "配送"),
+                                                l.text("Neutral", "中性"),
+                                            ),
+                                        };
                                     router.classified(
                                         request,
                                         TicketDecision::new(lane, confidence)
-                                            .with_intent(l.text("Question", "咨询"))
-                                            .with_sentiment(l.text("Neutral", "中性"))
-                                            .with_assignee("Alex"),
+                                            .with_intent(intent)
+                                            .with_sentiment(sentiment)
+                                            .with_assignee(assignee),
                                         cx,
                                     );
                                 }
                             });
-                        })
-                        .detach();
+                        });
+                        s.request_task = Some((request, task));
                     }
-                    TicketRouterEvent::RouteRequested {
-                        request, ticket, ..
-                    } => {
+                    TicketRouterEvent::RouteRequested { request, .. } => {
                         let request = *request;
                         let entity = entity.clone();
-                        let fail = ticket.id.as_ref() == "invoice" && s.fail_route;
-                        if fail {
-                            s.fail_route = false;
-                        }
-                        cx.spawn(async move |_, cx| {
+                        let fail = std::mem::take(&mut s.fail_route);
+                        let task = cx.spawn(async move |_, cx| {
                             cx.background_executor()
-                                .timer(std::time::Duration::from_millis(350))
+                                .timer(std::time::Duration::from_millis(490))
                                 .await;
                             entity.update(cx, |router, cx| {
                                 let result = if fail {
@@ -923,49 +1223,94 @@ impl TicketExample {
                                 };
                                 router.routed(request, result, cx);
                             });
-                        })
-                        .detach();
+                        });
+                        s.request_task = Some((request, task));
                     }
-                    TicketRouterEvent::Cancelled(_) => {
-                        s.note = l
-                            .text("Pending sample request cancelled", "已取消样例请求")
-                            .into();
-                        cx.notify();
+                    TicketRouterEvent::Cancelled(request) => {
+                        if s.request_task
+                            .as_ref()
+                            .is_some_and(|(active, _)| active == request)
+                        {
+                            s.request_task = None;
+                        }
                     }
                 }
             },
         );
+        cx.defer_in(w, |s, _, cx| {
+            s.control.update(cx, |router, cx| router.run(cx))
+        });
         Self {
             control,
-            fail_classification: true,
-            fail_route: true,
+            fail_classification: false,
+            fail_route: false,
             next: 1,
-            note: "".into(),
+            request_task: None,
             _subscription: subscription,
         }
     }
 }
 impl Render for TicketExample {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let l = UiLanguage::current(cx);
-        div().w_full().flex().flex_col().gap(px(10.)).child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text("Sample only: no ticket is sent or assigned. Two requests fail once to demonstrate retry.", "仅为样例：不会发送或分配工单。两项请求首次失败以演示重试。")))
-            .child(div().id("ticket-add-example").role(Role::Button).tab_index(0).cursor_pointer().text_size(px(12.))
-                .child(l.text("Add sample ticket", "添加样例工单"))
-                .on_click(cx.listener(|s, _, _, cx| {
-                    let number = s.next; s.next += 1;
-                    let l = UiLanguage::current(cx);
-                    let ticket = Ticket::new(format!("sample-{number}"), format!("{} {number}", l.text("Sample ticket", "样例工单")), l.text("A sample request", "一条样例请求"));
-                    s.control.update(cx, |router, cx| router.set_ticket(ticket, cx));
-                }))
-                .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
-                    if matches!(e.keystroke.key.as_str(), "enter" | "space") {
-                        let number = s.next; s.next += 1; let l = UiLanguage::current(cx);
-                        let ticket = Ticket::new(format!("sample-{number}"), format!("{} {number}", l.text("Sample ticket", "样例工单")), l.text("A sample request", "一条样例请求"));
-                        s.control.update(cx, |router, cx| router.set_ticket(ticket, cx)); w.prevent_default(); cx.stop_propagation();
-                    }
-                })))
-            .child(div().text_size(px(12.)).child(self.note.clone()))
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx).into();
+        let options = [
+            (
+                "ticket-add-example",
+                l.text("Add sample ticket", "添加样例工单"),
+            ),
+            (
+                "ticket-example-classify-fail",
+                l.text("Simulate classification failure", "模拟分类失败"),
+            ),
+            (
+                "ticket-example-route-fail",
+                l.text("Simulate assignment failure", "模拟分配失败"),
+            ),
+        ];
+        div()
+            .w_full()
+            .max_w(px(if w.viewport_size().width >= px(680.) {
+                840.
+            } else {
+                522.
+            }))
+            .mx_auto()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(self.control.clone())
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(p.secondary)
+                    .child(l.text(
+                        "Sample inbox. No messages are sent or assigned.",
+                        "样例收件箱，不会发送或分配工单。",
+                    )),
+            )
+            .child(div().flex().flex_wrap().gap(px(4.)).children(
+                options.into_iter().enumerate().map(|(index, (id, label))| {
+                    let perform = move |s: &mut Self, cx: &mut Context<Self>| {
+                        s.fail_classification |= index == 1;
+                        s.fail_route |= index == 2;
+                        s.add_sample(cx);
+                    };
+                    face(id, label, 30., radius, Tone::Clear, cx)
+                        .px(px(7.))
+                        .text_size(px(12.))
+                        .child(label)
+                        .on_click(cx.listener(move |s, _, _, cx| perform(s, cx)))
+                        .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                            if !e.is_held && matches!(e.keystroke.key.as_str(), "enter" | "space") {
+                                perform(s, cx);
+                                w.prevent_default();
+                                cx.stop_propagation();
+                            }
+                        }))
+                }),
+            ))
     }
 }
 
@@ -2354,7 +2699,9 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
         }
         _ => return None,
     }
-    let width = if id == "mega-menu-morph" {
+    let width = if id == "ticket-router" {
+        872.
+    } else if id == "mega-menu-morph" {
         680.
     } else if matches!(
         id,
@@ -2363,7 +2710,6 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
             | "undo-toast"
             | "glass-menu"
             | "glass-segmented"
-            | "ticket-router"
             | "ask-your-data"
     ) {
         554.

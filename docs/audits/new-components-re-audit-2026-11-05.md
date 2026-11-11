@@ -8,6 +8,8 @@
 
 2026-11-11 补充。剩余 52 项的逐项改动、可复查的截图和安装结果见 [Pro 复核的第二批返修表](</Users/leon/Documents/Kense ui/KUI/docs/audits/pro-parity-2026-11-10.md:75>)。该表区分浏览器渲染、专项操作和完整动效验收。
 
+工单分流已复测 312px 待审核分页，代码改动审阅已复测完整源码差异与独立滚动，数据问答已复测三组样例、SQL 复制及手机失败重试，敏感信息脱敏已确认中文样例回复恢复。最终构建通过 394 个组件测试、109 个 Story 测试及双语站点检查。52 项的完整同速动效、全量 Safari、原生视觉和真机触屏仍待逐项验收。[专项返修证据](</Users/leon/Documents/Kense ui/KUI/docs/audits/pro-parity-2026-11-10.md:141>)
+
 ## 目录
 
 - [范围与旧结论纠正](#范围与旧结论纠正)
@@ -331,10 +333,10 @@ Arc 已移植到 KUI 的 **110 个 Pro 组件已逐项核对桌面预览**。85 
 | <a id="review-tldr-toggle"></a>55 [摘要切换](http://127.0.0.1:4321/kui/components/tldr-toggle/)<br>[tldr-toggle](</Users/leon/Documents/Kense ui/KUI/docs/items/tldr-toggle.md>) | P1 | 摘要/原文/长度控制、内容卡高度和来源高亮。 | 生成/停止/重试、编辑时的结果处理、引用定位；切换高度、入场和高亮退场。 | 核对整段生成流程，不能把本地样例替换当作真实宿主完成。 | 待重审 · `□□□□□□D□` |
 | <a id="review-smart-form-fill"></a>56 [智能表单填写](http://127.0.0.1:4321/kui/components/smart-form-fill/)<br>[smart-form-fill](</Users/leon/Documents/Kense ui/KUI/docs/items/smart-form-fill.md>) | P1 | 原文区、建议字段、置信度标记、审核与保存位置。 | 低置信度审核、编辑冲突、结果排队/接受/拒绝、停止重试；来源高亮和逐字段填入。 | 需区分样例解析与宿主接口；验证已有编辑不会被晚到结果覆盖。 | 待重审 · `□□□□□□D□` |
 | <a id="review-enrich-column"></a>57 [数据补全列](http://127.0.0.1:4321/kui/components/enrich-column/)<br>[enrich-column](</Users/leon/Documents/Kense ui/KUI/docs/items/enrich-column.md>) | P1 | 指令编辑器、表格行列、待处理/完成/失败单元格。 | 单行/全部运行、停止/重试、编辑冲突与请求序号；逐格反馈、编辑器高度和焦点。 | 验证乱序/过期结果及重试不重复应用。 | 待重审 · `□□□□□□D□` |
-| <a id="review-ticket-router"></a>58 [工单分流](http://127.0.0.1:4321/kui/components/ticket-router/)<br>[ticket-router](</Users/leon/Documents/Kense ui/KUI/docs/items/ticket-router.md>) | P1 | 工单卡、分类/目标队列、低置信度审核区、操作位置。 | 启动/暂停、人工改派、失败重试、宿主确认；工单跨状态移动与退回。 | 指派必须有宿主确认，审查是否只切换了本地标签。 | 待重审 · `□□□□□□D□` |
+| <a id="review-ticket-router"></a>58 [工单分流](http://127.0.0.1:4321/kui/components/ticket-router/)<br>[ticket-router](</Users/leon/Documents/Kense ui/KUI/docs/items/ticket-router.md>) | P1 | 工单卡、分类/目标队列、低置信度审核区、操作位置。 | 启动/暂停、人工改派、失败重试、宿主确认；工单跨状态移动与退回。 | 指派必须有宿主确认，审查是否只切换了本地标签。 | 312px 审核分页及失败恢复已复测，完整动效和真机待验。 |
 | <a id="review-reply-draft"></a>59 [回复草稿](http://127.0.0.1:4321/kui/components/reply-draft/)<br>[reply-draft](</Users/leon/Documents/Kense ui/KUI/docs/items/reply-draft.md>) | P1 | 快捷回复/语气/长度、生成预览、编辑区与插入按钮。 | 停止/重试、生成时编辑、晚到结果确认、插入一次；流式内容和状态切换。 | 检查是否把成段替换当成流式体验；记录宿主/演示边界。 | 待重审 · `□□□□□□D□` |
-| <a id="review-ask-your-data"></a>60 [数据问答](http://127.0.0.1:4321/kui/components/ask-your-data/)<br>[ask-your-data](</Users/leon/Documents/Kense ui/KUI/docs/items/ask-your-data.md>) | P1 | 问题框、SQL/结果/图表/表格布局、空/错误状态。 | 提交/停止/重试、复制真实SQL、切换结果视图；图表入场、切换和溢出。 | 核对数据映射及各视图一致，样例查询不可冒充真实执行。 | 待重审 · `□□□□□□D□` |
-| <a id="review-pii-redaction"></a>61 [敏感信息脱敏](http://127.0.0.1:4321/kui/components/pii-redaction/)<br>[pii-redaction](</Users/leon/Documents/Kense ui/KUI/docs/items/pii-redaction.md>) | P1 | 选择范围、遮罩/标签、审阅与复制栏。 | 重叠范围、增删/撤销、编辑后偏移、复制前审阅；选择/拖动反馈。 | 当前是固定虚构匹配样例；要查复制实际结果与说明，不推断有真实检测。 | 待重审 · `□□□□□□D□` |
+| <a id="review-ask-your-data"></a>60 [数据问答](http://127.0.0.1:4321/kui/components/ask-your-data/)<br>[ask-your-data](</Users/leon/Documents/Kense ui/KUI/docs/items/ask-your-data.md>) | P1 | 问题框、SQL/结果/图表/表格布局、空/错误状态。 | 提交/停止/重试、复制真实SQL、切换结果视图；图表入场、切换和溢出。 | 核对数据映射及各视图一致，样例查询不可冒充真实执行。 | 三组结果、SQL 复制、方向键、内滚和 312px 失败重试已复测，完整同速动效和真机待验。 |
+| <a id="review-pii-redaction"></a>61 [敏感信息脱敏](http://127.0.0.1:4321/kui/components/pii-redaction/)<br>[pii-redaction](</Users/leon/Documents/Kense ui/KUI/docs/items/pii-redaction.md>) | P1 | 选择范围、遮罩/标签、审阅与复制栏。 | 重叠范围、增删/撤销、编辑后偏移、复制前审阅；选择/拖动反馈。 | 固定虚构匹配与本地回复样例；新增回复事件和按请求恢复接口，编辑或撤销审阅使旧回执失效。 | 中文回复恢复及原生取消回归已验证，对齐、操作行和完整动效及平台待验。 |
 | <a id="review-dictation-button"></a>62 [听写输入](http://127.0.0.1:4321/kui/components/dictation-button/)<br>[dictation-button](</Users/leon/Documents/Kense ui/KUI/docs/items/dictation-button.md>) | P1 | 麦克风键→听取行、临时文字、状态标记和确认入口。 | 权限/停止/取消、最终文本只插一次、插入位置移动确认、过期回执；宽度与波形变化。 | 需要在实际编辑器内验收，演示无权限不等于真实适配已通过。 | 待重审 · `□□□□□□D□` |
 | <a id="review-speech-player"></a>63 [朗读播放器](http://127.0.0.1:4321/kui/components/speech-player/)<br>[speech-player](</Users/leon/Documents/Kense ui/KUI/docs/items/speech-player.md>) | P1 | 播放栏、逐词高亮、进度/速度/暂停控制和换行。 | 启动/暂停/跳转/结束/失败/重试；字词时标、跨行定位、宿主音频同步。 | 必须检查跨行/滚动后的高亮，不只高亮第一句。 | 待重审 · `□□□□□□D□` |
 | <a id="review-provider-status"></a>64 [服务商状态](http://127.0.0.1:4321/kui/components/provider-status/)<br>[provider-status](</Users/leon/Documents/Kense ui/KUI/docs/items/provider-status.md>) | P1 | 服务行/状态点、延迟/指标、事故详情、加载和空状态。 | 轮询/数据变化、展开/关闭、打开事故链接、失败恢复；行/详情高度与状态变色。 | 文档写明视觉与触摸待验；需核对具体实际服务状态而非固定绿点。 | 待重审 · `□□□□□□D□` |

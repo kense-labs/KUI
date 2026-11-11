@@ -108,16 +108,16 @@
 | [speculative-decoding](https://uiarc.dev/components/speculative-decoding) | 在常见预览宽度将两模型标签与词元分上下区，草稿长度滑杆独占一行，比较开关另起一行。 | 未做相同时刻的播放轨迹逐帧对齐。 |
 | [prompt-cache](https://uiarc.dev/components/prompt-cache) | 缓存区加入按分段显示的缓存条、处理和命中图例；示例采用对应类别颜色及 Claude 标志，模拟说明移至面板下。 | 未做缓存流入、TTL 环和指标动效逐帧对齐。 |
 | [source-cards](https://uiarc.dev/components/source-cards) | 替换为七条签名排查示例，站点用已知品牌标志，更多卡展示叠放站点及域名，首屏有模拟检索态。 | 未知站点使用首字母，需复查悬停详情及键盘。 |
-| [code-suggestion](https://uiarc.dev/components/code-suggestion) | 代码视图分离行号、符号和代码，增添文件头、模型名和更完整的 Rust 重试代码。 | 未复刻单一源码流的生成占位、停止和语法高亮。 |
+| [code-suggestion](https://uiarc.dev/components/code-suggestion) | 统一原始源码、上下文和三个改动块。生成逐行流入，可停止、重试、接受或拒绝，带语法高亮和固定行号。 | 312px 预览已验证双向内滚。原生验证停止时丢弃不完整块。自动演示和完整动效对照待补。 |
 | [ghost-text](https://uiarc.dev/components/ghost-text) | GitHub 标志和 PR 语境，Claude 标志以及模拟输入的账单修复补全文字。 | 未做不同输入中断时的逐帧对齐。 |
 | [image-generation](https://uiarc.dev/components/image-generation) | 可选主图加四个缩略图、结果控件、模型标志、带进度的自动本地样例和可选失败。 | 生成纹理分块和宽高比转换需同进度复查。 |
 | [reply-draft](https://uiarc.dev/components/reply-draft) | 引入完整续约邮件、真实示例头像、模型标志、三种建议及自动本地草稿。 | 未做同一阶段的键盘与逐帧比较。 |
 | [agent-handoff](https://uiarc.dev/components/agent-handoff) | 恢复订单损坏场景、助手模型标识及右对齐转接入口。 | 接入时间线和原生键盘需复查。 |
-| [pii-redaction](https://uiarc.dev/components/pii-redaction) | 演示四类测试值，卡片显示真实替换编号，模型状态与脱敏区分层，自动运行本地示例。 | 未实现模型恢复回答，仅提供宿主驱动脱敏预览。 |
+| [pii-redaction](https://uiarc.dev/components/pii-redaction) | 增加可选的宿主驱动回复，流式接收脱敏结果，完成后按请求映射恢复原文。演示四类虚构测试值和本地回复，保留原有扫描与复制接口。 | 浏览器已确认中文回复恢复，原生回归覆盖审阅门控、编辑取消和旧回执拒收。卡片对齐、多余操作行、完整同速动效及 Safari 待验。 |
 | [tldr-toggle](https://uiarc.dev/components/tldr-toggle) | Linear 文章来源及 Claude 生成标志，首屏触发可取消的本地摘要，并保留正文及来源映射。 | 未对照文章长篇折叠和初态停留时间。 |
 | [smart-form-fill](https://uiarc.dev/components/smart-form-fill) | 来源放在六字段上方，容器达到 424px 时字段排成两列，保留流式填充和置信度复核。 | 浏览器确认桌面字段网格。品牌图标及完整转场待比对。 |
-| [ticket-router](https://uiarc.dev/components/ticket-router) | 邮件显示发件人、Gmail 标志和正文，分类后显示意图、情绪和置信度。四个队列改为自适应网格，保留确认与失败重试。 | 样例卡片数量和分流轨迹有差异。 |
-| [ask-your-data](https://uiarc.dev/components/ask-your-data) | 重排问题、停止按钮、可折叠 SQL 和结果。加入 PostgreSQL 标志、语法色、行号、四系列柱图、折线、表格及图例。 | 浏览器验证三种结果、失败重试与 312px 布局。原生测试验证取消及过期回执。连续入场曲线待对照。 |
+| [ticket-router](https://uiarc.dev/components/ticket-router) | 逐封展示当前工单，恢复四渠道标志、初始队列和真实示例头像。分类标签依次出现；宽屏沿连线显示分流脉冲。支持重试、转审核及确认目标，窄屏审核栏可分页。 | 已复测全屏直接重排、312px 中文审核分页和失败后单次归队。逐帧同速录像待补。 |
+| [ask-your-data](https://uiarc.dev/components/ask-your-data) | 按公开预览重做全宽切换轨道、SQL 完成标记、216px 图表区、三组样例数据、图例、合计及洞察。补 SQL 预留高度、逐块淡入和视图淡入淡出。 | 浏览器验证三组结果、SQL 复制、方向键切换、独立滚动与 312px 暗色失败重试。SQL 淡入已实现，完整同速录制及 Safari 真机仍待核验。 |
 | [image-reveal](https://uiarc.dev/components/image-reveal) | 生成阶段显示逐步退去的彩色颗粒层，保留进度、失败和重试状态。 | 同一时间及窄屏帧时间仍需复查。 |
 | [tone-tuner](https://uiarc.dev/components/tone-tuner) | 恢复头像、模型标志与上下排列的两条滑杆，保留用户编辑、切换与复制。 | 未对照逐字改写进入及离场。 |
 | [upgrade-prompt](https://uiarc.dev/components/upgrade-prompt) | 示例权益显示 Claude 与 GPT 的具体型号和标志。 | 套餐失败、成功和移动宽度未逐帧复查。 |
@@ -137,6 +137,34 @@
 - 52 项分别在空白项目通过 `kui add` 安装，并在原生和 WASM 目标通过编译。网站检查覆盖 231 个双语组件、注册表和 947 个静态路由。
 - 52 个浏览器预览在同一版本逐项渲染，保留修复后的初态对照。专项实测数据问答的柱图、折线、表格、失败重试、312px 手机预览、亮暗主题和键盘切换，多层面板的打开、下钻和返回，以及弹性刷新的点击、旋转和完成态。[浏览器渲染记录](../../target/parity-52/final-browser-results.json) · [数据问答](../../target/parity-52/ask-your-data-final-preview.png) · [多层面板](../../target/parity-52/sheet-stack-final-open.png) · [弹性刷新](../../target/parity-52/stretch-refresh-final-done.png)
 - 状态相同的截图和操作用于核对具体差异。逐帧同速录制、全量 Safari、真机触屏和原生视觉验收仍需独立记录。
+
+#### 工单分流专项返修（2026-11-11）
+
+- 依据公开文档的 220ms 首次进入、100ms 退出、160ms 再进入、50ms 标签交错和 240ms 路由脉冲调整时间。画布从 628px 自适应切到 926px 全屏时直接重排四列。浏览器确认一次分类失败后重试，账务队列由 3 条变为 4 条。低置信度工单继续保留在审核队列。[参考动效](https://uiarc.dev/components/ticket-router#motion) · [宽屏](../../target/parity-52/ticket-final-fullscreen.png) · [失败](../../target/parity-52/ticket-final-failure.png) · [重试完成](../../target/parity-52/ticket-final-routed.png)
+- 312px 中文手机预览保留两列。浏览器模拟分配失败，送交审核后总数由 2 增到 3，首页保留两行，进入第 2 页能访问最早一条。[审核首页](../../target/parity-52/ticket-mobile-review-page-1.png) · [审核次页](../../target/parity-52/ticket-mobile-review-page-2.png)
+- 预览使用本地样例和 KUI 自有肖像。原生回归覆盖历史记录、离屏取消、拒收旧回执和转人工审核。最终版本通过 Clippy、网站、原生和 WASM 安装检查。真机触屏、完整同速录像及读屏播报仍待验证。
+
+#### 代码改动审阅专项返修（2026-11-11）
+
+- 对照参考的完整文件、阅读和生成阶段，KUI 将新增、删除和上下文放在同一份源码中，补语法高亮、分块决策和批量快捷键。浏览器确认先接受一处再批量拒绝时保留已接受的内容，模拟错误后也能重试。[参考预览](https://uiarc.dev/components/code-suggestion) · [完整改动](../../target/parity-52/patch-ready-english.png) · [混合决策](../../target/parity-52/patch-mixed-resolution.png) · [重试](../../target/parity-52/patch-retry-english.png)
+- 312px 浏览器预览可纵向滚到第三处改动，网页正文位置保持不变。横向滚动时行号固定。原生测试覆盖停止时丢弃未完成的块、重叠范围校验和焦点回到源码区。完整同速动效、真机触屏和读屏待验。[纵向滚动](../../target/parity-52/patch-mobile-scrolled.png) · [横向滚动](../../target/parity-52/patch-mobile-horizontal.png)
+
+#### 数据问答专项返修（2026-11-11）
+
+- 在官网逐一提交注册量、地区收入和套餐流失率三个问题，读取图表和表格实值。KUI 对齐系列、金额及百分比单位、初始视图、合计列与读数。结果区实测并固定为 216px，视图切换位于图例上方。外壳圆角沿用 KUI 8px。[Arc 注册量结果](../../target/parity-52/ask-arc-result-current.png) · [KUI 注册量柱图](../../target/parity-52/ask-aligned-bars.png) · [地区收入](../../target/parity-52/ask-aligned-revenue.png) · [流失率表格](../../target/parity-52/ask-aligned-churn.png)
+- 浏览器确认 SQL 折叠／展开、复制整段 SQL、方向键切到折线和表格内滚动，柱图和表格的预览边界相同。312px 中文暗色实测样例查询失败后，点重试恢复原结果。[SQL 展开](../../target/parity-52/ask-aligned-sql.png) · [方向键](../../target/parity-52/ask-aligned-keyboard-line.png) · [表格滚动](../../target/parity-52/ask-aligned-table-scroll.png) · [失败](../../target/parity-52/ask-aligned-failure.png) · [重试恢复](../../target/parity-52/ask-aligned-recovered.png)
+- 388 个组件测试和 109 个 Story 测试通过。站点 231 个双语组件、947 个静态路由、注册表及 52 项独立安装的原生／WASM 检查通过。SQL 保留 34ms 的分块节奏，各块的 140ms 独立淡入已实现并随本批网站构建生成。整段动效同速、真机 Safari、触屏和读屏待验。
+
+#### 敏感信息脱敏专项返修（2026-11-11）
+
+- 新增可选的 `with_reply` 流程和独立的 `PiiReplyEvent`。宿主仅收到审阅后的脱敏文本，回复按该请求的映射恢复。源文本编辑、范围变化、撤回审阅和停止会使旧回执失效。未知占位符保留原样，恢复只执行一遍。
+- 浏览器已确认四类虚构测试值的中文回复恢复，示例全程使用本地样例回复。保留邮箱和电话图标、类型颜色、模型标志和胶囊开关。[中文恢复回复](../../target/parity-52/pii-restored-zh.png)
+- 当前卡片的水平对齐和额外审阅／复制操作行仍有视觉差异，分段扫描高亮、完整同速动效、Safari、原生视觉和真机触屏仍待验。
+
+#### 本批提交验证（2026-11-11）
+
+- 最终源代码通过 394 个组件测试、109 个 Story 单测、集成与文档测试、Clippy、WASM 发布构建和注册表源码校验。站点检查覆盖 231 个双语组件及 947 个静态目标。日志位于 `target/parity-52/pii-full-gates.log`。
+- 本批记录已实现的修复及其证据。52 项的完整同速视觉与动效、全量 Safari、原生视觉和真机触屏仍待逐项验收。
 
 ### 本地验证范围
 

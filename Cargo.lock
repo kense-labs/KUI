@@ -2741,6 +2741,7 @@ dependencies = [
  "gpui-pre-platform",
  "kense-kui",
  "serde_json",
+ "unicode-segmentation",
 ]
 
 [[package]]

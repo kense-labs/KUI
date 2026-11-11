@@ -939,21 +939,21 @@
       "en": "Review a proposed edit and accept or reject its changes.",
       "zh": "审阅代码修改建议并接受或拒绝。"
     },
-    "usageRust": "use gpui::prelude::*;\nuse kui::components::code_suggestion::{PatchReview, Hunk, Decision};\n\nlet control = cx.new(|cx| PatchReview::new(\"patch\",\"release.rs\",vec![Hunk {line:4,before:vec![\"let n = 1;\".into()],after:vec![\"let n = 2;\".into()],decision:Decision::Pending}],cx));",
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::code_suggestion::{Decision, Hunk, PatchReview};\n\nlet control = cx.new(|cx| {\n    PatchReview::new(\"patch\", \"release.rs\", vec![Hunk {\n        line: 2,\n        before: vec![\"    let attempts = 1;\".into()],\n        after: vec![\"    let attempts = 4;\".into()],\n        decision: Decision::Pending,\n    }], cx).with_original(\"fn release() {\\n    let attempts = 1;\\n}\\n\")\n});",
     "method": "new",
     "signature": "(id, file, Vec<Hunk>, cx)",
     "event": "PatchEvent",
     "rule": {
-      "en": "Accept or reject each pending hunk once. Cmd/Ctrl+Enter accepts remaining hunks.",
-      "zh": "同一待处理片段只决策一次。Cmd/Ctrl+Enter 接受剩余片段。"
+      "en": "Use Cmd/Ctrl+Enter to accept the remaining hunks and Cmd/Ctrl+Backspace to reject them. Use the arrow keys inside the code area to scroll long lines. Stop and retry are available during generation and after failure.",
+      "zh": "Cmd/Ctrl+Enter 接受剩余改动，Cmd/Ctrl+Backspace 拒绝剩余改动。代码区获得焦点后可用左右键滚动长行；生成中可停止，失败后可重试。"
     },
     "api": {
-      "en": "Each Hunk declares a starting line, before/after lines and a Decision. PatchEvent lists only newly decided indices.",
-      "zh": "Hunk 指定起始行、原文、修改后内容和 Decision。PatchEvent 只包含此次新决策的片段索引。"
+      "en": "Hunk uses a one-based source line. with_original adds unchanged context and enables resolved_code. Use set_phase with Thinking, Streaming, Ready or Error. PatchEvent reports decisions. Subscribe to PatchControlEvent for Stop, Retry and Regenerate.",
+      "zh": "Hunk 使用从 1 开始的源码行号。with_original 加入未修改的上下文并启用 resolved_code。用 set_phase 设置 Thinking、Streaming、Ready 或 Error。PatchEvent 报告审阅结果，PatchControlEvent 报告停止、重试和重新生成。"
     },
     "motion": {
-      "en": "Removed and new lines have separate clipping groups. Accept or reject folds the superseded lines over 260ms and new lines arrive in 38ms steps.",
-      "zh": "增删行独立裁切。接受或拒绝后，旧行以 260ms 收起；新增行错开 38ms 出现。"
+      "en": "New lines open over 120ms. Review actions open over 240ms, and deciding a hunk folds the superseded lines over 260ms. The demo streams a line every 38ms.",
+      "zh": "新增行在 120ms 内展开，审阅操作在 240ms 内展开。接受或拒绝后，被替换的行在 260ms 内收起。样例每 38ms 输出一行。"
     }
   },
   {
