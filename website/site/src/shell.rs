@@ -167,8 +167,9 @@ fn header(en: bool, company: bool, landing: bool) -> String {
             format!("{prefix}/"),
             "https://github.com/kense-labs",
             format!(
-                r##"<a href="{prefix}/#products">{}</a>"##,
-                tr(en, "Products", "产品")
+                r##"<a href="{prefix}/#products">{}</a><a href="{prefix}/docs/">{}</a>"##,
+                tr(en, "Products", "产品"),
+                tr(en, "Docs", "文档")
             ),
         )
     } else {
@@ -202,7 +203,10 @@ fn footer(en: bool, company: bool) -> String {
     let (brand, links) = if company {
         (
             "Kense".into(),
-            format!(r#"<a href="{prefix}/kui/">KUI</a>"#),
+            format!(
+                r#"<a href="{prefix}/kui/">KUI</a> · <a href="https://kense-labs.github.io/krun/">krun</a> · <a href="{prefix}/docs/">{}</a>"#,
+                tr(en, "Docs", "文档")
+            ),
         )
     } else {
         (
@@ -219,24 +223,67 @@ fn footer(en: bool, company: bool) -> String {
 }
 
 pub fn company(en: bool) -> String {
+    let prefix = path(en);
     format!(
         r#"<main class="company-main"><section class="hero wrap"><h1 class="motion-fade-up">Kense</h1><p class="muted lead motion-fade-up motion-fade-up-delay-1">{}</p></section>
 <section id="products" class="wrap products"><h2 class="motion-fade-up motion-fade-up-delay-1">{}</h2>
-<a class="product-card interactive lift motion-fade-up motion-fade-up-delay-2" href="{}/kui/"><div class="row"><span class="name">KUI</span><span class="tag">{}</span></div><p class="muted">{}</p><span class="cta-line">{}</span></a></section></main>"#,
+<div class="product-list">
+<a class="product-card interactive lift motion-fade-up motion-fade-up-delay-2" href="{prefix}/kui/"><div class="row"><span class="name">KUI</span><span class="tag">{}</span></div><p class="muted">{}</p><span class="cta-line">{}</span></a>
+<a class="product-card interactive lift motion-fade-up motion-fade-up-delay-2" href="https://kense-labs.github.io/krun/"><div class="row"><span class="name">krun</span><span class="tag">{}</span></div><p class="muted">{}</p><span class="cta-line">{}</span></a>
+</div></section></main>"#,
         tr(
             en,
             "Focused products. Source you can own and extend.",
             "专注的产品。源码由你拥有、可扩展。"
         ),
         tr(en, "Products", "产品"),
-        path(en),
         tr(en, "GPUI · Desktop + WASM", "GPUI · 桌面 + WASM"),
         tr(
             en,
             "Rust UI kit for GPUI. Use the component library or own selected component source.",
             "面向 GPUI 的 Rust UI 工具包。使用组件库，或将所需组件源码安装到项目中。"
         ),
-        tr(en, "Open KUI →", "打开 KUI →")
+        tr(en, "Open KUI →", "打开 KUI →"),
+        tr(en, "Web Main · local runtime", "Web Main · 本地运行时"),
+        tr(
+            en,
+            "Dock krun from Electron Main with @kense/krun. Session control and local VM placement.",
+            "在 Electron Main 中通过 @kense/krun 对接。会话控制与本地虚拟机放置。"
+        ),
+        tr(en, "Open krun docs →", "打开 krun 文档 →")
+    )
+}
+
+pub fn docs_hub(en: bool) -> String {
+    let prefix = path(en);
+    format!(
+        r#"<main class="company-main"><section class="hero wrap"><h1 class="motion-fade-up">{}</h1><p class="muted lead motion-fade-up motion-fade-up-delay-1">{}</p></section>
+<section class="wrap products"><h2 class="motion-fade-up motion-fade-up-delay-1">{}</h2>
+<div class="product-list">
+<a class="product-card interactive lift motion-fade-up motion-fade-up-delay-2" href="{prefix}/kui/docs/"><div class="row"><span class="name">KUI</span><span class="tag">{}</span></div><p class="muted">{}</p><span class="cta-line">{}</span></a>
+<a class="product-card interactive lift motion-fade-up motion-fade-up-delay-2" href="https://kense-labs.github.io/krun/"><div class="row"><span class="name">krun</span><span class="tag">{}</span></div><p class="muted">{}</p><span class="cta-line">{}</span></a>
+</div></section></main>"#,
+        tr(en, "Docs", "文档"),
+        tr(
+            en,
+            "Product documentation from Kense.",
+            "Kense 产品文档入口。"
+        ),
+        tr(en, "Products", "产品"),
+        tr(en, "Component library", "组件库"),
+        tr(
+            en,
+            "Install, components, and AI notes for the GPUI UI kit.",
+            "GPUI 组件库的安装、组件与 AI 说明。"
+        ),
+        tr(en, "Open KUI docs →", "打开 KUI 文档 →"),
+        tr(en, "Runtime dock", "运行时对接"),
+        tr(
+            en,
+            "Web Main docking with @kense/krun — integration, API, and operations.",
+            "Web Main 对接 @kense/krun：集成、API 与运维。"
+        ),
+        tr(en, "Open krun docs →", "打开 krun 文档 →")
     )
 }
 

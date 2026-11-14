@@ -1,3 +1,11 @@
+# Kense
+
+> Organization docs hub. Products: KUI (this tree) and krun.
+
+- [Docs hub](./docs/)
+- [KUI docs](./kui/docs/)
+- [krun docs](https://kense-labs.github.io/krun/)
+
 # KUI
 
 > KUI is Rust UI for GPUI (desktop + WASM), as a library or copied source. From Kense.

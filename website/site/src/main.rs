@@ -174,6 +174,17 @@ fn main() -> Result<()> {
             true,
         )?;
         write(
+            "docs",
+            shell::docs_hub(en),
+            if en { "Docs · Kense" } else { "文档 · Kense" },
+            if en {
+                "Product documentation from Kense — KUI and krun."
+            } else {
+                "Kense 产品文档：KUI 与 krun。"
+            },
+            true,
+        )?;
+        write(
             "kui",
             cover::page(en),
             "KUI",
@@ -208,7 +219,6 @@ fn main() -> Result<()> {
         }
         let prefix = if en { "/en" } else { "" };
         for (from, to) in [
-            ("docs", "kui/docs"),
             ("docs/installation", "kui/docs/installation"),
             ("components", "kui/components/button"),
             ("components/button", "kui/components/button"),

@@ -29,7 +29,7 @@ ids = {item['name'] for item in catalog if item['name'] != 'kui-foundation'}
 for en in (False, True):
     prefix = 'en/' if en else ''
     bundle = None
-    for sub in ('','kui','kui/docs','kui/docs/installation','kui/ai',*[f'kui/components/{id}' for id in ids]):
+    for sub in ('','docs','kui','kui/docs','kui/docs/installation','kui/ai',*[f'kui/components/{id}' for id in ids]):
         path = root / prefix / sub / 'index.html'
         page = Page(path.read_text())
         canonical = next(a['href'] for t, a in page.elements if t == 'link' and a.get('rel') == 'canonical')
