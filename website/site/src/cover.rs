@@ -147,6 +147,11 @@ fn prompt_button(en: bool, task: &Task, class: &str, caption: &str, hint: bool) 
 
 fn command_button(en: bool, show_command: bool) -> String {
     let copy = label(en, "复制命令", "Copy command");
+    let hint = label(
+        en,
+        "复制命令：kui add button 将源码装入项目",
+        "Copy command: add Button source via kui CLI",
+    );
     let content = if show_command {
         format!("<code>kui add button</code>{}", copy_mark("copy"))
     } else {
@@ -154,7 +159,7 @@ fn command_button(en: bool, show_command: bool) -> String {
     };
     button(
         &format!(
-            r#"class="agent-cta cli" data-copy="kui add button" data-kind="command" aria-label="{copy} · kui add button""#
+            r#"class="agent-cta cli" data-copy="kui add button" data-kind="command" data-guide-hint="{hint}" aria-label="{copy} · kui add button""#
         ),
         &content,
     )
@@ -176,32 +181,48 @@ fn guide(en: bool, base: &str) -> String {
     let open = label(en, "打开 KUI 向导", "Open KUI guide");
     let close = label(en, "收起 KUI 向导", "Close KUI guide");
     let name = label(en, "KUI 向导", "KUI guide");
-    let links: String = [
+    let home_href = if base.is_empty() {
+        "/".to_owned()
+    } else {
+        format!("{base}/")
+    };
+    let items = [
         (
-            "components/button",
+            format!("{base}/kui/components/button/"),
             "box",
-            label(en, "浏览组件", "Explore components"),
+            label(en, "浏览全部组件", "Explore components"),
+            "278 UI",
         ),
         (
-            "docs/installation",
+            format!("{base}/kui/docs/installation/"),
             "book",
-            label(en, "安装指南", "Installation guide"),
+            label(en, "安装与 CLI 指南", "Installation & CLI"),
+            "CLI",
         ),
         (
-            "ai",
+            format!("{base}/kui/ai/"),
             "code",
-            label(en, "AI 接入指南", "Guide for AI agents"),
+            label(en, "AI 智能体接入指南", "Guide for AI agents"),
+            "Agent",
         ),
-    ]
-    .iter()
-    .map(|(path, glyph, text)| {
-        format!(
-            r#"<a href="{base}/kui/{path}/">{}<span>{text}</span>{}</a>"#,
-            icon(glyph, 16),
-            icon("arrowRight", 14)
-        )
-    })
-    .collect();
+        (
+            home_href,
+            "terminal",
+            label(en, "返回 Kense 组织首页", "Kense Organization"),
+            "Kense",
+        ),
+    ];
+    let links: String = items
+        .iter()
+        .enumerate()
+        .map(|(idx, (href, glyph, text, tag))| {
+            format!(
+                r#"<a href="{href}" style="--choice-delay:{}ms"><span class="choice-bracket" aria-hidden="true">&gt;</span>{}<span class="choice-text">{text}</span><span class="choice-tag">{tag}</span></a>"#,
+                65 + idx * 24,
+                icon(glyph, 15),
+            )
+        })
+        .collect();
     let trigger = button(
         &format!(
             r#"class="trigger" aria-expanded="false" aria-controls="cover-guide-choices" aria-label="{open}" data-open-label="{open}" data-close-label="{close}""#
@@ -209,13 +230,13 @@ fn guide(en: bool, base: &str) -> String {
         &format!(
             r#"<span class="gaze" aria-hidden="true"><span class="eyes"><i></i><i></i></span></span>
         <span class="guide-name" aria-hidden="true">{name}</span>
-        <svg class="cross" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>"#
+        <svg class="cross" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>"#
         ),
     );
     let speech_copy = button(
         r#"class="speech-copy" hidden data-kind="prompt""#,
         &format!(
-            "{}{}",
+            "{}<span>{}</span>",
             copy_mark("copy"),
             label(en, "复制提示词", "Copy prompt")
         ),
@@ -225,8 +246,53 @@ fn guide(en: bool, base: &str) -> String {
         name = name,
         links = links,
         trigger = trigger,
-        speech_copy = speech_copy
+        speech_copy = speech_copy,
+        msg_cmd = label(
+            en,
+            "命令已复制 · 可直接粘贴至终端运行",
+            "Command copied · ready in terminal"
+        ),
+        msg_prompt = label(
+            en,
+            "提示词已复制 · 直接粘贴给编程 Agent",
+            "Prompt copied · paste into your coding agent"
+        ),
     )
+}
+
+fn product_intro() -> &'static str {
+    r#"<div class="kui-product-intro" data-kui-product-intro data-intro-key="kui:product-intro:v1" hidden aria-hidden="true">
+  <div class="kui-intro-backdrop"></div>
+  <div class="kui-intro-word kui-intro-word--top" data-kui-intro-word data-intro-direction="right">KUI</div>
+  <div class="kui-intro-word kui-intro-word--bottom" data-kui-intro-word data-intro-direction="left">GPUI</div>
+  <div class="kui-intro-stage">
+    <svg class="kui-intro-draft" viewBox="-120 -120 760 680" preserveAspectRatio="xMidYMid meet" fill="none" aria-hidden="true">
+      <g class="kui-intro-guides">
+        <path d="M-40 76H560" data-kui-trace pathLength="1"/>
+        <path d="M-40 220H560" data-kui-trace pathLength="1"/>
+        <path d="M-40 364H560" data-kui-trace pathLength="1"/>
+        <path d="M116 -40V480" data-kui-trace pathLength="1"/>
+        <path d="M260 -40V480" data-kui-trace pathLength="1"/>
+        <path d="M404 -40V480" data-kui-trace pathLength="1"/>
+        <path d="M64 24L456 416" data-kui-trace pathLength="1"/>
+        <circle cx="260" cy="220" r="198" data-kui-trace pathLength="1"/>
+        <circle cx="152" cy="112" r="36" data-kui-trace pathLength="1"/>
+        <circle cx="368" cy="328" r="36" data-kui-trace pathLength="1"/>
+      </g>
+      <g class="kui-intro-extrude-base">
+        <path d="M152 76H280A36 36 0 0 1 316 112V240A36 36 0 0 1 280 276H152A36 36 0 0 1 116 240V112A36 36 0 0 1 152 76Z"/>
+        <path d="M240 164H368A36 36 0 0 1 404 200V328A36 36 0 0 1 368 364H240A36 36 0 0 1 204 328V200A36 36 0 0 1 240 164Z"/>
+        <circle cx="260" cy="220" r="24"/>
+      </g>
+      <g class="kui-intro-extrude-edges"></g>
+      <g class="kui-intro-outline">
+        <path d="M152 76H280A36 36 0 0 1 316 112V240A36 36 0 0 1 280 276H152A36 36 0 0 1 116 240V112A36 36 0 0 1 152 76Z" data-kui-trace pathLength="1"/>
+        <path d="M240 164H368A36 36 0 0 1 404 200V328A36 36 0 0 1 368 364H240A36 36 0 0 1 204 328V200A36 36 0 0 1 240 164Z" data-kui-trace pathLength="1"/>
+        <circle cx="260" cy="220" r="24" data-kui-trace pathLength="1"/>
+      </g>
+    </svg>
+  </div>
+</div>"#
 }
 
 /// Renders the complete cover inside the shared site shell.
@@ -263,6 +329,7 @@ pub fn page(en: bool) -> String {
     );
     format!(
         include_str!("../cover/page.html"),
+        product_intro = product_intro(),
         base = base,
         description = description,
         arrow = arrow,
@@ -319,7 +386,7 @@ pub fn page(en: bool) -> String {
             &SAVE,
             "agent-cta",
             label(en, "复制提示词", "Copy prompt"),
-            false
+            true
         ),
         start_command = command_button(en, false)
     )

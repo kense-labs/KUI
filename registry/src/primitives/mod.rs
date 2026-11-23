@@ -34,6 +34,7 @@ pub mod ops_surface;
 pub mod picker;
 pub mod plot;
 pub mod presentation;
+pub mod pro_icons;
 
 pub mod nav;
 

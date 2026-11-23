@@ -203,6 +203,26 @@
     "zh": "组件",
     "en": "Components"
   },
+  "sidebar.screens": {
+    "zh": "应用屏幕",
+    "en": "Screens"
+  },
+  "sidebar.tier.label": {
+    "zh": "筛选范围",
+    "en": "Show"
+  },
+  "sidebar.tier.all": {
+    "zh": "全部",
+    "en": "All"
+  },
+  "sidebar.tier.free": {
+    "zh": "免费",
+    "en": "Free"
+  },
+  "sidebar.tier.pro": {
+    "zh": "Pro",
+    "en": "Pro"
+  },
   "sidebar.search.placeholder": {
     "zh": "搜索",
     "en": "Search"
@@ -330,5 +350,33 @@
   "sidebar.group.media": {
     "en": "Media",
     "zh": "媒体"
+  },
+  "sidebar.group.pro-motion": {
+    "en": "Surfaces",
+    "zh": "光效背景"
+  },
+  "sidebar.group.pro-shells": {
+    "en": "App shells",
+    "zh": "应用壳层"
+  },
+  "sidebar.group.pro-agents": {
+    "en": "Agents",
+    "zh": "智能体"
+  },
+  "sidebar.group.pro-chat": {
+    "en": "AI chat",
+    "zh": "AI 对话"
+  },
+  "sidebar.group.pro-onboarding": {
+    "en": "Onboarding",
+    "zh": "引导配置"
+  },
+  "sidebar.group.pro-settings": {
+    "en": "Settings",
+    "zh": "设置"
+  },
+  "sidebar.group.pro-workspace": {
+    "en": "Workspace",
+    "zh": "工作台"
   }
 }

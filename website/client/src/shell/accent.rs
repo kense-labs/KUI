@@ -158,6 +158,9 @@ fn present(colors: Pair, settled: bool) {
     for f in frames() {
         sync_frame(&f);
     }
+    if let Ok(ev) = Event::new("kui:accent-change") {
+        let _ = window().dispatch_event(&ev);
+    }
 }
 pub(super) fn sync_frame(frame: &HtmlIFrameElement) {
     let [l, d] = STATE.with_borrow(|s| s.colors);

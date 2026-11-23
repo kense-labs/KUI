@@ -98,6 +98,9 @@ fn apply(dark: bool) {
     if let Some(m) = q(r#"meta[name="theme-color"]"#) {
         attr(&m, "content", if dark { "#000000" } else { "#ffffff" });
     }
+    if let Ok(ev) = Event::new("kui:theme-change") {
+        let _ = window().dispatch_event(&ev);
+    }
 }
 fn sync(dark: bool) {
     apply(dark);

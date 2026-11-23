@@ -43,7 +43,9 @@ mod web {
             if let Some(preview) = preview {
                 preview.app.update(|cx| {
                     Theme::global_mut(cx).set_accent(palette);
-                    cx.refresh_windows();
+                });
+                preview.app.update(|cx| {
+                    let _ = preview.window.update(cx, |_, w, cx| w.bounds_changed(cx));
                 });
             }
         });
@@ -89,19 +91,20 @@ mod web {
             })
         })
     }
-    fn appearance(dark: bool, reduced: bool, cx: &mut App) {
+    fn appearance(dark: bool, reduced: bool, cx: &mut App) -> bool {
         let mode = if dark {
             ThemeMode::Dark
         } else {
             ThemeMode::Light
         };
-        let theme = Theme::global_mut(cx);
+        let theme = Theme::global(cx);
         if theme.mode == mode && theme.reduced_motion == reduced {
-            return;
+            return false;
         }
+        let theme = Theme::global_mut(cx);
         theme.set_mode(mode);
         theme.reduced_motion = reduced;
-        cx.refresh_windows();
+        true
     }
     #[wasm_bindgen]
     pub fn set_icon_intent(dark: bool) {
@@ -141,7 +144,12 @@ mod web {
     pub fn set_preferences(dark: bool, reduced: bool) {
         PREVIEW.with_borrow(|preview| {
             if let Some(preview) = preview {
-                preview.app.update(|cx| appearance(dark, reduced, cx))
+                let changed = preview.app.update(|cx| appearance(dark, reduced, cx));
+                if changed {
+                    preview.app.update(|cx| {
+                        let _ = preview.window.update(cx, |_, w, cx| w.bounds_changed(cx));
+                    });
+                }
             }
         })
     }

@@ -1854,5 +1854,381 @@
     "kind": "component",
     "name": "holo-card",
     "title": "HoloCard"
+  },
+  {
+    "categories": [
+      "pro-motion"
+    ],
+    "kind": "component",
+    "name": "gradient-floor",
+    "title": "GradientFloor"
+  },
+  {
+    "categories": [
+      "pro-shells"
+    ],
+    "kind": "component",
+    "name": "app-shell",
+    "title": "AppShell"
+  },
+  {
+    "categories": [
+      "pro-shells"
+    ],
+    "kind": "component",
+    "name": "app-shell-flat",
+    "title": "AppShellFlat"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-activity",
+    "title": "AgentActivityScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agents",
+    "title": "AgentsScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "inbox",
+    "title": "AgentInboxScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-inbox-board",
+    "title": "AgentInboxBoardScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-memory",
+    "title": "AgentMemoryScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-orchestration",
+    "title": "AgentOrchestrationScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-permissions",
+    "title": "AgentPermissionsScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-run-detail",
+    "title": "AgentRunDetailScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-schedules",
+    "title": "AgentSchedulesScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-skills",
+    "title": "AgentSkillsScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-tasks",
+    "title": "AgentTasksScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-thread",
+    "title": "AgentThreadScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-tool-calls",
+    "title": "AgentToolCallsScreen"
+  },
+  {
+    "categories": [
+      "pro-agents"
+    ],
+    "kind": "component",
+    "name": "agent-usage",
+    "title": "AgentUsageScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "assistant-home",
+    "title": "AssistantHomeScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "assistant-overview",
+    "title": "AssistantOverviewScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "agent-chat",
+    "title": "AgentChatScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "agent-chat-rail",
+    "title": "AgentChatRailScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "agent-chat-progress",
+    "title": "AgentChatProgressScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "agent-run",
+    "title": "AgentRunScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "ai-chat-revenue",
+    "title": "AiChatRevenueScreen"
+  },
+  {
+    "categories": [
+      "pro-chat"
+    ],
+    "kind": "component",
+    "name": "ai-chat-spend",
+    "title": "AiChatSpendScreen"
+  },
+  {
+    "categories": [
+      "pro-onboarding"
+    ],
+    "kind": "component",
+    "name": "onboarding",
+    "title": "OnboardingScreen"
+  },
+  {
+    "categories": [
+      "pro-onboarding"
+    ],
+    "kind": "component",
+    "name": "onboarding-website",
+    "title": "OnboardingWebsiteScreen"
+  },
+  {
+    "categories": [
+      "pro-onboarding"
+    ],
+    "kind": "component",
+    "name": "onboarding-brand",
+    "title": "OnboardingBrandScreen"
+  },
+  {
+    "categories": [
+      "pro-onboarding"
+    ],
+    "kind": "component",
+    "name": "onboarding-tone",
+    "title": "OnboardingToneScreen"
+  },
+  {
+    "categories": [
+      "pro-onboarding"
+    ],
+    "kind": "component",
+    "name": "onboarding-ready",
+    "title": "OnboardingReadyScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-general",
+    "title": "SettingsGeneralScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-profile",
+    "title": "SettingsProfileScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-preferences",
+    "title": "SettingsPreferencesScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-models",
+    "title": "SettingsModelsScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-members",
+    "title": "SettingsMembersScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-subscription",
+    "title": "SettingsSubscriptionScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-notifications",
+    "title": "SettingsNotificationsScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-privacy",
+    "title": "SettingsPrivacyScreen"
+  },
+  {
+    "categories": [
+      "pro-settings"
+    ],
+    "kind": "component",
+    "name": "settings-security",
+    "title": "SettingsSecurityScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "analytics",
+    "title": "AnalyticsScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "crm",
+    "title": "CrmScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "evals",
+    "title": "EvalsScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "files",
+    "title": "FilesScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "folder",
+    "title": "FolderScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "integrations",
+    "title": "IntegrationsScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "kanban",
+    "title": "KanbanScreen"
+  },
+  {
+    "categories": [
+      "pro-workspace"
+    ],
+    "kind": "component",
+    "name": "workflow-builder",
+    "title": "WorkflowBuilderScreen"
   }
 ]

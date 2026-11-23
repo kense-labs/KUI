@@ -6,6 +6,7 @@ pub mod gallery;
 pub use gallery::ButtonGallery;
 
 mod extra_story;
+mod kense_showcase;
 pub use extra_story::{
     ControlCenterPreviewHost, HoloPreviewHost, HoloPreviewPreferences, OrbitPhotoHost,
 };

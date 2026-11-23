@@ -1,0 +1,24 @@
+{
+  "name": "app-shell-flat",
+  "kind": "component",
+  "title": "AppShellFlat",
+  "description": "Lay out the workspace sidebar, continuous top header, main canvas, and work area edge-to-edge with hairline dividers.",
+  "categories": [
+    "pro-shells"
+  ],
+  "registry_dependencies": [
+    "kui-foundation",
+    "app-shell"
+  ],
+  "cargo_dependencies": [
+    "web-time@1"
+  ],
+  "gpui_version": "=0.3.10",
+  "files": [
+    {
+      "path": "components/app_shell_flat.rs",
+      "content": "//! Edge-to-edge application shell split by single hairlines.\n//!\n//! Shares the navigation, command search, and tabbed work-area behavior of\n//! [`AppShell`](crate::components::app_shell::AppShell) while laying the sidebar,\n//! header bar, main scroll container, and work area flat across the window.\n\nuse crate::components::app_shell::{\n    AppShell, AppShellEvent, AppShellLayout, AppShellPreset, ShellNavGroup,\n};\nuse gpui::{prelude::*, *};\n\n/// Edge-to-edge variant of [`AppShell`] with a continuous header bar and hairline dividers.\npub struct AppShellFlat {\n    inner: Entity<AppShell>,\n}\n\nimpl EventEmitter<AppShellEvent> for AppShellFlat {}\n\nimpl AppShellFlat {\n    /// Construct a flat application shell with default `Acme` navigation and right work area.\n    pub fn new(id: impl Into<SharedString>, cx: &mut Context<Self>) -> Self {\n        cx.observe_global::<crate::foundation::Theme>(|_, cx| cx.notify())\n            .detach();\n        cx.observe_global::<crate::primitives::control::UiLanguage>(|_, cx| cx.notify())\n            .detach();\n        let id = id.into();\n        let inner = cx.new(|cx| AppShell::new(id, cx).with_layout(AppShellLayout::Flat));\n        cx.subscribe(&inner, |_, _, ev: &AppShellEvent, cx| {\n            cx.emit(ev.clone());\n        })\n        .detach();\n        Self { inner }\n    }\n\n    /// Apply a canonical sidebar preset (`Chat`, `Agent`, `Settings`, `Issues`, `Crm`).\n    pub fn with_preset(self, preset: AppShellPreset, cx: &mut Context<Self>) -> Self {\n        self.inner.update(cx, |s, cx| {\n            *s = std::mem::replace(s, AppShell::new(\"tmp\", cx))\n                .with_preset(preset, cx)\n                .with_layout(AppShellLayout::Flat);\n        });\n        self\n    }\n\n    /// Override the workspace name shown in the top-left header.\n    pub fn with_workspace(\n        self,\n        workspace: impl Into<SharedString>,\n        cx: &mut Context<Self>,\n    ) -> Self {\n        let ws = workspace.into();\n        self.inner.update(cx, |s, cx| {\n            *s = std::mem::replace(s, AppShell::new(\"tmp\", cx))\n                .with_workspace(ws)\n                .with_layout(AppShellLayout::Flat);\n        });\n        self\n    }\n\n    /// Override custom navigation groups.\n    pub fn set_groups(&self, groups: Vec<ShellNavGroup>, cx: &mut App) {\n        self.inner.update(cx, |s, cx| {\n            *s = std::mem::replace(s, AppShell::new(\"tmp\", cx))\n                .with_groups(groups)\n                .with_layout(AppShellLayout::Flat);\n            cx.notify();\n        });\n    }\n\n    /// Access the underlying [`AppShell`] entity for custom page or panel wiring.\n    pub fn shell(&self) -> &Entity<AppShell> {\n        &self.inner\n    }\n}\n\nimpl Render for AppShellFlat {\n    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {\n        self.inner.clone()\n    }\n}\n"
+    }
+  ],
+  "docs_url": "docs/items/app-shell-flat.md"
+}

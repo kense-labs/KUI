@@ -44,6 +44,7 @@ mod orbit_logos;
 mod orbit_photo;
 mod stretch_refresh;
 pub use orbit_photo::OrbitPhotoHost;
+mod pro_screens;
 mod prompt_cache;
 mod provider;
 mod reasoning_tree;
@@ -131,8 +132,14 @@ pub fn story(id: &str, window: &mut Window, cx: &mut Context<crate::StoryHost>) 
         .or_else(|| photo_grid::story(id, window, cx))
         .or_else(|| cover_flow::story(id, window, cx))
         .or_else(|| orbit_logos::story(id, window, cx))
-        .or_else(|| live_visitors::story(id, window, cx))?;
-    let min_height = if stretch_refresh::IDS.contains(&id) {
+        .or_else(|| live_visitors::story(id, window, cx))
+        .or_else(|| pro_screens::story(id, window, cx))?;
+    let full_bleed = pro_screens::IDS.contains(&id);
+    let min_height = if pro_screens::SCREEN_IDS.contains(&id) {
+        pro_screens::PREVIEW_HEIGHT
+    } else if id == "gradient-floor" {
+        pro_screens::FLOOR_PREVIEW_HEIGHT
+    } else if stretch_refresh::IDS.contains(&id) {
         stretch_refresh::PREVIEW_HEIGHT
     } else if social_proof_toast::IDS.contains(&id) {
         social_proof_toast::PREVIEW_HEIGHT
@@ -142,7 +149,7 @@ pub fn story(id: &str, window: &mut Window, cx: &mut Context<crate::StoryHost>) 
         520.
     };
     Some(
-        cx.new(|cx| EmbeddedStory::new(child, min_height, cx))
+        cx.new(|cx| EmbeddedStory::new(child, min_height, full_bleed, cx))
             .into(),
     )
 }
@@ -207,28 +214,39 @@ pub fn ids() -> impl Iterator<Item = &'static str> {
         .chain(stretch_refresh::IDS)
         .chain(skeleton_morph::IDS)
         .chain(social_proof_toast::IDS)
+        .chain(pro_screens::IDS)
         .chain(["morph-loader", "ai-spark"].iter())
         .copied()
 }
 
 struct EmbeddedStory {
     min_height: f32,
+    full_bleed: bool,
     child: AnyView,
     focus: FocusHandle,
     edges: [FocusHandle; 2],
+    last_mode: Option<kui::foundation::ThemeMode>,
 }
 impl EmbeddedStory {
-    fn new(child: AnyView, min_height: f32, cx: &mut Context<Self>) -> Self {
+    fn new(child: AnyView, min_height: f32, full_bleed: bool, cx: &mut Context<Self>) -> Self {
+        cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         Self {
             min_height,
+            full_bleed,
             child,
             focus: cx.focus_handle(),
             edges: [cx.focus_handle(), cx.focus_handle()],
+            last_mode: None,
         }
     }
 }
 impl Render for EmbeddedStory {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let mode = Theme::global(cx).mode;
+        if self.last_mode != Some(mode) {
+            self.last_mode = Some(mode);
+            window.request_animation_frame();
+        }
         let paint = Paint::get(cx);
         let edge = |i| {
             div()
@@ -239,17 +257,21 @@ impl Render for EmbeddedStory {
         };
         let bridge = cx.try_global::<crate::StoryBridge>();
         let embedded = bridge.is_some();
-        let min_height = bridge.map_or(self.min_height, |bridge| {
-            self.min_height.max((bridge.min_height)())
-        });
+        let host_h = bridge.map_or(0., |bridge| (bridge.min_height)());
+        let min_height = if self.full_bleed && host_h > 100. {
+            host_h
+        } else {
+            self.min_height.max(host_h)
+        };
+        let full_bleed = self.full_bleed;
         let scene = div()
             .w_full()
             .min_h(px(min_height))
+            .when(full_bleed, |d| d.h(px(min_height)).items_stretch())
+            .when(!full_bleed, |d| d.items_center().justify_center())
             .flex_none()
             .flex()
             .flex_col()
-            .items_center()
-            .justify_center()
             .bg(paint.stage)
             .when(embedded, |e| e.child(edge(0)))
             .child(self.child.clone())
@@ -269,7 +291,8 @@ impl Render for EmbeddedStory {
             .size_full()
             .flex()
             .flex_col()
-            .overflow_y_scroll()
+            .when(full_bleed, |e| e.overflow_hidden())
+            .when(!full_bleed, |e| e.overflow_y_scroll())
             .font_family("KUI Preview Latin")
             .text_color(paint.ink)
             .text_size(px(14.))

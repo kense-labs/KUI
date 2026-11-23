@@ -20,6 +20,9 @@ impl StoryHost {
             .iter()
             .find(|(name, _)| *name == id)
             .map_or(id, |(_, story)| *story);
+        if let Some(view) = crate::kense_showcase::story(id, w, cx) {
+            return Some(view);
+        }
         if let Some(view) = crate::extra_story::story(id, w, cx) {
             return Some(view);
         }

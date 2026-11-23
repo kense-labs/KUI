@@ -132,16 +132,12 @@ impl Render for BaseButtons {
                     .into_themed(cx),
             );
         let mut feedback = row();
-        for i in 0..2 {
-            let g = if self.copied[i] {
-                Glyph::Check
-            } else {
-                Glyph::Copy
-            };
+        for (i, &copied) in self.copied.iter().enumerate().take(2) {
+            let g = if copied { Glyph::Check } else { Glyph::Copy };
             let b = Button::new(("copy", i))
                 .secondary()
                 .with_size(Size::Sm)
-                .label(if self.copied[i] {
+                .label(if copied {
                     t("Copied", "已复制")
                 } else {
                     t("Copy link", "复制链接")

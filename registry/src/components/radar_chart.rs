@@ -1011,7 +1011,7 @@ mod tests {
             let tip = tooltip_anchor(width, height, radius, 2, 6, tip_w, tip_h).0;
             (start, finish, tip)
         });
-        let mut samples = w.update(|_, cx| {
+        let samples = w.update(|_, cx| {
             view.update(cx, |chart, cx| {
                 chart.select(Some(0), cx);
             });

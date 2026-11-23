@@ -252,6 +252,53 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [control-center](./md/control-center.md): ControlCenter
 - [card-to-article](./md/card-to-article.md): CardToArticle
 - [holo-card](./md/holo-card.md): HoloCard
+- [gradient-floor](./md/gradient-floor.md): GradientFloor
+- [app-shell](./md/app-shell.md): AppShell
+- [app-shell-flat](./md/app-shell-flat.md): AppShellFlat
+- [agent-activity](./md/agent-activity.md): AgentActivityScreen
+- [agents](./md/agents.md): AgentsScreen
+- [inbox](./md/inbox.md): AgentInboxScreen
+- [agent-inbox-board](./md/agent-inbox-board.md): AgentInboxBoardScreen
+- [agent-memory](./md/agent-memory.md): AgentMemoryScreen
+- [agent-orchestration](./md/agent-orchestration.md): AgentOrchestrationScreen
+- [agent-permissions](./md/agent-permissions.md): AgentPermissionsScreen
+- [agent-run-detail](./md/agent-run-detail.md): AgentRunDetailScreen
+- [agent-schedules](./md/agent-schedules.md): AgentSchedulesScreen
+- [agent-skills](./md/agent-skills.md): AgentSkillsScreen
+- [agent-tasks](./md/agent-tasks.md): AgentTasksScreen
+- [agent-thread](./md/agent-thread.md): AgentThreadScreen
+- [agent-tool-calls](./md/agent-tool-calls.md): AgentToolCallsScreen
+- [agent-usage](./md/agent-usage.md): AgentUsageScreen
+- [assistant-home](./md/assistant-home.md): AssistantHomeScreen
+- [assistant-overview](./md/assistant-overview.md): AssistantOverviewScreen
+- [agent-chat](./md/agent-chat.md): AgentChatScreen
+- [agent-chat-rail](./md/agent-chat-rail.md): AgentChatRailScreen
+- [agent-chat-progress](./md/agent-chat-progress.md): AgentChatProgressScreen
+- [agent-run](./md/agent-run.md): AgentRunScreen
+- [ai-chat-revenue](./md/ai-chat-revenue.md): AiChatRevenueScreen
+- [ai-chat-spend](./md/ai-chat-spend.md): AiChatSpendScreen
+- [onboarding](./md/onboarding.md): OnboardingScreen
+- [onboarding-website](./md/onboarding-website.md): OnboardingWebsiteScreen
+- [onboarding-brand](./md/onboarding-brand.md): OnboardingBrandScreen
+- [onboarding-tone](./md/onboarding-tone.md): OnboardingToneScreen
+- [onboarding-ready](./md/onboarding-ready.md): OnboardingReadyScreen
+- [settings-general](./md/settings-general.md): SettingsGeneralScreen
+- [settings-profile](./md/settings-profile.md): SettingsProfileScreen
+- [settings-preferences](./md/settings-preferences.md): SettingsPreferencesScreen
+- [settings-models](./md/settings-models.md): SettingsModelsScreen
+- [settings-members](./md/settings-members.md): SettingsMembersScreen
+- [settings-subscription](./md/settings-subscription.md): SettingsSubscriptionScreen
+- [settings-notifications](./md/settings-notifications.md): SettingsNotificationsScreen
+- [settings-privacy](./md/settings-privacy.md): SettingsPrivacyScreen
+- [settings-security](./md/settings-security.md): SettingsSecurityScreen
+- [analytics](./md/analytics.md): AnalyticsScreen
+- [crm](./md/crm.md): CrmScreen
+- [evals](./md/evals.md): EvalsScreen
+- [files](./md/files.md): FilesScreen
+- [folder](./md/folder.md): FolderScreen
+- [integrations](./md/integrations.md): IntegrationsScreen
+- [kanban](./md/kanban.md): KanbanScreen
+- [workflow-builder](./md/workflow-builder.md): WorkflowBuilderScreen
 
 ## Registry JSON
 
@@ -488,3 +535,50 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [control-center](./r/control-center.json)
 - [card-to-article](./r/card-to-article.json)
 - [holo-card](./r/holo-card.json)
+- [gradient-floor](./r/gradient-floor.json)
+- [app-shell](./r/app-shell.json)
+- [app-shell-flat](./r/app-shell-flat.json)
+- [agent-activity](./r/agent-activity.json)
+- [agents](./r/agents.json)
+- [inbox](./r/inbox.json)
+- [agent-inbox-board](./r/agent-inbox-board.json)
+- [agent-memory](./r/agent-memory.json)
+- [agent-orchestration](./r/agent-orchestration.json)
+- [agent-permissions](./r/agent-permissions.json)
+- [agent-run-detail](./r/agent-run-detail.json)
+- [agent-schedules](./r/agent-schedules.json)
+- [agent-skills](./r/agent-skills.json)
+- [agent-tasks](./r/agent-tasks.json)
+- [agent-thread](./r/agent-thread.json)
+- [agent-tool-calls](./r/agent-tool-calls.json)
+- [agent-usage](./r/agent-usage.json)
+- [assistant-home](./r/assistant-home.json)
+- [assistant-overview](./r/assistant-overview.json)
+- [agent-chat](./r/agent-chat.json)
+- [agent-chat-rail](./r/agent-chat-rail.json)
+- [agent-chat-progress](./r/agent-chat-progress.json)
+- [agent-run](./r/agent-run.json)
+- [ai-chat-revenue](./r/ai-chat-revenue.json)
+- [ai-chat-spend](./r/ai-chat-spend.json)
+- [onboarding](./r/onboarding.json)
+- [onboarding-website](./r/onboarding-website.json)
+- [onboarding-brand](./r/onboarding-brand.json)
+- [onboarding-tone](./r/onboarding-tone.json)
+- [onboarding-ready](./r/onboarding-ready.json)
+- [settings-general](./r/settings-general.json)
+- [settings-profile](./r/settings-profile.json)
+- [settings-preferences](./r/settings-preferences.json)
+- [settings-models](./r/settings-models.json)
+- [settings-members](./r/settings-members.json)
+- [settings-subscription](./r/settings-subscription.json)
+- [settings-notifications](./r/settings-notifications.json)
+- [settings-privacy](./r/settings-privacy.json)
+- [settings-security](./r/settings-security.json)
+- [analytics](./r/analytics.json)
+- [crm](./r/crm.json)
+- [evals](./r/evals.json)
+- [files](./r/files.json)
+- [folder](./r/folder.json)
+- [integrations](./r/integrations.json)
+- [kanban](./r/kanban.json)
+- [workflow-builder](./r/workflow-builder.json)

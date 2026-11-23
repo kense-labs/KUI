@@ -173,10 +173,19 @@ Presets in `foundation::MOTION`:
 | --- | --- | --- |
 | `instant` | 80ms | Micro fades |
 | `snappy` | 120ms | Button press |
-| `smooth` | 220ms | Panels (future) |
-| `morph` | 280ms | Shared-element moves (future) |
+| `smooth` | 220ms | Panels and disclosures |
+| `morph` | 280ms | Shared-element selection glides and chart morphs |
 
 When `Theme.reduced_motion` is true, effective duration is `0`.
+
+### Pro screen interaction motion
+
+Application screens in `registry/src/components/pro_chrome.rs` and `app_shell.rs` share the KUI critically-damped `Slide` and `PhaseClock` physics:
+
+- **Tactile controls (`pro_btn`, `pro_icon_btn`, `pro_switch`)** — Hover blends premultiplied RGBA tokens over `snappy`; active press insets only the painted face inside a fixed hit box so sibling layout never shifts; dynamic button labels crossfade upward; capsule switches travel over `morph` (280ms) and widen the thumb by 3.5px while pressed.
+- **Shared-element selection (`pro_pill_indicator`, `pro_underline_indicator`)** — Tabs, filter strips, sidebar rows, and capsule period toggles measure child bounds in GPUI prepaint and glide position and size over 240–250ms when selection changes, while snapping without lag on resize or scroll.
+- **Panels, folds, and overlays (`pro_fold`, `pro_presence`, `pro_modal_appear`, `pro_view_transition`, `pro_toast_banner`)** — Collapsible sidebars, inspector panels, inline accordions, popovers, modals, and floating status bars animate both entrance and exit; view bodies apply a 200ms directional settle on selection or step change and render static on initial mount.
+- **Data meters (`pro_spring_bar`, `pro_progress_ring`, `pro_trend_canvas`)** — Quota bars, progress arcs, and trend polylines interpolate between previous and target series when datasets or filters change, then stop requesting frames once settled.
 
 ## 7. Layout density (story)
 

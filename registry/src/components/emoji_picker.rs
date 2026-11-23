@@ -705,8 +705,9 @@ impl Render for SymbolPicker {
                                     .into_any_element(),
                                 Line::Cells { first, len } => {
                                     let mut line = row().h(px(36.)).gap_0();
-                                    for pos in *first..(*first + *len) {
-                                        let i = data.order[pos];
+                                    for (pos, &i) in
+                                        data.order.iter().enumerate().skip(*first).take(*len)
+                                    {
                                         let n = s.items[i].name.clone();
                                         let zoom = if s.pressed == Some(pos) {
                                             s.press.get(w, cx)

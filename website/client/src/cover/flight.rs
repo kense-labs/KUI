@@ -1,14 +1,14 @@
 //! Motion of the little guide between controls and along the scrolling page.
 #[derive(Clone, Copy, Default)]
-pub(super) struct Point {
+pub(crate) struct Point {
     pub x: f64,
     pub y: f64,
 }
 impl Point {
-    pub(super) fn distance(self, to: Point) -> f64 {
+    pub(crate) fn distance(self, to: Point) -> f64 {
         (self.x - to.x).hypot(self.y - to.y)
     }
-    pub(super) fn blend(self, to: Point, u: f64) -> Point {
+    pub(crate) fn blend(self, to: Point, u: f64) -> Point {
         let t = smooth(u.clamp(0.0, 1.0));
         Point {
             x: self.x + (to.x - self.x) * t,
@@ -33,7 +33,7 @@ struct Trip {
 }
 
 #[derive(PartialEq, Clone, Copy)]
-pub(super) enum Mode {
+pub(crate) enum Mode {
     Pointer,
     Scroll,
     Held,
@@ -41,7 +41,7 @@ pub(super) enum Mode {
 }
 
 #[derive(Default)]
-pub(super) struct Flight {
+pub(crate) struct Flight {
     pub position: Point,
     pub stretch: f64,
     pub shear: f64,

@@ -409,7 +409,7 @@ mod tests {
     fn wrapped_announcement_pushes_following_content_and_collapses_from_its_height() {
         let mut app = TestAppContext::single();
         app.update(crate::init);
-        let (page, mut window) = app.add_window_view(|_, cx| {
+        let (page, window) = app.add_window_view(|_, cx| {
             Page(cx.new(|cx| {
                 AnnouncementBar::new(
                     vec![

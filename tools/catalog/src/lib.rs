@@ -325,6 +325,9 @@ pub fn materialize(registry: &Path, id: &str) -> Result<RegistryItem> {
             if matches!(id, "sankey-flow" | "split-bar" | "waffle-chart") {
                 paths.push("src/components/color_math.rs".into());
             }
+            if entry.primitives.contains(&"pro_icons") {
+                paths.push("src/components/pro_chrome.rs".into());
+            }
             paths.extend(
                 entry
                     .primitives

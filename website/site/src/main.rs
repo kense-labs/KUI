@@ -1,4 +1,6 @@
 //! Generate the organization site and independently fetchable KUI document fragments.
+mod brand_marks;
+mod company;
 mod controls;
 mod cover;
 mod docs;
@@ -89,6 +91,7 @@ fn main() -> Result<()> {
         shell::CSS,
         docs::CSS,
         cover::CSS,
+        company::CSS,
     ]
     .join("\n");
     let css_file = format!(
@@ -164,23 +167,27 @@ fn main() -> Result<()> {
         };
         write(
             "",
-            shell::company(en),
+            company::page(en, rev),
             "Kense",
             if en {
-                "Explore products from Kense."
+                "Open infrastructure for trust-native AI operating planes, isolated runtimes, dual-runtime GPUI interfaces, and agent systems."
             } else {
-                "探索 Kense 的产品。"
+                "面向可信 AI 操作系统、隔离运行时、双端同源 GPUI 界面与智能体工程的开源基础设施。"
             },
             true,
         )?;
         write(
             "docs",
-            shell::docs_hub(en),
-            if en { "Docs · Kense" } else { "文档 · Kense" },
+            company::docs_hub(en),
             if en {
-                "Product documentation from Kense — KUI and krun."
+                "Docs · Kense"
             } else {
-                "Kense 产品文档：KUI 与 krun。"
+                "文档 · Kense"
+            },
+            if en {
+                "Documentation hub for Kense — KUI, KRun, AI OS architecture, KBox, KSandbox, and KCL."
+            } else {
+                "Kense 文档中心：KUI、KRun、AI OS 架构、KBox、KSandbox 与 KCL。"
             },
             true,
         )?;

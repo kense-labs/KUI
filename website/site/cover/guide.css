@@ -1,120 +1,476 @@
 .kui-cover-page {
+  .guide-trail {
+    position: fixed;
+    inset: 0;
+    z-index: 48;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
   .guide {
-    --guide-paper:var(--brand); --guide-ink:var(--on-brand);
-    --settle:cubic-bezier(.2,.82,.22,1); --shape-time:320ms;
-    display:block;position:fixed;top:0;left:0;width:0;height:0;z-index:35;
-    transform:translate3d(var(--guide-x,0px),var(--guide-y,0px),0);
-    pointer-events:none;visibility:hidden;
+    --guide-paper: #171717;
+    --guide-ink: #ffffff;
+    --guide-rim: rgb(255 255 255 / 0.14);
+    --settle: cubic-bezier(0.2, 0.82, 0.22, 1);
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    z-index: 49;
+    transform: translate3d(var(--guide-x, 0px), var(--guide-y, 0px), 0);
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.22s ease;
   }
-  .guide[data-placed] {visibility:visible;}
+
+  html[data-theme="dark"] & .guide {
+    --guide-paper: #ffffff;
+    --guide-ink: #111215;
+    --guide-rim: rgb(17 18 21 / 0.12);
+  }
+
+  .guide[data-placed] {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .guide[data-open] {
+    z-index: 55;
+  }
+
+  .guide[data-concealed],
+  html[data-mega-open] & .guide,
+  html[data-mega-open] & .guide-trail,
+  [data-kui-surface] & .guide,
+  [data-kui-surface] & .guide-trail,
+  body[data-kui-intro-active] & .guide-trail {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
   .shell {
-    position:absolute;bottom:0;left:0;width:clamp(49px,3.9vw,56px);height:36px;
-    transform:translateX(-50%) var(--flight-pose,matrix(1,0,0,1,0,0));transform-origin:center 55%;color:var(--guide-ink);
-    transition:width 118ms var(--settle),height var(--shape-time) var(--settle);
-  }
-  .ink {
-    position:absolute;top:0;left:2px;width:calc(100% - 4px);height:100%;overflow:visible;pointer-events:none;
-    color:var(--guide-paper);transform:skewX(-6deg);transform-origin:center;
-    transition:transform 180ms var(--settle),left 180ms var(--settle),width 180ms var(--settle);
-  }
-  .tail {transform-origin:0 0;transition:transform 180ms var(--settle);}
-  .trigger {
-    position:absolute;left:0;top:-5px;width:100%;height:46px;padding:0;
-    border:0;background:transparent;color:inherit;border-radius:var(--radius-control);
-    font:inherit;cursor:pointer;pointer-events:auto;touch-action:manipulation;
-  }
-  .trigger:focus-visible {outline:2px solid var(--focus);outline-offset:4px;}
-  .gaze {
-    position:absolute;left:16px;top:16px;width:19px;height:11px;
-    transform:translate(var(--look-x,0px),var(--look-y,0px)) skewX(-2deg);
-    transition:transform 150ms ease-out,height 200ms var(--settle),top 200ms var(--settle);
-  }
-  .eyes {
-    width:100%;height:100%;display:flex;justify-content:space-between;
-    transform:skewX(-7deg);transform-origin:center 59%;
-  }
-  .eyes i {display:block;width:5px;height:100%;background:currentColor;}
-  .guide-name,.cross {
-    position:absolute;top:50%;visibility:hidden;opacity:0;pointer-events:none;
-    transform:translate(4px,-50%);transition:opacity 85ms ease,transform 170ms var(--settle);
-  }
-  .guide-name {left:47px;white-space:nowrap;font-size:13px;line-height:1;font-weight:520;}
-  .cross {right:16px;}
-
-
-  .guide[data-open] :is(.cross,.guide-name) {
-    visibility:visible;opacity:1;transform:translate(0,-50%);transition-delay:90ms;
-  }
-  .guide[data-open] .shell {pointer-events:auto;width:min(278px,calc(100vw - 36px));height:184px;}
-  .guide[data-below] .shell {bottom:auto;top:-36px;}
-  .guide[data-open] .ink {left:0;width:100%;transform:none;filter:drop-shadow(0 8px 15px #0002) drop-shadow(0 1px 2px #0001);}
-  .guide[data-open] .tail {transform:scaleY(0);}
-  .guide[data-open] .trigger {top:0;}
-  .guide[data-open] .trigger:focus-visible {outline-offset:-4px;outline-color:var(--guide-ink);}
-  .guide[data-pressed]:not([data-open]) .gaze {transform:translate(var(--look-x,0px),var(--look-y,0px)) skewX(-5deg) scaleY(.64);transition-duration:110ms;}
-  .guide[data-open] .gaze {top:17px;transform:none;}
-  .choices {
-    position:absolute;inset:45px 6px 6px;overflow:hidden;
-    visibility:hidden;pointer-events:none;
-  }
-  .guide[data-open] .choices {visibility:visible;pointer-events:auto;}
-  .choices a {
-    height:44px;display:grid;grid-template-columns:18px minmax(0,1fr) 16px;align-items:center;gap:10px;
-    padding:0 11px;text-decoration:none;border-radius:var(--radius-control);color:inherit;
-    white-space:nowrap;font-size:13px;line-height:1.2;
-    opacity:0;transform:translateY(5px);transition:opacity 90ms,transform 170ms var(--settle),background-color 120ms;
-  }
-  .guide[data-open] .choices a {opacity:1;transform:none;transition-delay:75ms,75ms,0ms;}
-  .guide[data-open] .choices a:nth-child(2) {transition-delay:105ms,105ms,0ms;}
-  .guide[data-open] .choices a:nth-child(3) {transition-delay:135ms,135ms,0ms;}
-  .choices a:is(:hover,:focus-visible) {background:color-mix(in srgb,currentColor 12%,transparent);outline-offset:-2px;outline-color:currentColor;}
-  .choices a .icon-arrowRight {opacity:0;transform:translateX(-3px);transition:opacity 150ms,transform 200ms;}
-  .choices a:is(:hover,:focus-visible) .icon-arrowRight {opacity:1;transform:none;}
-  @media(prefers-reduced-motion:no-preference) {
-    .guide .shell {animation:guide-arrive 400ms var(--settle) backwards;}
-    @keyframes guide-arrive {
-      0% {opacity:0;translate:0 6px;}
-      68% {opacity:1;}
-      100% {translate:0 0;}
-    }
-    .guide[data-awake]:not([data-open]) .eyes {animation:guide-blink 5.4s infinite;}
-    .guide:not([data-open]):has(.trigger:active) .ink {translate:0 1px;scale:.98 .94;}
-    @keyframes guide-blink {
-      0%,44%,48%,100% {transform:skewX(-7deg) scaleY(1);}
-      46% {transform:skewX(-7deg) scaleY(.14);}
-    }
-  }
-  @media(prefers-reduced-motion:reduce) {
-    .guide *,.choices a .icon {transition:none !important;animation:none !important;}
-    .guide .gaze,.guide[data-pressed]:not([data-open]) .gaze {transform:none;}
-    .guide[data-hint]:not([data-open]) .shell {transform:translateX(-50%);}
-  }
-  @media(forced-colors:active) { .guide {--guide-paper:CanvasText;--guide-ink:Canvas;forced-color-adjust:none;} }
-}
-.kui-cover-page {
-  .guide[data-hint] .shell {
-    width: max-content;
-    max-width: min(20.5rem, calc(100vw - 24px));
-    height: auto;
-    min-height: 38px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: var(--shell-w, 56px);
+    height: var(--shell-h, 36px);
+    color: var(--guide-ink);
     pointer-events: auto;
-    transition: none;
+    transform: translateX(-50%) var(--flight-pose, matrix(1, 0, 0, 1, 0, 0));
+    transform-origin: 50% 100%;
+    transition:
+      width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      height 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .guide[data-hint] .ink { transform: none; }
-  .guide[data-hint] .trigger { z-index: 1; top: 0; width: 42px; height: 38px; }
-  .guide[data-hint] .gaze { top: 13px; left: 13px; height: 14px; }
-  .speech { position: relative; padding: 10px 15px 10px 43px; font-size: 13px; line-height: 1.45; color: var(--guide-ink); }
-  .speech-title { display: block; font-weight: 550; }
-  .speech-body { margin: .35rem 0 .55rem; overflow-wrap: anywhere; }
-  .speech-copy { display: inline-flex; align-items: center; gap: .4rem; min-height: 30px; padding: .25rem .6rem;
-    border: 1px solid color-mix(in srgb, currentColor 38%, transparent); border-radius: var(--radius-control);
-    font: inherit; background: transparent; color: inherit; cursor:pointer; }
-  .speech-copy:is(:hover,:focus-visible) { background: color-mix(in srgb, currentColor 16%, transparent); }
-  .speech-copy .copy-mark { color: inherit; }
-  .speech[hidden],.speech-body[hidden],.speech-copy[hidden],.choices[hidden] { display: none; }
-  .guide[data-hint] .shell::after { content:""; position:absolute; left:0; right:0; top:100%; height:18px; }
-  .guide[data-below] .shell::after { top:auto;bottom:100%; }
-  .guide[data-below][data-hint] .shell { top:0;bottom:auto; }
-  .guide[data-below][data-hint] .tail { display:none; }
-  .guide[data-hint] .speech { max-height: calc(100svh - 5.5rem); overflow-y: auto; }
+
+  .guide[data-below] .shell {
+    bottom: auto;
+    top: 0;
+    transform-origin: 50% 0%;
+  }
+
+  .guide[data-open] .shell {
+    width: min(292px, calc(100vw - 32px));
+    height: 230px;
+    transform: translateX(-50%);
+  }
+
+  .ink {
+    position: absolute;
+    top: 0;
+    left: 2px;
+    width: calc(100% - 4px);
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    color: var(--guide-paper);
+    transform: skewX(-6deg);
+    transform-origin: center;
+    filter:
+      drop-shadow(0 12px 28px rgb(0 0 0 / 0.2))
+      drop-shadow(0 2px 5px rgb(0 0 0 / 0.12));
+    transition:
+      transform 0.18s var(--settle),
+      left 0.18s var(--settle),
+      width 0.18s var(--settle);
+  }
+
+  .guide:is([data-hint], [data-open]) .ink {
+    left: 0;
+    width: 100%;
+    transform: none;
+  }
+
+  html[data-theme="dark"] & .ink {
+    filter:
+      drop-shadow(0 16px 38px rgb(0 0 0 / 0.56))
+      drop-shadow(0 2px 8px rgb(0 0 0 / 0.28));
+  }
+
+  .rim {
+    stroke: var(--guide-rim);
+    stroke-width: 1;
+  }
+
+  .tail {
+    transform-origin: 0 0;
+    transition: opacity 0.16s ease, transform 0.2s var(--settle);
+  }
+
+  .guide[data-flying] .tail,
+  .guide[data-open] .tail,
+  .guide[data-below] .tail {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+
+  .trigger {
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    top: -5px;
+    width: 100%;
+    height: 46px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    border-radius: 9px;
+    font: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+  }
+
+  .trigger:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 4px;
+  }
+
+  .guide[data-hint]:not([data-open]) .trigger {
+    top: 0;
+    width: 44px;
+    height: 100%;
+  }
+
+  .guide[data-open] .trigger {
+    position: relative;
+    top: 0;
+    width: 100%;
+    height: 44px;
+    border-radius: 9px 9px 0 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--guide-ink) 10%, transparent);
+  }
+
+  .guide[data-open] .trigger:focus-visible {
+    outline-offset: -4px;
+    outline-color: var(--guide-ink);
+  }
+
+  /* Signature KUI Bot Eyes — preserved exactly */
+  .gaze {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    width: 19px;
+    height: 11px;
+    transform: translate(var(--look-x, 0px), var(--look-y, 0px)) skewX(-2deg);
+    transition:
+      transform 150ms ease-out,
+      height 200ms var(--settle),
+      top 200ms var(--settle),
+      left 200ms var(--settle);
+  }
+
+  .guide[data-pressed]:not([data-open]) .gaze {
+    transform: translate(var(--look-x, 0px), var(--look-y, 0px)) skewX(-5deg) scaleY(0.64);
+    transition-duration: 110ms;
+  }
+
+  .guide[data-hint]:not([data-open]) .gaze {
+    top: 13px;
+    left: 13px;
+    height: 14px;
+  }
+
+  .guide[data-open] .gaze {
+    top: 16px;
+    left: 16px;
+    height: 11px;
+    transform: none;
+  }
+
+  .eyes {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: space-between;
+    transform: skewX(-7deg);
+    transform-origin: center 59%;
+  }
+
+  .eyes i {
+    display: block;
+    width: 5px;
+    height: 100%;
+    background: currentColor;
+  }
+
+  .guide-name,
+  .cross {
+    position: absolute;
+    top: 50%;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(4px, -50%);
+    transition: opacity 90ms ease, transform 170ms var(--settle);
+  }
+
+  .guide-name {
+    left: 46px;
+    white-space: nowrap;
+    font-size: 0.84rem;
+    line-height: 1;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--guide-ink) 92%, transparent);
+  }
+
+  .cross {
+    right: 14px;
+    color: color-mix(in srgb, var(--guide-ink) 66%, transparent);
+  }
+
+  .guide[data-open] :is(.cross, .guide-name) {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(0, -50%);
+    transition-delay: 80ms;
+  }
+
+  /* Speech Bubble + Staggered Character Reveal */
+  .speech {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: max-content;
+    max-width: min(312px, calc(100vw - 40px));
+    max-height: calc(100svh - 5.5rem);
+    overflow-y: auto;
+    padding: 9px 14px 10px 44px;
+    font-size: 0.83rem;
+    line-height: 1.44;
+    color: var(--guide-ink);
+    text-align: left;
+  }
+
+  .speech-title {
+    display: block;
+    font-weight: 560;
+    color: var(--guide-ink);
+  }
+
+  .speech-char {
+    display: inline-block;
+    white-space: pre;
+    animation: kui-guide-char-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) var(--char-delay, 0ms) both;
+  }
+
+  @keyframes kui-guide-char-in {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .speech-body {
+    margin: 0;
+    font-size: 0.76rem;
+    line-height: 1.52;
+    color: color-mix(in srgb, var(--guide-ink) 72%, transparent);
+    overflow-wrap: anywhere;
+  }
+
+  .speech-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin-top: 4px;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--guide-ink) 12%, transparent);
+    color: var(--guide-ink);
+    font-size: 0.74rem;
+    font-weight: 550;
+    cursor: pointer;
+    transition: background-color 0.14s ease;
+  }
+
+  .speech-copy:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--guide-ink) 20%, transparent);
+  }
+
+  .speech-copy .copy-mark {
+    color: inherit;
+  }
+
+  .guide[data-hint] .shell::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 18px;
+  }
+
+  .guide[data-below] .shell::after {
+    top: auto;
+    bottom: 100%;
+  }
+
+  /* Polished Command Card Choices */
+  .choices {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    gap: 3px;
+    padding: 8px 10px 9px;
+  }
+
+  .speech[hidden],
+  .speech-body[hidden],
+  .speech-copy[hidden],
+  .choices[hidden] {
+    display: none !important;
+  }
+
+  .choices a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 10px;
+    border-radius: 8px;
+    color: color-mix(in srgb, var(--guide-ink) 86%, transparent);
+    font-size: 0.84rem;
+    font-weight: 520;
+    text-decoration: none;
+    white-space: nowrap;
+    animation: kui-guide-choice-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) var(--choice-delay, 60ms) both;
+    transition: background-color 0.14s ease, color 0.14s ease;
+  }
+
+  @keyframes kui-guide-choice-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .choice-bracket {
+    flex: 0 0 8px;
+    font: 600 13px/1 var(--mono);
+    color: var(--guide-ink);
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .choices a:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--guide-ink) 10%, transparent);
+    color: var(--guide-ink);
+    outline-offset: -2px;
+    outline-color: currentColor;
+  }
+
+  .choices a:is(:hover, :focus-visible) .choice-bracket {
+    opacity: 1;
+  }
+
+  .choice-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .choice-tag {
+    margin-left: auto;
+    font: 500 10.5px/1 var(--mono);
+    color: color-mix(in srgb, var(--guide-ink) 48%, transparent);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .guide .shell {
+      animation: guide-arrive 400ms var(--settle) backwards;
+    }
+    @keyframes guide-arrive {
+      0% {
+        opacity: 0;
+        translate: 0 6px;
+      }
+      68% {
+        opacity: 1;
+      }
+      100% {
+        translate: 0 0;
+      }
+    }
+    .guide[data-awake]:not([data-open]) .eyes {
+      animation: guide-blink 5.4s infinite;
+    }
+    .guide:not([data-open]):has(.trigger:active) .ink {
+      translate: 0 1px;
+      scale: 0.98 0.94;
+    }
+    @keyframes guide-blink {
+      0%,
+      44%,
+      48%,
+      100% {
+        transform: skewX(-7deg) scaleY(1);
+      }
+      46% {
+        transform: skewX(-7deg) scaleY(0.14);
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .guide *,
+    .choices a {
+      transition: none !important;
+      animation: none !important;
+    }
+    .guide .gaze,
+    .guide[data-pressed]:not([data-open]) .gaze {
+      transform: none;
+    }
+    .guide[data-hint]:not([data-open]) .shell {
+      transform: translateX(-50%);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .guide {
+      --guide-paper: CanvasText;
+      --guide-ink: Canvas;
+      forced-color-adjust: none;
+    }
+  }
 }

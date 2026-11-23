@@ -619,8 +619,7 @@ impl Render for SmartFormFill {
             .gap(px(12.))
             .min_w_0()
             .w_full();
-        for i in 0..self.fields.len() {
-            let field = &self.fields[i];
+        for (i, field) in self.fields.iter().enumerate() {
             let age = field.flash.time(0.9, w, cx);
             let tint = if age < 0.9 {
                 (1. - ease(age / 0.9)) * 0.14

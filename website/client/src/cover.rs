@@ -1,6 +1,7 @@
 //! Browser interactions for the KUI cover.
-mod flight;
+pub(crate) mod flight;
 mod guide;
+mod intro;
 mod motion;
 
 use std::{
@@ -10,33 +11,37 @@ use std::{
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_sys::{Document, Element, Event, EventTarget, HtmlElement, Window};
 
-type Result<T = ()> = std::result::Result<T, JsValue>;
+pub(crate) type Result<T = ()> = std::result::Result<T, JsValue>;
 
-fn element<T: JsCast>(root: &Element, selector: &str) -> Result<T> {
+pub(crate) fn element<T: JsCast>(root: &Element, selector: &str) -> Result<T> {
     root.query_selector(selector)?
         .ok_or_else(|| JsValue::from_str(selector))?
         .dyn_into()
         .map_err(Into::into)
 }
 
-fn flag(el: &Element, attr: &str, enabled: bool) {
+pub(crate) fn flag(el: &Element, attr: &str, enabled: bool) {
     if el.has_attribute(attr) != enabled {
         let _ = el.toggle_attribute(attr);
     }
 }
 
-fn css(el: &HtmlElement, name: &str, value: &str) {
+pub(crate) fn css(el: &HtmlElement, name: &str, value: &str) {
     let _ = el.style().set_property(name, value);
 }
 
-fn listen(target: &EventTarget, event: &str, handler: impl FnMut(Event) + 'static) -> Result {
+pub(crate) fn listen(
+    target: &EventTarget,
+    event: &str,
+    handler: impl FnMut(Event) + 'static,
+) -> Result {
     let handler = Closure::<dyn FnMut(Event)>::new(handler);
     target.add_event_listener_with_callback(event, handler.as_ref().unchecked_ref())?;
     handler.forget(); // The static document owns the listener until navigation.
     Ok(())
 }
 
-fn viewport(window: &Window) -> (f64, f64) {
+pub(crate) fn viewport(window: &Window) -> (f64, f64) {
     (
         window
             .inner_width()
@@ -52,14 +57,14 @@ fn viewport(window: &Window) -> (f64, f64) {
 }
 
 /// At most one frame is queued. Idle effects wake through their event handlers.
-struct Frame {
+pub(crate) struct Frame {
     window: Window,
     pending: Cell<bool>,
     callback: Closure<dyn FnMut(f64)>,
 }
 
 impl Frame {
-    fn new(window: &Window, mut tick: impl FnMut(f64) -> bool + 'static) -> Rc<Self> {
+    pub(crate) fn new(window: &Window, mut tick: impl FnMut(f64) -> bool + 'static) -> Rc<Self> {
         Rc::new_cyclic(|weak: &Weak<Self>| {
             let weak = weak.clone();
             let callback = Closure::new(move |now: f64| {
@@ -77,7 +82,7 @@ impl Frame {
             }
         })
     }
-    fn request(&self) {
+    pub(crate) fn request(&self) {
         if !self.pending.replace(true)
             && self
                 .window
@@ -102,6 +107,7 @@ pub fn init() -> Result {
     let reduced = window
         .match_media("(prefers-reduced-motion: reduce)")?
         .ok_or("matchMedia")?;
+    intro::init(&window, &document, &root, &reduced)?;
     motion::init(&window, &document, &root, &reduced)?;
     guide::init(&window, &document, &root, &reduced)?;
     root.set_attribute("data-initialized", "")
