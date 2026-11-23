@@ -3,6 +3,7 @@
 mod belt;
 mod dock;
 mod dots;
+mod floor;
 mod fusion;
 mod guide;
 mod heat_flow;
@@ -33,6 +34,7 @@ pub fn init() -> Result {
         return Ok(());
     }
     intro::init(&window, &document, &root, &reduced)?;
+    floor::init(&window, &document, &root, &reduced)?;
     belt::init(&window, &document, &root, &reduced)?;
     heat_flow::init(&window, &document, &root, &reduced)?;
     dock::init(&window, &document, &root, &reduced)?;

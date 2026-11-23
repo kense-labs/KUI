@@ -17,7 +17,7 @@ web-sys = { version = "0.3", features = [
   "AddEventListenerOptions","Animation","AnimationEvent","CanvasGradient","CanvasRenderingContext2d","Clipboard","CssStyleDeclaration","CustomEvent",
   "Document","DocumentFragment","DomRect","DomRectReadOnly","DomTokenList","Element","Event","EventTarget","FillMode","FocusEvent",
   "History","HtmlAnchorElement","HtmlButtonElement","HtmlCanvasElement","HtmlCollection","HtmlDetailsElement",
-  "HtmlDialogElement","HtmlElement","HtmlIFrameElement","HtmlImageElement","HtmlInputElement","HtmlSelectElement",
+  "HtmlDialogElement","HtmlElement","HtmlIFrameElement","HtmlImageElement","HtmlInputElement","HtmlSelectElement","ImageData",
   "HtmlTemplateElement","HtmlTextAreaElement","KeyboardEvent","KeyframeAnimationOptions","Location","MediaQueryList",
   "MessageEvent","MouseEvent","NamedNodeMap","Attr","Navigator","Node","NodeList","Performance","PointerEvent",
   "IntersectionObserver","IntersectionObserverEntry","MutationObserver","MutationObserverInit","ResizeObserver","FontFaceSet","PopStateEvent","DomParser","SupportedType","DocumentType","Request","RequestInit","Response","ScrollToOptions","ScrollBehavior","Storage","TextMetrics","Url","VisibilityState","WebGlBuffer","WebGlContextAttributes","WebGlProgram","WebGlRenderingContext","WebGlShader","WebGlUniformLocation","WheelEvent","Window","console"

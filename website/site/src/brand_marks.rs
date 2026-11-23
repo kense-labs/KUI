@@ -6,6 +6,12 @@
 /// Monochrome two-tone architectural silhouette for resting navigation states (`viewBox="0 0 64 64"`).
 pub fn silhouette_paths(kind: &str) -> &'static str {
     match kind {
+        "kstack" => {
+            r##"<path fill="currentColor" fill-opacity="0.92" d="M32 7 55 18.5 32 30 9 18.5Z"/><path fill="currentColor" fill-opacity="0.64" d="m15.6 26.8 16.4 8.2 16.4-8.2L55 30.2 32 41.8 9 30.2Z"/><path fill="currentColor" fill-opacity="0.42" d="m15.6 38.6 16.4 8.2 16.4-8.2L55 42 32 53.6 9 42Z"/>"##
+        }
+        "kstudio" => {
+            r##"<path fill="currentColor" fill-opacity="0.46" fill-rule="evenodd" d="M12 11h40a6 6 0 0 1 6 6v24a6 6 0 0 1-6 6H12a6 6 0 0 1-6-6V17a6 6 0 0 1 6-6Zm3 7v20h34V18H15Z"/><path fill="currentColor" fill-opacity="0.9" d="M21 23h9v10h-9Zm13 0h9v4h-9Zm0 6h9v4h-9ZM20 51h24l3 4H17Z"/>"##
+        }
         "kui" => {
             r##"<path fill="currentColor" fill-opacity="0.44" fill-rule="evenodd" d="M18 8h16a10 10 0 0 1 10 10v16a10 10 0 0 1-10 10H18A10 10 0 0 1 8 34V18A10 10 0 0 1 18 8Zm1 9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V19a2 2 0 0 0-2-2H19Z"/><path fill="currentColor" fill-opacity="0.88" fill-rule="evenodd" d="M30 20h16a10 10 0 0 1 10 10v16a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10V30a10 10 0 0 1 10-10Zm1 9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V31a2 2 0 0 0-2-2H31Z"/>"##
         }
@@ -42,6 +48,14 @@ pub fn silhouette_paths(kind: &str) -> &'static str {
 /// Full multi-facet jewel-tone sculpted ribbon paths (`viewBox="0 0 64 64"`).
 pub fn detail_paths(kind: &str) -> &'static str {
     match kind {
+        "kstack" => {
+            // 3-Tier Isometric Accelerator & MaaS Cluster Prism Stack
+            r##"<path fill="#4F46E5" d="m9 42 23-11.4L55 42 32 53.6Z"/><path fill="#3730A3" d="m32 53.6 23-11.6v4.2L32 57.8Z"/><path fill="#6366F1" d="m9 30.2 23-11.4 23 11.4L32 41.8Z"/><path fill="#4338CA" d="m32 41.8 23-11.6v4.2L32 46Z"/><path fill="#A5B4FC" d="M32 7 55 18.5 32 30 9 18.5Z"/><path fill="#818CF8" d="m32 30 23-11.5v4.2L32 34.2Z"/><path fill="#EEF2FF" d="m32 13.4 9.2 4.6-9.2 4.6-9.2-4.6Z"/>"##
+        }
+        "kstudio" => {
+            // Multi-Machine Native Hub Display + Connected Node Tiles
+            r##"<rect x="7" y="10" width="50" height="36" rx="8" fill="#0F766E"/><path fill="#14B8A6" d="M15 10h34a8 8 0 0 1 8 8v5H7v-5a8 8 0 0 1 8-8Z"/><rect x="13" y="18" width="16" height="20" rx="3.5" fill="#CCFBF1"/><rect x="33" y="18" width="18" height="8.5" rx="2.5" fill="#5EEAD4"/><rect x="33" y="29.5" width="18" height="8.5" rx="2.5" fill="#99F6E4"/><path fill="#115E59" d="M24 46h16l4 7.5a2 2 0 0 1-1.8 2.9H21.8a2 2 0 0 1-1.8-2.9Z"/>"##
+        }
         "kui" => {
             // Interlocking Sapphire & Sky-Cobalt Escher Ribbon Frames + Precision Core Spark
             r##"<path fill="#60A5FA" fill-rule="evenodd" d="M18 8h16a10 10 0 0 1 10 10v16a10 10 0 0 1-10 10H18A10 10 0 0 1 8 34V18A10 10 0 0 1 18 8Zm1 9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V19a2 2 0 0 0-2-2H19Z"/><path fill="#2563EB" fill-rule="evenodd" d="M30 20h16a10 10 0 0 1 10 10v16a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10V30a10 10 0 0 1 10-10Zm1 9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V31a2 2 0 0 0-2-2H31Z"/><path fill="#1E3A8A" d="M35 20h9v9h-9z" opacity="0.32"/><path fill="#93C5FD" d="M35 16h9v15h-9z"/><path fill="#1D4ED8" d="M20 35h9v9h-9z"/><path fill="#DBEAFE" d="m32 27.2 4.8 4.8-4.8 4.8-4.8-4.8Z"/>"##

@@ -238,6 +238,7 @@ static ENTRIES: LazyLock<Vec<Entry>> = LazyLock::new(|| {
         include_str!("../docs/navigation-extra.json"),
         include_str!("../docs/glass-extra.json"),
         include_str!("../docs/pro-screens-extra.json"),
+        include_str!("../docs/observability-extra.json"),
     ] {
         entries.extend(
             serde_json::from_str::<Vec<Entry>>(file)

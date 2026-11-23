@@ -119,12 +119,7 @@ fn update_links() {
     };
     let home = brand.get_attribute("href").unwrap_or_default();
     let en = root().get_attribute("lang").as_deref() == Some("en");
-    let suffix = match (en, q(".topbar.product").is_some()) {
-        (true, true) => "/en/kui/",
-        (false, true) => "/kui/",
-        (true, false) => "/en/",
-        (false, false) => "/",
-    };
+    let suffix = if en { "/en/" } else { "/" };
     let base = home.strip_suffix(suffix).unwrap_or("");
     let loc = window().location();
     let pathname = loc.pathname().unwrap_or_default();

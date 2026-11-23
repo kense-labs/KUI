@@ -60,6 +60,14 @@ pub fn solid_fallback(kind: &str) -> &'static str {
   <rect x="284" y="98" width="84" height="162" rx="16" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.2"/>
 </svg>"##
         }
+        "studio" => {
+            r##"<svg class="kense-solid-fallback" viewBox="0 0 440 330" fill="none" aria-hidden="true">
+  <ellipse cx="220" cy="276" rx="154" ry="18" fill="currentColor" opacity="0.06"/>
+  <rect x="116" y="58" width="208" height="142" rx="14" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.2"/>
+  <rect x="52" y="152" width="68" height="58" rx="10" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1.1"/>
+  <rect x="322" y="124" width="62" height="94" rx="10" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1.1"/>
+</svg>"##
+        }
         _ => {
             r##"<svg class="kense-solid-fallback" viewBox="0 0 440 330" fill="none" aria-hidden="true">
   <ellipse cx="220" cy="276" rx="152" ry="18" fill="currentColor" opacity="0.06"/>

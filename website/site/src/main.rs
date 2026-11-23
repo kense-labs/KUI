@@ -170,9 +170,9 @@ fn main() -> Result<()> {
             company::page(en, rev),
             "Kense",
             if en {
-                "Open infrastructure for trust-native AI operating planes, isolated runtimes, dual-runtime GPUI interfaces, and agent systems."
+                "Kense builds KStack, KStudio, KWork, and KUI: software for heterogeneous GPU scheduling, multi-machine development, desktop agents, and cross-platform GPUI interfaces."
             } else {
-                "面向可信 AI 操作系统、隔离运行时、双端同源 GPUI 界面与智能体工程的开源基础设施。"
+                "Kense 开发 KStack、KStudio、KWork 与 KUI：涵盖异构 GPU 调度、多机远程开发、桌面 Agent 工作台与跨端 GPUI 组件库。"
             },
             true,
         )?;
@@ -185,9 +185,9 @@ fn main() -> Result<()> {
                 "文档 · Kense"
             },
             if en {
-                "Documentation hub for Kense — KUI, KRun, AI OS architecture, KBox, KSandbox, and KCL."
+                "Product documentation for KStack, KStudio, KWork, and KUI, plus KBox and KSandbox runtime middleware notes."
             } else {
-                "Kense 文档中心：KUI、KRun、AI OS 架构、KBox、KSandbox 与 KCL。"
+                "Kense 产品文档中心：KStack、KStudio、KWork、KUI 功能说明，以及 KBox 与 KSandbox 运行时中间件介绍。"
             },
             true,
         )?;

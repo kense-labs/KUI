@@ -808,6 +808,7 @@ enum SceneKind {
     ClayShield,
     ClayRelease,
     ClayRust,
+    Studio,
 }
 
 impl SceneKind {
@@ -819,6 +820,7 @@ impl SceneKind {
             "clay-vault" => Self::ClayVault,
             "clay-shield" => Self::ClayShield,
             "clay-release" => Self::ClayRelease,
+            "studio" => Self::Studio,
             _ => Self::ClayRust,
         }
     }
@@ -832,6 +834,7 @@ impl SceneKind {
             Self::ClayShield => (0.18, 0.15, 2.18),
             Self::ClayRelease => (-0.17, 0.21, 2.32),
             Self::ClayRust => (0.19, 0.15, 2.42),
+            Self::Studio => (0.24, 0.17, 3.12),
         }
     }
 }
@@ -1451,6 +1454,114 @@ fn build_clay_rust(gl: &GL) -> Result<SceneMeshes> {
     })
 }
 
+fn build_studio_scene(gl: &GL) -> Result<SceneMeshes> {
+    let mut sh = MeshBuilder::new();
+    sh.ground_shadow(-1.34, 2.75, 1.32);
+
+    // Part 0: Central GPUI Multi-Machine Hub Display + Stand (Bot fusion host!)
+    let mut hub = MeshBuilder::new();
+    hub.bevel_box(
+        0.0, 0.22, -0.08, 2.72, 1.76, 0.18, 0.18, 0.035, SILVER, MAT_ALLOY,
+    );
+    hub.bevel_box(
+        0.0,
+        -0.78,
+        -0.10,
+        0.38,
+        0.36,
+        0.12,
+        0.05,
+        0.015,
+        SILVER_DEEP,
+        MAT_ALLOY,
+    );
+    hub.bevel_box(
+        0.0, -0.96, -0.02, 1.04, 0.10, 0.42, 0.05, 0.018, SILVER, MAT_ALLOY,
+    );
+    hub.decal(0.0, 0.22, 0.016, 2.48, 1.52, 0.10, PORCELAIN, MAT_DISPLAY);
+    // Top window chrome + machine status pills
+    hub.decal(0.0, 0.82, 0.020, 2.48, 0.22, 0.06, PAPER, MAT_DISPLAY);
+    for (i, col) in [CORAL, AMBER, EMERALD].into_iter().enumerate() {
+        hub.decal(
+            -1.06 + (i as f32) * 0.11,
+            0.82,
+            0.024,
+            0.055,
+            0.055,
+            0.027,
+            col,
+            MAT_DISPLAY,
+        );
+    }
+    hub.decal(0.86, 0.82, 0.024, 0.46, 0.11, 0.055, MINT, MAT_DISPLAY);
+    // Left & Right machine tiles on screen
+    hub.decal(-0.82, 0.12, 0.020, 0.62, 1.02, 0.06, PAPER, MAT_DISPLAY);
+    hub.decal(-0.82, 0.44, 0.024, 0.44, 0.06, 0.03, UI_INK, MAT_DISPLAY);
+    hub.decal(-0.82, 0.24, 0.024, 0.44, 0.18, 0.04, SAPPHIRE, MAT_DISPLAY);
+    hub.decal(-0.82, -0.08, 0.024, 0.44, 0.18, 0.04, EMERALD, MAT_DISPLAY);
+    // Center recessed dark Agent Terminal window (Bot fusion host!)
+    hub.bevel_box(
+        0.34, 0.12, 0.030, 1.46, 1.02, 0.08, 0.11, 0.02, NAVY_PLATE, MAT_ENAMEL,
+    );
+
+    let mut sym = MeshBuilder::new();
+    sym.decal(-0.24, 0.16, 0.0, 0.62, 0.075, 0.035, EMERALD, MAT_DISPLAY);
+    sym.decal(-0.08, -0.02, 0.0, 0.94, 0.06, 0.03, SKY_COBALT, MAT_DISPLAY);
+    sym.decal(-0.18, -0.18, 0.0, 0.74, 0.055, 0.028, PAPER, MAT_DISPLAY);
+
+    // Part 1: Left Compact Mac-Studio Workstation Cube
+    let mut mac_node = MeshBuilder::new();
+    mac_node.bevel_box(
+        -1.64, -0.44, 0.34, 0.92, 0.62, 0.72, 0.16, 0.035, SILVER, MAT_ALLOY,
+    );
+    mac_node.decal(
+        -1.42,
+        -0.58,
+        0.705,
+        0.16,
+        0.05,
+        0.025,
+        OBSIDIAN,
+        MAT_DISPLAY,
+    );
+    mac_node.decal(
+        -1.84,
+        -0.58,
+        0.705,
+        0.055,
+        0.055,
+        0.027,
+        EMERALD,
+        MAT_DISPLAY,
+    );
+
+    // Part 2: Right Remote Linux Tower Node + Verified Link Seal
+    let mut linux_node = MeshBuilder::new();
+    linux_node.bevel_box(
+        1.68, -0.22, 0.30, 0.78, 1.18, 0.68, 0.14, 0.032, GRAPHITE, MAT_ENAMEL,
+    );
+    linux_node.decal(1.68, 0.14, 0.645, 0.48, 0.07, 0.035, SAPPHIRE, MAT_DISPLAY);
+    linux_node.decal(1.68, -0.04, 0.645, 0.48, 0.07, 0.035, EMERALD, MAT_DISPLAY);
+    linux_node.verified_medallion(1.88, 0.52, 0.56, 0.30);
+
+    Ok(SceneMeshes {
+        shadow: GpuPart::upload(gl, &sh, false)?,
+        parts: vec![
+            GpuPart::upload(gl, &hub, true)?,
+            GpuPart::upload(gl, &mac_node, true)?,
+            GpuPart::upload(gl, &linux_node, true)?,
+        ],
+        host: FusionHost {
+            part_idx: 0,
+            local_anchor: [0.34, 0.12, 0.078],
+            world_w: 1.38,
+            eye_w: 0.40,
+            symbols: GpuPart::upload(gl, &sym, false)?,
+            eyes: make_eyes(gl, 0.40, PAPER)?,
+        },
+    })
+}
+
 struct GlPipeline {
     gl: GL,
     gl_canvas: HtmlCanvasElement,
@@ -1462,7 +1573,7 @@ struct GlPipeline {
     u_mvp: WebGlUniformLocation,
     u_model: WebGlUniformLocation,
     u_dark: WebGlUniformLocation,
-    scenes: [SceneMeshes; 7],
+    scenes: [SceneMeshes; 8],
 }
 
 fn compile_shader(gl: &GL, ty: u32, src: &str) -> Result<WebGlShader> {
@@ -1533,6 +1644,7 @@ impl GlPipeline {
             build_clay_shield(&gl)?,
             build_clay_release(&gl)?,
             build_clay_rust(&gl)?,
+            build_studio_scene(&gl)?,
         ];
 
         Ok(Self {
@@ -1653,6 +1765,14 @@ impl GlPipeline {
                     let tilt =
                         ((t * 0.75).sin() * 0.12 + slot.spin as f32 * 0.35) * (1.0 - hov * 0.72);
                     Mat4::translate(0.18, -0.06 + bob, 0.42 + hov * 0.06).mul(Mat4::rot_z(tilt))
+                }
+                (SceneKind::Studio, 1) => {
+                    let bob = (t * 1.5).sin() * 0.045 + hov * 0.07;
+                    Mat4::translate(-ex * 0.30, bob, hov * 0.05)
+                }
+                (SceneKind::Studio, 2) => {
+                    let bob = (t * 1.6 + 1.1).cos() * 0.045 + hov * 0.07;
+                    Mat4::translate(ex * 0.30, bob, hov * 0.05)
                 }
                 _ => Mat4::identity(),
             };

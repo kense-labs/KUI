@@ -19,8 +19,8 @@ use web_sys::{
 
 const REST_W: f64 = 56.0;
 const REST_H: f64 = 36.0;
-const MENU_W: f64 = 292.0;
-const MENU_H: f64 = 230.0;
+const MENU_W: f64 = 296.0;
+const MENU_H: f64 = 274.0;
 const TRAIL_WINDOW_MS: f64 = 220.0;
 
 #[derive(Clone, Copy)]
@@ -560,7 +560,7 @@ impl Guide {
 
         let (dx, dy) = self
             .pointer
-            .map_or((0.0, 0.0), |p| (p.x - x, p.y - y + 18.0));
+            .map_or((0.0, 0.0), |p| (p.x - x, p.y - y + 19.0));
         let gaze = dx.hypot(dy).max(55.0);
         css(
             &self.guide,

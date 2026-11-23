@@ -159,28 +159,27 @@ impl Scene {
         let t = |en, zh| lang.text(en, zh);
         let options = match kind {
             Kind::Gateway => vec![
-                GlassSegmentOption::new("llm", "LLM /v1"),
-                GlassSegmentOption::new("mcp", "MCP Tool"),
-                GlassSegmentOption::new("a2a", "A2A Agent"),
+                GlassSegmentOption::new("llm", "NVIDIA H800"),
+                GlassSegmentOption::new("mcp", "Ascend 910B"),
+                GlassSegmentOption::new("a2a", "Apple M3 Ultra"),
             ],
             Kind::Sandbox => vec![
-                GlassSegmentOption::new("sandbox", "Sandbox"),
-                GlassSegmentOption::new("microvm", "MicroVM"),
-                GlassSegmentOption::new("pool", t("Prewarmed", "预热池")),
+                GlassSegmentOption::new("sandbox", "Mac Studio"),
+                GlassSegmentOption::new("microvm", "Linux Box"),
+                GlassSegmentOption::new("pool", t("Cloud VM", "云端主机")),
             ],
             Kind::Workbench => vec![
                 GlassSegmentOption::new("low", "Flash"),
                 GlassSegmentOption::new("high", "V4"),
-                GlassSegmentOption::new("max", "Max"),
+                GlassSegmentOption::new("max", "Reasoner"),
             ],
         };
-        let segmented = cx.new(|cx| {
-            GlassSegmented::new(t("Execution route", "执行路由"), options, cx).with_small(true)
-        });
+        let segmented =
+            cx.new(|cx| GlassSegmented::new(t("Target", "目标节点"), options, cx).with_small(true));
         let toggle_label = match kind {
-            Kind::Gateway => t("Vault egress injection", "Vault 密文引用出网"),
-            Kind::Sandbox => t("Fail-closed boundary", "失败闭合内核边界"),
-            Kind::Workbench => t("Closed KCL schema", "KCL 闭合 Schema 准入"),
+            Kind::Gateway => t("dGPU memory quota", "开启单卡 dGPU 显存切分"),
+            Kind::Sandbox => t("Keep session on close", "关闭窗口后后台常驻"),
+            Kind::Workbench => t("Require single approval", "敏感命令需单次确认"),
         };
         let toggle =
             cx.new(|cx| Switch::new("kense-policy-switch", toggle_label, w, cx).with_checked(true));
@@ -301,159 +300,178 @@ impl Scene {
         let zh = lang == UiLanguage::Chinese;
         match self.kind {
             Kind::Gateway => [
-                if zh { "主 Key 验签" } else { "Verify key" },
-                if zh { "换发 SVID" } else { "Mint SVID" },
-                if zh { "零凭据出网" } else { "Zero-secret" },
-                if zh { "哈希锚定" } else { "Anchored" },
+                if zh { "显存估算" } else { "VRAM math" },
+                if zh { "异构选卡" } else { "Pick GPU" },
+                if zh { "启动实例" } else { "Start instance" },
+                if zh { "/v1 就绪" } else { "/v1 ready" },
             ],
             Kind::Sandbox => [
-                if zh { "内核探测" } else { "OS probe" },
-                if zh { "隔离挂载" } else { "Isolation" },
-                if zh { "有界工作区" } else { "Workspace" },
-                if zh { "回收补池" } else { "Replenish" },
+                if zh { "SSH 连通" } else { "SSH link" },
+                if zh { "分配环境" } else { "Clean box" },
+                if zh { "运行任务" } else { "Execute" },
+                if zh { "后台保活" } else { "Keep alive" },
             ],
             Kind::Workbench => [
-                if zh { "Schema 准入" } else { "KCL schema" },
-                if zh { "同源渲染" } else { "GPUI view" },
-                if zh { "单次授权" } else { "Approval" },
-                if zh { "状态归档" } else { "Persisted" },
+                if zh { "选择工作区" } else { "Workspace" },
+                if zh { "生成方案" } else { "Plan" },
+                if zh { "单次确认" } else { "Approval" },
+                if zh { "保存历史" } else { "Saved" },
             ],
         }
     }
 
     fn detail_rows(&self, lang: UiLanguage) -> [(&'static str, String); 3] {
         let zh = lang == UiLanguage::Chinese;
-        let digest = (self.runs * 19 + 0x4a) & 0xff;
+        let _digest = (self.runs * 19 + 0x4a) & 0xff;
         match self.kind {
             Kind::Gateway => {
-                let aud = ["llm/v1", "mcp/stdio", "a2a/mesh"][self.mode_index];
-                let egress = if self.flag_on {
+                let (spec, engine) = match self.mode_index {
+                    0 => (
+                        "weights 41.2 GB + kv 14.8 GB / 80 GB",
+                        "vLLM · NIXL · node-04",
+                    ),
+                    1 => (
+                        "weights 38.4 GB + kv 12.0 GB / 64 GB",
+                        "vLLM-Ascend · Mooncake",
+                    ),
+                    _ => (
+                        "weights 22.6 GB + kv 8.4 GB / 192 GB",
+                        "mlx-engine · studio-m3",
+                    ),
+                };
+                let dgpu = if self.flag_on {
                     if zh {
-                        "secret_ref@v4 · 沙箱明文=0".into()
+                        "dGPU 配额已启用 · 单卡多模型并存"
                     } else {
-                        "secret_ref@v4 · 0 plaintext".into()
+                        "dGPU quota active · multi-model card"
                     }
                 } else if zh {
-                    "出网侧隔离".into()
+                    "整卡独占分配"
                 } else {
-                    "isolated egress".into()
+                    "dedicated full card"
                 };
                 [
                     (
                         if zh {
-                            "换发短时 SVID"
+                            "启动前显存预算"
                         } else {
-                            "Scoped SVID"
+                            "VRAM estimate"
                         },
-                        format!("RFC 8693 · {aud} · 600s"),
+                        spec.into(),
                     ),
                     (
                         if zh {
-                            "零凭据执行与注入"
+                            "选中节点与实例"
                         } else {
-                            "Vault egress"
-                        },
-                        egress,
-                    ),
-                    (
-                        if zh {
-                            "计量与哈希锚定"
-                        } else {
-                            "Audit chain"
-                        },
-                        format!("1 event · sha256:4e8a{digest:02x}"),
-                    ),
-                ]
-            }
-            Kind::Sandbox => {
-                let engine = match (zh, self.mode_index) {
-                    (true, 0) => "内置 Sandbox · 28ms 启动 / 6ms 执行",
-                    (true, 1) => "libkrun MicroVM · HVF / KVM",
-                    (true, _) => "预热池极速挂载 · 19.3ms RTT",
-                    (false, 0) => "In-tree Sandbox · 28ms start / 6ms exec",
-                    (false, 1) => "libkrun MicroVM · HVF / KVM",
-                    (false, _) => "Prewarmed pool · 19.3ms RTT",
-                };
-                let boundary = if self.blocked_alert {
-                    if zh {
-                        "~/.ssh 与外网套接字 -> 内核拒绝 (EPERM)"
-                    } else {
-                        "~/.ssh & outbound socket -> denied (EPERM)"
-                    }
-                } else if self.flag_on {
-                    "Seatbelt / seccomp · cap ≤ 100 KiB"
-                } else {
-                    "probe required"
-                };
-                [
-                    (
-                        if zh {
-                            "隔离运行时"
-                        } else {
-                            "Isolation tier"
+                            "Selected GPU"
                         },
                         engine.into(),
                     ),
                     (
                         if zh {
-                            "有界工作区与阻断"
+                            "显存共享与网关"
                         } else {
-                            "Process boundary"
+                            "Gateway & quota"
+                        },
+                        format!("{dgpu} · /v1 #{:02}", self.runs),
+                    ),
+                ]
+            }
+            Kind::Sandbox => {
+                let host = match (zh, self.mode_index) {
+                    (true, 0) => "desk-studio.local · 24 核 / 空闲 142 GB",
+                    (true, 1) => "build-box-02 · Ubuntu 24.04 · MicroVM",
+                    (true, _) => "cn-hz-worker-07 · Tailscale 直连",
+                    (false, 0) => "desk-studio.local · 24 cores / 142 GB free",
+                    (false, 1) => "build-box-02 · Ubuntu 24.04 · MicroVM",
+                    (false, _) => "cn-hz-worker-07 · via Tailscale",
+                };
+                let boundary = if self.blocked_alert {
+                    if zh {
+                        "读取宿主机 ~/.ssh -> 已被沙箱阻断 (EPERM)"
+                    } else {
+                        "read host ~/.ssh -> blocked by sandbox (EPERM)"
+                    }
+                } else if self.flag_on {
+                    if zh {
+                        "KBox / KSandbox 隔离中 · 关窗后会话继续运行"
+                    } else {
+                        "isolated box · keeps running when window closes"
+                    }
+                } else if zh {
+                    "窗口关闭时自动结束会话"
+                } else {
+                    "ends when window closes"
+                };
+                [
+                    (
+                        if zh {
+                            "目标机器状态"
+                        } else {
+                            "Target machine"
+                        },
+                        host.into(),
+                    ),
+                    (
+                        if zh {
+                            "运行边界与保活"
+                        } else {
+                            "Isolation & tray"
                         },
                         boundary.into(),
                     ),
                     (
                         if zh {
-                            "退出回收与补池"
+                            "已托管任务"
                         } else {
-                            "Lifecycle"
+                            "Active session"
                         },
                         if zh {
-                            format!("后代进程树已完整回收 · #{:02}", self.runs)
+                            format!("claude-code + 后台终端运行中 · #{:02}", self.runs)
                         } else {
-                            format!("descendant tree reaped · #{:02}", self.runs)
+                            format!("claude-code + persistent pty · #{:02}", self.runs)
                         },
                     ),
                 ]
             }
             Kind::Workbench => {
                 let model = ["deepseek-flash", "deepseek-v4", "deepseek-reasoner"][self.mode_index];
-                let acp = if self.awaiting_approval {
+                let step = if self.awaiting_approval {
                     if zh {
-                        "请求单次授权：ksandbox exec -- cargo test".into()
+                        "等待你确认执行：cargo test --workspace".into()
                     } else {
-                        "awaiting approval: ksandbox exec -- cargo test".into()
+                        "awaiting approval: cargo test --workspace".into()
                     }
                 } else {
-                    format!("stdio json-rpc · {model}")
+                    format!("{model} · tools ready")
                 };
                 [
                     (
                         if zh {
-                            "闭合 Schema 准入"
+                            "当前项目工作区"
                         } else {
-                            "KCL admission"
+                            "Workspace"
                         },
-                        format!("sha256:7c21{digest:02x} · ≤ 1 MiB"),
+                        "~/Projects/billing-service".into(),
                     ),
                     (
                         if zh {
-                            "桌面与 Web 同源渲染"
+                            "模型与工具状态"
                         } else {
-                            "ACP session"
+                            "Model & tools"
                         },
-                        acp,
+                        step,
                     ),
                     (
                         if zh {
-                            "授权执行与归档"
+                            "历史与定时任务"
                         } else {
-                            "State archive"
+                            "History & schedule"
                         },
                         if zh {
-                            "会话轨迹已归档至 DSH_HOME · 支持冷恢复".into()
+                            format!("本地历史已保存 · 每日 09:00 巡检就绪 (#{:02})", self.runs)
                         } else {
-                            "persisted to DSH_HOME · cold resume ready".into()
+                            format!("saved locally · 09:00 daily run armed (#{:02})", self.runs)
                         },
                     ),
                 ]
@@ -473,49 +491,58 @@ impl Render for Scene {
         let (intent_prompt, header_title, subtitle) = match self.kind {
             Kind::Gateway => (
                 t(
-                    "Dispatch gateway request · zero-secret egress",
-                    "发起网关请求 · 沙箱零明文出网",
+                    "Deploy Qwen3-72B · estimate VRAM & pick GPU",
+                    "部署 Qwen3-72B · 估算显存并自动选卡",
                 ),
-                t("Unified Gateway · Trust Chain", "统一网关 · 单一信任链"),
-                "urn:kense:gateway:v1",
+                t(
+                    "KStack · GPU Scheduler & MaaS",
+                    "KStack · 异构选卡与模型服务",
+                ),
+                "kstack /v1/chat/completions",
             ),
             Kind::Sandbox => (
                 t(
-                    "Run workload inside isolated runtime",
-                    "运行隔离负载 · 预热池极速挂载",
+                    "Hand issue #142 to agent on Linux box",
+                    "把 Issue #142 交给远端机器上的 Agent 处理",
                 ),
-                t("KBox · Isolation Runtime", "KBox & KSandbox · 隔离运行时"),
-                "urn:kense:kbox:microvm",
+                t(
+                    "KStudio · Machine & Agent Hub",
+                    "KStudio · 多机与 Agent 控制台",
+                ),
+                "ssh + kbox microvm",
             ),
             Kind::Workbench => (
                 t(
-                    "ksandbox exec -- cargo test",
-                    "请求单次授权：ksandbox exec -- cargo test",
+                    "Run workspace test suite & summarize diff",
+                    "运行当前工作区测试并汇总改动",
                 ),
-                t("KWork · KUI · KCL Studio", "KWork · KUI · KCL 同源工作台"),
-                "urn:kense:kwork:acp",
+                t(
+                    "KWork · Desktop Agent Workbench",
+                    "KWork · 智能体桌面工作台",
+                ),
+                "kwork + kui gpui",
             ),
         };
 
         let status_badge = if self.blocked_alert {
             (t("Blocked", "越界已阻断"), p.danger)
         } else if self.awaiting_approval {
-            (t("Approval", "等待单次授权"), p.bright)
+            (t("Approval", "等待确认"), p.bright)
         } else if self.running {
-            (t("Running", "链路运行中"), p.bright)
+            (t("Running", "执行中"), p.bright)
         } else {
-            (t("Verified", "已验证"), p.success)
+            (t("Ready", "运行正常"), p.success)
         };
 
         let primary_label = match self.kind {
-            Kind::Gateway => t("Dispatch request", "发起网关请求"),
-            Kind::Sandbox => t("Run workload", "运行隔离负载"),
-            Kind::Workbench => t("Send ACP prompt", "发送 ACP 会话"),
+            Kind::Gateway => t("Deploy model", "一键部署模型"),
+            Kind::Sandbox => t("Dispatch to machine", "派发到该机器"),
+            Kind::Workbench => t("Run task", "发送任务"),
         };
         let secondary_label = match self.kind {
-            Kind::Sandbox => t("Simulate escape", "模拟越界访问"),
-            Kind::Workbench if self.awaiting_approval => t("Approve tool", "批准工具执行"),
-            _ => t("Step stage", "单步切换阶段"),
+            Kind::Sandbox => t("Test path block", "模拟敏感目录阻断"),
+            Kind::Workbench if self.awaiting_approval => t("Approve once", "批准本次执行"),
+            _ => t("Next step", "切换步骤"),
         };
 
         let run_entity = cx.entity();

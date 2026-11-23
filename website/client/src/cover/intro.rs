@@ -507,7 +507,7 @@ pub(super) fn init(
         .and_then(|n| n.dyn_into::<HtmlElement>().ok());
     let topbar_h = topbar
         .as_ref()
-        .map_or(64.0, |b| b.get_bounding_client_rect().height().max(48.0));
+        .map_or(56.0, |b| b.get_bounding_client_rect().height().max(48.0));
     let guide_bot = root
         .query_selector(".guide")?
         .and_then(|n| n.dyn_into::<HtmlElement>().ok());

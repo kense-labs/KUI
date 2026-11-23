@@ -389,11 +389,8 @@ html.is-client-nav .motion-fade-up-delay-3 {
   margin-inline: auto;
 }
 @media (min-width:721px) {
-  .topbar.landing .inner { width:min(calc(100% - 4rem),72rem); height:4rem; }
   .topbar.landing .nav:not(.company-nav) { margin-left:auto; }
   .topbar.landing .actions { margin-left:0; }
-  .topbar.landing .mark { width:28px; height:28px; }
-  .topbar.landing .wordmark { font-size:1.15rem; }
 }
 .topbar[data-kense-topbar] {
   z-index: 52;

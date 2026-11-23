@@ -177,7 +177,8 @@ fn reel(en: bool) -> String {
     )
 }
 
-fn guide(en: bool, base: &str) -> String {
+fn guide(en: bool, base: &str, count: usize) -> String {
+    let ui_tag = format!("{count} UI");
     let open = label(en, "打开 KUI 向导", "Open KUI guide");
     let close = label(en, "收起 KUI 向导", "Close KUI guide");
     let name = label(en, "KUI 向导", "KUI guide");
@@ -191,11 +192,17 @@ fn guide(en: bool, base: &str) -> String {
             format!("{base}/kui/components/button/"),
             "box",
             label(en, "浏览全部组件", "Explore components"),
-            "278 UI",
+            ui_tag.as_str(),
+        ),
+        (
+            format!("{base}/kui/docs/"),
+            "book",
+            label(en, "阅读组件文档", "Component docs"),
+            "Docs",
         ),
         (
             format!("{base}/kui/docs/installation/"),
-            "book",
+            "terminal",
             label(en, "安装与 CLI 指南", "Installation & CLI"),
             "CLI",
         ),
@@ -207,8 +214,8 @@ fn guide(en: bool, base: &str) -> String {
         ),
         (
             home_href,
-            "terminal",
-            label(en, "返回 Kense 组织首页", "Kense Organization"),
+            "arrowRight",
+            label(en, "返回 Kense 首页", "Back to Kense"),
             "Kense",
         ),
     ];
@@ -334,7 +341,7 @@ pub fn page(en: bool) -> String {
         description = description,
         arrow = arrow,
         cards = cards,
-        guide = guide(en, base),
+        guide = guide(en, base, count),
         transport = transport,
         title = label(
             en,

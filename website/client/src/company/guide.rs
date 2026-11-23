@@ -207,6 +207,7 @@ impl KenseGuide {
             4 => "clay-shield",
             5 => "clay-release",
             6 => "clay-rust",
+            7 => "studio",
             _ => return None,
         };
         let el = self

@@ -167,16 +167,15 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
         .filter(|(id, _, _)| *id != "kui-foundation")
         .count();
     let kui_desc = if en {
-        format!("{count} dual-runtime Rust + GPUI controls")
+        format!("{count} Rust + GPUI controls shared by desktop and web")
     } else {
-        format!("{count} 个桌面与 Web 同源 GPUI 组件")
+        format!("{count} 个桌面与 Web 共用源码的 Rust + GPUI 组件")
     };
     let comp_label = if en {
-        format!("Live gallery ({count} items)")
+        format!("Component gallery ({count})")
     } else {
         format!("实时组件画廊（{count} 个）")
     };
-    let ext = r#"<svg class="kense-mega-ext" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>"#;
 
     format!(
         r##"<div class="kense-mega-panel" id="kense-mega-products" data-kense-mega="products" role="region" aria-label="{prod_region}" inert aria-hidden="true">
@@ -187,14 +186,24 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
     <div class="kense-mega-col" data-mega-col>
       <div class="kense-mega-highlight" aria-hidden="true"></div>
       <div class="kense-mega-list">
-        <a class="kense-mega-item kense-mega-item--has-sub" href="https://github.com/kense-labs/kbox" target="_blank" rel="noreferrer" data-mega-entry>{l_kbox}<div class="kense-mega-copy"><span class="kense-mega-title">KBox {ext}</span><span class="kense-mega-desc">{d_kbox}</span></div></a>
+        <a class="kense-mega-item kense-mega-item--has-sub" href="{prefix}/#products-kstack" data-mega-entry>{l_kstack}<div class="kense-mega-copy"><span class="kense-mega-title">KStack</span><span class="kense-mega-desc">{d_kstack}</span></div></a>
         <div class="kense-mega-sub">
-          <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/#experience-sandbox" data-mega-entry><span class="kense-mega-title">{s_pool}</span></a>
-          <a class="kense-mega-item kense-mega-item--sub" href="https://kense-labs.github.io/krun/" data-mega-entry><span class="kense-mega-title">KRun · Web Main</span></a>
+          <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/docs/#kstack" data-mega-entry><span class="kense-mega-title">{s_kstack_doc}</span></a>
+          <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/#experience" data-mega-entry><span class="kense-mega-title">{s_kstack_demo}</span></a>
         </div>
-        <a class="kense-mega-item" href="https://github.com/kense-labs/ksandbox" target="_blank" rel="noreferrer" data-mega-entry>{l_ksb}<div class="kense-mega-copy"><span class="kense-mega-title">KSandbox {ext}</span><span class="kense-mega-desc">{d_ksb}</span></div></a>
       </div>
       <p class="kense-mega-label">{c1_lbl}</p>
+    </div>
+    <div class="kense-mega-col" data-mega-col>
+      <div class="kense-mega-highlight" aria-hidden="true"></div>
+      <div class="kense-mega-list">
+        <a class="kense-mega-item kense-mega-item--has-sub" href="{prefix}/#products-kstudio" data-mega-entry>{l_kstudio}<div class="kense-mega-copy"><span class="kense-mega-title">KStudio</span><span class="kense-mega-desc">{d_kstudio}</span></div></a>
+        <div class="kense-mega-sub">
+          <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/docs/#kstudio" data-mega-entry><span class="kense-mega-title">{s_kstudio_doc}</span></a>
+        </div>
+        <a class="kense-mega-item" href="{prefix}/#products-kwork" data-mega-entry>{l_kwork}<div class="kense-mega-copy"><span class="kense-mega-title">KWork</span><span class="kense-mega-desc">{d_kwork}</span></div></a>
+      </div>
+      <p class="kense-mega-label">{c2_lbl}</p>
     </div>
     <div class="kense-mega-col" data-mega-col>
       <div class="kense-mega-highlight" aria-hidden="true"></div>
@@ -204,19 +213,6 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
           <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/kui/components/button/" data-mega-entry><span class="kense-mega-title">{comp_label}</span></a>
           <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/kui/ai/" data-mega-entry><span class="kense-mega-title">{s_ai}</span></a>
         </div>
-        <a class="kense-mega-item" href="https://github.com/kense-labs/kwork" target="_blank" rel="noreferrer" data-mega-entry>{l_kwork}<div class="kense-mega-copy"><span class="kense-mega-title">KWork {ext}</span><span class="kense-mega-desc">{d_kwork}</span></div></a>
-      </div>
-      <p class="kense-mega-label">{c2_lbl}</p>
-    </div>
-    <div class="kense-mega-col" data-mega-col>
-      <div class="kense-mega-highlight" aria-hidden="true"></div>
-      <div class="kense-mega-list">
-        <a class="kense-mega-item kense-mega-item--has-sub" href="https://github.com/kense-labs/kense" target="_blank" rel="noreferrer" data-mega-entry>{l_aios}<div class="kense-mega-copy"><span class="kense-mega-title">Kense AI OS {ext}</span><span class="kense-mega-desc">{d_aios}</span></div></a>
-        <div class="kense-mega-sub">
-          <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/#experience-gateway" data-mega-entry><span class="kense-mega-title">{s_key}</span></a>
-        </div>
-        <a class="kense-mega-item" href="https://github.com/kense-labs/dsh-acp" target="_blank" rel="noreferrer" data-mega-entry>{l_acp}<div class="kense-mega-copy"><span class="kense-mega-title">dsh-acp {ext}</span><span class="kense-mega-desc">{d_acp}</span></div></a>
-        <a class="kense-mega-item" href="https://github.com/kense-labs/kcl" target="_blank" rel="noreferrer" data-mega-entry>{l_kcl}<div class="kense-mega-copy"><span class="kense-mega-title">KCL {ext}</span><span class="kense-mega-desc">{d_kcl}</span></div></a>
       </div>
       <p class="kense-mega-label">{c3_lbl}</p>
     </div>
@@ -232,165 +228,132 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
       <div class="kense-mega-list">
         <a class="kense-mega-item" href="{prefix}/docs/" data-mega-entry>{l_docs}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_hub}</span><span class="kense-mega-desc">{dv_hub_d}</span></div></a>
         <a class="kense-mega-item" href="{prefix}/kui/docs/installation/" data-mega-entry>{l_kui}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_install}</span><span class="kense-mega-desc">{dv_install_d}</span></div></a>
-        <a class="kense-mega-item" href="https://kense-labs.github.io/krun/" data-mega-entry>{l_krun}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_krun}</span><span class="kense-mega-desc">{dv_krun_d}</span></div></a>
+        <a class="kense-mega-item" href="{prefix}/#architecture" data-mega-entry>{l_kstack}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_arch}</span><span class="kense-mega-desc">{dv_arch_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc1_lbl}</p>
     </div>
     <div class="kense-mega-col" data-mega-col>
       <div class="kense-mega-highlight" aria-hidden="true"></div>
       <div class="kense-mega-list">
+        <a class="kense-mega-item" href="{prefix}/kui/components/button/" data-mega-entry>{l_kui}<div class="kense-mega-copy"><span class="kense-mega-title">{comp_label}</span><span class="kense-mega-desc">{dv_comp_d}</span></div></a>
         <a class="kense-mega-item" href="{prefix}/kui/ai/" data-mega-entry>{l_cli}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_ai}</span><span class="kense-mega-desc">{dv_ai_d}</span></div></a>
-        <a class="kense-mega-item" href="/llms.txt" data-mega-entry>{l_kcl}<div class="kense-mega-copy"><span class="kense-mega-title">llms.txt</span><span class="kense-mega-desc">{dv_llms_d}</span></div></a>
-        <a class="kense-mega-item" href="{prefix}/#start" data-mega-entry>{l_kbox}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_start}</span><span class="kense-mega-desc">{dv_start_d}</span></div></a>
+        <a class="kense-mega-item" href="/llms.txt" data-mega-entry>{l_docs}<div class="kense-mega-copy"><span class="kense-mega-title">llms.txt</span><span class="kense-mega-desc">{dv_llms_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc2_lbl}</p>
     </div>
     <div class="kense-mega-col" data-mega-col>
       <div class="kense-mega-highlight" aria-hidden="true"></div>
       <div class="kense-mega-list">
-        <a class="kense-mega-item" href="https://github.com/kense-labs" target="_blank" rel="noreferrer" data-mega-entry>{l_aios}<div class="kense-mega-copy"><span class="kense-mega-title">kense-labs {ext}</span><span class="kense-mega-desc">{dv_org_d}</span></div></a>
-        <a class="kense-mega-item" href="{prefix}/#architecture" data-mega-entry>{l_acp}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_arch}</span><span class="kense-mega-desc">{dv_arch_d}</span></div></a>
-        <a class="kense-mega-item" href="{prefix}/#principles" data-mega-entry>{l_ksb}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_repos}</span><span class="kense-mega-desc">{dv_repos_d}</span></div></a>
+        <a class="kense-mega-item" href="{prefix}/docs/#middleware" data-mega-entry>{l_kbox}<div class="kense-mega-copy"><span class="kense-mega-title">KBox</span><span class="kense-mega-desc">{dv_kbox_d}</span></div></a>
+        <a class="kense-mega-item" href="{prefix}/docs/#middleware" data-mega-entry>{l_ksb}<div class="kense-mega-copy"><span class="kense-mega-title">KSandbox</span><span class="kense-mega-desc">{dv_ksb_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc3_lbl}</p>
     </div>
   </div>
 </div>"##,
-        prod_region = tr(en, "Kense products", "Kense 产品矩阵"),
+        prod_region = tr(en, "Kense products", "Kense 核心产品"),
         prod_overview = tr(
             en,
-            "Explore all Kense infrastructure pillars",
-            "浏览 Kense 全栈产品与隔离运行时"
+            "Browse KStack, KStudio, KWork, and KUI",
+            "查看 KStack、KStudio、KWork 与 KUI 四款核心产品"
         ),
-        l_kbox = mega_logo("kbox"),
-        d_kbox = tr(
+        l_kstack = mega_logo("kstack"),
+        d_kstack = tr(
             en,
-            "OCI & libkrun MicroVM runtime · 28ms start",
-            "Docker 同形容器与 libkrun MicroVM · 28ms 热启动"
+            "40 MB heterogeneous GPU scheduler & /v1 model serving",
+            "40 MB 异构 GPU 算力池调度与一键模型推理服务"
         ),
-        s_pool = tr(
+        s_kstack_doc = tr(en, "Product overview & specs", "架构说明与支持范围"),
+        s_kstack_demo = tr(en, "Try live placement panel", "在线体验选卡调度面板"),
+        c1_lbl = tr(en, "Compute & Models", "算力与模型"),
+        l_kstudio = mega_logo("kstudio"),
+        d_kstudio = tr(
             en,
-            "Interactive Sandbox & Pool Demo",
-            "体验隔离沙箱与预热池"
+            "One native GPUI app for all your machines & agents",
+            "在一个窗口里连上名下所有机器、终端与 18 种编程 Agent"
         ),
-        l_ksb = mega_logo("ksandbox"),
-        d_ksb = tr(
-            en,
-            "Fail-closed OS process-tree sandbox",
-            "失败闭合的跨平台 Agent 进程树沙箱"
-        ),
-        c1_lbl = tr(en, "Runtimes", "隔离运行时"),
-        l_kui = mega_logo("kui"),
-        s_ai = tr(en, "Coding-Agent Specs & CLI", "编程 Agent 集成与 kui CLI"),
+        s_kstudio_doc = tr(en, "Multi-machine workflow", "多机连接与后台常驻说明"),
         l_kwork = mega_logo("kwork"),
         d_kwork = tr(
             en,
-            "Native GPUI + Tauri ACP desktop studio",
-            "KUI + GPUI 原生智能体桌面工作台"
+            "Desktop client for daily agent sessions, tools & schedules",
+            "日常跑任务的桌面 Agent 客户端，支持多模型切换与定时执行"
         ),
-        c2_lbl = tr(en, "Interfaces", "同源界面"),
-        l_aios = mega_logo("aios"),
-        d_aios = tr(
-            en,
-            "Gateway, Identity, URN, Metering & Vault",
-            "统一网关、计量、审计与密文注入"
-        ),
-        s_key = tr(en, "Live One-Key Trust Chain", "在线体验一把 Key 换票链路"),
-        l_acp = mega_logo("acp"),
-        d_acp = tr(
-            en,
-            "Daemonless stdio JSON-RPC agent harness",
-            "进程即会话的无守护进程 ACP 发行版"
-        ),
-        l_kcl = mega_logo("kcl"),
-        d_kcl = tr(
-            en,
-            "Bounded config parser & sha256 digests",
-            "有界配置解析、闭合 Schema 与规范摘要"
-        ),
-        c3_lbl = tr(en, "AI OS", "操作系统平面"),
-        dev_region = tr(en, "Developer resources", "开发者资源"),
-        dev_overview = tr(
-            en,
-            "Open Kense Documentation Hub",
-            "进入 Kense 文档与架构契约中心"
-        ),
+        c2_lbl = tr(en, "Machines & Desktop", "机器与工作台"),
+        l_kui = mega_logo("kui"),
+        s_ai = tr(en, "CLI & coding-agent guide", "kui CLI 与编程 Agent 接入"),
+        c3_lbl = tr(en, "UI System", "跨端界面"),
+        dev_region = tr(en, "Developer docs", "开发者文档"),
+        dev_overview = tr(en, "Open Documentation Hub", "进入产品与技术文档中心"),
         l_docs = mega_logo("docs"),
-        dv_hub = tr(en, "Documentation Hub", "文档中心总览"),
+        dv_hub = tr(en, "Product Documentation", "产品文档总览"),
         dv_hub_d = tr(
             en,
-            "Unified guides across KUI, KRun, KBox & AI OS",
-            "汇集运行时、UI 组件与架构规范入口"
+            "Guides for KStack, KStudio, KWork, and KUI",
+            "KStack、KStudio、KWork 与 KUI 功能说明"
         ),
-        dv_install = tr(en, "KUI Installation & CLI", "KUI 安装与 CLI 指南"),
+        dv_install = tr(en, "KUI Setup & CLI", "KUI 安装与 CLI"),
         dv_install_d = tr(
             en,
-            "cargo add kense-kui or kui add copy-source",
-            "支持 crates.io 依赖或源码直装"
+            "Add the crate or copy component source with kui add",
+            "按 Cargo 依赖引入或用 kui add 拷贝组件源码"
         ),
-        l_krun = mega_logo("krun"),
-        dv_krun = tr(en, "KRun Docking Guide", "KRun 运行时对接手册"),
-        dv_krun_d = tr(
+        dv_arch = tr(en, "How Products Fit Together", "四款产品怎么配合"),
+        dv_arch_d = tr(
             en,
-            "1-minute Electron / Web Main VM control",
-            "1 分钟在桌面宿主接入本地虚拟机"
+            "How desktop tools connect to KStack and runtimes",
+            "桌面端、模型算力池与底层运行环境的配合方式"
         ),
-        dc1_lbl = tr(en, "Guides", "开发指南"),
+        dc1_lbl = tr(en, "Documentation", "文档与架构"),
         l_cli = mega_logo("cli"),
-        dv_ai = tr(en, "Agent-First Integration", "Agent 优先接入规范"),
+        dv_comp_d = tr(
+            en,
+            "Live GPUI WebAssembly previews and Rust source",
+            "直接在浏览器里点按预览并查看 Rust 源码"
+        ),
+        dv_ai = tr(en, "Coding-Agent Guide", "编程 Agent 接入说明"),
         dv_ai_d = tr(
             en,
-            "Deterministic prompts, skills & doctor gates",
-            "面向编程智能体的技能包与静态门禁"
+            "Ready-to-paste component specs and CLI workflows",
+            "可直接发给编程 Agent 阅读的组件规格与接入步骤"
         ),
         dv_llms_d = tr(
             en,
-            "Machine-readable index for coding agents",
-            "供 LLM 与编程智能体直接读取的站点索引"
+            "Plain-text component index for LLM tools",
+            "供编程工具直接读取的纯文本组件目录"
         ),
-        dv_start = tr(en, "Quickstart Commands", "一行命令快速上手"),
-        dv_start_d = tr(
+        dc2_lbl = tr(en, "UI & Tooling", "组件与工具"),
+        l_kbox = mega_logo("kbox"),
+        dv_kbox_d = tr(
             en,
-            "Copy kbox, ksandbox & kense-kui snippets",
-            "一键复制沙箱、MicroVM 与组件安装命令"
+            "Container and libkrun MicroVM runtime middleware",
+            "容器与轻量 MicroVM 运行时中间件（含 KRun 桥接）"
         ),
-        dc2_lbl = tr(en, "Tooling", "工具与协议"),
-        dv_org_d = tr(
+        l_ksb = mega_logo("ksandbox"),
+        dv_ksb_d = tr(
             en,
-            "8 MIT-licensed systems & UI repositories",
-            "8 个 MIT 开源核心仓库与议题追踪"
+            "OS-level process sandbox for tool subprocesses",
+            "限制工具子进程文件与网络边界的轻量沙箱中间件"
         ),
-        dv_arch = tr(en, "AI OS Context Map", "AI OS 拓扑与脉搏"),
-        dv_arch_d = tr(
-            en,
-            "Inspect 9 bounded contexts & 4-stage flow",
-            "查看能力供给链与四阶段闭环流水线"
-        ),
-        dv_repos = tr(en, "Open-Source Matrix", "开源仓库矩阵"),
-        dv_repos_d = tr(
-            en,
-            "Compare crates, runtimes & license boundaries",
-            "浏览全栈模块定位与技术栈分布"
-        ),
-        dc3_lbl = tr(en, "Open Source", "开源生态"),
+        dc3_lbl = tr(en, "Middleware", "底层中间件"),
     )
 }
 
 fn header(en: bool, company: bool, landing: bool) -> String {
     let prefix = path(en);
-    let agent_prompt = "Read https://kense-labs.github.io/llms.txt to explore Kense AI OS, KUI (Rust + GPUI native/WASM components), KBox, KSandbox, KWork, dsh-acp, and KCL.";
+    let agent_prompt = "Read https://kense-labs.github.io/llms.txt to inspect KUI (Rust + GPUI desktop and WebAssembly components) and integrate the required controls into this project.";
     let agent_hint = tr(
         en,
-        "Click to copy llms.txt onboarding prompt for your coding agent",
-        "点击复制 Agent 引导指令（llms.txt），直接粘贴给编程智能体",
+        "Click to copy llms.txt prompt for your coding agent",
+        "点击复制 llms.txt 提示词，发给你的编程 Agent",
     );
     let prod_btn = button(
         &format!(
             r#"class="company-nav-trigger" data-kense-menu-toggle="products" aria-expanded="false" aria-controls="kense-mega-products" data-kense-hint="{}""#,
             tr(
                 en,
-                "Explore KBox, KSandbox, KUI, KWork & AI OS",
-                "展开查看 KBox、KSandbox、KUI、KWork 与 AI OS"
+                "Browse KStack, KStudio, KWork, and KUI",
+                "查看 KStack、KStudio、KWork 与 KUI"
             )
         ),
         &format!(
@@ -404,8 +367,8 @@ fn header(en: bool, company: bool, landing: bool) -> String {
             r#"class="company-nav-trigger" data-kense-menu-toggle="developers" aria-expanded="false" aria-controls="kense-mega-developers" data-kense-hint="{}""#,
             tr(
                 en,
-                "Docs, CLI, Agent specs & open-source repos",
-                "查看文档中心、CLI、Agent 规范与开源仓库"
+                "Product docs, KUI components, and runtime middleware",
+                "查看文档中心、KUI 组件索引与底层中间件说明"
             )
         ),
         &format!(
@@ -416,18 +379,18 @@ fn header(en: bool, company: bool, landing: bool) -> String {
     );
     let wb_hint = tr(
         en,
-        "Jump to live Rust + GPUI WebAssembly workbench",
-        "直达实时 Rust + GPUI WebAssembly 交互工作台",
+        "Try the live Rust + GPUI panel in your browser",
+        "在网页里直接点按体验实时 GPUI 面板",
     );
     let arch_hint = tr(
         en,
-        "Inspect the One-Key AI OS topology & 4-step flow",
-        "查看一把 Key 控制面拓扑与四步闭环链路",
+        "See how KStack, KStudio, KWork, and KUI work together",
+        "查看四款核心产品如何分工配合",
     );
     let gh_hint = tr(
         en,
-        "Browse all open-source repositories on GitHub",
-        "前往 GitHub 浏览 kense-labs 开源仓库",
+        "Visit kense-labs on GitHub",
+        "访问 kense-labs GitHub 主页",
     );
     let menus = company_mega_menus(en, prefix);
 
@@ -442,11 +405,11 @@ fn header(en: bool, company: bool, landing: bool) -> String {
             r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar company" data-kense-topbar><div class="inner"><div class="company-brand-group"><a class="brand" href="{prefix}/" aria-label="Kense">{}<span class="wordmark">Kense</span></a>{agent_badge}</div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link company-nav-extra" href="{prefix}/#experience" data-kense-hint="{wb_hint}">{}</a><a class="company-nav-link company-nav-extra" href="{prefix}/#architecture" data-kense-hint="{arch_hint}">{}</a><a class="company-nav-link" href="{prefix}/docs/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="https://github.com/kense-labs" target="_blank" rel="noreferrer" aria-label="GitHub" data-kense-hint="{gh_hint}">{}<span>GitHub</span></a></div></div></header>"#,
             mark(),
             tr(en, "Primary navigation", "主导航"),
-            tr(en, "Workbench", "体验"),
+            tr(en, "Live Demo", "体验"),
             tr(en, "Architecture", "架构"),
             tr(en, "Docs", "文档"),
             toolbar(en),
-            icon("github", 15)
+            icon("github", 15),
         );
     }
 
@@ -455,13 +418,14 @@ fn header(en: bool, company: bool, landing: bool) -> String {
     } else {
         "product"
     };
-    let href = format!("{prefix}/kui/");
+    let home_href = format!("{prefix}/");
+    let home_label = tr(en, "KUI · Back to Kense home", "KUI · 返回 Kense 首页");
     let github = "https://github.com/kense-labs/KUI";
     format!(
-        r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar {class}" data-kense-topbar><div class="inner"><div class="company-brand-group"><a class="brand" href="{href}" aria-label="KUI">{}<span class="wordmark">KUI</span></a></div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link company-nav-extra" href="{prefix}/#experience">{}</a><a class="company-nav-link company-nav-extra" href="{prefix}/#architecture">{}</a><a class="company-nav-link" data-nav="components" href="{prefix}/kui/components/button/">{}</a><a class="company-nav-link" data-nav="docs" href="{prefix}/kui/docs/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="{github}" target="_blank" rel="noreferrer" aria-label="GitHub">{}<span>GitHub</span></a></div></div></header>"#,
+        r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar {class}" data-kense-topbar><div class="inner"><div class="company-brand-group"><a class="brand" href="{home_href}" aria-label="{home_label}">{}<span class="wordmark">KUI</span></a></div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link company-nav-extra" href="{prefix}/#experience">{}</a><a class="company-nav-link company-nav-extra" href="{prefix}/#architecture">{}</a><a class="company-nav-link" data-nav="components" href="{prefix}/kui/components/button/">{}</a><a class="company-nav-link" data-nav="docs" href="{prefix}/kui/docs/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="{github}" target="_blank" rel="noreferrer" aria-label="GitHub">{}<span>GitHub</span></a></div></div></header>"#,
         mark(),
         tr(en, "Primary navigation", "主导航"),
-        tr(en, "Workbench", "体验"),
+        tr(en, "Live Demo", "体验"),
         tr(en, "Architecture", "架构"),
         tr(en, "Components", "组件"),
         tr(en, "Docs", "文档"),
@@ -479,22 +443,24 @@ fn footer(en: bool, company: bool) -> String {
         let components = if en {
             format!("{count} Components")
         } else {
-            format!("{count} 个组件")
+            format!("{count} 个组件画廊")
         };
         return format!(
-            r#"<footer class="footer-company-shell"><div class="footer-closing-card"><div class="footer-company-grid"><div class="footer-company-brand"><a class="footer-company-lockup" href="{prefix}/">{mark}<span>Kense</span></a><p class="footer-company-tagline">{tagline}</p></div><div class="footer-company-col"><h2>{c1}</h2><ul><li><a href="{prefix}/kui/">KUI</a></li><li><a href="https://kense-labs.github.io/krun/">KRun</a></li><li><a href="https://github.com/kense-labs/kbox" target="_blank" rel="noreferrer">KBox</a></li><li><a href="https://github.com/kense-labs/ksandbox" target="_blank" rel="noreferrer">KSandbox</a></li></ul></div><div class="footer-company-col"><h2>{c2}</h2><ul><li><a href="https://github.com/kense-labs/kense" target="_blank" rel="noreferrer">Kense AI OS</a></li><li><a href="https://github.com/kense-labs/kwork" target="_blank" rel="noreferrer">KWork</a></li><li><a href="https://github.com/kense-labs/dsh-acp" target="_blank" rel="noreferrer">dsh-acp</a></li><li><a href="https://github.com/kense-labs/kcl" target="_blank" rel="noreferrer">KCL</a></li></ul></div><div class="footer-company-col"><h2>{c3}</h2><ul><li><a href="{prefix}/docs/">{docs}</a></li><li><a href="{prefix}/kui/components/button/">{components}</a></li><li><a href="{prefix}/kui/ai/">{ai}</a></li><li><a href="/llms.txt">llms.txt</a></li></ul></div></div><div class="footer-company-legal"><span>MIT License · Kense</span><a href="https://github.com/kense-labs" target="_blank" rel="noreferrer">github.com/kense-labs</a></div></div></footer>"#,
+            r#"<footer class="footer-company-shell"><div class="footer-closing-card"><div class="footer-company-grid"><div class="footer-company-brand"><a class="footer-company-lockup" href="{prefix}/">{mark}<span>Kense</span></a><p class="footer-company-tagline">{tagline}</p></div><div class="footer-company-col"><h2>{c1}</h2><ul><li><a href="{prefix}/#products-kstack">KStack</a></li><li><a href="{prefix}/#products-kstudio">KStudio</a></li><li><a href="{prefix}/#products-kwork">KWork</a></li><li><a href="{prefix}/kui/">KUI</a></li></ul></div><div class="footer-company-col"><h2>{c2}</h2><ul><li><a href="{prefix}/kui/components/button/">{components}</a></li><li><a href="{prefix}/kui/docs/installation/">{install}</a></li><li><a href="{prefix}/kui/ai/">{ai}</a></li><li><a href="/llms.txt">llms.txt</a></li></ul></div><div class="footer-company-col"><h2>{c3}</h2><ul><li><a href="{prefix}/docs/">{docs}</a></li><li><a href="{prefix}/docs/#middleware">KBox &amp; KSandbox</a></li><li><a href="https://kense-labs.github.io/krun/">{krun}</a></li></ul></div></div><div class="footer-company-legal"><span>© Kense</span><a href="{prefix}/docs/">{docs}</a></div></div></footer>"#,
             mark = mark(),
             tagline = tr(
                 en,
-                "Open infrastructure for isolated runtimes, dual-runtime UI, and agent systems.",
-                "面向隔离运行时、双端同源界面与智能体工程的开源基础设施。"
+                "Software for GPU scheduling, multi-machine development, desktop agents, and cross-platform UI.",
+                "做算力调度、多机连接、桌面 Agent 与跨端 UI 软件。"
             ),
-            c1 = tr(en, "Products & Runtimes", "产品与运行时"),
-            c2 = tr(en, "Architecture & Agents", "架构与智能体"),
-            c3 = tr(en, "Developers", "开发者与文档"),
-            docs = tr(en, "Documentation Hub", "文档中心"),
+            c1 = tr(en, "Core Products", "核心产品"),
+            c2 = tr(en, "KUI & Tooling", "界面与工具"),
+            c3 = tr(en, "Docs & Middleware", "文档与中间件"),
+            docs = tr(en, "Documentation", "产品文档中心"),
+            install = tr(en, "KUI Installation", "KUI 安装指南"),
             components = components,
-            ai = tr(en, "Agent Integration", "Agent 集成规范"),
+            ai = tr(en, "Coding-Agent Guide", "Agent 接入说明"),
+            krun = tr(en, "KRun Local Bridge", "KRun 宿主桥接说明"),
         );
     }
     let brand = format!("{}<span>KUI</span>", mark());

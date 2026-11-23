@@ -1,4 +1,4 @@
-//! Bilingual Kense homepage and documentation hub.
+//! Bilingual Kense homepage and product documentation hub.
 
 #[path = "../company/svg.rs"]
 mod svg;
@@ -78,19 +78,24 @@ fn product_popover(en: bool) -> String {
     let prefix = path(en);
     let count = component_count();
     let kui_href = format!("{prefix}/kui/");
+    let kstack_href = format!("{prefix}/docs/#kstack");
+    let kstudio_href = format!("{prefix}/docs/#kstudio");
+    let kwork_href = format!("{prefix}/docs/#kwork");
+    let mw_href = format!("{prefix}/docs/#middleware");
+
     let kui_summary = if en {
         format!(
-            "{count} dual-runtime Rust + GPUI controls shared across macOS, Windows, Linux desktop and wasm32 browsers."
+            "One Rust + GPUI codebase compiled to macOS, Windows, Linux desktop and WebAssembly in the browser, with {count} components and page templates."
         )
     } else {
         format!(
-            "一套 Rust + GPUI 源码同时运行于 macOS / Windows / Linux 桌面与 wasm32 浏览器，共 {count} 个可安装组件。"
+            "同一份 Rust + GPUI 源码既跑在 macOS、Windows、Linux 原生桌面，也能编译成 WebAssembly 在浏览器里直接交互，共 {count} 个组件。"
         )
     };
     let kui_m1 = if en {
         format!("{count} components")
     } else {
-        format!("{count} 个同源组件")
+        format!("{count} 个组件")
     };
 
     struct Spec<'a> {
@@ -99,8 +104,8 @@ fn product_popover(en: bool) -> String {
         stack: &'a str,
         summary: &'a str,
         metrics: [&'a str; 3],
-        cmd: &'a str,
-        cmd_short: &'a str,
+        cmd: Option<(&'a str, &'a str)>,
+        note: &'a str,
         href: &'a str,
         external: bool,
         cta: &'a str,
@@ -108,128 +113,123 @@ fn product_popover(en: bool) -> String {
 
     let specs = [
         Spec {
-            id: "kui",
-            name: "KUI",
-            stack: "Rust · GPUI =0.3.10 · WASM · MIT",
-            summary: &kui_summary,
-            metrics: [kui_m1.as_str(), "Native + Web", "kui add <id>"],
-            cmd: "cargo add kense-kui --rename kui --no-default-features",
-            cmd_short: "cargo add kense-kui --rename kui …",
-            href: &kui_href,
+            id: "kstack",
+            name: "KStack",
+            stack: tr(
+                en,
+                "40 MB · GPU Scheduler & MaaS",
+                "40 MB · 算力调度与模型服务",
+            ),
+            summary: tr(
+                en,
+                "把自有机房、公有云主机、私有云虚拟机与已有 Kubernetes 集群并入同一个算力池，支持多厂商加速卡混部与一键模型推理部署。",
+                "Pools bare-metal servers, cloud instances, and existing Kubernetes clusters across NVIDIA, AMD, Ascend, PPU, Hygon, and Apple Silicon.",
+            ),
+            metrics: [
+                tr(en, "40 MB 控制面", "40 MB binary"),
+                tr(en, "392 模型 · 1,235 规格", "392 models"),
+                tr(en, "/v1 统一网关", "/v1 gateway"),
+            ],
+            cmd: None,
+            note: tr(en, "核心产品 · 算力与模型", "Core product · Compute & MaaS"),
+            href: &kstack_href,
             external: false,
-            cta: tr(en, "进入 KUI 产品站", "Open KUI"),
+            cta: tr(en, "查看 KStack 介绍", "About KStack"),
         },
         Spec {
-            id: "kbox",
-            name: "KBox",
-            stack: "Rust · OCI / libkrun · MIT",
+            id: "kstudio",
+            name: "KStudio",
+            stack: tr(
+                en,
+                "macOS · Linux · Windows · GPUI",
+                "macOS · Linux · Windows · GPUI",
+            ),
             summary: tr(
                 en,
-                "Docker 同形跨平台容器与硬件级 libkrun MicroVM 运行时，支持预热池亚 20ms 极速挂载。",
-                "Docker-shaped cross-platform OCI container and hardware-isolated libkrun MicroVM runtime with prewarmed pools.",
+                "把你名下所有工作站与服务器连进一个原生窗口，同时跑 18 种编程 Agent、真实终端、轻量虚拟机与远程桌面；关掉窗口后会话照跑。",
+                "One native GPUI app for every machine you own: run 18 coding agents, persistent terminals, remote Linux desktops, and file sync.",
             ),
-            metrics: ["28ms warm start", "6ms exec", "19.3ms pool RTT"],
-            cmd: "kbox run --rm --isolation microvm alpine:3.20 -- echo hello-kense",
-            cmd_short: "kbox run --isolation microvm …",
-            href: "https://github.com/kense-labs/kbox",
-            external: true,
-            cta: tr(en, "查看 KBox 仓库", "Explore KBox"),
-        },
-        Spec {
-            id: "ksandbox",
-            name: "KSandbox",
-            stack: "Rust · OS Process Sandbox · MIT",
-            summary: tr(
-                en,
-                "面向不可信 Agent 工具调用的跨平台失败闭合进程树沙箱（Seatbelt / Bubblewrap+seccomp / AppContainer）。",
-                "Fail-closed OS process-tree sandbox confining untrusted agent tools via Seatbelt, seccomp, or AppContainer.",
-            ),
-            metrics: ["Deny-all net", "100 KiB cap", "Tree reap"],
-            cmd: "cargo add --git https://github.com/kense-labs/ksandbox ksandbox",
-            cmd_short: "cargo add … ksandbox",
-            href: "https://github.com/kense-labs/ksandbox",
-            external: true,
-            cta: tr(en, "查看 KSandbox", "Explore KSandbox"),
+            metrics: [
+                tr(en, "18 种 Agent CLI", "18 agent CLIs"),
+                tr(en, "跨机终端与桌面", "Remote desktop & files"),
+                tr(en, "关窗后台常驻", "Runs in background"),
+            ],
+            cmd: None,
+            note: tr(en, "核心产品 · 多机终端", "Core product · Machine hub"),
+            href: &kstudio_href,
+            external: false,
+            cta: tr(en, "查看 KStudio 介绍", "About KStudio"),
         },
         Spec {
             id: "kwork",
             name: "KWork",
-            stack: "Rust · KUI · GPUI · Tauri · MIT",
+            stack: tr(
+                en,
+                "Rust · KUI · GPUI · Desktop",
+                "Rust · KUI · GPUI · 桌面端",
+            ),
             summary: tr(
                 en,
-                "基于 KUI 与 GPUI 构建的原生桌面智能体工作台，支持工作区会话、单次工具授权、定时任务与冷恢复。",
-                "Native desktop agent workbench built with KUI, GPUI, and Tauri—featuring tool approvals, schedules, and cold resume.",
+                "日常跑任务用的桌面 Agent 工作台。按项目目录整理对话与本地历史，随时切换模型与推理档位，查看每一步工具调用并支持定时运行。",
+                "Desktop client for daily agent sessions, with workspace history, model switching, single-use tool approvals, and scheduled runs.",
             ),
-            metrics: ["Native GPUI", "Stdio ACP", "Cold resume"],
-            cmd: "git clone https://github.com/kense-labs/kwork",
-            cmd_short: "git clone …/kwork",
-            href: "https://github.com/kense-labs/kwork",
-            external: true,
-            cta: tr(en, "查看 KWork", "Explore KWork"),
+            metrics: [
+                tr(en, "工作区归档", "Workspaces"),
+                tr(en, "单次权限确认", "Tool approvals"),
+                tr(en, "定时自动投递", "Scheduled runs"),
+            ],
+            cmd: None,
+            note: tr(en, "核心产品 · 桌面工作台", "Core product · Desktop client"),
+            href: &kwork_href,
+            external: false,
+            cta: tr(en, "查看 KWork 介绍", "About KWork"),
         },
         Spec {
-            id: "krun",
-            name: "KRun",
-            stack: "@kense/krun · Web Main",
-            summary: tr(
-                en,
-                "为 Electron / Web Main 提供 1 分钟本地虚拟机放置、诊断门禁与会话控制面对接。",
-                "Docks Electron / Web Main applications to local VM placement, doctor gates, and session orchestration.",
-            ),
-            metrics: ["1-min dock", "Web Main API", "Doctor gates"],
-            cmd: "pnpm add @kense/krun",
-            cmd_short: "pnpm add @kense/krun",
-            href: "https://kense-labs.github.io/krun/",
-            external: true,
-            cta: tr(en, "打开 KRun 文档", "Open KRun docs"),
+            id: "kui",
+            name: "KUI",
+            stack: "Rust · GPUI =0.3.10 · Desktop + WASM",
+            summary: &kui_summary,
+            metrics: [kui_m1.as_str(), "Desktop + Web", "kui add <id>"],
+            cmd: Some((
+                "cargo add kense-kui --rename kui --no-default-features",
+                "cargo add kense-kui --rename kui …",
+            )),
+            note: "",
+            href: &kui_href,
+            external: false,
+            cta: tr(en, "进入 KUI 组件站", "Open KUI"),
         },
         Spec {
-            id: "aios",
-            name: "Kense AI OS",
-            stack: "Operating Plane · 9 Contexts · MIT",
+            id: "kbox",
+            name: "KBox",
+            stack: tr(en, "中间件 · OCI 与 MicroVM", "Middleware · OCI & MicroVM"),
             summary: tr(
                 en,
-                "一把 API Key 贯通边缘换票（RFC 8693）、URN 注册、隔离路由、唯一计量、只追加哈希链审计与 Vault 密文注入。",
-                "One API key anchoring RFC 8693 token exchange, URN registry, placement, metering, hash-chain audit, and Vault refs.",
+                "底层容器与 libkrun 轻量虚拟机运行时，支持预热池快速挂载，供 KStudio 等上层应用按需调用。",
+                "Container and libkrun MicroVM runtime middleware used underneath KStudio for isolated execution.",
             ),
-            metrics: ["RFC 8693 SVID", "0 sandbox secrets", "Hash-chain audit"],
-            cmd: "git clone https://github.com/kense-labs/kense",
-            cmd_short: "git clone …/kense",
-            href: "https://github.com/kense-labs/kense",
-            external: true,
-            cta: tr(en, "阅读架构契约", "Read AI OS specs"),
+            metrics: ["OCI", "libkrun MicroVM", "Warm pool"],
+            cmd: None,
+            note: tr(en, "底层中间件", "Runtime middleware"),
+            href: &mw_href,
+            external: false,
+            cta: tr(en, "查看中间件说明", "Middleware notes"),
         },
         Spec {
-            id: "dsh-acp",
-            name: "dsh-acp",
-            stack: "ACP · Stdio JSON-RPC · GHCR · MIT",
+            id: "ksandbox",
+            name: "KSandbox",
+            stack: tr(en, "中间件 · 进程沙箱", "Middleware · Process sandbox"),
             summary: tr(
                 en,
-                "进程即会话的无守护进程 Agent Client Protocol 发行版，零常驻端口，客户端断开即自动退出清理。",
-                "Daemonless stdio JSON-RPC agent harness—zero background ports, anonymous GHCR pull, instant exit on disconnect.",
+                "基于 Seatbelt、Bubblewrap+seccomp 与 AppContainer 的轻量进程沙箱，限制工具子进程的目录读写与网络连接。",
+                "Lightweight OS process sandbox restricting filesystem and network access via Seatbelt, seccomp, or AppContainer.",
             ),
-            metrics: ["Zero daemon", "Stdio JSON-RPC", "GHCR image"],
-            cmd: "docker run --rm -i ghcr.io/kense-labs/dsh-acp:latest",
-            cmd_short: "docker run -i ghcr.io/…/dsh-acp",
-            href: "https://github.com/kense-labs/dsh-acp",
-            external: true,
-            cta: tr(en, "查看 dsh-acp", "Explore dsh-acp"),
-        },
-        Spec {
-            id: "kcl",
-            name: "KCL",
-            stack: "kense-kcl · Rust Parser · MIT",
-            summary: tr(
-                en,
-                "Kense 确定性配置语言：1 MiB / 64 层有界解析、默认闭合 Schema 准入，以及规范字节流 sha256 摘要。",
-                "Deterministic configuration language with 1 MiB / 64-depth bounds, closed schema admission, and canonical sha256.",
-            ),
-            metrics: ["≤ 1 MiB bounded", "Closed schema", "Canonical sha256"],
-            cmd: "cargo add --git https://github.com/kense-labs/kcl kense-kcl",
-            cmd_short: "cargo add … kense-kcl",
-            href: "https://github.com/kense-labs/kcl",
-            external: true,
-            cta: tr(en, "查看 KCL 规范", "Explore KCL"),
+            metrics: ["Seatbelt", "seccomp", "AppContainer"],
+            cmd: None,
+            note: tr(en, "底层中间件", "Runtime middleware"),
+            href: &mw_href,
+            external: false,
+            cta: tr(en, "查看中间件说明", "Middleware notes"),
         },
     ];
 
@@ -240,14 +240,18 @@ fn product_popover(en: bool) -> String {
         } else {
             ""
         };
-        let copy_btn = copy_cmd_button(
-            en,
-            s.cmd,
-            s.cmd_short,
-            tr(en, "点击复制安装或运行命令", "Click to copy command"),
-            "",
-            "kense-pop-copy",
-        );
+        let left_foot = if let Some((cmd, cmd_short)) = s.cmd {
+            copy_cmd_button(
+                en,
+                cmd,
+                cmd_short,
+                tr(en, "点击复制安装命令", "Click to copy command"),
+                "",
+                "kense-pop-copy",
+            )
+        } else {
+            format!(r#"<span class="kense-pop-note">{}</span>"#, s.note)
+        };
         cards.push_str(&format!(
             r#"<div class="kense-pop-card" data-popover-card="{id}" hidden>
   <div class="kense-pop-head" data-pop-domain="{id}">
@@ -259,7 +263,7 @@ fn product_popover(en: bool) -> String {
   </div>
   <p class="kense-pop-summary">{summary}</p>
   <div class="kense-pop-metrics"><span>{m0}</span><span>{m1}</span><span>{m2}</span></div>
-  <div class="kense-pop-foot">{copy_btn}<a class="kense-pop-link" href="{href}"{ext}>{cta}</a></div>
+  <div class="kense-pop-foot">{left_foot}<a class="kense-pop-link" href="{href}"{ext}>{cta}</a></div>
 </div>"#,
             id = s.id,
             emblem = svg::product_emblem(s.id),
@@ -276,7 +280,7 @@ fn product_popover(en: bool) -> String {
 
     format!(
         r#"<div class="kense-product-popover" id="kense-product-popover" data-kense-popover role="region" aria-label="{}" inert aria-hidden="true"><div class="kense-pop-arrow" aria-hidden="true"></div>{cards}</div>"#,
-        tr(en, "产品详情预览", "Product quick preview")
+        tr(en, "产品概览", "Product overview")
     )
 }
 
@@ -285,59 +289,49 @@ fn hero_flip_hint(en: bool) -> String {
     let count = component_count();
     let kui_desc = if en {
         format!(
-            "{count} GPUI components sharing one Rust tree across macOS, Windows, Linux desktop and WebAssembly."
+            "{count} GPUI components sharing one Rust codebase across macOS, Windows, Linux desktop and WebAssembly."
         )
     } else {
         format!(
-            "{count} 个原生桌面与 WebAssembly 同源的 Rust + GPUI 组件，支持 crate 引入与源码拷贝。"
+            "同一套 Rust 源码编译到 macOS、Windows、Linux 原生桌面与浏览器 WebAssembly，内置 {count} 个组件。"
         )
     };
     let entries = [
         (
-            "kui",
-            "KUI",
-            tr(en, "同源界面套件", "GPUI · Native + WASM"),
-            kui_desc.as_str(),
-        ),
-        (
-            "kbox",
-            "KBox",
-            tr(en, "隔离容器与 MicroVM", "28ms MicroVM · 6ms exec"),
+            "kstack",
+            "KStack",
+            tr(en, "算力调度与模型服务", "40 MB · GPU Pool & MaaS"),
             tr(
                 en,
-                "Docker 同形容器与 libkrun 硬件虚拟化运行时，预热池亚 20ms 极速挂载。",
-                "Docker-shaped OCI container and hardware-isolated libkrun MicroVM runtime with prewarmed pools.",
+                "把自有服务器与多云 GPU 接进同一个集群，启动前算清显存与选卡理由，一键部署推理服务。",
+                "Pools bare-metal and cloud GPUs into one scheduler with upfront VRAM estimates and 1-click model serving.",
             ),
         ),
         (
-            "ksandbox",
-            "KSandbox",
-            tr(en, "失败闭合进程沙箱", "Seatbelt · seccomp"),
+            "kstudio",
+            "KStudio",
+            tr(en, "多机终端与 Agent 管理", "macOS · Linux · Windows"),
             tr(
                 en,
-                "将不可信 Agent 工具调用锁入内核边界，默认零网络、零宿主密钥，缺失能力立即拒绝。",
-                "Confines untrusted agent tool trees with deny-all network and zero host fallbacks.",
-            ),
-        ),
-        (
-            "aios",
-            "Kense AI OS",
-            tr(en, "统一可信控制面", "RFC 8693 · Vault · Audit"),
-            tr(
-                en,
-                "一把 API Key 锚定边缘短时换票、URN 路由、唯一计量、哈希链审计与出网密文引用注入。",
-                "One API key anchoring edge token exchange, URN routing, metering, hash-chain audit, and Vault refs.",
+                "连上你手头所有工作站与服务器，在一个原生窗口里跑 18 种编程 Agent、常驻终端与远程桌面。",
+                "Connects every machine you own into one GPUI window for 18 agent CLIs, persistent shells, and remote desktops.",
             ),
         ),
         (
             "kwork",
             "KWork",
-            tr(en, "原生桌面工作台", "GPUI · Tauri · ACP"),
+            tr(en, "桌面 Agent 工作台", "Workspaces · Schedules"),
             tr(
                 en,
-                "基于 KUI 与 GPUI 构建的原生桌面客户端，驱动无守护进程 ACP 会话与单次工具审批。",
-                "Native desktop client driving daemonless dsh-acp sessions with single-use tool approvals and KCL digests.",
+                "按项目工作区整理对话与历史，随时切换模型与推理档位，查看每一步工具调用并支持定时任务。",
+                "Organizes sessions by workspace with model switching, single-use tool approvals, and scheduled runs.",
             ),
+        ),
+        (
+            "kui",
+            "KUI",
+            tr(en, "Rust + GPUI 组件库", "Desktop + WebAssembly"),
+            kui_desc.as_str(),
         ),
     ];
 
@@ -368,63 +362,51 @@ fn hero_flip_hint(en: bool) -> String {
 fn hero_solution_belt(en: bool, prefix: &str) -> String {
     let domains = [
         (
-            "kui",
-            format!("{prefix}/kui/"),
+            "kstack",
+            format!("{prefix}/#products-kstack"),
             false,
-            tr(en, "同源 GPUI 界面", "Dual-Runtime UI"),
-            "KUI",
+            tr(en, "KStack 模型算力", "KStack Compute"),
+            "KStack",
             tr(
                 en,
-                "浏览桌面与 Web 同源的 GPUI 组件体系",
-                "Explore dual-runtime Rust + GPUI controls",
+                "40 MB 异构 GPU 算力调度与一键模型推理平台",
+                "40 MB heterogeneous GPU scheduler and /v1 model serving",
             ),
         ),
         (
-            "kbox",
-            "https://github.com/kense-labs/kbox".to_owned(),
-            true,
-            tr(en, "硬件隔离运行时", "MicroVM Runtimes"),
-            "KBox",
+            "kstudio",
+            format!("{prefix}/#products-kstudio"),
+            false,
+            tr(en, "KStudio 多机终端", "KStudio Hub"),
+            "KStudio",
             tr(
                 en,
-                "28ms 热启动与亚 20ms 预热池的容器与 MicroVM",
-                "28ms start & ~19ms prewarmed libkrun MicroVMs",
-            ),
-        ),
-        (
-            "ksandbox",
-            "https://github.com/kense-labs/ksandbox".to_owned(),
-            true,
-            tr(en, "失败闭合沙箱", "Process Sandboxes"),
-            "KSandbox",
-            tr(
-                en,
-                "零网络、零明文凭据的跨平台 Agent 进程树隔离",
-                "Fail-closed OS process-tree confinement",
-            ),
-        ),
-        (
-            "aios",
-            "https://github.com/kense-labs/kense".to_owned(),
-            true,
-            tr(en, "可信控制平面", "Operating Plane"),
-            "Kense AI OS",
-            tr(
-                en,
-                "一把 API Key 贯通换票、计量、审计与密文引用",
-                "One API key across auth, metering, audit & Vault",
+                "在一个窗口里连上名下所有机器、终端与 18 种编程 Agent",
+                "One native GPUI app for all your machines and agents",
             ),
         ),
         (
             "kwork",
-            "https://github.com/kense-labs/kwork".to_owned(),
-            true,
-            tr(en, "智能体工作台", "Agent Workbench"),
+            format!("{prefix}/#products-kwork"),
+            false,
+            tr(en, "KWork 桌面工作台", "KWork Desktop"),
             "KWork",
             tr(
                 en,
-                "原生 GPUI 桌面客户端、单次工具审批与 KCL 摘要",
-                "Native GPUI studio with ACP approvals & KCL",
+                "按工作区整理会话、单次工具确认与定时自动投递",
+                "Daily desktop agent client with tool approvals & schedules",
+            ),
+        ),
+        (
+            "kui",
+            format!("{prefix}/kui/"),
+            false,
+            tr(en, "KUI 跨端界面", "KUI Interface"),
+            "KUI",
+            tr(
+                en,
+                "一套 Rust + GPUI 源码构建桌面与浏览器界面",
+                "Shared Rust + GPUI component library for desktop and web",
             ),
         ),
     ];
@@ -464,13 +446,13 @@ fn hero_solution_belt(en: bool, prefix: &str) -> String {
 fn hero_command_dock(en: bool) -> String {
     let prompt = tr(
         en,
-        "请阅读 https://kense-labs.github.io/llms.txt，检查当前仓库的 Rust / GPUI 或智能体运行环境，并按契约接入 Kense（KUI / KBox / KSandbox / KCL）。",
-        "Read https://kense-labs.github.io/llms.txt, inspect this workspace's Rust/GPUI or agent setup, and integrate Kense (KUI, KBox, KSandbox, or KCL) following its contracts.",
+        "请阅读 https://kense-labs.github.io/llms.txt，检查当前项目的 Rust 与 GPUI 配置，并按说明接入所需的 KUI 组件。",
+        "Read https://kense-labs.github.io/llms.txt, inspect this project's Rust and GPUI setup, and integrate the needed KUI components.",
     );
     let label = tr(
         en,
-        "复制 Kense Agent 接入指令",
-        "Copy Kense agent integration command",
+        "复制 KUI Agent 接入提示词",
+        "Copy KUI coding-agent prompt",
     );
     let dock_btn = button(
         &format!(
@@ -478,8 +460,8 @@ fn hero_command_dock(en: bool) -> String {
             esc(prompt),
             esc(tr(
                 en,
-                "点击复制给编程 Agent，一键读取全栈契约",
-                "Click to copy for your coding agent"
+                "点击复制提示词，发给编程 Agent 自动接入 KUI 组件",
+                "Click to copy prompt for your coding agent"
             )),
             esc(label),
         ),
@@ -493,7 +475,7 @@ fn hero_command_dock(en: bool) -> String {
 </span>"#,
             tr(
                 en,
-                "粘贴给 Agent · 自动读取 kense-labs.github.io/llms.txt",
+                "发给编程 Agent · 自动读取 kense-labs.github.io/llms.txt",
                 "Paste to your Agent · reads kense-labs.github.io/llms.txt"
             )
         ),
@@ -506,6 +488,8 @@ fn hero_command_dock(en: bool) -> String {
 /// Unified in-place morphing companion bot (`#kense-guide`) with silky comet-ribbon flight trail.
 fn guide_widget(en: bool) -> String {
     let prefix = path(en);
+    let count = component_count();
+    let ui_tag = format!("{count} UI");
     let open = tr(en, "打开 Kense 向导", "Open Kense guide");
     let close = tr(en, "收起 Kense 向导", "Close Kense guide");
     let name = tr(en, "Kense 向导", "Kense guide");
@@ -514,31 +498,31 @@ fn guide_widget(en: bool) -> String {
         (
             format!("{prefix}/#products"),
             "box",
-            tr(en, "核心产品与三维雕塑", "3D Product Stack"),
-            "KBox · KUI",
+            tr(en, "浏览四款核心产品", "Core Products"),
+            "KStack · KStudio",
         ),
         (
             format!("{prefix}/#experience"),
             "terminal",
-            tr(en, "实时 GPUI 交互工作台", "Live GPUI Studio"),
+            tr(en, "在线点按体验 GPUI 面板", "Live GPUI Demo"),
             "WASM",
         ),
         (
             format!("{prefix}/#architecture"),
             "layers",
-            tr(en, "一把 Key 控制面拓扑", "Operating Topology"),
-            "AI OS",
+            tr(en, "四款产品怎么配合", "How They Fit"),
+            "Stack",
         ),
         (
             format!("{prefix}/kui/"),
             "shield",
-            tr(en, "进入 KUI 同源组件站", "Open KUI Library"),
-            "GPUI",
+            tr(en, "进入 KUI 跨端组件站", "Open KUI"),
+            ui_tag.as_str(),
         ),
         (
             format!("{prefix}/docs/"),
             "book",
-            tr(en, "文档与开源契约中心", "Documentation Hub"),
+            tr(en, "查看产品与技术文档", "Documentation"),
             "Docs",
         ),
     ];
@@ -566,7 +550,7 @@ fn guide_widget(en: bool) -> String {
         &format!(
             "{}<span>{}</span>",
             copy_mark("copy"),
-            tr(en, "复制指令", "Copy")
+            tr(en, "复制命令", "Copy")
         ),
     );
 
@@ -588,7 +572,7 @@ fn guide_widget(en: bool) -> String {
 </div>"#,
         msg_cmd = tr(
             en,
-            "命令已复制 · 可直接粘贴至终端运行",
+            "命令已复制 · 可直接粘贴到终端运行",
             "Command copied · ready in terminal"
         ),
         msg_prompt = tr(
@@ -601,62 +585,18 @@ fn guide_widget(en: bool) -> String {
 
 fn docs_product_strip(prefix: &str) -> String {
     let items = [
-        ("kui", "KUI", format!("{prefix}/kui/"), false),
-        (
-            "kbox",
-            "KBox",
-            "https://github.com/kense-labs/kbox".to_owned(),
-            true,
-        ),
-        (
-            "ksandbox",
-            "KSandbox",
-            "https://github.com/kense-labs/ksandbox".to_owned(),
-            true,
-        ),
-        (
-            "kwork",
-            "KWork",
-            "https://github.com/kense-labs/kwork".to_owned(),
-            true,
-        ),
-        (
-            "krun",
-            "KRun",
-            "https://kense-labs.github.io/krun/".to_owned(),
-            true,
-        ),
-        (
-            "aios",
-            "AI OS",
-            "https://github.com/kense-labs/kense".to_owned(),
-            true,
-        ),
-        (
-            "dsh-acp",
-            "dsh-acp",
-            "https://github.com/kense-labs/dsh-acp".to_owned(),
-            true,
-        ),
-        (
-            "kcl",
-            "KCL",
-            "https://github.com/kense-labs/kcl".to_owned(),
-            true,
-        ),
+        ("kstack", "KStack", format!("{prefix}/docs/#kstack")),
+        ("kstudio", "KStudio", format!("{prefix}/docs/#kstudio")),
+        ("kwork", "KWork", format!("{prefix}/docs/#kwork")),
+        ("kui", "KUI", format!("{prefix}/kui/")),
     ];
 
     let mut out = String::from(
-        r#"<div class="kense-product-strip" role="list" aria-label="Kense products">"#,
+        r#"<div class="kense-product-strip" role="list" aria-label="Kense core products">"#,
     );
-    for (id, label, href, external) in items {
-        let ext = if external {
-            r#" target="_blank" rel="noreferrer""#
-        } else {
-            ""
-        };
+    for (id, label, href) in items {
         out.push_str(&format!(
-            r#"<a class="kense-product-badge" role="listitem" href="{href}"{ext} data-product-badge="{id}">{}<span>{label}</span></a>"#,
+            r#"<a class="kense-product-badge" role="listitem" href="{href}" data-product-badge="{id}">{}<span>{label}</span></a>"#,
             svg::product_emblem(id)
         ));
     }
@@ -674,18 +614,18 @@ pub fn page(en: bool, rev: &str) -> String {
         esc(rev)
     );
     let kui_cmd = "cargo add kense-kui --rename kui --no-default-features";
-    let ksandbox_cmd = "cargo add --git https://github.com/kense-labs/ksandbox ksandbox";
 
-    // Section 1: Full-Viewport Kinetic Hero + Inline Product Spring Belt + Heat-Flow Shader CTA + Liquid Command Dock
+    // Section 1: Hero + Inline 4-Product Spring Belt + Heat-Flow Shader CTA + Command Dock
     let hero = format!(
         r##"<section class="kense-hero" data-kense-hero aria-labelledby="kense-hero-title">
   <div class="kense-hero-optics" data-kense-optics aria-hidden="true">
     <div class="kense-optics-glow"></div>
+    <canvas class="kense-hero-floor" data-hero-floor width="160" height="96" hidden></canvas>
   </div>
   <div class="kense-intro" data-kense-intro data-intro-key="kense:home-intro:v1" hidden aria-hidden="true">
     <div class="kense-intro-backdrop"></div>
     <div class="kense-intro-word kense-intro-word--top" data-intro-word>KENSE</div>
-    <div class="kense-intro-word kense-intro-word--bottom" data-intro-word data-intro-direction="right">AI OS</div>
+    <div class="kense-intro-word kense-intro-word--bottom" data-intro-word data-intro-direction="right">STUDIO</div>
     <div class="kense-intro-stage">{draft}</div>
   </div>
   <div class="kense-hero-stage">
@@ -709,38 +649,46 @@ pub fn page(en: bool, rev: &str) -> String {
   {flip_hint}
 </section>"##,
         draft = svg::intro_draft(),
-        h_prefix = tr(en, "面向智能体时代的", "Open systems for"),
+        h_prefix = tr(
+            en,
+            "从算力集群到桌面端的",
+            "From GPU clusters to your desk,"
+        ),
         belt = hero_solution_belt(en, prefix),
-        h_suffix = tr(en, "开源底座", "at agent scale"),
+        h_suffix = tr(en, "自研软件栈", "built to work together"),
         lead = tr(
             en,
-            "一把 API Key 贯通隔离运行时、双端同源 GPUI 界面与可验证智能体治理。",
-            "One API key uniting isolated runtimes, dual-runtime GPUI interfaces, and verifiable agent governance."
+            "KStack 调度多云异构 GPU 与模型服务，KStudio 接管你名下的每一台机器，KWork 处理日常桌面任务，KUI 用同一份 Rust + GPUI 源码构建原生与网页界面。",
+            "KStack schedules GPUs and serves models across clouds, KStudio manages every machine you own in one window, KWork handles daily desktop tasks, and KUI builds native and web UI from one Rust + GPUI codebase."
         ),
-        explore = svg::action_content(tr(en, "探索核心产品", "Explore products")),
+        explore = svg::action_content(tr(en, "浏览核心产品", "Explore products")),
         open_kui = tr(en, "进入 KUI 组件站", "Open KUI"),
-        read_docs = tr(en, "阅读架构文档", "Read docs"),
-        h1_hint = tr(en, "向下检视三大三维硬件底座", "Inspect the 3D core stack"),
+        read_docs = tr(en, "产品文档", "Documentation"),
+        h1_hint = tr(
+            en,
+            "向下查看 KStack、KStudio、KWork 与 KUI",
+            "Inspect KStack, KStudio, KWork, and KUI"
+        ),
         h1_body = tr(
             en,
-            "拖拽交互 KBox 隔离运行时、KUI 双端显示器与 KWork 智能体笔记本雕塑。",
-            "Orbit smooth studio 3D hardware sculptures for KBox, KUI, and KWork."
+            "可拖拽旋转每款产品的三维模型，鼠标移上去时小 Bot 会跳进模型。",
+            "Drag any 3D model to orbit. Hovering sends the companion bot straight into the model."
         ),
-        h2_hint = tr(
-            en,
-            "进入 KUI：桌面与 Web 同源组件库",
-            "Open KUI dual-runtime GPUI kit"
-        ),
+        h2_hint = if en {
+            format!("Open KUI: {count} desktop & WebAssembly GPUI controls")
+        } else {
+            format!("打开 KUI：{count} 个跨桌面与 Web 的 GPUI 组件")
+        },
         h3_hint = tr(
             en,
-            "查阅 AI OS 架构契约与接入指南",
-            "Browse AI OS contracts & docs"
+            "查看四款核心产品与底层中间件文档",
+            "Browse product guides and middleware notes"
         ),
         dock = hero_command_dock(en),
         flip_hint = hero_flip_hint(en),
     );
 
-    // Section 2: Alternating Smooth Studio 3D Hardware Family (#products)
+    // Section 2: Four Core Products (#products) + Understated Runtime Middleware Note (#middleware)
     let family = format!(
         r##"<section class="kense-section kense-opening-anchor" id="products" aria-labelledby="kense-family-title">
   <div class="kense-opening-backdrop" aria-hidden="true"></div>
@@ -750,25 +698,48 @@ pub fn page(en: bool, rev: &str) -> String {
       <p>{desc}</p>
     </div>
     <div class="kense-family">
-      <article class="kense-family-item" data-family-berth="runtime" data-solid-entrance="pending">
-        <div class="kense-solid" data-kense-solid="runtime" data-kense-hint="{solid_rt_hint}" aria-hidden="true">{f_runtime}<canvas width="760" height="570"></canvas></div>
+      <article class="kense-family-item" id="products-kstack" data-family-berth="kstack" data-solid-entrance="pending">
+        <div class="kense-solid" data-kense-solid="runtime" aria-hidden="true">{f_runtime}<canvas width="760" height="570"></canvas></div>
         <div class="kense-family-copy kense-reveal">
-          <h3>{h_runtime}</h3>
-          <p>{p_runtime}</p>
-          <p class="kense-family-detail">{d_runtime}</p>
+          <h3>{h_kstack}</h3>
+          <p>{p_kstack}</p>
+          <p class="kense-family-detail">{d_kstack}</p>
           <div class="kense-family-links">
-            <a class="kense-pill kense-pill--outline" href="https://github.com/kense-labs/kbox" target="_blank" rel="noreferrer" data-product-badge="kbox" data-kense-hint="{hint_kbox}">{act_kbox}</a>
-            <a class="kense-inline-link" href="https://github.com/kense-labs/ksandbox" target="_blank" rel="noreferrer" data-product-badge="ksandbox" data-kense-hint="{hint_ksb}">KSandbox</a>
-            <a class="kense-inline-link" href="https://kense-labs.github.io/krun/" data-product-badge="krun" data-kense-hint="{hint_krun}">KRun</a>
+            <a class="kense-pill kense-pill--outline" href="{prefix}/docs/#kstack" data-product-badge="kstack" data-kense-hint="{hint_kstack}">{act_kstack}</a>
+            <a class="kense-inline-link" href="{prefix}/#experience" data-kense-hint="{hint_kstack_demo}">{act_kstack_demo}</a>
           </div>
         </div>
       </article>
-      <article class="kense-family-item kense-family-item--reverse" data-family-berth="ui" data-solid-entrance="pending">
-        <div class="kense-solid" data-kense-solid="ui" data-kense-hint="{solid_ui_hint}" aria-hidden="true">{f_ui}<canvas width="760" height="570"></canvas></div>
+      <article class="kense-family-item kense-family-item--reverse" id="products-kstudio" data-family-berth="kstudio" data-solid-entrance="pending">
+        <div class="kense-solid" data-kense-solid="studio" aria-hidden="true">{f_studio}<canvas width="760" height="570"></canvas></div>
         <div class="kense-family-copy kense-reveal">
-          <h3>{h_ui}</h3>
-          <p>{p_ui}</p>
-          <p class="kense-family-detail">{d_ui}</p>
+          <h3>{h_kstudio}</h3>
+          <p>{p_kstudio}</p>
+          <p class="kense-family-detail">{d_kstudio}</p>
+          <div class="kense-family-links">
+            <a class="kense-pill kense-pill--outline" href="{prefix}/docs/#kstudio" data-product-badge="kstudio" data-kense-hint="{hint_kstudio}">{act_kstudio}</a>
+            <a class="kense-inline-link" href="{prefix}/#experience-sandbox" data-kense-hint="{hint_kstudio_demo}">{act_kstudio_demo}</a>
+          </div>
+        </div>
+      </article>
+      <article class="kense-family-item" id="products-kwork" data-family-berth="kwork" data-solid-entrance="pending">
+        <div class="kense-solid" data-kense-solid="agent" aria-hidden="true">{f_agent}<canvas width="760" height="570"></canvas></div>
+        <div class="kense-family-copy kense-reveal">
+          <h3>{h_kwork}</h3>
+          <p>{p_kwork}</p>
+          <p class="kense-family-detail">{d_kwork}</p>
+          <div class="kense-family-links">
+            <a class="kense-pill kense-pill--outline" href="{prefix}/docs/#kwork" data-product-badge="kwork" data-kense-hint="{hint_kwork}">{act_kwork}</a>
+            <a class="kense-inline-link" href="{prefix}/#experience-interface" data-kense-hint="{hint_kwork_demo}">{act_kwork_demo}</a>
+          </div>
+        </div>
+      </article>
+      <article class="kense-family-item kense-family-item--reverse" id="products-kui" data-family-berth="kui" data-solid-entrance="pending">
+        <div class="kense-solid" data-kense-solid="ui" aria-hidden="true">{f_ui}<canvas width="760" height="570"></canvas></div>
+        <div class="kense-family-copy kense-reveal">
+          <h3>{h_kui}</h3>
+          <p>{p_kui}</p>
+          <p class="kense-family-detail">{d_kui}</p>
           <div class="kense-family-links">
             <a class="kense-pill kense-pill--outline" href="{prefix}/kui/" data-product-badge="kui" data-kense-hint="{hint_kui}">{act_kui}</a>
             <a class="kense-inline-link" href="{prefix}/kui/components/button/" data-kense-hint="{hint_comp}">{act_comp}</a>
@@ -776,156 +747,178 @@ pub fn page(en: bool, rev: &str) -> String {
           </div>
         </div>
       </article>
-      <article class="kense-family-item" data-family-berth="agent" data-solid-entrance="pending">
-        <div class="kense-solid" data-kense-solid="agent" data-kense-hint="{solid_ag_hint}" aria-hidden="true">{f_agent}<canvas width="760" height="570"></canvas></div>
-        <div class="kense-family-copy kense-reveal">
-          <h3>{h_agent}</h3>
-          <p>{p_agent}</p>
-          <p class="kense-family-detail">{d_agent}</p>
-          <div class="kense-family-links">
-            <a class="kense-pill kense-pill--outline" href="https://github.com/kense-labs/kwork" target="_blank" rel="noreferrer" data-product-badge="kwork" data-kense-hint="{hint_kwork}">{act_kwork}</a>
-            <a class="kense-inline-link" href="https://github.com/kense-labs/dsh-acp" target="_blank" rel="noreferrer" data-product-badge="dsh-acp" data-kense-hint="{hint_acp}">dsh-acp</a>
-            <a class="kense-inline-link" href="https://github.com/kense-labs/kcl" target="_blank" rel="noreferrer" data-product-badge="kcl" data-kense-hint="{hint_kcl}">KCL</a>
-          </div>
+    </div>
+    <div class="kense-middleware kense-reveal" id="middleware">
+      <div class="kense-middleware-head">
+        <h3>{mw_title}</h3>
+        <p>{mw_sub}</p>
+      </div>
+      <div class="kense-middleware-grid">
+        <div class="kense-middleware-item">
+          <h4>{ico_kbox}<span>KBox</span></h4>
+          <p>{mw_kbox}</p>
         </div>
-      </article>
+        <div class="kense-middleware-item">
+          <h4>{ico_ksb}<span>KSandbox</span></h4>
+          <p>{mw_ksb}</p>
+        </div>
+      </div>
     </div>
   </div>
 </section>"##,
-        title = tr(
-            en,
-            "隔离运行时、同源界面与智能体工作台",
-            "Isolated runtimes, dual-runtime UI, and agent workbench"
-        ),
+        title = tr(en, "四款核心产品", "Four core products"),
         desc = tr(
             en,
-            "从内核级沙箱与 MicroVM、跨桌面与浏览器的 Rust GPUI 组件库，到支持单次审批的原生桌面终端。",
-            "From kernel-enforced sandboxes and MicroVMs to shared desktop/WASM GPUI controls and native ACP workspaces."
-        ),
-        solid_rt_hint = tr(
-            en,
-            "拖拽旋转 MicroVM 隔离栈 · 快速划过赋予自转惯性",
-            "Drag to orbit MicroVM stack · swipe to spin"
-        ),
-        solid_ui_hint = tr(
-            en,
-            "拖拽检视桌面显示器与移动 Web 同源 GPUI 硬件雕塑",
-            "Drag to inspect dual-runtime Desktop & WASM devices"
-        ),
-        solid_ag_hint = tr(
-            en,
-            "拖拽检视 KWork 一体化笔记本、授权卡与 KCL 棱镜",
-            "Drag to orbit KWork laptop, auth card & KCL prism"
+            "每款产品都能单独拿来解决具体问题；放在一起时，从机房里的异构 GPU 集群一直连到你桌上的原生窗口。",
+            "Each product solves a concrete job on its own, and fits cleanly with the others from rack-scale GPUs to your desktop."
         ),
         f_runtime = svg::solid_fallback("runtime"),
-        h_runtime = tr(
+        h_kstack = tr(
             en,
-            "KBox · 硬件级隔离运行时",
-            "KBox · Isolated Runtime Stack"
+            "KStack · 算力调度与模型服务平台",
+            "KStack · GPU Scheduling & Model Serving"
         ),
-        p_runtime = tr(
+        p_kstack = tr(
             en,
-            "面向本地智能体与容器负载的双级隔离底座。KBox 提供与 Docker 同形的 CLI，支持默认树内 Sandbox 引擎与 libkrun 硬件级 MicroVM；KRun 为 Electron / Web Main 提供本地虚拟机与会话控制面对接。",
-            "Two-tier isolation for local agents and OCI workloads. KBox pairs a Docker-shaped CLI with an in-tree Sandbox engine and libkrun MicroVMs; KRun docks local VM sessions directly into Electron and Web Main."
+            "整个服务端连同中英双语 Web 控制台只有 40 MB 左右。一条命令就能把自有机房服务器、租用的公有云实例、私有云虚拟机以及已有 Kubernetes 集群并进同一个算力池；NVIDIA、AMD、昇腾、平头哥 PPU、海光与 Apple Silicon 可以在同一集群里混合调度，用卡时借出、空闲时归还。",
+            "A single ~40 MB binary with an embedded bilingual web console. Pool bare-metal GPU servers, cloud instances, private VMs, and existing Kubernetes clusters together across NVIDIA, AMD, Ascend, PPU, Hygon, and Apple Silicon."
         ),
-        d_runtime = tr(
+        d_kstack = tr(
             en,
-            "KSandbox 将不可信工具调用锁入 Seatbelt、Bubblewrap+seccomp 或 AppContainer 进程树——默认零网络、零明文密钥，缺失边界时立即失败闭合。",
-            "KSandbox confines untrusted agent tool calls inside Seatbelt, Bubblewrap+seccomp, or AppContainer process trees—deny-all by default, failing closed if any host boundary is missing."
+            "内置 392 个模型、1,235 份真机跑通的启动配置。启动前先算清权重与 KV cache 显存占用、说明选卡原因；支持单卡多模型切分（dGPU）、多机张量并行与 PD 分离，统一提供兼容 OpenAI 的 /v1 接口。",
+            "Ships 1,235 hardware-tested launch specs across 392 models. Estimates VRAM before launch, explains GPU selection, and supports single-card dGPU sharing, multi-node parallelism, and an OpenAI-compatible /v1 gateway."
         ),
-        act_kbox = svg::action_content(tr(en, "了解 KBox", "Explore KBox")),
-        hint_kbox = tr(
+        act_kstack = svg::action_content(tr(en, "了解 KStack", "About KStack")),
+        hint_kstack = tr(
             en,
-            "KBox：28ms 热启动 · 6ms 执行 · 预热池 ~19ms",
-            "KBox: 28ms start · 6ms exec · ~19ms pool"
+            "KStack：单机实测纳管跨 7 地域 1,000+ 台 GPU 节点",
+            "KStack: tested across 1,000+ GPU nodes in 7 regions"
         ),
-        hint_ksb = tr(
+        act_kstack_demo = tr(en, "体验选卡面板", "Try placement demo"),
+        hint_kstack_demo = tr(
             en,
-            "KSandbox：失败闭合进程树与 100 KiB 输出上限",
-            "KSandbox: fail-closed OS process sandbox"
+            "在下方 GPUI 面板中查看显存估算与选卡过程",
+            "Test VRAM estimation and GPU selection below"
         ),
-        hint_krun = tr(
+        f_studio = svg::solid_fallback("studio"),
+        h_kstudio = tr(
             en,
-            "KRun：1 分钟在 Electron / Web Main 对接本地 VM",
-            "KRun: dock local VM sessions from Web Main"
+            "KStudio · 多机终端与 Agent 客户端",
+            "KStudio · Multi-Machine & Agent Hub"
+        ),
+        p_kstudio = tr(
+            en,
+            "连上你手头所有的机器（桌下的 Mac Studio、机柜里的 Linux 服务器、几台笔记本或云主机），在一个 GPUI 原生窗口里一起管起来。支持在任意机器上运行 18 种编程 Agent CLI 与真实终端，直接复用你现有的 ssh 配置；就算关掉主窗口，连接、端口转发和后台任务依然继续运行。",
+            "Point it at every machine you own: a Mac Studio under the desk, Linux servers, cloud boxes, or laptops. Built natively with GPUI to run 18 coding agent CLIs and persistent terminals over your existing SSH setup, staying alive in the background when the window closes."
+        ),
+        d_kstudio = tr(
+            en,
+            "可以在终端旁直接查看并操作远程 Linux 桌面，在任意两台机器之间拖传文件与共享剪贴板，查看自建 Runner 负载，或把 GitHub Issue 一键交给选定机器上的 Agent 在独立环境里处理。",
+            "View live Linux desktops beside terminals, copy files and clipboards directly between any two machines, monitor self-hosted runners, or hand a GitHub issue to an agent in its own isolated box."
+        ),
+        act_kstudio = svg::action_content(tr(en, "了解 KStudio", "About KStudio")),
+        hint_kstudio = tr(
+            en,
+            "KStudio：支持 macOS、Linux 与 Windows 原生客户端",
+            "KStudio: native GPUI app on macOS, Linux, and Windows"
+        ),
+        act_kstudio_demo = tr(en, "查看多机隔离演示", "See machine isolation"),
+        hint_kstudio_demo = tr(
+            en,
+            "查看下方 GPUI 面板中的远程沙箱与虚拟机运行状态",
+            "Inspect remote box execution in the live GPUI panel"
+        ),
+        f_agent = svg::solid_fallback("agent"),
+        h_kwork = tr(
+            en,
+            "KWork · 桌面 Agent 工作台",
+            "KWork · Desktop Agent Workbench"
+        ),
+        p_kwork = tr(
+            en,
+            "日常跑任务、写代码用的桌面 Agent 客户端，界面用 KUI 与 GPUI 写成。按本地项目目录归档对话与历史，可接入 DeepSeek、OpenAI、OpenRouter 或本地模型服务，在输入框旁随时切换模型与推理档位。",
+            "A desktop client for everyday agent tasks, built with KUI and GPUI. Organize sessions by workspace, connect DeepSeek, OpenAI, OpenRouter, or local endpoints, and switch models or reasoning effort inline."
+        ),
+        d_kwork = tr(
+            en,
+            "任务执行过程中的每一次工具调用与返回结果都一目了然，涉及写入或执行命令时弹出单次确认；周期性的巡检、整理与构建可以直接设为定时任务，跑完自动投递回会话。",
+            "Inspect every tool call and output in real time, approve sensitive actions one by one, and turn recurring checks or builds into scheduled tasks delivered straight back to your workspace."
+        ),
+        act_kwork = svg::action_content(tr(en, "了解 KWork", "About KWork")),
+        hint_kwork = tr(
+            en,
+            "KWork：工作区会话归档、单次授权确认与定时任务",
+            "KWork: workspace sessions, tool approvals & schedules"
+        ),
+        act_kwork_demo = tr(en, "体验授权交互", "Try approval flow"),
+        hint_kwork_demo = tr(
+            en,
+            "在下方 GPUI 面板中体验工具单次确认流程",
+            "Test single-use tool approvals in the GPUI panel"
         ),
         f_ui = svg::solid_fallback("ui"),
-        h_ui = tr(
+        h_kui = tr(
             en,
-            "KUI · 双端同源 GPUI 界面套件",
-            "KUI · Dual-Runtime GPUI Kit"
+            "KUI · 跨桌面与 Web 的 GPUI 组件库",
+            "KUI · Cross-Platform GPUI Component Library"
         ),
-        p_ui = tr(
+        p_kui = tr(
             en,
-            "一套 Rust 控件源码同时运行于 macOS / Windows / Linux 原生桌面与 wasm32-unknown-unknown 浏览器环境。原语行为层与视觉表现层严格解耦，预览画廊与安装源码完全同源。",
-            "One Rust control tree targeting macOS, Windows, and Linux native desktop alongside wasm32-unknown-unknown browsers. Unstyled behavior primitives stay cleanly separated from themed chrome."
+            "一套 Rust 组件源码，同时编译运行在 macOS、Windows、Linux 原生桌面与浏览器 WebAssembly 中，不用把同一套界面用前端框架重写第二遍。底层交互状态与视觉主题清晰分开，网页上点按预览的就是实际装进工程里的代码。",
+            "One Rust component codebase running natively on macOS, Windows, and Linux as well as WebAssembly in the browser, without maintaining a separate web UI fork. What you interact with in the gallery is the exact source you ship."
         ),
-        d_ui = if en {
+        d_kui = if en {
             format!(
-                "{count} free, MIT-licensed components including 46 full-page workspace screens. Depend on kense-kui from crates.io or own selected ui/ source via kui add."
+                "Includes {count} components and full application screen templates. Add kense-kui via Cargo or copy individual component source into your repo with kui add."
             )
         } else {
             format!(
-                "全部 {count} 个组件（含 46 个全尺寸应用屏幕）均基于 MIT 协议免费开源。既可通过 crates.io 引入 kense-kui，也可通过 kui add 将源码安装进项目。"
+                "内置 {count} 个基础控件、复杂交互组件与完整应用页面模板。既可以通过 Cargo 作为库引入，也可以用 kui add 把所需源码直接拷进仓库自由定制。"
             )
         },
-        act_kui = svg::action_content(tr(en, "进入 KUI 产品站", "Open KUI")),
+        act_kui = svg::action_content(tr(en, "进入 KUI 组件站", "Open KUI")),
         act_comp = if en {
-            format!("{count} Components")
+            format!("Browse {count} components")
         } else {
             format!("浏览 {count} 个组件")
         },
         hint_kui = tr(
             en,
-            "KUI：桌面端与 Web 零分叉的纯正 GPUI 组件体系",
-            "KUI: zero-fork desktop & WASM GPUI kit"
+            "打开 KUI 产品站与实时画廊",
+            "Open KUI product site & live gallery"
         ),
         hint_comp = tr(
             en,
-            "在浏览器内实时交互体验全部 GPUI 组件画廊",
-            "Interact with live GPUI WebAssembly stories"
+            "直接在浏览器里点按试用全部 GPUI 组件",
+            "Try all GPUI components live in the browser"
         ),
-        act_install = tr(en, "安装与 CLI", "CLI & Docs"),
+        act_install = tr(en, "安装说明", "Installation"),
         hint_install = tr(
             en,
-            "查看 crates.io 依赖与 kui add 源码直装指南",
-            "Read crates.io dependency and kui add copy-source guide"
+            "查看 Cargo 引入与 kui add 源码安装步骤",
+            "Read Cargo dependency and kui add setup steps"
         ),
-        f_agent = svg::solid_fallback("agent"),
-        h_agent = tr(
+        mw_title = tr(en, "底层运行时中间件", "Runtime middleware"),
+        mw_sub = tr(
             en,
-            "KWork · 原生智能体桌面工作台",
-            "KWork · Native Agent Workbench"
+            "作为基础隔离模块供 KStudio、KWork 等上层产品内部调用：",
+            "Foundational isolation modules used underneath KStudio and KWork:"
         ),
-        p_agent = tr(
+        ico_kbox = crate::brand_marks::emblem("kbox", 18),
+        mw_kbox = tr(
             en,
-            "基于 KUI、GPUI 与 Tauri 构建原生桌面客户端，按工作区组织会话、定时任务、单次工具审批与多模型路由；底层通过无守护进程的 dsh-acp 在 stdio 或隔离 MicroVM 中驱动智能体。",
-            "Pairs KUI, GPUI, and Tauri in a native desktop client for workspace sessions, scheduled runs, tool approvals, and multi-provider routing—driving daemonless dsh-acp agents over stdio or MicroVMs."
+            r#"兼容 OCI 镜像的容器与 libkrun 轻量 MicroVM 运行时，支持预热池快速挂载独立环境；需要在桌面 Web 宿主中接入本地虚拟机时，也可通过轻量桥接模块 <a href="https://kense-labs.github.io/krun/">KRun</a> 调用。"#,
+            r#"OCI container and libkrun MicroVM runtime with prewarmed pools for isolated task environments, with optional <a href="https://kense-labs.github.io/krun/">KRun</a> bridging for desktop web hosts."#
         ),
-        d_agent = tr(
+        ico_ksb = crate::brand_marks::emblem("ksandbox", 18),
+        mw_ksb = tr(
             en,
-            "配置准入由 KCL（kense-kcl）把关：1 MiB / 64 层有界解析、默认闭合 Schema 校验，以及规范字节流 sha256 摘要。",
-            "Agent configurations are admitted through KCL (kense-kcl): bounded parsing, closed-by-default schema validation, and canonical sha256 digests."
-        ),
-        act_kwork = svg::action_content(tr(en, "了解 KWork", "Explore KWork")),
-        hint_kwork = tr(
-            en,
-            "KWork：会话冷恢复、单次工具审批与定时投递",
-            "KWork: cold resume, tool approvals & schedules"
-        ),
-        hint_acp = tr(
-            en,
-            "dsh-acp：进程即会话，零常驻端口，断连即回收",
-            "dsh-acp: daemonless stdio JSON-RPC harness"
-        ),
-        hint_kcl = tr(
-            en,
-            "KCL：1 MiB 有界解析、闭合 Schema 与 sha256 摘要",
-            "KCL: bounded parser & canonical sha256"
+            "跨平台轻量进程沙箱，利用 macOS Seatbelt、Linux Bubblewrap+seccomp 与 Windows AppContainer 限制命令子进程的目录读写与网络连接。",
+            "Lightweight cross-platform process sandbox using macOS Seatbelt, Linux Bubblewrap+seccomp, and Windows AppContainer to restrict subprocess file and network access."
         ),
     );
 
-    // Section 3: Interactive Live GPUI Studio Workbench (#experience)
+    // Section 3: Interactive Live GPUI Studio Panel (#experience)
     let experience = format!(
         r##"<section class="kense-section kense-section--panel" id="experience" aria-labelledby="kense-exp-title">
   <div class="kense-shell">
@@ -949,7 +942,7 @@ pub fn page(en: bool, rev: &str) -> String {
             <li><p>{gw_b2}</p></li>
             <li><p>{gw_b3}</p></li>
           </ul>
-          <a class="kense-pill kense-pill--solid" href="https://github.com/kense-labs/kense" target="_blank" rel="noreferrer" data-product-badge="aios" data-kense-hint="{gw_hint}">{gw_cta}</a>
+          <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstack" data-product-badge="kstack" data-kense-hint="{gw_hint}">{gw_cta}</a>
         </div>
         <div id="experience-sandbox" class="kense-exp-copy" role="tabpanel" aria-labelledby="kense-tab-sandbox" data-kense-panel="sandbox" data-gpui-story="kense-sandbox" hidden>
           <h3>{sb_h}</h3>
@@ -959,7 +952,7 @@ pub fn page(en: bool, rev: &str) -> String {
             <li><p>{sb_b2}</p></li>
             <li><p>{sb_b3}</p></li>
           </ul>
-          <a class="kense-pill kense-pill--solid" href="https://github.com/kense-labs/kbox" target="_blank" rel="noreferrer" data-product-badge="kbox" data-kense-hint="{sb_hint}">{sb_cta}</a>
+          <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstudio" data-product-badge="kstudio" data-kense-hint="{sb_hint}">{sb_cta}</a>
         </div>
         <div id="experience-interface" class="kense-exp-copy" role="tabpanel" aria-labelledby="kense-tab-interface" data-kense-panel="interface" data-gpui-story="kense-workbench" hidden>
           <h3>{ui_h}</h3>
@@ -982,149 +975,145 @@ pub fn page(en: bool, rev: &str) -> String {
 </section>"##,
         title = tr(
             en,
-            "在真实 GPUI 实例中，验证受控执行",
-            "Verify bounded execution in live GPUI"
+            "直接在网页里点按试试真实的 GPUI 界面",
+            "Try a live Rust + GPUI panel right in your browser"
         ),
         desc = tr(
             en,
-            "右侧直接运行编译为 WebAssembly 的纯 Rust + GPUI 实例——切换侧栏或点击按钮，实时体验边缘换票、越界阻断与单次工具授权。",
-            "Interact directly with a live Rust + GPUI WebAssembly studio—switch rails or click actions to test token exchange, fail-closed blocks, and ACP approvals."
+            "右侧不是静态截图，而是编译成 WebAssembly 实时运行的 GPUI 实例。切换选项卡或点击面板按钮，直接试试 KStack 选卡调度、KStudio 隔离运行与 KWork 工具确认。",
+            "The panel on the right is a real Rust + GPUI WebAssembly instance. Switch tabs or click controls to test KStack GPU placement, KStudio isolated boxes, and KWork tool approvals."
         ),
-        tablist_label = tr(en, "Kense 核心链路演示", "Kense architecture scenarios"),
-        gpui_label = tr(
-            en,
-            "Kense 实时 GPUI 交互工作台",
-            "Kense live GPUI interactive workbench"
-        ),
+        tablist_label = tr(en, "核心产品交互演示", "Interactive product scenarios"),
+        gpui_label = tr(en, "实时 GPUI 交互面板", "Live GPUI interactive panel"),
         tab_gw = button(
             &format!(
                 r#"id="kense-tab-gateway" class="kense-tab is-active" role="tab" aria-selected="true" aria-controls="experience-gateway" data-kense-tab="gateway" data-gpui-story="kense-gateway" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 GPUI 网关换票与密文引用场景",
-                    "Switch GPUI scene: Edge Token Exchange & Vault"
+                    "切换至 KStack 显存估算与异构选卡面板",
+                    "Switch to KStack VRAM estimate & GPU placement"
                 )
             ),
-            tr(en, "一把 Key 信任链", "One-Key Trust Chain")
+            tr(en, "KStack 算力与选卡", "KStack Placement")
         ),
         tab_sb = button(
             &format!(
                 r#"id="kense-tab-sandbox" class="kense-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="experience-sandbox" data-kense-tab="sandbox" data-gpui-story="kense-sandbox" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 GPUI 预热池与越界拦截场景",
-                    "Switch GPUI scene: KBox MicroVM & Fail-Closed Sandbox"
+                    "切换至 KStudio 远程机器与隔离环境面板",
+                    "Switch to KStudio machine & MicroVM isolation"
                 )
             ),
-            tr(en, "隔离运行时与阻断", "Isolated Execution")
+            tr(en, "KStudio 多机与隔离", "KStudio Machines")
         ),
         tab_ui = button(
             &format!(
                 r#"id="kense-tab-interface" class="kense-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="experience-interface" data-kense-tab="interface" data-gpui-story="kense-workbench" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 GPUI 单次审批与 KCL 准入场景",
-                    "Switch GPUI scene: KWork ACP Approval & KCL Studio"
+                    "切换至 KWork 工作区会话与单次工具确认面板",
+                    "Switch to KWork workspace & tool approval"
                 )
             ),
-            tr(en, "同源界面与单次审批", "Dual-Runtime UI & ACP")
+            tr(en, "KWork 会话与授权", "KWork Workspace")
         ),
         gw_h = tr(
             en,
-            "主 Key 止步边缘<br>下游共享同一条信任链",
-            "Primary key stops at the edge<br>One chain for auth, quota & audit"
+            "先算清显存开销<br>再把模型放到合适的卡上",
+            "Estimate memory upfront<br>Place each model on the right GPU"
         ),
         gw_p = tr(
             en,
-            "主 Key 只在统一网关出示一次并置换为 5–15 分钟单受众凭据；下游服务不可见主 Key，沙箱内不持有任何明文凭据。",
-            "Presented once at the Unified Gateway and exchanged via RFC 8693 for a 5–15 minute single-audience token; sandboxes hold zero secrets."
+            "不用反复猜启动参数。KStack 在拉起引擎前先估算权重、KV cache 与运行时开销，挑出匹配的加速卡并给出其余节点被排除的具体原因。",
+            "No guessing engine flags by trial and error. KStack calculates weight, KV cache, and runtime memory before launch, picks matching GPUs, and explains why other cards were skipped."
         ),
         gw_b1 = tr(
             en,
-            "所有能力先注册为 URN 再暴露，九类服务共用鉴权路径",
-            "Capabilities register as URNs before exposure"
+            "NVIDIA、AMD、昇腾、平头哥 PPU、海光与 Apple Silicon 同池混部",
+            "Mix NVIDIA, AMD, Ascend, PPU, Hygon, and Apple Silicon in one pool"
         ),
         gw_b2 = tr(
             en,
-            "Vault 出网仅注入 secret_ref + version，明文不落日志",
-            "Vault egress injects secret_ref + version only"
+            "支持 dGPU 显存切分与休眠轮换，让多个模型安全共用一张卡",
+            "Share a single card across models with dGPU quotas and sleep/wake"
         ),
         gw_b3 = tr(
             en,
-            "每次请求产生唯一计量事件，用量与商业账本架构解耦",
-            "One meter event per request; separated usage & billing ledgers"
+            "统一暴露 /v1 兼容网关，自带按令牌统计与压测工具",
+            "OpenAI-compatible /v1 gateway with per-key token accounting & benchmarks"
         ),
-        gw_cta = svg::action_content(tr(en, "阅读架构契约", "Read AI OS specs")),
+        gw_cta = svg::action_content(tr(en, "查看 KStack 详情", "About KStack")),
         gw_hint = tr(
             en,
-            "查看九大模块与五个横切面完整规范",
-            "Inspect 9 contexts & 5 shared planes"
+            "查看 KStack 支持的模型与硬件范围",
+            "Read KStack hardware & model specs"
         ),
         sb_h = tr(
             en,
-            "两级工作负载隔离<br>缺失边界时拒绝静默裸跑",
-            "Two isolation grades<br>Never silent fallback to host"
+            "把任务交给远端机器<br>在独立环境里踏实跑完",
+            "Hand tasks to your machines<br>Run inside isolated environments"
         ),
         sb_p = tr(
             en,
-            "无论是本地容器、libkrun 硬件虚拟化 MicroVM，还是嵌入宿主的进程树沙箱，策略由控制面声明，边界由操作系统强制执行。",
-            "Whether running OCI containers, libkrun MicroVMs, or embedded process sandboxes, policy declares intent while the OS enforces boundaries."
+            "在 KStudio 里挑一台空闲机器，Agent 会在独立的 KBox 轻量虚拟机或 KSandbox 沙箱中干活；空闲时自动暂停，继续追问时接着上次现场往下跑。",
+            "Pick an available machine in KStudio and let an agent work inside its own KBox MicroVM or KSandbox boundary, pausing when idle and resuming where it left off."
         ),
         sb_b1 = tr(
             en,
-            "KBox 预热池保持已初始化 MicroVM 就绪，亚 20ms 接入",
-            "Prewarmed KBox MicroVM pools attach in ~19ms RTT"
+            "直接沿用本机 ssh 配置与密钥，跨网段可经 Tailscale 直连",
+            "Uses your existing SSH config and keys, and works over Tailscale"
         ),
         sb_b2 = tr(
             en,
-            "KSandbox 默认封锁外网、宿主套接字、符号链接逃逸与敏感目录",
-            "KSandbox blocks network, sockets, symlink escapes & .git"
+            "底层沙箱默认拦截宿主机敏感目录（如 ~/.ssh）与未授权外网连接",
+            "Underlying sandbox blocks sensitive host paths and unexpected outbound sockets"
         ),
         sb_b3 = tr(
             en,
-            "超时终止整棵后代进程树，客户端断连即彻底回收实例",
-            "Timeouts kill the full descendant tree; VMs vanish on disconnect"
+            "关掉桌面窗口后会话与端口转发仍在后台保持，随时重连",
+            "Sessions and port forwards stay up in the menu bar even after closing the window"
         ),
-        sb_cta = svg::action_content(tr(en, "了解 KBox 运行时", "Explore KBox runtime")),
+        sb_cta = svg::action_content(tr(en, "查看 KStudio 详情", "About KStudio")),
         sb_hint = tr(
             en,
-            "对比 darwin arm64 实测生命周期延迟",
-            "Measured lifecycle benchmarks"
+            "查看 KStudio 多机管理与远程桌面功能",
+            "Read KStudio multi-machine capabilities"
         ),
         ui_h = tr(
             en,
-            "一套 Rust 界面源码<br>驱动桌面工作台与浏览器预览",
-            "One Rust UI source<br>Across native desktop and WebAssembly"
+            "看清每一步工具调用<br>一套 GPUI 界面横跨桌面与网页",
+            "Clear tool approvals in KWork<br>Powered by shared KUI controls"
         ),
         ui_p = tr(
             en,
-            "从 KCL 规范配置准入，到 KUI 双端同源 GPUI 渲染，再到 KWork 通过 stdio JSON-RPC 编排 dsh-acp 智能体会话。",
-            "From KCL schema admission to dual-runtime KUI rendering and KWork orchestrating dsh-acp agent sessions over stdio JSON-RPC."
+            "KWork 用 KUI 组件构建流畅的桌面工作区：模型切换、工具入参审阅、一次性权限批准与定时任务都在同一套简洁界面里完成。",
+            "KWork is built on KUI controls for fast everyday agent work: switch models inline, inspect tool arguments, approve sensitive commands once, and schedule recurring runs."
         ),
         ui_b1 = tr(
             en,
-            "KCL 在 1 MiB / 64 层上限内解析并生成确定性 sha256",
-            "Bounded KCL parser emits deterministic sha256 canonical digests"
+            "按本地目录建立工作区，完整保留历史记录并支持冷启动恢复",
+            "Workspace-scoped local history with clean session resume"
         ),
         ui_b2 = tr(
             en,
-            "KUI 锁定 gpui-pre =0.3.10，兼顾库依赖与拷源码分发",
-            "Pinned gpui-pre =0.3.10 with library and copy-source install paths"
+            "敏感文件修改与终端命令先展示详情，点确认后再放行",
+            "Review exact command arguments before granting single-use approval"
         ),
         ui_b3 = tr(
             en,
-            "KWork 统一工具调用审阅、单次授权确认、定时任务与冷恢复",
-            "KWork unifies tool inspection, permission prompts & scheduled tasks"
+            "同一套 KUI 组件也可直接打开网页画廊在线预览与拷贝源码",
+            "Every KUI control used here can be previewed in the browser and added via kui CLI"
         ),
-        ui_cta = svg::action_content(tr(en, "体验 KUI 组件站", "Experience KUI live")),
-        ui_hint = tr(
-            en,
-            "在浏览器内直接交互运行 GPUI 画廊",
-            "Run GPUI directly in the browser"
-        ),
+        ui_cta = svg::action_content(tr(en, "打开 KUI 组件画廊", "Explore KUI gallery")),
+        ui_hint = if en {
+            format!("Try all {count} KUI controls in the browser")
+        } else {
+            format!("在浏览器内交互体验全部 {count} 个 KUI 组件")
+        },
     );
 
-    // Section 4: Borderless Porcelain Plinth Bento + Volumetric 3D Matte-Clay Sculptures (#capabilities)
+    // Section 4: Borderless Porcelain Plinth Bento + 3D Bot-Fusion Sculptures (#capabilities)
     let capabilities = format!(
         r##"<section class="kense-section" id="capabilities" aria-labelledby="kense-cap-title">
   <div class="kense-shell">
@@ -1133,28 +1122,28 @@ pub fn page(en: bool, rev: &str) -> String {
       <p>{desc}</p>
     </div>
     <div class="kense-bento" data-kense-bento>
-      <article class="kense-bento-card kense-bento-card--wide" data-kense-tilt data-solid-entrance="pending" data-kense-hint="{b1_hint}">
+      <article class="kense-bento-card kense-bento-card--wide" data-kense-tilt data-solid-entrance="pending">
         <div class="kense-tilt-surface" data-kense-tilt-surface>
           <div class="kense-bento-art">{r1}</div>
           <h3>{c1_h}</h3>
           <p>{c1_p}</p>
         </div>
       </article>
-      <article class="kense-bento-card" data-kense-tilt data-solid-entrance="pending" data-kense-hint="{b2_hint}">
+      <article class="kense-bento-card" data-kense-tilt data-solid-entrance="pending">
         <div class="kense-tilt-surface" data-kense-tilt-surface>
           <div class="kense-bento-art">{r2}</div>
           <h3>{c2_h}</h3>
           <p>{c2_p}</p>
         </div>
       </article>
-      <article class="kense-bento-card" data-kense-tilt data-solid-entrance="pending" data-kense-hint="{b3_hint}">
+      <article class="kense-bento-card" data-kense-tilt data-solid-entrance="pending">
         <div class="kense-tilt-surface" data-kense-tilt-surface>
           <div class="kense-bento-art">{r3}</div>
           <h3>{c3_h}</h3>
           <p>{c3_p}</p>
         </div>
       </article>
-      <article class="kense-bento-card kense-bento-card--wide-end" data-kense-tilt data-solid-entrance="pending" data-kense-hint="{b4_hint}">
+      <article class="kense-bento-card kense-bento-card--wide-end" data-kense-tilt data-solid-entrance="pending">
         <div class="kense-tilt-surface" data-kense-tilt-surface>
           <div class="kense-bento-art">{r4}</div>
           <h3>{c4_h}</h3>
@@ -1166,81 +1155,61 @@ pub fn page(en: bool, rev: &str) -> String {
 </section>"##,
         title = tr(
             en,
-            "把“默认信任”重构为“可证明边界”",
-            "From implicit trust to provable boundaries"
+            "少造概念，把工程细节做扎实",
+            "Practical details that hold up in daily use"
         ),
         desc = tr(
             en,
-            "不在应用层堆砌脆弱补丁，而是在操作系统平面固化凭据、沙箱、发布与同源交互原语。",
-            "Operating-plane invariants for credentials, process isolation, reversible rollouts, and deterministic UI."
-        ),
-        b1_hint = tr(
-            en,
-            "RFC 8693 短时换票 + 出网密文引用注入",
-            "RFC 8693 token exchange + egress secret refs"
-        ),
-        b2_hint = tr(
-            en,
-            "缺失内核隔离能力时立即拒绝执行，绝不降级",
-            "Missing OS isolation fails closed immediately"
-        ),
-        b3_hint = tr(
-            en,
-            "OCI/ORAS 内容摘要 + 别名权重秒级回滚",
-            "Immutable digests + instant alias-flip rollback"
-        ),
-        b4_hint = tr(
-            en,
-            "从运行时到 GPUI 组件库与官网全栈纯 Rust 构建",
-            "100% Rust across runtimes, GPUI controls & web"
+            "把最容易踩坑的四件事提前处理好：算清显存再启动、默认把运行环境隔开、关掉窗口不断连、一套界面源码通吃桌面与网页。",
+            "Four everyday details handled properly: upfront memory math, isolated execution by default, persistent background sessions, and one UI codebase across desktop and web."
         ),
         r1 = svg::bento_relief("vault-chain"),
         c1_h = tr(
             en,
-            "边缘换票与零凭据沙箱",
-            "Edge Token Exchange & Zero-Secret Sandboxes"
+            "启动前先把显存账算清",
+            "Know the VRAM math before launch"
         ),
         c1_p = tr(
             en,
-            "主 Key 仅存哈希并在网关边缘出现一次；Vault 按作用域封存第三方密钥，出网侧仅注入引用与版本号，明文绝不进入沙箱与日志。",
-            "Only key hashes are stored and verified once at the edge; Vault seals third-party secrets per scope and injects references at egress so plaintext never enters sandboxes or logs."
+            "KStack 部署前直接列出模型权重、KV cache 和推理引擎各自占多少显存，哪张卡合适、哪张卡为什么排掉写得明明白白，省去报错后再回头排查。",
+            "Before starting any engine, KStack shows exact memory needs for weights, KV cache, and overhead, plus which GPUs matched and why others were skipped."
         ),
         r2 = svg::bento_relief("fail-closed"),
-        c2_h = tr(en, "内核强制与失败闭合", "Kernel-Enforced & Fail-Closed"),
+        c2_h = tr(en, "默认隔离，越界直接拦住", "Isolated by default"),
         c2_p = tr(
             en,
-            "Seatbelt、Bubblewrap+seccomp、AppContainer 与 libkrun MicroVM 分层把关；缺少宿主隔离能力时立即报错拒绝执行。",
-            "Enforced by Seatbelt, Bubblewrap+seccomp, AppContainer, and libkrun MicroVMs—missing host capabilities fail closed immediately."
+            "自动执行的任务跑在独立的 KBox 虚拟机或 KSandbox 进程沙箱里，不给宿主机私钥目录和随意出网权限；宿主缺少隔离支持时直接停下报错，不会悄悄裸跑。",
+            "Automated agent tasks run inside KBox MicroVMs or KSandbox process boundaries without access to host secrets, stopping immediately if host isolation is unavailable."
         ),
         r3 = svg::bento_relief("release-primitive"),
         c3_h = tr(
             en,
-            "不可变版本 · 别名 · 权重",
-            "Version · Alias · Traffic Weight"
+            "关掉主窗口，会话照常跑",
+            "Close the window, sessions keep running"
         ),
         c3_p = tr(
             en,
-            "Actions、Packages 与 Releases 横切模型、服务与 Agent 模板，按具体内容摘要灰度放量，回滚只需一次别名翻转。",
-            "Actions, Packages, and Releases ship concrete OCI/ORAS digests across models, apps, and agents—making rollback an instant alias flip."
+            "KStudio 在菜单栏常驻保持机器连接、端口转发与远端终端，哪台机器上的任务跑完了需要你看一眼会亮起提示；重新点开窗口就能直接接上。",
+            "KStudio keeps SSH links, port forwards, and agent terminals running from the menu bar or tray, badging when a session needs you and reattaching cleanly when reopened."
         ),
         r4 = svg::bento_relief("dual-runtime"),
         c4_h = tr(
             en,
-            "纯 Rust 与 WASM 全栈同源",
-            "Single-Source Rust & WebAssembly"
+            "一套 Rust 界面跑通桌面与网页",
+            "One Rust UI across desktop and web"
         ),
         c4_p = if en {
             format!(
-                "From sandboxes and the KCL parser to {count} GPUI components and this static site itself—authored in Rust and compiled to native & WebAssembly without DOM forks."
+                "KUI, KStudio, and KWork share the same GPUI foundation: {count} controls written once in Rust and compiled to native desktop apps and browser WebAssembly."
             )
         } else {
             format!(
-                "从沙箱运行时、KCL 配置编译器到 {count} 个 GPUI 界面组件乃至整座官网，全部以 Rust 构建并直编原生与 WebAssembly，无第二套前端树分叉。"
+                "KUI、KStudio 与 KWork 共用同一套 Rust + GPUI 基础，{count} 个组件写一次即可编译成三端原生桌面程序与浏览器 WebAssembly 预览。"
             )
         },
     );
 
-    // Section 5: Clean Editorial Ecosystem Topology + 4-Step Process Timeline (#architecture)
+    // Section 5: Clean Product Collaboration Diagram + 4-Step Workflow (#architecture)
     let architecture = format!(
         r##"<section class="kense-section" id="architecture" aria-labelledby="kense-arch-title">
   <div class="kense-shell">
@@ -1253,45 +1222,45 @@ pub fn page(en: bool, rev: &str) -> String {
       <div class="kense-eco-graph">
         <div class="kense-eco-col kense-eco-agents">
           <p class="kense-eco-mobile-label">{left_lbl}</p>
-          <article class="kense-eco-card" data-product-badge="kui">
-            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_ui}</span><h3>{l1_h}</h3></div>
-            <p class="kense-eco-tags">KUI · KWork · GPUI + WASM</p>
+          <article class="kense-eco-card" data-product-badge="kstudio">
+            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_studio}</span><h3>{l1_h}</h3></div>
+            <p class="kense-eco-tags">macOS · Linux · Windows · 18 Agent CLIs</p>
             <p class="kense-eco-note">{l1_n}</p>
           </article>
-          <article class="kense-eco-card" data-product-badge="dsh-acp">
-            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_acp}</span><h3>{l2_h}</h3></div>
-            <p class="kense-eco-tags">dsh-acp · ACP · MCP · A2A</p>
+          <article class="kense-eco-card" data-product-badge="kwork">
+            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_work}</span><h3>{l2_h}</h3></div>
+            <p class="kense-eco-tags">Workspaces · Tool Approvals · Schedules</p>
             <p class="kense-eco-note">{l2_n}</p>
           </article>
-          <article class="kense-eco-card" data-product-badge="kcl">
-            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_kcl}</span><h3>{l3_h}</h3></div>
-            <p class="kense-eco-tags">Actions · Packages · Releases · KCL</p>
+          <article class="kense-eco-card" data-product-badge="kui">
+            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_ui}</span><h3>{l3_h}</h3></div>
+            <p class="kense-eco-tags">Rust · GPUI · Desktop + WebAssembly</p>
             <p class="kense-eco-note">{l3_n}</p>
           </article>
         </div>
         {conn_left}
         <div class="kense-eco-core-wrap">
-          <div class="kense-eco-core" data-product-badge="aios" data-kense-hint="{core_hint}">
-            <span class="kense-eco-core-mark">{ico_aios}</span>
+          <div class="kense-eco-core">
+            <span class="kense-eco-core-mark">{ico_kstack}</span>
             <strong>Kense</strong>
             <span>{core_sub}</span>
-            <small>Gateway · SVID · Vault</small>
+            <small>SSH · MCP · /v1 API</small>
           </div>
         </div>
         {conn_right}
         <div class="kense-eco-col kense-eco-supply">
           <p class="kense-eco-mobile-label">{right_lbl}</p>
-          <article class="kense-eco-card">
-            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_aios}</span><h3>{r1_h}</h3></div>
-            <p class="kense-eco-tags">IaaS · MaaS · TaaS · PaaS / AaaS</p>
+          <article class="kense-eco-card" data-product-badge="kstack">
+            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_kstack_card}</span><h3>{r1_h}</h3></div>
+            <p class="kense-eco-tags">NVIDIA · AMD · Ascend · PPU · Hygon · Apple</p>
             <p class="kense-eco-note">{r1_n}</p>
-            <a class="kense-inline-action" href="https://github.com/kense-labs/kense" target="_blank" rel="noreferrer" data-product-badge="aios">{r1_cta}</a>
+            <a class="kense-inline-action" href="{prefix}/docs/#kstack" data-product-badge="kstack">{r1_cta}</a>
           </article>
-          <article class="kense-eco-card">
+          <article class="kense-eco-card" data-product-badge="kbox">
             <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_kbox}</span><h3>{r2_h}</h3></div>
-            <p class="kense-eco-tags">KBox · KSandbox · KRun · Pool</p>
+            <p class="kense-eco-tags">KBox · KSandbox · OCI &amp; MicroVM</p>
             <p class="kense-eco-note">{r2_n}</p>
-            <a class="kense-inline-action" href="https://kense-labs.github.io/krun/" data-product-badge="krun">{r2_cta}</a>
+            <a class="kense-inline-action" href="{prefix}/#middleware">{r2_cta}</a>
           </article>
         </div>
       </div>
@@ -1310,217 +1279,171 @@ pub fn page(en: bool, rev: &str) -> String {
     </div>
   </div>
 </section>"##,
-        title = tr(
-            en,
-            "一把 Key，贯通能力供给与可信治理",
-            "One key uniting capability supply and governance"
-        ),
+        title = tr(en, "四款产品如何分工配合", "How the products fit together"),
         desc = tr(
             en,
-            "下层向上层提供算力、模型与沙箱能力，上层生产轨迹回流 TaaS 构建评测基准；身份、配额、计量、审计与凭据锚定在同一条链上。",
-            "Lower layers supply compute, models, and sandboxes upward while production traces flow back as TaaS benchmarks—all anchored on one credential chain."
+            "桌面端用 KStudio 管机器、用 KWork 跑日常任务，界面由 KUI 构建；后端模型推理交给 KStack 统一调度，需要隔离环境时调用底层的 KBox 与 KSandbox。",
+            "Use KStudio to manage machines and KWork for daily tasks, both built with KUI; route model inference through KStack and isolate execution with KBox and KSandbox."
         ),
         eco_label = tr(
             en,
-            "工作负载、开发者供应链与异构资源底座通过 Kense 控制面连接",
-            "Workloads, developer supply chain, and isolation substrates connected through the Kense operating plane"
+            "KStudio、KWork、KUI 与 KStack 及底层运行时中间件的配合关系",
+            "How KStudio, KWork, KUI, KStack, and runtime middleware connect"
         ),
-        left_lbl = tr(en, "交互终端与交付供应链", "Surfaces & Supply Chain"),
-        right_lbl = tr(en, "分层服务与异构隔离底座", "Service Chain & Isolation"),
-        l1_h = tr(en, "原生桌面与 Web 界面", "Native & Web Interfaces"),
+        left_lbl = tr(en, "桌面端与跨端界面", "Desktop Apps & UI"),
+        right_lbl = tr(en, "模型算力与隔离中间件", "Model Serving & Middleware"),
+        l1_h = tr(en, "KStudio · 多机终端", "KStudio · Multi-Machine Hub"),
         l1_n = tr(
             en,
-            "一套 Rust 组件源覆盖桌面端与浏览器",
-            "Shared GPUI component source across desktop & web"
+            "管理多台机器的常驻终端、Agent 会话、远程桌面与跨机文件",
+            "Persistent terminals, 18 agent CLIs, remote desktops & file sync across machines"
         ),
-        l2_h = tr(en, "智能体与协议宿主", "Agent & Protocol Hosts"),
+        l2_h = tr(en, "KWork · 桌面工作台", "KWork · Desktop Workbench"),
         l2_n = tr(
             en,
-            "stdio ACP 会话、MCP 工具与多智能体路由",
-            "Stdio ACP sessions, MCP tools & A2A routing"
+            "日常项目对话、多模型切换、单次工具确认与定时任务",
+            "Project workspaces, inline model switching, tool approvals & scheduled tasks"
         ),
-        l3_h = tr(en, "不可变交付供应链", "Immutable Supply Chain"),
+        l3_h = tr(en, "KUI · 跨端组件库", "KUI · GPUI Component Kit"),
         l3_n = tr(
             en,
-            "OCI/ORAS 制品签名、SBOM 与 KCL 规范摘要",
-            "OCI/ORAS digests, SBOM attestation & KCL schemas"
+            "同一套 Rust 控件源码同时跑在原生桌面窗口与 Web 交互预览",
+            "Shared Rust + GPUI controls powering native apps and browser previews"
         ),
         conn_left = svg::topology_connector(true),
+        ico_studio = svg::product_emblem("kstudio"),
+        ico_work = svg::product_emblem("kwork"),
         ico_ui = svg::product_emblem("kui"),
-        ico_acp = svg::product_emblem("dsh-acp"),
-        ico_kcl = svg::product_emblem("kcl"),
-        ico_aios = svg::product_emblem("aios"),
+        ico_kstack = svg::product_emblem("kstack"),
+        ico_kstack_card = svg::product_emblem("kstack"),
         ico_kbox = svg::product_emblem("kbox"),
-        core_sub = tr(en, "AI OS 控制面", "AI OS Plane"),
-        core_hint = tr(
-            en,
-            "悬停查看 Kense AI OS 控制面详情",
-            "Inspect Kense AI OS operating plane"
-        ),
+        core_sub = tr(en, "连接协议", "Protocols"),
         conn_right = svg::topology_connector(false),
-        r1_h = tr(en, "全栈能力供给链", "Layered Capability Supply"),
+        r1_h = tr(en, "KStack · 算力与模型平台", "KStack · GPU Pool & MaaS"),
         r1_n = tr(
             en,
-            "可解释放置、兼容推理与按有效结果结算",
-            "Explainable placement, /v1 inference & outcome billing"
+            "把自有服务器与多云加速卡并入同一算力池，算清显存后一键提供 /v1 服务",
+            "Pools bare-metal and cloud GPUs with upfront VRAM estimates and /v1 serving"
         ),
-        r1_cta = svg::action_content(tr(en, "查看上下文映射图", "Context map")),
-        r2_h = tr(en, "异构算力与隔离运行时", "Compute & Sandbox Substrate"),
+        r1_cta = svg::action_content(tr(en, "了解 KStack", "About KStack")),
+        r2_h = tr(
+            en,
+            "KBox & KSandbox · 运行时中间件",
+            "KBox & KSandbox · Middleware"
+        ),
         r2_n = tr(
             en,
-            "控制面声明意图，资源池与内核边界强制执行事实",
-            "Control plane declares placement; substrate enforces facts"
+            "为上层任务提供独立轻量虚拟机与操作系统级子进程沙箱边界",
+            "Supplies lightweight MicroVMs and OS-level subprocess sandboxes on demand"
         ),
-        r2_cta = svg::action_content(tr(en, "查看运行时对接", "Runtime docking")),
-        proc_title = tr(
-            en,
-            "从一次请求，到生产闭环演进",
-            "From a single request to closed-loop evolution"
-        ),
-        s1_h = tr(en, "注册与准入", "Register & Admit"),
+        r2_cta = svg::action_content(tr(en, "查看中间件介绍", "Middleware overview")),
+        proc_title = tr(en, "一次任务从发出到跑完", "How a task runs end to end"),
+        s1_h = tr(en, "发起任务", "Assign a task"),
         s1_p = tr(
             en,
-            "能力先注册为 URN，网关校验主 Key 并签发短时 SVID",
-            "Register URN contracts; exchange primary key for scoped SVID"
+            "在 KStudio 挑一台目标机器，或在 KWork 当前工作区里直接发出指令",
+            "Pick a machine in KStudio or send a task from your KWork workspace"
         ),
-        s2_h = tr(en, "隔离与注入", "Isolate & Inject"),
+        s2_h = tr(en, "拉起隔离环境", "Start a clean box"),
         s2_p = tr(
             en,
-            "负载在 MicroVM 或失败闭合沙箱运行，出网侧注入密文引用",
-            "Execute inside MicroVM or sandbox; inject Vault refs at egress"
+            "按需在独立 KBox 虚拟机或 KSandbox 沙箱中执行，隔开宿主机敏感目录",
+            "Run commands inside an isolated KBox MicroVM or KSandbox directory boundary"
         ),
-        s3_h = tr(en, "计量与审计", "Meter & Anchor"),
+        s3_h = tr(en, "调度模型推理", "Route model calls"),
         s3_p = tr(
             en,
-            "产生唯一计量事件，敏感操作先落租户只追加哈希链",
-            "Emit one meter event and append to tenant hash-chain audit"
+            "经 KStack 的 /v1 网关转发到已就绪的加速卡实例，自动统计调用用量",
+            "Forward requests through KStack's /v1 gateway to matched GPU replicas"
         ),
-        s4_h = tr(en, "回流与灰度", "Trace & Rollout"),
+        s4_h = tr(en, "确认并收回结果", "Review & deliver"),
         s4_p = tr(
             en,
-            "生产轨迹回流 TaaS 评测，新制品按版本+别名+权重平滑发布",
-            "Feed traces back to TaaS benchmarks; roll out via alias weights"
+            "关键操作经你确认后放行，代码改动与运行日志直接回到桌面窗口",
+            "Approve sensitive steps once and receive code changes and logs in your window"
         ),
     );
 
-    // Section 6: Monumental Borderless Scale Typography + Dot-Matrix Field + Editorial Repo Index (#principles)
-    let kui_repo_desc = if en {
-        format!("{count} MIT-licensed GPUI components & 46 app screens (kense-kui) + kui CLI")
+    // Section 6: Real Engineering Numbers + Product & Middleware Directory (#principles)
+    let kui_dir_desc = if en {
+        format!(
+            "{count} Rust + GPUI components and screen templates shared across desktop and WebAssembly"
+        )
     } else {
-        format!("{count} 个 MIT 免费开源同源 GPUI 组件（含 46 个应用屏幕）与 kui CLI")
+        format!("{count} 个跨桌面与浏览器 WebAssembly 共用源码的 Rust + GPUI 组件与页面模板")
     };
-    let kui_repo_href = format!("{prefix}/kui/");
-    let repos = [
+    let kui_dir_href = format!("{prefix}/kui/");
+    let kstack_dir_href = format!("{prefix}/docs/#kstack");
+    let kstudio_dir_href = format!("{prefix}/docs/#kstudio");
+    let kwork_dir_href = format!("{prefix}/docs/#kwork");
+    let mw_dir_href = format!("{prefix}/docs/#middleware");
+
+    let directory_items = [
         (
-            "aios",
-            "kense",
-            "Architecture · MIT",
+            "kstack",
+            "KStack",
+            tr(en, "核心产品 · 算力与模型", "Product · Compute & MaaS"),
             tr(
                 en,
-                "AI OS 控制面架构契约、九大模块图谱与限界上下文设计",
-                "AI OS operating-plane architecture, 9 module blueprints & context maps",
+                "40 MB 异构 GPU 算力池调度与模型即服务平台，内置 392 个模型启动配置",
+                "40 MB heterogeneous GPU scheduler and /v1 model serving platform across clouds",
             ),
-            "https://github.com/kense-labs/kense",
-            true,
+            kstack_dir_href.as_str(),
+        ),
+        (
+            "kstudio",
+            "KStudio",
+            tr(en, "核心产品 · 多机终端", "Product · Machine Hub"),
+            tr(
+                en,
+                "管理名下所有机器的原生 GPUI 桌面软件，同时跑 18 种编程 Agent、终端与远程桌面",
+                "Native GPUI desktop app for all your machines, 18 agent CLIs, terminals, and remote desktops",
+            ),
+            kstudio_dir_href.as_str(),
+        ),
+        (
+            "kwork",
+            "KWork",
+            tr(en, "核心产品 · 桌面工作台", "Product · Workbench"),
+            tr(
+                en,
+                "日常跑任务的桌面 Agent 客户端，支持工作区归档、单次工具确认与定时运行",
+                "Desktop agent client with workspace history, single-use tool approvals, and schedules",
+            ),
+            kwork_dir_href.as_str(),
         ),
         (
             "kui",
             "KUI",
-            "Rust · GPUI · WASM · MIT",
-            kui_repo_desc.as_str(),
-            kui_repo_href.as_str(),
-            false,
+            tr(en, "核心产品 · 跨端组件库", "Product · UI Library"),
+            kui_dir_desc.as_str(),
+            kui_dir_href.as_str(),
         ),
         (
             "kbox",
-            "kbox",
-            "Rust · OCI / libkrun · MIT",
+            "KBox / KSandbox",
+            tr(en, "底层中间件 · 隔离运行", "Middleware · Isolation"),
             tr(
                 en,
-                "Docker 同形跨平台容器与 MicroVM 运行时，支持进程级预热池",
-                "Docker-shaped OCI & libkrun MicroVM runtime with prewarmed pools",
+                "供上层产品内部调用的 OCI 容器、libkrun 轻量虚拟机与跨平台子进程沙箱",
+                "OCI container, libkrun MicroVM, and OS subprocess sandbox modules used by upper products",
             ),
-            "https://github.com/kense-labs/kbox",
-            true,
-        ),
-        (
-            "ksandbox",
-            "ksandbox",
-            "Rust · OS Sandbox · MIT",
-            tr(
-                en,
-                "面向 Agent 工具调用的跨平台失败闭合进程树沙箱库与 CLI",
-                "Fail-closed OS process sandbox for untrusted agent tool execution",
-            ),
-            "https://github.com/kense-labs/ksandbox",
-            true,
-        ),
-        (
-            "kwork",
-            "kwork",
-            "Rust · GPUI · Tauri · MIT",
-            tr(
-                en,
-                "基于 KUI 与 GPUI 构建的 DeepSeek Harness ACP 原生桌面客户端",
-                "Native desktop ACP workbench built with Rust, KUI, GPUI, and Tauri",
-            ),
-            "https://github.com/kense-labs/kwork",
-            true,
-        ),
-        (
-            "dsh-acp",
-            "dsh-acp",
-            "TypeScript · ACP · MIT",
-            tr(
-                en,
-                "基于 stdio JSON-RPC 的无守护进程 ACP 智能体发行版与公开容器镜像",
-                "Daemonless Agent Client Protocol distribution & public GHCR container",
-            ),
-            "https://github.com/kense-labs/dsh-acp",
-            true,
-        ),
-        (
-            "kcl",
-            "kcl",
-            "Rust · Parser / Schema · MIT",
-            tr(
-                en,
-                "Kense 配置语言：有界解析、闭合 Schema 准入与规范 sha256 摘要",
-                "Kense Configuration Language: bounded parser, schema admission & sha256",
-            ),
-            "https://github.com/kense-labs/kcl",
-            true,
-        ),
-        (
-            "krun",
-            "krun",
-            "Web Main · Runtime Docs",
-            tr(
-                en,
-                "通过 @kense/krun 在 Electron / Web Main 对接本地虚拟机与会话控制面",
-                "Electron / Web Main docking for local VM placement and session control",
-            ),
-            "https://kense-labs.github.io/krun/",
-            true,
+            mw_dir_href.as_str(),
         ),
     ];
-    let mut repo_rows = String::new();
-    for (badge_id, name, stack, summary, href, external) in repos {
-        let ext_attrs = if external {
-            r#" target="_blank" rel="noreferrer""#
-        } else {
-            ""
-        };
+
+    let mut dir_rows = String::new();
+    for (badge_id, name, role, summary, href) in directory_items {
         let row_hint = if en {
-            format!("Open {name} ({stack})")
+            format!("View {name} ({role})")
         } else {
-            format!("打开 {name}（{stack}）")
+            format!("查看 {name}（{role}）")
         };
-        repo_rows.push_str(&format!(
-            r#"<a class="kense-repo-row" href="{href}"{ext_attrs} data-product-badge="{badge_id}" data-kense-hint="{}"><span class="kense-repo-name">{}<span>{name}</span></span><span class="kense-repo-desc">{summary}</span><span class="kense-repo-stack">{stack}</span><span class="kense-repo-go" aria-hidden="true">{}</span></a>"#,
+        dir_rows.push_str(&format!(
+            r#"<a class="kense-repo-row" href="{href}" data-product-badge="{badge_id}" data-kense-hint="{}"><span class="kense-repo-name">{}<span>{name}</span></span><span class="kense-repo-desc">{summary}</span><span class="kense-repo-stack">{role}</span><span class="kense-repo-go" aria-hidden="true">{}</span></a>"#,
             esc(&row_hint),
             svg::product_emblem(badge_id),
-            icon(if external { "external" } else { "arrow" }, 14)
+            icon("arrow", 14)
         ));
     }
 
@@ -1533,59 +1456,60 @@ pub fn page(en: bool, rev: &str) -> String {
       <p>{desc}</p>
     </div>
     <div class="kense-future-grid">
-      <article class="kense-future-item kense-reveal"><h3><span>{count}</span>{m1_h}</h3><p>{m1_p}</p></article>
-      <article class="kense-future-item kense-reveal"><h3><span>6 ms</span>{m2_h}</h3><p>{m2_p}</p></article>
-      <article class="kense-future-item kense-reveal"><h3><span>0</span>{m3_h}</h3><p>{m3_p}</p></article>
-      <article class="kense-future-item kense-reveal"><h3><span>MIT</span>{m4_h}</h3><p>{m4_p}</p></article>
+      <article class="kense-future-item kense-reveal"><h3><span>40 MB</span>{m1_h}</h3><p>{m1_p}</p></article>
+      <article class="kense-future-item kense-reveal"><h3><span>1,235</span>{m2_h}</h3><p>{m2_p}</p></article>
+      <article class="kense-future-item kense-reveal"><h3><span>18</span>{m3_h}</h3><p>{m3_p}</p></article>
+      <article class="kense-future-item kense-reveal"><h3><span>{count}</span>{m4_h}</h3><p>{m4_p}</p></article>
     </div>
     <div class="kense-repos kense-reveal" aria-labelledby="kense-repos-heading">
       <div class="kense-repos-head">
-        <h3 id="kense-repos-heading">{repos_title}</h3>
-        <a class="kense-repos-org" href="https://github.com/kense-labs" target="_blank" rel="noreferrer">github.com/kense-labs {ext}</a>
+        <h3 id="kense-repos-heading">{dir_title}</h3>
+        <a class="kense-repos-org" href="{prefix}/docs/">{dir_more} {arrow}</a>
       </div>
-      <div class="kense-repos-list">{repo_rows}</div>
+      <div class="kense-repos-list">{dir_rows}</div>
     </div>
   </div>
 </section>"##,
         title = tr(
             en,
-            "以系统工程的克制，<br>构建可长期拥有的开源基础设施",
-            "System-level restraint,<br>open source you can own and verify"
+            "轻量、直接，经得起真实机器规模检验",
+            "Small binaries, tested on real machine fleets"
         ),
         desc = tr(
             en,
-            "不造黑盒锁定，不把应用逻辑混入操作系统原语。每一层皆具备明确契约、静态验证门禁与公开仓库。",
-            "No black-box lock-in, no application bloat inside operating-plane primitives—every layer ships with clear contracts and MIT source."
+            "不堆厚重运行时依赖。从算力控制面到桌面客户端，每一层都做到单文件可部署、低内存占用和跟手的交互响应。",
+            "No bloated runtime dependencies. From cluster control planes to desktop apps, built for small footprints and fast response."
         ),
-        m1_h = tr(en, "同源 GPUI 组件", "Dual-runtime components"),
+        m1_h = tr(en, "KStack 服务端体积", "KStack server binary"),
         m1_p = tr(
             en,
-            "桌面端与 WebAssembly 共用单一 Rust 实现，可按需拷贝源码",
-            "Shared Rust source across desktop & WASM; install library or source"
+            "单静态二进制内嵌双语控制台，阿里云演练单机纳管跨 7 地域 1,003 台 GPU 主机",
+            "Single static binary with web UI; tested managing 1,003 GPU hosts across 7 regions"
         ),
-        m2_h = tr(en, "热态沙箱执行", "Warm sandbox exec"),
+        m2_h = tr(en, "真机验证启动规格", "Verified launch specs"),
         m2_p = tr(
             en,
-            "KBox 在 darwin arm64 实测 28ms 启动、6ms 执行与亚 20ms 预热连接",
-            "28ms start, 6ms exec, and ~19ms prewarmed MicroVM attach on arm64"
+            "覆盖 392 个模型与多厂商加速卡，镜像、引擎和参数均经真机跑通，选好即跑",
+            "Covering 392 models across GPU vendors with known-good images, engines, and flags"
         ),
-        m3_h = tr(en, "沙箱内明文密钥", "Plaintext secrets in sandbox"),
+        m3_h = tr(en, "原生支持 Agent CLI", "Supported agent CLIs"),
         m3_p = tr(
             en,
-            "边缘单次验签、出网引用注入、默认 deny-all 内核级进程树隔离",
-            "Single edge key check, egress secret refs & deny-all OS sandboxes"
+            "KStudio 直接托管 Claude Code、Codex、Gemini CLI 等会话，关掉窗口后台照常运行",
+            "Run Claude Code, Codex, Gemini CLI, and 15 more across any machine you own"
         ),
-        m4_h = tr(en, "开放许可与契约", "Open license & specs"),
+        m4_h = tr(en, "跨桌面与 Web 组件", "Desktop & web controls"),
         m4_p = tr(
             en,
-            "核心运行时、沙箱、配置语言与 UI 套件均以 MIT 协议开源在 kense-labs",
-            "Runtimes, sandboxes, config language & UI kit open on kense-labs"
+            "KUI 一套 Rust + GPUI 源码同时覆盖 macOS、Windows、Linux 与浏览器 WebAssembly",
+            "Shared Rust + GPUI controls running natively on desktop and in browser WebAssembly"
         ),
-        repos_title = tr(en, "开源仓库索引", "Open-source repositories"),
-        ext = icon("external", 14),
+        dir_title = tr(en, "产品与底层模块一览", "Products & runtime modules"),
+        dir_more = tr(en, "查看全部文档", "Full documentation"),
+        arrow = icon("arrow", 14),
     );
 
-    // Section 7: Fanned 3-Card Interactive Closing Deck (#start)
+    // Section 7: Fanned 3-Card Closing Deck (#start)
     let closing = format!(
         r##"<section class="kense-section kense-closing" id="start" aria-labelledby="kense-start-title">
   <div class="kense-shell">
@@ -1594,14 +1518,14 @@ pub fn page(en: bool, rev: &str) -> String {
       <p>{desc}</p>
     </div>
     <div class="kense-access-routes">
-      <article class="kense-reveal" data-access-card="ui">
+      <article class="kense-reveal" data-access-card="os">
         <div class="kense-access-card">
           <h3>{a1_h}</h3>
           <p>{a1_p}</p>
-          {art_ui}
+          {art_os}
           <div class="kense-access-actions">
-            {btn_kui_copy}
-            <a class="kense-inline-link" href="{prefix}/kui/" data-product-badge="kui">{a1_link}</a>
+            <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstack" data-product-badge="kstack">{a1_primary}</a>
+            <a class="kense-inline-link" href="{prefix}/#experience">{a1_link}</a>
           </div>
         </div>
       </article>
@@ -1611,19 +1535,19 @@ pub fn page(en: bool, rev: &str) -> String {
           <p>{a2_p}</p>
           {art_rt}
           <div class="kense-access-actions">
-            {btn_ksb_copy}
-            <a class="kense-inline-link" href="https://github.com/kense-labs/kbox" target="_blank" rel="noreferrer" data-product-badge="kbox">KBox</a>
+            <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstudio" data-product-badge="kstudio">{a2_primary}</a>
+            <a class="kense-inline-link" href="{prefix}/docs/#kwork" data-product-badge="kwork">KWork</a>
           </div>
         </div>
       </article>
-      <article class="kense-reveal" data-access-card="os">
+      <article class="kense-reveal" data-access-card="ui">
         <div class="kense-access-card">
           <h3>{a3_h}</h3>
           <p>{a3_p}</p>
-          {art_os}
+          {art_ui}
           <div class="kense-access-actions">
-            <a class="kense-pill kense-pill--solid" href="{prefix}/docs/" data-kense-hint="{a3_hint}">{a3_primary}</a>
-            <a class="kense-inline-link" href="https://github.com/kense-labs" target="_blank" rel="noreferrer">GitHub</a>
+            {btn_kui_copy}
+            <a class="kense-inline-link" href="{prefix}/kui/" data-product-badge="kui">{a3_link}</a>
           </div>
         </div>
       </article>
@@ -1632,20 +1556,49 @@ pub fn page(en: bool, rev: &str) -> String {
 </section>"##,
         title = tr(
             en,
-            "选择你的切入点，开始构建",
-            "Choose an entry point and start building"
+            "按你手头的需求挑一款开始",
+            "Start with what you need today"
         ),
         desc = tr(
             en,
-            "引入跨桌面与 Web 的 Rust UI 组件、嵌入失败闭合的 Agent 沙箱，或基于完整控制面契约扩展。",
-            "Adopt individual GPUI components, embed a fail-closed process sandbox, or build on the full AI OS architecture."
+            "可以把几台分散的 GPU 服务器并成推理池，也可以在一个窗口里管好所有开发机，或者直接拿 KUI 写桌面与网页界面。",
+            "Pool scattered GPUs into one serving cluster, manage all your dev machines in one app, or build Rust + GPUI interfaces."
         ),
-        a1_h = tr(en, "接入 KUI 同源组件", "Integrate KUI components"),
+        a1_h = tr(
+            en,
+            "调度 GPU 与部署模型 · KStack",
+            "Pool GPUs & serve models · KStack"
+        ),
         a1_p = tr(
             en,
-            "添加 kense-kui crate 或使用 kui CLI 将所需组件源码拷入仓库，附带面向编程 Agent 的 Markdown 规格。",
-            "Add the kense-kui crate or copy selected component source with the kui CLI—complete with agent-ready Markdown specs."
+            "查看 KStack 如何把自有服务器、多云主机和 Kubernetes 集群并入同一个算力池，在异构加速卡上一键拉起模型服务。",
+            "See how KStack unifies bare-metal, cloud instances, and Kubernetes clusters for one-click model serving across GPU vendors."
         ),
+        art_os = svg::access_graphic("os"),
+        a1_primary = svg::action_content(tr(en, "查看 KStack 说明", "KStack overview")),
+        a1_link = tr(en, "体验选卡面板", "Live demo"),
+        a2_h = tr(
+            en,
+            "管理多机与日常任务 · KStudio & KWork",
+            "Run machines & daily tasks · KStudio & KWork"
+        ),
+        a2_p = tr(
+            en,
+            "用 KStudio 集中连接你的工作站与远端服务器，用 KWork 在桌面工作区里处理日常对话、工具确认与定时任务。",
+            "Connect every workstation and server in KStudio, and run workspace sessions, tool approvals, and schedules in KWork."
+        ),
+        art_rt = svg::access_graphic("runtime"),
+        a2_primary = svg::action_content(tr(en, "查看 KStudio 说明", "KStudio overview")),
+        a3_h = tr(en, "构建跨端界面 · KUI", "Build native & web UI · KUI"),
+        a3_p = if en {
+            format!(
+                "Add the kense-kui crate or copy component source with the kui CLI, and preview all {count} controls live in the browser."
+            )
+        } else {
+            format!(
+                "引入 kense-kui crate 或用 kui CLI 将所需组件源码拷进工程，直接在浏览器里预览全部 {count} 个组件。"
+            )
+        },
         art_ui = svg::access_graphic("ui"),
         btn_kui_copy = copy_cmd_button(
             en,
@@ -1659,39 +1612,7 @@ pub fn page(en: bool, rev: &str) -> String {
             "",
             "kense-pill kense-pill--solid kense-access-copy"
         ),
-        a1_link = tr(en, "KUI 首页", "Open KUI"),
-        a2_h = tr(en, "嵌入隔离沙箱与 MicroVM", "Embed sandboxes & MicroVMs"),
-        a2_p = tr(
-            en,
-            "在智能体宿主中引入 ksandbox 强制内核边界，或运行 KBox 管理预热的 libkrun MicroVM 容器池。",
-            "Embed ksandbox for OS-enforced tool boundaries, or run KBox for Docker-compatible containers and libkrun MicroVMs."
-        ),
-        art_rt = svg::access_graphic("runtime"),
-        btn_ksb_copy = copy_cmd_button(
-            en,
-            ksandbox_cmd,
-            tr(en, "复制 ksandbox 依赖", "Copy ksandbox dep"),
-            tr(
-                en,
-                "点击复制：引入 KSandbox 进程沙箱库",
-                "Click to copy: add KSandbox crate"
-            ),
-            "",
-            "kense-pill kense-pill--solid kense-access-copy"
-        ),
-        a3_h = tr(en, "探索 AI OS 与全部文档", "Explore AI OS & docs"),
-        a3_p = tr(
-            en,
-            "查阅 Kense AI OS 架构图谱、KRun 本地运行时对接手册、KUI 安装指南与 kense-labs 全系开源仓库。",
-            "Browse the Kense AI OS architecture blueprints, KRun docking guides, KUI documentation, and all kense-labs repositories."
-        ),
-        art_os = svg::access_graphic("os"),
-        a3_primary = svg::action_content(tr(en, "打开文档中心", "Open Docs Hub")),
-        a3_hint = tr(
-            en,
-            "一站式直达 KUI、KRun、KBox 与 AI OS 文档",
-            "Unified entry to Kense documentation"
-        ),
+        a3_link = tr(en, "打开 KUI", "Open KUI"),
     );
 
     format!(
@@ -1701,118 +1622,150 @@ pub fn page(en: bool, rev: &str) -> String {
     )
 }
 
-/// Renders the `/docs/` and `/en/docs/` Kense Documentation Hub.
+/// Renders the `/docs/` and `/en/docs/` Kense Product & Middleware Documentation Hub.
 pub fn docs_hub(en: bool) -> String {
     let prefix = path(en);
     let count = component_count();
     let kui_doc_body = if en {
         format!(
-            "Installation guide, {count} free MIT component & screen docs, desktop/WASM platform notes, and coding-agent specs."
+            "Installation guide, {count} interactive component previews, 46 application screen templates, desktop/WASM platform notes, and coding-agent specs."
         )
     } else {
         format!(
-            "面向 GPUI 的 Rust 界面套件安装指南、{count} 个免费开源组件与应用屏幕文档及编程 Agent 接入说明。"
+            "同一套 Rust 源码覆盖三端原生桌面与浏览器 WebAssembly：包含安装指南、{count} 个实时交互组件、46 个页面模板及编程 Agent 接入说明。"
         )
     };
-    let cards = [
+
+    let core_cards = [
+        (
+            "kstack",
+            "kstack",
+            format!("{prefix}/#products-kstack"),
+            "KStack",
+            tr(en, "40 MB · 异构算力与 MaaS", "40 MB · GPU Pool & MaaS"),
+            tr(
+                en,
+                "把自有机房服务器、公有云实例、私有云虚拟机与已有 Kubernetes 集群并入同一个算力池，支持 NVIDIA、AMD、昇腾、平头哥 PPU、海光与 Apple Silicon 混部。内置 392 个模型、1,235 份真机验证启动规格，启动前估算显存并说明选卡原因，支持单卡 dGPU 显存切分、跨机并行、PD 分离与统一 /v1 网关。",
+                "Unifies bare-metal servers, cloud instances, private VMs, and existing Kubernetes clusters across NVIDIA, AMD, Ascend, PPU, Hygon, and Apple Silicon. Ships 1,235 verified launch specs for 392 models with upfront VRAM estimation, single-GPU sharing (dGPU), multi-node parallelism, and an OpenAI-compatible /v1 gateway.",
+            ),
+            tr(
+                en,
+                "查看首页三维演示与选卡面板",
+                "View 3D showcase & live demo",
+            ),
+        ),
+        (
+            "kstudio",
+            "kstudio",
+            format!("{prefix}/#products-kstudio"),
+            "KStudio",
+            tr(
+                en,
+                "macOS · Linux · Windows · GPUI",
+                "macOS · Linux · Windows · GPUI",
+            ),
+            tr(
+                en,
+                "连接你名下所有工作站、Linux 主机与云端服务器的原生桌面软件。复用本机 ssh 与 Tailscale，在一个窗口里同时管理 18 种编程 Agent CLI、常驻终端、KBox 轻量虚拟机、远程 Linux 桌面、跨机文件互传与自建 Runner；关掉窗口后会话与端口转发继续在菜单栏后台运行。",
+                "One native GPUI app for every machine you own. Reuses your system SSH and Tailscale to run 18 coding agent CLIs, persistent shells, KBox MicroVMs, live Linux desktops, cross-machine file & clipboard sync, and runner monitoring, staying alive in the background when closed.",
+            ),
+            tr(en, "查看 KStudio 产品演示", "View KStudio showcase"),
+        ),
+        (
+            "kwork",
+            "kwork",
+            format!("{prefix}/#products-kwork"),
+            "KWork",
+            tr(
+                en,
+                "Rust · KUI · GPUI · 桌面端",
+                "Rust · KUI · GPUI · Desktop",
+            ),
+            tr(
+                en,
+                "日常跑任务与写代码的桌面 Agent 工作台。按本地目录组织工作区与历史归档，可接入 DeepSeek、OpenAI、OpenRouter 或本地模型服务并随时切换推理强度；实时展示工具调用入参、支持敏感操作单次确认，并可将常用流程设为定时自动运行。",
+                "Desktop agent client built with KUI and GPUI for daily project work. Organizes local workspace history, connects DeepSeek, OpenAI, OpenRouter, or custom endpoints, previews tool calls for single-use approval, and runs scheduled tasks.",
+            ),
+            tr(en, "查看 KWork 工作台演示", "View KWork showcase"),
+        ),
         (
             "kui",
+            "kui",
             format!("{prefix}/kui/docs/"),
-            false,
             "KUI",
-            tr(en, "GPUI · 桌面 + WASM", "GPUI · Desktop + WASM"),
+            tr(
+                en,
+                "GPUI · 桌面 + WebAssembly",
+                "GPUI · Desktop + WebAssembly",
+            ),
             kui_doc_body.as_str(),
-            tr(en, "打开 KUI 文档", "Open KUI docs"),
-        ),
-        (
-            "krun",
-            "https://kense-labs.github.io/krun/".to_owned(),
-            true,
-            "KRun",
-            tr(en, "Web Main · 本地运行时", "Web Main · Local Runtime"),
-            tr(
-                en,
-                "通过 @kense/krun 在 Electron / Web Main 中对接本地运行时：1 分钟接入、调用配方与控制面 API。",
-                "Dock local VM placement and session control from Electron / Web Main with @kense/krun—quickstart, recipes, and API.",
-            ),
-            tr(en, "打开 KRun 文档", "Open KRun docs"),
-        ),
-        (
-            "aios",
-            "https://github.com/kense-labs/kense".to_owned(),
-            true,
-            "Kense AI OS",
-            tr(en, "控制面 · 架构契约", "Operating Plane · Architecture"),
-            tr(
-                en,
-                "一把 API Key 架构总图、上下文映射图，以及统一网关、身份、URN、计量、审计、Vault 等模块规范。",
-                "Layered AI OS architecture, context maps, and module contracts across Gateway, Identity, URN, Metering, Audit, and Vault.",
-            ),
-            tr(en, "阅读架构契约", "Read architecture specs"),
-        ),
-        (
-            "kbox",
-            "https://github.com/kense-labs/kbox".to_owned(),
-            true,
-            "KBox",
-            tr(en, "OCI · libkrun MicroVM", "OCI · libkrun MicroVM"),
-            tr(
-                en,
-                "Docker 同形跨平台容器与 MicroVM 运行时：安装、--isolation microvm、预热池与性能基准。",
-                "Cross-platform Docker-shaped container and libkrun MicroVM runtime: install, --isolation microvm, prewarmed pools, and benchmarks.",
-            ),
-            tr(en, "阅读 KBox 手册", "Read KBox guide"),
-        ),
-        (
-            "ksandbox",
-            "https://github.com/kense-labs/ksandbox".to_owned(),
-            true,
-            "KSandbox",
-            tr(en, "Rust · 失败闭合沙箱", "Rust · Fail-Closed Sandbox"),
-            tr(
-                en,
-                "Agent 工具调用进程树沙箱：NativeSandbox Rust API、Seatbelt / seccomp / AppContainer 威胁模型与默认策略。",
-                "OS-enforced process sandbox for agents: NativeSandbox Rust API, threat model, and Seatbelt / seccomp / AppContainer policies.",
-            ),
-            tr(en, "阅读 KSandbox 文档", "Read KSandbox docs"),
-        ),
-        (
-            "kcl",
-            "https://github.com/kense-labs/kcl".to_owned(),
-            true,
-            "KCL",
-            tr(en, "Rust · 配置与摘要", "Rust · Config & Digests"),
-            tr(
-                en,
-                "Kense 配置语言（kense-kcl）：块语法、有界解析限额、闭合 Schema 准入与规范 sha256 摘要。",
-                "Kense Configuration Language (kense-kcl): block grammar, parse limits, closed schema admission, and canonical sha256 digests.",
-            ),
-            tr(en, "阅读 KCL 规范", "Read KCL reference"),
+            tr(en, "打开 KUI 完整文档", "Open KUI documentation"),
         ),
     ];
 
     let mut list = String::new();
-    for (badge_id, href, external, name, tag, body, cta) in cards {
-        let ext = if external {
-            r#" target="_blank" rel="noreferrer""#
-        } else {
-            ""
-        };
+    for (dom_id, badge_id, href, name, tag, body, cta) in core_cards {
         list.push_str(&format!(
-            r#"<a class="kense-doc-card" href="{href}"{ext}><div class="kense-doc-top"><span class="kense-doc-name">{}<span>{name}</span></span><span class="kense-doc-tag">{tag}</span></div><p>{body}</p><span class="kense-doc-cta">{}</span></a>"#,
+            r#"<a class="kense-doc-card" id="{dom_id}" href="{href}"><div class="kense-doc-top"><span class="kense-doc-name">{}<span>{name}</span></span><span class="kense-doc-tag">{tag}</span></div><p>{body}</p><span class="kense-doc-cta">{}</span></a>"#,
             svg::product_emblem(badge_id),
             svg::action_content(cta)
         ));
     }
 
-    format!(
-        r#"<main class="kense-docs-hub"><section class="kense-docs-hero"><div class="kense-shell"><h1 class="motion-fade-up">{}</h1><p class="kense-docs-lead motion-fade-up motion-fade-up-delay-1">{}</p>{strip}</div></section><section class="kense-docs-section"><div class="kense-shell"><div class="kense-docs-grid motion-fade-up motion-fade-up-delay-2">{list}</div></div></section>{popover}</main>"#,
-        tr(en, "文档中心", "Documentation"),
-        tr(
+    let middleware = format!(
+        r#"<div class="kense-docs-middleware" id="middleware">
+  <h2 class="kense-docs-group-title">{mw_head}</h2>
+  <div class="kense-middleware">
+    <div class="kense-middleware-head">
+      <h3>{mw_subhead}</h3>
+      <p>{mw_note}</p>
+    </div>
+    <div class="kense-middleware-grid">
+      <div class="kense-middleware-item">
+        <h4>{ico_kbox}<span>KBox</span></h4>
+        <p>{mw_kbox}</p>
+      </div>
+      <div class="kense-middleware-item">
+        <h4>{ico_ksb}<span>KSandbox</span></h4>
+        <p>{mw_ksb}</p>
+      </div>
+    </div>
+  </div>
+</div>"#,
+        mw_head = tr(en, "底层运行时中间件", "Runtime middleware"),
+        mw_subhead = tr(
             en,
-            "Kense 开源基础设施、运行时、界面组件与架构契约统一入口。",
-            "Product guides, runtime APIs, UI specifications, and architecture contracts across Kense."
+            "基础容器、虚拟机与沙箱模块",
+            "Container, MicroVM & sandbox modules"
         ),
+        mw_note = tr(
+            en,
+            "供 KStudio、KWork 在内部调用的隔离运行模块，不单独做成桌面软件。",
+            "Internal runtime building blocks powering KStudio and KWork rather than standalone end-user apps."
+        ),
+        ico_kbox = crate::brand_marks::emblem("kbox", 18),
+        mw_kbox = tr(
+            en,
+            r#"提供兼容 OCI 镜像的容器与基于 libkrun（HVF / KVM）的轻量 MicroVM 运行环境，支持镜像快照与预热池快速分配；若需在桌面 Web Main 宿主进程中桥接本地虚拟机管理，可参阅 <a href="https://kense-labs.github.io/krun/">KRun 对接说明</a>。"#,
+            r#"Provides OCI-compatible containers and libkrun (HVF / KVM) MicroVMs with snapshots and prewarmed pools; for bridging local VMs from desktop Web Main processes, see the <a href="https://kense-labs.github.io/krun/">KRun bridge notes</a>."#
+        ),
+        ico_ksb = crate::brand_marks::emblem("ksandbox", 18),
+        mw_ksb = tr(
+            en,
+            "跨平台轻量进程树沙箱，利用 macOS Seatbelt、Linux Bubblewrap+seccomp 与 Windows AppContainer 限制命令子进程的文件系统访问范围、网络外连与输出上限，退出时完整回收后代进程。",
+            "Cross-platform process-tree sandbox using macOS Seatbelt, Linux Bubblewrap+seccomp, and Windows AppContainer to confine filesystem access, outbound network sockets, and descendant processes."
+        ),
+    );
+
+    format!(
+        r#"<main class="kense-docs-hub"><section class="kense-docs-hero"><div class="kense-shell"><h1 class="motion-fade-up">{h1}</h1><p class="kense-docs-lead motion-fade-up motion-fade-up-delay-1">{lead}</p>{strip}</div></section><section class="kense-docs-section"><div class="kense-shell"><h2 class="kense-docs-group-title">{core_head}</h2><div class="kense-docs-grid motion-fade-up motion-fade-up-delay-2">{list}</div>{middleware}</div></section>{popover}</main>"#,
+        h1 = tr(en, "产品文档", "Documentation"),
+        lead = tr(
+            en,
+            "KStack、KStudio、KWork 与 KUI 四款核心产品的功能说明、交互入口及底层中间件介绍。",
+            "Overview and documentation entry points for KStack, KStudio, KWork, and KUI, along with runtime middleware notes."
+        ),
+        core_head = tr(en, "核心产品", "Core products"),
         strip = docs_product_strip(prefix),
         popover = product_popover(en),
     )

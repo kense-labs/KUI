@@ -1,0 +1,77 @@
+[
+  {
+    "id": "step-console",
+    "group": "activity",
+    "title": {
+      "en": "Step console",
+      "zh": "步骤日志台"
+    },
+    "rustType": "StepConsole",
+    "lead": {
+      "en": "Follow multi-stage execution steps beside a docked, filterable step log console.",
+      "zh": "左侧跟踪多阶段执行步骤，右侧联动展示对应步骤的实时日志。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::step_console::{StepConsole, StepStage, StepStatus};\n\nlet control = cx.new(|_| StepConsole::new(\"pipeline\", \"Pipeline\", vec![StepStage::new(\"boot\", \"Boot\", StepStatus::Running)], vec![]));",
+    "method": "set_stages",
+    "signature": "(Vec<StepStage>, &mut Context<Self>)",
+    "event": "StepSelected",
+    "rule": {
+      "en": "Select any stage to inspect its summary, metrics, and scoped logs; enable Auto-follow to track active or failed stages automatically.",
+      "zh": "点击任意步骤即可查看摘要、指标与对应日志；开启自动跟随会自动追踪活动或异常步骤。"
+    },
+    "motion": {
+      "en": "Stage selection and filter chips update immediately using semantic KUI tokens with zero decorative motion.",
+      "zh": "步骤切换与筛选状态直接使用语义令牌响应，无多余装饰动画。"
+    }
+  },
+  {
+    "id": "log-stream",
+    "group": "tables",
+    "title": {
+      "en": "Log stream",
+      "zh": "多源日志流"
+    },
+    "rustType": "LogStream",
+    "lead": {
+      "en": "Explore multi-source logs with live search, severity chips, tail follow, and structured details.",
+      "zh": "多源聚合日志浏览器，支持实时搜索、级别筛选、末尾跟随与结构化详情。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::log_stream::{LogEntry, LogLevel, LogStream};\n\nlet control = cx.new(|cx| LogStream::new(\"logs\", \"Logs\", vec![LogEntry::new(\"1\", \"10:00:01\", LogLevel::Info, \"api\", \"ready\")], window, cx));",
+    "method": "push_entry",
+    "signature": "(LogEntry, &mut Context<Self>)",
+    "event": "LogEntrySelected",
+    "rule": {
+      "en": "Filter by source, severity level, or keyword query without mutating the underlying stream, and select any row to inspect its structured attributes.",
+      "zh": "按来源、级别或关键词实时过滤，点击任意日志行即可在右侧查看完整结构化字段。"
+    },
+    "motion": {
+      "en": "Uses the capsule KUI Switch for tail follow and crisp hairline borders across panes.",
+      "zh": "末尾跟随沿用 KUI 胶囊开关，分栏采用清晰的单像素发丝线边界。"
+    }
+  },
+  {
+    "id": "packet-dissector",
+    "group": "tables",
+    "title": {
+      "en": "Packet dissector",
+      "zh": "协议帧分析"
+    },
+    "rustType": "PacketDissector",
+    "lead": {
+      "en": "Inspect captured frames with protocol layer trees, redaction markers, and hex/ASCII dumps.",
+      "zh": "分层协议抓包检视器，支持协议过滤、脱敏高亮与 Hex/ASCII 载荷查看。"
+    },
+    "usageRust": "use gpui::prelude::*;\nuse kui::components::packet_dissector::{FrameDirection, PacketDissector, PacketFrame};\n\nlet control = cx.new(|_| PacketDissector::new(\"frames\", \"Frames\", vec![PacketFrame::new(\"1\", 1, FrameDirection::Outbound, \"HTTP\", \"GET /health\")]));",
+    "method": "set_frames",
+    "signature": "(Vec<PacketFrame>, &mut Context<Self>)",
+    "event": "FrameSelected",
+    "rule": {
+      "en": "Filter frames by protocol or error state, then select a frame to inspect decoded protocol layers and its redacted wire hex dump.",
+      "zh": "按协议类型或异常状态筛选数据帧，点击帧行即可查看分层字段与脱敏后的十六进制载荷。"
+    },
+    "motion": {
+      "en": "Frame selection highlights the active row and updates the layer tree and hex view in place.",
+      "zh": "选中数据帧即时高亮当前行并同步更新协议层与十六进制视图。"
+    }
+  }
+]
