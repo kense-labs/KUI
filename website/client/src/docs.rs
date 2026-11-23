@@ -388,6 +388,11 @@ fn fit_height(slot: &Element, restore: bool) -> Option<()> {
 }
 
 fn set_preview_size(button: &Element) -> Option<()> {
+    if button.has_attribute("disabled")
+        || button.get_attribute("aria-disabled").as_deref() == Some("true")
+    {
+        return Some(());
+    }
     let stage = button.closest("[data-component-stage]").ok()??;
     let mode = button.get_attribute("data-preview-mode")?;
     let slot = child(&stage, "[data-preview-slot]")?;
@@ -617,6 +622,11 @@ fn keydown(event: &Event) -> Option<()> {
         let group = target.closest("[role=radiogroup]").ok()??;
         let next = child(&group, &format!(r#"[data-preview-mode="{next}"]"#))?;
         event.prevent_default();
+        if next.has_attribute("disabled")
+            || next.get_attribute("aria-disabled").as_deref() == Some("true")
+        {
+            return Some(());
+        }
         set_preview_size(&next);
         return next.dyn_ref::<HtmlElement>()?.focus().ok();
     }

@@ -620,16 +620,34 @@ fn stage(doc: &Entry, en: bool, revision: &str, example: &str) -> String {
         ""
     };
     let url = preview_url(id, en, revision);
+    let mobile_disabled = doc.group().starts_with("pro-");
     let fit = pick(en, "Fit preview", "自适应预览");
-    let mobile = pick(en, "Mobile preview", "手机预览");
+    let mobile = if mobile_disabled {
+        pick(en, "Mobile preview unavailable", "无手机版预览")
+    } else {
+        pick(en, "Mobile preview", "手机预览")
+    };
     let expand = pick(en, "Fullscreen preview", "全屏预览");
     let collapse = pick(en, "Exit fullscreen preview", "退出全屏预览");
-    let size_switch = [("fit", fit, true), ("mobile", mobile, false)].map(|(mode, label, selected)| {
+    let size_switch = [
+        ("fit", fit, true, false),
+        ("mobile", mobile, false, mobile_disabled),
+    ]
+    .map(|(mode, label, selected, disabled)| {
+        let extra = if disabled {
+            r#" aria-disabled="true" disabled"#
+        } else {
+            ""
+        };
         controls::button(
-            &format!(r#"class="preview-control" role="radio" data-preview-mode="{mode}" aria-label="{label}" title="{label}" aria-checked="{selected}" tabindex="{}""#, if selected { 0 } else { -1 }),
+            &format!(
+                r#"class="preview-control" role="radio" data-preview-mode="{mode}" aria-label="{label}" title="{label}" aria-checked="{selected}" tabindex="{}"{extra}"#,
+                if selected { 0 } else { -1 }
+            ),
             &icon(mode, 14),
         )
-    }).join("");
+    })
+    .join("");
     let fullscreen = controls::button(
         &format!(
             r#"class="preview-control preview-expand" data-preview-expand aria-label="{expand}" title="{expand}" aria-haspopup="dialog""#

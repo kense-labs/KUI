@@ -613,7 +613,12 @@ html[data-theme="dark"] .aside .tier-indicator,
   -webkit-tap-highlight-color: transparent;
   transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
 }
-.stage .preview-control:is(:hover, [aria-checked="true"]) { color: var(--ink); }
+.stage .preview-control:not(:disabled):is(:hover, [aria-checked="true"]) { color: var(--ink); }
+.stage .preview-control:disabled {
+  opacity: 0.3;
+  color: var(--muted);
+  cursor: not-allowed;
+}
 .stage .preview-expand { height: 30px; }
 .stage .preview-close { width: 32px; height: 32px; }
 .stage :is(.preview-expand, .preview-close):is(:hover, :active) {
