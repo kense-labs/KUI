@@ -299,6 +299,9 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [integrations](./md/integrations.md): IntegrationsScreen
 - [kanban](./md/kanban.md): KanbanScreen
 - [workflow-builder](./md/workflow-builder.md): WorkflowBuilderScreen
+- [step-console](./md/step-console.md): StepConsole
+- [log-stream](./md/log-stream.md): LogStream
+- [packet-dissector](./md/packet-dissector.md): PacketDissector
 
 ## Registry JSON
 
@@ -582,3 +585,6 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [integrations](./r/integrations.json)
 - [kanban](./r/kanban.json)
 - [workflow-builder](./r/workflow-builder.json)
+- [step-console](./r/step-console.json)
+- [log-stream](./r/log-stream.json)
+- [packet-dissector](./r/packet-dissector.json)

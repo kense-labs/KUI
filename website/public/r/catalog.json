@@ -2230,5 +2230,29 @@
     "kind": "component",
     "name": "workflow-builder",
     "title": "WorkflowBuilderScreen"
+  },
+  {
+    "categories": [
+      "activity"
+    ],
+    "kind": "component",
+    "name": "step-console",
+    "title": "StepConsole"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "log-stream",
+    "title": "LogStream"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "packet-dissector",
+    "title": "PacketDissector"
   }
 ]

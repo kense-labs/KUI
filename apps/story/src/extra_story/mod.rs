@@ -40,6 +40,7 @@ mod media;
 mod meeting_summary;
 mod mixture_of_experts;
 mod morph_nav;
+mod observability;
 mod orbit_logos;
 mod orbit_photo;
 mod stretch_refresh;
@@ -133,6 +134,7 @@ pub fn story(id: &str, window: &mut Window, cx: &mut Context<crate::StoryHost>) 
         .or_else(|| cover_flow::story(id, window, cx))
         .or_else(|| orbit_logos::story(id, window, cx))
         .or_else(|| live_visitors::story(id, window, cx))
+        .or_else(|| observability::story(id, window, cx))
         .or_else(|| pro_screens::story(id, window, cx))?;
     let full_bleed = pro_screens::IDS.contains(&id);
     let min_height = if pro_screens::SCREEN_IDS.contains(&id) {
@@ -208,6 +210,7 @@ pub fn ids() -> impl Iterator<Item = &'static str> {
         .chain(card_to_article::IDS)
         .chain(photo_grid::IDS)
         .chain(cover_flow::IDS)
+        .chain(observability::IDS)
         .chain(orbit_logos::IDS)
         .chain(ticket_tear::IDS)
         .chain(live_visitors::IDS)
