@@ -275,16 +275,40 @@ fn update_col_highlight(entry: &HtmlElement) {
     let Ok(col_el) = col.dyn_into::<HtmlElement>() else {
         return;
     };
+
+    // Clear highlights in all sibling columns so moving across columns never leaves stale shadows!
+    if let Ok(Some(panel)) = col_el.closest(".kense-mega-panel")
+        && let Ok(cols) = panel.query_selector_all("[data-mega-col]")
+    {
+        for i in 0..cols.length() {
+            if let Some(other) = cols.item(i).and_then(|n| n.dyn_into::<HtmlElement>().ok())
+                && other != col_el
+            {
+                flag(&other, "data-has-highlight", false);
+                if let Ok(Some(other_hl)) = other.query_selector(".kense-mega-highlight")
+                    && let Ok(other_hl) = other_hl.dyn_into::<HtmlElement>()
+                {
+                    css(&other_hl, "opacity", "0");
+                }
+            }
+        }
+    }
+
     let Ok(Some(hl_node)) = col_el.query_selector(".kense-mega-highlight") else {
         return;
     };
     let Ok(hl) = hl_node.dyn_into::<HtmlElement>() else {
         return;
     };
+    let was_active = col_el.has_attribute("data-has-highlight");
     let cr = col_el.get_bounding_client_rect();
     let er = entry.get_bounding_client_rect();
     let x = er.left() - cr.left();
     let y = er.top() - cr.top();
+
+    if !was_active {
+        css(&hl, "transition", "opacity 0.14s ease");
+    }
     flag(&col_el, "data-has-highlight", true);
     css(&hl, "width", &format!("{:.1}px", er.width()));
     css(&hl, "height", &format!("{:.1}px", er.height()));
@@ -293,6 +317,10 @@ fn update_col_highlight(entry: &HtmlElement) {
         "transform",
         &format!("translate3d({x:.1}px,{y:.1}px,0)"),
     );
+    if !was_active {
+        let _ = hl.offset_width();
+        let _ = hl.style().remove_property("transition");
+    }
     css(&hl, "opacity", "1");
 }
 
@@ -363,6 +391,9 @@ pub(super) fn init(window: &Window, document: &Document, reduced: &MediaQueryLis
                 if let Ok(Some(btn)) = target.closest("[data-kense-menu-toggle]")
                     && let Some(key) = btn.get_attribute("data-kense-menu-toggle")
                 {
+                    if let Some(c) = &s.cluster {
+                        clear_col_highlights(c);
+                    }
                     let (vw, _) = viewport(&s.window);
                     if vw >= 760.0 {
                         s.set_menu(Some(&key), media.matches());
@@ -385,6 +416,8 @@ pub(super) fn init(window: &Window, document: &Document, reduced: &MediaQueryLis
                         s.kick_logo(logo_el, media.matches());
                         frame.request();
                     }
+                } else if let Some(c) = &s.cluster {
+                    clear_col_highlights(c);
                 }
             }
         })?;
@@ -400,6 +433,9 @@ pub(super) fn init(window: &Window, document: &Document, reduced: &MediaQueryLis
                     return;
                 }
                 let mut s = state.borrow_mut();
+                if let Some(c) = &s.cluster {
+                    clear_col_highlights(c);
+                }
                 if s.open_menu.is_none() {
                     return;
                 }
@@ -448,12 +484,15 @@ pub(super) fn init(window: &Window, document: &Document, reduced: &MediaQueryLis
         })?;
 
         listen(&cluster_el, "focusin", {
+            let cluster = cluster_el.clone();
             move |ev| {
                 if let Some(target) = ev.target().and_then(|t| t.dyn_into::<Element>().ok())
                     && let Ok(Some(entry)) = target.closest("[data-mega-entry]")
                     && let Ok(entry_el) = entry.dyn_into::<HtmlElement>()
                 {
                     update_col_highlight(&entry_el);
+                } else {
+                    clear_col_highlights(&cluster);
                 }
             }
         })?;

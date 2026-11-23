@@ -520,6 +520,8 @@ html[data-theme="dark"] .kense-nav-veil {
 }
 .topbar[data-kense-topbar] .company-nav-trigger,
 .topbar[data-kense-topbar] .company-nav > .company-nav-link {
+  appearance: none;
+  -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -527,7 +529,7 @@ html[data-theme="dark"] .kense-nav-veil {
   height: 28px;
   min-height: 28px;
   padding: 0 12px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: calc(var(--radius) - 2px);
   background: transparent;
   color: var(--text-secondary);
@@ -538,8 +540,8 @@ html[data-theme="dark"] .kense-nav-veil {
   cursor: pointer;
   transition:
     background 0.18s var(--ease-standard),
-    color 0.18s var(--ease-standard),
-    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    border-color 0.18s var(--ease-standard),
+    color 0.18s var(--ease-standard);
 }
 .topbar .company-nav-trigger {
   padding-right: 10px;
@@ -559,19 +561,19 @@ html[data-theme="dark"] .kense-nav-veil {
 .topbar .company-nav > .company-nav-link[aria-current="page"],
 .topbar .company-nav-trigger[aria-expanded="true"] {
   background: var(--surface);
+  border-color: var(--border);
   color: var(--ink);
   opacity: 1;
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.05),
-    inset 0 0 0 1px var(--border);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 html[data-theme="dark"] .topbar .company-nav-trigger:hover,
 html[data-theme="dark"] .topbar .company-nav > .company-nav-link:hover,
 html[data-theme="dark"] .topbar .company-nav > .company-nav-link[aria-current="page"],
 html[data-theme="dark"] .topbar .company-nav-trigger[aria-expanded="true"] {
   background: #24262c;
+  border-color: rgb(255 255 255 / 0.08);
   color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  box-shadow: none;
 }
 
 /* Invisible hover bridge between topbar triggers and floating mega-popover */
