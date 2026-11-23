@@ -55,50 +55,6 @@ fn english() -> bool {
         .is_some_and(|v| v.starts_with("en"))
 }
 
-const TIER_STORAGE_KEY: &str = "kui:sidebar-tier";
-
-fn valid_tier(value: &str) -> bool {
-    matches!(value, "all" | "free" | "pro")
-}
-
-fn stored_tier() -> Option<String> {
-    let storage = web_sys::window()?.session_storage().ok()??;
-    storage
-        .get_item(TIER_STORAGE_KEY)
-        .ok()
-        .flatten()
-        .filter(|v| valid_tier(v))
-}
-
-fn store_tier(tier: &str) {
-    if let Some(Ok(Some(storage))) = web_sys::window().map(|w| w.session_storage()) {
-        let _ = storage.set_item(TIER_STORAGE_KEY, tier);
-    }
-}
-
-fn current_tier(root: &Element) -> String {
-    child(root, "[data-tier][aria-checked=true]")
-        .and_then(|el| el.get_attribute("data-tier"))
-        .filter(|v| valid_tier(v))
-        .unwrap_or_else(|| "all".into())
-}
-
-fn apply_tier(root: &Element, tier: &str, persist: bool) {
-    let tier = if valid_tier(tier) { tier } else { "all" };
-    for item in children(root, "[data-tier]") {
-        let selected = item.get_attribute("data-tier").as_deref() == Some(tier);
-        attr(
-            &item,
-            "aria-checked",
-            if selected { "true" } else { "false" },
-        );
-        attr(&item, "tabindex", if selected { "0" } else { "-1" });
-    }
-    if persist {
-        store_tier(tier);
-    }
-}
-
 fn position_pill() -> Option<()> {
     let root = query("[data-nav-root]")?;
     let pill = child(&root, "[data-nav-pill]")?;
@@ -146,21 +102,13 @@ fn filter() -> Option<()> {
         .dyn_into::<HtmlInputElement>()
         .ok()?;
     let search = input.value().trim().to_lowercase();
-    let tier = current_tier(&root);
     let mut total = 0;
     for row in children(&root, "[data-nav-item]") {
-        let item_tier = row.get_attribute("data-tier-item").unwrap_or_default();
-        let tier_match = match tier.as_str() {
-            "free" => item_tier != "pro",
-            "pro" => item_tier == "pro",
-            _ => true,
-        };
-        let search_match = search.is_empty()
+        let show = search.is_empty()
             || row
                 .get_attribute("data-search-terms")
                 .unwrap_or_default()
                 .contains(&search);
-        let show = tier_match && search_match;
         flag(&row, "hidden", !show);
         total += usize::from(show);
     }
@@ -215,10 +163,6 @@ fn show_current(after_navigation: bool) -> Option<()> {
         filter();
     }
     let row = child(&root, "[aria-current=page]")?;
-    if row.has_attribute("hidden") {
-        apply_tier(&root, "all", true);
-        filter();
-    }
     for selector in ["[data-section]", "[data-group]"] {
         if let Ok(Some(shell)) = row.closest(selector) {
             // Navigation always reveals the newly selected item.
@@ -501,21 +445,6 @@ fn tab_stops(scope: &Element) -> Vec<HtmlElement> {
 
 fn click(event: &Event) -> Option<()> {
     let target = target(event)?;
-    if let Some(button) = target.closest("[data-tier]").ok()? {
-        let root = query("[data-docs-sidebar]")?;
-        let tier = button.get_attribute("data-tier")?;
-        if current_tier(&root) != tier {
-            apply_tier(&root, &tier, true);
-            filter();
-            if let Some(active) = child(&root, "a[aria-current=page]:not([hidden])") {
-                reveal_row(&active);
-            } else if let Some(scroll) = query("[data-nav-scroll]") {
-                scroll.set_scroll_top(0);
-            }
-            scroll_state();
-        }
-        return Some(());
-    }
     if let Some(tab) = target.closest("[data-component-stage] [data-view]").ok()? {
         set_view(&tab, false);
     }
@@ -580,31 +509,6 @@ fn keydown(event: &Event) -> Option<()> {
             }
         }
         return None;
-    }
-    if matches(&target, "[data-tier]") {
-        const ORDER: [&str; 3] = ["all", "free", "pro"];
-        let cur = target.get_attribute("data-tier").unwrap_or_default();
-        let idx = ORDER.iter().position(|t| *t == cur).unwrap_or(0);
-        let next = match name.as_str() {
-            "ArrowRight" | "ArrowDown" => ORDER[(idx + 1) % ORDER.len()],
-            "ArrowLeft" | "ArrowUp" => ORDER[(idx + ORDER.len() - 1) % ORDER.len()],
-            "Home" => ORDER[0],
-            "End" => ORDER[ORDER.len() - 1],
-            _ => return None,
-        };
-        let group = target.closest("[role=radiogroup]").ok()??;
-        let next_btn = child(&group, &format!(r#"[data-tier="{next}"]"#))?;
-        event.prevent_default();
-        let root = query("[data-docs-sidebar]")?;
-        apply_tier(&root, next, true);
-        filter();
-        if let Some(active) = child(&root, "a[aria-current=page]:not([hidden])") {
-            reveal_row(&active);
-        } else if let Some(scroll) = query("[data-nav-scroll]") {
-            scroll.set_scroll_top(0);
-        }
-        scroll_state();
-        return next_btn.dyn_ref::<HtmlElement>()?.focus().ok();
     }
     if matches(&target, "[data-preview-mode]") {
         let next = match name.as_str() {
@@ -891,12 +795,6 @@ pub fn init() -> Result<(), JsValue> {
                 .any(|name| v.contains(name))
         });
         kbd.set_text_content(Some(if mac { "⌘K" } else { "/" }));
-    }
-    if let Some(saved) = stored_tier()
-        && let Some(root) = query("[data-docs-sidebar]")
-    {
-        apply_tier(&root, &saved, false);
-        filter();
     }
     show_current(false);
     indicator();

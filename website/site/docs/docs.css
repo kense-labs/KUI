@@ -108,80 +108,6 @@
   text-align: center;
   transition: opacity var(--duration-fast) var(--ease-standard);
 }
-.aside .tiers {
-  position: relative;
-  display: flex;
-  height: 28px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  padding: 2px;
-  background: var(--surface-muted);
-}
-.aside .tier-main {
-  position: relative;
-  display: grid;
-  flex: 1 1 auto;
-  min-width: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
-}
-.aside .tier-indicator {
-  position: absolute;
-  z-index: 0;
-  inset: 0 auto 0 0;
-  width: calc((100% - 4px) / 3);
-  border-radius: calc(var(--radius) - 2px);
-  background: var(--surface);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.06),
-    inset 0 0 0 1px var(--border);
-  pointer-events: none;
-  transform: translate3d(0, 0, 0);
-  transition: transform 200ms var(--ease-snappy);
-}
-html[data-theme="dark"] .aside .tier-indicator,
-[data-kui-surface="dark"] .aside .tier-indicator {
-  background: color-mix(in oklab, var(--surface) 74%, var(--ink) 16%);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.36),
-    inset 0 0 0 1px var(--border);
-}
-.aside .tier-main:has([data-tier="free"][aria-checked="true"]) .tier-indicator {
-  transform: translate3d(calc(100% + 2px), 0, 0);
-}
-.aside .tier-main:has([data-tier="pro"][aria-checked="true"]) .tier-indicator {
-  transform: translate3d(calc(200% + 4px), 0, 0);
-}
-.aside .tier-btn {
-  position: relative;
-  z-index: 1;
-  isolation: isolate;
-  display: grid;
-  min-width: 0;
-  height: 100%;
-  place-items: center;
-  border: 0;
-  border-radius: calc(var(--radius) - 2px);
-  padding: 0 4px;
-  background: transparent;
-  color: var(--muted);
-  font: 500 11.5px/1 var(--font);
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: color var(--duration-fast) var(--ease-standard);
-}
-.aside .tier-btn > span {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-.aside .tier-btn:hover,
-.aside .tier-btn[aria-checked="true"] {
-  color: var(--ink);
-}
 .aside .sr-only {
   position: absolute;
   width: 1px;
@@ -883,61 +809,6 @@ html:has(.stage[data-preview-expanded]) { overflow: hidden; scrollbar-gutter: st
   letter-spacing: -0.035em;
   font-family: var(--font-display);
 }
-.doc h1:has([data-kui-pro-badge]) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem;
-}
-.pro-badge {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  height: 18px;
-  padding: 0 7px;
-  border: 1px solid transparent;
-  border-radius: 9999px;
-  background:
-    var(--kui-pro-soft) padding-box,
-    var(--kui-pro-line) border-box;
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0;
-  white-space: nowrap;
-  vertical-align: middle;
-  user-select: none;
-}
-.pro-badge-label {
-  background: var(--kui-pro-ink);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: var(--ink);
-  -webkit-text-fill-color: transparent;
-}
-.pro-badge-sm {
-  height: 16px;
-  padding: 0 5px;
-  font-size: 10px;
-}
-.pro-badge-md {
-  height: 22px;
-  padding: 0 9px;
-  font-size: 12px;
-}
-@media (forced-colors: active) {
-  .pro-badge {
-    border-color: CanvasText;
-    background: Canvas;
-  }
-  .pro-badge-label {
-    background: none;
-    color: CanvasText;
-    -webkit-text-fill-color: CanvasText;
-  }
-}
 .doc .lead {
   margin: 0 0 1rem;
 }
@@ -1241,9 +1112,6 @@ html,
   --doc-number: oklch(53% 0.14 55);
   --doc-string: oklch(48% 0.13 160);
   --doc-tag: oklch(50% 0.15 255);
-  --kui-pro-soft: linear-gradient(135deg, oklch(97.5% 0.016 300), oklch(98% 0.016 65));
-  --kui-pro-line: linear-gradient(100deg, oklch(83% 0.06 300), oklch(86% 0.06 65));
-  --kui-pro-ink: linear-gradient(100deg, oklch(47% 0.1 300), oklch(50% 0.09 55));
 }
 html[data-theme="dark"],
 [data-kui-surface="dark"] {
@@ -1252,9 +1120,6 @@ html[data-theme="dark"],
   --doc-number: oklch(82% 0.12 70);
   --doc-string: oklch(80% 0.12 160);
   --doc-tag: oklch(78% 0.12 250);
-  --kui-pro-soft: linear-gradient(135deg, oklch(23.5% 0.016 300), oklch(24% 0.014 65));
-  --kui-pro-line: linear-gradient(100deg, oklch(48% 0.06 300), oklch(52% 0.055 65));
-  --kui-pro-ink: linear-gradient(100deg, oklch(82% 0.07 300), oklch(86% 0.065 70));
 }
 :is(.code, .source) .syn-comment { color: var(--doc-comment); font-style: italic; }
 :is(.code, .source) .syn-keyword { color: var(--doc-keyword); }

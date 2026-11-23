@@ -119,10 +119,6 @@ impl Entry {
         self.group.as_deref().unwrap_or("buttons")
     }
 
-    fn is_pro(&self) -> bool {
-        self.group().starts_with("pro-")
-    }
-
     fn is_screen(&self) -> bool {
         SCREEN_GROUPS.contains(&self.group())
     }
@@ -339,28 +335,9 @@ fn icon(name: &str, size: u8) -> String {
     )
 }
 
-fn pro_badge(size: &str) -> String {
+fn nav_row(id: &str, current: &str, label: &str, terms: &str, en: bool) -> String {
     format!(
-        r#"<span class="pro-badge pro-badge-{size}" data-kui-pro-badge="{size}"><span class="pro-badge-label">Pro</span></span>"#
-    )
-}
-
-fn nav_row(
-    id: &str,
-    current: &str,
-    label: &str,
-    terms: &str,
-    tier: &str,
-    is_pro: bool,
-    en: bool,
-) -> String {
-    let badge = if is_pro {
-        pro_badge("sm")
-    } else {
-        String::new()
-    };
-    format!(
-        r#"<a href="{}" class="row" data-nav-item data-doc-id="{}" data-tier-item="{tier}" data-search-terms="{}"{}><span class="row-label">{}</span>{badge}</a>"#,
+        r#"<a href="{}" class="row" data-nav-item data-doc-id="{}" data-search-terms="{}"{}><span class="row-label">{}</span></a>"#,
         route(id, en),
         esc(id),
         esc(&terms.to_lowercase()),
@@ -398,23 +375,15 @@ fn render_groups(group_ids: &[&str], current: &str, en: bool) -> (String, usize)
         let mut rows = String::new();
         let mut count = 0;
         for entry in ENTRIES.iter().filter(|item| item.group() == *group) {
-            let is_pro = entry.is_pro();
-            let tier = if is_pro { "pro" } else { "free" };
             let terms = format!(
-                "{} {} {} {}{}",
-                entry.id,
-                entry.rust_type,
-                entry.title.en,
-                entry.title.zh,
-                if is_pro { " pro" } else { "" }
+                "{} {} {} {}",
+                entry.id, entry.rust_type, entry.title.en, entry.title.zh
             );
             rows.push_str(&nav_row(
                 &entry.id,
                 current,
                 entry.title.get(en),
                 &terms,
-                tier,
-                is_pro,
                 en,
             ));
             count += 1;
@@ -442,8 +411,6 @@ fn sidebar(current: &str, en: bool) -> String {
                 current,
                 title(id, en),
                 &format!("{} {}", title(id, true), title(id, false)),
-                "docs",
-                false,
                 en,
             )
         })
@@ -476,42 +443,12 @@ fn sidebar(current: &str, en: bool) -> String {
         "screens",
         &screen_groups,
     );
-    let pro_total = ENTRIES.iter().filter(|item| item.is_pro()).count();
-    let free_total = ENTRIES.len() - pro_total + doc_items.len();
-    let all_total = ENTRIES.len() + doc_items.len();
-    let item_count_title = |n: usize| {
-        if en {
-            format!("{n} items")
-        } else {
-            format!("{n} 项")
-        }
-    };
-    let tiers = [
-        ("all", t("sidebar.tier.all", en), all_total, true),
-        ("free", t("sidebar.tier.free", en), free_total, false),
-        ("pro", t("sidebar.tier.pro", en), pro_total, false),
-    ]
-    .map(|(tier, label, count, selected)| {
-        controls::button(
-            &format!(
-                r#"class="tier-btn" role="radio" data-tier="{tier}" aria-checked="{selected}" tabindex="{}" title="{}""#,
-                if selected { "0" } else { "-1" },
-                esc(&item_count_title(count))
-            ),
-            &format!("<span>{}</span>", esc(label)),
-        )
-    })
-    .join("");
-    let tier_bar = format!(
-        r#"<div class="tiers" data-tier-bar><div class="tier-main" role="radiogroup" aria-label="{}"><span class="tier-indicator" data-tier-indicator aria-hidden="true"></span>{tiers}</div></div>"#,
-        t("sidebar.tier.label", en)
-    );
     let placeholder = t("sidebar.search.placeholder", en);
     let search = controls::search(&format!(
         r#"data-sidebar-search placeholder="{placeholder}" aria-label="{placeholder}" autocomplete="off" spellcheck="false" enterkeyhint="go""#
     ));
     format!(
-        r#"<aside class="aside" data-docs-sidebar aria-label="{}"><div class="panel"><div class="top"><label class="search"><span class="search-icon">{}</span>{search}<kbd data-search-kbd aria-hidden="true">/</kbd></label>{tier_bar}<span class="sr-only" data-search-status role="status"></span></div><div class="scroll" data-nav-scroll><div class="content" data-nav-root><div class="pill" data-nav-pill data-hidden="1" aria-hidden="true"></div>{guides}{components}{screens}<p class="empty" data-empty hidden>{}</p></div></div></div></aside>"#,
+        r#"<aside class="aside" data-docs-sidebar aria-label="{}"><div class="panel"><div class="top"><label class="search"><span class="search-icon">{}</span>{search}<kbd data-search-kbd aria-hidden="true">/</kbd></label><span class="sr-only" data-search-status role="status"></span></div><div class="scroll" data-nav-scroll><div class="content" data-nav-root><div class="pill" data-nav-pill data-hidden="1" aria-hidden="true"></div>{guides}{components}{screens}<p class="empty" data-empty hidden>{}</p></div></div></div></aside>"#,
         pick(en, "Library", "组件库"),
         icon("search", 15),
         t("sidebar.empty", en)
@@ -698,13 +635,8 @@ fn component(doc: &Entry, en: bool, revision: &str) -> String {
         t(section_key, en),
         t(&format!("sidebar.group.{}", doc.group()), en)
     );
-    let badge = if doc.is_pro() {
-        format!(" {}", pro_badge("md"))
-    } else {
-        String::new()
-    };
     let mut html = format!(
-        r#"<article class="doc" data-doc-id="{id}"><p class="muted crumb">{crumb}</p><h1>{}{badge}</h1><p class="muted lead">{} <a href="/md/{id}.md">/md/{id}.md</a></p>{}<h2>{}</h2><p>{}</p>"#,
+        r#"<article class="doc" data-doc-id="{id}"><p class="muted crumb">{crumb}</p><h1>{}</h1><p class="muted lead">{} <a href="/md/{id}.md">/md/{id}.md</a></p>{}<h2>{}</h2><p>{}</p>"#,
         esc(doc.title.get(en)),
         esc(doc.lead.get(en)),
         stage(doc, en, revision, &example),

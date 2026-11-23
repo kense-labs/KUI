@@ -862,11 +862,11 @@ pub fn page(en: bool, rev: &str) -> String {
         ),
         d_ui = if en {
             format!(
-                "{count} installable components plus 46 KUI Pro workspace screens. Depend on kense-kui from crates.io or own selected ui/ source via kui add."
+                "{count} free, MIT-licensed components including 46 full-page workspace screens. Depend on kense-kui from crates.io or own selected ui/ source via kui add."
             )
         } else {
             format!(
-                "包含 {count} 个基础与高阶组件及 46 个 Pro 全尺寸屏幕。既可通过 crates.io 引入 kense-kui，也可通过 kui add 将源码安装进项目。"
+                "全部 {count} 个组件（含 46 个全尺寸应用屏幕）均基于 MIT 协议免费开源。既可通过 crates.io 引入 kense-kui，也可通过 kui add 将源码安装进项目。"
             )
         },
         act_kui = svg::action_content(tr(en, "进入 KUI 产品站", "Open KUI")),
@@ -1405,9 +1405,9 @@ pub fn page(en: bool, rev: &str) -> String {
 
     // Section 6: Monumental Borderless Scale Typography + Dot-Matrix Field + Editorial Repo Index (#principles)
     let kui_repo_desc = if en {
-        format!("{count} dual-runtime GPUI components (kense-kui), 46 Pro screens, and kui CLI")
+        format!("{count} MIT-licensed GPUI components & 46 app screens (kense-kui) + kui CLI")
     } else {
-        format!("{count} 个桌面与 Web 同源 GPUI 组件、46 个 Pro 屏幕与 kui CLI")
+        format!("{count} 个 MIT 免费开源同源 GPUI 组件（含 46 个应用屏幕）与 kui CLI")
     };
     let kui_repo_href = format!("{prefix}/kui/");
     let repos = [
@@ -1707,11 +1707,11 @@ pub fn docs_hub(en: bool) -> String {
     let count = component_count();
     let kui_doc_body = if en {
         format!(
-            "Installation guide, {count} live component docs, 46 Pro screens, desktop/WASM platform notes, and coding-agent specs."
+            "Installation guide, {count} free MIT component & screen docs, desktop/WASM platform notes, and coding-agent specs."
         )
     } else {
         format!(
-            "面向 GPUI 的 Rust 界面套件安装指南、{count} 个组件交互文档、46 个 Pro 屏幕与编程 Agent 接入说明。"
+            "面向 GPUI 的 Rust 界面套件安装指南、{count} 个免费开源组件与应用屏幕文档及编程 Agent 接入说明。"
         )
     };
     let cards = [

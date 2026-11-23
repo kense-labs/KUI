@@ -8,8 +8,8 @@
     "en": "Introduction"
   },
   "docs.intro.lead": {
-    "zh": "KUI 是面向 GPUI 的 Rust UI 组件库，支持原生桌面与 WASM。可通过 crates.io 安装，也可复制所需组件源码。",
-    "en": "KUI is a Rust UI kit for GPUI on native desktop and WASM. Install the library from crates.io or copy selected component source."
+    "zh": "KUI 是面向 GPUI 的 Rust UI 组件库，支持原生桌面与 WASM。全部组件与应用屏幕均基于 MIT 协议免费开源，可通过 crates.io 安装，也可按需复制源码。",
+    "en": "KUI is an MIT-licensed, free and open-source Rust UI kit for GPUI on native desktop and WASM. Install every component and screen via crates.io or copy selected source."
   },
   "docs.intro.what": {
     "zh": "KUI 是什么",
@@ -206,22 +206,6 @@
   "sidebar.screens": {
     "zh": "应用屏幕",
     "en": "Screens"
-  },
-  "sidebar.tier.label": {
-    "zh": "筛选范围",
-    "en": "Show"
-  },
-  "sidebar.tier.all": {
-    "zh": "全部",
-    "en": "All"
-  },
-  "sidebar.tier.free": {
-    "zh": "免费",
-    "en": "Free"
-  },
-  "sidebar.tier.pro": {
-    "zh": "Pro",
-    "en": "Pro"
   },
   "sidebar.search.placeholder": {
     "zh": "搜索",
