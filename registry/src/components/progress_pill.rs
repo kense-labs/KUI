@@ -8,11 +8,12 @@
 use crate::{
     components::pro_chrome::{
         ProPalette, pro_ease, pro_eid, pro_empty_state, pro_shimmer_text, pro_skeleton_bar,
-        pro_spring_f32, tr,
+        pro_spring_f32, pro_swap_label, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
+        family::{Slide, disabled_motion},
         pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells},
     },
 };
@@ -300,11 +301,17 @@ fn paint_fading_capsule(card_bg: Hsla, border_col: Hsla, shadow_col: Hsla) -> im
 /// ```
 pub struct ProgressPill {
     id: ElementId,
+    focus: FocusHandle,
     title: Option<SharedString>,
     name: Option<SharedString>,
     steps: Option<Vec<SharedString>>,
     agent: SharedString,
     playing: bool,
+    user_paused: bool,
+    paused_elapsed_ms: f64,
+    hovered: bool,
+    hover_slide: Slide,
+    press_slide: Slide,
     step: usize,
     hold_ms: u64,
     controlled_progress: Option<f32>,
@@ -322,14 +329,20 @@ impl ProgressPill {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         Self {
             id: id.into(),
+            focus: cx.focus_handle().tab_stop(true),
             title: None,
             name: None,
             steps: None,
             agent: "analyst".into(),
             playing: true,
+            user_paused: false,
+            paused_elapsed_ms: 0.0,
+            hovered: false,
+            hover_slide: Slide::new(0.),
+            press_slide: Slide::snappy(0.),
             step: 1,
             hold_ms: 2600,
             controlled_progress: None,
@@ -429,9 +442,32 @@ impl ProgressPill {
     /// Pause or resume automatic step cycling at runtime.
     pub fn set_playing(&mut self, playing: bool, cx: &mut Context<Self>) {
         if self.playing != playing {
+            let now = cx.background_executor().now();
+            if !playing {
+                self.paused_elapsed_ms +=
+                    now.saturating_duration_since(self.started_at).as_secs_f64() * 1000.0;
+                self.user_paused = true;
+            } else {
+                self.started_at = now;
+                self.user_paused = false;
+            }
             self.playing = playing;
-            self.started_at = Instant::now();
             cx.notify();
+        }
+    }
+
+    fn toggle_or_replay(&mut self, is_done: bool, cx: &mut Context<Self>) {
+        let now = cx.background_executor().now();
+        if is_done {
+            self.step = 0;
+            self.paused_elapsed_ms = 0.0;
+            self.started_at = now;
+            self.step_entered_at = now;
+            self.playing = true;
+            self.user_paused = false;
+            cx.notify();
+        } else {
+            self.set_playing(!self.playing, cx);
         }
     }
 
@@ -447,9 +483,11 @@ impl ProgressPill {
     /// Advance manually to the next step (and reset the cycle anchor).
     pub fn advance_step(&mut self, step_count: usize, cx: &mut Context<Self>) {
         let n = step_count.max(1);
+        let now = cx.background_executor().now();
         self.step = (self.step + 1) % n;
-        self.started_at = Instant::now();
-        self.step_entered_at = Instant::now();
+        self.paused_elapsed_ms = 0.0;
+        self.started_at = now;
+        self.step_entered_at = now;
         cx.notify();
     }
 
@@ -483,9 +521,15 @@ impl ProgressPill {
 impl Render for ProgressPill {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = Theme::global(cx).reduced_motion;
-        let elapsed_secs = self.started_at.elapsed().as_secs_f64();
-        let elapsed_ms = elapsed_secs * 1000.0;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let live_delta_ms = if self.playing {
+            now.saturating_duration_since(self.started_at).as_secs_f64() * 1000.0
+        } else {
+            0.0
+        };
+        let elapsed_ms = self.paused_elapsed_ms + live_delta_ms;
+        let elapsed_secs = elapsed_ms / 1000.0;
 
         if self.loading {
             let phase = ((elapsed_secs as f32) / 1.4).fract();
@@ -526,20 +570,22 @@ impl Render for ProgressPill {
             .clone()
             .unwrap_or_else(|| default_progress_steps(cx));
         let step_count = steps.len().max(1);
+        let eval_playing = self.playing || self.user_paused;
         let snap = evaluate_pill_snapshot(
             step_count,
             self.step,
             self.hold_ms,
-            self.playing,
+            eval_playing,
             reduced,
             elapsed_ms,
             self.controlled_progress,
         );
+        let snap_done = snap.done;
 
         let cur_key = (snap.step_index, snap.done);
         if self.last_observed_key != cur_key {
             self.last_observed_key = cur_key;
-            self.step_entered_at = Instant::now();
+            self.step_entered_at = now;
             let label: SharedString = if snap.done {
                 tr(cx, "Report ready", "报告已就绪").into()
             } else {
@@ -555,6 +601,14 @@ impl Render for ProgressPill {
                 done: snap.done,
             });
         }
+
+        self.hover_slide.duration(
+            if self.hovered { 1.0 } else { 0.0 },
+            if self.hovered { 0.22 } else { 0.26 },
+            cx,
+        );
+        let hov_t = self.hover_slide.get(w, cx).clamp(0., 1.);
+        let down_t = self.press_slide.get(w, cx).clamp(0., 1.);
 
         let live_motion = self.playing && !reduced;
         if live_motion {
@@ -584,12 +638,20 @@ impl Render for ProgressPill {
         )
         .clamp(0.0, 1.0);
         let pct_int = (sprung_ratio * 100.0).round() as u32;
+        let shown_step = (snap.step_index + 1).min(step_count);
         let readout_text = if self.show_step_count {
-            let shown_step = (snap.step_index + 1).min(step_count);
             format!("{shown_step}/{step_count} · {pct_int}%")
         } else {
             format!("{pct_int}%")
         };
+        let state_badge = if snap.done {
+            tr(cx, "Replay", "重播")
+        } else if !self.playing {
+            tr(cx, "Paused", "已暂停")
+        } else {
+            tr(cx, "Live", "运行中")
+        };
+        let hover_detail = format!("{shown_step}/{step_count} · {state_badge}");
 
         let dark = p.dark;
         let card_bg: Hsla = if dark {
@@ -659,7 +721,9 @@ impl Render for ProgressPill {
         };
 
         // Step entrance animation (`420ms` upward micro-glide + fade)
-        let step_age = self.step_entered_at.elapsed().as_secs_f32();
+        let step_age = now
+            .saturating_duration_since(self.step_entered_at)
+            .as_secs_f32();
         let enter_t = if reduced || elapsed_secs < 0.08 {
             1.0
         } else {
@@ -740,9 +804,9 @@ impl Render for ProgressPill {
                     }
                 }
             },
-        )
-        .w_full()
-        .h(px(4.0));
+        );
+        let bar_h = 4.0 + 1.5 * hov_t;
+        let bar_canvas = bar_canvas.w_full().h(px(bar_h));
 
         // Atmospheric drifting blue-purple-pink glow beneath the capsule
         let drift_x = if live_motion {
@@ -751,7 +815,7 @@ impl Render for ProgressPill {
             0.0
         };
         let glow_img = under_glow_svg(dark);
-        let glow_opacity = if dark { 0.52 } else { 0.70 };
+        let glow_opacity = ((if dark { 0.52 } else { 0.70 }) + 0.14 * hov_t).clamp(0.0, 0.92);
 
         let pixel_tile = render_circular_pixel_mark(
             &self.agent,
@@ -762,26 +826,63 @@ impl Render for ProgressPill {
             elapsed_ms as f32,
         );
 
+        let card_lift_y = -1.8 * hov_t * (1.0 - down_t) + 1.5 * down_t;
+        let content_w = 210.0 + 38.0 * hov_t;
+        let detail_max_w = 88.0 * hov_t;
+
         let pill_card = div()
             .id(pro_eid(&self.id, "pill-card"))
+            .role(Role::Button)
+            .aria_label(title_str.clone())
             .relative()
+            .top(px(card_lift_y))
             .w(px(452.0))
             .h(px(68.0))
-            .pl(px(10.0))
+            .pl(px(10.0 + 1.2 * down_t))
             .pr(px(20.0))
             .flex()
             .items_center()
             .gap(px(12.0))
             .cursor_pointer()
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if this.hovered != *inside {
+                    this.hovered = *inside;
+                    if !*inside {
+                        this.press_slide.duration(0., 0.14, cx);
+                    }
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.press_slide.duration(1., 0.08, cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.press_slide.duration(0., 0.14, cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.press_slide.duration(0., 0.14, cx);
+                    cx.notify();
+                }),
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.advance_step(step_count, cx);
+                this.toggle_or_replay(snap_done, cx);
             }))
             .child(paint_fading_capsule(card_bg, border_col, shadow_col))
             .child(div().relative().child(pixel_tile))
             .child(
                 div()
                     .relative()
-                    .w(px(210.0))
+                    .w(px(content_w))
                     .flex_none()
                     .flex()
                     .flex_col()
@@ -789,9 +890,9 @@ impl Render for ProgressPill {
                         div()
                             .w_full()
                             .flex()
-                            .items_baseline()
+                            .items_center()
                             .justify_between()
-                            .gap(px(12.0))
+                            .gap(px(8.0))
                             .child(
                                 div()
                                     .flex_1()
@@ -806,11 +907,39 @@ impl Render for ProgressPill {
                             .child(
                                 div()
                                     .flex_none()
-                                    .text_size(px(11.5))
-                                    .line_height(px(18.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(pct_col)
-                                    .child(readout_text),
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0 * hov_t))
+                                    .when(hov_t > 0.02, |d| {
+                                        d.child(
+                                            div()
+                                                .max_w(px(detail_max_w))
+                                                .overflow_hidden()
+                                                .opacity(hov_t)
+                                                .px(px(5.5 * hov_t))
+                                                .h(px(16.0))
+                                                .rounded_full()
+                                                .bg(tile_bg)
+                                                .flex()
+                                                .items_center()
+                                                .child(pro_swap_label(
+                                                    pro_eid(&self.id, "hover-detail"),
+                                                    hover_detail,
+                                                    10.0,
+                                                    FontWeight::MEDIUM,
+                                                    muted_col,
+                                                )),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .flex_none()
+                                            .text_size(px(11.5))
+                                            .line_height(px(18.0))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(pct_col)
+                                            .child(readout_text),
+                                    ),
                             ),
                     )
                     .child(
@@ -849,12 +978,30 @@ impl Render for ProgressPill {
 
         div()
             .id(self.id.clone())
+            .track_focus(&self.focus)
+            .tab_index(0)
             .w_full()
             .min_h(px(168.0))
             .flex()
             .items_center()
             .justify_center()
             .overflow_hidden()
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |s| s.rounded(px(14.)).border_color(p.focus))
+            .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
+                match ev.keystroke.key.as_str() {
+                    "space" | " " | "enter" => {
+                        this.toggle_or_replay(snap_done, cx);
+                        cx.stop_propagation();
+                    }
+                    "right" | "n" => {
+                        this.advance_step(step_count, cx);
+                        cx.stop_propagation();
+                    }
+                    _ => {}
+                }
+            }))
             .child(stack)
             .into_any_element()
     }
@@ -862,7 +1009,11 @@ impl Render for ProgressPill {
 
 #[cfg(test)]
 mod tests {
-    use super::evaluate_pill_snapshot;
+    use super::{ProgressPill, evaluate_pill_snapshot};
+    use gpui::{
+        MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point, px, size,
+    };
+    use std::time::Duration;
 
     #[test]
     fn initial_and_static_step_match_reference_percentage() {
@@ -902,5 +1053,88 @@ mod tests {
         assert!(!ctrl.done);
         assert!((ctrl.ratio - 0.75).abs() < 1e-5);
         assert_eq!(ctrl.step_index, 3);
+    }
+
+    #[gpui::test]
+    fn hover_expands_detail_readout_and_click_toggles_pause_or_replays_done(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, vcx) =
+            cx.add_window_view(|_, cx| ProgressPill::new("pp-test", cx).with_hold(1000));
+        vcx.simulate_resize(size(px(560.), px(220.)));
+        vcx.run_until_parked();
+
+        // Pill is centered inside `(560, 220)` -> center `(220, 96)` hits `pill-card`
+        let pill_pt = point(px(220.), px(96.));
+        vcx.simulate_event(MouseMoveEvent {
+            position: pill_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        exec.advance_clock(Duration::from_millis(240));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let pp = view.read(app);
+            assert!(pp.hovered);
+            assert!(pp.hover_slide.value(app) > 0.75);
+            assert!(pp.is_playing());
+        });
+
+        // Click pill -> pauses while preserving accumulated progress
+        vcx.simulate_event(MouseDownEvent {
+            position: pill_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: pill_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        vcx.run_until_parked();
+        assert!(!vcx.update(|_, app| view.read(app).is_playing()));
+
+        // Click again -> resumes, then advance into `done` beat and click to replay from step 0!
+        vcx.simulate_event(MouseDownEvent {
+            position: pill_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: pill_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        exec.advance_clock(Duration::from_millis(2150));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+        assert!(vcx.update(|_, app| view.read(app).last_observed_key.1));
+
+        vcx.simulate_event(MouseDownEvent {
+            position: pill_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: pill_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        vcx.run_until_parked();
+        assert_eq!(vcx.update(|_, app| view.read(app).step), 0);
+        assert!(vcx.update(|_, app| view.read(app).is_playing()));
     }
 }

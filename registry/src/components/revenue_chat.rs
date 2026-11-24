@@ -6,14 +6,17 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_icon_btn,
-        pro_mix_color, pro_presence, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
-        pro_spring_f32, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_presence,
+        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
+        family::{Slide, disabled_motion},
         pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
     },
 };
@@ -520,6 +523,8 @@ pub struct RevenueChatBlock {
     model_index: usize,
     attached_context: bool,
     recording: bool,
+    active_period: SharedString,
+    selected_kpi: Option<(SharedString, usize)>,
     hovered_point: Option<(SharedString, usize)>,
     keyboard_point: usize,
     active_brush: Option<ActiveBrush>,
@@ -554,6 +559,8 @@ impl RevenueChatBlock {
             model_index: 0,
             attached_context: false,
             recording: false,
+            active_period: "90d".into(),
+            selected_kpi: None,
             hovered_point: None,
             keyboard_point: 8,
             active_brush: None,
@@ -802,10 +809,12 @@ impl RevenueChatBlock {
                 labels,
                 current,
                 previous,
-                ..
+                mark,
             } => {
+                let (p_labels, p_cur, p_prev, _) =
+                    trend_series_for_period(&self.active_period, labels, current, previous, *mark);
                 let (label, detail) =
-                    compute_trend_selection(labels, current, previous, br.from, br.to);
+                    compute_trend_selection(&p_labels, &p_cur, &p_prev, br.from, br.to);
                 Some(RevenueChartSelection {
                     turn_id: br.turn_id.clone(),
                     from: br.from.min(br.to),
@@ -929,8 +938,22 @@ impl RevenueChatBlock {
             RevenueChatTurn::Assistant {
                 id, chart: Some(c), ..
             } => match c {
-                RevenueChartKind::Trend { labels, .. }
-                | RevenueChartKind::Forecast { labels, .. } => {
+                RevenueChartKind::Trend {
+                    labels,
+                    current,
+                    previous,
+                    mark,
+                } => {
+                    let (pl, _, _, _) = trend_series_for_period(
+                        &self.active_period,
+                        labels,
+                        current,
+                        previous,
+                        *mark,
+                    );
+                    Some((id.clone(), pl.len(), false))
+                }
+                RevenueChartKind::Forecast { labels, .. } => {
                     Some((id.clone(), labels.len(), false))
                 }
                 RevenueChartKind::Split { groups, .. } => Some((id.clone(), groups.len(), true)),
@@ -1020,72 +1043,145 @@ impl RevenueChatBlock {
         }
     }
 
-    fn render_kpi_strip(kpis: &[RevenueChatKpi], narrow: bool, p: &ProPalette) -> Div {
-        let edge = p.line;
-        let make_card = |kpi: &RevenueChatKpi| {
-            div()
-                .flex_1()
-                .min_w(px(if narrow { 130. } else { 150. }))
-                .px(px(14.))
-                .py(px(12.))
-                .rounded(px(12.))
-                .bg(p.card)
-                .border_1()
-                .border_color(edge)
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(p.muted)
-                        .truncate()
-                        .child(kpi.label.clone()),
-                )
-                .child(
-                    div()
-                        .text_size(px(20.))
-                        .line_height(px(28.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .truncate()
-                        .child(kpi.value.clone()),
-                )
-                .when_some(kpi.change.clone(), |d, chg| {
-                    d.child(
+    #[allow(clippy::too_many_arguments)]
+    fn render_kpi_strip(
+        &self,
+        turn_id: &SharedString,
+        kpis: &[RevenueChatKpi],
+        scale_for_period: bool,
+        narrow: bool,
+        p: &ProPalette,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let period_key = self.active_period.as_ref();
+        let make_card =
+            |ki: usize, kpi: &RevenueChatKpi, w: &mut Window, cx: &mut Context<Self>| {
+                let is_sel = self
+                    .selected_kpi
+                    .as_ref()
+                    .is_some_and(|(tid, idx)| tid == turn_id && *idx == ki);
+                let dimmed = self
+                    .selected_kpi
+                    .as_ref()
+                    .is_some_and(|(tid, idx)| tid == turn_id && *idx != ki);
+                let op = pro_spring_f32(
+                    pro_eid(&self.id, format!("rc-kpi-op-{turn_id}-{ki}")),
+                    if dimmed { 0.72 } else { 1.0 },
+                    0.22,
+                    w,
+                    cx,
+                );
+                let sel_t = pro_spring_f32(
+                    pro_eid(&self.id, format!("rc-kpi-sel-{turn_id}-{ki}")),
+                    if is_sel { 1.0 } else { 0.0 },
+                    0.22,
+                    w,
+                    cx,
+                );
+                let rest_border = pro_mix_color(p.line, p.blue.opacity(0.62), sel_t);
+                let hover_bg = pro_mix_color(p.card, p.hover, 0.55);
+
+                let val_el: AnyElement = if let Some((base_v, dec, pref, suf)) =
+                    parse_revenue_kpi(&kpi.value)
+                {
+                    let (adj_v, adj_dec, adj_suf) = if scale_for_period && period_key != "90d" {
+                        scale_kpi_for_period(base_v, dec, pref.as_ref(), suf.as_ref(), period_key)
+                    } else {
+                        (base_v, dec, suf)
+                    };
+                    pro_rolling_number(
+                        pro_eid(&self.id, format!("rc-kpi-num-{turn_id}-{ki}")),
+                        adj_v,
+                        adj_dec,
+                        pref,
+                        adj_suf,
+                        20.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )
+                } else {
+                    pro_swap_label(
+                        pro_eid(&self.id, format!("rc-kpi-txt-{turn_id}-{ki}")),
+                        kpi.value.clone(),
+                        20.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )
+                };
+
+                let inner = div()
+                    .w_full()
+                    .px(px(14.))
+                    .py(px(12.))
+                    .opacity(op)
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(
                         div()
                             .text_size(px(12.))
                             .line_height(px(16.))
-                            .text_color(if kpi.good { p.green_ink } else { p.red_ink })
+                            .text_color(p.muted)
                             .truncate()
-                            .child(chg),
+                            .child(kpi.label.clone()),
                     )
-                })
-        };
+                    .child(div().min_h(px(28.)).flex().items_center().child(val_el))
+                    .when_some(kpi.change.clone(), |d, chg| {
+                        d.child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .text_color(if kpi.good { p.green_ink } else { p.red_ink })
+                                .truncate()
+                                .child(chg),
+                        )
+                    });
+
+                let tid_sel = turn_id.clone();
+                pro_tactile(
+                    pro_eid(&self.id, format!("rc-kpi-{turn_id}-{ki}")),
+                    format!("{} {}", kpi.label, kpi.value),
+                    12.,
+                    p.card,
+                    hover_bg,
+                    rest_border,
+                    p.line_strong,
+                    is_sel,
+                    inner,
+                    cx,
+                    move |this, _, cx| {
+                        let next = (tid_sel.clone(), ki);
+                        if this.selected_kpi.as_ref() == Some(&next) {
+                            this.selected_kpi = None;
+                        } else {
+                            this.selected_kpi = Some(next);
+                        }
+                        cx.notify();
+                    },
+                )
+                .flex_1()
+                .min_w(px(if narrow { 130. } else { 150. }))
+                .when(sel_t > 0.12, |d| d.shadow_xs())
+            };
 
         if narrow && kpis.len() == 3 {
+            let c0 = make_card(0, &kpis[0], w, cx);
+            let c1 = make_card(1, &kpis[1], w, cx);
+            let c2 = make_card(2, &kpis[2], w, cx);
             div()
                 .w_full()
                 .flex()
                 .flex_col()
                 .gap(px(8.))
-                .child(make_card(&kpis[0]))
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .gap(px(8.))
-                        .child(make_card(&kpis[1]))
-                        .child(make_card(&kpis[2])),
-                )
+                .child(c0)
+                .child(div().w_full().flex().gap(px(8.)).child(c1).child(c2))
         } else {
-            div()
-                .w_full()
-                .flex()
-                .flex_wrap()
-                .gap(px(10.))
-                .children(kpis.iter().map(make_card))
+            let mut row = div().w_full().flex().flex_wrap().gap(px(10.));
+            for (ki, kpi) in kpis.iter().enumerate() {
+                row = row.child(make_card(ki, kpi, w, cx));
+            }
+            row
         }
     }
 
@@ -1184,16 +1280,23 @@ impl RevenueChatBlock {
         &mut self,
         turn_id: &SharedString,
         caption: Option<SharedString>,
-        labels: Vec<SharedString>,
-        current: Vec<f64>,
-        previous: Vec<f64>,
-        mark: Option<usize>,
+        raw_labels: Vec<SharedString>,
+        raw_current: Vec<f64>,
+        raw_previous: Vec<f64>,
+        raw_mark: Option<usize>,
         narrow: bool,
         reduced: bool,
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let p = ProPalette::get(cx);
+        let (labels, current, previous, mark) = trend_series_for_period(
+            &self.active_period,
+            &raw_labels,
+            &raw_current,
+            &raw_previous,
+            raw_mark,
+        );
         let n = current.len();
         let bounds_cell = self
             .plot_bounds
@@ -1217,9 +1320,24 @@ impl RevenueChatBlock {
                 .or_else(|| mark.filter(|&m| m < n))
         };
 
-        let y_min = 50.0_f32;
-        let y_max = 150.0_f32;
-        let y_span = y_max - y_min;
+        let mut min_raw = f32::INFINITY;
+        let mut max_raw = f32::NEG_INFINITY;
+        for &v in current.iter().chain(previous.iter()) {
+            let vf = v as f32;
+            if vf.is_finite() {
+                min_raw = min_raw.min(vf);
+                max_raw = max_raw.max(vf);
+            }
+        }
+        let (y_min, y_max) = if self.active_period.as_ref() == "90d" {
+            (50.0_f32, 150.0_f32)
+        } else if min_raw.is_finite() && max_raw.is_finite() {
+            let pad = ((max_raw - min_raw) * 0.18).max(4.0);
+            ((min_raw - pad).max(0.0).floor(), (max_raw + pad).ceil())
+        } else {
+            (50.0_f32, 150.0_f32)
+        };
+        let y_span = (y_max - y_min).max(1.0);
         let denom = (n.saturating_sub(1)).max(1) as f32;
 
         let mut cur_norm = Vec::with_capacity(n);
@@ -1252,28 +1370,39 @@ impl RevenueChatBlock {
         }
 
         let fb_idx = active_idx.or(mark).unwrap_or(0).min(n.saturating_sub(1));
-        let marker_tx = pro_spring_f32(
-            pro_eid(&self.id, format!("rc-mtx-{turn_id}")),
-            fb_idx as f32 / denom,
-            0.16,
-            w,
+        let scrub_st = w.use_keyed_state(
+            pro_eid(&self.id, format!("rc-trend-scrub-{turn_id}")),
             cx,
-        )
-        .clamp(0.0, 1.0);
-        let marker_cy = pro_spring_f32(
-            pro_eid(&self.id, format!("rc-mcy-{turn_id}")),
-            cur_norm.get(fb_idx).copied().unwrap_or(0.5),
-            0.16,
-            w,
-            cx,
+            |_, _| {
+                (
+                    Slide::snappy(fb_idx as f32 / denom),
+                    Slide::snappy(f32::from(active_idx.is_some())),
+                    active_idx.is_some(),
+                )
+            },
         );
-        let marker_py = pro_spring_f32(
-            pro_eid(&self.id, format!("rc-mpy-{turn_id}")),
-            prev_norm.get(fb_idx).copied().unwrap_or(0.4),
-            0.16,
-            w,
-            cx,
-        );
+        let (marker_tx, marker_alpha) = scrub_st.update(cx, |s, cx| {
+            if let Some(ai) = active_idx {
+                let ratio = ai as f32 / denom;
+                if !s.2 && s.1.value(cx) < 0.08 {
+                    s.0.reset(ratio);
+                } else {
+                    s.0.set(ratio, cx);
+                }
+                s.1.set(1.0, cx);
+                s.2 = true;
+            } else {
+                s.1.set(0.0, cx);
+                s.2 = false;
+            }
+            (
+                s.0.get(w, cx).clamp(0.0, 1.0),
+                s.1.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+        let pos_f = marker_tx * denom;
+        let marker_cy = sample_norm(&cur_norm, pos_f);
+        let marker_py = sample_norm(&prev_norm, pos_f);
 
         let brush_band = active_br.as_ref().map(|br| {
             let lo = br.from.min(br.to) as f32 / denom;
@@ -1296,7 +1425,6 @@ impl RevenueChatBlock {
         let grid_c = p.line;
         let guide_c = p.line_strong;
         let card_bg = p.card;
-        let show_marker = active_idx.is_some();
         let bounds_writer = bounds_cell.clone();
 
         let chart_canvas = canvas(
@@ -1389,7 +1517,7 @@ impl RevenueChatBlock {
                     window.paint_path(path, blue_c);
                 }
 
-                if show_marker && fb_idx < vis_n {
+                if marker_alpha > 0.01 && fb_idx < vis_n {
                     let cur_pt = point(
                         bounds.left() + px(marker_tx * bw),
                         bounds.top() + px((1.0 - marker_cy) * bh),
@@ -1402,95 +1530,119 @@ impl RevenueChatBlock {
                     gp.move_to(point(cur_pt.x, bounds.top()));
                     gp.line_to(point(cur_pt.x, bounds.bottom()));
                     if let Ok(path) = gp.build() {
-                        window.paint_path(path, guide_c);
+                        window.paint_path(path, guide_c.opacity(guide_c.a * marker_alpha));
                     }
+                    let scale = 0.78 + 0.22 * marker_alpha;
                     if !prev_norm.is_empty() {
-                        paint_ringed_dot(window, prev_pt, 3.0, 2.0, prev_c, card_bg);
+                        paint_ringed_dot(
+                            window,
+                            prev_pt,
+                            3.0 * scale,
+                            2.0 * scale,
+                            prev_c.opacity(prev_c.a * marker_alpha),
+                            card_bg.opacity(marker_alpha),
+                        );
                     }
-                    paint_ringed_dot(window, cur_pt, 4.0, 2.0, blue_c, card_bg);
+                    paint_ringed_dot(
+                        window,
+                        cur_pt,
+                        4.0 * scale,
+                        2.0 * scale,
+                        blue_c.opacity(marker_alpha),
+                        card_bg.opacity(marker_alpha),
+                    );
                 }
             },
         )
         .size_full();
 
-        let tooltip = (show_marker && n > 0).then(|| {
-            let on_left = marker_tx > 0.54;
-            let cur_txt = format_k_dollars(current[fb_idx]);
-            let prev_txt = previous
-                .get(fb_idx)
-                .copied()
-                .map(format_k_dollars)
-                .unwrap_or_default();
-            div()
-                .absolute()
-                .top(px(-4.))
-                .when(on_left, |d| d.right(relative(1.0 - marker_tx)).mr(px(12.)))
-                .when(!on_left, |d| d.left(relative(marker_tx)).ml(px(12.)))
-                .min_w(px(144.))
-                .px(px(10.))
-                .py(px(7.))
-                .rounded(px(10.))
-                .bg(if p.dark { rgb(0x252528).into() } else { p.card })
-                .border_1()
-                .border_color(p.line_strong)
-                .flex()
-                .flex_col()
-                .gap(px(4.))
-                .child(
-                    div()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .child(labels[fb_idx].clone()),
-                )
-                .child(div().h(px(1.)).bg(p.line))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_color(p.text)
-                                .child(div().size(px(7.)).rounded(px(2.)).bg(blue_c))
-                                .child(tr(cx, "This year", "今年")),
-                        )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(cur_txt),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_color(p.text)
-                                .child(div().w(px(7.)).h(px(2.)).rounded(px(1.)).bg(prev_c))
-                                .child(tr(cx, "Last year", "去年")),
-                        )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(prev_txt),
-                        ),
-                )
-        });
+        let tip_labels = labels.clone();
+        let tip_cur = current.clone();
+        let tip_prev = previous.clone();
+        let this_yr_lbl = tr(cx, "This year", "今年").to_owned();
+        let last_yr_lbl = tr(cx, "Last year", "去年").to_owned();
+        let tooltip_overlay = RevenueScrubOverlay {
+            id: pro_eid(&self.id, format!("rc-trend-tip-{turn_id}")),
+            active_idx,
+            count: n,
+            pill_width: 152.,
+            render_pill: Box::new(move |idx| {
+                let cur_txt = format_k_dollars(tip_cur.get(idx).copied().unwrap_or(0.0));
+                let prev_txt = tip_prev
+                    .get(idx)
+                    .copied()
+                    .map(format_k_dollars)
+                    .unwrap_or_default();
+                let lbl = tip_labels.get(idx).cloned().unwrap_or_default();
+                div()
+                    .min_w(px(144.))
+                    .px(px(10.))
+                    .py(px(7.))
+                    .rounded(px(10.))
+                    .bg(if p.dark { rgb(0x252528).into() } else { p.card })
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(lbl),
+                    )
+                    .child(div().h(px(1.)).bg(p.line))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.text)
+                                    .child(div().size(px(7.)).rounded(px(2.)).bg(blue_c))
+                                    .child(this_yr_lbl),
+                            )
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(cur_txt),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.text)
+                                    .child(div().w(px(7.)).h(px(2.)).rounded(px(1.)).bg(prev_c))
+                                    .child(last_yr_lbl),
+                            )
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(prev_txt),
+                            ),
+                    )
+                    .into_any_element()
+            }),
+        };
 
         let ask_bar = active_br
             .as_ref()
@@ -1565,11 +1717,80 @@ impl RevenueChatBlock {
                 }),
             )
             .child(chart_canvas)
-            .when_some(tooltip, |d, tip| d.child(tip));
+            .child(tooltip_overlay);
+
+        // Period selector (7d / 30d / 90d / 12m) with 4-edge liquid pro_pill_indicator
+        let period_sensor = pro_selection_sensor();
+        let pill_thumb: Hsla = if p.dark {
+            rgb(0x2a2a2e).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let mut period_seg = div()
+            .relative()
+            .p(px(2.))
+            .rounded(px(7.))
+            .bg(p.chip)
+            .flex()
+            .items_center()
+            .gap(px(1.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, format!("rc-period-pill-{turn_id}")),
+                self.active_period.clone(),
+                period_sensor.clone(),
+                5.,
+                pill_thumb,
+                Some(p.line),
+                true,
+            ));
+        for pr in ["7d", "30d", "90d", "12m"] {
+            let sel = self.active_period.as_ref() == pr;
+            let pr_shared = SharedString::from(pr);
+            period_seg = period_seg.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("rc-period-{turn_id}-{pr}")),
+                    pr,
+                    5.,
+                    transparent_black(),
+                    if sel { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    sel,
+                    div()
+                        .h(px(22.))
+                        .px(px(7.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .whitespace_nowrap()
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.strong } else { p.muted })
+                        .child(pr),
+                    cx,
+                    move |this, _, cx| {
+                        if this.active_period != pr_shared {
+                            this.active_period = pr_shared.clone();
+                            this.active_brush = None;
+                            this.dragging_brush = false;
+                            this.hovered_point = None;
+                            cx.notify();
+                        }
+                    },
+                )
+                .role(Role::Tab)
+                .relative()
+                .flex_none()
+                .when(sel, |d| d.child(pro_mark_selected(&period_sensor))),
+            );
+        }
 
         let first_lbl = labels.first().cloned().unwrap_or_default();
         let mid_lbl = labels.get(n / 2).cloned().unwrap_or_default();
         let last_lbl = labels.last().cloned().unwrap_or_default();
+        let y_top_txt = format_k_dollars(y_max as f64);
+        let y_mid_txt = format_k_dollars(((y_min + y_max) * 0.5) as f64);
+        let y_bot_txt = format_k_dollars(y_min as f64);
 
         div()
             .px(px(if narrow { 10. } else { 14. }))
@@ -1598,8 +1819,9 @@ impl RevenueChatBlock {
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .items_center()
-                            .gap(px(12.))
+                            .gap(px(10.))
                             .text_size(px(12.))
                             .text_color(p.muted)
                             .child(
@@ -1617,7 +1839,8 @@ impl RevenueChatBlock {
                                     .gap(px(6.))
                                     .child(div().w(px(10.)).h(px(2.)).rounded(px(1.)).bg(prev_c))
                                     .child(tr(cx, "Last year", "去年")),
-                            ),
+                            )
+                            .child(period_seg),
                     ),
             )
             .when_some(ask_bar, |d, b| d.child(b))
@@ -1636,9 +1859,9 @@ impl RevenueChatBlock {
                             .items_end()
                             .text_size(px(11.))
                             .text_color(p.muted)
-                            .child("$150K")
-                            .child("$100K")
-                            .child("$50K"),
+                            .child(y_top_txt)
+                            .child(y_mid_txt)
+                            .child(y_bot_txt),
                     )
                     .child(
                         div()
@@ -1742,6 +1965,14 @@ impl RevenueChatBlock {
                 cx,
             );
             let is_picked = picked_bar == Some(gi);
+            let dimmed = picked_bar.is_some_and(|pb| pb != gi);
+            let bar_op = pro_spring_f32(
+                pro_eid(&self.id, format!("rc-sbar-op-{turn_id}-{gi}")),
+                if dimmed { 0.56 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
             let tid_click = turn_id.clone();
 
             let stack = div()
@@ -1766,25 +1997,25 @@ impl RevenueChatBlock {
                         .bg(seg_colors[pi % seg_colors.len()])
                 }));
 
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, format!("rc-split-col-{turn_id}-{gi}")),
+                format!("{} {}", grp.name, format_dollars_compact(tot)),
+                8.,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                is_picked,
                 div()
-                    .id(pro_eid(&self.id, format!("rc-split-col-{turn_id}-{gi}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {}", grp.name, format_dollars_compact(tot)))
-                    .tab_index(0)
-                    .flex_1()
-                    .min_w_0()
+                    .w_full()
                     .h_full()
                     .px(px(4.))
-                    .rounded(px(8.))
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
+                    .opacity(bar_op)
                     .flex()
                     .flex_col()
                     .items_center()
                     .justify_end()
                     .gap(px(6.))
-                    .cursor_pointer()
                     .child(
                         div()
                             .text_size(px(11.5))
@@ -1815,7 +2046,18 @@ impl RevenueChatBlock {
                     cx.notify();
                 },
             )
+            .flex_1()
+            .min_w_0()
+            .h_full()
         });
+
+        let (gt_val, gt_dec, gt_suf): (f64, usize, &'static str) = if grand_total >= 1_000_000.0 {
+            (grand_total / 1_000_000.0, 2, "M")
+        } else if grand_total >= 10_000.0 {
+            (grand_total / 1_000.0, 0, "K")
+        } else {
+            (grand_total / 1_000.0, 1, "K")
+        };
 
         div()
             .flex()
@@ -1849,12 +2091,16 @@ impl RevenueChatBlock {
                                     .text_size(px(13.))
                                     .text_color(p.text)
                                     .child(title)
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .child(format_dollars_compact(grand_total)),
-                                    )
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, format!("rc-split-tot-{turn_id}")),
+                                        gt_val,
+                                        gt_dec,
+                                        "$",
+                                        gt_suf,
+                                        13.,
+                                        FontWeight::MEDIUM,
+                                        p.strong,
+                                    ))
                                     .when_some(delta_chip, |d, c| d.child(c)),
                             ),
                     )
@@ -1972,6 +2218,7 @@ impl RevenueChatBlock {
         forecast: Vec<Option<f64>>,
         target: Option<f64>,
         narrow: bool,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let p = ProPalette::get(cx);
@@ -1988,6 +2235,15 @@ impl RevenueChatBlock {
             .filter(|b| &b.turn_id == turn_id && !b.is_bar)
             .cloned();
 
+        let hover_idx = if active_br.is_some() {
+            None
+        } else {
+            self.hovered_point
+                .as_ref()
+                .filter(|(tid, idx)| tid == turn_id && *idx < n)
+                .map(|(_, idx)| *idx)
+        };
+
         let ask_bar = active_br
             .as_ref()
             .filter(|b| b.ask_open)
@@ -1998,6 +2254,43 @@ impl RevenueChatBlock {
         let max_v = 160.0_f32;
         let span = max_v - min_v;
         let denom = (n.saturating_sub(1)).max(1) as f32;
+
+        let combined_vals: Vec<f32> = (0..n)
+            .map(|i| {
+                actual
+                    .get(i)
+                    .and_then(|x| *x)
+                    .or_else(|| forecast.get(i).and_then(|x| *x))
+                    .unwrap_or(100.0) as f32
+            })
+            .collect();
+
+        let fc_scrub_st = w.use_keyed_state(
+            pro_eid(&self.id, format!("rc-fc-scrub-{turn_id}")),
+            cx,
+            |_, _| (Slide::snappy(0.5), Slide::snappy(0.0), false),
+        );
+        let (fc_tx, fc_alpha) = fc_scrub_st.update(cx, |s, cx| {
+            if let Some(hi) = hover_idx {
+                let ratio = hi as f32 / denom;
+                if !s.2 && s.1.value(cx) < 0.08 {
+                    s.0.reset(ratio);
+                } else {
+                    s.0.set(ratio, cx);
+                }
+                s.1.set(1.0, cx);
+                s.2 = true;
+            } else {
+                s.1.set(0.0, cx);
+                s.2 = false;
+            }
+            (
+                s.0.get(w, cx).clamp(0.0, 1.0),
+                s.1.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+        let fc_pos = fc_tx * denom;
+        let fc_y_val = sample_norm(&combined_vals, fc_pos);
 
         let act_pts: Vec<(usize, f32)> = actual
             .iter()
@@ -2022,6 +2315,9 @@ impl RevenueChatBlock {
         let violet_c = p.purple;
         let target_c = p.amber.opacity(0.65);
         let grid_c = p.line;
+        let guide_c = p.line_strong;
+        let card_bg = p.card;
+        let last_act_idx = act_pts.last().map(|&(i, _)| i).unwrap_or(0);
         let bounds_writer = bounds_cell.clone();
 
         let chart_canvas = canvas(
@@ -2128,18 +2424,123 @@ impl RevenueChatBlock {
                         );
                     }
                 }
+
+                if fc_alpha > 0.01 {
+                    let gx = bounds.left() + px(fc_tx * bw);
+                    let gy =
+                        bounds.top() + px((1.0 - ((fc_y_val - min_v) / span).clamp(0.0, 1.0)) * bh);
+                    let mut gp = PathBuilder::stroke(px(1.0));
+                    gp.move_to(point(gx, bounds.top()));
+                    gp.line_to(point(gx, bounds.bottom()));
+                    if let Ok(path) = gp.build() {
+                        window.paint_path(path, guide_c.opacity(guide_c.a * fc_alpha));
+                    }
+                    let dot_c = if fc_pos <= last_act_idx as f32 + 0.1 {
+                        blue_c
+                    } else {
+                        violet_c
+                    };
+                    let scale = 0.78 + 0.22 * fc_alpha;
+                    paint_ringed_dot(
+                        window,
+                        point(gx, gy),
+                        4.0 * scale,
+                        2.0 * scale,
+                        dot_c.opacity(fc_alpha),
+                        card_bg.opacity(fc_alpha),
+                    );
+                }
             },
         )
         .size_full();
 
+        let fc_tip_labels = labels.clone();
+        let fc_tip_act = actual.clone();
+        let fc_tip_proj = forecast.clone();
+        let fc_act_lbl = tr(cx, "Actual", "实际").to_owned();
+        let fc_proj_lbl = tr(cx, "Forecast", "预测").to_owned();
+        let fc_tooltip = RevenueScrubOverlay {
+            id: pro_eid(&self.id, format!("rc-fc-tip-{turn_id}")),
+            active_idx: hover_idx,
+            count: n,
+            pill_width: 148.,
+            render_pill: Box::new(move |idx| {
+                let lbl = fc_tip_labels.get(idx).cloned().unwrap_or_default();
+                let (kind_lbl, val_k, dot_c) = if let Some(Some(av)) = fc_tip_act.get(idx).copied()
+                {
+                    (fc_act_lbl, av, blue_c)
+                } else {
+                    let fv = fc_tip_proj.get(idx).and_then(|x| *x).unwrap_or(0.0);
+                    (fc_proj_lbl, fv, violet_c)
+                };
+                div()
+                    .min_w(px(140.))
+                    .px(px(10.))
+                    .py(px(7.))
+                    .rounded(px(10.))
+                    .bg(if p.dark { rgb(0x252528).into() } else { p.card })
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(lbl),
+                    )
+                    .child(div().h(px(1.)).bg(p.line))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.text)
+                                    .child(div().size(px(7.)).rounded(px(2.)).bg(dot_c))
+                                    .child(kind_lbl),
+                            )
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(format_k_dollars(val_k)),
+                            ),
+                    )
+                    .into_any_element()
+            }),
+        };
+
         let tid_down = turn_id.clone();
         let tid_move = turn_id.clone();
+        let tid_leave = turn_id.clone();
         let plot_box = div()
             .id(pro_eid(&self.id, format!("fc-plot-{turn_id}")))
             .relative()
             .w_full()
             .h(px(152.))
             .cursor_crosshair()
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if !*inside
+                    && !this.dragging_brush
+                    && this
+                        .hovered_point
+                        .as_ref()
+                        .is_some_and(|(t, _)| t == &tid_leave)
+                {
+                    this.hovered_point = None;
+                    cx.notify();
+                }
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
@@ -2158,14 +2559,17 @@ impl RevenueChatBlock {
                 }),
             )
             .on_mouse_move(cx.listener(move |this, ev: &MouseMoveEvent, _, cx| {
-                if this.dragging_brush
-                    && ev.pressed_button == Some(MouseButton::Left)
-                    && let Some(pi) = this.point_index_from_x(&tid_move, n, ev.position.x)
-                    && let Some(br) = &mut this.active_brush
-                    && br.turn_id == tid_move
-                {
-                    br.from = br.anchor.min(pi);
-                    br.to = br.anchor.max(pi);
+                if let Some(pi) = this.point_index_from_x(&tid_move, n, ev.position.x) {
+                    this.hovered_point = Some((tid_move.clone(), pi));
+                    this.keyboard_point = pi;
+                    if this.dragging_brush
+                        && ev.pressed_button == Some(MouseButton::Left)
+                        && let Some(br) = &mut this.active_brush
+                        && br.turn_id == tid_move
+                    {
+                        br.from = br.anchor.min(pi);
+                        br.to = br.anchor.max(pi);
+                    }
                     cx.notify();
                 }
             }))
@@ -2175,7 +2579,8 @@ impl RevenueChatBlock {
                     this.finish_brush(w, cx);
                 }),
             )
-            .child(chart_canvas);
+            .child(chart_canvas)
+            .child(fc_tooltip);
 
         let first_lbl = labels.first().cloned().unwrap_or_default();
         let mid_lbl = labels.get(n / 2).cloned().unwrap_or_default();
@@ -2285,41 +2690,53 @@ impl RevenueChatBlock {
     ) -> AnyElement {
         let p = ProPalette::get(cx);
         match turn {
-            RevenueChatTurn::User { id, text, quote } => div()
-                .id(pro_eid(&self.id, format!("user-turn-{id}")))
-                .w_full()
-                .flex()
-                .flex_col()
-                .items_end()
-                .gap(px(4.))
-                .when_some(quote, |d, q| {
-                    d.child(
+            RevenueChatTurn::User { id, text, quote } => {
+                let is_dynamic = id.as_ref() != "u-1";
+                let row = div()
+                    .id(pro_eid(&self.id, format!("user-turn-{id}")))
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .items_end()
+                    .gap(px(4.))
+                    .when_some(quote, |d, q| {
+                        d.child(
+                            div()
+                                .max_w(relative(0.84))
+                                .px(px(10.))
+                                .py(px(3.))
+                                .rounded(px(8.))
+                                .bg(p.accent_soft)
+                                .border_l_2()
+                                .border_color(p.blue)
+                                .text_size(px(12.))
+                                .text_color(p.text)
+                                .child(q),
+                        )
+                    })
+                    .child(
                         div()
-                            .max_w(relative(0.84))
-                            .px(px(10.))
-                            .py(px(3.))
-                            .rounded(px(8.))
-                            .bg(p.accent_soft)
-                            .border_l_2()
-                            .border_color(p.blue)
-                            .text_size(px(12.))
-                            .text_color(p.text)
-                            .child(q),
+                            .max_w(relative(0.82))
+                            .px(px(14.))
+                            .py(px(9.))
+                            .rounded(px(16.))
+                            .bg(p.chip)
+                            .text_size(px(14.))
+                            .line_height(px(21.))
+                            .text_color(p.ink)
+                            .child(text),
                     )
-                })
-                .child(
-                    div()
-                        .max_w(relative(0.82))
-                        .px(px(14.))
-                        .py(px(9.))
-                        .rounded(px(16.))
-                        .bg(p.chip)
-                        .text_size(px(14.))
-                        .line_height(px(21.))
-                        .text_color(p.ink)
-                        .child(text),
-                )
-                .into_any_element(),
+                    .into_any_element();
+                if is_dynamic {
+                    TurnEntrance {
+                        id: pro_eid(&self.id, format!("u-ent-{id}")),
+                        content: row,
+                    }
+                    .into_any_element()
+                } else {
+                    row
+                }
+            }
 
             RevenueChatTurn::Assistant {
                 id,
@@ -2364,8 +2781,10 @@ impl RevenueChatBlock {
                 let mut body = div().w_full().flex().flex_col().gap(px(14.)).min_w_0();
 
                 if !streaming {
+                    let has_trend = matches!(chart, Some(RevenueChartKind::Trend { .. }));
                     if !kpis.is_empty() {
-                        body = body.child(Self::render_kpi_strip(&kpis, narrow, &p));
+                        body = body
+                            .child(self.render_kpi_strip(&id, &kpis, has_trend, narrow, &p, w, cx));
                     }
                     if let Some(ch) = chart {
                         let fig = match ch {
@@ -2392,7 +2811,7 @@ impl RevenueChatBlock {
                                 forecast,
                                 target,
                             } => self.render_forecast_chart(
-                                &id, caption, labels, actual, forecast, target, narrow, cx,
+                                &id, caption, labels, actual, forecast, target, narrow, w, cx,
                             ),
                         };
                         body = body.child(fig);
@@ -2489,50 +2908,54 @@ impl RevenueChatBlock {
                                         cx.notify();
                                     },
                                 ))
-                                .child(activate(
-                                    div()
-                                        .id(pro_eid(&self.id, format!("rc-like-{id}")))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Good answer", "有帮助"))
-                                        .aria_toggled(liked.into())
-                                        .tab_index(0)
-                                        .size(px(28.))
-                                        .rounded(px(7.))
-                                        .bg(if liked {
+                                .child(
+                                    pro_tactile(
+                                        pro_eid(&self.id, format!("rc-like-{id}")),
+                                        tr(cx, "Good answer", "有帮助"),
+                                        7.,
+                                        if liked {
                                             p.accent_soft
                                         } else {
                                             transparent_black()
-                                        })
-                                        .hover(move |s| s.bg(p.hover))
-                                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .child(pro_svg(
-                                            "0 0 24 24",
-                                            SVG_THUMBS_UP,
-                                            14.,
-                                            if liked { p.blue } else { p.muted },
-                                        )),
-                                    cx,
-                                    move |this, _, cx| {
-                                        for t in &mut this.turns {
-                                            if let RevenueChatTurn::Assistant { id, liked, .. } = t
-                                                && id == &tid_like
-                                            {
-                                                *liked = !*liked;
-                                                let next_liked = *liked;
-                                                cx.emit(RevenueChatEvent::LikedTurn {
-                                                    turn_id: tid_like.clone(),
-                                                    liked: next_liked,
-                                                });
-                                                break;
+                                        },
+                                        if liked { p.accent_soft } else { p.hover },
+                                        transparent_black(),
+                                        transparent_black(),
+                                        liked,
+                                        div()
+                                            .size(px(28.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .child(pro_svg(
+                                                "0 0 24 24",
+                                                SVG_THUMBS_UP,
+                                                14.,
+                                                if liked { p.blue } else { p.muted },
+                                            )),
+                                        cx,
+                                        move |this, _, cx| {
+                                            for t in &mut this.turns {
+                                                if let RevenueChatTurn::Assistant {
+                                                    id, liked, ..
+                                                } = t
+                                                    && id == &tid_like
+                                                {
+                                                    *liked = !*liked;
+                                                    let next_liked = *liked;
+                                                    cx.emit(RevenueChatEvent::LikedTurn {
+                                                        turn_id: tid_like.clone(),
+                                                        liked: next_liked,
+                                                    });
+                                                    break;
+                                                }
                                             }
-                                        }
-                                        cx.notify();
-                                    },
-                                ))
+                                            cx.notify();
+                                        },
+                                    )
+                                    .aria_toggled(liked.into())
+                                    .flex_none(),
+                                )
                                 .child(pro_icon_btn(
                                     pro_eid(&self.id, format!("rc-retry-{id}")),
                                     tr(cx, "Try again", "重新生成"),
@@ -2571,29 +2994,26 @@ impl RevenueChatBlock {
                         let chips = div().flex().flex_wrap().gap(px(6.)).children(
                             next.into_iter().enumerate().map(|(ni, prompt)| {
                                 let p_str = prompt.to_string();
-                                activate(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("rc-next-{id}-{ni}")),
+                                    prompt.clone(),
+                                    9.,
+                                    p.card,
+                                    p.hover,
+                                    p.line,
+                                    p.line_strong,
+                                    false,
                                     div()
-                                        .id(pro_eid(&self.id, format!("rc-next-{id}-{ni}")))
-                                        .role(Role::Button)
-                                        .tab_index(0)
                                         .min_h(px(30.))
                                         .pl(px(12.))
                                         .pr(px(10.))
                                         .py(px(5.))
-                                        .rounded(px(9.))
-                                        .bg(p.card)
-                                        .border_1()
-                                        .border_color(p.line)
-                                        .hover(move |s| {
-                                            s.border_color(p.line_strong).text_color(p.ink)
-                                        })
-                                        .focus_visible(move |s| s.border_1().border_color(p.focus))
                                         .flex()
                                         .items_center()
                                         .gap(px(6.))
+                                        .whitespace_nowrap()
                                         .text_size(px(13.))
                                         .text_color(p.text)
-                                        .cursor_pointer()
                                         .child(prompt)
                                         .child(pro_icon(ProIcon::ExternalArrow, 12.5, p.faint)),
                                     cx,
@@ -2601,6 +3021,7 @@ impl RevenueChatBlock {
                                         this.ask(p_str.clone(), None, cx);
                                     },
                                 )
+                                .flex_none()
                             }),
                         );
                         body = body.child(chips);
@@ -2684,24 +3105,33 @@ impl RevenueChatBlock {
                     .flex()
                     .flex_col()
                     .gap(px(12.))
-                    .when(self.attached_context, |d| {
-                        d.child(
-                            div().flex().items_center().gap(px(6.)).child(
-                                div()
-                                    .h(px(22.))
-                                    .px(px(8.))
-                                    .rounded(px(6.))
-                                    .bg(p.chip)
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .text_size(px(12.))
-                                    .text_color(p.text)
-                                    .child(pro_icon(ProIcon::Database, 12., p.blue))
-                                    .child("stripe.q3_settled_mrr.csv"),
-                            ),
-                        )
-                    })
+                    .child(pro_fold(
+                        pro_eid(&self.id, "rc-attach-fold"),
+                        self.attached_context,
+                        24.,
+                        12.,
+                        move || {
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(
+                                    div()
+                                        .h(px(22.))
+                                        .px(px(8.))
+                                        .rounded(px(6.))
+                                        .bg(p.chip)
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .text_size(px(12.))
+                                        .text_color(p.text)
+                                        .child(pro_icon(ProIcon::Database, 12., p.blue))
+                                        .child("stripe.q3_settled_mrr.csv"),
+                                )
+                                .into_any_element()
+                        },
+                    ))
                     .child(
                         div()
                             .px(px(2.))
@@ -2731,75 +3161,93 @@ impl RevenueChatBlock {
                                             cx.notify();
                                         },
                                     ))
-                                    .child(activate(
-                                        div()
-                                            .id(pro_eid(&self.id, "rc-approval-btn"))
-                                            .role(Role::Button)
-                                            .aria_label(policy_lbl)
-                                            .tab_index(0)
-                                            .h(px(28.))
-                                            .px(px(8.))
-                                            .rounded(px(8.))
-                                            .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                            .focus_visible(move |s| {
-                                                s.border_1().border_color(p.focus)
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.))
-                                            .text_size(px(12.5))
-                                            .text_color(p.muted)
-                                            .cursor_pointer()
-                                            .child(pro_svg(
-                                                "0 0 68.155 68.155",
-                                                SVG_HAND_APPROVAL,
-                                                14.,
-                                                p.muted,
-                                            ))
-                                            .when(!narrow, |d| d.child(policy_lbl)),
-                                        cx,
-                                        |this, _, cx| {
-                                            this.approval_policy = this.approval_policy.next();
-                                            cx.emit(RevenueChatEvent::ApprovalPolicyChanged(
-                                                this.approval_policy,
-                                            ));
-                                            cx.notify();
-                                        },
-                                    )),
+                                    .child(
+                                        pro_tactile(
+                                            pro_eid(&self.id, "rc-approval-btn"),
+                                            policy_lbl,
+                                            8.,
+                                            transparent_black(),
+                                            p.hover,
+                                            transparent_black(),
+                                            transparent_black(),
+                                            false,
+                                            div()
+                                                .h(px(28.))
+                                                .px(px(8.))
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(6.))
+                                                .whitespace_nowrap()
+                                                .child(pro_svg(
+                                                    "0 0 68.155 68.155",
+                                                    SVG_HAND_APPROVAL,
+                                                    14.,
+                                                    p.muted,
+                                                ))
+                                                .when(!narrow, |d| {
+                                                    d.child(pro_swap_label(
+                                                        pro_eid(&self.id, "rc-approval-lbl"),
+                                                        policy_lbl,
+                                                        12.5,
+                                                        FontWeight::NORMAL,
+                                                        p.muted,
+                                                    ))
+                                                }),
+                                            cx,
+                                            |this, _, cx| {
+                                                this.approval_policy = this.approval_policy.next();
+                                                cx.emit(RevenueChatEvent::ApprovalPolicyChanged(
+                                                    this.approval_policy,
+                                                ));
+                                                cx.notify();
+                                            },
+                                        )
+                                        .flex_none(),
+                                    ),
                             )
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap(px(4.))
-                                    .child(activate(
-                                        div()
-                                            .id(pro_eid(&self.id, "rc-model-btn"))
-                                            .role(Role::Button)
-                                            .aria_label(model_name)
-                                            .tab_index(0)
-                                            .h(px(28.))
-                                            .px(px(8.))
-                                            .rounded(px(8.))
-                                            .hover(move |s| s.bg(p.hover))
-                                            .focus_visible(move |s| {
-                                                s.border_1().border_color(p.focus)
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .text_size(px(12.5))
-                                            .text_color(p.ink)
-                                            .cursor_pointer()
-                                            .child(model_name)
-                                            .child(pro_icon(ProIcon::ChevronDown, 12., p.muted)),
-                                        cx,
-                                        |this, _, cx| {
-                                            this.model_index =
-                                                (this.model_index + 1) % COMPOSER_MODELS.len();
-                                            cx.notify();
-                                        },
-                                    ))
+                                    .child(
+                                        pro_tactile(
+                                            pro_eid(&self.id, "rc-model-btn"),
+                                            model_name,
+                                            8.,
+                                            transparent_black(),
+                                            p.hover,
+                                            transparent_black(),
+                                            transparent_black(),
+                                            false,
+                                            div()
+                                                .h(px(28.))
+                                                .px(px(8.))
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(4.))
+                                                .whitespace_nowrap()
+                                                .child(pro_swap_label(
+                                                    pro_eid(&self.id, "rc-model-lbl"),
+                                                    model_name,
+                                                    12.5,
+                                                    FontWeight::NORMAL,
+                                                    p.ink,
+                                                ))
+                                                .child(pro_icon(
+                                                    ProIcon::ChevronDown,
+                                                    12.,
+                                                    p.muted,
+                                                )),
+                                            cx,
+                                            |this, _, cx| {
+                                                this.model_index =
+                                                    (this.model_index + 1) % COMPOSER_MODELS.len();
+                                                cx.notify();
+                                            },
+                                        )
+                                        .flex_none(),
+                                    )
                                     .child(pro_icon_btn(
                                         pro_eid(&self.id, "rc-mic"),
                                         tr(cx, "Voice dictation", "语音输入"),
@@ -2812,33 +3260,36 @@ impl RevenueChatBlock {
                                             cx.notify();
                                         },
                                     ))
-                                    .child(activate(
-                                        div()
-                                            .id(pro_eid(&self.id, "rc-send"))
-                                            .role(Role::Button)
-                                            .aria_label(tr(cx, "Send question", "发送问题"))
-                                            .tab_index(0)
-                                            .size(px(28.))
-                                            .rounded(px(8.))
-                                            .bg(send_bg)
-                                            .focus_visible(move |s| {
-                                                s.border_1().border_color(p.focus)
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .cursor_pointer()
-                                            .child(pro_icon(ProIcon::ArrowUp, 14., send_fg)),
-                                        cx,
-                                        move |this, w, cx| {
-                                            if let Some(ed) = &ed_opt {
-                                                let val = ed.read(cx).value().to_string();
-                                                if this.ask(val, None, cx) {
-                                                    ed.update(cx, |e, cx| e.set_value("", w, cx));
+                                    .child(
+                                        pro_tactile(
+                                            pro_eid(&self.id, "rc-send"),
+                                            tr(cx, "Send question", "发送问题"),
+                                            8.,
+                                            send_bg,
+                                            pro_mix_color(send_bg, p.hover, 0.25),
+                                            transparent_black(),
+                                            transparent_black(),
+                                            has_text,
+                                            div()
+                                                .size(px(28.))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .child(pro_icon(ProIcon::ArrowUp, 14., send_fg)),
+                                            cx,
+                                            move |this, w, cx| {
+                                                if let Some(ed) = &ed_opt {
+                                                    let val = ed.read(cx).value().to_string();
+                                                    if this.ask(val, None, cx) {
+                                                        ed.update(cx, |e, cx| {
+                                                            e.set_value("", w, cx)
+                                                        });
+                                                    }
                                                 }
-                                            }
-                                        },
-                                    )),
+                                            },
+                                        )
+                                        .flex_none(),
+                                    ),
                             ),
                     ),
             )
@@ -2980,6 +3431,301 @@ impl Render for RevenueChatBlock {
             )
             .child(composer)
             .child(pro_toast_banner(self.toast.clone()))
+    }
+}
+
+fn sample_norm(vals: &[f32], pos: f32) -> f32 {
+    if vals.is_empty() {
+        return 0.5;
+    }
+    let clamped = pos.clamp(0.0, (vals.len() - 1) as f32);
+    let i0 = (clamped.floor() as usize).min(vals.len() - 1);
+    let i1 = (i0 + 1).min(vals.len() - 1);
+    let frac = clamped - i0 as f32;
+    vals[i0] + (vals[i1] - vals[i0]) * frac
+}
+
+fn trend_series_for_period(
+    period: &str,
+    labels: &[SharedString],
+    current: &[f64],
+    previous: &[f64],
+    mark: Option<usize>,
+) -> (Vec<SharedString>, Vec<f64>, Vec<f64>, Option<usize>) {
+    match period {
+        "7d" if current.len() >= 7 => {
+            let day_labels: Vec<SharedString> = vec![
+                "Nov 18".into(),
+                "Nov 19".into(),
+                "Nov 20".into(),
+                "Nov 21".into(),
+                "Nov 22".into(),
+                "Nov 23".into(),
+                "Nov 24".into(),
+            ];
+            let tail_c = &current[(current.len() - 7)..];
+            let tail_p = if previous.len() >= 7 {
+                &previous[(previous.len() - 7)..]
+            } else {
+                tail_c
+            };
+            let c_days: Vec<f64> = tail_c.iter().map(|&v| (v / 6.8).round().max(8.0)).collect();
+            let p_days: Vec<f64> = tail_p.iter().map(|&v| (v / 7.2).round().max(6.0)).collect();
+            (day_labels, c_days, p_days, Some(6))
+        }
+        "30d" if current.len() >= 5 => {
+            let k = current.len().min(6);
+            let s = current.len() - k;
+            let ps = previous.len().saturating_sub(k);
+            let sub_lbls = labels[s..].to_vec();
+            let sub_c = current[s..].to_vec();
+            let sub_p = if previous.len() >= k {
+                previous[ps..].to_vec()
+            } else {
+                vec![75.0; k]
+            };
+            let sub_mark = mark.and_then(|m| m.checked_sub(s)).filter(|&m| m < k);
+            (sub_lbls, sub_c, sub_p, sub_mark.or(Some(k - 1)))
+        }
+        "12m" => {
+            let months: [&str; 12] = [
+                "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+            ];
+            let base = if current.is_empty() {
+                95.0
+            } else {
+                current.iter().sum::<f64>() / current.len() as f64
+            };
+            let m_lbls: Vec<SharedString> = months.into_iter().map(SharedString::from).collect();
+            let m_cur: Vec<f64> = (0..12)
+                .map(|i| {
+                    let lift = 0.78 + (i as f64) * 0.045 + if i == 8 { 0.14 } else { 0.0 };
+                    (base * 4.15 * lift).round()
+                })
+                .collect();
+            let m_prev: Vec<f64> = (0..12)
+                .map(|i| {
+                    let lift = 0.72 + (i as f64) * 0.036;
+                    (base * 3.65 * lift).round()
+                })
+                .collect();
+            (m_lbls, m_cur, m_prev, Some(8))
+        }
+        _ => (labels.to_vec(), current.to_vec(), previous.to_vec(), mark),
+    }
+}
+
+fn parse_revenue_kpi(raw: &str) -> Option<(f64, usize, SharedString, SharedString)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('–')
+        || trimmed.contains(' ')
+        || trimmed.starts_with('W')
+    {
+        return None;
+    }
+    let (prefix, rest) = if let Some(r) = trimmed.strip_prefix('$') {
+        ("$", r)
+    } else if let Some(r) = trimmed.strip_prefix('+') {
+        ("+", r)
+    } else {
+        ("", trimmed)
+    };
+    let (num_part, suffix) = if let Some(r) = rest.strip_suffix('%') {
+        (r, "%")
+    } else if let Some(r) = rest.strip_suffix('M') {
+        (r, "M")
+    } else if let Some(r) = rest.strip_suffix('K') {
+        (r, "K")
+    } else {
+        (rest, "")
+    };
+    let clean = num_part.replace(',', "");
+    let val: f64 = clean.parse().ok()?;
+    if !val.is_finite() {
+        return None;
+    }
+    let decimals = clean
+        .split_once('.')
+        .map(|(_, frac)| frac.len())
+        .unwrap_or(0);
+    Some((val, decimals, prefix.into(), suffix.into()))
+}
+
+fn scale_kpi_for_period(
+    base_val: f64,
+    decimals: usize,
+    prefix: &str,
+    suffix: &str,
+    period: &str,
+) -> (f64, usize, SharedString) {
+    if suffix == "%" {
+        let delta = match period {
+            "7d" => -0.2,
+            "30d" => -0.1,
+            "12m" => 0.2,
+            _ => 0.0,
+        };
+        return ((base_val + delta).max(0.1), decimals, suffix.into());
+    }
+    if prefix == "$" && suffix == "M" {
+        match period {
+            "7d" => ((base_val * 1000.0 * 0.088).round(), 0, "K".into()),
+            "30d" => ((base_val * 1000.0 * 0.34).round(), 0, "K".into()),
+            "12m" => (base_val * 3.78, 2, "M".into()),
+            _ => (base_val, decimals, suffix.into()),
+        }
+    } else if prefix == "$" && suffix == "K" {
+        match period {
+            "7d" => ((base_val * 0.14).round().max(1.0), 0, "K".into()),
+            "30d" => ((base_val * 0.42).round().max(1.0), 0, "K".into()),
+            "12m" => ((base_val * 3.6).round(), 0, "K".into()),
+            _ => (base_val, decimals, suffix.into()),
+        }
+    } else {
+        let factor = match period {
+            "7d" => 0.12,
+            "30d" => 0.36,
+            "12m" => 3.7,
+            _ => 1.0,
+        };
+        ((base_val * factor).max(1.0), decimals, suffix.into())
+    }
+}
+
+struct RevenueScrubState {
+    last_idx: usize,
+    x_ratio: Slide,
+    alpha: Slide,
+    was_open: bool,
+    host_w: Rc<Cell<f32>>,
+}
+
+#[derive(IntoElement)]
+struct RevenueScrubOverlay {
+    id: ElementId,
+    active_idx: Option<usize>,
+    count: usize,
+    pill_width: f32,
+    render_pill: Box<dyn FnOnce(usize) -> AnyElement>,
+}
+
+impl RenderOnce for RevenueScrubOverlay {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let init_open = self.active_idx.is_some();
+        let init_idx = self.active_idx.unwrap_or(0);
+        let init_ratio = if self.count > 1 {
+            init_idx.min(self.count - 1) as f32 / (self.count - 1) as f32
+        } else {
+            0.5
+        };
+        let st = w.use_keyed_state(pro_eid(&self.id, "rc-scrub-pop"), cx, |_, _| {
+            RevenueScrubState {
+                last_idx: init_idx,
+                x_ratio: Slide::snappy(init_ratio),
+                alpha: Slide::snappy(f32::from(init_open)),
+                was_open: init_open,
+                host_w: Rc::new(Cell::new(560.)),
+            }
+        });
+
+        let count = self.count;
+        let (shown_idx, rx, amt, host_cell) = st.update(cx, |s, cx| {
+            if let Some(ai) = self.active_idx.filter(|&i| i < count) {
+                let ratio = if count > 1 {
+                    ai as f32 / (count - 1) as f32
+                } else {
+                    0.5
+                };
+                if !s.was_open && s.alpha.value(cx) < 0.08 {
+                    s.x_ratio.reset(ratio);
+                } else {
+                    s.x_ratio.set(ratio, cx);
+                }
+                s.last_idx = ai;
+                s.alpha.set(1.0, cx);
+                s.was_open = true;
+            } else {
+                s.alpha.set(0.0, cx);
+                s.was_open = false;
+            }
+            (
+                s.last_idx.min(count.saturating_sub(1)),
+                s.x_ratio.get(w, cx).clamp(0.0, 1.0),
+                s.alpha.get(w, cx).clamp(0.0, 1.0),
+                s.host_w.clone(),
+            )
+        });
+
+        let cw = host_cell.get().max(self.pill_width + 12.);
+        let measure_cell = host_cell.clone();
+        let sensor = canvas(
+            move |b, window, _| {
+                let nw = f32::from(b.size.width);
+                if nw > 12. && (measure_cell.get() - nw).abs() > 1.0 {
+                    measure_cell.set(nw);
+                    window.request_animation_frame();
+                }
+            },
+            |_, _, _, _| (),
+        )
+        .w_full()
+        .h(px(0.));
+
+        if amt <= 0.01 || count == 0 {
+            return div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .top_0()
+                .child(sensor)
+                .into_any_element();
+        }
+
+        let left_px =
+            (rx * cw - self.pill_width * 0.5).clamp(4., (cw - self.pill_width - 4.).max(4.));
+        div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .top_0()
+            .child(sensor)
+            .child(
+                div()
+                    .absolute()
+                    .left(px(left_px))
+                    .top(px(-4. + 4. * (1. - amt)))
+                    .opacity(amt)
+                    .child((self.render_pill)(shown_idx)),
+            )
+            .into_any_element()
+    }
+}
+
+#[derive(IntoElement)]
+struct TurnEntrance {
+    id: ElementId,
+    content: AnyElement,
+}
+
+impl RenderOnce for TurnEntrance {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(self.id, cx, |_, inner_cx| {
+            let mut s = Slide::new(0.);
+            s.duration(1., 0.24, inner_cx);
+            s
+        });
+        let amt = if disabled_motion(cx) {
+            1.0
+        } else {
+            st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.))
+        };
+        div()
+            .w_full()
+            .relative()
+            .top(px(6. * (1. - amt)))
+            .opacity(amt)
+            .child(self.content)
     }
 }
 

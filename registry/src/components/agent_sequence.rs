@@ -7,16 +7,20 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_presence,
-        pro_skeleton_bar, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mix_color, pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
+        pro_tactile, pro_view_transition, tr,
     },
     primitives::{
         family::disabled_motion,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork, pro_icon},
+        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork},
     },
 };
 use gpui::{prelude::*, *};
-use std::{collections::HashMap, f32::consts::TAU};
+use std::{
+    collections::{HashMap, HashSet},
+    f32::consts::TAU,
+};
 use web_time::Instant;
 
 const GUTTER_W: f32 = 42.0;
@@ -657,6 +661,9 @@ pub struct AgentSequence {
     show_times: bool,
     replay_mode: bool,
     selection: Option<SequenceSelection>,
+    last_selection: Option<SequenceSelection>,
+    hovered_msg_id: Option<SharedString>,
+    hovered_part_id: Option<SharedString>,
     focused_msg_idx: Option<usize>,
     started_at: Instant,
     loading: bool,
@@ -679,6 +686,9 @@ impl AgentSequence {
             show_times: true,
             replay_mode: false,
             selection: None,
+            last_selection: None,
+            hovered_msg_id: None,
+            hovered_part_id: None,
             focused_msg_idx: None,
             started_at: Instant::now(),
             loading: false,
@@ -847,12 +857,16 @@ impl Render for AgentSequence {
             .unwrap_or_else(|| tr(cx, "Agent sequence", "智能体序列图"))
             .into();
 
-        let msg_count_lbl = if tr(cx, "en", "zh") == "zh" {
-            format!("{} 条消息", layout.rows.len())
+        if let Some(s) = &self.selection {
+            self.last_selection = Some(s.clone());
+        }
+
+        let msg_sfx = if tr(cx, "en", "zh") == "zh" {
+            " 条消息"
         } else if layout.rows.len() == 1 {
-            "1 message".to_string()
+            " message"
         } else {
-            format!("{} messages", layout.rows.len())
+            " messages"
         };
 
         let header = div()
@@ -895,25 +909,28 @@ impl Render for AgentSequence {
                         };
                         d.child(div().text_color(red_c).child(f_txt))
                     })
-                    .child(msg_count_lbl)
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "asq-msg-cnt"),
+                        layout.rows.len() as f64,
+                        0,
+                        "",
+                        msg_sfx,
+                        12.0,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
                     .child(format_seq_ms(max_at_ms))
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "asq-replay"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Replay sequence diagram", "重放序列图"))
-                            .size(px(22.))
-                            .rounded(px(5.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.replay(cx);
-                            }))
-                            .child(pro_icon(ProIcon::Refresh, 12., p.muted)),
-                    ),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "asq-replay"),
+                        tr(cx, "Replay sequence diagram", "重放序列图"),
+                        ProIcon::Refresh,
+                        22.,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.replay(cx);
+                        },
+                    )),
             );
 
         if self.loading {
@@ -1003,6 +1020,122 @@ impl Render for AgentSequence {
             col_colors.push(col);
         }
 
+        // Connected call/reply chain spotlight via pro_spring_f32!
+        let focus_msg = self
+            .hovered_msg_id
+            .clone()
+            .or_else(|| match &self.selection {
+                Some(SequenceSelection::Message(m)) => Some(m.clone()),
+                _ => None,
+            });
+        let focus_part = self
+            .hovered_part_id
+            .clone()
+            .or_else(|| match &self.selection {
+                Some(SequenceSelection::Participant(pt)) => Some(pt.clone()),
+                _ => None,
+            });
+        let mut lit_msgs: HashSet<SharedString> = HashSet::new();
+        let mut lit_parts: HashSet<SharedString> = HashSet::new();
+        let has_spotlight = if let Some(fmid) = &focus_msg {
+            lit_msgs.insert(fmid.clone());
+            if let Some(fm) = self.messages.iter().find(|m| &m.id == fmid) {
+                lit_parts.insert(fm.from.clone());
+                lit_parts.insert(fm.to.clone());
+                if let Some(rt) = &fm.reply_to {
+                    lit_msgs.insert(rt.clone());
+                    if let Some(cm) = self.messages.iter().find(|m| &m.id == rt) {
+                        lit_parts.insert(cm.from.clone());
+                        lit_parts.insert(cm.to.clone());
+                    }
+                }
+                for m in &self.messages {
+                    if m.reply_to.as_ref() == Some(fmid) {
+                        lit_msgs.insert(m.id.clone());
+                    }
+                    if let Some(fr) = &fm.frame
+                        && fr.as_ref() == "retry"
+                        && m.frame.as_ref() == Some(fr)
+                    {
+                        lit_msgs.insert(m.id.clone());
+                    }
+                }
+            }
+            true
+        } else if let Some(fpid) = &focus_part {
+            lit_parts.insert(fpid.clone());
+            for m in self.messages.iter().take(visible_msgs) {
+                if &m.from == fpid || &m.to == fpid {
+                    lit_msgs.insert(m.id.clone());
+                    lit_parts.insert(m.from.clone());
+                    lit_parts.insert(m.to.clone());
+                }
+            }
+            true
+        } else {
+            false
+        };
+
+        let head_opacities: Vec<f32> = self
+            .participants
+            .iter()
+            .map(|pt| {
+                let target_op = if has_spotlight {
+                    if lit_parts.contains(&pt.id) {
+                        1.0_f32
+                    } else {
+                        0.42_f32
+                    }
+                } else {
+                    1.0_f32
+                };
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("seq-hop-{}", pt.id)),
+                    target_op,
+                    0.22,
+                    window,
+                    cx,
+                )
+            })
+            .collect();
+
+        let row_opacities: Vec<f32> = layout
+            .rows
+            .iter()
+            .map(|r| {
+                let mid = &self.messages[r.msg_idx].id;
+                let target_op = if has_spotlight {
+                    if lit_msgs.contains(mid) {
+                        1.0_f32
+                    } else {
+                        0.28_f32
+                    }
+                } else {
+                    1.0_f32
+                };
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("seq-mop-{mid}")),
+                    target_op,
+                    0.22,
+                    window,
+                    cx,
+                )
+            })
+            .collect();
+
+        let answered_call_ids: HashSet<SharedString> = self
+            .messages
+            .iter()
+            .take(visible_msgs)
+            .filter_map(|m| {
+                if m.kind == SeqMessageKind::Reply && m.status.is_none() {
+                    m.reply_to.clone()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         // Participant header pills (`ui-asqc__heads`)
         let mut heads_row = div().w_full().pl(px(gutter)).h(px(28.)).mb(px(8.)).flex();
         for (c_idx, pt) in self.participants.iter().enumerate() {
@@ -1010,10 +1143,11 @@ impl Render for AgentSequence {
             let is_busy =
                 self.running && layout.activations.iter().any(|a| a.col == c_idx && a.open);
             let is_selected = self.selection == Some(SequenceSelection::Participant(pid.clone()));
+            let hop = head_opacities.get(c_idx).copied().unwrap_or(1.0);
             let icon_el =
                 render_seq_chip_icon(pt, col_colors[c_idx], is_busy, wall_ms, reduced, cx);
             let click_pid = pid.clone();
-            let key_pid = pid.clone();
+            let hov_pid = pid.clone();
 
             heads_row = heads_row.child(
                 div()
@@ -1023,26 +1157,33 @@ impl Render for AgentSequence {
                     .items_center()
                     .justify_center()
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, format!("seq-head-{pid}")))
-                            .role(Role::Button)
-                            .aria_label(pt.display_name(cx).to_string())
-                            .tab_index(0)
-                            .h(px(28.))
-                            .pl(px(6.))
-                            .pr(px(9.))
-                            .rounded(px(7.))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(if is_selected { p.focus } else { p.line_strong })
-                            .when(!p.dark, |d| d.shadow_xs())
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, format!("seq-head-{pid}")),
+                            pt.display_name(cx).to_string(),
+                            7.0,
+                            card_bg,
+                            p.hover,
+                            if is_selected { p.focus } else { p.line_strong },
+                            p.line_strong,
+                            is_selected,
+                            div()
+                                .h(px(28.))
+                                .pl(px(6.))
+                                .pr(px(9.))
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .child(icon_el)
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(pt.display_name(cx).to_string()),
+                                ),
+                            cx,
+                            move |this, _, cx| {
                                 let target =
                                     Some(SequenceSelection::Participant(click_pid.clone()));
                                 let next = if this.selection == target {
@@ -1051,36 +1192,26 @@ impl Render for AgentSequence {
                                     target
                                 };
                                 this.set_selection(next, cx);
-                            }))
-                            .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
-                                match ev.keystroke.key.as_str() {
-                                    "enter" | "space" | " " => {
-                                        let target =
-                                            Some(SequenceSelection::Participant(key_pid.clone()));
-                                        let next = if this.selection == target {
-                                            None
-                                        } else {
-                                            target
-                                        };
-                                        this.set_selection(next, cx);
-                                        cx.stop_propagation();
-                                    }
-                                    "escape" if this.selection.is_some() => {
-                                        this.set_selection(None, cx);
-                                        cx.stop_propagation();
-                                    }
-                                    _ => {}
+                            },
+                        )
+                        .h(px(28.))
+                        .opacity(hop)
+                        .when(!p.dark, |d| d.shadow_xs())
+                        .on_hover(cx.listener(
+                            move |this, inside: &bool, _, cx| {
+                                let next = if *inside {
+                                    Some(hov_pid.clone())
+                                } else if this.hovered_part_id.as_ref() == Some(&hov_pid) {
+                                    None
+                                } else {
+                                    this.hovered_part_id.clone()
+                                };
+                                if this.hovered_part_id != next {
+                                    this.hovered_part_id = next;
+                                    cx.notify();
                                 }
-                            }))
-                            .child(icon_el)
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(pt.display_name(cx).to_string()),
-                            ),
+                            },
+                        )),
                     ),
             );
         }
@@ -1090,7 +1221,7 @@ impl Render for AgentSequence {
         let layout_snap = layout.clone();
         let msgs_snap = self.messages.clone();
         let col_colors_snap = col_colors.clone();
-        let sel_snap = self.selection.clone();
+        let row_ops_snap = row_opacities.clone();
         let running_flag = self.running;
         let sweep_phase = if reduced {
             0.0
@@ -1197,14 +1328,7 @@ impl Render for AgentSequence {
                         1.0
                     };
 
-                    let dim = match &sel_snap {
-                        Some(SequenceSelection::Message(mid)) => mid != &msg.id,
-                        Some(SequenceSelection::Participant(pid)) => {
-                            &msg.from != pid && &msg.to != pid
-                        }
-                        None => false,
-                    };
-                    let dim_mul = if dim { 0.28 } else { 1.0 };
+                    let dim_mul = row_ops_snap.get(r_pos).copied().unwrap_or(1.0);
 
                     let base_col = match msg.status {
                         Some(SeqMessageStatus::Failed) => red_c,
@@ -1450,17 +1574,13 @@ impl Render for AgentSequence {
         }
 
         // Render interactive message rows (left time + opaque colored pill tag above arrow!)
-        for row in &layout.rows {
+        for (r_pos, row) in layout.rows.iter().enumerate() {
             let msg = &self.messages[row.msg_idx];
             let mid = msg.id.clone();
             let is_open = self.selection == Some(SequenceSelection::Message(mid.clone()));
-            let dim = match &self.selection {
-                Some(SequenceSelection::Message(sel_m)) => sel_m != &mid,
-                Some(SequenceSelection::Participant(sel_p)) => {
-                    &msg.from != sel_p && &msg.to != sel_p
-                }
-                None => false,
-            };
+            let mop = row_opacities.get(r_pos).copied().unwrap_or(1.0);
+            let show_done_chk = msg.status.is_none()
+                && (msg.kind == SeqMessageKind::Reply || answered_call_ids.contains(&mid));
 
             let tag_tint = match msg.status {
                 Some(SeqMessageStatus::Failed) => red_c,
@@ -1473,34 +1593,72 @@ impl Render for AgentSequence {
 
             let lbl_str = msg.display_label(cx).to_string();
             let is_self = row.from_col == row.to_col;
+            let tag_click_mid = mid.clone();
+            let tag_row_i = row.msg_idx;
+            let from_name = self.participants[row.from_col].display_name(cx);
+            let to_name = self.participants[row.to_col].display_name(cx);
 
-            let tag_pill = div()
-                .h(px(19.))
-                .px(px(6.))
-                .max_w(px(230.))
-                .truncate()
-                .rounded(px(5.))
-                .bg(tag_bg)
-                .when(is_open, |d| {
-                    d.border_1().border_color(tag_tint.opacity(0.55))
-                })
-                .hover(move |s| s.bg(tag_hover_bg))
-                .text_size(px(11.5))
-                .line_height(px(18.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(tag_fg)
-                .flex()
-                .items_center()
-                .gap(px(4.))
-                .child(lbl_str.clone())
-                .when(msg.status == Some(SeqMessageStatus::Failed), |d| {
-                    d.child(
+            let tag_pill = pro_tactile(
+                pro_eid(&self.id, format!("seq-tag-{mid}")),
+                format!("{from_name} → {to_name}: {lbl_str}"),
+                5.0,
+                tag_bg,
+                tag_hover_bg,
+                if is_open {
+                    tag_tint.opacity(0.55)
+                } else {
+                    transparent_black()
+                },
+                tag_tint.opacity(0.45),
+                is_open,
+                div()
+                    .h(px(19.))
+                    .px(px(6.))
+                    .max_w(px(230.))
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .when(show_done_chk, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, format!("seq-chk-{mid}")),
+                            true,
+                            12.0,
+                            false,
+                            tag_fg,
+                        ))
+                    })
+                    .child(
                         div()
-                            .text_size(px(10.5))
-                            .text_color(red_c)
-                            .child(format!("· {}", tr(cx, "Failed", "失败"))),
+                            .truncate()
+                            .text_size(px(11.5))
+                            .line_height(px(18.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(tag_fg)
+                            .child(lbl_str.clone()),
                     )
-                });
+                    .when(msg.status == Some(SeqMessageStatus::Failed), |d| {
+                        d.child(
+                            div()
+                                .flex_none()
+                                .text_size(px(10.5))
+                                .text_color(red_c)
+                                .child(format!("· {}", tr(cx, "Failed", "失败"))),
+                        )
+                    }),
+                cx,
+                move |this, _, cx| {
+                    this.focused_msg_idx = Some(tag_row_i);
+                    let target = Some(SequenceSelection::Message(tag_click_mid.clone()));
+                    let next = if this.selection == target {
+                        None
+                    } else {
+                        target
+                    };
+                    this.set_selection(next, cx);
+                },
+            )
+            .h(px(19.))
+            .on_click(|_, _, cx| cx.stop_propagation());
 
             let tag_positioned: AnyElement = if is_self {
                 let on_last = row.from_col + 1 == n_cols && n_cols > 1;
@@ -1546,9 +1704,8 @@ impl Render for AgentSequence {
             };
 
             let click_mid = mid.clone();
+            let hov_mid = mid.clone();
             let row_i = row.msg_idx;
-            let from_name = self.participants[row.from_col].display_name(cx);
-            let to_name = self.participants[row.to_col].display_name(cx);
 
             body_box = body_box.child(
                 div()
@@ -1560,10 +1717,23 @@ impl Render for AgentSequence {
                     .right_0()
                     .top(px(row.top_y))
                     .h(px(row.height))
-                    .opacity(if dim { 0.30 } else { 1.0 })
+                    .opacity(mop)
                     .flex()
                     .items_start()
                     .cursor_pointer()
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        let next = if *inside {
+                            Some(hov_mid.clone())
+                        } else if this.hovered_msg_id.as_ref() == Some(&hov_mid) {
+                            None
+                        } else {
+                            this.hovered_msg_id.clone()
+                        };
+                        if this.hovered_msg_id != next {
+                            this.hovered_msg_id = next;
+                            cx.notify();
+                        }
+                    }))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.focused_msg_idx = Some(row_i);
                         let target = Some(SequenceSelection::Message(click_mid.clone()));
@@ -1593,8 +1763,13 @@ impl Render for AgentSequence {
             );
         }
 
-        // Click-to-Inspect Popover Card (`Participant` OR `Message`)!
-        let pop_card: AnyElement = match self.selection.clone() {
+        // Click-to-Inspect Popover Card (`Participant` OR `Message`) with bidirectional presence!
+        let is_pop_open = self.selection.is_some();
+        let shown_sel = self
+            .selection
+            .clone()
+            .or_else(|| self.last_selection.clone());
+        let pop_card: AnyElement = match shown_sel {
             Some(SequenceSelection::Participant(sel_pid)) => {
                 let part_opt = self
                     .participants
@@ -1628,70 +1803,88 @@ impl Render for AgentSequence {
                     let working_tag = tr(cx, "Working", "执行中").to_string();
                     let sent_lbl = tr(cx, "Sent", "发送").to_string();
                     let recv_lbl = tr(cx, "Received", "接收").to_string();
-                    let ent = cx.entity().clone();
                     let align_right = c_idx * 2 >= n_cols;
                     let col_frac = ((c_idx as f32 + 0.5) / (n_cols as f32)).clamp(0.05, 0.90);
-
-                    pro_presence(
-                        pro_eid(&self.id, "seq-part-card"),
-                        true,
-                        0.16,
-                        0.12,
-                        move |amt| {
-                            let card = div()
-                                .id("seq-participant-dialog")
-                                .role(Role::Dialog)
-                                .w(px(244.))
-                                .p(px(10.))
-                                .rounded(px(9.))
-                                .bg(card_bg)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .shadow_md()
-                                .opacity(amt)
-                                .flex()
-                                .flex_col()
-                                .gap(px(7.))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(6.))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .truncate()
-                                                .text_size(px(13.))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.strong)
-                                                .child(pname),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("seq-pcard-close")
-                                                .role(Role::Button)
-                                                .aria_label("Close card")
-                                                .size(px(22.))
-                                                .rounded(px(5.))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .hover(move |s| s.bg(p.hover))
-                                                .on_click(move |_, _, cx| {
-                                                    ent.update(cx, |this, cx| {
-                                                        this.set_selection(None, cx);
-                                                    });
-                                                })
-                                                .child(pro_icon(ProIcon::Close, 12., p.muted)),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_wrap()
-                                        .gap(px(4.))
-                                        .child(
+                    let close_btn = pro_icon_btn(
+                        "seq-pcard-close",
+                        "Close card",
+                        ProIcon::Close,
+                        22.,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.set_selection(None, cx);
+                        },
+                    );
+                    let sent_num = pro_rolling_number(
+                        pro_eid(&self.id, "seq-sent-cnt"),
+                        sent_n as f64,
+                        0,
+                        "",
+                        "",
+                        12.5,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    );
+                    let recv_num = pro_rolling_number(
+                        pro_eid(&self.id, "seq-recv-cnt"),
+                        recv_n as f64,
+                        0,
+                        "",
+                        "",
+                        12.5,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    );
+                    let card_vtx = pro_view_transition(
+                        pro_eid(&self.id, "seq-pop-vtx"),
+                        format!("part:{sel_pid}"),
+                        div()
+                            .id("seq-participant-dialog")
+                            .role(Role::Dialog)
+                            .w(px(244.))
+                            .p(px(10.))
+                            .rounded(px(9.))
+                            .bg(card_bg)
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .shadow_md()
+                            .flex()
+                            .flex_col()
+                            .gap(px(7.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .truncate()
+                                            .text_size(px(13.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.strong)
+                                            .child(pname),
+                                    )
+                                    .child(close_btn),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap(px(4.))
+                                    .child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(1.))
+                                            .rounded(px(5.))
+                                            .bg(p.chip)
+                                            .text_size(px(11.))
+                                            .text_color(p.text)
+                                            .child(kind_tag),
+                                    )
+                                    .when_some(pmodel, |d, m| {
+                                        d.child(
                                             div()
                                                 .px(px(6.))
                                                 .py(px(1.))
@@ -1699,94 +1892,78 @@ impl Render for AgentSequence {
                                                 .bg(p.chip)
                                                 .text_size(px(11.))
                                                 .text_color(p.text)
-                                                .child(kind_tag),
+                                                .child(m),
                                         )
-                                        .when_some(pmodel, |d, m| {
-                                            d.child(
-                                                div()
-                                                    .px(px(6.))
-                                                    .py(px(1.))
-                                                    .rounded(px(5.))
-                                                    .bg(p.chip)
-                                                    .text_size(px(11.))
-                                                    .text_color(p.text)
-                                                    .child(m),
-                                            )
-                                        })
-                                        .when(is_busy_now, |d| {
-                                            d.child(
-                                                div()
-                                                    .px(px(6.))
-                                                    .py(px(1.))
-                                                    .rounded(px(5.))
-                                                    .bg(blue_fg.opacity(0.14))
-                                                    .text_size(px(11.))
-                                                    .text_color(blue_fg)
-                                                    .child(working_tag),
-                                            )
-                                        }),
-                                )
-                                .when_some(pdesc, |d, desc| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .line_height(px(16.))
-                                            .text_color(p.text)
-                                            .child(desc),
-                                    )
-                                })
-                                .child(
+                                    })
+                                    .when(is_busy_now, |d| {
+                                        d.child(
+                                            div()
+                                                .px(px(6.))
+                                                .py(px(1.))
+                                                .rounded(px(5.))
+                                                .bg(blue_fg.opacity(0.14))
+                                                .text_size(px(11.))
+                                                .text_color(blue_fg)
+                                                .child(working_tag),
+                                        )
+                                    }),
+                            )
+                            .when_some(pdesc, |d, desc| {
+                                d.child(
                                     div()
-                                        .pt(px(7.))
-                                        .border_t_1()
-                                        .border_color(p.line)
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(18.))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .child(
-                                                    div()
-                                                        .text_size(px(11.))
-                                                        .text_color(p.muted)
-                                                        .child(sent_lbl),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_size(px(12.5))
-                                                        .font_weight(FontWeight::MEDIUM)
-                                                        .text_color(p.ink)
-                                                        .child(sent_n.to_string()),
-                                                ),
-                                        )
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .child(
-                                                    div()
-                                                        .text_size(px(11.))
-                                                        .text_color(p.muted)
-                                                        .child(recv_lbl),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_size(px(12.5))
-                                                        .font_weight(FontWeight::MEDIUM)
-                                                        .text_color(p.ink)
-                                                        .child(recv_n.to_string()),
-                                                ),
-                                        ),
-                                );
+                                        .text_size(px(12.))
+                                        .line_height(px(16.))
+                                        .text_color(p.text)
+                                        .child(desc),
+                                )
+                            })
+                            .child(
+                                div()
+                                    .pt(px(7.))
+                                    .border_t_1()
+                                    .border_color(p.line)
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(18.))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.))
+                                                    .text_color(p.muted)
+                                                    .child(sent_lbl),
+                                            )
+                                            .child(sent_num),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.))
+                                                    .text_color(p.muted)
+                                                    .child(recv_lbl),
+                                            )
+                                            .child(recv_num),
+                                    ),
+                            ),
+                    );
 
-                            let wrap = div().absolute().top(px(2. + 3. * (1. - amt)));
+                    pro_presence(
+                        pro_eid(&self.id, "seq-pop-pres"),
+                        is_pop_open,
+                        0.16,
+                        0.12,
+                        move |amt| {
+                            let wrap = div().absolute().top(px(2. + 3. * (1. - amt))).opacity(amt);
                             if align_right {
-                                wrap.right(px(8.)).child(card).into_any_element()
+                                wrap.right(px(8.)).child(card_vtx).into_any_element()
                             } else {
                                 wrap.left(relative(col_frac.clamp(0.02, 0.55)))
-                                    .child(card)
+                                    .child(card_vtx)
                                     .into_any_element()
                             }
                         },
@@ -1873,140 +2050,150 @@ impl Render for AgentSequence {
 
                     let top_y = (row.top_y + 26.0).min((layout.total_h - 130.0).max(6.0));
                     let align_right = (row.from_col + row.to_col) >= n_cols;
-                    let ent = cx.entity().clone();
-
-                    pro_presence(
-                        pro_eid(&self.id, "seq-msg-card"),
-                        true,
-                        0.16,
-                        0.12,
-                        move |amt| {
-                            let card = div()
-                                .id("seq-message-dialog")
-                                .role(Role::Dialog)
-                                .w(px(256.))
-                                .p(px(10.))
-                                .rounded(px(9.))
-                                .bg(card_bg)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .shadow_md()
-                                .opacity(amt)
-                                .flex()
-                                .flex_col()
-                                .gap(px(7.))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(6.))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .truncate()
-                                                .text_size(px(12.))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.ink)
-                                                .child(route),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("seq-mcard-close")
-                                                .role(Role::Button)
-                                                .aria_label("Close message card")
-                                                .size(px(22.))
-                                                .rounded(px(5.))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .hover(move |s| s.bg(p.hover))
-                                                .on_click(move |_, _, cx| {
-                                                    ent.update(cx, |this, cx| {
-                                                        this.set_selection(None, cx);
-                                                    });
-                                                })
-                                                .child(pro_icon(ProIcon::Close, 12., p.muted)),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(12.5))
-                                        .line_height(px(17.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(pro_mix_color(tint, p.strong, 0.25))
-                                        .child(lbl_txt),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_wrap()
-                                        .gap(px(4.))
-                                        .child(
+                    let close_btn = pro_icon_btn(
+                        "seq-mcard-close",
+                        "Close message card",
+                        ProIcon::Close,
+                        22.,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.set_selection(None, cx);
+                        },
+                    );
+                    let p_hover = p.hover;
+                    let p_ink = p.ink;
+                    let detail_fold = detail.map(|det| {
+                        let line_cnt = det.lines().count().max(1) as f32;
+                        pro_fold(
+                            pro_eid(&self.id, "seq-det-fold"),
+                            is_pop_open,
+                            14.0 + line_cnt * 16.0,
+                            7.0,
+                            move || {
+                                div()
+                                    .px(px(8.))
+                                    .py(px(6.))
+                                    .rounded(px(6.))
+                                    .bg(p_hover)
+                                    .font_family("Menlo")
+                                    .text_size(px(10.5))
+                                    .line_height(px(15.5))
+                                    .text_color(p_ink)
+                                    .child(det)
+                                    .into_any_element()
+                            },
+                        )
+                    });
+                    let card_vtx = pro_view_transition(
+                        pro_eid(&self.id, "seq-pop-vtx"),
+                        format!("msg:{sel_mid}"),
+                        div()
+                            .id("seq-message-dialog")
+                            .role(Role::Dialog)
+                            .w(px(256.))
+                            .p(px(10.))
+                            .rounded(px(9.))
+                            .bg(card_bg)
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .shadow_md()
+                            .flex()
+                            .flex_col()
+                            .gap(px(7.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .truncate()
+                                            .text_size(px(12.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(route),
+                                    )
+                                    .child(close_btn),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.5))
+                                    .line_height(px(17.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(pro_mix_color(tint, p.strong, 0.25))
+                                    .child(lbl_txt),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap(px(4.))
+                                    .child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(1.))
+                                            .rounded(px(5.))
+                                            .bg(tint.opacity(0.13))
+                                            .text_size(px(11.))
+                                            .text_color(tint)
+                                            .child(kind_chip),
+                                    )
+                                    .when_some(frame_chip, |d, fc| {
+                                        d.child(
                                             div()
                                                 .px(px(6.))
                                                 .py(px(1.))
                                                 .rounded(px(5.))
-                                                .bg(tint.opacity(0.13))
-                                                .text_size(px(11.))
-                                                .text_color(tint)
-                                                .child(kind_chip),
+                                                .bg(p.chip)
+                                                .text_size(px(10.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.text)
+                                                .child(fc),
                                         )
-                                        .when_some(frame_chip, |d, fc| {
-                                            d.child(
-                                                div()
-                                                    .px(px(6.))
-                                                    .py(px(1.))
-                                                    .rounded(px(5.))
-                                                    .bg(p.chip)
-                                                    .text_size(px(10.))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(p.text)
-                                                    .child(fc),
-                                            )
-                                        })
-                                        .when_some(status_chip, |d, (st_lbl, st_c)| {
-                                            d.child(
-                                                div()
-                                                    .px(px(6.))
-                                                    .py(px(1.))
-                                                    .rounded(px(5.))
-                                                    .bg(st_c.opacity(0.14))
-                                                    .text_size(px(11.))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(st_c)
-                                                    .child(st_lbl),
-                                            )
-                                        }),
+                                    })
+                                    .when_some(status_chip, |d, (st_lbl, st_c)| {
+                                        d.child(
+                                            div()
+                                                .px(px(6.))
+                                                .py(px(1.))
+                                                .rounded(px(5.))
+                                                .bg(st_c.opacity(0.14))
+                                                .text_size(px(11.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(st_c)
+                                                .child(st_lbl),
+                                        )
+                                    }),
+                            )
+                            .when_some(detail_fold, |d, df| d.child(df))
+                            .when(!meta_str.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(p.muted)
+                                        .child(meta_str),
                                 )
-                                .when_some(detail, |d, det| {
-                                    d.child(
-                                        div()
-                                            .px(px(8.))
-                                            .py(px(6.))
-                                            .rounded(px(6.))
-                                            .bg(p.hover)
-                                            .font_family("Menlo")
-                                            .text_size(px(10.5))
-                                            .line_height(px(15.5))
-                                            .text_color(p.ink)
-                                            .child(det),
-                                    )
-                                })
-                                .when(!meta_str.is_empty(), |d| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(p.muted)
-                                            .child(meta_str),
-                                    )
-                                });
+                            }),
+                    );
 
-                            let wrap = div().absolute().top(px(top_y + 3. * (1. - amt)));
+                    pro_presence(
+                        pro_eid(&self.id, "seq-pop-pres"),
+                        is_pop_open,
+                        0.16,
+                        0.12,
+                        move |amt| {
+                            let wrap = div()
+                                .absolute()
+                                .top(px(top_y + 3. * (1. - amt)))
+                                .opacity(amt);
                             if align_right {
-                                wrap.right(px(8.)).child(card).into_any_element()
+                                wrap.right(px(8.)).child(card_vtx).into_any_element()
                             } else {
-                                wrap.left(px(gutter + 8.)).child(card).into_any_element()
+                                wrap.left(px(gutter + 8.))
+                                    .child(card_vtx)
+                                    .into_any_element()
                             }
                         },
                     )

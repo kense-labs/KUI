@@ -5,8 +5,12 @@
 //! glyphs and wipes color in from left to right on first view.
 
 use crate::{
+    components::pro_chrome::{ProBtnStyle, pro_btn},
     foundation::{Theme, ThemeMode},
-    primitives::control::UiLanguage,
+    primitives::{
+        control::UiLanguage,
+        family::{Slide, disabled_motion},
+    },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, f32::consts::PI, rc::Rc};
@@ -101,11 +105,21 @@ fn blend_radial_blob(
     ]
 }
 
-/// Evaluate the four-layer liquid gradient (`100deg` linear base + 3 orbiting radial blobs).
-fn sample_liquid_gradient(u: f32, v: f32, phase: f32, stops: [[f32; 3]; 4]) -> Hsla {
+/// Evaluate the four-layer liquid gradient (`100deg` linear base + 3 orbiting radial blobs),
+/// optionally pulled toward an interactive pointer-scrubbed focal band `(scrub_u, scrub_v)`.
+fn sample_liquid_gradient_scrubbed(
+    u: f32,
+    v: f32,
+    phase: f32,
+    stops: [[f32; 3]; 4],
+    scrub_uv: (f32, f32),
+    scrub_mix: f32,
+) -> Hsla {
     let [c1, c2, c3, c4] = stops;
-    // 100deg CSS linear-gradient(100deg, c1 10%, c2 90%)
-    let proj = 0.5 + ((u - 0.5) * 0.9848 + (v - 0.5) * 0.1736) / 1.1584;
+    let mix = scrub_mix.clamp(0., 1.);
+    // Shift projection axis gently toward scrubbed pointer position
+    let u_warped = u - (scrub_uv.0 - 0.5) * 0.42 * mix;
+    let proj = 0.5 + ((u_warped - 0.5) * 0.9848 + (v - 0.5) * 0.1736) / 1.1584;
     let t_lin = ((proj - 0.10) / 0.80).clamp(0., 1.);
     let mut rgb_out = [
         c1[0] + (c2[0] - c1[0]) * t_lin,
@@ -113,14 +127,40 @@ fn sample_liquid_gradient(u: f32, v: f32, phase: f32, stops: [[f32; 3]; 4]) -> H
         c1[2] + (c2[2] - c1[2]) * t_lin,
     ];
 
-    let pos_c = interp_loop_keys(&BLOB_C_KEYS, phase);
-    let pos_b = interp_loop_keys(&BLOB_B_KEYS, phase);
-    let pos_a = interp_loop_keys(&BLOB_A_KEYS, phase);
+    let eff_phase = phase + (scrub_uv.0 - 0.5) * 0.28 * mix;
+    let pos_c = interp_loop_keys(&BLOB_C_KEYS, eff_phase);
+    let pos_b = interp_loop_keys(&BLOB_B_KEYS, eff_phase);
+    let mut pos_a = interp_loop_keys(&BLOB_A_KEYS, eff_phase);
+    if mix > 0.002 {
+        pos_a.0 = pos_a.0 * (1. - mix) + scrub_uv.0 * mix;
+        pos_a.1 = pos_a.1 * (1. - mix) + scrub_uv.1 * mix;
+    }
 
     // Paint back-to-front matching CSS multiple-background stacking order: c1, c4, then c3 on top.
     rgb_out = blend_radial_blob(rgb_out, c1, (0.60, 1.60), pos_c, (u, v));
     rgb_out = blend_radial_blob(rgb_out, c4, (0.80, 1.90), pos_b, (u, v));
     rgb_out = blend_radial_blob(rgb_out, c3, (0.70, 1.70), pos_a, (u, v));
+
+    // Iridescent focal band concentrated around the scrubbed cursor position.
+    if mix > 0.002 {
+        let focal_col = [
+            (c3[0] * 0.65 + c4[0] * 0.35 + 0.10).min(1.0),
+            (c3[1] * 0.65 + c4[1] * 0.35 + 0.08).min(1.0),
+            (c3[2] * 0.65 + c4[2] * 0.35 + 0.12).min(1.0),
+        ];
+        let band_dx = (u - scrub_uv.0) / 0.24;
+        let band_dy = (v - scrub_uv.1) / 0.90;
+        let dist = (band_dx * band_dx + band_dy * band_dy).sqrt();
+        if dist < 1.0 {
+            let f = 1.0 - dist;
+            let band_a = f * f * (3.0 - 2.0 * f) * 0.68 * mix;
+            rgb_out = [
+                rgb_out[0] * (1. - band_a) + focal_col[0] * band_a,
+                rgb_out[1] * (1. - band_a) + focal_col[1] * band_a,
+                rgb_out[2] * (1. - band_a) + focal_col[2] * band_a,
+            ];
+        }
+    }
 
     Rgba {
         r: rgb_out[0].clamp(0., 1.),
@@ -129,6 +169,12 @@ fn sample_liquid_gradient(u: f32, v: f32, phase: f32, stops: [[f32; 3]; 4]) -> H
         a: 1.,
     }
     .into()
+}
+
+/// Evaluate the four-layer liquid gradient (`100deg` linear base + 3 orbiting radial blobs).
+#[cfg(test)]
+fn sample_liquid_gradient(u: f32, v: f32, phase: f32, stops: [[f32; 3]; 4]) -> Hsla {
+    sample_liquid_gradient_scrubbed(u, v, phase, stops, (0.5, 0.5), 0.0)
 }
 
 fn paint_glyphs_in_span(
@@ -168,6 +214,26 @@ impl LiveClock {
     }
 }
 
+struct ScrubSpringState {
+    bounds: Rc<Cell<Bounds<Pixels>>>,
+    scrub_u: Slide,
+    scrub_v: Slide,
+    scrub_mix: Slide,
+    external_active: bool,
+}
+
+impl ScrubSpringState {
+    fn new() -> Self {
+        Self {
+            bounds: Rc::new(Cell::new(Bounds::default())),
+            scrub_u: Slide::snappy(0.5),
+            scrub_v: Slide::snappy(0.5),
+            scrub_mix: Slide::new(0.),
+            external_active: false,
+        }
+    }
+}
+
 /// Animated liquid-gradient text span or heading with optional left-to-right entrance sweep.
 ///
 /// # Examples
@@ -196,6 +262,7 @@ pub struct GradientText {
     base_color: Option<Hsla>,
     heading_level: Option<usize>,
     replay_nonce: usize,
+    external_scrub: Option<(f32, f32)>,
     clock: Rc<LiveClock>,
 }
 
@@ -215,6 +282,7 @@ impl GradientText {
             base_color: None,
             heading_level: None,
             replay_nonce: 0,
+            external_scrub: None,
             clock: Rc::new(LiveClock::new()),
         }
     }
@@ -310,11 +378,16 @@ impl GradientText {
         self
     }
 
+    fn with_external_scrub(mut self, scrub_uv: Option<(f32, f32)>) -> Self {
+        self.external_scrub = scrub_uv;
+        self
+    }
+
     /// Restart the `1100ms` left-to-right sweep on a mounted `GradientText` entity.
     pub fn replay(&mut self, cx: &mut Context<Self>) {
         self.replay_nonce = self.replay_nonce.wrapping_add(1);
         self.clock.replay_nonce.set(self.replay_nonce);
-        self.clock.sweep_started.set(Instant::now());
+        self.clock.sweep_started.set(cx.background_executor().now());
         cx.notify();
     }
 
@@ -366,12 +439,38 @@ impl GradientText {
     fn render_element(&self, clock: Rc<LiveClock>, w: &mut Window, cx: &mut App) -> Stateful<Div> {
         let theme = Theme::global(cx);
         let dark = theme.mode == ThemeMode::Dark;
-        let reduced = theme.reduced_motion;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
 
         if clock.replay_nonce.get() != self.replay_nonce {
             clock.replay_nonce.set(self.replay_nonce);
-            clock.sweep_started.set(Instant::now());
+            clock.sweep_started.set(now);
         }
+
+        let scrub_state_id: ElementId = (self.id.clone(), "gt-scrub").into();
+        let scrub_st = w.use_keyed_state(scrub_state_id, cx, |_, _| ScrubSpringState::new());
+        let ext_scrub = self.external_scrub;
+        let (scrub_u, scrub_v, scrub_mix, bounds_cell) = scrub_st.update(cx, |s, cx| {
+            if let Some((eu, ev)) = ext_scrub {
+                s.external_active = true;
+                s.scrub_u.duration(eu.clamp(0., 1.), 0.16, cx);
+                s.scrub_v.duration(ev.clamp(0., 1.), 0.16, cx);
+                s.scrub_mix.duration(1.0, 0.18, cx);
+            } else if s.external_active {
+                s.external_active = false;
+                s.scrub_mix.duration(0.0, 0.42, cx);
+            }
+            (
+                s.scrub_u.get(w, cx).clamp(0., 1.),
+                s.scrub_v.get(w, cx).clamp(0., 1.),
+                if reduced {
+                    0.0
+                } else {
+                    s.scrub_mix.get(w, cx).clamp(0., 1.)
+                },
+                s.bounds.clone(),
+            )
+        });
 
         let base_ink = self.base_color.unwrap_or_else(|| {
             if dark {
@@ -398,6 +497,8 @@ impl GradientText {
         let speed = self.speed;
         let sweep_enabled = self.sweep;
         let paused = self.paused;
+        let move_st = scrub_st.clone();
+        let hover_st = scrub_st;
 
         div()
             .id(self.id.clone())
@@ -412,25 +513,62 @@ impl GradientText {
             .font_weight(self.font_weight)
             .whitespace_nowrap()
             .text_color(transparent_black())
+            .on_mouse_move(move |ev: &MouseMoveEvent, window, cx| {
+                if disabled_motion(cx) {
+                    return;
+                }
+                move_st.update(cx, |s, cx| {
+                    let b = s.bounds.get();
+                    let bw = f32::from(b.size.width);
+                    let bh = f32::from(b.size.height);
+                    if bw > 1. && bh > 1. {
+                        let u = ((f32::from(ev.position.x - b.left())) / bw).clamp(0., 1.);
+                        let v = ((f32::from(ev.position.y - b.top())) / bh).clamp(0., 1.);
+                        s.scrub_u.duration(u, 0.14, cx);
+                        s.scrub_v.duration(v, 0.14, cx);
+                        s.scrub_mix.duration(1.0, 0.18, cx);
+                    }
+                });
+                window.refresh();
+            })
+            .on_hover(move |over: &bool, window, cx| {
+                if !*over {
+                    hover_st.update(cx, |s, cx| {
+                        if !s.external_active {
+                            s.scrub_mix.duration(0.0, 0.42, cx);
+                        }
+                    });
+                    window.refresh();
+                }
+            })
             .child(self.text.clone())
             .child(
                 canvas(
-                    |_, _, _| (),
-                    move |bounds, _, window, _| {
+                    move |b, _, _| {
+                        bounds_cell.set(b);
+                    },
+                    move |bounds, _, window, cx| {
                         let bw = f32::from(bounds.size.width);
                         let bh = f32::from(bounds.size.height);
                         if bw <= 0.5 || bh <= 0.5 {
                             return;
                         }
 
+                        let now_f = cx.background_executor().now();
                         let flow_running = !reduced && !paused && speed > 0.001;
                         let flow_phase = if flow_running {
-                            (clock.flow_started.elapsed().as_secs_f32() / speed).fract()
+                            (now_f
+                                .saturating_duration_since(clock.flow_started)
+                                .as_secs_f32()
+                                / speed)
+                                .fract()
                         } else {
                             0.0
                         };
 
-                        let sweep_elapsed = clock.sweep_started.get().elapsed().as_secs_f32();
+                        let sweep_elapsed = now_f
+                            .saturating_duration_since(clock.sweep_started.get())
+                            .as_secs_f32();
                         let sweep_progress = if reduced || !sweep_enabled {
                             1.0
                         } else {
@@ -499,7 +637,14 @@ impl GradientText {
                                 let mid_x = (sx0 + sx1) * 0.5;
                                 let u = ((mid_x - origin_x) / bw).clamp(0., 1.);
                                 let v = (0.48 + 0.14 * (u - 0.5)).clamp(0.15, 0.85);
-                                let col = sample_liquid_gradient(u, v, flow_phase, stops);
+                                let col = sample_liquid_gradient_scrubbed(
+                                    u,
+                                    v,
+                                    flow_phase,
+                                    stops,
+                                    (scrub_u, scrub_v),
+                                    scrub_mix,
+                                );
 
                                 let slice_mask = Bounds::new(
                                     point(px(sx0), mask_top),
@@ -556,6 +701,8 @@ impl RenderOnce for GradientText {
 pub struct GradientTextShowcase {
     id: ElementId,
     replay_nonce: usize,
+    heading_bounds: Rc<Cell<Bounds<Pixels>>>,
+    scrub_uv: Option<(f32, f32)>,
 }
 
 impl GradientTextShowcase {
@@ -567,6 +714,8 @@ impl GradientTextShowcase {
         Self {
             id: id.into(),
             replay_nonce: 0,
+            heading_bounds: Rc::new(Cell::new(Bounds::default())),
+            scrub_uv: None,
         }
     }
 
@@ -582,7 +731,6 @@ impl Render for GradientTextShowcase {
         let theme = Theme::global(cx);
         let dark = theme.mode == ThemeMode::Dark;
         let lang = UiLanguage::current(cx);
-        let focus_ring = theme.tokens.colors.focus_outline;
 
         let vw = f32::from(w.viewport_size().width);
         let (font_px, line_px): (f32, f32) = if vw > 0. && vw < 540. {
@@ -596,16 +744,6 @@ impl Render for GradientTextShowcase {
         } else {
             rgb(0x171717).into()
         };
-        let btn_bg: Hsla = if dark {
-            rgb(0x232326).into()
-        } else {
-            rgb(0xffffff).into()
-        };
-        let btn_border: Hsla = if dark {
-            hsla(0., 0., 1., 0.10)
-        } else {
-            hsla(0., 0., 0., 0.11)
-        };
 
         let line1 = lang.text("Interfaces people", "真正让人动容的");
         let line2_prefix = lang.text("actually ", "交互");
@@ -614,6 +752,18 @@ impl Render for GradientTextShowcase {
 
         let gt_id: ElementId = (self.id.clone(), "hero-feel").into();
         let replay_id: ElementId = (self.id.clone(), "replay-btn").into();
+        let hb_cell = self.heading_bounds.clone();
+        let replay_btn = pro_btn(
+            replay_id,
+            replay_label,
+            None,
+            ProBtnStyle::Secondary,
+            true,
+            cx,
+            |this, _, cx| {
+                this.replay(cx);
+            },
+        );
 
         div()
             .id(self.id.clone())
@@ -630,6 +780,7 @@ impl Render for GradientTextShowcase {
                     .role(Role::Heading)
                     .aria_level(2)
                     .aria_label(format!("{line1} {line2_prefix}{payoff}"))
+                    .relative()
                     .flex()
                     .flex_col()
                     .items_center()
@@ -637,6 +788,28 @@ impl Render for GradientTextShowcase {
                     .line_height(px(line_px))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ink)
+                    .cursor_ew_resize()
+                    .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
+                        let b = this.heading_bounds.get();
+                        let bw = f32::from(b.size.width);
+                        let bh = f32::from(b.size.height);
+                        if bw > 1. && bh > 1. {
+                            let u = ((f32::from(ev.position.x - b.left())) / bw).clamp(0., 1.);
+                            let v = ((f32::from(ev.position.y - b.top())) / bh).clamp(0., 1.);
+                            this.scrub_uv = Some((u, v));
+                            cx.notify();
+                        }
+                    }))
+                    .on_hover(cx.listener(|this, over: &bool, _, cx| {
+                        if !*over && this.scrub_uv.take().is_some() {
+                            cx.notify();
+                        }
+                    }))
+                    .child(
+                        canvas(move |b, _, _| hb_cell.set(b), |_, _, _, _| ())
+                            .absolute()
+                            .inset_0(),
+                    )
                     .child(div().whitespace_nowrap().child(line1))
                     .child(
                         div()
@@ -653,45 +826,12 @@ impl Render for GradientTextShowcase {
                                     .with_base_color(ink)
                                     .with_speed(8.0)
                                     .with_sweep(true)
-                                    .with_replay_nonce(self.replay_nonce),
+                                    .with_replay_nonce(self.replay_nonce)
+                                    .with_external_scrub(self.scrub_uv),
                             ),
                     ),
             )
-            .child(
-                div()
-                    .mt(px(28.))
-                    .id(replay_id)
-                    .role(Role::Button)
-                    .aria_label(replay_label)
-                    .tab_index(0)
-                    .h(px(30.))
-                    .px(px(13.))
-                    .rounded(px(9.))
-                    .bg(btn_bg)
-                    .border_1()
-                    .border_color(btn_border)
-                    .shadow(vec![BoxShadow {
-                        color: hsla(0., 0., 0., if dark { 0.28 } else { 0.04 }),
-                        offset: point(px(0.), px(1.)),
-                        blur_radius: px(2.),
-                        spread_radius: px(0.),
-                        inset: false,
-                    }])
-                    .text_color(ink)
-                    .text_size(px(12.5))
-                    .line_height(px(18.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.86))
-                    .focus_visible(move |s| s.border_color(focus_ring))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.replay(cx);
-                    }))
-                    .child(replay_label),
-            )
+            .child(div().mt(px(28.)).child(replay_btn))
     }
 }
 
@@ -699,9 +839,10 @@ impl Render for GradientTextShowcase {
 mod tests {
     use super::{
         DARK_DEFAULTS, GradientText, GradientTextShowcase, LIGHT_DEFAULTS, gt_sweep_ease,
-        hsla_to_rgb_f32, sample_liquid_gradient,
+        hsla_to_rgb_f32, sample_liquid_gradient, sample_liquid_gradient_scrubbed,
     };
-    use gpui::{Rgba, TestAppContext, rgb};
+    use gpui::{MouseMoveEvent, Rgba, TestAppContext, point, px, rgb, size};
+    use std::time::Duration;
 
     #[test]
     fn sweep_easing_is_smooth_s_curve_bounded_zero_to_one() {
@@ -747,5 +888,75 @@ mod tests {
             view.update(cx, |s, cx| s.replay(cx));
         });
         assert_eq!(window.update(|_, cx| view.read(cx).replay_nonce), 1);
+    }
+
+    #[gpui::test]
+    fn pointer_scrubbing_pulls_iridescent_focal_band_and_recovers_on_leave(
+        cx: &mut TestAppContext,
+    ) {
+        let stops = LIGHT_DEFAULTS.map(|hex| hsla_to_rgb_f32(rgb(hex).into()));
+        let un_scrubbed = Rgba::from(sample_liquid_gradient_scrubbed(
+            0.15,
+            0.5,
+            0.25,
+            stops,
+            (0.5, 0.5),
+            0.0,
+        ));
+        let scrubbed_left = Rgba::from(sample_liquid_gradient_scrubbed(
+            0.15,
+            0.5,
+            0.25,
+            stops,
+            (0.15, 0.5),
+            1.0,
+        ));
+        let delta = (scrubbed_left.r - un_scrubbed.r).abs()
+            + (scrubbed_left.g - un_scrubbed.g).abs()
+            + (scrubbed_left.b - un_scrubbed.b).abs();
+        assert!(
+            delta > 0.12,
+            "expected pointer focal scrub to pull luminous band to u=0.15, got delta={delta}"
+        );
+
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, vcx) =
+            cx.add_window_view(|_, cx| GradientTextShowcase::new("gt-scrub-test", cx));
+        vcx.simulate_resize(size(px(720.), px(360.)));
+        vcx.run_until_parked();
+
+        let (in_pt, out_pt) = vcx.update(|_, app| {
+            let hb = view.read(app).heading_bounds.get();
+            (
+                point(
+                    hb.left() + hb.size.width * 0.25,
+                    hb.top() + hb.size.height * 0.5,
+                ),
+                point(px(2.0), px(2.0)),
+            )
+        });
+        vcx.simulate_event(MouseMoveEvent {
+            position: in_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        exec.advance_clock(Duration::from_millis(180));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        let scrub_u = vcx.update(|_, app| view.read(app).scrub_uv.map(|p| p.0));
+        assert!(
+            scrub_u.is_some_and(|u| (u - 0.25).abs() < 0.05),
+            "expected heading scrub u near 0.25, got {scrub_u:?}"
+        );
+
+        vcx.simulate_event(MouseMoveEvent {
+            position: out_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.run_until_parked();
+        assert!(vcx.update(|_, app| view.read(app).scrub_uv.is_none()));
     }
 }

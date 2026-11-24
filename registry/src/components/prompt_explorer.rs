@@ -9,14 +9,17 @@ use crate::{
     components::{
         app_shell::{AppShell, AppShellEvent, AppShellLayout, ShellNavGroup, ShellNavItem},
         pro_chrome::{
-            ProPalette, pro_eid, pro_empty_state, pro_icon_btn, pro_presence, pro_skeleton_bar,
-            pro_spring_bar, pro_switch, pro_toast_banner, pro_view_transition, tr,
+            ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+            pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator,
+            pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+            pro_spring_bar, pro_spring_f32, pro_swap_label, pro_switch, pro_tactile,
+            pro_toast_banner, pro_view_transition, tr,
         },
     },
     foundation::Theme,
     primitives::{
-        control::activate,
         editor::{EditEvent, Editor, EditorShortcutEvent, InputMode},
+        family::{PhaseClock, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -253,8 +256,32 @@ fn format_signed_delta(change: i64) -> String {
     }
 }
 
-fn format_share_pct(share: f32) -> String {
-    format!("{}%", (share.clamp(0., 1.) * 100.0).round() as u32)
+fn synthesize_engine_breakdown(query: &str, base_share: f32) -> [(&'static str, f32); 4] {
+    let mut hash: u32 = 2166136261;
+    for b in query.bytes() {
+        hash = (hash ^ u32::from(b)).wrapping_mul(16777619);
+    }
+    let offsets = [
+        (((hash & 0x1f) as f32) - 15.0) * 0.008,
+        ((((hash >> 5) & 0x1f) as f32) - 14.0) * 0.009,
+        ((((hash >> 10) & 0x1f) as f32) - 16.0) * 0.007,
+        ((((hash >> 15) & 0x1f) as f32) - 15.0) * 0.008,
+    ];
+    [
+        (
+            "ChatGPT",
+            (base_share + offsets[0] + 0.04).clamp(0.02, 0.96),
+        ),
+        (
+            "Perplexity",
+            (base_share + offsets[1] + 0.01).clamp(0.02, 0.94),
+        ),
+        (
+            "AI Overviews",
+            (base_share + offsets[2] - 0.03).clamp(0.01, 0.92),
+        ),
+        ("Claude", (base_share + offsets[3] - 0.01).clamp(0.02, 0.94)),
+    ]
 }
 
 fn synthesize_prompt_result(query: &str, catalog: &[PromptKeywordItem]) -> PromptAnalysisResult {
@@ -627,46 +654,198 @@ fn rasterize_hero_glow(dark: bool, panel_rgb: [u8; 3], elapsed: f32) -> RenderIm
     RenderImage::new(vec![Frame::new(img_buf)])
 }
 
-fn render_mini_sparkline(values: &[u64], width: f32, height: f32, color: Hsla) -> AnyElement {
-    let vals: Vec<f32> = values.iter().map(|&v| v as f32).collect();
-    canvas(
-        |_, _, _| (),
-        move |bounds, _, window, _| {
-            let w = f32::from(bounds.size.width);
-            let h = f32::from(bounds.size.height);
-            if vals.len() < 2 || w <= 2. || h <= 2. {
-                return;
+struct RollingVolState {
+    target: i64,
+    from: i64,
+    dir: f32,
+    clock: PhaseClock,
+}
+
+#[derive(IntoElement)]
+struct RollingPromptVolume {
+    id: ElementId,
+    value: i64,
+    signed: bool,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+}
+
+impl RenderOnce for RollingPromptVolume {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let val = self.value;
+        let st = w.use_keyed_state(pro_eid(&self.id, "rvol"), cx, |_, _| RollingVolState {
+            target: val,
+            from: val,
+            dir: 1.,
+            clock: PhaseClock::default(),
+        });
+        let (shown, dy) = st.update(cx, |s, cx| {
+            let age_cur = s.clock.time(0.28, w, cx);
+            let cur_t = pro_ease((age_cur / 0.28).clamp(0., 1.)) as f64;
+            if s.target != val {
+                s.from = (s.from as f64 + (s.target - s.from) as f64 * cur_t).round() as i64;
+                s.dir = if val >= s.target { 1. } else { -1. };
+                s.target = val;
+                s.clock.restart(cx);
             }
-            let mut min_v = f32::INFINITY;
-            let mut max_v = f32::NEG_INFINITY;
-            for &v in &vals {
-                min_v = min_v.min(v);
-                max_v = max_v.max(v);
+            let age = s.clock.time(0.28, w, cx);
+            let t = pro_ease((age / 0.28).clamp(0., 1.));
+            let interp = (s.from as f64 + (s.target - s.from) as f64 * (t as f64)).round() as i64;
+            let offset = if t >= 0.999 || disabled_motion(cx) {
+                0.
+            } else {
+                2.4 * s.dir * (1. - t)
+            };
+            (interp, offset)
+        });
+        let text = if self.signed {
+            format_signed_delta(shown)
+        } else {
+            format_prompt_volume(shown)
+        };
+        div()
+            .relative()
+            .top(px(dy))
+            .text_size(px(self.font_size))
+            .font_weight(self.weight)
+            .text_color(self.color)
+            .whitespace_nowrap()
+            .child(text)
+    }
+}
+
+fn rolling_prompt_volume(
+    id: impl Into<ElementId>,
+    value: i64,
+    signed: bool,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+) -> AnyElement {
+    RollingPromptVolume {
+        id: id.into(),
+        value,
+        signed,
+        font_size,
+        weight,
+        color,
+    }
+    .into_any_element()
+}
+
+struct SparkMorphState {
+    from_vals: Vec<f32>,
+    to_vals: Vec<f32>,
+    clock: PhaseClock,
+}
+
+#[derive(IntoElement)]
+struct PromptSparklineCanvas {
+    id: ElementId,
+    values: Vec<f32>,
+    width: f32,
+    height: f32,
+    color: Hsla,
+}
+
+impl RenderOnce for PromptSparklineCanvas {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let init_vals = self.values.clone();
+        let st = w.use_keyed_state(pro_eid(&self.id, "spkm"), cx, |_, _| SparkMorphState {
+            from_vals: init_vals.clone(),
+            to_vals: init_vals,
+            clock: PhaseClock::default(),
+        });
+        let vals = st.update(cx, |s, cx| {
+            let age_cur = s.clock.time(0.28, w, cx);
+            let cur_t = pro_ease((age_cur / 0.28).clamp(0., 1.));
+            let changed = s.to_vals.len() != self.values.len()
+                || s.to_vals
+                    .iter()
+                    .zip(self.values.iter())
+                    .any(|(a, b)| (a - b).abs() > 0.5);
+            if changed {
+                let len = self.values.len().max(1);
+                let prev: Vec<f32> = (0..len)
+                    .map(|i| {
+                        let a = s.from_vals.get(i).copied().unwrap_or(0.);
+                        let b = s.to_vals.get(i).copied().unwrap_or(a);
+                        a + (b - a) * cur_t
+                    })
+                    .collect();
+                s.from_vals = prev;
+                s.to_vals = self.values.clone();
+                s.clock.restart(cx);
             }
-            let span = max_v - min_v;
-            let mut builder = PathBuilder::stroke(px(1.4));
-            for (i, &v) in vals.iter().enumerate() {
-                let x = bounds.left() + px(1.0 + (i as f32 / (vals.len() - 1) as f32) * (w - 2.0));
-                let y_off = if span.abs() < 1e-4 {
-                    h * 0.5
-                } else {
-                    h - 1.5 - ((v - min_v) / span) * (h - 3.0)
-                };
-                let pt = point(x, bounds.top() + px(y_off));
-                if i == 0 {
-                    builder.move_to(pt);
-                } else {
-                    builder.line_to(pt);
+            let age = s.clock.time(0.28, w, cx);
+            let t = pro_ease((age / 0.28).clamp(0., 1.));
+            self.values
+                .iter()
+                .enumerate()
+                .map(|(i, &target)| {
+                    let from = s.from_vals.get(i).copied().unwrap_or(target);
+                    from + (target - from) * t
+                })
+                .collect::<Vec<f32>>()
+        });
+        let color = self.color;
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if vals.len() < 2 || bw <= 2. || bh <= 2. {
+                    return;
                 }
-            }
-            if let Ok(path) = builder.build() {
-                window.paint_path(path, color);
-            }
-        },
-    )
-    .w(px(width))
-    .h(px(height))
-    .flex_none()
+                let mut min_v = f32::INFINITY;
+                let mut max_v = f32::NEG_INFINITY;
+                for &v in &vals {
+                    min_v = min_v.min(v);
+                    max_v = max_v.max(v);
+                }
+                let span = max_v - min_v;
+                let mut builder = PathBuilder::stroke(px(1.4));
+                for (i, &v) in vals.iter().enumerate() {
+                    let x =
+                        bounds.left() + px(1.0 + (i as f32 / (vals.len() - 1) as f32) * (bw - 2.0));
+                    let y_off = if span.abs() < 1e-4 {
+                        bh * 0.5
+                    } else {
+                        bh - 1.5 - ((v - min_v) / span) * (bh - 3.0)
+                    };
+                    let pt = point(x, bounds.top() + px(y_off));
+                    if i == 0 {
+                        builder.move_to(pt);
+                    } else {
+                        builder.line_to(pt);
+                    }
+                }
+                if let Ok(path) = builder.build() {
+                    window.paint_path(path, color);
+                }
+            },
+        )
+        .w(px(self.width))
+        .h(px(self.height))
+        .flex_none()
+    }
+}
+
+fn render_mini_sparkline(
+    id: impl Into<ElementId>,
+    values: &[u64],
+    width: f32,
+    height: f32,
+    color: Hsla,
+) -> AnyElement {
+    PromptSparklineCanvas {
+        id: id.into(),
+        values: values.iter().map(|&v| v as f32).collect(),
+        width,
+        height,
+        color,
+    }
     .into_any_element()
 }
 
@@ -707,9 +886,14 @@ pub struct PromptExplorerScreen {
     editor_focused: bool,
     dropdown_open: bool,
     active_suggestion: usize,
+    last_suggestions: Vec<PromptKeywordItem>,
+    last_typed_token: String,
+    last_bulk_count: usize,
     hovered_tip: Option<SharedString>,
     results: Option<Vec<PromptAnalysisResult>>,
-    analysis_gen: usize,
+    last_results: Option<Vec<PromptAnalysisResult>>,
+    selected_result: Option<usize>,
+    last_selected_result: Option<PromptAnalysisResult>,
     loading: bool,
     empty: bool,
     toast: Option<(SharedString, Instant)>,
@@ -790,9 +974,14 @@ impl PromptExplorerScreen {
             editor_focused: false,
             dropdown_open: false,
             active_suggestion: 0,
+            last_suggestions: Vec::new(),
+            last_typed_token: String::new(),
+            last_bulk_count: 1,
             hovered_tip: None,
             results: None,
-            analysis_gen: 0,
+            last_results: None,
+            selected_result: None,
+            last_selected_result: None,
             loading: false,
             empty: false,
             toast: None,
@@ -987,7 +1176,9 @@ impl PromptExplorerScreen {
 
     /// Dismiss the current analysis results card.
     pub fn clear_analysis(&mut self, cx: &mut Context<Self>) {
-        if self.results.take().is_some() {
+        if let Some(prev) = self.results.take() {
+            self.last_results = Some(prev);
+            self.selected_result = None;
             cx.emit(PromptExplorerEvent::ClearAnalysis);
             cx.notify();
         }
@@ -1017,7 +1208,15 @@ impl PromptExplorerScreen {
             .iter()
             .map(|q| synthesize_prompt_result(q, &self.prompts))
             .collect();
-        self.analysis_gen = self.analysis_gen.wrapping_add(1);
+        if let Some(idx) = self.selected_result {
+            if idx < computed.len() {
+                self.last_selected_result = Some(computed[idx].clone());
+            } else {
+                self.selected_result = Some(0);
+                self.last_selected_result = computed.first().cloned();
+            }
+        }
+        self.last_results = Some(computed.clone());
         self.results = Some(computed.clone());
         cx.emit(PromptExplorerEvent::Analyse {
             prompts: cleaned,
@@ -1219,12 +1418,14 @@ impl PromptExplorerScreen {
     }
 
     fn render_change_badge(
+        id: impl Into<ElementId>,
         change: i64,
         with_arrow: bool,
         up_color: Hsla,
         down_color: Hsla,
         muted: Hsla,
     ) -> Div {
+        let id = id.into();
         let color = if change > 0 {
             up_color
         } else if change < 0 {
@@ -1246,9 +1447,23 @@ impl PromptExplorerScreen {
                 ARROW_DOWN_SVG
             };
             row = row.child(pro_svg("0 0 24 24", svg, 13.5, color));
-            row = row.child(format_prompt_volume(change));
+            row = row.child(rolling_prompt_volume(
+                id,
+                change,
+                false,
+                13.,
+                FontWeight::NORMAL,
+                color,
+            ));
         } else {
-            row = row.child(format_signed_delta(change));
+            row = row.child(rolling_prompt_volume(
+                id,
+                change,
+                true,
+                13.,
+                FontWeight::NORMAL,
+                color,
+            ));
         }
         row
     }
@@ -1293,6 +1508,7 @@ impl PromptExplorerScreen {
     fn render_keyword_column(
         &self,
         col_key: &'static str,
+        metric_prefix: &'static str,
         items: &[PromptKeywordItem],
         with_spark: bool,
         mobile: bool,
@@ -1388,62 +1604,82 @@ impl PromptExplorerScreen {
                 dir_word,
                 format_prompt_volume(item.change),
             );
-            let row = activate(
-                div()
-                    .id(pro_eid(&self.id, format!("kw-{col_key}-{idx}")))
-                    .role(Role::Button)
-                    .aria_label(aria)
-                    .tab_index(0)
-                    .h(px(44.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .gap(px(16.))
-                    .text_size(px(13.))
-                    .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .child(div().flex_1().min_w_0().truncate().child(item.text.clone()))
-                    .when(show_spark, |d| {
-                        d.child(
-                            div()
-                                .w(px(56.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(render_mini_sparkline(&item.trend, 48., 16., p.faint)),
-                        )
-                    })
-                    .child(
+            let is_analysed = self.results.as_ref().is_some_and(|rows| {
+                rows.iter()
+                    .any(|r| r.text.eq_ignore_ascii_case(item.text.as_ref()))
+            });
+            let row_content = div()
+                .h(px(44.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(16.))
+                .text_size(px(13.))
+                .text_color(p.ink)
+                .child(div().flex_1().min_w_0().truncate().child(item.text.clone()))
+                .when(show_spark, |d| {
+                    d.child(
                         div()
-                            .w(px(if mobile { 64. } else { 72. }))
+                            .w(px(56.))
                             .flex_none()
                             .flex()
-                            .justify_end()
-                            .child(Self::render_change_badge(
-                                item.change,
-                                true,
-                                up_color,
-                                down_color,
-                                p.muted,
+                            .items_center()
+                            .justify_center()
+                            .child(render_mini_sparkline(
+                                pro_eid(&self.id, format!("kw-spk-{metric_prefix}-{idx}")),
+                                &item.trend,
+                                48.,
+                                16.,
+                                p.faint,
                             )),
                     )
-                    .child(
-                        div()
-                            .w(px(if mobile { 48. } else { 52. }))
-                            .flex_none()
-                            .text_right()
-                            .text_color(p.ink)
-                            .child(vol_str),
-                    ),
+                })
+                .child(
+                    div()
+                        .w(px(if mobile { 64. } else { 72. }))
+                        .flex_none()
+                        .flex()
+                        .justify_end()
+                        .child(Self::render_change_badge(
+                            pro_eid(&self.id, format!("kw-chg-{metric_prefix}-{idx}")),
+                            item.change,
+                            true,
+                            up_color,
+                            down_color,
+                            p.muted,
+                        )),
+                )
+                .child(
+                    div()
+                        .w(px(if mobile { 48. } else { 52. }))
+                        .flex_none()
+                        .flex()
+                        .justify_end()
+                        .child(rolling_prompt_volume(
+                            pro_eid(&self.id, format!("kw-vol-{metric_prefix}-{idx}")),
+                            item.volume as i64,
+                            false,
+                            13.,
+                            FontWeight::NORMAL,
+                            p.ink,
+                        )),
+                );
+            let row = pro_tactile(
+                pro_eid(&self.id, format!("kw-{col_key}-{idx}")),
+                aria,
+                6.,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                is_analysed,
+                row_content,
                 cx,
                 move |this, w, cx| {
                     this.pick_keyword(text.clone(), w, cx);
                 },
-            );
+            )
+            .w_full();
             list = list.child(
                 div()
                     .when(idx > 0, |d| d.border_t_1().border_color(p.line))
@@ -1451,6 +1687,144 @@ impl PromptExplorerScreen {
             );
         }
         list.into_any_element()
+    }
+
+    fn render_result_inspector(
+        &self,
+        row: &PromptAnalysisResult,
+        stack_cols: bool,
+        on_blue: Hsla,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let p = ProPalette::get(cx);
+        let engines = synthesize_engine_breakdown(&row.text, row.share);
+        let ws = self.workspace.clone();
+        let subtitle = format!(
+            "{} · {}",
+            tr(cx, "Answer engine breakdown", "各答案引擎品牌提及率"),
+            ws
+        );
+
+        let mut grid = div().flex().when(stack_cols, |d| d.flex_wrap()).gap(px(8.));
+        for (ei, (engine_name, eng_share)) in engines.into_iter().enumerate() {
+            let cited = eng_share >= 0.20;
+            let pct_val = (eng_share * 100.0).round() as f64;
+            grid = grid.child(
+                div()
+                    .when(!stack_cols, |d| d.flex_1().min_w_0())
+                    .when(stack_cols, |d| d.min_w(px(140.)).flex_1())
+                    .px(px(10.))
+                    .py(px(8.))
+                    .rounded(px(8.))
+                    .bg(p.card)
+                    .border_1()
+                    .border_color(p.line)
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .min_w_0()
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, format!("res-eng-chk-{ei}")),
+                                        cited,
+                                        13.,
+                                        false,
+                                        on_blue,
+                                    ))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .truncate()
+                                            .child(engine_name),
+                                    ),
+                            )
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("res-eng-pct-{ei}")),
+                                pct_val,
+                                0,
+                                "",
+                                "%",
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.strong,
+                            )),
+                    )
+                    .child(pro_spring_bar(
+                        pro_eid(&self.id, format!("res-eng-bar-{ei}")),
+                        eng_share,
+                        5.,
+                        2.5,
+                        p.chip,
+                        on_blue,
+                    )),
+            );
+        }
+
+        div()
+            .mx(px(12.))
+            .mb(px(12.))
+            .p(px(12.))
+            .rounded(px(8.))
+            .bg(p.tray)
+            .border_1()
+            .border_color(p.line)
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .min_w_0()
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "res-insp-title"),
+                                row.text.clone(),
+                                13.,
+                                FontWeight::MEDIUM,
+                                p.strong,
+                            ))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .text_color(p.muted)
+                                    .truncate()
+                                    .child(subtitle),
+                            ),
+                    )
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "close-res-inspector"),
+                        tr(cx, "Close breakdown", "收起明细"),
+                        ProIcon::Close,
+                        24.,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.selected_result = None;
+                            cx.notify();
+                        },
+                    )),
+            )
+            .child(grid)
+            .into_any_element()
     }
 
     fn render_results_card(
@@ -1468,6 +1842,14 @@ impl PromptExplorerScreen {
         } else {
             tr(cx, "Analysis", "分析结果").into()
         };
+
+        let total_vol: i64 = rows.iter().map(|r| r.volume as i64).sum();
+        let avg_share: f32 = if rows.is_empty() {
+            0.0
+        } else {
+            rows.iter().map(|r| r.share.clamp(0., 1.)).sum::<f32>() / (rows.len() as f32)
+        };
+        let avg_share_pct = (avg_share * 100.0).round() as f64;
 
         let mut table = div().px(px(12.)).pb(px(8.)).flex().flex_col().child(
             div()
@@ -1509,70 +1891,137 @@ impl PromptExplorerScreen {
         );
 
         for (ri, row) in rows.iter().enumerate() {
-            let share_str = format_share_pct(row.share);
-            table = table.child(
-                div()
-                    .h(px(44.))
-                    .px(px(8.))
-                    .border_t_1()
-                    .border_color(p.line)
-                    .flex()
-                    .items_center()
-                    .gap(px(16.))
-                    .text_size(px(13.))
-                    .text_color(p.ink)
-                    .child(div().flex_1().min_w_0().truncate().child(row.text.clone()))
-                    .child(
+            let row_sel = self.selected_result == Some(ri);
+            let row_snap = row.clone();
+            let share_pct_val = (row.share.clamp(0., 1.) * 100.0).round() as f64;
+            let row_aria = format!(
+                "{}, {} prompts a month",
+                row.text,
+                format_prompt_volume(row.volume as i64)
+            );
+            let row_body = div()
+                .h(px(44.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(16.))
+                .text_size(px(13.))
+                .text_color(p.ink)
+                .child(div().flex_1().min_w_0().truncate().child(row.text.clone()))
+                .child(
+                    div()
+                        .w(px(if compact_cols { 80. } else { 96. }))
+                        .flex_none()
+                        .flex()
+                        .justify_end()
+                        .child(rolling_prompt_volume(
+                            pro_eid(&self.id, format!("res-vol-{ri}")),
+                            row.volume as i64,
+                            false,
+                            13.,
+                            FontWeight::NORMAL,
+                            p.ink,
+                        )),
+                )
+                .child(
+                    div()
+                        .w(px(if compact_cols { 70. } else { 80. }))
+                        .flex_none()
+                        .flex()
+                        .justify_end()
+                        .child(Self::render_change_badge(
+                            pro_eid(&self.id, format!("res-chg-{ri}")),
+                            row.change,
+                            true,
+                            up_color,
+                            down_color,
+                            p.muted,
+                        )),
+                )
+                .when(!compact_cols, |d| {
+                    d.child(
                         div()
-                            .w(px(if compact_cols { 80. } else { 96. }))
-                            .flex_none()
-                            .text_right()
-                            .child(format_prompt_volume(row.volume as i64)),
-                    )
-                    .child(
-                        div()
-                            .w(px(if compact_cols { 70. } else { 80. }))
+                            .w(px(96.))
                             .flex_none()
                             .flex()
-                            .justify_end()
-                            .child(Self::render_change_badge(
-                                row.change, true, up_color, down_color, p.muted,
+                            .items_center()
+                            .justify_center()
+                            .child(render_mini_sparkline(
+                                pro_eid(&self.id, format!("res-spk-{ri}")),
+                                &row.trend,
+                                72.,
+                                18.,
+                                p.faint,
                             )),
                     )
-                    .when(!compact_cols, |d| {
-                        d.child(
-                            div()
-                                .w(px(96.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(render_mini_sparkline(&row.trend, 72., 18., p.faint)),
-                        )
-                        .child(
-                            div()
-                                .w(px(150.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .gap(px(10.))
-                                .text_color(p.text)
-                                .child(div().flex_1().min_w_0().child(pro_spring_bar(
-                                    pro_eid(
-                                        &self.id,
-                                        format!("res-share-{}-{ri}", self.analysis_gen),
-                                    ),
-                                    row.share,
-                                    6.,
-                                    3.,
-                                    p.chip,
-                                    on_blue,
-                                )))
-                                .child(div().w(px(34.)).flex_none().text_right().child(share_str)),
-                        )
-                    }),
-            );
+                    .child(
+                        div()
+                            .w(px(150.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .text_color(p.text)
+                            .child(div().flex_1().min_w_0().child(pro_spring_bar(
+                                pro_eid(&self.id, format!("res-share-{ri}")),
+                                row.share,
+                                6.,
+                                3.,
+                                p.chip,
+                                on_blue,
+                            )))
+                            .child(div().w(px(34.)).flex_none().flex().justify_end().child(
+                                pro_rolling_number(
+                                    pro_eid(&self.id, format!("res-share-pct-{ri}")),
+                                    share_pct_val,
+                                    0,
+                                    "",
+                                    "%",
+                                    13.,
+                                    FontWeight::NORMAL,
+                                    p.text,
+                                ),
+                            )),
+                    )
+                });
+            let row_el = pro_tactile(
+                pro_eid(&self.id, format!("res-row-{ri}")),
+                row_aria,
+                6.,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                row_sel,
+                row_body,
+                cx,
+                move |this, _, cx| {
+                    if this.selected_result == Some(ri) {
+                        this.selected_result = None;
+                    } else {
+                        this.selected_result = Some(ri);
+                        this.last_selected_result = Some(row_snap.clone());
+                    }
+                    cx.notify();
+                },
+            )
+            .w_full();
+            table = table.child(div().border_t_1().border_color(p.line).child(row_el));
         }
+
+        let insp_open = self.selected_result.is_some();
+        let insp_row = self
+            .selected_result
+            .and_then(|idx| rows.get(idx))
+            .or(self.last_selected_result.as_ref());
+        let insp_el = insp_row.map(|r| self.render_result_inspector(r, compact_cols, on_blue, cx));
+        let inspector_fold = pro_fold(
+            pro_eid(&self.id, "res-inspector-fold"),
+            insp_open && insp_el.is_some(),
+            104.,
+            0.,
+            move || insp_el.unwrap_or_else(|| div().into_any_element()),
+        );
 
         div()
             .w_full()
@@ -1592,25 +2041,77 @@ impl PromptExplorerScreen {
                     .items_center()
                     .justify_between()
                     .gap(px(12.))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "res-heading"),
+                        heading,
+                        15.,
+                        FontWeight::MEDIUM,
+                        p.strong,
+                    ))
                     .child(
                         div()
-                            .text_size(px(15.))
-                            .line_height(px(24.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .child(heading),
-                    )
-                    .child(pro_icon_btn(
-                        pro_eid(&self.id, "clear-analysis"),
-                        tr(cx, "Clear the analysis", "关闭分析结果"),
-                        ProIcon::Close,
-                        28.,
-                        false,
-                        cx,
-                        |this, _, cx| this.clear_analysis(cx),
-                    )),
+                            .flex()
+                            .items_center()
+                            .gap(px(12.))
+                            .when(!compact_cols, |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .text_size(px(12.))
+                                        .text_color(p.muted)
+                                        .child(tr(cx, "Total", "月总计"))
+                                        .child(rolling_prompt_volume(
+                                            pro_eid(&self.id, "res-sum-vol"),
+                                            total_vol,
+                                            false,
+                                            12.,
+                                            FontWeight::MEDIUM,
+                                            p.ink,
+                                        )),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .text_size(px(12.))
+                                        .text_color(p.muted)
+                                        .child(tr(cx, "Avg share", "平均提及"))
+                                        .child(div().w(px(40.)).child(pro_spring_bar(
+                                            pro_eid(&self.id, "res-sum-bar"),
+                                            avg_share,
+                                            5.,
+                                            2.5,
+                                            p.chip,
+                                            on_blue,
+                                        )))
+                                        .child(pro_rolling_number(
+                                            pro_eid(&self.id, "res-sum-pct"),
+                                            avg_share_pct,
+                                            0,
+                                            "",
+                                            "%",
+                                            12.,
+                                            FontWeight::MEDIUM,
+                                            p.ink,
+                                        )),
+                                )
+                            })
+                            .child(pro_icon_btn(
+                                pro_eid(&self.id, "clear-analysis"),
+                                tr(cx, "Clear the analysis", "关闭分析结果"),
+                                ProIcon::Close,
+                                28.,
+                                false,
+                                cx,
+                                |this, _, cx| this.clear_analysis(cx),
+                            )),
+                    ),
             )
             .child(table)
+            .child(inspector_fold)
     }
 
     fn render_page(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -1659,13 +2160,27 @@ impl PromptExplorerScreen {
         };
 
         let suggestions = self.current_suggestions(cx);
+        let typed_token = self.current_query_token(cx);
+        if !suggestions.is_empty() {
+            self.last_suggestions = suggestions.clone();
+            self.last_typed_token = typed_token.clone();
+        }
         let show_dropdown = self.dropdown_open && self.editor_focused && !suggestions.is_empty();
-        let active_idx = if suggestions.is_empty() {
+        let shown_suggestions = if !suggestions.is_empty() {
+            suggestions.clone()
+        } else {
+            self.last_suggestions.clone()
+        };
+        let shown_typed = if !suggestions.is_empty() {
+            typed_token
+        } else {
+            self.last_typed_token.clone()
+        };
+        let active_idx = if shown_suggestions.is_empty() {
             0
         } else {
-            self.active_suggestion.min(suggestions.len() - 1)
+            self.active_suggestion.min(shown_suggestions.len() - 1)
         };
-        let typed_token = self.current_query_token(cx);
 
         let full_val = self.current_editor_value(cx);
         let bulk_line_count = if self.is_bulk_analysis() {
@@ -1676,6 +2191,9 @@ impl PromptExplorerScreen {
         } else {
             0
         };
+        if bulk_line_count > 0 {
+            self.last_bulk_count = bulk_line_count;
+        }
         let raw_line_rows = full_val.split('\n').count().max(2);
         let field_h = if self.is_bulk_analysis() {
             ((raw_line_rows as f32) * 22.0 + 18.0).clamp(68.0, 148.0)
@@ -1758,11 +2276,13 @@ impl PromptExplorerScreen {
                 .child(tr(cx, "prompting ChatGPT", "ChatGPT 提问什么"))
         };
 
-        // Mode switcher (Prompts vs Page)
+        // Mode switcher (Prompts vs Page) with 4-edge liquid pill indicator & smooth tooltips
+        let mode_sensor = pro_selection_sensor();
         let mode_group = div()
             .id(pro_eid(&self.id, "mode-group"))
             .role(Role::RadioGroup)
             .aria_label(tr(cx, "Analyse", "分析模式"))
+            .relative()
             .flex()
             .items_center()
             .gap(px(2.))
@@ -1776,6 +2296,15 @@ impl PromptExplorerScreen {
                     cx.stop_propagation();
                 }
             }))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "mode-pill"),
+                self.mode.slug(),
+                mode_sensor.clone(),
+                6.,
+                p.chip,
+                None,
+                false,
+            ))
             .children(PromptAnalyseMode::all().into_iter().map(|m| {
                 let checked = self.mode == m;
                 let tip: SharedString = m.label(cx).into();
@@ -1785,50 +2314,61 @@ impl PromptExplorerScreen {
                     PromptAnalyseMode::Keyword => ProIcon::Search,
                     PromptAnalyseMode::Url => ProIcon::Link,
                 };
-                let fg = if checked { p.ink } else { p.faint };
-                let btn = activate(
+                let ink_t = pro_spring_f32(
+                    pro_eid(&self.id, format!("mode-ink-{}", m.slug())),
+                    f32::from(checked),
+                    0.18,
+                    w,
+                    cx,
+                )
+                .clamp(0., 1.);
+                let fg = pro_mix_color(p.faint, p.ink, ink_t);
+                let btn = pro_tactile(
+                    pro_eid(&self.id, format!("mode-{}", m.slug())),
+                    tip.clone(),
+                    6.,
+                    transparent_black(),
+                    if checked {
+                        transparent_black()
+                    } else {
+                        p.hover
+                    },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("mode-{}", m.slug())))
-                        .role(Role::RadioButton)
-                        .aria_label(tip.clone())
-                        .aria_toggled(checked.into())
-                        .tab_index(if checked { 0 } else { -1 })
-                        .size(px(28.))
-                        .rounded(px(6.))
-                        .when(checked, |d| d.bg(p.chip))
-                        .hover(move |s| {
-                            if checked {
-                                s.text_color(p.ink)
-                            } else {
-                                s.text_color(p.ink).bg(p.hover)
-                            }
-                        })
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
+                        .h(px(28.))
                         .flex()
                         .items_center()
                         .justify_center()
-                        .cursor_pointer()
-                        .on_hover(cx.listener({
-                            let tip_key = tip_key.clone();
-                            move |this, inside: &bool, _, cx| {
-                                if *inside {
-                                    this.hovered_tip = Some(tip_key.clone());
-                                } else if this.hovered_tip.as_ref() == Some(&tip_key) {
-                                    this.hovered_tip = None;
-                                }
-                                cx.notify();
-                            }
-                        }))
                         .child(pro_icon(icon, 15., fg)),
                     cx,
                     move |this, _, cx| this.set_mode(m, cx),
-                );
-                div().relative().child(btn).when(show_tip, |d| {
-                    d.child(
+                )
+                .role(Role::RadioButton)
+                .aria_toggled(checked.into())
+                .tab_index(if checked { 0 } else { -1 })
+                .w(px(28.))
+                .h(px(28.))
+                .relative()
+                .flex_none()
+                .when(checked, |d| d.child(pro_mark_selected(&mode_sensor)))
+                .on_hover(cx.listener({
+                    let tip_key = tip_key.clone();
+                    move |this, inside: &bool, _, cx| {
+                        if *inside {
+                            this.hovered_tip = Some(tip_key.clone());
+                        } else if this.hovered_tip.as_ref() == Some(&tip_key) {
+                            this.hovered_tip = None;
+                        }
+                        cx.notify();
+                    }
+                }));
+                let tip_pop = pro_popover_presence(
+                    pro_eid(&self.id, format!("mode-tip-{}", m.slug())),
+                    show_tip,
+                    move || {
                         div()
-                            .absolute()
-                            .bottom(px(34.))
-                            .left(px(-16.))
                             .px(px(7.))
                             .py(px(3.))
                             .rounded(px(6.))
@@ -1837,20 +2377,36 @@ impl PromptExplorerScreen {
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(rgb(0xffffff))
                             .whitespace_nowrap()
-                            .child(tip),
-                    )
-                })
+                            .child(tip)
+                            .into_any_element()
+                    },
+                );
+                div().relative().child(btn).child(
+                    div()
+                        .absolute()
+                        .bottom(px(34.))
+                        .left(px(-16.))
+                        .child(tip_pop),
+                )
             }));
 
         // Bulk analysis switch + label + Analyse button
         let url_disabled = self.mode == PromptAnalyseMode::Url;
+        let bulk_op = pro_spring_f32(
+            pro_eid(&self.id, "bulk-op"),
+            if url_disabled { 0.45 } else { 1.0 },
+            0.18,
+            w,
+            cx,
+        )
+        .clamp(0.35, 1.0);
         let bulk_checked = self.is_bulk_analysis();
         let bulk_label: SharedString = tr(cx, "Bulk analysis", "批量分析").into();
         let bulk_control = div()
             .flex()
             .items_center()
-            .gap(px(8.))
-            .when(url_disabled, |d| d.opacity(0.45))
+            .gap(px(6.))
+            .opacity(bulk_op)
             .child(pro_switch(
                 pro_eid(&self.id, "bulk-switch"),
                 bulk_label.clone(),
@@ -1866,60 +2422,68 @@ impl PromptExplorerScreen {
                     }
                 },
             ))
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "bulk-label"))
-                    .role(Role::Button)
-                    .tab_index(-1)
-                    .text_size(px(13.))
-                    .text_color(p.text)
-                    .when(!url_disabled, |d| d.cursor_pointer())
-                    .child(bulk_label),
-                cx,
-                |this, w, cx| {
-                    if this.mode == PromptAnalyseMode::Keyword {
-                        let next = !this.bulk;
-                        this.set_bulk_analysis(next, cx);
-                        if let Some(ed) = this.editor.clone() {
-                            ed.update(cx, |e, cx| e.focus(w, cx));
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, "bulk-label"),
+                    bulk_label.clone(),
+                    5.,
+                    transparent_black(),
+                    if url_disabled {
+                        transparent_black()
+                    } else {
+                        p.hover
+                    },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    div()
+                        .px(px(4.))
+                        .py(px(2.))
+                        .text_size(px(13.))
+                        .text_color(p.text)
+                        .whitespace_nowrap()
+                        .child(bulk_label),
+                    cx,
+                    |this, w, cx| {
+                        if this.mode == PromptAnalyseMode::Keyword {
+                            let next = !this.bulk;
+                            this.set_bulk_analysis(next, cx);
+                            if let Some(ed) = this.editor.clone() {
+                                ed.update(cx, |e, cx| e.focus(w, cx));
+                            }
                         }
-                    }
-                },
-            ));
+                    },
+                )
+                .tab_index(-1)
+                .flex_none(),
+            );
 
-        let analyse_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "analyse-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Analyse", "分析"))
-                .tab_index(0)
-                .h(px(28.))
-                .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.primary)
-                .text_color(p.on_primary)
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.opacity(0.90))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(tr(cx, "Analyse", "分析")),
+        let analyse_btn = pro_btn(
+            pro_eid(&self.id, "analyse-btn"),
+            tr(cx, "Analyse", "分析"),
+            None,
+            ProBtnStyle::Primary,
+            true,
             cx,
             |this, _, cx| this.submit_from_editor(cx),
         );
 
         let composer_bounds_cell = self.composer_bounds.clone();
         let firm_edge = self.editor_focused || show_dropdown;
-        let box_border = if firm_edge {
-            p.line_strong
-        } else if p.dark {
+        let edge_t = pro_spring_f32(
+            pro_eid(&self.id, "composer-edge"),
+            f32::from(firm_edge),
+            0.18,
+            w,
+            cx,
+        )
+        .clamp(0., 1.);
+        let rest_edge = if p.dark {
             hsla(0., 0., 1., 0.10)
         } else {
             hsla(0., 0., 0., 0.07)
         };
+        let box_border = pro_mix_color(rest_edge, p.line_strong, edge_t);
         let box_corners = if show_dropdown {
             Corners {
                 top_left: px(10.),
@@ -2011,6 +2575,25 @@ impl PromptExplorerScreen {
             );
         }
 
+        let show_bulk_cnt = bulk_checked && bulk_line_count > 0;
+        let shown_cnt = if bulk_line_count > 0 {
+            bulk_line_count
+        } else {
+            self.last_bulk_count
+        };
+        let count_lbl: SharedString = if shown_cnt == 1 {
+            format!("1 {}", tr(cx, "prompt", "条提问")).into()
+        } else {
+            format!("{shown_cnt} {}", tr(cx, "prompts", "条提问")).into()
+        };
+        let cnt_id = pro_eid(&self.id, "bulk-cnt-lbl");
+        let cnt_muted = p.muted;
+        let bulk_cnt_pop = pro_popover_presence(
+            pro_eid(&self.id, "bulk-cnt-pop"),
+            show_bulk_cnt,
+            move || pro_swap_label(cnt_id, count_lbl, 12., FontWeight::NORMAL, cnt_muted),
+        );
+
         composer_box = composer_box.child(
             div()
                 .pt(px(8.))
@@ -2023,19 +2606,7 @@ impl PromptExplorerScreen {
                 .gap(px(if mobile { 8. } else { 12. }))
                 .child(mode_group)
                 .child(div().flex_1())
-                .when(bulk_checked && bulk_line_count > 0, |d| {
-                    let count_lbl = if bulk_line_count == 1 {
-                        format!("1 {}", tr(cx, "prompt", "条提问"))
-                    } else {
-                        format!("{bulk_line_count} {}", tr(cx, "prompts", "条提问"))
-                    };
-                    d.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(count_lbl),
-                    )
-                })
+                .child(bulk_cnt_pop)
                 .child(bulk_control)
                 .child(analyse_btn),
         );
@@ -2054,11 +2625,13 @@ impl PromptExplorerScreen {
             .child(div().relative().child(title_el))
             .child(composer_box);
 
-        // Trending switcher (Rising / Falling)
+        // Trending switcher (Rising / Falling) with 4-edge liquid pill indicator & smooth tooltips
+        let trend_sensor = pro_selection_sensor();
         let trend_switcher = div()
             .id(pro_eid(&self.id, "trend-group"))
             .role(Role::RadioGroup)
             .aria_label(tr(cx, "Trend", "趋势方向"))
+            .relative()
             .flex()
             .items_center()
             .gap(px(2.))
@@ -2072,6 +2645,15 @@ impl PromptExplorerScreen {
                     cx.stop_propagation();
                 }
             }))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "trend-pill"),
+                self.trend_dir.slug(),
+                trend_sensor.clone(),
+                6.,
+                p.chip,
+                None,
+                false,
+            ))
             .children(PromptTrendDirection::all().into_iter().map(|dir| {
                 let checked = self.trend_dir == dir;
                 let tip: SharedString = dir.label(cx).into();
@@ -2081,45 +2663,61 @@ impl PromptExplorerScreen {
                     PromptTrendDirection::Rising => (CHART_RISING_SVG, up_color),
                     PromptTrendDirection::Falling => (CHART_FALLING_SVG, down_color),
                 };
-                let fg = if checked { active_fg } else { p.faint };
-                let btn = activate(
+                let tint_t = pro_spring_f32(
+                    pro_eid(&self.id, format!("trend-ink-{}", dir.slug())),
+                    f32::from(checked),
+                    0.18,
+                    w,
+                    cx,
+                )
+                .clamp(0., 1.);
+                let fg = pro_mix_color(p.faint, active_fg, tint_t);
+                let btn = pro_tactile(
+                    pro_eid(&self.id, format!("trend-{}", dir.slug())),
+                    tip.clone(),
+                    6.,
+                    transparent_black(),
+                    if checked {
+                        transparent_black()
+                    } else {
+                        p.hover
+                    },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("trend-{}", dir.slug())))
-                        .role(Role::RadioButton)
-                        .aria_label(tip.clone())
-                        .aria_toggled(checked.into())
-                        .tab_index(if checked { 0 } else { -1 })
-                        .w(px(32.))
                         .h(px(28.))
-                        .rounded(px(6.))
-                        .when(checked, |d| d.bg(p.chip))
-                        .hover(move |s| when_not_checked_bg(s, checked, p.hover))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
                         .flex()
                         .items_center()
                         .justify_center()
-                        .cursor_pointer()
-                        .on_hover(cx.listener({
-                            let tip_key = tip_key.clone();
-                            move |this, inside: &bool, _, cx| {
-                                if *inside {
-                                    this.hovered_tip = Some(tip_key.clone());
-                                } else if this.hovered_tip.as_ref() == Some(&tip_key) {
-                                    this.hovered_tip = None;
-                                }
-                                cx.notify();
-                            }
-                        }))
                         .child(pro_svg("0 0 24 24", svg, 16., fg)),
                     cx,
                     move |this, _, cx| this.set_trend_direction(dir, cx),
-                );
-                div().relative().child(btn).when(show_tip, |d| {
-                    d.child(
+                )
+                .role(Role::RadioButton)
+                .aria_toggled(checked.into())
+                .tab_index(if checked { 0 } else { -1 })
+                .w(px(32.))
+                .h(px(28.))
+                .relative()
+                .flex_none()
+                .when(checked, |d| d.child(pro_mark_selected(&trend_sensor)))
+                .on_hover(cx.listener({
+                    let tip_key = tip_key.clone();
+                    move |this, inside: &bool, _, cx| {
+                        if *inside {
+                            this.hovered_tip = Some(tip_key.clone());
+                        } else if this.hovered_tip.as_ref() == Some(&tip_key) {
+                            this.hovered_tip = None;
+                        }
+                        cx.notify();
+                    }
+                }));
+                let tip_pop = pro_popover_presence(
+                    pro_eid(&self.id, format!("trend-tip-{}", dir.slug())),
+                    show_tip,
+                    move || {
                         div()
-                            .absolute()
-                            .bottom(px(34.))
-                            .right_0()
                             .px(px(7.))
                             .py(px(3.))
                             .rounded(px(6.))
@@ -2128,12 +2726,18 @@ impl PromptExplorerScreen {
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(rgb(0xffffff))
                             .whitespace_nowrap()
-                            .child(tip),
-                    )
-                })
+                            .child(tip)
+                            .into_any_element()
+                    },
+                );
+                div()
+                    .relative()
+                    .child(btn)
+                    .child(div().absolute().bottom(px(34.)).right_0().child(tip_pop))
             }));
 
         let pop_body = self.render_keyword_column(
+            "popular",
             "popular",
             &self.popular,
             false,
@@ -2156,6 +2760,7 @@ impl PromptExplorerScreen {
             trend_col_key,
             self.render_keyword_column(
                 trend_col_key,
+                "trending",
                 active_trending,
                 true,
                 mobile,
@@ -2234,28 +2839,24 @@ impl PromptExplorerScreen {
             .child(left_col)
             .child(right_col);
 
+        let section_gap = if mobile { 12.0 } else { 16.0 };
         let has_results = self.results.is_some();
-        let results_el = self.results.as_deref().map(|rows| {
-            self.render_results_card(rows, stack_cols, up_color, down_color, on_blue, cx)
+        let results_rows = self.results.as_deref().or(self.last_results.as_deref());
+        let results_el = results_rows.map(|rows| {
+            div()
+                .w_full()
+                .pb(px(section_gap))
+                .child(
+                    self.render_results_card(rows, stack_cols, up_color, down_color, on_blue, cx),
+                )
+                .into_any_element()
         });
-        let results_presence = pro_presence(
-            pro_eid(&self.id, "results-pres"),
-            has_results,
-            0.22,
-            0.14,
-            move |a| {
-                if let Some(card) = results_el {
-                    div()
-                        .w_full()
-                        .relative()
-                        .top(px(6. * (1. - a)))
-                        .opacity(a)
-                        .child(card)
-                        .into_any_element()
-                } else {
-                    div().into_any_element()
-                }
-            },
+        let results_fold = pro_fold(
+            pro_eid(&self.id, "results-fold"),
+            has_results && results_el.is_some(),
+            136.,
+            0.,
+            move || results_el.unwrap_or_else(|| div().into_any_element()),
         );
 
         // Width & page bounds sensor
@@ -2274,7 +2875,7 @@ impl PromptExplorerScreen {
         .w_full()
         .h(px(0.));
 
-        let mut scroll = div()
+        let scroll = div()
             .id(pro_eid(&self.id, "scroll"))
             .size_full()
             .min_h_0()
@@ -2284,14 +2885,17 @@ impl PromptExplorerScreen {
             .pb(px(if mobile { 16. } else { 24. }))
             .flex()
             .flex_col()
-            .gap(px(if mobile { 12. } else { 16. }))
+            .gap(px(section_gap))
             .child(width_sensor)
-            .child(hero_section);
-
-        if has_results {
-            scroll = scroll.child(results_presence);
-        }
-        scroll = scroll.child(keywords_card);
+            .child(hero_section)
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .child(results_fold)
+                    .child(keywords_card),
+            );
 
         let mut page = div()
             .id(self.id.clone())
@@ -2318,22 +2922,97 @@ impl PromptExplorerScreen {
             }))
             .child(scroll);
 
-        // Floating combobox listbox painted above all cards via `deferred`
-        if show_dropdown
+        // Floating combobox listbox painted above all cards via `deferred` + `pro_popover_presence`
+        if (show_dropdown || !shown_suggestions.is_empty())
             && let (Some(cb), Some(pb)) = (self.composer_bounds.get(), self.page_bounds.get())
         {
             let left_px = f32::from(cb.left() - pb.left()).max(8.0);
             let top_px = f32::from(cb.bottom() - pb.top()) - 1.0;
             let list_w = f32::from(cb.size.width).max(220.0);
-            let mut popup = div()
+            let sug_sensor = pro_selection_sensor();
+            let mut list_rows = div().relative().flex().flex_col().child(pro_pill_indicator(
+                pro_eid(&self.id, "relevant-pill"),
+                format!("sug-{active_idx}"),
+                sug_sensor.clone(),
+                6.,
+                p.hover,
+                None,
+                false,
+            ));
+
+            for (si, opt) in shown_suggestions.iter().enumerate() {
+                let selected = si == active_idx;
+                let opt_text = opt.text.clone();
+                let opt_body = div()
+                    .h(px(34.))
+                    .px(px(10.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(16.))
+                    .child(Self::render_highlighted_completion(
+                        &opt.text,
+                        &shown_typed,
+                        p,
+                    ))
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .text_size(px(13.))
+                            .text_color(p.ink)
+                            .child(rolling_prompt_volume(
+                                pro_eid(&self.id, format!("sug-vol-{si}")),
+                                opt.volume as i64,
+                                false,
+                                13.,
+                                FontWeight::NORMAL,
+                                p.ink,
+                            ))
+                            .child(Self::render_change_badge(
+                                pro_eid(&self.id, format!("sug-chg-{si}")),
+                                opt.change,
+                                false,
+                                up_color,
+                                down_color,
+                                p.muted,
+                            )),
+                    );
+                let opt_el = pro_tactile(
+                    pro_eid(&self.id, format!("relevant-opt-{si}")),
+                    opt.text.clone(),
+                    6.,
+                    transparent_black(),
+                    transparent_black(),
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    opt_body,
+                    cx,
+                    move |this, w, cx| this.pick_keyword(opt_text.clone(), w, cx),
+                )
+                .role(Role::ListBoxOption)
+                .aria_selected(selected)
+                .w_full()
+                .relative()
+                .when(selected, |d| d.child(pro_mark_selected(&sug_sensor)))
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside && this.active_suggestion != si {
+                        this.active_suggestion = si;
+                        cx.notify();
+                    }
+                }));
+                list_rows = list_rows.child(opt_el);
+            }
+
+            let popup = div()
                 .id(pro_eid(&self.id, "relevant-listbox"))
                 .role(Role::ListBox)
                 .aria_label(tr(cx, "Relevant searches", "相关搜索"))
-                .occlude()
-                .absolute()
-                .left(px(left_px))
-                .top(px(top_px))
-                .w(px(list_w))
+                .when(show_dropdown, |d| d.occlude())
+                .w_full()
                 .p(px(6.))
                 .rounded_b(px(10.))
                 .bg(box_bg)
@@ -2350,65 +3029,30 @@ impl PromptExplorerScreen {
                         .text_size(px(12.))
                         .text_color(p.muted)
                         .child(tr(cx, "Relevant searches", "相关搜索")),
-                );
+                )
+                .child(list_rows);
 
-            for (si, opt) in suggestions.iter().enumerate() {
-                let selected = si == active_idx;
-                let opt_text = opt.text.clone();
-                popup = popup.child(activate(
+            let popup_pres = pro_popover_presence(
+                pro_eid(&self.id, "relevant-pop"),
+                show_dropdown,
+                move || popup.into_any_element(),
+            );
+            page = page.child(
+                deferred(
                     div()
-                        .id(pro_eid(&self.id, format!("relevant-opt-{si}")))
-                        .role(Role::ListBoxOption)
-                        .aria_selected(selected)
-                        .h(px(34.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .when(selected, |d| d.bg(p.hover))
-                        .hover(move |s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(16.))
-                        .cursor_pointer()
-                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                            if *inside && this.active_suggestion != si {
-                                this.active_suggestion = si;
-                                cx.notify();
-                            }
-                        }))
-                        .child(Self::render_highlighted_completion(
-                            &opt.text,
-                            &typed_token,
-                            p,
-                        ))
-                        .child(
-                            div()
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_size(px(13.))
-                                .text_color(p.ink)
-                                .child(format_prompt_volume(opt.volume as i64))
-                                .child(Self::render_change_badge(
-                                    opt.change, false, up_color, down_color, p.muted,
-                                )),
-                        ),
-                    cx,
-                    move |this, w, cx| this.pick_keyword(opt_text.clone(), w, cx),
-                ));
-            }
-
-            page = page.child(deferred(popup).with_priority(6));
+                        .absolute()
+                        .left(px(left_px))
+                        .top(px(top_px))
+                        .w(px(list_w))
+                        .child(popup_pres),
+                )
+                .with_priority(6),
+            );
         }
 
         page = page.child(pro_toast_banner(self.toast.clone()));
         page
     }
-}
-
-fn when_not_checked_bg(style: StyleRefinement, checked: bool, hover: Hsla) -> StyleRefinement {
-    if checked { style } else { style.bg(hover) }
 }
 
 impl Render for PromptExplorerScreen {

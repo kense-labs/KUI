@@ -6,8 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_eid, pro_empty_state, pro_fold,
-        pro_shimmer_text, pro_skeleton_bar, tr,
+        ProPalette, pro_agent_avatar, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32,
+        pro_tactile, tr,
     },
     primitives::{
         family::disabled_motion,
@@ -701,8 +702,18 @@ impl Render for ReasoningSummary {
             )
         } else {
             div()
+                .flex()
+                .items_center()
+                .gap(px(5.))
                 .text_size(px(13.))
                 .text_color(p.text)
+                .child(pro_check_draw(
+                    pro_eid(&self.id, "head-done-chk"),
+                    true,
+                    13.,
+                    false,
+                    p.green,
+                ))
                 .child(
                     tr(
                         cx,
@@ -736,15 +747,18 @@ impl Render for ReasoningSummary {
                     ))
                     .child(head_label),
             )
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .child(format_secs_ms(total_ms)),
-            );
+            .child(pro_rolling_number(
+                pro_eid(&self.id, "hdr-tot-s"),
+                total_ms as f64 / 1_000.0,
+                1,
+                "",
+                "s",
+                13.,
+                FontWeight::MEDIUM,
+                p.strong,
+            ));
 
-        // Multi-segment horizontal cognitive bar
+        // Multi-segment horizontal cognitive bar with spring-animated proportions
         let mut seg_bar = div()
             .id(pro_eid(&self.id, "seg-bar"))
             .role(Role::Image)
@@ -762,7 +776,14 @@ impl Render for ReasoningSummary {
         let sweep_phase = (elapsed_s / 1.55).fract();
         for (idx, step) in self.steps.iter().enumerate() {
             let sms = step_ms_vec[idx].max(80);
-            let frac = (sms as f32 / bar_denom_ms as f32).clamp(0.03, 1.0);
+            let target_frac = (sms as f32 / bar_denom_ms as f32).clamp(0.03, 1.0);
+            let frac = pro_spring_f32(
+                pro_eid(&self.id, format!("seg-w-{}", step.id)),
+                target_frac,
+                0.28,
+                window,
+                cx,
+            );
             let lit = step_matches(step);
             let k_col = step.kind.color(&p);
             let sid_hov = step.id.clone();
@@ -901,14 +922,16 @@ impl Render for ReasoningSummary {
                         .text_color(p.text)
                         .child(kind.label(cx)),
                 )
-                .child(
-                    div()
-                        .flex_none()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .child(format_secs_ms(sum_k)),
-                );
+                .child(div().flex_none().child(pro_rolling_number(
+                    pro_eid(&self.id, format!("kind-s-{kind:?}")),
+                    sum_k as f64 / 1_000.0,
+                    1,
+                    "",
+                    "s",
+                    12.5,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                )));
             kind_pills.push(pill);
         }
 
@@ -1005,45 +1028,18 @@ impl Render for ReasoningSummary {
             let is_expanded = self.expanded_model.as_ref() == Some(&model.id);
             let mid_hov = model.id.clone();
             let mid_click = model.id.clone();
-            let row_hover = p.chip;
-            let aria = format!(
+            let aria = SharedString::from(format!(
                 "{}, {}, {}, {}",
                 model.name,
                 model.display_role(cx),
                 format_secs_ms(m_ms),
                 model.effort.label(cx)
-            );
+            ));
 
-            let model_row = div()
-                .id(pro_eid(&self.id, format!("mdl-{}", model.id)))
-                .role(Role::Button)
-                .aria_label(aria)
-                .tab_index(0)
+            let model_inner = div()
                 .w_full()
                 .min_h(px(32.))
                 .px(px(6.))
-                .mx(px(-6.))
-                .rounded(px(6.))
-                .bg(if is_expanded {
-                    p.chip
-                } else {
-                    transparent_black()
-                })
-                .opacity(if lit { 1.0 } else { 0.38 })
-                .cursor_pointer()
-                .hover(move |s| s.bg(row_hover))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                    if *inside {
-                        this.highlight = Some(FocusHighlight::Model(mid_hov.clone()));
-                    } else if this.highlight == Some(FocusHighlight::Model(mid_hov.clone())) {
-                        this.highlight = None;
-                    }
-                    cx.notify();
-                }))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.toggle_model(mid_click.as_ref(), cx);
-                }))
                 .flex()
                 .items_center()
                 .gap(px(8.))
@@ -1071,15 +1067,54 @@ impl Render for ReasoningSummary {
                         .text_color(p.muted)
                         .child(model.display_role(cx).to_string()),
                 )
-                .child(
-                    div()
-                        .flex_none()
-                        .min_w(px(34.))
-                        .text_right()
-                        .text_size(px(12.5))
-                        .text_color(p.ink)
-                        .child(format_secs_ms(m_ms)),
-                );
+                .child(div().flex_none().min_w(px(34.)).flex().justify_end().child(
+                    pro_rolling_number(
+                        pro_eid(&self.id, format!("mdl-s-{}", model.id)),
+                        m_ms as f64 / 1_000.0,
+                        1,
+                        "",
+                        "s",
+                        12.5,
+                        FontWeight::NORMAL,
+                        p.ink,
+                    ),
+                ));
+
+            let model_tactile = pro_tactile(
+                pro_eid(&self.id, format!("mdl-{}", model.id)),
+                aria,
+                6.,
+                if is_expanded {
+                    p.chip
+                } else {
+                    transparent_black()
+                },
+                p.chip,
+                transparent_black(),
+                transparent_black(),
+                is_expanded,
+                model_inner,
+                cx,
+                move |this, _, cx| {
+                    this.toggle_model(mid_click.as_ref(), cx);
+                },
+            )
+            .w_full();
+
+            let model_row = div()
+                .id(pro_eid(&self.id, format!("mdl-hov-{}", model.id)))
+                .w_full()
+                .mx(px(-6.))
+                .opacity(if lit { 1.0 } else { 0.38 })
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.highlight = Some(FocusHighlight::Model(mid_hov.clone()));
+                    } else if this.highlight == Some(FocusHighlight::Model(mid_hov.clone())) {
+                        this.highlight = None;
+                    }
+                    cx.notify();
+                }))
+                .child(model_tactile);
 
             let detail_fold = {
                 let provider = model.provider.to_string();
@@ -1097,7 +1132,8 @@ impl Render for ReasoningSummary {
                     ),
                 )
                 .to_string();
-                let cost_str = format!("${:.3}", model.cost);
+                let cost_val = model.cost;
+                let cost_eid = pro_eid(&self.id, format!("mcost-{}", model.id));
                 let note_opt = model.display_note(cx).map(str::to_string);
                 let effort_txt = model.effort.label(cx).to_string();
                 let segs: Vec<(Hsla, f32)> = if m_ms > 0 {
@@ -1128,9 +1164,26 @@ impl Render for ReasoningSummary {
                             .flex_col()
                             .gap(px(5.))
                             .child(mini)
-                            .child(div().text_size(px(11.5)).text_color(p.text).child(format!(
-                                "{provider} · {effort_txt} · {tok_str} · {cost_str}"
-                            )))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .text_size(px(11.5))
+                                    .text_color(p.text)
+                                    .child(format!("{provider} · {effort_txt} · {tok_str} ·"))
+                                    .child(pro_rolling_number(
+                                        cost_eid,
+                                        cost_val,
+                                        3,
+                                        "$",
+                                        "",
+                                        11.5,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    )),
+                            )
                             .when_some(note_opt, |d, note| {
                                 d.child(
                                     div()
@@ -1148,20 +1201,107 @@ impl Render for ReasoningSummary {
             models_block = models_block.child(model_row).child(detail_fold);
         }
 
-        // Footer: stacked source icons + "Searched 24 sources" button on left, Steps toggle on right
+        // Footer: stacked source icons + "Searched 24 sources" tactile button on left, Steps tactile toggle on right
         let mut icon_stack = div().flex().items_center().gap(px(3.));
         for src in self.sources.iter().take(4) {
             icon_stack = icon_stack.child(pro_app_tile(src.icon.as_ref(), 18.0, cx));
         }
 
-        let src_hover = p.chip;
-        let toggle_hover = p.chip;
-        let sources_label = tr(
+        let sources_label = SharedString::from(
+            tr(
+                cx,
+                &format!("Searched {} sources", self.source_count),
+                &format!("已检索 {} 个来源", self.source_count),
+            )
+            .to_string(),
+        );
+        let src_prefix = tr(cx, "Searched ", "已检索 ");
+        let src_suffix = tr(cx, " sources", " 个来源");
+        let src_inner = div()
+            .h(px(28.))
+            .px(px(6.))
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .child(icon_stack)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .text_size(px(12.5))
+                    .text_color(if self.sources_open { p.ink } else { p.text })
+                    .child(src_prefix)
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "src-cnt-num"),
+                        self.source_count as f64,
+                        0,
+                        "",
+                        src_suffix,
+                        12.5,
+                        FontWeight::MEDIUM,
+                        if self.sources_open { p.ink } else { p.text },
+                    )),
+            );
+        let src_btn = pro_tactile(
+            pro_eid(&self.id, "src-btn"),
+            sources_label,
+            6.,
+            if self.sources_open {
+                p.chip
+            } else {
+                transparent_black()
+            },
+            p.chip,
+            transparent_black(),
+            transparent_black(),
+            self.sources_open,
+            src_inner,
             cx,
-            &format!("Searched {} sources", self.source_count),
-            &format!("已检索 {} 个来源", self.source_count),
+            |this, _, cx| this.toggle_sources(cx),
         )
-        .to_string();
+        .mx(px(-6.))
+        .flex_none();
+
+        let steps_suffix = tr(cx, " steps", " 步");
+        let steps_inner = div()
+            .h(px(28.))
+            .px(px(7.))
+            .flex()
+            .items_center()
+            .gap(px(5.))
+            .child(pro_icon(
+                ProIcon::List,
+                14.,
+                if self.steps_open { p.ink } else { p.muted },
+            ))
+            .child(pro_rolling_number(
+                pro_eid(&self.id, "steps-cnt-num"),
+                self.steps.len() as f64,
+                0,
+                "",
+                steps_suffix,
+                12.,
+                FontWeight::NORMAL,
+                if self.steps_open { p.ink } else { p.muted },
+            ));
+        let steps_btn = pro_tactile(
+            pro_eid(&self.id, "steps-btn"),
+            SharedString::from(tr(cx, "Toggle step trace", "展开或收起推理步骤明细")),
+            6.,
+            if self.steps_open {
+                p.chip
+            } else {
+                transparent_black()
+            },
+            p.chip,
+            transparent_black(),
+            transparent_black(),
+            self.steps_open,
+            steps_inner,
+            cx,
+            |this, _, cx| this.toggle_steps(cx),
+        )
+        .flex_none();
 
         let footer_block = div()
             .w_full()
@@ -1173,77 +1313,8 @@ impl Render for ReasoningSummary {
             .items_center()
             .justify_between()
             .gap(px(10.))
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "src-btn"))
-                    .role(Role::Button)
-                    .aria_label(sources_label.clone())
-                    .tab_index(0)
-                    .h(px(28.))
-                    .px(px(6.))
-                    .mx(px(-6.))
-                    .rounded(px(6.))
-                    .bg(if self.sources_open {
-                        p.chip
-                    } else {
-                        transparent_black()
-                    })
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(src_hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.toggle_sources(cx);
-                    }))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(icon_stack)
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .text_color(if self.sources_open { p.ink } else { p.text })
-                            .child(sources_label),
-                    ),
-            )
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "steps-btn"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Toggle step trace", "展开或收起推理步骤明细"))
-                    .tab_index(0)
-                    .h(px(28.))
-                    .px(px(7.))
-                    .rounded(px(6.))
-                    .bg(if self.steps_open {
-                        p.chip
-                    } else {
-                        transparent_black()
-                    })
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(toggle_hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.toggle_steps(cx);
-                    }))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.))
-                    .text_color(if self.steps_open { p.ink } else { p.muted })
-                    .child(pro_icon(
-                        ProIcon::List,
-                        14.,
-                        if self.steps_open { p.ink } else { p.muted },
-                    ))
-                    .child(
-                        tr(
-                            cx,
-                            &format!("{} steps", self.steps.len()),
-                            &format!("{} 步", self.steps.len()),
-                        )
-                        .to_string(),
-                    ),
-            );
+            .child(src_btn)
+            .child(steps_btn);
 
         // Collapsible Sources drawer (pro_fold)
         let sources_fold = {
@@ -1328,9 +1399,17 @@ impl Render for ReasoningSummary {
             )
         };
 
-        // Collapsible Steps Trace drawer (pro_fold)
+        // Collapsible Steps Trace drawer (pro_fold) with pro_check_draw on completed steps
         let steps_fold = {
-            type StepTraceRow = (ProIcon, Hsla, AnyElement, Option<AnyElement>, String, bool);
+            type StepTraceRow = (
+                ElementId,
+                ProIcon,
+                Hsla,
+                AnyElement,
+                Option<AnyElement>,
+                u64,
+                bool,
+            );
             let trace_rows: Vec<StepTraceRow> = self
                 .steps
                 .iter()
@@ -1364,11 +1443,12 @@ impl Render for ReasoningSummary {
                         .and_then(|mid| self.models.iter().find(|m| &m.id == mid))
                         .and_then(|m| pro_app_artwork(m.icon.as_ref(), 12.0, cx));
                     (
+                        pro_eid(&self.id, format!("rstep-{}", s.id)),
                         s.kind.icon(),
                         k_col,
                         label_el,
                         m_art,
-                        format_secs_ms(sms),
+                        sms,
                         s_run,
                     )
                 })
@@ -1390,7 +1470,9 @@ impl Render for ReasoningSummary {
                         .flex()
                         .flex_col()
                         .gap(px(2.));
-                    for (ic, k_col, label_el, m_art, t_str, s_run) in trace_rows {
+                    for (row_eid, ic, k_col, label_el, m_art, sms, s_run) in trace_rows {
+                        let chk_eid = pro_eid(&row_eid, "chk");
+                        let num_eid = pro_eid(&row_eid, "ms");
                         col = col.child(
                             div()
                                 .h(px(30.))
@@ -1410,15 +1492,22 @@ impl Render for ReasoningSummary {
                                         .child(pro_icon(ic, 12.5, k_col)),
                                 )
                                 .child(div().flex_1().min_w_0().overflow_hidden().child(label_el))
+                                .when(!s_run, |d| {
+                                    d.child(pro_check_draw(chk_eid, true, 12.5, false, p.green))
+                                })
                                 .when_some(m_art, |d, art| d.child(div().opacity(0.85).child(art)))
-                                .child(
-                                    div()
-                                        .min_w(px(34.))
-                                        .text_right()
-                                        .text_size(px(12.))
-                                        .text_color(if s_run { p.ink } else { p.muted })
-                                        .child(t_str),
-                                ),
+                                .child(div().min_w(px(34.)).flex().justify_end().child(
+                                    pro_rolling_number(
+                                        num_eid,
+                                        sms as f64 / 1_000.0,
+                                        1,
+                                        "",
+                                        "s",
+                                        12.,
+                                        FontWeight::NORMAL,
+                                        if s_run { p.ink } else { p.muted },
+                                    ),
+                                )),
                         );
                     }
                     col.into_any_element()

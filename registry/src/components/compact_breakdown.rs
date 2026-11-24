@@ -1,13 +1,14 @@
 //! Compact ranked breakdown card with period pill switcher, rolling total, and position-trading rows.
 //!
 //! Splits a headline metric into ranked parts across selectable periods (`7d`, `30d`, `90d`),
-//! rolling the headline readout (`pro_rolling_number`), gliding a multi-segment proportion bar
-//! (`Slide`), and smoothly trading vertical row positions (`Slide` y-offset) as ranks reorder.
+//! rolling the headline readout (`pro_rolling_number`), spring-morphing horizontal bar segments
+//! (`pro_spring_f32`), and smoothly trading vertical row positions with `pro_tactile` selection.
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_view_transition, tr,
+        ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_view_transition, tr,
     },
     primitives::{
         control::activate,
@@ -119,22 +120,11 @@ impl CompactPeriodData {
 pub enum CompactBreakdownEvent {
     /// Active period changed (`"7d"`, `"30d"`, `"90d"`).
     PeriodChanged(SharedString),
-    /// User clicked or focused a ranked part row.
+    /// User clicked or focused a ranked part row or bar segment.
     PartSelected {
         period: SharedString,
         part_id: SharedString,
     },
-}
-
-fn sample_slide(id: ElementId, target: f32, seconds: f32, w: &mut Window, cx: &mut App) -> f32 {
-    let st = w.use_keyed_state(id, cx, |_, _| (target, Slide::new(target)));
-    st.update(cx, |s, cx| {
-        if (s.0 - target).abs() > 0.0005 {
-            s.0 = target;
-            s.1.duration(target, seconds, cx);
-        }
-        s.1.get(w, cx)
-    })
 }
 
 /// Compact part-of-whole breakdown card with gliding bar and position-trading ranked rows.
@@ -153,6 +143,8 @@ pub struct CompactBreakdown {
     datasets: HashMap<SharedString, CompactPeriodData>,
     canonical_order: Vec<SharedString>,
     hovered_part: Option<SharedString>,
+    selected_part: Option<SharedString>,
+    part_spotlights: HashMap<SharedString, (Slide, Slide)>,
     loading: bool,
     empty: bool,
     width_cell: Rc<Cell<f32>>,
@@ -196,6 +188,8 @@ impl CompactBreakdown {
             datasets,
             canonical_order,
             hovered_part: None,
+            selected_part: None,
+            part_spotlights: HashMap::new(),
             loading: false,
             empty: false,
             width_cell: Rc::new(Cell::new(360.)),
@@ -262,6 +256,7 @@ impl CompactBreakdown {
         }
         self.periods = periods;
         self.datasets = datasets;
+        self.selected_part = None;
         if !order.is_empty() {
             self.canonical_order = order;
         }
@@ -305,6 +300,23 @@ impl CompactBreakdown {
         ));
         cx.notify();
         true
+    }
+
+    fn toggle_select_part(&mut self, part_id: SharedString, cx: &mut Context<Self>) {
+        if self.selected_part.as_ref() == Some(&part_id) {
+            self.selected_part = None;
+        } else {
+            self.selected_part = Some(part_id.clone());
+        }
+        cx.emit(CompactBreakdownEvent::PartSelected {
+            period: self.active_period.clone(),
+            part_id,
+        });
+        cx.notify();
+    }
+
+    fn active_spotlight_part(&self) -> Option<&SharedString> {
+        self.hovered_part.as_ref().or(self.selected_part.as_ref())
     }
 
     /// Return items for the active period sorted descending by `value` (tie-broken by canonical order).
@@ -455,8 +467,9 @@ impl Render for CompactBreakdown {
 
         let heading = tr(cx, self.title.as_ref(), self.title_zh.as_ref()).to_string();
 
-        // Period pill switcher (`7d`, `30d`, `90d` with `pro_pill_indicator`)
+        // Period pill switcher (`7d`, `30d`, `90d` with liquid `pro_pill_indicator`)
         let period_sensor = pro_selection_sensor();
+        let pill_fill: Hsla = if p.dark { rgb(0x28282c).into() } else { p.card };
         let period_switch = if self.periods.is_empty() {
             div().into_any_element()
         } else {
@@ -475,9 +488,9 @@ impl Render for CompactBreakdown {
                     self.active_period.clone(),
                     period_sensor.clone(),
                     5.,
-                    p.chip_hover,
-                    None,
-                    false,
+                    pill_fill,
+                    Some(p.line),
+                    !p.dark,
                 ));
 
             for opt in &self.periods {
@@ -499,7 +512,9 @@ impl Render for CompactBreakdown {
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if selected { p.ink } else { p.text })
                         .cursor_pointer()
-                        .when(!selected, move |d| d.hover(move |s| s.bg(p.hover)))
+                        .when(!selected, move |d| {
+                            d.hover(move |s| s.bg(p.hover).text_color(p.ink))
+                        })
                         .focus_visible(move |s| s.border_1().border_color(p.focus))
                         .when(selected, |d| d.child(pro_mark_selected(&period_sensor)))
                         .child(opt.label.clone()),
@@ -530,29 +545,34 @@ impl Render for CompactBreakdown {
             )
             .child(period_switch);
 
-        // Determine headline figure (rolls to hovered part's value when a part is hovered!)
-        let hovered_item = self
-            .hovered_part
+        // Determine headline figure (rolls to hovered or selected part's value via `pro_rolling_number`!)
+        let active_part_id = self.active_spotlight_part().cloned();
+        let spotlight_item = active_part_id
             .as_ref()
-            .and_then(|hid| ranked.iter().find(|i| &i.id == hid));
+            .and_then(|aid| ranked.iter().find(|i| &i.id == aid));
 
-        let shown_big_value = hovered_item.map(|i| i.value).unwrap_or(total);
-        let caption_key = hovered_item
-            .map(|i| format!("hov-{}", i.id))
-            .unwrap_or_else(|| format!("tot-{}", self.active_period));
-        let caption_text = if let Some(hi) = hovered_item {
+        let shown_big_value = spotlight_item.map(|i| i.value).unwrap_or(total);
+        let caption_text: SharedString = if let Some(hi) = spotlight_item {
             let pct = if total > 0.0 {
                 (hi.value / total) * 100.0
             } else {
                 0.0
             };
             let plbl = tr(cx, hi.label.as_ref(), hi.label_zh.as_ref());
-            format!("{plbl} · {pct:.1}%")
+            if self.selected_part.as_ref() == Some(&hi.id) && self.hovered_part.is_none() {
+                format!(
+                    "{} \u{00b7} {plbl} \u{00b7} {pct:.1}%",
+                    tr(cx, "Selected", "已选")
+                )
+                .into()
+            } else {
+                format!("{plbl} \u{00b7} {pct:.1}%").into()
+            }
         } else {
-            tr(cx, self.total_label.as_ref(), self.total_label_zh.as_ref()).to_string()
+            tr(cx, self.total_label.as_ref(), self.total_label_zh.as_ref()).into()
         };
 
-        let delta_badge = if hovered_item.is_none()
+        let delta_badge = if spotlight_item.is_none()
             && let Some(dp) = delta_pct
             && dp.is_finite()
         {
@@ -583,7 +603,16 @@ impl Render for CompactBreakdown {
                     11.,
                     fg,
                 ))
-                .child(format!("{:.1}%", dp.abs()))
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, "delta-roll"),
+                    dp.abs(),
+                    1,
+                    "",
+                    "%",
+                    11.5,
+                    FontWeight::MEDIUM,
+                    fg,
+                ))
                 .into_any_element()
         } else {
             div().into_any_element()
@@ -612,20 +641,20 @@ impl Render for CompactBreakdown {
                     ))
                     .child(delta_badge),
             )
-            .child(pro_view_transition(
-                pro_eid(&self.id, "cap-tx"),
-                caption_key,
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.muted)
-                    .child(caption_text),
+            .child(pro_swap_label(
+                pro_eid(&self.id, "cap-swap"),
+                caption_text,
+                12.,
+                FontWeight::NORMAL,
+                p.muted,
             ));
 
-        // Gliding Multi-Segment Proportion Bar (`Slide` per canonical slot!)
+        // Spring-Morphing Multi-Segment Proportion Bar (`pro_spring_f32` per segment share + `Slide::snappy` spotlight!)
         let mut prop_bar = div()
             .mt(px(15.))
             .w_full()
-            .h(px(9.))
+            .flex_none()
+            .h(px(10.))
             .flex()
             .items_center()
             .gap(px(2.));
@@ -641,13 +670,36 @@ impl Render for CompactBreakdown {
             ordered_parts
         };
 
+        // Pre-sample snappy `(opacity_slide, height_slide)` per part id.
+        let mut part_anim_map: HashMap<SharedString, (f32, f32)> =
+            HashMap::with_capacity(bar_parts.len());
+        for part in &bar_parts {
+            let is_spot = active_part_id.as_ref() == Some(&part.id);
+            let dimmed = active_part_id.is_some() && !is_spot;
+            let tgt_alpha = if dimmed { 0.26 } else { 1.0 };
+            let tgt_h = if is_spot { 10.0 } else { 6.0 };
+            let entry = self
+                .part_spotlights
+                .entry(part.id.clone())
+                .or_insert_with(|| (Slide::snappy(1.0), Slide::snappy(6.0)));
+            entry.0.set(tgt_alpha, cx);
+            entry.1.set(tgt_h, cx);
+            part_anim_map.insert(
+                part.id.clone(),
+                (
+                    entry.0.get(w, cx).clamp(0.20, 1.0),
+                    entry.1.get(w, cx).clamp(5.0, 11.0),
+                ),
+            );
+        }
+
         for (b_idx, part) in bar_parts.iter().enumerate() {
             let target_share = if total > 0.0 {
                 (part.value / total) as f32
             } else {
                 0.0
             };
-            let anim_share = sample_slide(
+            let anim_share = pro_spring_f32(
                 pro_eid(&self.id, format!("seg-w-{}", part.id)),
                 target_share.clamp(0.0, 1.0),
                 0.32,
@@ -660,19 +712,19 @@ impl Render for CompactBreakdown {
                 continue;
             }
 
-            let is_hov = self.hovered_part.as_ref() == Some(&part.id);
-            let dimmed = self.hovered_part.is_some() && !is_hov;
+            let (seg_alpha, seg_h) = part_anim_map.get(&part.id).copied().unwrap_or((1.0, 6.0));
             let seg_color = self.part_color(part, &p);
             let pid_hov = part.id.clone();
+            let pid_click = part.id.clone();
 
             prop_bar = prop_bar.child(
                 div()
                     .id(pro_eid(&self.id, format!("bseg-{b_idx}-{}", part.id)))
                     .w(relative(anim_share))
-                    .h(if is_hov { px(9.) } else { px(6.) })
+                    .h(px(seg_h))
                     .rounded(px(2.5))
                     .bg(seg_color)
-                    .opacity(if dimmed { 0.30 } else { 1.0 })
+                    .opacity(seg_alpha)
                     .cursor_pointer()
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
@@ -681,11 +733,14 @@ impl Render for CompactBreakdown {
                             this.hovered_part = None;
                         }
                         cx.notify();
+                    }))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_select_part(pid_click.clone(), cx);
                     })),
             );
         }
 
-        // Ranked Rows Smoothly Trading Vertical Positions via `Slide` y-offset!
+        // Ranked Rows Smoothly Trading Vertical Positions via `pro_spring_f32` y-offset + `pro_tactile`!
         let rank_map: HashMap<SharedString, usize> = ranked
             .iter()
             .enumerate()
@@ -693,7 +748,12 @@ impl Render for CompactBreakdown {
             .collect();
 
         let list_h = (ranked.len() as f32) * ROW_HEIGHT;
-        let mut rows_stage = div().mt(px(10.)).w_full().h(px(list_h)).relative();
+        let mut rows_stage = div()
+            .mt(px(10.))
+            .w_full()
+            .flex_none()
+            .h(px(list_h))
+            .relative();
 
         // Iterate in stable canonical order so GPUI element identity never swaps when ranks trade places!
         for part in &bar_parts {
@@ -701,7 +761,7 @@ impl Render for CompactBreakdown {
                 continue;
             };
             let target_y = (rank_idx as f32) * ROW_HEIGHT;
-            let anim_y = sample_slide(
+            let anim_y = pro_spring_f32(
                 pro_eid(&self.id, format!("row-y-{}", part.id)),
                 target_y,
                 0.36,
@@ -709,8 +769,10 @@ impl Render for CompactBreakdown {
                 cx,
             );
 
-            let is_hov = self.hovered_part.as_ref() == Some(&part.id);
-            let dimmed = self.hovered_part.is_some() && !is_hov;
+            let is_sel = self.selected_part.as_ref() == Some(&part.id);
+            let is_spot = active_part_id.as_ref() == Some(&part.id);
+            let (seg_alpha, _) = part_anim_map.get(&part.id).copied().unwrap_or((1.0, 6.0));
+            let row_alpha = (0.42 + 0.58 * seg_alpha).clamp(0.42, 1.0);
             let swatch_c = self.part_color(part, &p);
             let share_pct = if total > 0.0 {
                 (part.value / total) * 100.0
@@ -721,76 +783,102 @@ impl Render for CompactBreakdown {
             let pid_hov = part.id.clone();
             let pid_click = part.id.clone();
 
-            let row_el = activate(
-                div()
-                    .id(pro_eid(&self.id, format!("rank-row-{}", part.id)))
-                    .role(Role::Button)
-                    .aria_label(format!("{plabel}: {:.0} ({share_pct:.0}%)", part.value))
-                    .tab_index(0)
-                    .absolute()
-                    .left(px(-8.))
-                    .right(px(-8.))
-                    .top(px(anim_y))
-                    .h(px(ROW_HEIGHT))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(if is_hov { p.hover } else { transparent_black() })
-                    .opacity(if dimmed { 0.45 } else { 1.0 })
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                        if *inside {
-                            this.hovered_part = Some(pid_hov.clone());
-                        } else if this.hovered_part.as_ref() == Some(&pid_hov) {
-                            this.hovered_part = None;
-                        }
-                        cx.notify();
-                    }))
-                    .flex()
-                    .items_center()
-                    .gap(px(9.))
-                    .child(div().size(px(8.)).flex_none().rounded(px(2.)).bg(swatch_c))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(13.))
-                            .text_color(p.ink)
-                            .child(plabel),
-                    )
-                    .child(pro_rolling_number(
-                        pro_eid(&self.id, format!("rval-{}", part.id)),
-                        part.value,
-                        self.decimals,
-                        self.value_prefix.clone(),
-                        self.value_suffix.clone(),
-                        13.,
-                        FontWeight::MEDIUM,
-                        p.ink,
+            let rest_bg = if is_sel {
+                pro_mix_color(
+                    transparent_black(),
+                    swatch_c,
+                    if p.dark { 0.16 } else { 0.08 },
+                )
+            } else {
+                transparent_black()
+            };
+            let hover_bg = if is_sel {
+                pro_mix_color(p.hover, swatch_c, if p.dark { 0.20 } else { 0.11 })
+            } else {
+                p.hover
+            };
+            let rest_border = if is_sel {
+                swatch_c.opacity(0.36)
+            } else {
+                transparent_black()
+            };
+
+            let row_inner = div()
+                .w_full()
+                .h(px(ROW_HEIGHT))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(9.))
+                .child(div().size(px(8.)).flex_none().rounded(px(2.)).bg(swatch_c))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(13.))
+                        .font_weight(if is_spot {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if is_spot { p.strong } else { p.ink })
+                        .child(plabel.clone()),
+                )
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, format!("rval-{}", part.id)),
+                    part.value,
+                    self.decimals,
+                    self.value_prefix.clone(),
+                    self.value_suffix.clone(),
+                    13.,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ))
+                .when(!very_narrow, |d| {
+                    d.child(div().w(px(36.)).flex_none().flex().justify_end().child(
+                        pro_rolling_number(
+                            pro_eid(&self.id, format!("rshr-{}", part.id)),
+                            share_pct,
+                            0,
+                            "",
+                            "%",
+                            12.,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        ),
                     ))
-                    .when(!very_narrow, |d| {
-                        d.child(div().w(px(36.)).flex_none().flex().justify_end().child(
-                            pro_rolling_number(
-                                pro_eid(&self.id, format!("rshr-{}", part.id)),
-                                share_pct,
-                                0,
-                                "",
-                                "%",
-                                12.,
-                                FontWeight::NORMAL,
-                                p.muted,
-                            ),
-                        ))
-                    }),
+                });
+
+            let row_el = pro_tactile(
+                pro_eid(&self.id, format!("rank-row-{}", part.id)),
+                format!("{plabel}: {:.0} ({share_pct:.0}%)", part.value),
+                6.,
+                rest_bg,
+                hover_bg,
+                rest_border,
+                swatch_c.opacity(0.28),
+                is_sel,
+                row_inner,
                 cx,
                 move |this, _, cx| {
-                    cx.emit(CompactBreakdownEvent::PartSelected {
-                        period: this.active_period.clone(),
-                        part_id: pid_click.clone(),
-                    });
+                    this.toggle_select_part(pid_click.clone(), cx);
                 },
-            );
+            )
+            .absolute()
+            .left(px(-8.))
+            .right(px(-8.))
+            .top(px(anim_y))
+            .h(px(ROW_HEIGHT))
+            .opacity(row_alpha)
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_part = Some(pid_hov.clone());
+                } else if this.hovered_part.as_ref() == Some(&pid_hov) {
+                    this.hovered_part = None;
+                }
+                cx.notify();
+            }));
 
             rows_stage = rows_stage.child(row_el);
         }
@@ -834,6 +922,11 @@ impl Render for CompactBreakdown {
             .id(self.id.clone())
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                if ev.keystroke.key.as_str() == "escape" && this.selected_part.is_some() {
+                    this.selected_part = None;
+                    cx.notify();
+                    return;
+                }
                 let n = this.periods.len();
                 if n == 0 {
                     return;
@@ -940,7 +1033,8 @@ fn default_channel_datasets() -> HashMap<SharedString, CompactPeriodData> {
 #[cfg(test)]
 mod tests {
     use super::CompactBreakdown;
-    use gpui::{AppContext, TestAppContext};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[gpui::test]
     fn switching_periods_reorders_ranked_rows_and_updates_totals(cx: &mut TestAppContext) {
@@ -968,6 +1062,35 @@ mod tests {
             assert_eq!(r90[0].id.as_ref(), "organic");
             assert_eq!(r90[1].id.as_ref(), "referrals");
             assert_eq!(r90[2].id.as_ref(), "direct");
+        });
+    }
+
+    #[gpui::test]
+    fn tactile_row_selection_highlights_segment_with_snappy_spring(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (card, w) = cx.add_window_view(|_, cx| CompactBreakdown::new("cb-sel", cx));
+        w.simulate_resize(size(px(400.), px(380.)));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            card.update(app, |cb, cx| {
+                cb.toggle_select_part("direct".into(), cx);
+                assert_eq!(cb.selected_part.as_deref(), Some("direct"));
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(60));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let cb = card.read(app);
+            let (sel_alpha, sel_h) = cb.part_spotlights["direct"];
+            let (dim_alpha, _) = cb.part_spotlights["organic"];
+            assert!(sel_h.value(app) > 6.5);
+            assert!(sel_alpha.value(app) > dim_alpha.value(app));
         });
     }
 }

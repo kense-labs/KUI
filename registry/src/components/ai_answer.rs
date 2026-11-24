@@ -7,15 +7,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_eid, pro_empty_state, pro_fold,
-        pro_presence, pro_shimmer_text, pro_skeleton_bar, pro_toast_banner, pro_view_transition,
-        tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
+        pro_shimmer_text, pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         clipboard,
         control::UiLanguage,
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -28,6 +29,35 @@ const SVG_SPARK_MARK: &str = r#"<path d="M6.5 2.2c.2 0 .36.14.4.33.53 2.6 1.4 3.
 const SVG_THUMB_UP: &str = r#"<path d="M7 11V19C7 19.5523 6.55228 20 6 20H4C3.44772 20 3 19.5523 3 19V12C3 11.4477 3.44772 11 4 11H7ZM7 11L10.6 4.7C11.1 3.8 12.3 3.6 13.1 4.2C13.7 4.7 13.9 5.5 13.7 6.3L12.8 10H18.4C19.8 10 20.8 11.3 20.4 12.7L18.9 18.2C18.6 19.3 17.6 20 16.5 20H9C7.9 20 7 19.1 7 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 const SVG_THUMB_DOWN: &str = r#"<path d="M7 13V5C7 4.44772 6.55228 4 6 4H4C3.44772 4 3 4.44772 3 5V12C3 12.5523 3.44772 13 4 13H7ZM7 13L10.6 19.3C11.1 20.2 12.3 20.4 13.1 19.8C13.7 19.3 13.9 18.5 13.7 17.7L12.8 14H18.4C19.8 14 20.8 12.7 20.4 11.3L18.9 5.8C18.6 4.7 17.6 4 16.5 4H9C7.9 4 7 4.9 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+
+#[derive(IntoElement)]
+struct GlideArrow {
+    id: ElementId,
+    active: bool,
+    size: f32,
+    rest_color: Hsla,
+    active_color: Hsla,
+}
+
+impl RenderOnce for GlideArrow {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let init = self.active;
+        let st = w.use_keyed_state(self.id, cx, |_, _| (init, Slide::snappy(f32::from(init))));
+        let t = st.update(cx, |s, cx| {
+            if s.0 != self.active {
+                s.0 = self.active;
+                s.1.set(f32::from(self.active), cx);
+            }
+            s.1.get(w, cx).clamp(0., 1.)
+        });
+        let col = pro_mix_color(self.rest_color, self.active_color, t);
+        div()
+            .relative()
+            .left(px(2.0 * t))
+            .flex_none()
+            .child(pro_icon(ProIcon::ArrowRight, self.size, col))
+    }
+}
 
 /// Helpful or unhelpful rating recorded on [`AiAnswer`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -449,7 +479,9 @@ pub struct AiAnswer {
     stopped_tokens: Option<usize>,
     expand_all_sources: bool,
     hovered_source: Option<usize>,
+    hovered_follow_up: Option<usize>,
     active_cite_chip: Option<(SharedString, Vec<usize>)>,
+    last_cite_nums: Vec<usize>,
     copied_at: Option<Instant>,
     feedback: Option<AiAnswerFeedback>,
     picked_reason: Option<SharedString>,
@@ -487,7 +519,9 @@ impl AiAnswer {
             stopped_tokens: None,
             expand_all_sources: false,
             hovered_source: None,
+            hovered_follow_up: None,
             active_cite_chip: None,
+            last_cite_nums: Vec::new(),
             copied_at: None,
             feedback: None,
             picked_reason: None,
@@ -777,59 +811,17 @@ impl AiAnswer {
     ) -> Stateful<Div> {
         let p = ProPalette::get(cx);
         let src_clone = src.clone();
-        let card_bg = if lit {
-            if p.dark {
-                rgb(0x252529).into()
-            } else {
-                rgb(0xf4f7fc).into()
-            }
-        } else if self.framed {
-            p.subtle
+        let rest_bg = if self.framed { p.subtle } else { p.card };
+        let hover_bg: Hsla = if p.dark {
+            rgb(0x252529).into()
         } else {
-            p.card
+            rgb(0xf4f7fc).into()
         };
-        let bdr = if lit { p.blue.opacity(0.45) } else { p.line };
-
-        div()
-            .id(pro_eid(&self.id, format!("src-card-{idx_1based}")))
-            .role(Role::Button)
-            .aria_label(format!("{}: {} — {}", idx_1based, src.name, src.title))
-            .tab_index(0)
-            .flex_1()
-            .min_w_0()
+        let content = div()
             .p(px(9.))
-            .rounded(px(8.))
-            .bg(card_bg)
-            .border_1()
-            .border_color(bdr)
-            .cursor_pointer()
             .flex()
             .flex_col()
             .gap(px(5.))
-            .focus_visible(move |s| s.border_color(p.focus))
-            .hover(move |s| s.bg(if p.dark { rgb(0x232327) } else { rgb(0xf6f6f7) }))
-            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                this.hovered_source = if *inside { Some(idx_1based) } else { None };
-                cx.notify();
-            }))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toast = Some((
-                    SharedString::from(format!(
-                        "{} · {}",
-                        src_clone.name,
-                        src_clone
-                            .href
-                            .as_deref()
-                            .unwrap_or(src_clone.title.as_ref())
-                    )),
-                    Instant::now(),
-                ));
-                cx.emit(AiAnswerEvent::OpenSource {
-                    index: idx_1based,
-                    source: src_clone.clone(),
-                });
-                cx.notify();
-            }))
             .child(
                 div()
                     .flex()
@@ -863,7 +855,44 @@ impl AiAnswer {
                     .text_color(p.strong)
                     .line_clamp(2)
                     .child(src.title.clone()),
-            )
+            );
+
+        pro_tactile(
+            pro_eid(&self.id, format!("src-card-{idx_1based}")),
+            format!("{}: {} — {}", idx_1based, src.name, src.title),
+            8.,
+            rest_bg,
+            hover_bg,
+            p.line,
+            p.blue.opacity(0.45),
+            lit,
+            content,
+            cx,
+            move |this, _, cx| {
+                this.toast = Some((
+                    SharedString::from(format!(
+                        "{} · {}",
+                        src_clone.name,
+                        src_clone
+                            .href
+                            .as_deref()
+                            .unwrap_or(src_clone.title.as_ref())
+                    )),
+                    Instant::now(),
+                ));
+                cx.emit(AiAnswerEvent::OpenSource {
+                    index: idx_1based,
+                    source: src_clone.clone(),
+                });
+                cx.notify();
+            },
+        )
+        .flex_1()
+        .min_w_0()
+        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+            this.hovered_source = if *inside { Some(idx_1based) } else { None };
+            cx.notify();
+        }))
     }
 
     fn render_token_stream(
@@ -1153,53 +1182,45 @@ impl Render for AiAnswer {
                 row = row.child(self.render_source_card(n, src, lit, cx));
             }
             if hidden_count > 0 {
+                let more_body = div()
+                    .h_full()
+                    .p(px(9.))
+                    .flex()
+                    .flex_col()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(if overflow_lit { p.blue } else { p.strong })
+                            .child(format!("+{hidden_count}")),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .whitespace_nowrap()
+                            .text_color(p.text)
+                            .child(tr(cx, "Sources", "来源")),
+                    );
                 row = row.child(
-                    div()
-                        .id(pro_eid(&self.id, "src-more-tile"))
-                        .role(Role::Button)
-                        .aria_label(format!("+{hidden_count} more sources"))
-                        .tab_index(0)
-                        .w(px(68.))
-                        .flex_none()
-                        .p(px(9.))
-                        .rounded(px(8.))
-                        .bg(if overflow_lit {
-                            p.accent_soft
-                        } else if self.framed {
-                            p.subtle
-                        } else {
-                            p.card
-                        })
-                        .border_1()
-                        .border_color(if overflow_lit {
-                            p.blue.opacity(0.45)
-                        } else {
-                            p.line
-                        })
-                        .cursor_pointer()
-                        .flex()
-                        .flex_col()
-                        .justify_between()
-                        .focus_visible(move |s| s.border_color(p.focus))
-                        .hover(move |s| s.bg(p.hover))
-                        .on_click(cx.listener(|this, _, _, cx| {
+                    pro_tactile(
+                        pro_eid(&self.id, "src-more-tile"),
+                        format!("+{hidden_count} more sources"),
+                        8.,
+                        if self.framed { p.subtle } else { p.card },
+                        p.accent_soft,
+                        p.line,
+                        p.blue.opacity(0.45),
+                        overflow_lit,
+                        more_body,
+                        cx,
+                        |this, _, cx| {
                             this.expand_all_sources = true;
                             cx.notify();
-                        }))
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(if overflow_lit { p.blue } else { p.strong })
-                                .child(format!("+{hidden_count}")),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(11.))
-                                .whitespace_nowrap()
-                                .text_color(p.text)
-                                .child(tr(cx, "Sources", "来源")),
-                        ),
+                        },
+                    )
+                    .w(px(68.))
+                    .flex_none(),
                 );
             }
             sources_grid = sources_grid.child(row);
@@ -1266,14 +1287,22 @@ impl Render for AiAnswer {
                 ))
             });
 
-        // Citation preview popover card when hovering/focusing any `[n]` chip.
-        let preview_nums = self
+        // Citation preview popover card when hovering/focusing any `[n]` chip (`pro_popover_presence` enter & exit).
+        let active_nums = self
             .active_cite_chip
             .as_ref()
             .map(|(_, nums)| nums.clone())
             .unwrap_or_default();
-        let preview_open = !preview_nums.is_empty();
-        let preview_sources: Vec<(usize, AnswerSource, AnyElement)> = preview_nums
+        let preview_open = !active_nums.is_empty();
+        if preview_open {
+            self.last_cite_nums = active_nums.clone();
+        }
+        let shown_nums = if preview_open {
+            &active_nums
+        } else {
+            &self.last_cite_nums
+        };
+        let preview_sources: Vec<(usize, AnswerSource, AnyElement)> = shown_nums
             .iter()
             .filter_map(|&n| {
                 self.sources.get(n.saturating_sub(1)).cloned().map(|s| {
@@ -1282,12 +1311,8 @@ impl Render for AiAnswer {
                 })
             })
             .collect();
-        let cite_popover = pro_presence(
-            pro_eid(&self.id, "cite-popover"),
-            preview_open,
-            0.16,
-            0.12,
-            move |amt| {
+        let cite_popover =
+            pro_popover_presence(pro_eid(&self.id, "cite-popover"), preview_open, move || {
                 let mut pop = div()
                     .mb(px(8.))
                     .p(px(8.))
@@ -1296,7 +1321,6 @@ impl Render for AiAnswer {
                     .border_1()
                     .border_color(p.line_strong)
                     .shadow_md()
-                    .opacity(amt)
                     .flex()
                     .flex_col()
                     .gap(px(6.));
@@ -1352,8 +1376,7 @@ impl Render for AiAnswer {
                     );
                 }
                 pop.into_any_element()
-            },
-        );
+            });
 
         // Render streamed answer blocks + pulsing caret while writing.
         let mut answer_col = div().w_full().flex().flex_col().gap(px(8.));
@@ -1438,71 +1461,89 @@ impl Render for AiAnswer {
             );
         }
 
-        // Related follow-up chips once streaming finishes.
+        // Related follow-up rows once streaming finishes (`pro_tactile` + `GlideArrow` 2px snappy glide).
         let show_follow_ups = matches!(self.phase, AiAnswerPhase::Done | AiAnswerPhase::Stopped)
             && !self.follow_ups.is_empty();
+        let follow_body: AnyElement = {
+            let label_txt = tr(cx, "Related follow-ups", "相关追问").to_owned();
+            let mut col = div().mt(px(14.)).w_full().flex().flex_col().child(
+                div()
+                    .pb(px(4.))
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.muted)
+                    .child(label_txt.to_uppercase()),
+            );
+            for (fi, (q, reply)) in self.follow_ups.clone().into_iter().enumerate() {
+                let is_hov = self.hovered_follow_up == Some(fi);
+                let q_click = q.clone();
+                let r_click = reply.clone();
+                let row_inner = div()
+                    .min_h(px(33.))
+                    .py(px(6.))
+                    .px(px(6.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.5))
+                            .text_color(p.ink)
+                            .child(q.clone()),
+                    )
+                    .child(GlideArrow {
+                        id: pro_eid(&self.id, format!("follow-arr-{fi}")),
+                        active: is_hov,
+                        size: 14.,
+                        rest_color: p.muted,
+                        active_color: p.strong,
+                    });
+                col = col.child(
+                    div()
+                        .w_full()
+                        .border_t_1()
+                        .border_color(p.line)
+                        .pt(px(2.))
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, format!("follow-{fi}")),
+                                q,
+                                6.,
+                                transparent_black(),
+                                p.hover,
+                                transparent_black(),
+                                transparent_black(),
+                                false,
+                                row_inner,
+                                cx,
+                                move |this, _, cx| {
+                                    this.ask_follow_up(q_click.clone(), r_click.clone(), cx);
+                                },
+                            )
+                            .on_hover(cx.listener(
+                                move |this, inside: &bool, _, cx| {
+                                    if *inside {
+                                        this.hovered_follow_up = Some(fi);
+                                    } else if this.hovered_follow_up == Some(fi) {
+                                        this.hovered_follow_up = None;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        ),
+                );
+            }
+            col.into_any_element()
+        };
         let follow_section = pro_fold(
             pro_eid(&self.id, "follow-fold"),
             show_follow_ups,
-            126.,
+            132.,
             0.,
-            {
-                let items = self.follow_ups.clone();
-                let entity = cx.entity().clone();
-                let base_id = self.id.clone();
-                let label_txt = tr(cx, "Related follow-ups", "相关追问").to_owned();
-                move || {
-                    let mut col = div().mt(px(14.)).w_full().flex().flex_col().child(
-                        div()
-                            .pb(px(4.))
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.muted)
-                            .child(label_txt.to_uppercase()),
-                    );
-                    for (fi, (q, reply)) in items.into_iter().enumerate() {
-                        let ent = entity.clone();
-                        let q_click = q.clone();
-                        col = col.child(
-                            div()
-                                .id(pro_eid(&base_id, format!("follow-{fi}")))
-                                .role(Role::Button)
-                                .aria_label(q.clone())
-                                .tab_index(0)
-                                .min_h(px(33.))
-                                .py(px(6.))
-                                .px(px(4.))
-                                .border_t_1()
-                                .border_color(p.line)
-                                .rounded(px(4.))
-                                .cursor_pointer()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap(px(10.))
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(move |_, _, app| {
-                                    let q_next = q_click.clone();
-                                    let r_next = reply.clone();
-                                    ent.update(app, |this, cx| {
-                                        this.ask_follow_up(q_next, r_next, cx);
-                                    });
-                                })
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .text_size(px(12.5))
-                                        .text_color(p.ink)
-                                        .child(q),
-                                )
-                                .child(pro_icon(ProIcon::ArrowRight, 14., p.muted)),
-                        );
-                    }
-                    col.into_any_element()
-                }
-            },
+            move || follow_body,
         );
 
         // Footer bar: Stop while streaming; Copy, Regenerate, 1/2 Version switcher, Thumbs Up/Down, and Replay when finished.
@@ -1515,6 +1556,19 @@ impl Render for AiAnswer {
         let is_down = self.feedback == Some(AiAnswerFeedback::Down);
 
         let footer = if self.is_streaming() {
+            let stop_body = div()
+                .h(px(28.))
+                .px(px(10.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.strong)
+                .whitespace_nowrap()
+                .child(div().size(px(8.)).rounded(px(2.)).bg(p.ink))
+                .child(tr(cx, "Stop", "停止"));
+
             div()
                 .h(px(44.))
                 .px(px(if self.framed { 14. } else { 0. }))
@@ -1523,31 +1577,22 @@ impl Render for AiAnswer {
                 .items_center()
                 .justify_between()
                 .child(
-                    div()
-                        .id(pro_eid(&self.id, "stop-stream-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Stop generating", "停止生成"))
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .hover(move |s| s.bg(p.hover))
-                        .focus_visible(move |s| s.border_color(p.focus))
-                        .on_click(cx.listener(move |this, _, _, cx| {
+                    pro_tactile(
+                        pro_eid(&self.id, "stop-stream-btn"),
+                        tr(cx, "Stop generating", "停止生成"),
+                        6.,
+                        p.card,
+                        p.hover,
+                        p.line_strong,
+                        p.line_strong,
+                        false,
+                        stop_body,
+                        cx,
+                        move |this, _, cx| {
                             this.stop(visible_tokens, cx);
-                        }))
-                        .child(div().size(px(8.)).rounded(px(2.)).bg(p.ink))
-                        .child(tr(cx, "Stop", "停止")),
+                        },
+                    )
+                    .flex_none(),
                 )
                 .child(
                     div()
@@ -1556,15 +1601,104 @@ impl Render for AiAnswer {
                         .child(format!("{visible_tokens}/{total_tokens} tokens")),
                 )
         } else {
-            let status_note: Option<SharedString> = if just_copied {
-                Some(tr(cx, "Copied", "已复制").into())
-            } else if let Some(ref reason) = self.picked_reason {
-                Some(format!("{}: {reason}", tr(cx, "Feedback noted", "已记录反馈")).into())
-            } else if is_up {
-                Some(tr(cx, "Thanks for the feedback", "感谢反馈").into())
+            let status_note: Option<SharedString> = self.picked_reason.as_ref().map(|reason| {
+                format!("{}: {reason}", tr(cx, "Feedback noted", "已记录反馈")).into()
+            });
+            let copy_lbl = if just_copied {
+                tr(cx, "Copied", "已复制")
             } else {
-                None
+                tr(cx, "Copy", "复制")
             };
+            let copy_fg = if just_copied { p.green_ink } else { p.text };
+            let copy_icon_slot = div()
+                .relative()
+                .size(px(14.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .when(!just_copied, |d| {
+                    d.child(pro_icon(ProIcon::Copy, 14., p.muted))
+                })
+                .child(
+                    div()
+                        .when(!just_copied, |d| d.absolute().inset_0().opacity(0.))
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, "act-copy-chk"),
+                            just_copied,
+                            14.,
+                            false,
+                            p.green,
+                        )),
+                );
+            let copy_content = div()
+                .h(px(28.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .child(copy_icon_slot)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "act-copy-lbl"),
+                    copy_lbl,
+                    12.,
+                    FontWeight::MEDIUM,
+                    copy_fg,
+                ));
+
+            let helpful_lbl = if is_up {
+                tr(cx, "Helpful", "已赞有帮助")
+            } else {
+                tr(cx, "Helpful", "有帮助")
+            };
+            let helpful_fg = if is_up { p.green_ink } else { p.text };
+            let helpful_icon_slot = div()
+                .relative()
+                .size(px(14.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .when(!is_up, |d| {
+                    d.child(pro_svg("0 0 24 24", SVG_THUMB_UP, 14., p.muted))
+                })
+                .child(
+                    div()
+                        .when(!is_up, |d| d.absolute().inset_0().opacity(0.))
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, "act-up-chk"),
+                            is_up,
+                            14.,
+                            false,
+                            p.green,
+                        )),
+                );
+            let helpful_content = div()
+                .h(px(28.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .child(helpful_icon_slot)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "act-up-lbl"),
+                    helpful_lbl,
+                    12.,
+                    FontWeight::MEDIUM,
+                    helpful_fg,
+                ));
+
+            let down_content = div()
+                .size(px(28.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_svg(
+                    "0 0 24 24",
+                    SVG_THUMB_DOWN,
+                    15.,
+                    if is_down { p.amber_ink } else { p.muted },
+                ));
 
             div()
                 .min_h(px(44.))
@@ -1580,46 +1714,41 @@ impl Render for AiAnswer {
                         .flex()
                         .items_center()
                         .gap(px(3.))
-                        // Copy -> green Check
+                        // Copy ->Copied with `pro_check_draw` + `pro_swap_label`
                         .child(
-                            div()
-                                .id(pro_eid(&self.id, "act-copy"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Copy answer", "复制回答"))
-                                .tab_index(0)
-                                .size(px(28.))
-                                .rounded(px(6.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|this, _, _, cx| this.copy_answer(cx)))
-                                .child(if just_copied {
-                                    pro_icon(ProIcon::Check, 15., p.green_ink)
+                            pro_tactile(
+                                pro_eid(&self.id, "act-copy"),
+                                tr(cx, "Copy answer", "复制回答"),
+                                6.,
+                                if just_copied {
+                                    p.green_soft
                                 } else {
-                                    pro_icon(ProIcon::Copy, 15., p.muted)
-                                }),
+                                    transparent_black()
+                                },
+                                p.hover,
+                                transparent_black(),
+                                if just_copied {
+                                    p.green.opacity(0.35)
+                                } else {
+                                    transparent_black()
+                                },
+                                just_copied,
+                                copy_content,
+                                cx,
+                                |this, _, cx| this.copy_answer(cx),
+                            )
+                            .flex_none(),
                         )
                         // Regenerate
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, "act-regen"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Regenerate answer", "重新生成回答"))
-                                .tab_index(0)
-                                .size(px(28.))
-                                .rounded(px(6.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|this, _, _, cx| this.regenerate(cx)))
-                                .child(pro_icon(ProIcon::Refresh, 15., p.muted)),
-                        )
+                        .child(pro_icon_btn(
+                            pro_eid(&self.id, "act-regen"),
+                            tr(cx, "Regenerate answer", "重新生成回答"),
+                            ProIcon::Refresh,
+                            28.,
+                            false,
+                            cx,
+                            |this, _, cx| this.regenerate(cx),
+                        ))
                         // Version switcher `1/2`
                         .when(
                             version_total > 1 && self.follow_up_override.is_none(),
@@ -1657,18 +1786,13 @@ impl Render for AiAnswer {
                                                 }))
                                                 .child(pro_icon(ProIcon::ChevronLeft, 12., p.text)),
                                         )
-                                        .child(
-                                            div()
-                                                .px(px(3.))
-                                                .text_size(px(11.))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.text)
-                                                .child(format!(
-                                                    "{}/{}",
-                                                    cur_ver + 1,
-                                                    version_total
-                                                )),
-                                        )
+                                        .child(div().px(px(3.)).child(pro_swap_label(
+                                            pro_eid(&self.id, "ver-lbl"),
+                                            format!("{}/{}", cur_ver + 1, version_total),
+                                            11.,
+                                            FontWeight::MEDIUM,
+                                            p.text,
+                                        )))
                                         .child(
                                             div()
                                                 .id(pro_eid(&self.id, "ver-next"))
@@ -1695,57 +1819,51 @@ impl Render for AiAnswer {
                                 )
                             },
                         )
-                        // Thumbs Up
+                        // Thumbs Up / Helpful (`pro_tactile` + `pro_check_draw` + `pro_swap_label`)
                         .child(
-                            div()
-                                .id(pro_eid(&self.id, "act-thumb-up"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Good answer", "回答有帮助"))
-                                .tab_index(0)
-                                .size(px(28.))
-                                .rounded(px(6.))
-                                .bg(if is_up { p.chip } else { transparent_black() })
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|this, _, _, cx| {
+                            pro_tactile(
+                                pro_eid(&self.id, "act-thumb-up"),
+                                tr(cx, "Good answer", "回答有帮助"),
+                                6.,
+                                if is_up {
+                                    p.green_soft
+                                } else {
+                                    transparent_black()
+                                },
+                                p.hover,
+                                transparent_black(),
+                                if is_up {
+                                    p.green.opacity(0.35)
+                                } else {
+                                    transparent_black()
+                                },
+                                is_up,
+                                helpful_content,
+                                cx,
+                                |this, _, cx| {
                                     this.set_feedback(AiAnswerFeedback::Up, cx);
-                                }))
-                                .child(pro_svg(
-                                    "0 0 24 24",
-                                    SVG_THUMB_UP,
-                                    15.,
-                                    if is_up { p.green_ink } else { p.muted },
-                                )),
+                                },
+                            )
+                            .flex_none(),
                         )
-                        // Thumbs Down
+                        // Thumbs Down (`pro_tactile`)
                         .child(
-                            div()
-                                .id(pro_eid(&self.id, "act-thumb-down"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Poor answer", "回答需改进"))
-                                .tab_index(0)
-                                .size(px(28.))
-                                .rounded(px(6.))
-                                .bg(if is_down { p.chip } else { transparent_black() })
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|this, _, _, cx| {
+                            pro_tactile(
+                                pro_eid(&self.id, "act-thumb-down"),
+                                tr(cx, "Poor answer", "回答需改进"),
+                                6.,
+                                if is_down { p.chip } else { transparent_black() },
+                                p.hover,
+                                transparent_black(),
+                                transparent_black(),
+                                is_down,
+                                down_content,
+                                cx,
+                                |this, _, cx| {
                                     this.set_feedback(AiAnswerFeedback::Down, cx);
-                                }))
-                                .child(pro_svg(
-                                    "0 0 24 24",
-                                    SVG_THUMB_DOWN,
-                                    15.,
-                                    if is_down { p.amber_ink } else { p.muted },
-                                )),
+                                },
+                            )
+                            .flex_none(),
                         ),
                 )
                 .child(
@@ -1753,14 +1871,28 @@ impl Render for AiAnswer {
                         .flex()
                         .items_center()
                         .gap(px(8.))
-                        .when_some(status_note, |d, note| {
-                            d.child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(if just_copied { p.green_ink } else { p.muted })
-                                    .child(note),
-                            )
-                        })
+                        .child(pro_presence(
+                            pro_eid(&self.id, "status-note-pres"),
+                            status_note.is_some(),
+                            0.18,
+                            0.14,
+                            {
+                                let note_lbl = status_note.unwrap_or_default();
+                                let note_id = pro_eid(&self.id, "status-note-lbl");
+                                move |amt| {
+                                    div()
+                                        .opacity(amt)
+                                        .child(pro_swap_label(
+                                            note_id,
+                                            note_lbl,
+                                            11.5,
+                                            FontWeight::NORMAL,
+                                            p.muted,
+                                        ))
+                                        .into_any_element()
+                                }
+                            },
+                        ))
                         .child(pro_btn(
                             pro_eid(&self.id, "act-replay"),
                             tr(cx, "Replay stream", "重播流式输出"),
@@ -1773,67 +1905,62 @@ impl Render for AiAnswer {
                 )
         };
 
-        // Unfolding thumbs-down reason tags (`pro_fold`).
+        // Unfolding thumbs-down reason tags (`pro_fold` + `pro_tactile`).
         let reasons_open = is_down && !self.is_streaming();
-        let reasons_fold = pro_fold(pro_eid(&self.id, "reasons-fold"), reasons_open, 44., 0., {
-            let reasons = self.feedback_reasons.clone();
-            let picked = self.picked_reason.clone();
-            let entity = cx.entity().clone();
-            let base_id = self.id.clone();
-            let framed = self.framed;
-            move || {
-                let mut wrap = div()
-                    .w_full()
-                    .px(px(if framed { 14. } else { 0. }))
-                    .pb(px(if framed { 12. } else { 4. }))
-                    .pt(px(2.))
+        let reasons_body: AnyElement = {
+            let mut wrap = div()
+                .w_full()
+                .px(px(if self.framed { 14. } else { 0. }))
+                .pb(px(if self.framed { 12. } else { 4. }))
+                .pt(px(2.))
+                .flex()
+                .flex_wrap()
+                .gap(px(6.));
+            for (ri, r) in self.feedback_reasons.clone().into_iter().enumerate() {
+                let active = self.picked_reason.as_ref() == Some(&r);
+                let r_click = r.clone();
+                let chip_body = div()
+                    .h(px(27.))
+                    .px(px(10.))
                     .flex()
-                    .flex_wrap()
-                    .gap(px(6.));
-                for (ri, r) in reasons.into_iter().enumerate() {
-                    let active = picked.as_ref() == Some(&r);
-                    let ent = entity.clone();
-                    let r_click = r.clone();
-                    wrap = wrap.child(
-                        div()
-                            .id(pro_eid(&base_id, format!("reason-{ri}")))
-                            .role(Role::Button)
-                            .aria_label(r.clone())
-                            .tab_index(0)
-                            .h(px(27.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .bg(if active {
-                                p.accent_soft
-                            } else {
-                                transparent_black()
-                            })
-                            .border_1()
-                            .border_color(if active {
-                                p.blue.opacity(0.45)
-                            } else {
-                                p.line_strong
-                            })
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if active { p.blue } else { p.text })
-                            .hover(move |s| s.bg(p.chip))
-                            .focus_visible(move |s| s.border_color(p.focus))
-                            .on_click(move |_, _, app| {
-                                let chosen = r_click.clone();
-                                ent.update(app, |this, cx| {
-                                    this.pick_feedback_reason(chosen, cx);
-                                });
-                            })
-                            .child(r),
-                    );
-                }
-                wrap.into_any_element()
+                    .items_center()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if active { p.blue } else { p.text })
+                    .whitespace_nowrap()
+                    .child(r.clone());
+                wrap = wrap.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("reason-{ri}")),
+                        r,
+                        6.,
+                        if active {
+                            p.accent_soft
+                        } else {
+                            transparent_black()
+                        },
+                        p.chip,
+                        p.line_strong,
+                        p.blue.opacity(0.45),
+                        active,
+                        chip_body,
+                        cx,
+                        move |this, _, cx| {
+                            this.pick_feedback_reason(r_click.clone(), cx);
+                        },
+                    )
+                    .flex_none(),
+                );
             }
-        });
+            wrap.into_any_element()
+        };
+        let reasons_fold = pro_fold(
+            pro_eid(&self.id, "reasons-fold"),
+            reasons_open,
+            44.,
+            0.,
+            move || reasons_body,
+        );
 
         let version_key = SharedString::from(format!(
             "ans-v{}-{}",

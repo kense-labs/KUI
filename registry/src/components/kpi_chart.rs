@@ -1,14 +1,17 @@
 //! Multi-series KPI metric card with rolling headline, legend toggles, and pointer crosshair tooltip.
 //!
 //! Renders a headline figure with directional delta badge above a `PathBuilder` multi-line/area chart
-//! whose series morph smoothly via [`Slide`] springs when toggled in the legend and scrub day-by-day with a floating tooltip.
+//! whose series morph smoothly via [`Slide`] springs when solo-highlighted or toggled in the legend and scrub continuously with a gliding crosshair.
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_rolling_number, pro_skeleton_bar,
-        pro_spring_f32, tr,
+        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
-    primitives::{family::disabled_motion, pro_icons::ProIcon},
+    primitives::{
+        family::{Slide, disabled_motion},
+        pro_icons::ProIcon,
+    },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
@@ -187,6 +190,30 @@ fn build_smooth_points(pts: &[Point<Pixels>]) -> Vec<Point<Pixels>> {
     out
 }
 
+fn sample_polyline_y(pts: &[Point<Pixels>], target_x: Pixels) -> Option<Pixels> {
+    let first = *pts.first()?;
+    let last = *pts.last()?;
+    let tx = f32::from(target_x);
+    if tx <= f32::from(first.x) {
+        return Some(first.y);
+    }
+    if tx >= f32::from(last.x) {
+        return Some(last.y);
+    }
+    for seg in pts.windows(2) {
+        let x0 = f32::from(seg[0].x);
+        let x1 = f32::from(seg[1].x);
+        if tx >= x0 && tx <= x1 {
+            let span = (x1 - x0).max(1e-4);
+            let u = ((tx - x0) / span).clamp(0.0, 1.0);
+            let y0 = f32::from(seg[0].y);
+            let y1 = f32::from(seg[1].y);
+            return Some(px(y0 + (y1 - y0) * u));
+        }
+    }
+    Some(last.y)
+}
+
 /// Multi-series KPI metric card (`kpi-chart`).
 pub struct KpiChart {
     id: ElementId,
@@ -204,6 +231,13 @@ pub struct KpiChart {
     footer: Option<SharedString>,
     default_index: Option<usize>,
     hovered_index: Option<usize>,
+    hovered_series: Option<SharedString>,
+    solo_series: Option<SharedString>,
+    series_opacities: Vec<Slide>,
+    scrub_x: Slide,
+    scrub_presence: Slide,
+    scrub_ready: bool,
+    area_mix: Slide,
     style: KpiChartStyle,
     empty_text: Option<SharedString>,
     loading: bool,
@@ -271,6 +305,10 @@ impl KpiChart {
                 vec![800., 1100., 1000., 1100., 1300., 1700., 1400.],
             ),
         ];
+        let series_opacities = series
+            .iter()
+            .map(|s| Slide::snappy(if s.visible { 1.0 } else { 0.0 }))
+            .collect();
 
         Self {
             id: id.into(),
@@ -288,6 +326,13 @@ impl KpiChart {
             footer: Some("Top 5 channels".into()),
             default_index: None,
             hovered_index: None,
+            hovered_series: None,
+            solo_series: None,
+            series_opacities,
+            scrub_x: Slide::snappy(0.0),
+            scrub_presence: Slide::snappy(0.0),
+            scrub_ready: false,
+            area_mix: Slide::new(0.0),
             style: KpiChartStyle::Line,
             empty_text: None,
             loading: false,
@@ -358,6 +403,12 @@ impl KpiChart {
     /// Replace the plotted [`KpiSeries`] collection.
     pub fn with_series(mut self, series: Vec<KpiSeries>) -> Self {
         self.headline_override = None;
+        self.series_opacities = series
+            .iter()
+            .map(|s| Slide::snappy(if s.visible { 1.0 } else { 0.0 }))
+            .collect();
+        self.hovered_series = None;
+        self.solo_series = None;
         self.series = series;
         self
     }
@@ -378,6 +429,10 @@ impl KpiChart {
     /// Choose [`KpiChartStyle::Line`] or [`KpiChartStyle::Area`].
     pub fn with_style(mut self, style: KpiChartStyle) -> Self {
         self.style = style;
+        self.area_mix.reset(match style {
+            KpiChartStyle::Line => 0.0,
+            KpiChartStyle::Area => 1.0,
+        });
         self
     }
 
@@ -420,12 +475,40 @@ impl KpiChart {
             s.visible = !s.visible;
             let vis = s.visible;
             let sid = s.id.clone();
+            if !vis && self.solo_series.as_deref() == Some(id) {
+                self.solo_series = None;
+            }
             cx.emit(KpiChartEvent::SeriesToggled {
                 id: sid,
                 visible: vis,
             });
             cx.notify();
         }
+    }
+
+    fn toggle_solo_series(&mut self, id: &str, cx: &mut Context<Self>) {
+        if let Some(s) = self.series.iter().find(|s| s.id.as_ref() == id)
+            && !s.visible
+        {
+            self.toggle_series(id, cx);
+        }
+        if self.solo_series.as_deref() == Some(id) {
+            self.solo_series = None;
+        } else {
+            self.solo_series = Some(SharedString::from(id.to_string()));
+        }
+        cx.notify();
+    }
+
+    fn spotlight_series_id(&self) -> Option<&SharedString> {
+        self.hovered_series
+            .as_ref()
+            .filter(|hid| self.series.iter().any(|s| s.visible && &s.id == *hid))
+            .or_else(|| {
+                self.solo_series
+                    .as_ref()
+                    .filter(|sid| self.series.iter().any(|s| s.visible && &s.id == *sid))
+            })
     }
 
     /// Sum finite values across all currently visible series.
@@ -450,16 +533,48 @@ impl KpiChart {
         }
     }
 
+    fn bucket_or_period_total(&self, active_idx: Option<usize>) -> f64 {
+        let spot = self.spotlight_series_id();
+        if let Some(idx) = active_idx {
+            let mut sum = 0.0;
+            for s in self.series.iter().filter(|s| s.visible) {
+                if spot.is_some_and(|sp| sp != &s.id) {
+                    continue;
+                }
+                if let Some(&v) = s.values.get(idx)
+                    && v.is_finite()
+                {
+                    sum += v;
+                }
+            }
+            return sum;
+        }
+        if let Some(sp) = spot
+            && let Some(s) = self.series.iter().find(|s| s.visible && &s.id == sp)
+        {
+            let raw_all: f64 = self.series.iter().map(KpiSeries::sum).sum();
+            let s_sum = s.sum();
+            if let Some(override_all) = self.headline_override
+                && raw_all > 1e-9
+            {
+                return override_all * (s_sum / raw_all);
+            }
+            return s_sum;
+        }
+        self.visible_total()
+    }
+
     fn visible_delta(&self) -> Option<f64> {
         let base_delta = self.delta?;
         let raw_all: f64 = self.series.iter().map(KpiSeries::sum).sum();
+        let spot = self.spotlight_series_id();
         let raw_vis: f64 = self
             .series
             .iter()
-            .filter(|s| s.visible)
+            .filter(|s| s.visible && spot.is_none_or(|sp| sp == &s.id))
             .map(KpiSeries::sum)
             .sum();
-        if raw_all > 1e-9 && !self.series.iter().all(|s| s.visible) {
+        if raw_all > 1e-9 && (!self.series.iter().all(|s| s.visible) || spot.is_some()) {
             Some(base_delta * (raw_vis / raw_all))
         } else {
             Some(base_delta)
@@ -480,6 +595,33 @@ impl KpiChart {
         }
     }
 
+    fn set_scrub_index(&mut self, next: Option<usize>, cx: &mut Context<Self>) {
+        if self.hovered_index == next {
+            return;
+        }
+        let n = self.point_count();
+        if let Some(idx) = next
+            && n > 0
+        {
+            let frac = idx.min(n - 1) as f32 / (n.saturating_sub(1)).max(1) as f32;
+            if !self.scrub_ready {
+                self.scrub_x.reset(frac);
+                self.scrub_ready = true;
+            } else {
+                self.scrub_x.set(frac, cx);
+            }
+            self.scrub_presence.set(1.0, cx);
+        } else {
+            self.scrub_presence.set(0.0, cx);
+            if self.scrub_presence.value(cx) < 0.04 {
+                self.scrub_ready = false;
+            }
+        }
+        self.hovered_index = next;
+        cx.emit(KpiChartEvent::HoverIndexChanged(next));
+        cx.notify();
+    }
+
     fn handle_key_down(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         let n = self.point_count();
         if n == 0 {
@@ -491,23 +633,18 @@ impl KpiChart {
                     Some(i) => i.saturating_sub(1),
                     None => n - 1,
                 };
-                self.hovered_index = Some(next);
-                cx.emit(KpiChartEvent::HoverIndexChanged(Some(next)));
-                cx.notify();
+                self.set_scrub_index(Some(next), cx);
             }
             "right" => {
                 let next = match self.active_index() {
                     Some(i) => (i + 1).min(n - 1),
                     None => 0,
                 };
-                self.hovered_index = Some(next);
-                cx.emit(KpiChartEvent::HoverIndexChanged(Some(next)));
-                cx.notify();
+                self.set_scrub_index(Some(next), cx);
             }
-            "escape" if self.hovered_index.is_some() => {
-                self.hovered_index = None;
-                cx.emit(KpiChartEvent::HoverIndexChanged(None));
-                cx.notify();
+            "escape" if self.hovered_index.is_some() || self.solo_series.is_some() => {
+                self.solo_series = None;
+                self.set_scrub_index(None, cx);
             }
             _ => {}
         }
@@ -627,99 +764,194 @@ impl Render for KpiChart {
             pro_spring_f32(pro_eid(&self.id, "y-ceil"), target_ceil as f32, 0.34, w, cx).max(1.0)
                 as f64;
 
+        // Sync per-series Slide::snappy opacity springs (1.0 solo/normal vs 0.22 dimmed vs 0.0 hidden).
+        if self.series_opacities.len() < self.series.len() {
+            for s in &self.series[self.series_opacities.len()..] {
+                self.series_opacities
+                    .push(Slide::snappy(if s.visible { 1.0 } else { 0.0 }));
+            }
+        } else if self.series_opacities.len() > self.series.len() {
+            self.series_opacities.truncate(self.series.len());
+        }
+
+        let spotlight_id = self.spotlight_series_id().cloned();
         let mut series_alphas = Vec::with_capacity(self.series.len());
         for (si, s) in self.series.iter().enumerate() {
-            let a = pro_spring_f32(
-                pro_eid(&self.id, format!("vis-{si}")),
-                if s.visible { 1.0 } else { 0.0 },
-                0.28,
-                w,
-                cx,
-            )
-            .clamp(0., 1.);
+            let target_alpha = if !s.visible {
+                0.0
+            } else if let Some(ref spot) = spotlight_id {
+                if &s.id == spot { 1.0 } else { 0.22 }
+            } else {
+                1.0
+            };
+            self.series_opacities[si].set(target_alpha, cx);
+            let a = self.series_opacities[si].get(w, cx).clamp(0.0, 1.0);
             series_alphas.push(a);
         }
 
-        let active_idx = self.active_index();
-        let target_frac = active_idx
-            .map(|idx| idx as f32 / (n_pts.saturating_sub(1)).max(1) as f32)
-            .unwrap_or(0.0);
-        let guide_frac = if reduced || active_idx.is_none() {
-            target_frac
-        } else {
-            pro_spring_f32(pro_eid(&self.id, "guide-x"), target_frac, 0.14, w, cx)
-        };
+        self.area_mix.duration(
+            match self.style {
+                KpiChartStyle::Line => 0.0,
+                KpiChartStyle::Area => 1.0,
+            },
+            0.26,
+            cx,
+        );
+        let area_alpha_mix = self.area_mix.get(w, cx).clamp(0.0, 1.0);
 
-        let headline_scaled = self.visible_total() / self.headline_divisor;
+        let active_idx = self.active_index();
+        if let Some(idx) = active_idx {
+            let target_frac = idx as f32 / (n_pts.saturating_sub(1)).max(1) as f32;
+            if !self.scrub_ready {
+                self.scrub_x.reset(target_frac);
+                self.scrub_ready = true;
+            } else {
+                self.scrub_x.set(target_frac, cx);
+            }
+            self.scrub_presence.set(1.0, cx);
+        } else {
+            self.scrub_presence.set(0.0, cx);
+        }
+
+        let guide_frac = self.scrub_x.get(w, cx).clamp(0.0, 1.0);
+        let scrub_alpha = self.scrub_presence.get(w, cx).clamp(0.0, 1.0);
+
+        // Dynamic rolling KPI headline: shows scrubbed bucket's total on scrub, returning to period headline on leave.
+        let shown_total = self.bucket_or_period_total(active_idx.filter(|_| plot_has_data));
+        let headline_scaled = shown_total / self.headline_divisor;
         let headline_suffix = format!("{}{}", self.headline_unit_suffix, self.suffix);
 
-        let delta_badge: Option<AnyElement> = self.visible_delta().map(|d| {
-            let up = d >= 0.0;
-            let (dbg, dfg): (Hsla, Hsla) = if up {
-                if dark {
-                    (hsla(145. / 360., 0.46, 0.65, 0.14), rgb(0x5fc88a).into())
+        let delta_badge: Option<AnyElement> =
+            if let Some(idx) = active_idx.filter(|_| plot_has_data) {
+                if idx > 0 {
+                    let prev_tot = self.bucket_or_period_total(Some(idx - 1));
+                    let diff = shown_total - prev_tot;
+                    let up = diff >= 0.0;
+                    let (dbg, dfg): (Hsla, Hsla) = if up {
+                        if dark {
+                            (hsla(145. / 360., 0.46, 0.65, 0.14), rgb(0x5fc88a).into())
+                        } else {
+                            (hsla(145. / 360., 0.49, 0.58, 0.10), rgb(0x1e8a4f).into())
+                        }
+                    } else if dark {
+                        (hsla(4. / 360., 1.0, 0.69, 0.14), rgb(0xff6b5f).into())
+                    } else {
+                        (hsla(4. / 360., 0.86, 0.58, 0.09), rgb(0xf04438).into())
+                    };
+                    let sign = if up { "+ " } else { "\u{2212} " };
+                    let formatted = format!(
+                        "{sign}{}",
+                        format_kpi_value(diff.abs(), &self.prefix, &self.suffix)
+                    );
+                    Some(
+                        div()
+                            .h(px(20.))
+                            .px(px(6.))
+                            .rounded(px(5.))
+                            .bg(dbg)
+                            .text_color(dfg)
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .flex()
+                            .items_center()
+                            .child(formatted)
+                            .into_any_element(),
+                    )
                 } else {
-                    (hsla(145. / 360., 0.49, 0.58, 0.10), rgb(0x1e8a4f).into())
+                    None
                 }
-            } else if dark {
-                (hsla(4. / 360., 1.0, 0.69, 0.14), rgb(0xff6b5f).into())
             } else {
-                (hsla(4. / 360., 0.86, 0.58, 0.09), rgb(0xf04438).into())
+                self.visible_delta().map(|d| {
+                    let up = d >= 0.0;
+                    let (dbg, dfg): (Hsla, Hsla) = if up {
+                        if dark {
+                            (hsla(145. / 360., 0.46, 0.65, 0.14), rgb(0x5fc88a).into())
+                        } else {
+                            (hsla(145. / 360., 0.49, 0.58, 0.10), rgb(0x1e8a4f).into())
+                        }
+                    } else if dark {
+                        (hsla(4. / 360., 1.0, 0.69, 0.14), rgb(0xff6b5f).into())
+                    } else {
+                        (hsla(4. / 360., 0.86, 0.58, 0.09), rgb(0xf04438).into())
+                    };
+                    let sign = if up { "+ " } else { "\u{2212} " };
+                    let formatted = format!(
+                        "{sign}{}",
+                        format_kpi_value(d.abs(), &self.prefix, &self.suffix)
+                    );
+                    div()
+                        .h(px(20.))
+                        .px(px(6.))
+                        .rounded(px(5.))
+                        .bg(dbg)
+                        .text_color(dfg)
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .flex()
+                        .items_center()
+                        .child(formatted)
+                        .into_any_element()
+                })
             };
-            let sign = if up { "+ " } else { "\u{2212} " };
-            let formatted = format!(
-                "{sign}{}",
-                format_kpi_value(d.abs(), &self.prefix, &self.suffix)
-            );
-            div()
-                .h(px(20.))
-                .px(px(6.))
-                .rounded(px(5.))
-                .bg(dbg)
-                .text_color(dfg)
-                .text_size(px(12.))
-                .font_weight(FontWeight::MEDIUM)
-                .flex()
-                .items_center()
-                .child(formatted)
-                .into_any_element()
-        });
+
+        let context_caption: SharedString = if let Some(idx) = active_idx.filter(|_| plot_has_data)
+        {
+            self.tooltip_labels
+                .get(idx)
+                .or_else(|| self.labels.get(idx))
+                .cloned()
+                .unwrap_or_default()
+        } else if let Some(ref spot) = spotlight_id
+            && let Some(s) = self.series.iter().find(|s| &s.id == spot)
+        {
+            s.label.clone()
+        } else {
+            SharedString::default()
+        };
 
         let style_mode = self.style;
         let wash: Hsla = if dark {
-            hsla(0., 0., 1., 0.05)
+            hsla(0., 0., 1., 0.06)
         } else {
-            hsla(0., 0., 0., 0.035)
+            hsla(0., 0., 0., 0.04)
         };
-        let style_toggle = div()
-            .id(pro_eid(&self.id, "style-toggle"))
-            .role(Role::Button)
-            .aria_label(tr(cx, "Toggle line or area fill", "切换折线或面积填充"))
-            .tab_index(0)
-            .h(px(24.))
-            .px(px(8.))
-            .rounded(px(6.))
-            .border_1()
-            .border_color(line)
-            .text_size(px(11.5))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(p.text)
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .hover(move |s| s.bg(wash).text_color(p.ink))
-            .on_click(cx.listener(|this, _, _, cx| {
+        let style_lbl = match style_mode {
+            KpiChartStyle::Line => tr(cx, "Line", "折线"),
+            KpiChartStyle::Area => tr(cx, "Area", "面积"),
+        };
+        let style_toggle = pro_tactile(
+            pro_eid(&self.id, "style-toggle"),
+            tr(cx, "Toggle line or area fill", "切换折线或面积填充"),
+            6.,
+            transparent_black(),
+            wash,
+            line,
+            p.line_strong,
+            style_mode == KpiChartStyle::Area,
+            div()
+                .h(px(24.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "style-lbl"),
+                    style_lbl,
+                    11.5,
+                    FontWeight::MEDIUM,
+                    p.text,
+                )),
+            cx,
+            |this, _, cx| {
                 this.style = match this.style {
                     KpiChartStyle::Line => KpiChartStyle::Area,
                     KpiChartStyle::Area => KpiChartStyle::Line,
                 };
                 cx.emit(KpiChartEvent::StyleChanged(this.style));
                 cx.notify();
-            }))
-            .child(match style_mode {
-                KpiChartStyle::Line => tr(cx, "Line", "折线"),
-                KpiChartStyle::Area => tr(cx, "Area", "面积"),
-            });
+            },
+        )
+        .flex_none();
 
         let top_tick = format_kpi_value(target_ceil, &self.prefix, &self.suffix);
         let mid_tick = format_kpi_value(target_ceil * 0.5, &self.prefix, &self.suffix);
@@ -728,7 +960,7 @@ impl Render for KpiChart {
         let series_paint = self.series.clone();
         let alphas_paint = series_alphas.clone();
         let bounds_cell = self.plot_bounds.clone();
-        let active_for_paint = active_idx;
+        let spot_for_paint = spotlight_id.clone();
 
         let plot_canvas = canvas(
             {
@@ -763,9 +995,13 @@ impl Render for KpiChart {
                     )
                 };
 
+                let mut smooth_curves: Vec<Option<Vec<Point<Pixels>>>> =
+                    Vec::with_capacity(series_paint.len());
+
                 for (si, s) in series_paint.iter().enumerate() {
                     let alpha = alphas_paint[si];
                     if alpha <= 0.005 || s.values.len() < 2 {
+                        smooth_curves.push(None);
                         continue;
                     }
                     let raw_pts: Vec<Point<Pixels>> = s
@@ -781,7 +1017,7 @@ impl Render for KpiChart {
                     let vis_len = (((smooth.len() - 1) as f32 * draw_reveal).ceil() as usize + 1)
                         .clamp(2, smooth.len());
 
-                    if style_mode == KpiChartStyle::Area {
+                    if area_alpha_mix > 0.005 {
                         let mut area = PathBuilder::fill();
                         let first = smooth[0];
                         let last = smooth[vis_len - 1];
@@ -797,14 +1033,19 @@ impl Render for KpiChart {
                                 path,
                                 linear_gradient(
                                     180.,
-                                    linear_color_stop(s.color.opacity(0.18 * alpha), 0.),
+                                    linear_color_stop(
+                                        s.color.opacity(0.18 * alpha * area_alpha_mix),
+                                        0.,
+                                    ),
                                     linear_color_stop(s.color.opacity(0.0), 1.),
                                 ),
                             );
                         }
                     }
 
-                    let mut stroke = PathBuilder::stroke(px(1.65));
+                    let is_spot = spot_for_paint.as_ref() == Some(&s.id);
+                    let stroke_w = if is_spot { 2.15 } else { 1.65 };
+                    let mut stroke = PathBuilder::stroke(px(stroke_w));
                     for (pi, &pt) in smooth.iter().take(vis_len).enumerate() {
                         if pi == 0 {
                             stroke.move_to(pt);
@@ -815,40 +1056,44 @@ impl Render for KpiChart {
                     if let Ok(path) = stroke.build() {
                         window.paint_path(path, s.color.opacity(alpha));
                     }
+                    smooth_curves.push(Some(smooth));
                 }
 
-                if let Some(idx) = active_for_paint {
+                if scrub_alpha > 0.01 {
                     let gx = bounds.left() + px(guide_frac.clamp(0., 1.) * bw);
                     window.paint_quad(fill(
                         Bounds::new(point(gx, bounds.top() - px(4.)), size(px(1.), px(bh + 4.))),
-                        guide_c,
+                        guide_c.opacity(guide_c.a * scrub_alpha),
                     ));
                     for (si, s) in series_paint.iter().enumerate() {
-                        let alpha = alphas_paint[si];
-                        if alpha <= 0.1 || idx >= s.values.len() {
+                        let alpha = alphas_paint[si] * scrub_alpha;
+                        if alpha <= 0.05 {
                             continue;
                         }
-                        let v = s.values[idx];
-                        if !v.is_finite() {
+                        let Some(ref curve) = smooth_curves[si] else {
                             continue;
-                        }
-                        let pt = map_pt(idx, s.values.len(), v);
-                        let dot_pt = point(gx, pt.y);
+                        };
+                        let Some(gy) = sample_polyline_y(curve, gx) else {
+                            continue;
+                        };
+                        let dot_pt = point(gx, gy);
+                        let is_spot = spot_for_paint.as_ref() == Some(&s.id);
+                        let (halo_r, inner_r) = if is_spot { (6.2, 4.25) } else { (5.5, 3.75) };
                         window.paint_quad(
                             fill(
                                 Bounds::new(
-                                    point(dot_pt.x - px(5.5), dot_pt.y - px(5.5)),
-                                    size(px(11.), px(11.)),
+                                    point(dot_pt.x - px(halo_r), dot_pt.y - px(halo_r)),
+                                    size(px(halo_r * 2.), px(halo_r * 2.)),
                                 ),
-                                card_bg,
+                                card_bg.opacity(scrub_alpha),
                             )
                             .corner_radii(px(99.)),
                         );
                         window.paint_quad(
                             fill(
                                 Bounds::new(
-                                    point(dot_pt.x - px(3.75), dot_pt.y - px(3.75)),
-                                    size(px(7.5), px(7.5)),
+                                    point(dot_pt.x - px(inner_r), dot_pt.y - px(inner_r)),
+                                    size(px(inner_r * 2.), px(inner_r * 2.)),
                                 ),
                                 s.color.opacity(alpha),
                             )
@@ -867,7 +1112,7 @@ impl Render for KpiChart {
                 .or_else(|| self.labels.get(idx))
                 .cloned()
                 .unwrap_or_else(|| format!("Day {}", idx + 1).into());
-            let flip_left = idx * 2 > n_pts.saturating_sub(1);
+            let flip_left = guide_frac > 0.5;
 
             let mut rows = div()
                 .mt(px(4.))
@@ -877,11 +1122,16 @@ impl Render for KpiChart {
                 .flex()
                 .flex_col()
                 .gap(px(1.));
-            for s in self.series.iter().filter(|s| s.visible) {
+            for (si, s) in self.series.iter().enumerate() {
+                if !s.visible {
+                    continue;
+                }
                 let val = s.values.get(idx).copied().unwrap_or(0.0);
+                let row_alpha = series_alphas[si].clamp(0.32, 1.0);
                 rows = rows.child(
                     div()
                         .h(px(20.))
+                        .opacity(row_alpha)
                         .flex()
                         .items_center()
                         .gap(px(8.))
@@ -914,15 +1164,13 @@ impl Render for KpiChart {
                 .border_1()
                 .border_color(p.line_strong)
                 .shadow_lg()
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .line_height(px(19.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .truncate()
-                        .child(head_lbl),
-                )
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "tip-date"),
+                    head_lbl,
+                    13.,
+                    FontWeight::MEDIUM,
+                    p.strong,
+                ))
                 .child(rows);
 
             let plot_w = self
@@ -939,8 +1187,9 @@ impl Render for KpiChart {
 
             div()
                 .absolute()
-                .top(px(-8.))
+                .top(px(-8. + 3. * (1. - scrub_alpha)))
                 .left(px(tip_left))
+                .opacity(scrub_alpha)
                 .child(tip)
                 .into_any_element()
         });
@@ -993,17 +1242,11 @@ impl Render for KpiChart {
                 let rel_x = f32::from(ev.position.x - b.left()).clamp(0.0, bw);
                 let idx = ((rel_x / bw) * (n - 1) as f32).round() as usize;
                 let idx = idx.min(n - 1);
-                if this.hovered_index != Some(idx) {
-                    this.hovered_index = Some(idx);
-                    cx.emit(KpiChartEvent::HoverIndexChanged(Some(idx)));
-                    cx.notify();
-                }
+                this.set_scrub_index(Some(idx), cx);
             }))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if !*inside && this.hovered_index.is_some() {
-                    this.hovered_index = None;
-                    cx.emit(KpiChartEvent::HoverIndexChanged(None));
-                    cx.notify();
+                    this.set_scrub_index(None, cx);
                 }
             }))
             .child(plot_canvas)
@@ -1022,37 +1265,85 @@ impl Render for KpiChart {
             None
         };
 
-        let mut legend_wrap = div().flex().flex_wrap().items_center().gap(px(6.));
-        for s in &self.series {
+        let mut legend_wrap = div().flex().flex_wrap().items_center().gap(px(5.));
+        for (si, s) in self.series.iter().enumerate() {
             let sid = s.id.clone();
+            let sid_hov = s.id.clone();
+            let sid_click = s.id.clone();
             let vis = s.visible;
             let sw_c = s.color;
+            let is_solo = self.solo_series.as_ref() == Some(&sid);
+            let is_spot = spotlight_id.as_ref() == Some(&sid);
+            let pill_alpha = if !vis {
+                0.38
+            } else {
+                (0.45 + 0.55 * series_alphas[si]).clamp(0.45, 1.0)
+            };
+            let rest_bg = if is_solo {
+                pro_mix_color(transparent_black(), sw_c, if dark { 0.18 } else { 0.11 })
+            } else {
+                transparent_black()
+            };
+            let hov_bg = pro_mix_color(wash, sw_c, if dark { 0.22 } else { 0.14 });
+            let rest_bdr = if is_solo {
+                sw_c.opacity(0.42)
+            } else {
+                transparent_black()
+            };
+            let hov_bdr = sw_c.opacity(0.32);
+
+            let pill_content = div()
+                .h(px(23.))
+                .px(px(7.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .whitespace_nowrap()
+                .child(div().size(px(7.)).flex_none().rounded(px(2.)).bg(sw_c))
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .font_weight(if is_spot {
+                            FontWeight::SEMIBOLD
+                        } else {
+                            FontWeight::MEDIUM
+                        })
+                        .text_color(if is_spot {
+                            p.strong
+                        } else if vis {
+                            p.text
+                        } else {
+                            p.muted
+                        })
+                        .child(s.label.clone()),
+                );
+
             legend_wrap = legend_wrap.child(
-                div()
-                    .id(pro_eid(&self.id, format!("leg-{sid}")))
-                    .role(Role::CheckBox)
-                    .aria_label(s.label.clone())
-                    .tab_index(0)
-                    .h(px(22.))
-                    .px(px(6.))
-                    .rounded(px(5.))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .opacity(if vis { 1.0 } else { 0.42 })
-                    .cursor_pointer()
-                    .hover(move |st| st.bg(wash))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.toggle_series(&sid, cx);
-                    }))
-                    .child(div().size(px(7.)).rounded(px(2.)).bg(sw_c))
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if vis { p.text } else { p.muted })
-                            .child(s.label.clone()),
-                    ),
+                pro_tactile(
+                    pro_eid(&self.id, format!("leg-{sid}")),
+                    s.label.clone(),
+                    6.,
+                    rest_bg,
+                    hov_bg,
+                    rest_bdr,
+                    hov_bdr,
+                    is_solo,
+                    pill_content,
+                    cx,
+                    move |this, _, cx| {
+                        this.toggle_solo_series(&sid_click, cx);
+                    },
+                )
+                .flex_none()
+                .opacity(pill_alpha)
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_series = Some(sid_hov.clone());
+                    } else if this.hovered_series.as_ref() == Some(&sid_hov) {
+                        this.hovered_series = None;
+                    }
+                    cx.notify();
+                })),
             );
         }
 
@@ -1110,7 +1401,16 @@ impl Render for KpiChart {
                                 FontWeight::MEDIUM,
                                 p.strong,
                             ))
-                            .when_some(delta_badge, |d, b| d.child(b)),
+                            .when_some(delta_badge, |d, b| d.child(b))
+                            .when(!context_caption.is_empty(), |d| {
+                                d.child(pro_swap_label(
+                                    pro_eid(&self.id, "ctx-cap"),
+                                    context_caption,
+                                    12.,
+                                    FontWeight::MEDIUM,
+                                    p.muted,
+                                ))
+                            }),
                     )
                     .child(
                         div()
@@ -1145,6 +1445,7 @@ impl Render for KpiChart {
                                     .child(
                                         div()
                                             .w_full()
+                                            .flex_none()
                                             .h(px(16.))
                                             .flex()
                                             .items_center()
@@ -1188,7 +1489,8 @@ impl Render for KpiChart {
 #[cfg(test)]
 mod tests {
     use super::{KpiChart, format_kpi_value};
-    use gpui::{AppContext, TestAppContext};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[test]
     fn compact_kpi_formatter_formats_thousands_and_negatives() {
@@ -1213,6 +1515,44 @@ mod tests {
             c.toggle_series("partners", cx);
             // Last remaining series must stay visible.
             assert!(c.visible_total() > 0.0);
+        });
+    }
+
+    #[gpui::test]
+    fn scrub_x_glides_between_buckets_and_solo_series_dims_others(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (chart, w) = cx.add_window_view(|_, cx| KpiChart::new("kpi-scrub", cx));
+        w.simulate_resize(size(px(500.), px(400.)));
+        w.run_until_parked();
+
+        // Enter scrub at bucket 1, then scrub to bucket 5 -> scrub_x glides smoothly.
+        w.update(|_, app| {
+            chart.update(app, |c, cx| {
+                c.set_scrub_index(Some(1), cx);
+                assert!((c.bucket_or_period_total(Some(1)) - 12_500.0).abs() < 1.0);
+                c.set_scrub_index(Some(5), cx);
+                c.toggle_solo_series("organic", cx);
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(45));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let c = chart.read(app);
+            let gx = c.scrub_x.value(app);
+            assert!(
+                gx > 1.0 / 6.0 && gx < 5.0 / 6.0,
+                "expected gliding scrub_x, got {gx}"
+            );
+            let dimmed = c.series_opacities[1].value(app);
+            assert!(
+                dimmed < 0.95 && dimmed > 0.22,
+                "expected snappy dim toward 0.22, got {dimmed}"
+            );
         });
     }
 }

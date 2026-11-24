@@ -7,12 +7,13 @@
 use crate::{
     components::pro_chrome::{
         ProBtnStyle, ProPalette, ProPresence, pro_agent_avatar, pro_app_tile, pro_btn,
-        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
-        pro_person_avatar, pro_presence, pro_shimmer_text, pro_skeleton_bar, tr,
+        pro_check_draw, pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_person_avatar, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         family::disabled_motion,
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_raw_svg},
     },
@@ -467,6 +468,7 @@ pub struct AgentWorkbench {
     reading_override: Option<SharedString>,
     done_override: Option<bool>,
     live: bool,
+    hovered_link: Option<SharedString>,
     inspected: Option<WorkbenchTarget>,
     last_target: Option<WorkbenchTarget>,
     measured_width: Rc<Cell<f32>>,
@@ -503,6 +505,7 @@ impl AgentWorkbench {
             reading_override: None,
             done_override: None,
             live: true,
+            hovered_link: None,
             inspected: None,
             last_target: None,
             measured_width: Rc::new(Cell::new(804.0)),
@@ -981,10 +984,16 @@ impl AgentWorkbench {
                                 1.5,
                                 blue_fg,
                                 self.boot_at.elapsed().as_secs_f32(),
-                                !disabled_motion(cx),
+                                !(disabled_motion(cx) || Theme::global(cx).reduced_motion),
                             )
                         } else {
-                            pro_icon(ProIcon::Check, 12., ok_fg)
+                            pro_check_draw(
+                                pro_eid(&self.id, format!("wb-pop-chk-{}", s.id)),
+                                true,
+                                12.0,
+                                false,
+                                ok_fg,
+                            )
                         })
                         .child(
                             div()
@@ -1095,7 +1104,7 @@ impl Focusable for AgentWorkbench {
 impl Render for AgentWorkbench {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
 
         if self.loading {
             let phase = self.boot_at.elapsed().as_secs_f32() * 0.9;
@@ -1248,9 +1257,47 @@ impl Render for AgentWorkbench {
         let ok_fg = p.green_ink;
         let ok_bg = p.green_soft;
 
+        let hov_key = self.hovered_link.as_deref();
+        let insp_is_agent = matches!(self.inspected, Some(WorkbenchTarget::Agent));
+        let insp_is_files = matches!(self.inspected, Some(WorkbenchTarget::File(_)));
+        let any_focus = hov_key.is_some() || self.inspected.is_some();
+        let any_spot = pro_spring_f32(
+            pro_eid(&self.id, "wb-any-spot"),
+            if any_focus { 1.0 } else { 0.0 },
+            0.22,
+            w,
+            cx,
+        );
+
+        let u_lit = active_at.as_deref() == Some("user")
+            || hov_key == Some("user")
+            || hov_key == Some("agent")
+            || insp_is_agent;
+        let u_spot = pro_spring_f32(
+            pro_eid(&self.id, "wb-u-spot"),
+            if u_lit { 1.0 } else { 0.0 },
+            0.24,
+            w,
+            cx,
+        );
+
+        let f_lit = active_at.as_deref() == Some("files")
+            || hov_key == Some("files")
+            || hov_key == Some("agent")
+            || insp_is_files
+            || insp_is_agent;
+        let f_spot = pro_spring_f32(
+            pro_eid(&self.id, "wb-f-spot"),
+            if f_lit { 1.0 } else { 0.0 },
+            0.24,
+            w,
+            cx,
+        );
+
         // 1. User Card (Left)
         let user_msg = self.localize_default(&self.user.message, cx).to_owned();
         let user_card = div()
+            .id(pro_eid(&self.id, "user-card"))
             .relative()
             .when(!stacked, |d| d.flex_1().min_w_0())
             .when(stacked, |d| d.w_full())
@@ -1260,8 +1307,17 @@ impl Render for AgentWorkbench {
             .rounded(px(12.))
             .bg(card_bg)
             .border_1()
-            .border_color(p.line)
+            .border_color(pro_mix_color(p.line, blue.opacity(0.55), u_spot))
             .when(!p.dark, |d| d.shadow_xs())
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_link = Some("user".into());
+                    cx.notify();
+                } else if this.hovered_link.as_deref() == Some("user") {
+                    this.hovered_link = None;
+                    cx.notify();
+                }
+            }))
             .flex()
             .flex_col()
             .gap(px(10.))
@@ -1369,7 +1425,13 @@ impl Render for AgentWorkbench {
                                 .child(if row_live {
                                     spinning_arc(12., 1.6, blue, elapsed_s, !reduced)
                                 } else {
-                                    pro_icon(ProIcon::Check, 12., ok_fg)
+                                    pro_check_draw(
+                                        pro_eid(&self.id, format!("wb-step-chk-{}", st.id)),
+                                        true,
+                                        12.0,
+                                        false,
+                                        ok_fg,
+                                    )
                                 }),
                         )
                         .child(
@@ -1413,83 +1475,106 @@ impl Render for AgentWorkbench {
             }
         }
 
-        let agent_pop_el = {
-            let show = agent_open;
-            let tgt = WorkbenchTarget::Agent;
-            let steps_c = steps.clone();
-            let pal = p;
-            let entity = cx.entity().downgrade();
-            pro_presence(
-                pro_eid(&self.id, "agent-pop"),
-                show,
-                0.18,
-                0.13,
-                move |amt| {
-                    if let Some(ent) = entity.upgrade() {
-                        // Rendered immediately during render below via prebuilt AnyElement:
-                        let _ = ent;
-                        div().opacity(amt).into_any_element()
-                    } else {
-                        let _ = (tgt, steps_c, pal);
-                        div().into_any_element()
-                    }
-                },
-            )
-        };
-        let _ = agent_pop_el;
-
         let agent_pop_rendered = if agent_open
             || matches!(self.last_target, Some(WorkbenchTarget::Agent))
         {
             let content = self.render_popover(&WorkbenchTarget::Agent, 1.0, &steps, done, &p, cx);
-            Some(pro_presence(
-                pro_eid(&self.id, "agent-pop-layer"),
-                agent_open,
-                0.18,
-                0.13,
-                move |amt| {
-                    div()
-                        .absolute()
-                        .left_0()
-                        .right_0()
-                        .top(relative(1.0))
-                        .pt(px(8.))
-                        .opacity(amt)
-                        .child(content)
-                        .into_any_element()
-                },
-            ))
+            let mut cell = Some(content);
+            Some(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .top(relative(1.0))
+                    .pt(px(8.))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, "agent-pop-layer"),
+                        agent_open,
+                        move || cell.take().unwrap_or_else(|| div().into_any_element()),
+                    )),
+            )
         } else {
             None
         };
 
-        let focus_col = p.focus;
         let hover_border = p.line_strong;
         let base_border = if agent_open {
             blue.opacity(0.55)
         } else {
             p.line
         };
-        let agent_hit = activate(
+        let agent_status_pill = if done {
             div()
-                .id(pro_eid(&self.id, "agent-hit"))
-                .role(Role::Button)
-                .aria_label(agent_aria)
-                .aria_expanded(agent_open)
-                .tab_index(0)
+                .h(px(22.))
+                .px(px(8.))
+                .rounded(px(6.))
+                .bg(ok_bg)
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .child(pro_check_draw(
+                    pro_eid(&self.id, "wb-done-chk"),
+                    true,
+                    12.0,
+                    false,
+                    ok_fg,
+                ))
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "wb-agent-st"),
+                    tr(cx, "Done", "已完成"),
+                    12.,
+                    FontWeight::MEDIUM,
+                    ok_fg,
+                ))
+        } else if is_working {
+            div()
+                .h(px(22.))
+                .px(px(8.))
+                .rounded(px(6.))
+                .bg(blue_bg)
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(spinning_arc(12., 1.7, blue_fg, elapsed_s, !reduced))
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "wb-agent-st"),
+                    tr(cx, "Working", "运行中"),
+                    12.,
+                    FontWeight::MEDIUM,
+                    blue_fg,
+                ))
+        } else {
+            div()
+                .h(px(22.))
+                .px(px(8.))
+                .rounded(px(6.))
+                .bg(tag_bg)
+                .flex()
+                .items_center()
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "wb-agent-st"),
+                    tr(cx, "Ready", "就绪"),
+                    12.,
+                    FontWeight::MEDIUM,
+                    p.text,
+                ))
+        };
+
+        let agent_hit = pro_tactile(
+            pro_eid(&self.id, "agent-hit"),
+            agent_aria,
+            12.0,
+            card_bg,
+            pro_mix_color(card_bg, p.ink, 0.02),
+            base_border,
+            hover_border,
+            agent_open,
+            div()
                 .w_full()
                 .pt(px(12.))
                 .px(px(14.))
                 .pb(px(14.))
-                .rounded(px(12.))
-                .bg(card_bg)
-                .border_1()
-                .border_color(base_border)
-                .when(!p.dark, |d| d.shadow_xs())
-                .cursor_pointer()
-                .hover(move |s| s.border_color(hover_border))
-                .focus_visible(move |s| s.border_2().border_color(focus_col))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .relative()
                 .flex()
                 .flex_col()
                 .gap(px(10.))
@@ -1539,54 +1624,26 @@ impl Render for AgentWorkbench {
                                     )
                                 }),
                         )
-                        .child(if done {
-                            div()
-                                .h(px(22.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .bg(ok_bg)
-                                .text_color(ok_fg)
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .gap(px(4.))
-                                .child(pro_icon(ProIcon::Check, 12., ok_fg))
-                                .child(tr(cx, "Done", "已完成"))
-                        } else if is_working {
-                            div()
-                                .h(px(22.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .bg(blue_bg)
-                                .text_color(blue_fg)
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(spinning_arc(12., 1.7, blue_fg, elapsed_s, !reduced))
-                                .child(tr(cx, "Working", "运行中"))
-                        } else {
-                            div()
-                                .h(px(22.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .bg(tag_bg)
-                                .text_color(p.text)
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .child(tr(cx, "Ready", "就绪"))
-                        }),
+                        .child(agent_status_pill),
                 )
                 .child(work_box),
             cx,
             |this, _, cx| {
                 this.inspect(Some(WorkbenchTarget::Agent), cx);
             },
-        );
+        )
+        .aria_expanded(agent_open)
+        .when(!p.dark, |d| d.shadow_xs())
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+            if *inside {
+                this.hovered_link = Some("agent".into());
+                cx.notify();
+            } else if this.hovered_link.as_deref() == Some("agent") {
+                this.hovered_link = None;
+                cx.notify();
+            }
+        }));
 
         let agent_wrap = div()
             .relative()
@@ -1604,12 +1661,15 @@ impl Render for AgentWorkbench {
             self.files.len()
         };
         let extra_files = self.files.len().saturating_sub(max_file_rows);
-        let mut file_rows = div().flex().flex_col();
+        let mut file_rows = div().flex().flex_col().gap(px(2.));
         let mut file_pop_rendered: Option<AnyElement> = None;
 
         for file in self.files.iter().take(max_file_rows) {
             let fid = file.id.clone();
             let is_reading = active_file_id.as_ref() == Some(&fid);
+            let file_used = steps
+                .iter()
+                .any(|s| !s.running && s.file_id.as_ref() == Some(&fid));
             let is_open = self.inspected == Some(WorkbenchTarget::File(fid.clone()));
             if is_open || self.last_target == Some(WorkbenchTarget::File(fid.clone())) {
                 let content = self.render_popover(
@@ -1620,23 +1680,21 @@ impl Render for AgentWorkbench {
                     &p,
                     cx,
                 );
-                file_pop_rendered = Some(pro_presence(
-                    pro_eid(&self.id, format!("fpop-{fid}")),
-                    is_open,
-                    0.18,
-                    0.13,
-                    move |amt| {
-                        div()
-                            .absolute()
-                            .left_0()
-                            .right_0()
-                            .top(relative(1.0))
-                            .pt(px(8.))
-                            .opacity(amt)
-                            .child(content)
-                            .into_any_element()
-                    },
-                ));
+                let mut cell = Some(content);
+                file_pop_rendered = Some(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .top(relative(1.0))
+                        .pt(px(8.))
+                        .child(pro_popover_presence(
+                            pro_eid(&self.id, format!("fpop-{fid}")),
+                            is_open,
+                            move || cell.take().unwrap_or_else(|| div().into_any_element()),
+                        ))
+                        .into_any_element(),
+                );
             }
             let row_bg = if is_reading {
                 blue_bg
@@ -1649,21 +1707,23 @@ impl Render for AgentWorkbench {
             let file_aria: SharedString =
                 format!("{} – {}", file.name, tr(cx, "details", "详情")).into();
             let fid_click = fid.clone();
-            let row_el = activate(
+            let row_el = pro_tactile(
+                pro_eid(&self.id, format!("file-{fid}")),
+                file_aria,
+                6.0,
+                row_bg,
+                row_hover,
+                transparent_black(),
+                if is_reading {
+                    blue.opacity(0.35)
+                } else {
+                    edge_col
+                },
+                is_open,
                 div()
-                    .id(pro_eid(&self.id, format!("file-{fid}")))
-                    .role(Role::Button)
-                    .aria_label(file_aria)
-                    .aria_expanded(is_open)
-                    .tab_index(0)
+                    .w_full()
                     .h(px(28.))
                     .px(px(5.))
-                    .rounded(px(6.))
-                    .bg(row_bg)
-                    .hover(move |s| s.bg(row_hover))
-                    .focus_visible(move |s| s.border_1().border_color(focus_col))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .cursor_pointer()
                     .flex()
                     .items_center()
                     .gap(px(8.))
@@ -1691,6 +1751,15 @@ impl Render for AgentWorkbench {
                             })
                             .child(file.name.clone()),
                     )
+                    .when(file_used && !is_reading, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, format!("f-used-chk-{fid}")),
+                            true,
+                            12.0,
+                            false,
+                            ok_fg,
+                        ))
+                    })
                     .child(
                         div()
                             .flex_none()
@@ -1702,7 +1771,9 @@ impl Render for AgentWorkbench {
                 move |this, _, cx| {
                     this.inspect(Some(WorkbenchTarget::File(fid_click.clone())), cx);
                 },
-            );
+            )
+            .aria_expanded(is_open)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
             file_rows = file_rows.child(row_el);
         }
         if extra_files > 0 {
@@ -1732,6 +1803,7 @@ impl Render for AgentWorkbench {
         };
 
         let files_card = div()
+            .id(pro_eid(&self.id, "files-card"))
             .relative()
             .when(!stacked, |d| {
                 d.flex_basis(relative(0.)).flex_grow(1.08).min_w_0()
@@ -1743,12 +1815,17 @@ impl Render for AgentWorkbench {
             .rounded(px(12.))
             .bg(card_bg)
             .border_1()
-            .border_color(if active_at.as_deref() == Some("files") {
-                blue.opacity(0.42)
-            } else {
-                p.line
-            })
+            .border_color(pro_mix_color(p.line, blue.opacity(0.50), f_spot))
             .when(!p.dark, |d| d.shadow_xs())
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_link = Some("files".into());
+                    cx.notify();
+                } else if this.hovered_link.as_deref() == Some("files") {
+                    this.hovered_link = None;
+                    cx.notify();
+                }
+            }))
             .flex()
             .flex_col()
             .gap(px(8.))
@@ -1811,6 +1888,7 @@ impl Render for AgentWorkbench {
             s.0.set(None);
         }
 
+        let mut t_spots = [0.0_f32; 4];
         let mut tools_row = div()
             .w_full()
             .flex()
@@ -1824,6 +1902,17 @@ impl Render for AgentWorkbench {
             let calling = !done && active_at.as_ref() == Some(&tid);
             let used = steps.iter().any(|s| !s.running && s.at == tid);
             let is_open = self.inspected == Some(WorkbenchTarget::Tool(tid.clone()));
+            let is_hov = hov_key == Some(tid.as_ref()) || hov_key == Some("agent") || insp_is_agent;
+            let slot_lit = calling || is_open || is_hov;
+            let t_spot = pro_spring_f32(
+                pro_eid(&self.id, format!("wb-t-spot-{tid}")),
+                if slot_lit { 1.0 } else { 0.0 },
+                0.24,
+                w,
+                cx,
+            );
+            t_spots[idx] = t_spot;
+
             let (tag_lbl, t_bg, t_fg) = if calling {
                 (tr(cx, "Calling", "调用中"), blue_bg, blue_fg)
             } else if used {
@@ -1856,23 +1945,20 @@ impl Render for AgentWorkbench {
                         &p,
                         cx,
                     );
-                    Some(pro_presence(
-                        pro_eid(&self.id, format!("tpop-{tid}")),
-                        is_open,
-                        0.18,
-                        0.13,
-                        move |amt| {
-                            div()
-                                .absolute()
-                                .left_0()
-                                .right_0()
-                                .bottom(relative(1.0))
-                                .pb(px(8.))
-                                .opacity(amt)
-                                .child(content)
-                                .into_any_element()
-                        },
-                    ))
+                    let mut cell = Some(content);
+                    Some(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .right_0()
+                            .bottom(relative(1.0))
+                            .pb(px(8.))
+                            .child(pro_popover_presence(
+                                pro_eid(&self.id, format!("tpop-{tid}")),
+                                is_open,
+                                move || cell.take().unwrap_or_else(|| div().into_any_element()),
+                            )),
+                    )
                 } else {
                     None
                 };
@@ -1880,31 +1966,23 @@ impl Render for AgentWorkbench {
             let tool_aria: SharedString =
                 format!("{} – {}", tool.name, tr(cx, "details", "详情")).into();
             let tid_click = tid.clone();
-            let t_border = if calling || is_open {
-                blue.opacity(0.50)
-            } else {
-                p.line
-            };
+            let tid_hov = tid.clone();
+            let t_border = pro_mix_color(p.line, blue.opacity(0.55), t_spot);
 
-            let tool_hit = activate(
+            let tool_hit = pro_tactile(
+                pro_eid(&self.id, format!("tool-{tid}")),
+                tool_aria,
+                12.0,
+                card_bg,
+                pro_mix_color(card_bg, p.ink, 0.02),
+                t_border,
+                hover_border,
+                is_open,
                 div()
-                    .id(pro_eid(&self.id, format!("tool-{tid}")))
-                    .role(Role::Button)
-                    .aria_label(tool_aria)
-                    .aria_expanded(is_open)
-                    .tab_index(0)
                     .w_full()
                     .py(px(12.))
                     .px(px(14.))
-                    .rounded(px(12.))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(t_border)
-                    .when(!p.dark, |d| d.shadow_xs())
-                    .hover(move |s| s.border_color(hover_border))
-                    .focus_visible(move |s| s.border_2().border_color(focus_col))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .cursor_pointer()
+                    .relative()
                     .flex()
                     .flex_col()
                     .gap(px(10.))
@@ -1950,12 +2028,25 @@ impl Render for AgentWorkbench {
                                     .self_start()
                                     .rounded(px(5.))
                                     .bg(t_bg)
-                                    .text_color(t_fg)
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
                                     .flex()
                                     .items_center()
-                                    .child(tag_lbl),
+                                    .gap(px(4.))
+                                    .when(used && !calling, |d| {
+                                        d.child(pro_check_draw(
+                                            pro_eid(&self.id, format!("tool-used-chk-{tid}")),
+                                            true,
+                                            12.0,
+                                            false,
+                                            t_fg,
+                                        ))
+                                    })
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, format!("tool-st-{tid}")),
+                                        tag_lbl,
+                                        11.,
+                                        FontWeight::MEDIUM,
+                                        t_fg,
+                                    )),
                             ),
                     )
                     .child(
@@ -1998,7 +2089,19 @@ impl Render for AgentWorkbench {
                 move |this, _, cx| {
                     this.inspect(Some(WorkbenchTarget::Tool(tid_click.clone())), cx);
                 },
-            );
+            )
+            .aria_expanded(is_open)
+            .when(!p.dark, |d| d.shadow_xs())
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_link = Some(tid_hov.clone());
+                    cx.notify();
+                } else if this.hovered_link.as_ref() == Some(&tid_hov) {
+                    this.hovered_link = None;
+                    cx.notify();
+                }
+            }));
 
             let card_wrap = div()
                 .relative()
@@ -2011,6 +2114,24 @@ impl Render for AgentWorkbench {
         }
 
         if has_overflow_tools {
+            let extra_tool_ids_chk: Vec<SharedString> = self
+                .tools
+                .iter()
+                .skip(shown_tool_count)
+                .map(|t| t.id.clone())
+                .collect();
+            let extra_lit = active_at
+                .as_ref()
+                .is_some_and(|id| extra_tool_ids_chk.contains(id))
+                || hov_key == Some("agent")
+                || insp_is_agent;
+            t_spots[3] = pro_spring_f32(
+                pro_eid(&self.id, "wb-t-spot-overflow"),
+                if extra_lit { 1.0 } else { 0.0 },
+                0.24,
+                w,
+                cx,
+            );
             let extra_n = self.tools.len() - shown_tool_count;
             let mut logos = div().flex().items_center().gap(px(4.));
             for extra_tool in self.tools.iter().skip(shown_tool_count).take(3) {
@@ -2049,27 +2170,11 @@ impl Render for AgentWorkbench {
         }
 
         // Background wire canvas + foreground hollow-port canvas when side-by-side (`!stacked`)
-        let tool_ids_shown: Vec<SharedString> = self
-            .tools
-            .iter()
-            .take(shown_tool_count)
-            .map(|t| t.id.clone())
-            .collect();
-        let extra_tool_ids: Vec<SharedString> = self
-            .tools
-            .iter()
-            .skip(shown_tool_count)
-            .map(|t| t.id.clone())
-            .collect();
-
         let wires_bg = {
             let u_s = self.user_sensor.clone();
             let a_s = self.agent_sensor.clone();
             let f_s = self.files_sensor.clone();
             let t_s = self.tool_sensors.clone();
-            let act_at = active_at.clone();
-            let tids = tool_ids_shown.clone();
-            let etids = extra_tool_ids.clone();
             canvas(
                 |_, _, _| (),
                 move |_, _, window, _| {
@@ -2079,37 +2184,38 @@ impl Render for AgentWorkbench {
                     let (Some(ub), Some(ab), Some(fb)) = (u_s.get(), a_s.get(), f_s.get()) else {
                         return;
                     };
+                    let dim_idle = wire_idle.opacity(wire_idle.a * (1.0 - 0.45 * any_spot));
                     // 1. User -> Agent horizontal wire
                     let uy = (ub.center().y + ab.center().y) * 0.5_f32;
-                    let u_on = act_at.as_deref() == Some("user");
+                    let u_col = pro_mix_color(dim_idle, wire_active, u_spot);
                     pro_connector_pulse(
                         point(ub.right(), uy),
                         point(ab.left(), uy),
                         8.0,
                         false,
-                        if u_on { wire_active } else { wire_idle },
+                        u_col,
                         blue,
-                        if u_on { pulse_t } else { None },
-                        1.4,
+                        if u_spot > 0.35 { pulse_t } else { None },
+                        1.4 + 0.65 * u_spot,
                         window,
                     );
                     // 2. Agent -> Files horizontal wire
                     let fy = (ab.center().y + fb.center().y) * 0.5_f32;
-                    let f_on = act_at.as_deref() == Some("files");
+                    let f_col = pro_mix_color(dim_idle, wire_active, f_spot);
                     pro_connector_pulse(
                         point(ab.right(), fy),
                         point(fb.left(), fy),
                         8.0,
                         false,
-                        if f_on { wire_active } else { wire_idle },
+                        f_col,
                         blue,
-                        if f_on { pulse_t } else { None },
-                        1.4,
+                        if f_spot > 0.35 { pulse_t } else { None },
+                        1.4 + 0.65 * f_spot,
                         window,
                     );
                     // 3. Agent -> Tools vertical-first wires
                     let aw = f32::from(ab.size.width);
-                    for slot in 0..total_cards {
+                    for (slot, &ts) in t_spots.iter().enumerate().take(total_cards) {
                         let Some(tb) = t_s[slot].get() else {
                             continue;
                         };
@@ -2120,20 +2226,16 @@ impl Render for AgentWorkbench {
                         };
                         let p0 = point(ab.left() + px(aw * frac), ab.bottom());
                         let p1 = point(tb.center().x, tb.top());
-                        let is_on = if slot < tids.len() {
-                            act_at.as_ref() == Some(&tids[slot])
-                        } else {
-                            act_at.as_ref().is_some_and(|id| etids.contains(id))
-                        };
+                        let t_col = pro_mix_color(dim_idle, wire_active, ts);
                         pro_connector_pulse(
                             p0,
                             p1,
                             10.0,
                             true,
-                            if is_on { wire_active } else { wire_idle },
+                            t_col,
                             blue,
-                            if is_on { pulse_t } else { None },
-                            1.4,
+                            if ts > 0.35 { pulse_t } else { None },
+                            1.4 + 0.65 * ts,
                             window,
                         );
                     }
@@ -2148,9 +2250,6 @@ impl Render for AgentWorkbench {
             let a_s = self.agent_sensor.clone();
             let f_s = self.files_sensor.clone();
             let t_s = self.tool_sensors.clone();
-            let act_at = active_at.clone();
-            let tids = tool_ids_shown;
-            let etids = extra_tool_ids;
             let has_pop = self.inspected.is_some();
             canvas(
                 |_, _, _| (),
@@ -2162,17 +2261,15 @@ impl Render for AgentWorkbench {
                         return;
                     };
                     let uy = (ub.center().y + ab.center().y) * 0.5_f32;
-                    let u_on = act_at.as_deref() == Some("user");
-                    paint_hollow_port(point(ub.right(), uy), u_on, card_bg, blue, window);
-                    paint_hollow_port(point(ab.left(), uy), u_on, card_bg, blue, window);
+                    paint_hollow_port(point(ub.right(), uy), u_spot > 0.35, card_bg, blue, window);
+                    paint_hollow_port(point(ab.left(), uy), u_spot > 0.35, card_bg, blue, window);
 
                     let fy = (ab.center().y + fb.center().y) * 0.5_f32;
-                    let f_on = act_at.as_deref() == Some("files");
-                    paint_hollow_port(point(ab.right(), fy), f_on, card_bg, blue, window);
-                    paint_hollow_port(point(fb.left(), fy), f_on, card_bg, blue, window);
+                    paint_hollow_port(point(ab.right(), fy), f_spot > 0.35, card_bg, blue, window);
+                    paint_hollow_port(point(fb.left(), fy), f_spot > 0.35, card_bg, blue, window);
 
                     let aw = f32::from(ab.size.width);
-                    for slot in 0..total_cards {
+                    for (slot, &ts) in t_spots.iter().enumerate().take(total_cards) {
                         let Some(tb) = t_s[slot].get() else {
                             continue;
                         };
@@ -2183,13 +2280,8 @@ impl Render for AgentWorkbench {
                         };
                         let p0 = point(ab.left() + px(aw * frac), ab.bottom());
                         let p1 = point(tb.center().x, tb.top());
-                        let is_on = if slot < tids.len() {
-                            act_at.as_ref() == Some(&tids[slot])
-                        } else {
-                            act_at.as_ref().is_some_and(|id| etids.contains(id))
-                        };
-                        paint_hollow_port(p0, is_on, card_bg, blue, window);
-                        paint_hollow_port(p1, is_on, card_bg, blue, window);
+                        paint_hollow_port(p0, ts > 0.35, card_bg, blue, window);
+                        paint_hollow_port(p1, ts > 0.35, card_bg, blue, window);
                     }
                 },
             )
@@ -2219,6 +2311,8 @@ impl Render for AgentWorkbench {
 
         let footer_bar = if self.custom_steps.is_none() {
             let live_now = self.live;
+            let completed_steps = steps.iter().filter(|s| !s.running || done).count();
+            let total_steps = self.playbook.len().max(1);
             Some(
                 div()
                     .w_full()
@@ -2230,19 +2324,54 @@ impl Render for AgentWorkbench {
                     .gap(px(8.))
                     .child(
                         div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(tr(
-                                cx,
-                                "Click the agent, any file, or any tool to inspect permissions and run steps.",
-                                "点击中央智能体、右侧文件或下方工具卡片即可查看权限范围与本次调用明细。",
-                            )),
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.muted)
+                                    .child(tr(
+                                        cx,
+                                        "Hover or click any card to illuminate links and inspect permissions.",
+                                        "悬停或点击任意卡片即可点亮连接线路并查看权限与调用明细。",
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .h(px(20.))
+                                    .px(px(7.))
+                                    .rounded(px(5.))
+                                    .bg(fill_bg)
+                                    .border_1()
+                                    .border_color(edge_col)
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "wb-steps-done"),
+                                        completed_steps as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        11.5,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
+                                    .child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(p.muted)
+                                            .child(format!("/ {total_steps}")),
+                                    ),
+                            ),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(px(10.))
                             .child(pro_btn(
                                 pro_eid(&self.id, "step-btn"),
                                 tr(cx, "Next step", "下一步"),
@@ -2255,25 +2384,28 @@ impl Render for AgentWorkbench {
                                     this.advance_demo_step(cx);
                                 },
                             ))
-                            .child(pro_btn(
-                                pro_eid(&self.id, "live-btn"),
-                                if live_now {
-                                    tr(cx, "Pause", "暂停")
-                                } else {
-                                    tr(cx, "Auto", "自动播放")
-                                },
-                                Some(if live_now {
-                                    ProIcon::Pause
-                                } else {
-                                    ProIcon::Play
-                                }),
-                                ProBtnStyle::Ghost,
-                                true,
-                                cx,
-                                move |this, _, cx| {
-                                    this.set_live(!live_now, cx);
-                                },
-                            )),
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(if live_now { p.strong } else { p.muted })
+                                            .child(tr(cx, "Auto", "自动")),
+                                    )
+                                    .child(pro_switch(
+                                        pro_eid(&self.id, "live-btn"),
+                                        tr(cx, "Auto-advance demo steps", "自动推进演示步骤"),
+                                        live_now,
+                                        cx,
+                                        move |this, _, cx| {
+                                            this.set_live(!live_now, cx);
+                                        },
+                                    )),
+                            ),
                     ),
             )
         } else {

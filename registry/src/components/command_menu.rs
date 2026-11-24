@@ -7,14 +7,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_selection_sensor, pro_skeleton_bar, pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_icon_btn,
+        pro_mark_selected, pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar,
+        pro_swap_label, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_raw_svg, pro_svg},
     },
 };
@@ -494,6 +495,64 @@ fn render_keycap(label: &str, active: bool, p: &ProPalette) -> Div {
         .child(label.to_string())
 }
 
+#[derive(IntoElement)]
+struct CmdRowTactile {
+    id: ElementId,
+    pressed: bool,
+    active: bool,
+    dark: bool,
+    content: AnyElement,
+}
+
+impl RenderOnce for CmdRowTactile {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let reduced = disabled_motion(cx);
+        let target = if self.pressed { 1.0 } else { 0.0 };
+        let st = w.use_keyed_state(
+            ElementId::Name(format!("{}-press", self.id).into()),
+            cx,
+            |_, _| (self.pressed, Slide::snappy(target)),
+        );
+        let prev = st.read(cx).0;
+        if prev != self.pressed {
+            st.update(cx, |s, cx| {
+                s.0 = self.pressed;
+                if reduced {
+                    s.1.reset(target);
+                } else {
+                    s.1.duration(target, 0.11, cx);
+                }
+            });
+        }
+        let amt = if reduced {
+            target
+        } else {
+            st.update(cx, |s, cx| s.1.get(w, cx).clamp(0.0, 1.0))
+        };
+        let flash_bg = if amt > 0.01 {
+            if self.dark {
+                hsla(0., 0., 1., 0.06 * amt)
+            } else {
+                hsla(0., 0., 0., 0.05 * amt)
+            }
+        } else {
+            transparent_black()
+        };
+        let _ = self.active;
+        div()
+            .size_full()
+            .rounded(px(6.))
+            .bg(flash_bg)
+            .relative()
+            .top(px(1.25 * amt))
+            .px(px(8. + 2.0 * amt))
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .child(self.content)
+    }
+}
+
 /// Search-and-run command palette with brand logos, `⌘1`–`⌘5` shortcuts, and gliding highlight.
 ///
 /// # Examples
@@ -517,6 +576,7 @@ pub struct CommandMenu {
     auto_focus: bool,
     did_auto_focus: bool,
     active_idx: usize,
+    pressed_cmd: Option<SharedString>,
     last_ran: Option<(SharedString, SharedString, Instant)>,
     search_editor: Option<Entity<Editor>>,
     editor_lang_zh: Option<bool>,
@@ -541,6 +601,7 @@ impl CommandMenu {
             auto_focus: false,
             did_auto_focus: false,
             active_idx: 0,
+            pressed_cmd: None,
             last_ran: None,
             search_editor: None,
             editor_lang_zh: None,
@@ -960,32 +1021,25 @@ impl Render for CommandMenu {
             )
             .when(!query_str.is_empty(), |d| {
                 let clear_lbl: SharedString = tr(cx, "Clear search", "清空搜索").into();
-                d.child(
-                    div()
-                        .id(pro_eid(&self.id, "clear-q"))
-                        .role(Role::Button)
-                        .aria_label(clear_lbl)
-                        .tab_index(0)
-                        .size(px(20.))
-                        .rounded(px(5.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .on_click(cx.listener(|v, _, w, cx| {
-                            if let Some(ed) = v.search_editor.clone() {
-                                ed.update(cx, |e, cx| {
-                                    e.set_value("", w, cx);
-                                    e.focus(w, cx);
-                                });
-                            }
-                            v.active_idx = 0;
-                            cx.emit(CommandMenuEvent::QueryChanged("".into()));
-                            cx.notify();
-                        }))
-                        .child(pro_icon(ProIcon::Close, 12., p.muted)),
-                )
+                d.child(pro_icon_btn(
+                    pro_eid(&self.id, "clear-q"),
+                    clear_lbl,
+                    ProIcon::Close,
+                    22.,
+                    false,
+                    cx,
+                    |v, w, cx| {
+                        if let Some(ed) = v.search_editor.clone() {
+                            ed.update(cx, |e, cx| {
+                                e.set_value("", w, cx);
+                                e.focus(w, cx);
+                            });
+                        }
+                        v.active_idx = 0;
+                        cx.emit(CommandMenuEvent::QueryChanged("".into()));
+                        cx.notify();
+                    },
+                ))
             })
             .when(!compact, |d| {
                 d.child(
@@ -1104,18 +1158,45 @@ impl Render for CommandMenu {
             }
 
             let aria_lbl = entry.item.label.clone();
+            let cmd_id = entry.item.id.clone();
+            let cmd_id_down = cmd_id.clone();
+            let cmd_id_up = cmd_id.clone();
+            let exec_flash = self.last_ran.as_ref().is_some_and(|(ran_id, _, t)| {
+                *ran_id == cmd_id && t.elapsed().as_secs_f32() < 0.14
+            });
+            let is_pressed = self.pressed_cmd.as_ref() == Some(&cmd_id) || exec_flash;
+            let row_inner = div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(lead_visual)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .text_size(px(13.))
+                        .line_height(px(20.))
+                        .child(name_el)
+                        .when_some(hint_el, |d, h| d.child(h)),
+                )
+                .child(keys_row)
+                .into_any_element();
+
             inner_col = inner_col.child(
                 div()
-                    .id(row_id)
+                    .id(row_id.clone())
                     .role(Role::ListItem)
                     .aria_label(aria_lbl)
                     .relative()
                     .h(px(36.))
-                    .px(px(8.))
                     .rounded(px(6.))
                     .flex()
                     .items_center()
-                    .gap(px(10.))
                     .cursor_pointer()
                     .when(is_active, |d| d.child(pro_mark_selected(&sensor)))
                     .on_hover(cx.listener(move |v, inside: &bool, _, cx| {
@@ -1124,23 +1205,42 @@ impl Render for CommandMenu {
                             cx.notify();
                         }
                     }))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |v, _, _, cx| {
+                            v.pressed_cmd = Some(cmd_id_down.clone());
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |v, _, _, cx| {
+                            if v.pressed_cmd.as_ref() == Some(&cmd_id_up) {
+                                v.pressed_cmd = None;
+                                cx.notify();
+                            }
+                        }),
+                    )
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(|v, _, _, cx| {
+                            if v.pressed_cmd.is_some() {
+                                v.pressed_cmd = None;
+                                cx.notify();
+                            }
+                        }),
+                    )
                     .on_click(cx.listener(move |v, _, _, cx| {
+                        v.pressed_cmd = None;
                         v.run_visible_index(v_idx, cx);
                     }))
-                    .child(lead_visual)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .text_size(px(13.))
-                            .line_height(px(20.))
-                            .child(name_el)
-                            .when_some(hint_el, |d, h| d.child(h)),
-                    )
-                    .child(keys_row),
+                    .child(CmdRowTactile {
+                        id: row_id,
+                        pressed: is_pressed,
+                        active: is_active,
+                        dark: p.dark,
+                        content: row_inner,
+                    }),
             );
         }
 
@@ -1153,33 +1253,51 @@ impl Render for CommandMenu {
             .child(inner_col);
 
         // Footer tray: shows execution confirmation or keyboard tips
+        let has_done = recent_done.is_some();
+        let done_chk = pro_check_draw(
+            pro_eid(&self.id, "foot-ran-chk"),
+            has_done,
+            15.,
+            false,
+            p.green,
+        );
         let footer_left = if let Some(done_label) = recent_done {
             let ran_prefix = tr(cx, "Ran", "已执行");
+            let full_done: SharedString = format!("{ran_prefix} {done_label}").into();
             pro_view_transition(
                 pro_eid(&self.id, "foot-vtx"),
-                format!("done-{done_label}"),
+                "done-state",
                 div()
                     .flex()
                     .items_center()
                     .gap(px(6.))
                     .min_w_0()
                     .text_color(p.ink)
-                    .child(pro_icon(ProIcon::Check, 15., p.green_ink))
-                    .child(
-                        div()
-                            .truncate()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(format!("{ran_prefix} {done_label}")),
-                    ),
+                    .child(done_chk)
+                    .child(div().min_w_0().truncate().child(pro_swap_label(
+                        pro_eid(&self.id, "foot-ran-lbl"),
+                        full_done,
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))),
             )
         } else if !compact {
             pro_view_transition(
                 pro_eid(&self.id, "foot-vtx"),
                 "idle-tip",
                 div()
+                    .relative()
                     .flex()
                     .items_center()
                     .gap(px(6.))
+                    .child(
+                        div()
+                            .size(px(0.))
+                            .overflow_hidden()
+                            .opacity(0.)
+                            .child(done_chk),
+                    )
                     .child(render_keycap("Tab", false, &p))
                     .child(div().text_color(p.muted).child(tr(
                         cx,
@@ -1188,7 +1306,12 @@ impl Render for CommandMenu {
                     ))),
             )
         } else {
-            div().into_any_element()
+            div()
+                .size(px(0.))
+                .overflow_hidden()
+                .opacity(0.)
+                .child(done_chk)
+                .into_any_element()
         };
 
         let show_footer = !compact || self.last_ran.is_some();

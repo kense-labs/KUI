@@ -7,20 +7,274 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_person_avatar, pro_presence, pro_progress_ring, pro_skeleton_bar,
-        pro_switch, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color, pro_person_avatar,
+        pro_pill_indicator, pro_popover_presence, pro_presence, pro_progress_ring,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_switch, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
+        family::Slide,
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
+
+type TaskClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+type TaskMouseDownHandler = Rc<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
+type TaskKeyDownHandler = Rc<dyn Fn(&KeyDownEvent, &mut Window, &mut App)>;
+
+#[derive(IntoElement)]
+struct ColShiftMiniBtn {
+    id: ElementId,
+    aria: SharedString,
+    icon: ProIcon,
+    on_shift: TaskClickHandler,
+}
+
+impl RenderOnce for ColShiftMiniBtn {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let st = w.use_keyed_state(pro_eid(&self.id, "mv-st"), cx, |_, _| {
+            (Slide::snappy(0.), Slide::snappy(0.))
+        });
+        let (hov, down) = st.update(cx, |s, cx| {
+            (s.0.get(w, cx).clamp(0., 1.), s.1.get(w, cx).clamp(0., 1.))
+        });
+        let face_bg = pro_mix_color(transparent_black(), p.chip_hover, hov);
+        let fg = pro_mix_color(p.faint, p.strong, hov);
+        let icon_sz = 10.5 * (1. - 0.12 * down);
+        let on_shift = self.on_shift;
+
+        div()
+            .id(self.id)
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .size(px(18.))
+            .relative()
+            .rounded(px(5.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.0.set(if *inside { 1. } else { 0. }, cx);
+                        if !*inside {
+                            s.1.set(0., cx);
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    cx.stop_propagation();
+                    st.update(cx, |s, cx| {
+                        s.1.set(1., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    cx.stop_propagation();
+                    st.update(cx, |s, cx| {
+                        s.1.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up_out(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_click(move |ev, w, cx| {
+                cx.stop_propagation();
+                (on_shift)(ev, w, cx);
+            })
+            .child(
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        if face_bg.a <= 0.001 {
+                            return;
+                        }
+                        let inset = 1.2 * down;
+                        let bw = f32::from(bounds.size.width);
+                        let bh = f32::from(bounds.size.height);
+                        let rect = Bounds::new(
+                            point(bounds.origin.x + px(inset), bounds.origin.y + px(inset)),
+                            size(px((bw - 2. * inset).max(1.)), px((bh - 2. * inset).max(1.))),
+                        );
+                        window.paint_quad(fill(rect, face_bg).corner_radii(px(4.5)));
+                    },
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .child(pro_icon(self.icon, icon_sz, fg))
+    }
+}
+
+struct TaskCardAnim {
+    hover: Slide,
+    drag: Slide,
+    was_dragging: bool,
+}
+
+#[derive(IntoElement)]
+struct TaskCardSurface {
+    id: ElementId,
+    aria: SharedString,
+    radius: f32,
+    is_open: bool,
+    is_dragging: bool,
+    bounds_cell: Rc<Cell<Bounds<Pixels>>>,
+    on_mouse_down: TaskMouseDownHandler,
+    on_key_down: TaskKeyDownHandler,
+    content: AnyElement,
+}
+
+impl RenderOnce for TaskCardSurface {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_drag = self.is_dragging;
+        let st = w.use_keyed_state(pro_eid(&self.id, "tcard-st"), cx, |_, _| TaskCardAnim {
+            hover: Slide::snappy(0.),
+            drag: Slide::snappy(f32::from(init_drag)),
+            was_dragging: init_drag,
+        });
+        let (hov, drag_t) = st.update(cx, |s, cx| {
+            if s.was_dragging != self.is_dragging {
+                s.was_dragging = self.is_dragging;
+                s.drag.set(f32::from(self.is_dragging), cx);
+            }
+            (
+                s.hover.get(w, cx).clamp(0., 1.),
+                s.drag.get(w, cx).clamp(0., 1.),
+            )
+        });
+
+        let base_border = if self.is_open { p.blue } else { p.line };
+        let hov_border = if self.is_open { p.blue } else { p.line_strong };
+        let border_col = pro_mix_color(
+            pro_mix_color(base_border, hov_border, hov),
+            p.blue.opacity(0.65),
+            drag_t,
+        );
+        let card_bg = pro_mix_color(p.card, p.subtle, drag_t * 0.35);
+        let opacity = 1.0 - 0.56 * drag_t;
+        let lift_y = -2.2 * drag_t - 0.6 * hov * (1.0 - drag_t);
+        let bounds_cell = self.bounds_cell;
+        let on_md = self.on_mouse_down;
+        let on_kd = self.on_key_down;
+
+        div()
+            .id(self.id)
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .tab_index(0)
+            .relative()
+            .top(px(lift_y))
+            .w_full()
+            .rounded(px(self.radius))
+            .bg(card_bg)
+            .border_1()
+            .border_color(border_col)
+            .when(!p.dark && (hov > 0.05 || drag_t > 0.05), |d| d.shadow_sm())
+            .when(!p.dark && hov <= 0.05 && drag_t <= 0.05, |d| d.shadow_xs())
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .opacity(opacity)
+            .cursor_pointer()
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.hover.set(if *inside { 1. } else { 0. }, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, move |ev, w, cx| {
+                (on_md)(ev, w, cx);
+            })
+            .on_key_down(move |ev, w, cx| {
+                (on_kd)(ev, w, cx);
+            })
+            .child(
+                canvas(move |b, _, _| bounds_cell.set(b), |_, _, _, _| ())
+                    .absolute()
+                    .inset_0(),
+            )
+            .child(self.content)
+    }
+}
+
+#[derive(IntoElement)]
+struct DropSlotBar {
+    id: ElementId,
+    active: bool,
+    bottom_gap: f32,
+    top_gap: f32,
+}
+
+impl RenderOnce for DropSlotBar {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_act = self.active;
+        let st = w.use_keyed_state(pro_eid(&self.id, "dslot"), cx, |_, _| {
+            (init_act, Slide::snappy(f32::from(init_act)))
+        });
+        let amt = st.update(cx, |s, cx| {
+            if s.0 != self.active {
+                s.0 = self.active;
+                s.1.set(f32::from(self.active), cx);
+            }
+            s.1.get(w, cx).clamp(0., 1.)
+        });
+        if !self.active && amt <= 0.01 {
+            return div().into_any_element();
+        }
+        let width_frac = (0.72 + 0.28 * amt).clamp(0.1, 1.0);
+        div()
+            .w_full()
+            .mt(px(self.top_gap * amt))
+            .mb(px(self.bottom_gap * amt))
+            .h(px(3.5 * amt))
+            .flex()
+            .items_center()
+            .justify_center()
+            .opacity(amt)
+            .child(
+                div()
+                    .w(relative(width_frac))
+                    .h_full()
+                    .rounded_full()
+                    .bg(p.blue),
+            )
+            .into_any_element()
+    }
+}
 
 const SVG_STAR_FILLED: &str = r#"<path d="M13.7276 3.44418L15.4874 6.99288C15.7274 7.48687 16.3673 7.9607 16.9073 8.05143L20.0969 8.58575C22.1367 8.92853 22.6167 10.4206 21.1468 11.8925L18.6671 14.3927C18.2471 14.8161 18.0172 15.6327 18.1471 16.2175L18.8571 19.3125C19.417 21.7623 18.1271 22.71 15.9774 21.4296L12.9877 19.6452C12.4478 19.3226 11.5579 19.3226 11.0079 19.6452L8.01827 21.4296C5.8785 22.71 4.57865 21.7522 5.13859 19.3125L5.84851 16.2175C5.97849 15.6327 5.74852 14.8161 5.32856 14.3927L2.84884 11.8925C1.389 10.4206 1.85895 8.92853 3.89872 8.58575L7.08837 8.05143C7.61831 7.9607 8.25824 7.48687 8.49821 6.99288L10.258 3.44418C11.2179 1.51861 12.7777 1.51861 13.7276 3.44418Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>"#;
 const SVG_BACKLOG_DASH: &str = r#"<circle cx="8" cy="8" r="5.3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.4 2.4"></circle>"#;
@@ -1028,12 +1282,29 @@ impl TaskBoardBlock {
         is_dragging: bool,
         p: &ProPalette,
         cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
+    ) -> AnyElement {
         let is_open = self.open_task_key.as_ref() == Some(&task.key);
         let key_down = task.key.clone();
         let key_enter = task.key.clone();
         let key_left = task.key.to_string();
         let key_right = task.key.to_string();
+
+        let on_md: TaskMouseDownHandler =
+            Rc::new(cx.listener(move |this, ev: &MouseDownEvent, _, _| {
+                this.drag = Some(DragSession {
+                    key: key_down.clone(),
+                    start_pos: ev.position,
+                    active: false,
+                    target_col: Some(col_idx),
+                    target_slot: None,
+                });
+            }));
+        let on_kd: TaskKeyDownHandler =
+            Rc::new(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
+                if matches!(ev.keystroke.key.as_str(), "enter" | " ") {
+                    this.inspect_task(Some(key_enter.clone()), cx);
+                }
+            }));
 
         let person_avatar = task
             .assignee
@@ -1052,47 +1323,12 @@ impl TaskBoardBlock {
                 .map(|lbl| div().size(px(6.5)).rounded_full().bg(rgb(lbl.color_rgb)))
                 .collect();
 
-            return div()
-                .id(pro_eid(&self.id, format!("tb-card-{}", task.key)))
-                .role(Role::Button)
-                .aria_label(format!("{} {}", task.key, task.title))
-                .tab_index(0)
-                .relative()
+            let compact_inner = div()
                 .px(px(10.))
                 .py(px(8.))
-                .rounded(px(9.))
-                .bg(p.card)
-                .border_1()
-                .border_color(if is_open { p.blue } else { p.line })
-                .hover(move |s| s.border_color(p.line_strong))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .when(is_dragging, |d| d.opacity(0.42))
                 .flex()
                 .items_center()
                 .gap(px(7.))
-                .cursor_pointer()
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, ev: &MouseDownEvent, _, _| {
-                        this.drag = Some(DragSession {
-                            key: key_down.clone(),
-                            start_pos: ev.position,
-                            active: false,
-                            target_col: Some(col_idx),
-                            target_slot: None,
-                        });
-                    }),
-                )
-                .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
-                    if matches!(ev.keystroke.key.as_str(), "enter" | " ") {
-                        this.inspect_task(Some(key_enter.clone()), cx);
-                    }
-                }))
-                .child(
-                    canvas(move |b, _, _| bounds_cell.set(b), |_, _, _, _| ())
-                        .absolute()
-                        .inset_0(),
-                )
                 .child(Self::render_priority_bars(task.priority, p))
                 .child(
                     div()
@@ -1114,7 +1350,21 @@ impl TaskBoardBlock {
                 .when(!dots.is_empty(), |d| {
                     d.child(div().flex().items_center().gap(px(3.)).children(dots))
                 })
-                .when_some(person_avatar, |d, av| d.child(av));
+                .when_some(person_avatar, |d, av| d.child(av))
+                .into_any_element();
+
+            return TaskCardSurface {
+                id: pro_eid(&self.id, format!("tb-card-{}", task.key)),
+                aria: format!("{} {}", task.key, task.title).into(),
+                radius: 9.,
+                is_open,
+                is_dragging,
+                bounds_cell,
+                on_mouse_down: on_md,
+                on_key_down: on_kd,
+                content: compact_inner,
+            }
+            .into_any_element();
         }
 
         // Standard card layout matching reference pixel geometry
@@ -1204,7 +1454,13 @@ impl TaskBoardBlock {
                 .text_size(px(11.5))
                 .text_color(p.faint)
                 .child(pro_progress_ring(ratio, 11.5, 2.0, p.muted, p.line_strong))
-                .child(format!("{done_n}/{tot_n}"))
+                .child(pro_swap_label(
+                    pro_eid(&self.id, format!("tb-csub-cnt-{}", task.key)),
+                    format!("{done_n}/{tot_n}"),
+                    11.5,
+                    FontWeight::NORMAL,
+                    p.faint,
+                ))
         });
 
         let pr_badge = task.pull_request.map(|pr_num| {
@@ -1261,49 +1517,30 @@ impl TaskBoardBlock {
         let can_left = col_idx > 0;
         let can_right = col_idx + 1 < total_cols;
 
-        div()
-            .id(pro_eid(&self.id, format!("tb-card-{}", task.key)))
-            .role(Role::Button)
-            .aria_label(format!("{} {}", task.key, task.title))
-            .tab_index(0)
-            .relative()
+        let shift_left_btn = can_left.then(|| ColShiftMiniBtn {
+            id: pro_eid(&self.id, format!("tb-mv-l-{}", task.key)),
+            aria: tr(cx, "Move left", "左移一列").into(),
+            icon: ProIcon::ChevronLeft,
+            on_shift: Rc::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.shift_task_column(&key_left, -1, cx);
+            })),
+        });
+        let shift_right_btn = can_right.then(|| ColShiftMiniBtn {
+            id: pro_eid(&self.id, format!("tb-mv-r-{}", task.key)),
+            aria: tr(cx, "Move right", "右移一列").into(),
+            icon: ProIcon::ChevronRight,
+            on_shift: Rc::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.shift_task_column(&key_right, 1, cx);
+            })),
+        });
+
+        let standard_inner = div()
             .px(px(12.))
             .pt(px(11.))
             .pb(px(10.))
-            .rounded(px(10.))
-            .bg(p.card)
-            .border_1()
-            .border_color(if is_open { p.blue } else { p.line })
-            .when(!p.dark, |d| d.shadow_xs())
-            .hover(move |s| s.border_color(if is_open { p.blue } else { p.line_strong }))
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
-            .when(is_dragging, |d| d.opacity(0.42))
             .flex()
             .flex_col()
             .gap(px(6.))
-            .cursor_pointer()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, ev: &MouseDownEvent, _, _| {
-                    this.drag = Some(DragSession {
-                        key: key_down.clone(),
-                        start_pos: ev.position,
-                        active: false,
-                        target_col: Some(col_idx),
-                        target_slot: None,
-                    });
-                }),
-            )
-            .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
-                if matches!(ev.keystroke.key.as_str(), "enter" | " ") {
-                    this.inspect_task(Some(key_enter.clone()), cx);
-                }
-            }))
-            .child(
-                canvas(move |b, _, _| bounds_cell.set(b), |_, _, _, _| ())
-                    .absolute()
-                    .inset_0(),
-            )
             .child(
                 div()
                     .flex()
@@ -1354,57 +1591,15 @@ impl TaskBoardBlock {
                             .min_w_0()
                             .flex()
                             .items_center()
-                            .gap(px(5.))
+                            .gap(px(4.))
                             .text_size(px(12.))
                             .text_color(p.text)
                             .child(Self::render_status_glyph(status_meta.icon, 12.5, p))
                             .when(!has_right_badges, |d| {
                                 d.child(div().truncate().child(disp_status_lbl))
                             })
-                            .when(can_left, |d| {
-                                d.child(
-                                    div()
-                                        .id(pro_eid(&self.id, format!("tb-mv-l-{}", task.key)))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Move left", "左移一列"))
-                                        .size(px(16.))
-                                        .rounded(px(4.))
-                                        .hover(move |s| s.bg(p.hover).text_color(p.strong))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                            cx.stop_propagation();
-                                        })
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            this.shift_task_column(&key_left, -1, cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::ChevronLeft, 10., p.faint)),
-                                )
-                            })
-                            .when(can_right, |d| {
-                                d.child(
-                                    div()
-                                        .id(pro_eid(&self.id, format!("tb-mv-r-{}", task.key)))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Move right", "右移一列"))
-                                        .size(px(16.))
-                                        .rounded(px(4.))
-                                        .hover(move |s| s.bg(p.hover).text_color(p.strong))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                            cx.stop_propagation();
-                                        })
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            this.shift_task_column(&key_right, 1, cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::ChevronRight, 10., p.faint)),
-                                )
-                            }),
+                            .when_some(shift_left_btn, |d, b| d.child(b))
+                            .when_some(shift_right_btn, |d, b| d.child(b)),
                     )
                     .child(
                         div()
@@ -1418,6 +1613,20 @@ impl TaskBoardBlock {
                             .when_some(person_avatar, |d, av| d.child(av)),
                     ),
             )
+            .into_any_element();
+
+        TaskCardSurface {
+            id: pro_eid(&self.id, format!("tb-card-{}", task.key)),
+            aria: format!("{} {}", task.key, task.title).into(),
+            radius: 10.,
+            is_open,
+            is_dragging,
+            bounds_cell,
+            on_mouse_down: on_md,
+            on_key_down: on_kd,
+            content: standard_inner,
+        }
+        .into_any_element()
     }
 
     fn render_detail_drawer(
@@ -1449,51 +1658,73 @@ impl TaskBoardBlock {
         let can_left = cur_col_idx > 0;
         let can_right = cur_col_idx + 1 < self.statuses.len();
 
-        let status_buttons: Vec<_> = self
-            .statuses
-            .iter()
-            .map(|st| {
-                let on = st.id == task.status;
-                let k_mv = task_key.to_string();
-                let st_id = st.id.to_string();
-                activate(
+        let thumb_bg: Hsla = if p.dark {
+            rgb(0x2a2a2e).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+
+        // Status segmented strip with pro_pill_indicator
+        let st_sensor = pro_selection_sensor();
+        let mut status_strip = div()
+            .relative()
+            .p(px(2.))
+            .rounded(px(8.))
+            .bg(p.chip)
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(2.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "tb-drw-st-pill"),
+                task.status.clone(),
+                st_sensor.clone(),
+                6.,
+                thumb_bg,
+                Some(p.line),
+                true,
+            ));
+
+        for st in &self.statuses {
+            let on = st.id == task.status;
+            let k_mv = task_key.to_string();
+            let st_id = st.id.to_string();
+            status_strip = status_strip.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-drw-st-{}", st.id)),
+                    st.label.clone(),
+                    6.,
+                    transparent_black(),
+                    if on { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-drw-st-{}", st.id)))
-                        .role(Role::RadioButton)
-                        .aria_label(st.label.clone())
-                        .aria_toggled(on.into())
-                        .tab_index(0)
-                        .h(px(26.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .bg(if on { p.accent_soft } else { p.chip })
-                        .border_1()
-                        .border_color(if on {
-                            p.blue.opacity(0.45)
-                        } else {
-                            p.line_soft
-                        })
-                        .hover(move |s| s.bg(if on { p.accent_soft } else { p.chip_hover }))
+                        .h(px(24.))
+                        .px(px(7.))
                         .flex()
                         .items_center()
-                        .gap(px(5.))
-                        .text_size(px(12.))
+                        .gap(px(4.5))
+                        .whitespace_nowrap()
+                        .text_size(px(11.5))
                         .font_weight(if on {
                             FontWeight::MEDIUM
                         } else {
                             FontWeight::NORMAL
                         })
-                        .text_color(if on { p.blue } else { p.text })
-                        .cursor_pointer()
-                        .child(Self::render_status_glyph(st.icon, 11.5, p))
+                        .text_color(if on { p.strong } else { p.text })
+                        .child(Self::render_status_glyph(st.icon, 11., p))
                         .child(st.label.clone()),
                     cx,
                     move |this, _, cx| {
                         this.move_task(&k_mv, &st_id, None, cx);
                     },
                 )
-            })
-            .collect();
+                .relative()
+                .flex_none()
+                .when(on, |d| d.child(pro_mark_selected(&st_sensor))),
+            );
+        }
 
         let prio_buttons: Vec<_> = TaskPriority::PICKABLE
             .into_iter()
@@ -1502,22 +1733,22 @@ impl TaskBoardBlock {
                     || (pr == TaskPriority::High && task.priority == TaskPriority::Urgent);
                 let k_pr = task_key.clone();
                 let lbl = pr.label(cx);
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-drw-pr-{}", pr as u8)),
+                    lbl,
+                    6.,
+                    if on { p.select } else { p.chip },
+                    if on { p.select } else { p.chip_hover },
+                    if on { p.line_strong } else { p.line_soft },
+                    p.line_strong,
+                    on,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-drw-pr-{}", pr as u8)))
-                        .role(Role::RadioButton)
-                        .aria_label(lbl)
-                        .aria_toggled(on.into())
-                        .tab_index(0)
                         .h(px(26.))
                         .px(px(8.))
-                        .rounded(px(6.))
-                        .bg(if on { p.select } else { p.chip })
-                        .border_1()
-                        .border_color(if on { p.line_strong } else { p.line_soft })
                         .flex()
                         .items_center()
                         .gap(px(5.))
+                        .whitespace_nowrap()
                         .text_size(px(12.))
                         .font_weight(if on {
                             FontWeight::MEDIUM
@@ -1525,7 +1756,6 @@ impl TaskBoardBlock {
                             FontWeight::NORMAL
                         })
                         .text_color(if on { p.strong } else { p.text })
-                        .cursor_pointer()
                         .child(Self::render_priority_bars(pr, p))
                         .child(pr.short_label(cx)),
                     cx,
@@ -1538,6 +1768,7 @@ impl TaskBoardBlock {
                         }
                     },
                 )
+                .flex_none()
             })
             .collect();
 
@@ -1546,24 +1777,24 @@ impl TaskBoardBlock {
             .map(|sz| {
                 let on = task.estimate.as_deref() == Some(sz);
                 let k_est = task_key.clone();
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-drw-est-{sz}")),
+                    sz,
+                    5.,
+                    if on { p.select } else { p.chip },
+                    if on { p.select } else { p.chip_hover },
+                    if on { p.line_strong } else { p.line_soft },
+                    p.line_strong,
+                    on,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-drw-est-{sz}")))
-                        .role(Role::Button)
-                        .aria_toggled(on.into())
-                        .tab_index(0)
                         .h(px(24.))
                         .px(px(8.))
-                        .rounded(px(5.))
-                        .bg(if on { p.select } else { p.chip })
-                        .border_1()
-                        .border_color(if on { p.line_strong } else { p.line_soft })
                         .flex()
                         .items_center()
+                        .whitespace_nowrap()
                         .text_size(px(11.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if on { p.strong } else { p.muted })
-                        .cursor_pointer()
                         .child(sz),
                     cx,
                     move |this, _, cx| {
@@ -1579,6 +1810,7 @@ impl TaskBoardBlock {
                         }
                     },
                 )
+                .flex_none()
             })
             .collect();
 
@@ -1589,25 +1821,25 @@ impl TaskBoardBlock {
                 let on = task.assignee.as_ref() == Some(&per.id);
                 let k_per = task_key.clone();
                 let pid = per.id.clone();
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-drw-per-{}", per.id)),
+                    per.name.clone(),
+                    999.,
+                    if on { p.select } else { p.chip },
+                    if on { p.select } else { p.chip_hover },
+                    if on { p.line_strong } else { p.line_soft },
+                    p.line_strong,
+                    on,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-drw-per-{}", per.id)))
-                        .role(Role::Button)
-                        .aria_toggled(on.into())
-                        .tab_index(0)
                         .h(px(26.))
                         .pl(px(5.))
                         .pr(px(8.))
-                        .rounded_full()
-                        .bg(if on { p.select } else { p.chip })
-                        .border_1()
-                        .border_color(if on { p.line_strong } else { p.line_soft })
                         .flex()
                         .items_center()
                         .gap(px(5.))
+                        .whitespace_nowrap()
                         .text_size(px(11.5))
                         .text_color(if on { p.strong } else { p.text })
-                        .cursor_pointer()
                         .child(pro_person_avatar(&per.name, 16., false, None, cx))
                         .child(per.name.clone()),
                     cx,
@@ -1620,6 +1852,7 @@ impl TaskBoardBlock {
                         }
                     },
                 )
+                .flex_none()
             })
             .collect();
 
@@ -1630,24 +1863,24 @@ impl TaskBoardBlock {
                 let on = task.labels.contains(&lbl.id);
                 let k_lbl = task_key.clone();
                 let lid = lbl.id.clone();
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-drw-lbl-{}", lbl.id)),
+                    lbl.label.clone(),
+                    999.,
+                    if on { p.select } else { p.chip },
+                    if on { p.select } else { p.chip_hover },
+                    if on { p.line_strong } else { p.line_soft },
+                    p.line_strong,
+                    on,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-drw-lbl-{}", lbl.id)))
-                        .role(Role::Button)
-                        .aria_toggled(on.into())
-                        .tab_index(0)
                         .h(px(24.))
                         .px(px(8.))
-                        .rounded_full()
-                        .bg(if on { p.select } else { p.chip })
-                        .border_1()
-                        .border_color(if on { p.line_strong } else { p.line_soft })
                         .flex()
                         .items_center()
                         .gap(px(5.))
+                        .whitespace_nowrap()
                         .text_size(px(11.5))
                         .text_color(if on { p.strong } else { p.muted })
-                        .cursor_pointer()
                         .child(div().size(px(6.5)).rounded_full().bg(rgb(lbl.color_rgb)))
                         .child(lbl.label.clone()),
                     cx,
@@ -1664,8 +1897,17 @@ impl TaskBoardBlock {
                         }
                     },
                 )
+                .flex_none()
             })
             .collect();
+
+        let sub_done_count = task.subtasks.iter().filter(|s| s.done).count();
+        let sub_total_count = task.subtasks.len();
+        let sub_ratio = if sub_total_count > 0 {
+            sub_done_count as f32 / sub_total_count as f32
+        } else {
+            0.0
+        };
 
         let subtask_rows: Vec<_> = task
             .subtasks
@@ -1674,27 +1916,29 @@ impl TaskBoardBlock {
             .map(|(si, sub)| {
                 let k_sub = task_key.clone();
                 let done = sub.done;
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-drw-sub-{si}")),
+                    sub.title.clone(),
+                    6.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    done,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-drw-sub-{si}")))
-                        .role(Role::Button)
-                        .aria_toggled(done.into())
-                        .tab_index(0)
                         .px(px(8.))
-                        .py(px(5.))
-                        .rounded(px(6.))
-                        .hover(move |s| s.bg(p.hover))
+                        .py(px(5.5))
                         .flex()
                         .items_center()
-                        .gap(px(7.))
+                        .gap(px(8.))
                         .text_size(px(12.))
                         .text_color(if done { p.muted } else { p.ink })
-                        .cursor_pointer()
-                        .child(pro_svg(
-                            "0 0 16 16",
-                            if done { SVG_DONE_BOX } else { SVG_TODO_SQ },
-                            13.,
-                            if done { p.blue } else { p.muted },
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("tb-sub-chk-{task_key}-{si}")),
+                            done,
+                            14.,
+                            true,
+                            p.blue,
                         ))
                         .child(div().flex_1().min_w_0().child(sub.title.clone())),
                     cx,
@@ -1709,30 +1953,16 @@ impl TaskBoardBlock {
                         }
                     },
                 )
+                .w_full()
             })
             .collect();
 
         let title_ed = self.title_editor.clone();
         let drawer_w = if narrow { 320.0 } else { 336.0 };
 
-        let sheet =
+        let sheet_body =
             div()
-                .id(pro_eid(&self.id, "tb-detail-sheet"))
-                .role(Role::Dialog)
-                .aria_label(tr(cx, "Task details", "任务详情"))
-                .w(px(drawer_w))
-                .max_w_full()
-                .h_full()
-                .p(px(16.))
-                .rounded(px(12.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_lg()
-                .overflow_y_scroll()
-                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                    cx.stop_propagation();
-                })
+                .w_full()
                 .flex()
                 .flex_col()
                 .gap(px(14.))
@@ -1840,13 +2070,7 @@ impl TaskBoardBlock {
                                 .text_color(p.muted)
                                 .child(tr(cx, "Status", "状态")),
                         )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap(px(5.))
-                                .children(status_buttons),
-                        ),
+                        .child(status_strip),
                 )
                 .child(
                     div()
@@ -1918,17 +2142,66 @@ impl TaskBoardBlock {
                             .border_color(p.line)
                             .flex()
                             .flex_col()
-                            .gap(px(3.))
+                            .gap(px(4.))
                             .child(
                                 div()
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .child(tr(cx, "Subtasks", "子任务清单")),
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(8.))
+                                    .child(
+                                        div()
+                                            .text_size(px(11.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.muted)
+                                            .child(tr(cx, "Subtasks", "子任务清单")),
+                                    )
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, format!("tb-drw-scnt-{task_key}")),
+                                        format!("{sub_done_count}/{sub_total_count}"),
+                                        11.,
+                                        FontWeight::MEDIUM,
+                                        p.muted,
+                                    )),
                             )
+                            .child(pro_spring_bar(
+                                pro_eid(&self.id, format!("tb-drw-sbar-{task_key}")),
+                                sub_ratio,
+                                3.5,
+                                2.,
+                                p.chip,
+                                if sub_done_count == sub_total_count {
+                                    p.green
+                                } else {
+                                    p.blue
+                                },
+                            ))
                             .children(subtask_rows),
                     )
                 });
+
+        let sheet = div()
+            .id(pro_eid(&self.id, "tb-detail-sheet"))
+            .role(Role::Dialog)
+            .aria_label(tr(cx, "Task details", "任务详情"))
+            .w(px(drawer_w))
+            .max_w_full()
+            .h_full()
+            .p(px(16.))
+            .rounded(px(12.))
+            .bg(p.card)
+            .border_1()
+            .border_color(p.line_strong)
+            .shadow_lg()
+            .overflow_y_scroll()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            })
+            .child(pro_view_transition(
+                pro_eid(&self.id, "tb-drw-task-vtx"),
+                task_key,
+                sheet_body,
+            ));
 
         let scrim_alpha = if p.dark { 0.36 } else { 0.14 };
         let dismiss = cx.listener(|this, _: &MouseDownEvent, _, cx| {
@@ -2007,6 +2280,34 @@ impl Render for TaskBoardBlock {
         };
         let last_crumb_idx = crumbs_slice.len().saturating_sub(1);
 
+        let star_btn = pro_tactile(
+            pro_eid(&self.id, "tb-star"),
+            tr(cx, "Add to favorites", "添加到收藏"),
+            7.,
+            transparent_black(),
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            self.starred,
+            div()
+                .size(px(26.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(if self.starred {
+                    pro_svg("0 0 24 24", SVG_STAR_FILLED, 14., p.amber)
+                } else {
+                    pro_icon(ProIcon::Star, 14., p.muted)
+                }),
+            cx,
+            |this, _, cx| {
+                this.starred = !this.starred;
+                cx.emit(TaskBoardEvent::StarredChanged(this.starred));
+                cx.notify();
+            },
+        )
+        .flex_none();
+
         let breadcrumb = div()
             .min_w_0()
             .flex()
@@ -2033,33 +2334,7 @@ impl Render for TaskBoardBlock {
                             .child(seg.clone()),
                     )
             }))
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "tb-star"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Add to favorites", "添加到收藏"))
-                    .aria_toggled(self.starred.into())
-                    .tab_index(0)
-                    .size(px(26.))
-                    .rounded(px(7.))
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .child(if self.starred {
-                        pro_svg("0 0 24 24", SVG_STAR_FILLED, 14., p.amber)
-                    } else {
-                        pro_icon(ProIcon::Star, 14., p.muted)
-                    }),
-                cx,
-                |this, _, cx| {
-                    this.starred = !this.starred;
-                    cx.emit(TaskBoardEvent::StarredChanged(this.starred));
-                    cx.notify();
-                },
-            ));
+            .child(star_btn);
 
         let search_ed = self.search_editor.clone();
         let top_bar = div()
@@ -2079,12 +2354,13 @@ impl Render for TaskBoardBlock {
                     .items_center()
                     .gap(px(10.))
                     .when(!very_narrow, |d| {
-                        d.child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(p.faint)
-                                .child(format!("{visible_total} {}", tr(cx, "tasks", "项任务"))),
-                        )
+                        d.child(pro_swap_label(
+                            pro_eid(&self.id, "tb-vis-count"),
+                            format!("{visible_total} {}", tr(cx, "tasks", "项任务")),
+                            12.,
+                            FontWeight::NORMAL,
+                            p.faint,
+                        ))
                     })
                     .child(
                         div()
@@ -2131,72 +2407,134 @@ impl Render for TaskBoardBlock {
                     ),
             );
 
-        // Label filter chips strip
+        // Label filter chips strip with liquid capsule pro_pill_indicator
         let all_active = self.active_labels.is_empty();
-        let filter_strip = div()
+        let pill_key: SharedString = self
+            .active_labels
+            .last()
+            .cloned()
+            .unwrap_or_else(|| "all".into());
+        let label_sensor = pro_selection_sensor();
+        let pill_fill: Hsla = if all_active { p.select } else { p.accent_soft };
+        let pill_border: Option<Hsla> = Some(if all_active {
+            p.line_strong
+        } else {
+            p.blue.opacity(0.45)
+        });
+
+        let mut filter_strip = div()
+            .relative()
             .px(px(if narrow { 12. } else { 16. }))
             .pb(px(10.))
             .flex()
             .flex_wrap()
             .items_center()
             .gap(px(5.))
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "tb-fchip-all"))
-                    .role(Role::Button)
-                    .aria_toggled(all_active.into())
-                    .tab_index(0)
-                    .h(px(23.))
-                    .px(px(8.5))
-                    .rounded_full()
-                    .bg(if all_active { p.select } else { p.chip })
-                    .border_1()
-                    .border_color(if all_active {
-                        p.line_strong
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "tb-label-pill"),
+                pill_key.clone(),
+                label_sensor.clone(),
+                999.,
+                pill_fill,
+                pill_border,
+                false,
+            ))
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, "tb-fchip-all"),
+                    tr(cx, "All labels", "全部标签"),
+                    999.,
+                    if all_active {
+                        transparent_black()
+                    } else {
+                        p.chip
+                    },
+                    if all_active {
+                        transparent_black()
+                    } else {
+                        p.chip_hover
+                    },
+                    if all_active {
+                        transparent_black()
                     } else {
                         p.line_soft
-                    })
-                    .hover(move |s| s.bg(p.chip_hover).text_color(p.ink))
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.5))
-                    .font_weight(if all_active {
-                        FontWeight::MEDIUM
+                    },
+                    if all_active {
+                        transparent_black()
                     } else {
-                        FontWeight::NORMAL
-                    })
-                    .text_color(if all_active { p.strong } else { p.muted })
-                    .cursor_pointer()
-                    .child(tr(cx, "All labels", "全部标签")),
-                cx,
-                |this, _, cx| {
-                    this.active_labels.clear();
-                    cx.notify();
-                },
-            ))
-            .children(self.labels.iter().map(|lbl| {
-                let on = self.active_labels.contains(&lbl.id);
-                let lid = lbl.id.to_string();
-                activate(
+                        p.line_strong
+                    },
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-fchip-{}", lbl.id)))
-                        .role(Role::Button)
-                        .aria_toggled(on.into())
-                        .tab_index(0)
                         .h(px(23.))
                         .px(px(8.5))
-                        .rounded_full()
-                        .bg(if on { p.accent_soft } else { p.chip })
-                        .border_1()
-                        .border_color(if on {
-                            p.blue.opacity(0.45)
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .text_size(px(11.5))
+                        .font_weight(if all_active {
+                            FontWeight::MEDIUM
                         } else {
-                            p.line_soft
+                            FontWeight::NORMAL
                         })
-                        .hover(move |s| s.bg(if on { p.accent_soft } else { p.chip_hover }))
+                        .text_color(if all_active { p.strong } else { p.muted })
+                        .child(tr(cx, "All labels", "全部标签")),
+                    cx,
+                    |this, _, cx| {
+                        this.active_labels.clear();
+                        cx.notify();
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(all_active, |d| d.child(pro_mark_selected(&label_sensor))),
+            );
+
+        for lbl in &self.labels {
+            let on = self.active_labels.contains(&lbl.id);
+            let is_pill_anchor = pill_key == lbl.id;
+            let lid = lbl.id.to_string();
+            filter_strip = filter_strip.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tb-fchip-{}", lbl.id)),
+                    lbl.label.clone(),
+                    999.,
+                    if is_pill_anchor {
+                        transparent_black()
+                    } else if on {
+                        p.accent_soft
+                    } else {
+                        p.chip
+                    },
+                    if is_pill_anchor {
+                        transparent_black()
+                    } else if on {
+                        p.accent_soft
+                    } else {
+                        p.chip_hover
+                    },
+                    if is_pill_anchor {
+                        transparent_black()
+                    } else if on {
+                        p.blue.opacity(0.45)
+                    } else {
+                        p.line_soft
+                    },
+                    if is_pill_anchor {
+                        transparent_black()
+                    } else if on {
+                        p.blue.opacity(0.55)
+                    } else {
+                        p.line_strong
+                    },
+                    false,
+                    div()
+                        .h(px(23.))
+                        .px(px(8.5))
                         .flex()
                         .items_center()
                         .gap(px(5.))
+                        .whitespace_nowrap()
                         .text_size(px(11.5))
                         .font_weight(if on {
                             FontWeight::MEDIUM
@@ -2204,7 +2542,6 @@ impl Render for TaskBoardBlock {
                             FontWeight::NORMAL
                         })
                         .text_color(if on { p.blue } else { p.text })
-                        .cursor_pointer()
                         .child(div().size(px(6.5)).rounded_full().bg(rgb(lbl.color_rgb)))
                         .child(lbl.label.clone()),
                     cx,
@@ -2212,7 +2549,13 @@ impl Render for TaskBoardBlock {
                         this.toggle_label_filter(&lid, cx);
                     },
                 )
-            }));
+                .relative()
+                .flex_none()
+                .when(is_pill_anchor, |d| {
+                    d.child(pro_mark_selected(&label_sensor))
+                }),
+            );
+        }
 
         while self.col_bounds.len() < self.statuses.len() {
             self.col_bounds.push(Rc::new(Cell::new(Bounds::default())));
@@ -2299,48 +2642,59 @@ impl Render for TaskBoardBlock {
                 };
 
                 let is_drop_col = drag_target.is_some_and(|(tc, _)| tc == ci);
+                let drop_col_t = pro_spring_f32(
+                    pro_eid(&self.id, format!("tb-dcol-{}", st_col.id)),
+                    f32::from(is_drop_col),
+                    0.18,
+                    w,
+                    cx,
+                )
+                .clamp(0., 1.);
+                let col_bg = pro_mix_color(col_frame_bg, p.accent_soft, drop_col_t);
+                let col_border =
+                    pro_mix_color(transparent_black(), p.blue.opacity(0.45), drop_col_t);
                 let col_cell = self.col_bounds[ci].clone();
 
-                let mut card_els: Vec<AnyElement> = Vec::with_capacity(col_cards.len() + 1);
+                let mut card_els: Vec<AnyElement> = Vec::with_capacity(col_cards.len());
                 for (si, card) in col_cards.iter().take(50).enumerate() {
-                    if drag_target == Some((ci, si)) {
-                        card_els.push(
-                            div()
-                                .w_full()
-                                .h(px(2.5))
-                                .rounded_full()
-                                .bg(p.blue)
-                                .into_any_element(),
-                        );
-                    }
+                    let slot_before = drag_target == Some((ci, si));
                     let cb_cell = Rc::new(Cell::new(Bounds::default()));
                     self.card_bounds
                         .push((card.key.clone(), ci, si, cb_cell.clone()));
                     let is_card_dragging = dragging_key.as_ref() == Some(&card.key);
-                    card_els.push(
-                        self.render_task_card(
-                            card,
-                            st_col,
-                            ci,
-                            total_cols,
-                            cb_cell,
-                            is_card_dragging,
-                            &p,
-                            cx,
-                        )
-                        .into_any_element(),
+                    let card_el = self.render_task_card(
+                        card,
+                        st_col,
+                        ci,
+                        total_cols,
+                        cb_cell,
+                        is_card_dragging,
+                        &p,
+                        cx,
                     );
-                }
-                if drag_target.is_some_and(|(tc, slot)| tc == ci && slot >= col_cards.len()) {
                     card_els.push(
                         div()
                             .w_full()
-                            .h(px(2.5))
-                            .rounded_full()
-                            .bg(p.blue)
+                            .flex()
+                            .flex_col()
+                            .child(DropSlotBar {
+                                id: pro_eid(&self.id, format!("tb-slot-{ci}-{si}")),
+                                active: slot_before,
+                                bottom_gap: 6.0,
+                                top_gap: 0.0,
+                            })
+                            .child(card_el)
                             .into_any_element(),
                     );
                 }
+                let tail_slot_active =
+                    drag_target.is_some_and(|(tc, slot)| tc == ci && slot >= col_cards.len());
+                let tail_slot = DropSlotBar {
+                    id: pro_eid(&self.id, format!("tb-slot-tail-{ci}")),
+                    active: tail_slot_active,
+                    bottom_gap: 0.0,
+                    top_gap: 2.0,
+                };
 
                 // Inline quick-add card form in each column
                 let quick_open = self.quick_add_col.as_ref() == Some(&st_col.id);
@@ -2350,22 +2704,24 @@ impl Render for TaskBoardBlock {
                 let prio_now = self.quick_add_priority;
                 let p_copy = p;
 
-                let prio_cycle_btn = activate(
+                let prio_cycle_btn = pro_tactile(
+                    pro_eid(&self.id, format!("tb-qa-prio-{}", st_col.id)),
+                    prio_now.label(cx),
+                    5.,
+                    p.chip,
+                    p.chip_hover,
+                    transparent_black(),
+                    p.line_strong,
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("tb-qa-prio-{}", st_col.id)))
-                        .role(Role::Button)
-                        .tab_index(0)
                         .h(px(24.))
                         .px(px(7.))
-                        .rounded(px(5.))
-                        .bg(p.chip)
-                        .hover(move |s| s.bg(p.chip_hover))
                         .flex()
                         .items_center()
                         .gap(px(4.))
+                        .whitespace_nowrap()
                         .text_size(px(11.))
                         .text_color(p.text)
-                        .cursor_pointer()
                         .child(Self::render_priority_bars(prio_now, &p))
                         .child(prio_now.short_label(cx)),
                     cx,
@@ -2374,6 +2730,7 @@ impl Render for TaskBoardBlock {
                         cx.notify();
                     },
                 )
+                .flex_none()
                 .into_any_element();
 
                 let quick_ed_submit = quick_ed.clone();
@@ -2452,40 +2809,42 @@ impl Render for TaskBoardBlock {
                 );
 
                 let st_open_id = st_col.id.clone();
-                let add_trigger = (!quick_open).then(|| {
-                    activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("tb-add-btn-{st_add_id}")))
-                            .role(Role::Button)
-                            .aria_label(format!(
-                                "{} {}",
-                                tr(cx, "Add task to", "添加任务到"),
-                                st_col.label
-                            ))
-                            .tab_index(0)
-                            .mt(px(2.))
-                            .h(px(28.))
-                            .w_full()
-                            .rounded(px(8.))
-                            .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .child(pro_icon(ProIcon::Plus, 13., p.muted)),
-                        cx,
-                        move |this, w, cx| {
-                            this.quick_add_col = Some(st_open_id.clone());
-                            if let Some(ed) = &this.quick_editor {
-                                ed.update(cx, |e, cx| e.set_value("", w, cx));
-                                let fh = ed.read(cx).focus.clone();
-                                fh.focus(w, cx);
-                            }
-                            cx.notify();
-                        },
-                    )
-                });
+                let add_btn_el = pro_tactile(
+                    pro_eid(&self.id, format!("tb-add-btn-{st_add_id}")),
+                    format!("{} {}", tr(cx, "Add task to", "添加任务到"), st_col.label),
+                    8.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    div()
+                        .h(px(28.))
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_icon(ProIcon::Plus, 13., p.muted)),
+                    cx,
+                    move |this, w, cx| {
+                        this.quick_add_col = Some(st_open_id.clone());
+                        if let Some(ed) = &this.quick_editor {
+                            ed.update(cx, |e, cx| e.set_value("", w, cx));
+                            let fh = ed.read(cx).focus.clone();
+                            fh.focus(w, cx);
+                        }
+                        cx.notify();
+                    },
+                )
+                .mt(px(2.))
+                .w_full()
+                .into_any_element();
+
+                let add_trigger = pro_popover_presence(
+                    pro_eid(&self.id, format!("tb-add-pres-{}", st_col.id)),
+                    !quick_open,
+                    move || add_btn_el,
+                );
 
                 let col_w = if narrow { 236.0 } else { 0.0 };
                 let col_div = div()
@@ -2496,14 +2855,9 @@ impl Render for TaskBoardBlock {
                     .min_h(px(280.))
                     .p(px(5.))
                     .rounded(px(14.))
-                    .bg(if is_drop_col {
-                        p.accent_soft
-                    } else {
-                        col_frame_bg
-                    })
-                    .when(is_drop_col, |d| {
-                        d.border_1().border_color(p.blue.opacity(0.45))
-                    })
+                    .bg(col_bg)
+                    .border_1()
+                    .border_color(col_border)
                     .flex()
                     .flex_col()
                     .child(
@@ -2551,9 +2905,13 @@ impl Render for TaskBoardBlock {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .text_size(px(11.))
-                                    .text_color(p.muted)
-                                    .child(count_txt),
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, format!("tb-col-cnt-{}", st_col.id)),
+                                        count_txt,
+                                        11.,
+                                        FontWeight::MEDIUM,
+                                        p.muted,
+                                    )),
                             ),
                     )
                     .child(
@@ -2564,8 +2922,15 @@ impl Render for TaskBoardBlock {
                             .gap(px(6.))
                             .pt(px(2.))
                             .children(card_els)
-                            .child(quick_fold)
-                            .when_some(add_trigger, |d, btn| d.child(btn)),
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .flex_col()
+                                    .child(tail_slot)
+                                    .child(quick_fold)
+                                    .child(add_trigger),
+                            ),
                     );
 
                 col_els.push(col_div);

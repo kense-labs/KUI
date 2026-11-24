@@ -1,16 +1,16 @@
 //! Compact two-line A/B experiment card unfolding on hover with variant chart and winner selection.
 //!
-//! Cross-links a `PathBuilder` miniature head chart with variant rows, a `pro_pill_indicator` metric switcher
-//! (`Conversion`, `Revenue`, `Retention`) with rolling numbers, statistical confidence readouts, and winner confirmation.
+//! Cross-links a `PathBuilder` miniature head chart with tactile `pro_tactile` variant rows, a liquid
+//! `pro_pill_indicator` metric switcher (`Conversion`, `Revenue`, `Retention`) with rolling numbers, and `pro_check_draw` winner confirmation.
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32,
-        pro_toast_banner, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_svg},
     },
 };
@@ -21,7 +21,6 @@ use web_time::Instant;
 const LIVE_DOT_SVG: &str = r#"<circle cx="5" cy="5" r="4.5" fill="currentColor" opacity="0.22"></circle><circle cx="5" cy="5" r="2.25" fill="currentColor"></circle>"#;
 const TREND_LEAD_SVG: &str = r#"<path d="M1.5 8.5 4.5 5.5l2 2 4-4M8 3.5h2.5V6" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const TREND_DROP_SVG: &str = r#"<path d="M1.5 3.5 4.5 6.5l2-2 4 4M8 8.5h2.5V6" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const CHECK_WINNER_SVG: &str = r#"<path d="m2.8 6.2 2.1 2.1 4.3-4.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const ARROW_SHIP_SVG: &str = r#"<path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 /// Semantic status tone for [`ExperimentStatus`] and lift badges.
@@ -276,6 +275,7 @@ pub struct ExperimentCard {
     hovered_card: bool,
     pinned_open: bool,
     hovered_variant: Option<SharedString>,
+    variant_spotlights: Vec<(Slide, Slide)>,
     loading: bool,
     empty: bool,
     focus: FocusHandle,
@@ -319,6 +319,9 @@ impl ExperimentCard {
                 .with_confidence("revenue", 94)
                 .with_confidence("retention", 96),
         ];
+        let variant_spotlights = (0..variants.len())
+            .map(|_| (Slide::snappy(1.0), Slide::snappy(0.0)))
+            .collect();
         Self {
             id: id.into(),
             title: "Signup button copy".into(),
@@ -335,6 +338,7 @@ impl ExperimentCard {
             hovered_card: false,
             pinned_open: false,
             hovered_variant: None,
+            variant_spotlights,
             loading: false,
             empty: false,
             focus: cx.focus_handle().tab_stop(true),
@@ -381,6 +385,9 @@ impl ExperimentCard {
 
     /// Replace the experiment variants.
     pub fn with_variants(mut self, variants: Vec<ExperimentVariant>) -> Self {
+        self.variant_spotlights = (0..variants.len())
+            .map(|_| (Slide::snappy(1.0), Slide::snappy(0.0)))
+            .collect();
         self.variants = variants;
         self
     }
@@ -632,9 +639,9 @@ impl Render for ExperimentCard {
             hsla(0., 0., 0., 0.06)
         };
         let wash: Hsla = if dark {
-            hsla(0., 0., 1., 0.04)
+            hsla(0., 0., 1., 0.05)
         } else {
-            hsla(0., 0., 0., 0.03)
+            hsla(0., 0., 0., 0.035)
         };
         let track_c: Hsla = if dark {
             hsla(0., 0., 1., 0.08)
@@ -644,12 +651,12 @@ impl Render for ExperimentCard {
         let pick_bg: Hsla = if dark {
             hsla(218. / 360., 1.0, 0.65, 0.14)
         } else {
-            hsla(215. / 360., 1.0, 0.44, 0.055)
+            hsla(215. / 360., 1.0, 0.44, 0.065)
         };
         let pick_border: Hsla = if dark {
-            hsla(218. / 360., 1.0, 0.65, 0.40)
+            hsla(218. / 360., 1.0, 0.65, 0.42)
         } else {
-            hsla(215. / 360., 1.0, 0.44, 0.35)
+            hsla(215. / 360., 1.0, 0.44, 0.36)
         };
 
         if self.loading {
@@ -720,10 +727,18 @@ impl Render for ExperimentCard {
             .fold(0.0f64, f64::max)
             .max(1e-6);
 
-        let mut head_ratios = Vec::with_capacity(self.variants.len());
-        let mut head_colors = Vec::with_capacity(self.variants.len());
-        let mut head_hot = Vec::with_capacity(self.variants.len());
-        let mut head_dim = Vec::with_capacity(self.variants.len());
+        let n_vars = self.variants.len();
+        if self.variant_spotlights.len() < n_vars {
+            self.variant_spotlights
+                .resize_with(n_vars, || (Slide::snappy(1.0), Slide::snappy(0.0)));
+        } else if self.variant_spotlights.len() > n_vars {
+            self.variant_spotlights.truncate(n_vars);
+        }
+
+        let mut head_ratios = Vec::with_capacity(n_vars);
+        let mut head_colors = Vec::with_capacity(n_vars);
+        let mut head_hot_t = Vec::with_capacity(n_vars);
+        let mut head_alphas = Vec::with_capacity(n_vars);
 
         for (i, v) in self.variants.iter().enumerate() {
             let raw_ratio = (v.metric_value(&metric.id).abs() / max_val) as f32;
@@ -742,12 +757,22 @@ impl Render for ExperimentCard {
                 .winner
                 .as_ref()
                 .is_some_and(|wid| wid != &v.id && !is_hot);
+            let dim_target = if (any_hover && !is_hot) || passed_winner {
+                0.32
+            } else {
+                1.0
+            };
+            let hot_target = if is_hot { 1.0 } else { 0.0 };
+            self.variant_spotlights[i].0.set(dim_target, cx);
+            self.variant_spotlights[i].1.set(hot_target, cx);
+
             head_ratios.push(spring_h);
             head_colors.push(col_c);
-            head_hot.push(is_hot);
-            head_dim.push((any_hover && !is_hot) || passed_winner);
+            head_alphas.push(self.variant_spotlights[i].0.get(w, cx).clamp(0.25, 1.0));
+            head_hot_t.push(self.variant_spotlights[i].1.get(w, cx).clamp(0.0, 1.0));
         }
 
+        let paint_alphas = head_alphas.clone();
         let mini_chart = div()
             .size(px(36.))
             .flex_none()
@@ -775,13 +800,13 @@ impl Render for ExperimentCard {
 
                         for i in 0..n {
                             let h_px = (bh * head_ratios[i]).max(3.0);
-                            let w_eff = if head_hot[i] { col_w * 1.24 } else { col_w };
+                            let w_eff = col_w * (1.0 + 0.24 * head_hot_t[i]);
                             let cx_x = start_x + i as f32 * (col_w + gap) + col_w * 0.5;
                             let x0 = cx_x - w_eff * 0.5;
                             let x1 = cx_x + w_eff * 0.5;
                             let y0 = bot_y - h_px;
                             let r = 1.5f32.min(w_eff * 0.5).min(h_px * 0.5);
-                            let alpha = if head_dim[i] { 0.32 } else { 1.0 };
+                            let alpha = paint_alphas[i];
 
                             let mut bar = PathBuilder::fill();
                             bar.move_to(point(px(x0), px(bot_y)));
@@ -814,20 +839,26 @@ impl Render for ExperimentCard {
             .items_center()
             .gap(px(5.))
             .child(pro_svg("0 0 10 10", LIVE_DOT_SVG, 10., st_fg))
-            .child(self.status.label.clone());
+            .child(pro_swap_label(
+                pro_eid(&self.id, "status-lbl"),
+                self.status.label.clone(),
+                12.,
+                FontWeight::MEDIUM,
+                st_fg,
+            ));
 
         let lead_badge: Option<AnyElement> = if let Some(wid) = &self.winner
             && let Some(idx) = self.variants.iter().position(|v| &v.id == wid)
         {
             let v = &self.variants[idx];
             let (lbg, lfg) = ExperimentTone::Blue.colors(dark);
-            let delta_txt = self
+            let delta_txt: SharedString = self
                 .variant_delta(idx)
                 .map(|(pct, _)| {
                     let sign = if pct >= 0.0 { "+" } else { "\u{2212}" };
-                    format!("{sign}{:.1}%", pct.abs())
+                    format!("{} {sign}{:.1}%", v.key, pct.abs()).into()
                 })
-                .unwrap_or_else(|| tr(cx, "Picked", "已选").to_string());
+                .unwrap_or_else(|| format!("{} {}", v.key, tr(cx, "Picked", "已选")).into());
             Some(
                 div()
                     .h(px(24.))
@@ -840,10 +871,21 @@ impl Render for ExperimentCard {
                     .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .child(pro_svg("0 0 12 12", CHECK_WINNER_SVG, 11., lfg))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child(v.key.clone()))
-                    .child(delta_txt)
+                    .gap(px(5.))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "head-win-chk"),
+                        true,
+                        13.,
+                        false,
+                        lfg,
+                    ))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "head-win-lbl"),
+                        delta_txt,
+                        12.,
+                        FontWeight::SEMIBOLD,
+                        lfg,
+                    ))
                     .into_any_element(),
             )
         } else if let Some((lead_v, pct, good)) = self.leading_variant() {
@@ -951,25 +993,16 @@ impl Render for ExperimentCard {
             )
             .when_some(lead_badge, |d, lb| d.child(lb));
 
-        // Pre-sample variant row bar springs so animations stay silky across metric switches.
-        let mut row_bar_ratios = Vec::with_capacity(self.variants.len());
+        // Pre-sample variant row bar springs (`pro_spring_f32`) so animations stay silky across metric switches.
+        let mut row_bar_ratios = Vec::with_capacity(n_vars);
         for (i, v) in self.variants.iter().enumerate() {
             let ratio = ((v.metric_value(&metric.id).abs() / max_val) as f32).clamp(0.06, 1.0);
-            let sp = pro_spring_f32(pro_eid(&self.id, format!("rbar-{i}")), ratio, 0.38, w, cx);
+            let sp = pro_spring_f32(pro_eid(&self.id, format!("rbar-{i}")), ratio, 0.36, w, cx);
             row_bar_ratios.push(sp);
         }
 
-        let base_id = self.id.clone();
-        let metrics_list = self.metrics.clone();
-        let active_metric_id = metric.id.clone();
-        let variants_snapshot = self.variants.clone();
-        let winner_id = self.winner.clone();
-        let confirmed_id = self.confirmed_winner.clone();
-        let hovered_vid = self.hovered_variant.clone();
         let ctrl_idx = self.control_index();
-        let deltas: Vec<Option<(f64, bool)>> = (0..self.variants.len())
-            .map(|i| self.variant_delta(i))
-            .collect();
+        let deltas: Vec<Option<(f64, bool)>> = (0..n_vars).map(|i| self.variant_delta(i)).collect();
 
         let caption_str: SharedString = if let Some(hvid) = &self.hovered_variant
             && let Some(hv) = self.variants.iter().find(|v| &v.id == hvid)
@@ -1019,339 +1052,369 @@ impl Render for ExperimentCard {
             tr(cx, "Pick a winner", "点击方案选择胜出者").into()
         };
 
-        let action_prefix = self.action_prefix.clone();
-        let entity = cx.entity().clone();
-        let ship_label_confirmed = tr(cx, "Confirmed", "已上线");
+        // Build liquid `pro_pill_indicator` metric switcher (`Conversion / Revenue / Retention`).
+        let pill_track_bg: Hsla = if dark {
+            hsla(0., 0., 1., 0.045)
+        } else {
+            hsla(0., 0., 0., 0.035)
+        };
+        let pill_fill: Hsla = if dark {
+            rgb(0x28282c).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let pill_border: Hsla = if dark {
+            hsla(0., 0., 1., 0.11)
+        } else {
+            hsla(0., 0., 0., 0.08)
+        };
 
-        let unfolded = pro_fold(pro_eid(&self.id, "fold"), open, 232., 0., move || {
-            let pill_fill: Hsla = if dark {
-                hsla(0., 0., 1., 0.09)
-            } else {
-                hsla(0., 0., 0., 0.065)
-            };
-            let metric_switch: Option<AnyElement> = (metrics_list.len() > 1).then(|| {
-                let sensor = pro_selection_sensor();
-                let mut strip = div()
-                    .w_full()
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .child(pro_pill_indicator(
-                        pro_eid(&base_id, "msw"),
-                        active_metric_id.clone(),
-                        sensor.clone(),
-                        6.,
-                        pill_fill,
-                        None,
-                        false,
-                    ));
-                for m in &metrics_list {
-                    let mid = m.id.clone();
-                    let selected = mid == active_metric_id;
-                    let ent = entity.clone();
-                    strip = strip.child(
-                        div()
-                            .id(pro_eid(&base_id, format!("m-{mid}")))
-                            .role(Role::RadioButton)
-                            .aria_label(m.label.clone())
-                            .flex_1()
-                            .h(px(28.))
-                            .px(px(8.))
-                            .relative()
-                            .rounded(px(6.))
-                            .border_1()
-                            .border_color(line)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if selected { p.ink } else { p.text })
-                            .cursor_pointer()
-                            .when(!selected, |d| {
-                                d.hover(move |s| s.bg(wash).text_color(p.ink))
-                            })
-                            .when(selected, |d| d.child(pro_mark_selected(&sensor)))
-                            .on_click(move |_, _, cx| {
-                                ent.update(cx, |this, cx| this.set_metric(mid.clone(), cx));
-                            })
-                            .child(m.label.clone()),
-                    );
-                }
-                strip.into_any_element()
-            });
-
-            let mut rows_col = div()
+        let metric_switch: Option<AnyElement> = (self.metrics.len() > 1).then(|| {
+            let sensor = pro_selection_sensor();
+            let mut strip = div()
                 .w_full()
-                .mt(px(if metric_switch.is_some() { 8. } else { 0. }))
+                .p(px(2.))
+                .rounded(px(7.))
+                .bg(pill_track_bg)
+                .border_1()
+                .border_color(line)
+                .relative()
                 .flex()
-                .flex_col()
-                .gap(px(2.));
-
-            for (i, v) in variants_snapshot.iter().enumerate() {
-                let vid = v.id.clone();
-                let col_c = v.color.unwrap_or_else(|| default_variant_color(i, dark));
-                let picked = winner_id.as_ref() == Some(&vid);
-                let hot = hovered_vid.as_ref() == Some(&vid);
-                let dimmed = hovered_vid.is_some() && !hot && !picked;
-                let val = v.metric_value(&metric.id);
-                let bar_ratio = row_bar_ratios[i];
-
-                let badge_bg = if picked {
-                    col_c
-                } else {
-                    col_c.opacity(if dark { 0.18 } else { 0.14 })
-                };
-                let badge_fg: Hsla = if picked {
-                    if dark && i == 0 {
-                        rgb(0x1c1c1e).into()
-                    } else {
-                        rgb(0xffffff).into()
-                    }
-                } else if i == 0 {
-                    p.ink
-                } else {
-                    col_c
-                };
-
-                let lift_pill = if i == ctrl_idx {
-                    let (gbg, gfg) = ExperimentTone::Gray.colors(dark);
+                .items_center()
+                .gap(px(2.))
+                .child(pro_pill_indicator(
+                    pro_eid(&self.id, "msw"),
+                    metric.id.clone(),
+                    sensor.clone(),
+                    5.5,
+                    pill_fill,
+                    Some(pill_border),
+                    !dark,
+                ));
+            for m in &self.metrics {
+                let mid = m.id.clone();
+                let selected = mid == metric.id;
+                strip = strip.child(
                     div()
-                        .min_w(px(52.))
-                        .h(px(20.))
-                        .px(px(6.))
-                        .rounded(px(5.))
-                        .bg(gbg)
-                        .text_color(gfg)
-                        .text_size(px(11.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child("Base")
-                        .into_any_element()
-                } else if let Some((pct, good)) = deltas[i] {
-                    let tone = if good {
-                        ExperimentTone::Green
-                    } else {
-                        ExperimentTone::Red
-                    };
-                    let (lbg, lfg) = tone.colors(dark);
-                    let sign = if pct >= 0.0 { "+" } else { "\u{2212}" };
-                    div()
-                        .min_w(px(52.))
-                        .h(px(20.))
-                        .px(px(6.))
-                        .rounded(px(5.))
-                        .bg(lbg)
-                        .text_color(lfg)
-                        .text_size(px(11.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(pro_rolling_number(
-                            pro_eid(&base_id, format!("lift-{i}")),
-                            pct.abs(),
-                            1,
-                            sign,
-                            "%",
-                            11.,
-                            FontWeight::MEDIUM,
-                            lfg,
-                        ))
-                        .into_any_element()
-                } else {
-                    div().min_w(px(52.)).into_any_element()
-                };
-
-                let ent_hover = entity.clone();
-                let ent_click = entity.clone();
-                let vid_h = vid.clone();
-                let vid_c = vid.clone();
-
-                rows_col = rows_col.child(
-                    div()
-                        .id(pro_eid(&base_id, format!("vrow-{vid}")))
+                        .id(pro_eid(&self.id, format!("m-{mid}")))
                         .role(Role::RadioButton)
-                        .aria_label(v.name.clone())
-                        .w_full()
-                        .px(px(6.))
-                        .py(px(7.))
-                        .rounded(px(6.))
+                        .aria_label(m.label.clone())
+                        .flex_1()
+                        .h(px(26.))
+                        .px(px(8.))
+                        .relative()
+                        .rounded(px(5.5))
                         .flex()
-                        .flex_col()
-                        .gap(px(6.))
-                        .opacity(if dimmed { 0.56 } else { 1.0 })
-                        .bg(if picked {
-                            pick_bg
-                        } else if hot {
-                            wash
-                        } else {
-                            transparent_black()
-                        })
-                        .when(picked, |d| d.border_1().border_color(pick_border))
-                        .cursor_pointer()
-                        .on_hover(move |inside, _, cx| {
-                            ent_hover.update(cx, |this, cx| {
-                                if *inside {
-                                    this.hovered_variant = Some(vid_h.clone());
-                                } else if this.hovered_variant.as_ref() == Some(&vid_h) {
-                                    this.hovered_variant = None;
-                                }
-                                cx.notify();
-                            });
-                        })
-                        .on_click(move |_, _, cx| {
-                            ent_click.update(cx, |this, cx| {
-                                this.toggle_pick_winner(vid_c.clone(), cx);
-                            });
-                        })
-                        .child(
-                            div()
-                                .w_full()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .min_w(px(20.))
-                                        .h(px(20.))
-                                        .px(px(4.))
-                                        .flex_none()
-                                        .rounded(px(5.))
-                                        .bg(badge_bg)
-                                        .text_color(badge_fg)
-                                        .text_size(px(11.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(if picked {
-                                            pro_svg("0 0 12 12", CHECK_WINNER_SVG, 10., badge_fg)
-                                        } else {
-                                            div().child(v.key.clone()).into_any_element()
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .text_size(px(13.))
-                                        .text_color(p.ink)
-                                        .truncate()
-                                        .child(v.name.clone()),
-                                )
-                                .child(pro_rolling_number(
-                                    pro_eid(&base_id, format!("vnum-{i}")),
-                                    val,
-                                    metric.decimals,
-                                    metric.prefix.clone(),
-                                    metric.suffix.clone(),
-                                    13.,
-                                    FontWeight::MEDIUM,
-                                    p.strong,
-                                ))
-                                .child(lift_pill),
-                        )
-                        .child(
-                            div().w_full().pl(px(28.)).child(
-                                canvas(
-                                    |_, _, _| (),
-                                    move |bounds, _, window, _| {
-                                        paint_rounded_bar_path(
-                                            bounds, bar_ratio, track_c, col_c, window,
-                                        );
-                                    },
-                                )
-                                .w_full()
-                                .h(px(3.)),
-                            ),
-                        ),
-                );
-            }
-
-            let action_btn: Option<AnyElement> = winner_id.as_ref().and_then(|wid| {
-                let wv = variants_snapshot.iter().find(|v| &v.id == wid)?;
-                let is_confirmed = confirmed_id.as_ref() == Some(wid);
-                let ent_act = entity.clone();
-                let label_txt = if is_confirmed {
-                    format!("{ship_label_confirmed} {}", wv.key)
-                } else {
-                    format!("{action_prefix} {}", wv.key)
-                };
-                Some(
-                    div()
-                        .id(pro_eid(&base_id, "confirm-winner"))
-                        .role(Role::Button)
-                        .aria_label(label_txt.clone())
-                        .h(px(28.))
-                        .pl(px(10.))
-                        .pr(px(8.))
-                        .flex_none()
-                        .rounded(px(6.))
-                        .bg(p.primary)
-                        .text_color(p.on_primary)
+                        .items_center()
+                        .justify_center()
                         .text_size(px(12.5))
                         .font_weight(FontWeight::MEDIUM)
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
+                        .text_color(if selected { p.ink } else { p.text })
                         .cursor_pointer()
-                        .hover(|s| s.opacity(0.9))
-                        .on_click(move |_, _, cx| {
-                            ent_act.update(cx, |this, cx| this.confirm_winner(cx));
-                        })
-                        .child(label_txt)
-                        .child(if is_confirmed {
-                            pro_svg("0 0 12 12", CHECK_WINNER_SVG, 11., p.on_primary)
-                        } else {
-                            pro_svg("0 0 12 12", ARROW_SHIP_SVG, 11., p.on_primary)
-                        })
-                        .into_any_element(),
-                )
-            });
+                        .when(!selected, |d| d.hover(move |s| s.text_color(p.ink)))
+                        .when(selected, |d| d.child(pro_mark_selected(&sensor)))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_metric(mid.clone(), cx);
+                        }))
+                        .child(m.label.clone()),
+                );
+            }
+            strip.into_any_element()
+        });
 
-            div()
+        // Build tactile `pro_tactile` variant rows with `pro_rolling_number` & `pro_check_draw`.
+        let mut rows_col = div()
+            .w_full()
+            .mt(px(if metric_switch.is_some() { 8. } else { 0. }))
+            .flex()
+            .flex_col()
+            .gap(px(3.));
+
+        for i in 0..n_vars {
+            let v = self.variants[i].clone();
+            let vid = v.id.clone();
+            let vid_hov = vid.clone();
+            let vid_click = vid.clone();
+            let col_c = v.color.unwrap_or_else(|| default_variant_color(i, dark));
+            let picked = self.winner.as_ref() == Some(&vid);
+            let row_alpha = if picked {
+                1.0
+            } else {
+                (0.45 + 0.55 * head_alphas[i]).clamp(0.45, 1.0)
+            };
+            let val = v.metric_value(&metric.id);
+            let bar_ratio = row_bar_ratios[i];
+
+            let badge_bg = col_c.opacity(if dark { 0.18 } else { 0.14 });
+            let badge_fg: Hsla = if i == 0 { p.ink } else { col_c };
+
+            let lift_pill = if i == ctrl_idx {
+                let (gbg, gfg) = ExperimentTone::Gray.colors(dark);
+                div()
+                    .min_w(px(52.))
+                    .h(px(20.))
+                    .px(px(6.))
+                    .rounded(px(5.))
+                    .bg(gbg)
+                    .text_color(gfg)
+                    .text_size(px(11.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child("Base")
+                    .into_any_element()
+            } else if let Some((pct, good)) = deltas[i] {
+                let tone = if good {
+                    ExperimentTone::Green
+                } else {
+                    ExperimentTone::Red
+                };
+                let (lbg, lfg) = tone.colors(dark);
+                let sign = if pct >= 0.0 { "+" } else { "\u{2212}" };
+                div()
+                    .min_w(px(52.))
+                    .h(px(20.))
+                    .px(px(6.))
+                    .rounded(px(5.))
+                    .bg(lbg)
+                    .text_color(lfg)
+                    .text_size(px(11.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("lift-{i}")),
+                        pct.abs(),
+                        1,
+                        sign,
+                        "%",
+                        11.,
+                        FontWeight::MEDIUM,
+                        lfg,
+                    ))
+                    .into_any_element()
+            } else {
+                div().min_w(px(52.)).into_any_element()
+            };
+
+            let lead_mark: AnyElement = if picked {
+                pro_check_draw(
+                    pro_eid(&self.id, format!("vchk-{vid}")),
+                    true,
+                    20.,
+                    true,
+                    if i == 0 { p.blue } else { col_c },
+                )
+            } else {
+                div()
+                    .min_w(px(20.))
+                    .h(px(20.))
+                    .px(px(4.))
+                    .flex_none()
+                    .rounded(px(5.))
+                    .bg(badge_bg)
+                    .text_color(badge_fg)
+                    .text_size(px(11.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(v.key.clone())
+                    .into_any_element()
+            };
+
+            let row_content = div()
                 .w_full()
+                .px(px(6.))
+                .py(px(7.))
                 .flex()
                 .flex_col()
+                .gap(px(6.))
                 .child(
                     div()
                         .w_full()
-                        .px(px(12.))
-                        .pb(px(10.))
-                        .flex()
-                        .flex_col()
-                        .when_some(metric_switch, |d, sw| d.child(sw))
-                        .child(rows_col),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(44.))
-                        .pl(px(12.))
-                        .pr(px(8.))
-                        .border_t_1()
-                        .border_color(line)
                         .flex()
                         .items_center()
-                        .justify_between()
                         .gap(px(8.))
+                        .child(lead_mark)
                         .child(
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
-                                .text_color(p.muted)
+                                .text_size(px(13.))
+                                .font_weight(if picked {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .text_color(if picked { p.strong } else { p.ink })
                                 .truncate()
-                                .child(caption_str),
+                                .child(v.name.clone()),
                         )
-                        .when_some(action_btn, |d, btn| d.child(btn)),
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, format!("vnum-{i}")),
+                            val,
+                            metric.decimals,
+                            metric.prefix.clone(),
+                            metric.suffix.clone(),
+                            13.,
+                            FontWeight::MEDIUM,
+                            p.strong,
+                        ))
+                        .child(lift_pill),
                 )
-                .into_any_element()
+                .child(
+                    div().w_full().pl(px(28.)).child(
+                        canvas(
+                            |_, _, _| (),
+                            move |bounds, _, window, _| {
+                                paint_rounded_bar_path(bounds, bar_ratio, track_c, col_c, window);
+                            },
+                        )
+                        .w_full()
+                        .flex_none()
+                        .h(px(3.5)),
+                    ),
+                );
+
+            let rest_bg = if picked { pick_bg } else { transparent_black() };
+            let hover_bg = if picked { pick_bg } else { wash };
+            let rest_border = if picked {
+                pick_border
+            } else {
+                transparent_black()
+            };
+            let hover_border = if picked { pick_border } else { line };
+
+            rows_col = rows_col.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("vrow-{vid}")),
+                    v.name.clone(),
+                    6.,
+                    rest_bg,
+                    hover_bg,
+                    rest_border,
+                    hover_border,
+                    picked,
+                    row_content,
+                    cx,
+                    move |this, _, cx| {
+                        this.toggle_pick_winner(vid_click.clone(), cx);
+                    },
+                )
+                .w_full()
+                .opacity(row_alpha)
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_variant = Some(vid_hov.clone());
+                    } else if this.hovered_variant.as_ref() == Some(&vid_hov) {
+                        this.hovered_variant = None;
+                    }
+                    cx.notify();
+                })),
+            );
+        }
+
+        // Winner confirmation button (`pro_popover_presence` + `pro_tactile` + `pro_swap_label` + `pro_check_draw`).
+        let has_winner = self.winner.is_some();
+        let winner_btn_inner: Option<AnyElement> = self.winner.as_ref().and_then(|wid| {
+            let wv = self.variants.iter().find(|v| &v.id == wid)?;
+            let is_confirmed = self.confirmed_winner.as_ref() == Some(wid);
+            let label_txt: SharedString = if is_confirmed {
+                format!("{} {}", tr(cx, "Confirmed", "已上线"), wv.key).into()
+            } else {
+                format!("{} {}", self.action_prefix, wv.key).into()
+            };
+            let btn = pro_tactile(
+                pro_eid(&self.id, "confirm-winner"),
+                label_txt.clone(),
+                6.,
+                p.primary,
+                pro_chrome_hover_primary(&p),
+                transparent_black(),
+                transparent_black(),
+                is_confirmed,
+                div()
+                    .h(px(28.))
+                    .pl(px(10.))
+                    .pr(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .whitespace_nowrap()
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "confirm-lbl"),
+                        label_txt,
+                        12.5,
+                        FontWeight::MEDIUM,
+                        p.on_primary,
+                    ))
+                    .child(if is_confirmed {
+                        pro_check_draw(pro_eid(&self.id, "confirm-chk"), true, 14., false, p.green)
+                    } else {
+                        pro_svg("0 0 12 12", ARROW_SHIP_SVG, 11., p.on_primary)
+                    }),
+                cx,
+                |this, _, cx| {
+                    this.confirm_winner(cx);
+                },
+            )
+            .flex_none()
+            .into_any_element();
+            Some(btn)
+        });
+
+        let action_presence =
+            pro_popover_presence(pro_eid(&self.id, "confirm-pres"), has_winner, move || {
+                winner_btn_inner.unwrap_or_else(|| div().into_any_element())
+            });
+
+        let unfolded_body = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(12.))
+                    .pb(px(10.))
+                    .flex()
+                    .flex_col()
+                    .when_some(metric_switch, |d, sw| d.child(sw))
+                    .child(rows_col),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .h(px(44.))
+                    .pl(px(12.))
+                    .pr(px(8.))
+                    .border_t_1()
+                    .border_color(line)
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "foot-cap"),
+                                caption_str,
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
+                    )
+                    .child(action_presence),
+            );
+
+        let unfolded = pro_fold(pro_eid(&self.id, "fold"), open, 236., 0., move || {
+            unfolded_body.into_any_element()
         });
 
         div()
@@ -1387,10 +1450,15 @@ impl Render for ExperimentCard {
     }
 }
 
+fn pro_chrome_hover_primary(p: &ProPalette) -> Hsla {
+    crate::components::pro_chrome::pro_mix_color(p.primary, p.on_primary, 0.12)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ExperimentCard, ExperimentMetric, ExperimentVariant};
-    use gpui::{AppContext, TestAppContext};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[gpui::test]
     fn computes_deltas_and_confirms_winner(cx: &mut TestAppContext) {
@@ -1435,6 +1503,34 @@ mod tests {
             let (pct, good) = c.variant_delta(1).expect("delta");
             assert!((pct - -7.5).abs() < 0.01);
             assert!(good);
+        });
+    }
+
+    #[gpui::test]
+    fn unfolded_card_animates_winner_spotlight_and_metric_switch(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (card, w) =
+            cx.add_window_view(|_, cx| ExperimentCard::new("xc-open", cx).with_default_open(true));
+        w.simulate_resize(size(px(360.), px(420.)));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            card.update(app, |c, cx| {
+                c.set_metric("retention".into(), cx);
+                c.toggle_pick_winner("c".into(), cx);
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(60));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let c = card.read(app);
+            assert_eq!(c.winner(), Some("c"));
+            assert!(c.variant_spotlights[2].0.value(app) > c.variant_spotlights[0].0.value(app));
         });
     }
 }

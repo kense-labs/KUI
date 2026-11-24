@@ -5,11 +5,14 @@
 //! band glides from model to model or follows pointer hover and keyboard input.
 
 use crate::{
-    components::pro_chrome::{ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, tr},
+    components::pro_chrome::{
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, tr,
+    },
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
-        family::Slide,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_svg},
     },
 };
@@ -25,8 +28,6 @@ const CARD_TOP: f32 = 34.0;
 const CARD_W: f32 = 340.0;
 const CARD_R: f32 = 12.0;
 const ROW_H: f32 = 32.0;
-
-const CHECK_SVG: &str = r#"<path d="M5 13.5L9.5 18L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.1"></path>"#;
 
 const QWEN_SVG: &str = r#"<path fill="currentColor" d="M23.919 14.545 20.817 9.17l1.47-2.544a.56.56 0 0 0 0-.566l-1.633-2.83a.57.57 0 0 0-.49-.283h-6.207L12.487.402a.57.57 0 0 0-.49-.284H8.732a.56.56 0 0 0-.49.284L5.139 5.775h-2.94a.56.56 0 0 0-.49.284L.077 8.887a.56.56 0 0 0 0 .567L3.18 14.83l-1.47 2.545a.56.56 0 0 0 0 .566l1.634 2.83a.57.57 0 0 0 .49.283h6.205l1.47 2.545a.57.57 0 0 0 .49.284h3.266a.57.57 0 0 0 .49-.284l3.104-5.375h2.94a.57.57 0 0 0 .49-.283l1.634-2.828a.55.55 0 0 0-.004-.568M8.733.686l1.634 2.828-1.634 2.828H21.8L20.164 9.17H7.425L5.63 6.06Zm1.306 19.801-6.205-.002 1.634-2.83h3.265L2.201 6.344h3.267q3.182 5.517 6.367 11.032zm10.124-5.66L18.53 12l-6.532 11.315-1.634-2.83c2.129-3.673 4.25-7.351 6.373-11.028h3.592l3.102 5.374z"></path>"#;
 
@@ -397,6 +398,7 @@ pub struct ModelMenu {
     walk: usize,
     hovered_row: Option<usize>,
     band_slide: Slide,
+    row_press: [Slide; 9],
     loading: bool,
     empty: bool,
     clock: Instant,
@@ -421,9 +423,20 @@ impl ModelMenu {
             walk: 3,
             hovered_row: None,
             band_slide: Slide::new(ROW_H),
+            row_press: [
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+            ],
             loading: false,
             empty: false,
-            clock: Instant::now(),
+            clock: cx.background_executor().now(),
             plate_cache: Rc::new(RefCell::new(CardPlateCache::new())),
         }
     }
@@ -509,7 +522,7 @@ impl ModelMenu {
         }
         let next = index.min(self.models.len() - 1);
         self.selected = next;
-        self.clock = Instant::now();
+        self.clock = cx.background_executor().now();
         self.band_slide.duration(next as f32 * ROW_H, 0.42, cx);
         cx.notify();
     }
@@ -518,7 +531,7 @@ impl ModelMenu {
     pub fn set_playing(&mut self, playing: bool, cx: &mut Context<Self>) {
         if self.playing != playing {
             self.playing = playing;
-            self.clock = Instant::now();
+            self.clock = cx.background_executor().now();
             cx.notify();
         }
     }
@@ -554,14 +567,16 @@ impl Render for ModelMenu {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let elapsed = now.saturating_duration_since(self.clock);
 
         if self.loading {
             let phase = if reduced {
                 0.0
             } else {
                 w.request_animation_frame();
-                (self.clock.elapsed().as_secs_f32() / 1.4).fract()
+                (elapsed.as_secs_f32() / 1.4).fract()
             };
             return div()
                 .id(pro_eid(&self.id, "loading"))
@@ -616,7 +631,7 @@ impl Render for ModelMenu {
         let row_count = self.models.len().min(9);
         let auto_animate = self.playing && !reduced && self.hovered_row.is_none() && row_count > 1;
         let elapsed_ms = if auto_animate {
-            self.clock.elapsed().as_millis() as u64
+            elapsed.as_millis() as u64
         } else {
             0
         };
@@ -729,47 +744,82 @@ impl Render for ModelMenu {
             );
         }
 
-        // Gliding checkmark synced with the rose band (`padding-left: 236px` inside the card)
-        let check_sy = rows_top + band_y + ROW_H * 0.5;
-        let check_alpha = scene_mask_alpha(CARD_LEFT + 236., check_sy);
-        scene = scene.child(
-            div()
-                .absolute()
-                .left(px(CARD_LEFT + 236.))
-                .top(px(rows_top + band_y + (ROW_H - 14.) * 0.5))
-                .size(px(14.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .opacity(check_alpha)
-                .child(pro_svg("0 0 24 24", CHECK_SVG, 14., strong_c)),
-        );
+        // 4-edge liquid `pro_pill_indicator` + `pro_check_draw` active model checkmark + tactile row press inset
+        let rose_pill_fill: Hsla = if dark {
+            hsla(330. / 360., 0.86, 0.70, 0.085)
+        } else {
+            hsla(330. / 360., 0.94, 0.45, 0.055)
+        };
+        let rose_pill_bdr: Hsla = if dark {
+            hsla(330. / 360., 0.86, 0.72, 0.20)
+        } else {
+            hsla(330. / 360., 0.94, 0.45, 0.14)
+        };
+        let rose_check: Hsla = if dark {
+            rgb(0xf472b6).into()
+        } else {
+            rgb(0xdd0674).into()
+        };
+        let _ = strong_c;
 
-        // Render each 32px model row with provider mark + crisp ellipsis label + hover/click handlers
+        let mut row_downs = [0.0f32; 9];
+        for (i, d) in row_downs.iter_mut().enumerate().take(row_count) {
+            *d = self.row_press[i].get(w, cx).clamp(0., 1.);
+        }
+
+        let sensor = pro_selection_sensor();
+        let target_key: SharedString = format!("row-{target_row}").into();
+        let pill_alpha = scene_mask_alpha(CARD_LEFT + 80., rows_top + band_y + ROW_H * 0.5);
+        let mut rows_stack = div()
+            .absolute()
+            .left(px(CARD_LEFT + 6.))
+            .top(px(rows_top))
+            .w(px(254.))
+            .flex()
+            .flex_col()
+            .child(div().opacity(pill_alpha).child(pro_pill_indicator(
+                pro_eid(&self.id, "liquid-pill"),
+                target_key,
+                sensor.clone(),
+                8.0,
+                rose_pill_fill,
+                Some(rose_pill_bdr),
+                false,
+            )));
+
         let visible_models: Vec<MenuModel> = self.models.iter().take(row_count).cloned().collect();
+        let active_sel = self.selected.min(row_count - 1);
         for (idx, model) in visible_models.iter().enumerate() {
             let is_last = idx + 1 == row_count && row_count >= 5;
+            let is_target = idx == target_row;
+            let is_checked = idx == active_sel;
+            let down = row_downs[idx];
             let row_top = rows_top + idx as f32 * ROW_H;
             let row_alpha = scene_mask_alpha(CARD_LEFT + 40., row_top + ROW_H * 0.5);
+            let check_alpha = scene_mask_alpha(CARD_LEFT + 236., row_top + ROW_H * 0.5);
             let mark_el = render_model_mark(model, dark, w, cx);
             let model_name = model.name.clone();
             let emit_name = model.name.clone();
 
-            scene = scene.child(
+            rows_stack = rows_stack.child(
                 div()
                     .id(pro_eid(&self.id, format!("row-{idx}")))
-                    .absolute()
-                    .left(px(CARD_LEFT))
-                    .top(px(row_top))
-                    .w(px(CARD_W))
+                    .role(Role::ListItem)
+                    .aria_label(model_name.clone())
+                    .aria_selected(is_checked)
+                    .relative()
+                    .w(px(254.))
                     .h(px(ROW_H))
-                    .pl(px(14.))
-                    .pr(px(116.))
+                    .pl(px(8. + 2.2 * down))
+                    .pr(px(10. + 1.5 * down))
+                    .top(px(0.6 * down))
+                    .rounded(px(8.))
                     .flex()
                     .items_center()
                     .gap(px(9.))
                     .cursor_pointer()
                     .opacity(row_alpha)
+                    .when(is_target, |d| d.child(pro_mark_selected(&sensor)))
                     .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                         let next = if *hovered { Some(idx) } else { None };
                         if this.hovered_row != next {
@@ -777,13 +827,35 @@ impl Render for ModelMenu {
                                 this.hovered_row = Some(idx);
                             } else if this.hovered_row == Some(idx) {
                                 this.hovered_row = None;
+                                this.row_press[idx].duration(0., 0.14, cx);
                             }
                             cx.notify();
                         }
                     }))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.row_press[idx].duration(1., 0.08, cx);
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.row_press[idx].duration(0., 0.14, cx);
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.row_press[idx].duration(0., 0.14, cx);
+                            cx.notify();
+                        }),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.selected = idx;
-                        this.clock = Instant::now();
+                        this.clock = cx.background_executor().now();
                         cx.emit(ModelMenuEvent::Select {
                             index: idx,
                             name: emit_name.clone(),
@@ -812,9 +884,19 @@ impl Render for ModelMenu {
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(if is_last { faint_c } else { ink_c })
                             .child(model_name),
-                    ),
+                    )
+                    .child(div().size(px(15.)).flex_none().opacity(check_alpha).child(
+                        pro_check_draw(
+                            pro_eid(&self.id, format!("chk-{idx}")),
+                            is_checked,
+                            15.,
+                            false,
+                            rose_check,
+                        ),
+                    )),
             );
         }
+        scene = scene.child(rows_stack);
 
         let focus_ring = p.focus;
         let a11y = tr(
@@ -845,27 +927,30 @@ impl Render for ModelMenu {
                 match e.keystroke.key.as_str() {
                     "down" | "j" => {
                         this.selected = (this.selected + 1) % n;
-                        this.clock = Instant::now();
+                        this.clock = cx.background_executor().now();
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "up" | "k" => {
                         this.selected = (this.selected + n - 1) % n;
-                        this.clock = Instant::now();
+                        this.clock = cx.background_executor().now();
                         cx.stop_propagation();
                         cx.notify();
                     }
                     " " => {
                         this.playing = !this.playing;
-                        this.clock = Instant::now();
+                        this.clock = cx.background_executor().now();
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "enter" => {
                         let idx = this.selected.min(n - 1);
+                        this.row_press[idx].reset(1.);
+                        this.row_press[idx].duration(0., 0.16, cx);
                         let name = this.models[idx].name.clone();
                         cx.emit(ModelMenuEvent::Select { index: idx, name });
                         cx.stop_propagation();
+                        cx.notify();
                     }
                     _ => {}
                 }
@@ -878,9 +963,13 @@ impl Render for ModelMenu {
 #[cfg(test)]
 mod tests {
     use super::{
-        CARD_LEFT, CARD_TOP, CardPlateKey, ROW_H, SCENE_H, SCENE_W, active_walk_index,
-        default_menu_models, rasterize_card_plate, scene_mask_alpha,
+        CARD_LEFT, CARD_TOP, CardPlateKey, ModelMenu, ModelMenuEvent, ROW_H, SCENE_H, SCENE_W,
+        active_walk_index, default_menu_models, rasterize_card_plate, scene_mask_alpha,
     };
+    use gpui::{
+        MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point, px, size,
+    };
+    use std::{cell::RefCell, rc::Rc, time::Duration};
 
     #[test]
     fn default_models_and_walk_cycle_match_reference() {
@@ -930,5 +1019,68 @@ mod tests {
         // Far right edge of card is faded out (`alpha < 15`)
         let right_edge = (r1_y * SCENE_W + (SCENE_W - 3)) * 4;
         assert!(bytes[right_edge + 3] < 15);
+    }
+
+    #[gpui::test]
+    fn hover_and_click_row_glides_liquid_band_and_selects_active_model(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let events: Rc<RefCell<Vec<ModelMenuEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let ev_sink = events.clone();
+
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            let menu = ModelMenu::new("mm-test", cx).with_playing(false);
+            cx.subscribe_self(move |_, ev: &ModelMenuEvent, _| {
+                ev_sink.borrow_mut().push(ev.clone());
+            })
+            .detach();
+            menu
+        });
+        vcx.simulate_resize(size(px(480.), px(400.)));
+        vcx.run_until_parked();
+
+        // Scene is centered `(SCENE_W=384, SCENE_H=340)` inside `(480, 400)` -> ox=48, oy=30.
+        // Row 3 ("Gemini") sits at `y = 30 + CARD_TOP(34) + 32 + 3 * ROW_H(32) + 16 = 208`
+        let gemini_pt = point(
+            px(48. + CARD_LEFT + 80.),
+            px(30. + CARD_TOP + 32. + 3. * ROW_H + 16.),
+        );
+        vcx.simulate_event(MouseMoveEvent {
+            position: gemini_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        exec.advance_clock(Duration::from_millis(360));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let mm = view.read(app);
+            assert_eq!(mm.hovered_row, Some(3));
+            assert!((mm.band_slide.value(app) - 3. * ROW_H).abs() < 4.0);
+        });
+
+        vcx.simulate_event(MouseDownEvent {
+            position: gemini_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: gemini_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        vcx.run_until_parked();
+
+        assert_eq!(vcx.update(|_, app| view.read(app).selected()), 3);
+        assert!(events.borrow().iter().any(|e| {
+            *e == ModelMenuEvent::Select {
+                index: 3,
+                name: "Gemini".into(),
+            }
+        }));
     }
 }

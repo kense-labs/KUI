@@ -7,16 +7,18 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_person_avatar, pro_presence, pro_skeleton_bar, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_mix_color, pro_person_avatar, pro_popover_presence, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_f32, pro_tactile, tr,
     },
+    foundation::Theme,
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 const LANE_H: f32 = 48.0;
@@ -348,7 +350,12 @@ pub struct AgentLanes {
     base_now_ms: u64,
     live: bool,
     selected_task_id: Option<SharedString>,
+    last_selected_task: Option<LaneTask>,
+    hovered_task_id: Option<SharedString>,
     hovered_agent_id: Option<SharedString>,
+    track_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    scrubber_frac: Option<f32>,
+    scrubber_slide: Slide,
     started_at: Instant,
     loading: bool,
     empty: bool,
@@ -370,7 +377,12 @@ impl AgentLanes {
             base_now_ms: DEFAULT_SPAN_MS,
             live: true,
             selected_task_id: None,
+            last_selected_task: None,
+            hovered_task_id: None,
             hovered_agent_id: None,
+            track_bounds: Rc::new(Cell::new(None)),
+            scrubber_frac: None,
+            scrubber_slide: Slide::snappy(0.85),
             started_at: Instant::now(),
             loading: false,
             empty: false,
@@ -458,9 +470,11 @@ impl AgentLanes {
     /// Approve a waiting task (`Waiting -> Running`), closing its decision popover and emitting [`AgentLanesEvent::Approve`].
     pub fn approve_task(&mut self, task_id: &str, cx: &mut Context<Self>) {
         if let Some(t) = self.tasks.iter_mut().find(|t| t.id.as_ref() == task_id) {
+            let snap = t.clone();
             t.status = LaneTaskStatus::Running;
             let id = t.id.clone();
             if self.selected_task_id.as_ref() == Some(&id) {
+                self.last_selected_task = Some(snap);
                 self.selected_task_id = None;
             }
             cx.emit(AgentLanesEvent::Approve(id));
@@ -471,10 +485,12 @@ impl AgentLanes {
     /// Reject a waiting task (`Waiting -> Failed`), closing its decision popover and emitting [`AgentLanesEvent::Reject`].
     pub fn reject_task(&mut self, task_id: &str, run_now_ms: u64, cx: &mut Context<Self>) {
         if let Some(t) = self.tasks.iter_mut().find(|t| t.id.as_ref() == task_id) {
+            let snap = t.clone();
             t.status = LaneTaskStatus::Failed;
             t.end_ms = Some(run_now_ms);
             let id = t.id.clone();
             if self.selected_task_id.as_ref() == Some(&id) {
+                self.last_selected_task = Some(snap);
                 self.selected_task_id = None;
             }
             cx.emit(AgentLanesEvent::Reject(id));
@@ -538,7 +554,7 @@ fn paint_dashed_cubic_handoff(
 impl Render for AgentLanes {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let now_ms = self.current_now_ms(reduced);
         let (running_cnt, waiting_cnt) = self.active_counts();
 
@@ -610,16 +626,8 @@ impl Render for AgentLanes {
         } else {
             format!("Last {span_mins}m")
         };
-        let run_summary = if tr(cx, "en", "zh") == "zh" {
-            format!("{running_cnt} 个运行中")
-        } else {
-            format!("{running_cnt} running")
-        };
-        let wait_summary = if tr(cx, "en", "zh") == "zh" {
-            format!("{waiting_cnt} 个待确认")
-        } else {
-            format!("{waiting_cnt} needs you")
-        };
+        let run_word = tr(cx, "running", "个运行中");
+        let wait_word = tr(cx, "needs you", "个待确认");
 
         let bar_header = div()
             .px(px(16.))
@@ -649,17 +657,27 @@ impl Render for AgentLanes {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(px(5.))
                             .text_color(p.muted)
                             .child(div().size(px(6.)).rounded_full().bg(run_fg))
-                            .child(run_summary),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "lanes-run-cnt"),
+                                running_cnt as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
+                            .child(run_word),
                     )
                     .when(waiting_cnt > 0, |d| {
                         d.child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(6.))
+                                .gap(px(5.))
                                 .text_color(warn_fg)
                                 .child(
                                     div()
@@ -667,7 +685,17 @@ impl Render for AgentLanes {
                                         .rounded_full()
                                         .bg(warn_fg.opacity(pulse_alpha)),
                                 )
-                                .child(wait_summary),
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "lanes-wait-cnt"),
+                                    waiting_cnt as f64,
+                                    0,
+                                    "",
+                                    "",
+                                    12.0,
+                                    FontWeight::MEDIUM,
+                                    warn_fg,
+                                ))
+                                .child(wait_word),
                         )
                     }),
             )
@@ -774,6 +802,17 @@ impl Render for AgentLanes {
             agent_row_map.insert(ag.id.as_ref(), idx);
         }
 
+        let focus_task_id = self
+            .hovered_task_id
+            .as_ref()
+            .or(self.selected_task_id.as_ref());
+        let focus_agent_from_task = focus_task_id.and_then(|ft| {
+            self.tasks
+                .iter()
+                .find(|t| &t.id == ft)
+                .map(|t| t.agent_id.clone())
+        });
+
         // Left column: agent avatars, role names, status chips (`Idle` / `Needs you`), and models
         let mut agents_col = div().w(px(AGENT_COL_W)).flex_none().flex().flex_col();
         for ag in &self.agents {
@@ -786,7 +825,20 @@ impl Render for AgentLanes {
                 .tasks
                 .iter()
                 .any(|t| t.agent_id == aid && t.status == LaneTaskStatus::Waiting);
-            let is_faded = self.hovered_agent_id.as_ref().is_some_and(|ha| ha != &aid);
+            let is_faded = if let Some(ha) = &self.hovered_agent_id {
+                ha != &aid
+            } else if let Some(fa) = &focus_agent_from_task {
+                fa != &aid
+            } else {
+                false
+            };
+            let ag_alpha = pro_spring_f32(
+                pro_eid(&self.id, format!("lane-ag-spot-{aid}")),
+                if is_faded { 0.44 } else { 1.0 },
+                0.22,
+                window,
+                cx,
+            );
 
             let avatar_el = if let Some(logo) = &ag.avatar {
                 pro_app_tile(logo.as_ref(), 24., cx)
@@ -839,7 +891,7 @@ impl Render for AgentLanes {
                     .h(px(LANE_H))
                     .pl(px(16.))
                     .pr(px(10.))
-                    .opacity(if is_faded { 0.42 } else { 1.0 })
+                    .opacity(ag_alpha)
                     .flex()
                     .items_center()
                     .gap(px(10.))
@@ -887,8 +939,8 @@ impl Render for AgentLanes {
             );
         }
 
-        // Compute handoff curves `(u0, row0, u1, row1, is_live)`
-        let mut handoffs: Vec<(f32, usize, f32, usize, bool)> = Vec::new();
+        // Compute handoff curves `(u0, row0, u1, row1, is_live, spot)`
+        let mut handoffs: Vec<(f32, usize, f32, usize, bool, f32)> = Vec::new();
         for t in &self.tasks {
             let Some(target_id) = &t.handoff_to else {
                 continue;
@@ -912,16 +964,41 @@ impl Render for AgentLanes {
                 dst.status,
                 LaneTaskStatus::Running | LaneTaskStatus::Waiting
             );
-            handoffs.push((u0, r0, u1, r1, is_live_handoff));
+            let ho_hot = focus_task_id.is_some_and(|ft| ft == &t.id || ft == &dst.id);
+            let ho_spot = pro_spring_f32(
+                pro_eid(&self.id, format!("lane-ho-{}-{}", t.id, dst.id)),
+                if ho_hot { 1.0 } else { 0.0 },
+                0.22,
+                window,
+                cx,
+            );
+            handoffs.push((u0, r0, u1, r1, is_live_handoff || ho_hot, ho_spot));
         }
+
+        let scrub_x = self.scrubber_slide.get(window, cx).clamp(0.0, 1.0);
+        let scrub_alpha = pro_spring_f32(
+            pro_eid(&self.id, "lanes-scrub-a"),
+            if self.scrubber_frac.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            0.18,
+            window,
+            cx,
+        );
 
         let num_lanes = self.agents.len();
         let track_h = (num_lanes as f32) * LANE_H;
         let grid_line_c = p.line;
+        let scrub_line_c = p.ink.opacity(0.32);
+        let bounds_for_prepaint = self.track_bounds.clone();
 
-        // Track canvas: horizontal lane dividers, 5-minute vertical dashed ticks, right-edge `now` line, and curved handoffs!
+        // Track canvas: horizontal lane dividers, 5-minute vertical dashed ticks, hover crosshair, right-edge `now` line, and curved handoffs!
         let track_canvas = canvas(
-            |_, _, _| (),
+            move |bounds, _, _| {
+                bounds_for_prepaint.set(Some(bounds));
+            },
             move |bounds, _, win, _| {
                 let tw = f32::from(bounds.size.width);
                 let th = f32::from(bounds.size.height);
@@ -958,6 +1035,17 @@ impl Render for AgentLanes {
                     }
                 }
 
+                // Smooth `Slide::snappy` hover time-scrubber crosshair
+                if scrub_alpha > 0.01 {
+                    let sx = ox + scrub_x * tw;
+                    let mut spb = PathBuilder::stroke(px(1.0));
+                    spb.move_to(point(px(sx), px(oy)));
+                    spb.line_to(point(px(sx), px(oy + th)));
+                    if let Ok(path) = spb.build() {
+                        win.paint_path(path, scrub_line_c.opacity(scrub_line_c.a * scrub_alpha));
+                    }
+                }
+
                 // Right-edge `now` cursor line
                 let mut now_pb = PathBuilder::stroke(px(1.5));
                 now_pb.move_to(point(px(ox + tw - 0.75), px(oy)));
@@ -967,18 +1055,20 @@ impl Render for AgentLanes {
                 }
 
                 // Inter-lane curved handoff splines (`PathBuilder`)
-                for &(u0, r0, u1, r1, is_live_h) in &handoffs {
+                for &(u0, r0, u1, r1, is_live_h, ho_spot) in &handoffs {
                     let x0 = ox + u0 * tw;
                     let y0 = oy + (r0 as f32) * LANE_H + LANE_H * 0.5;
                     let x1 = (ox + u1 * tw).max(x0 + 4.0);
                     let y1 = oy + (r1 as f32) * LANE_H + LANE_H * 0.5;
+                    let base_hc = if is_live_h { run_edge } else { rail_c };
+                    let hc = pro_mix_color(base_hc, run_fg, ho_spot);
                     paint_dashed_cubic_handoff(
                         x0,
                         y0,
                         x1,
                         y1,
                         if is_live_h { flow_phase } else { 0.0 },
-                        if is_live_h { run_edge } else { rail_c },
+                        hc,
                         win,
                     );
                 }
@@ -987,7 +1077,7 @@ impl Render for AgentLanes {
         .absolute()
         .inset_0();
 
-        // Top time axis labels (`−25m .. −5m` + `now` badge)
+        // Top time axis labels (`−25m .. −5m` + `now` badge + smooth scrubber pill)
         let mut top_ticks = div().w_full().h(px(20.)).relative();
         for step in 1..6usize {
             let mins_ago = ((6 - step) as u64 * (self.span_ms / 60_000)) / 6;
@@ -1020,8 +1110,59 @@ impl Render for AgentLanes {
                 .items_center()
                 .child(tr(cx, "now", "此刻")),
         );
+        if scrub_alpha > 0.01 {
+            let scrub_mins = ((1.0 - scrub_x) * (self.span_ms as f32 / 60_000.0)).round() as u32;
+            let scrub_txt = if scrub_mins == 0 {
+                tr(cx, "now", "此刻").to_string()
+            } else {
+                format!("−{scrub_mins}m")
+            };
+            top_ticks = top_ticks.child(
+                div()
+                    .absolute()
+                    .left(relative(scrub_x.clamp(0.04, 0.90)))
+                    .top(px(1.))
+                    .ml(px(-16.))
+                    .h(px(16.))
+                    .px(px(5.))
+                    .rounded(px(4.))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .opacity(scrub_alpha)
+                    .text_size(px(10.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.ink)
+                    .flex()
+                    .items_center()
+                    .child(scrub_txt),
+            );
+        }
 
-        let mut track_box = div().w_full().h(px(track_h)).relative().child(track_canvas);
+        let bounds_for_move = self.track_bounds.clone();
+        let mut track_box = div()
+            .id(pro_eid(&self.id, "lanes-track-area"))
+            .w_full()
+            .h(px(track_h))
+            .relative()
+            .on_mouse_move(cx.listener(move |this, ev: &MouseMoveEvent, _, cx| {
+                if let Some(b) = bounds_for_move.get() {
+                    let bw = f32::from(b.size.width);
+                    if bw > 8.0 {
+                        let frac = ((f32::from(ev.position.x - b.left())) / bw).clamp(0.0, 1.0);
+                        this.scrubber_frac = Some(frac);
+                        this.scrubber_slide.set(frac, cx);
+                        cx.notify();
+                    }
+                }
+            }))
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if !*inside && this.scrubber_frac.is_some() {
+                    this.scrubber_frac = None;
+                    cx.notify();
+                }
+            }))
+            .child(track_canvas);
 
         // Render task blocks on each lane
         for task in &self.tasks {
@@ -1034,9 +1175,27 @@ impl Render for AgentLanes {
             }
             let clamped_start = task.start_ms.max(win_start_ms);
             let clamped_end = t_end.min(now_ms);
-            let left_frac = ((clamped_start - win_start_ms) as f32 / span_f).clamp(0., 0.98);
-            let width_frac = ((clamped_end.saturating_sub(clamped_start)) as f32 / span_f)
-                .clamp(0.015, 1.0 - left_frac);
+            let raw_left = ((clamped_start - win_start_ms) as f32 / span_f).clamp(0., 0.98);
+            let raw_width = ((clamped_end.saturating_sub(clamped_start)) as f32 / span_f)
+                .clamp(0.015, 1.0 - raw_left);
+
+            let tid = task.id.clone();
+            let left_frac = pro_spring_f32(
+                pro_eid(&self.id, format!("lane-l-{tid}")),
+                raw_left,
+                0.26,
+                window,
+                cx,
+            )
+            .clamp(0.0, 0.98);
+            let width_frac = pro_spring_f32(
+                pro_eid(&self.id, format!("lane-w-{tid}")),
+                raw_width,
+                0.26,
+                window,
+                cx,
+            )
+            .clamp(0.015, 1.0 - left_frac);
 
             let (blk_bg, blk_fg) = match task.status {
                 LaneTaskStatus::Done => (done_bg, p.text),
@@ -1045,10 +1204,37 @@ impl Render for AgentLanes {
                 LaneTaskStatus::Failed => (p.red_soft, p.red_ink),
             };
 
-            let is_faded = self
-                .hovered_agent_id
-                .as_ref()
-                .is_some_and(|ha| ha != &task.agent_id);
+            let is_hot = self.hovered_task_id.as_ref() == Some(&tid)
+                || self.selected_task_id.as_ref() == Some(&tid);
+            let is_connected = focus_task_id.is_some_and(|ft| {
+                ft == &tid
+                    || task.handoff_to.as_ref() == Some(ft)
+                    || self
+                        .tasks
+                        .iter()
+                        .any(|o| &o.id == ft && o.handoff_to.as_ref() == Some(&tid))
+            });
+            let is_faded = if let Some(ha) = &self.hovered_agent_id {
+                ha != &task.agent_id
+            } else if focus_task_id.is_some() {
+                !is_connected
+            } else {
+                false
+            };
+            let blk_alpha = pro_spring_f32(
+                pro_eid(&self.id, format!("lane-blk-a-{tid}")),
+                if is_faded { 0.42 } else { 1.0 },
+                0.20,
+                window,
+                cx,
+            );
+            let hot_amt = pro_spring_f32(
+                pro_eid(&self.id, format!("lane-blk-hot-{tid}")),
+                if is_hot { 1.0 } else { 0.0 },
+                0.18,
+                window,
+                cx,
+            );
 
             let mut tools_row = div().flex_none().flex().items_center().gap(px(4.));
             for tk in &task.tools {
@@ -1057,10 +1243,10 @@ impl Render for AgentLanes {
                 }
             }
 
-            let tid = task.id.clone();
             let tid_app = tid.clone();
             let tid_rej = tid.clone();
             let is_waiting = task.status == LaneTaskStatus::Waiting;
+            let is_done = task.status == LaneTaskStatus::Done;
             let show_inline_actions = is_waiting && width_frac >= 0.30;
 
             let inline_controls: Option<AnyElement> = if show_inline_actions {
@@ -1069,54 +1255,66 @@ impl Render for AgentLanes {
                         .ml_auto()
                         .pl(px(6.))
                         .flex_none()
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .flex()
                         .items_center()
                         .gap(px(4.))
                         .child(
-                            div()
-                                .id(pro_eid(&self.id, format!("inl-rej-{tid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Reject task", "拒绝任务"))
-                                .h(px(20.))
-                                .px(px(6.))
-                                .rounded(px(4.))
-                                .bg(card_bg)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .text_size(px(11.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .flex()
-                                .items_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            pro_tactile(
+                                pro_eid(&self.id, format!("inl-rej-{tid}")),
+                                tr(cx, "Reject task", "拒绝任务"),
+                                4.0,
+                                card_bg,
+                                p.hover,
+                                p.line_strong,
+                                p.line_strong,
+                                false,
+                                div()
+                                    .h(px(20.))
+                                    .px(px(6.))
+                                    .text_size(px(11.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .flex()
+                                    .items_center()
+                                    .child(tr(cx, "Reject", "拒绝")),
+                                cx,
+                                move |this, _, cx| {
                                     cx.stop_propagation();
-                                    let run_now = this.current_now_ms(disabled_motion(cx));
+                                    let run_now = this.current_now_ms(
+                                        disabled_motion(cx) || Theme::global(cx).reduced_motion,
+                                    );
                                     this.reject_task(tid_rej.as_ref(), run_now, cx);
-                                }))
-                                .child(tr(cx, "Reject", "拒绝")),
+                                },
+                            )
+                            .w_auto(),
                         )
                         .child(
-                            div()
-                                .id(pro_eid(&self.id, format!("inl-app-{tid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Approve task", "批准任务"))
-                                .h(px(20.))
-                                .px(px(7.))
-                                .rounded(px(4.))
-                                .bg(p.primary)
-                                .text_color(p.on_primary)
-                                .text_size(px(11.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            pro_tactile(
+                                pro_eid(&self.id, format!("inl-app-{tid}")),
+                                tr(cx, "Approve task", "批准任务"),
+                                4.0,
+                                p.primary,
+                                p.primary.opacity(0.88),
+                                p.primary,
+                                p.primary.opacity(0.88),
+                                false,
+                                div()
+                                    .h(px(20.))
+                                    .px(px(7.))
+                                    .text_color(p.on_primary)
+                                    .text_size(px(11.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .flex()
+                                    .items_center()
+                                    .child(tr(cx, "Approve", "批准")),
+                                cx,
+                                move |this, _, cx| {
                                     cx.stop_propagation();
                                     this.approve_task(tid_app.as_ref(), cx);
-                                }))
-                                .child(tr(cx, "Approve", "批准")),
+                                },
+                            )
+                            .w_auto(),
                         )
                         .into_any_element(),
                 )
@@ -1145,7 +1343,11 @@ impl Render for AgentLanes {
             let title_txt = task.display_title(cx).to_string();
             let click_tid = tid.clone();
             let key_tid = tid.clone();
+            let hov_tid = tid.clone();
+            let snap_task = task.clone();
+            let snap_task_key = task.clone();
             let is_running = task.status == LaneTaskStatus::Running;
+            let blk_border_c = pro_mix_color(transparent_black(), run_edge, hot_amt);
 
             let block = div()
                 .id(pro_eid(&self.id, format!("lane-blk-{tid}")))
@@ -1153,15 +1355,17 @@ impl Render for AgentLanes {
                 .aria_label(title_txt.clone())
                 .tab_index(0)
                 .absolute()
-                .top(px((lane_idx as f32) * LANE_H + BLOCK_TOP))
+                .top(px((lane_idx as f32) * LANE_H + BLOCK_TOP - 0.8 * hot_amt))
                 .left(relative(left_frac))
                 .w(relative(width_frac))
-                .h(px(BLOCK_H))
+                .h(px(BLOCK_H + 1.6 * hot_amt))
                 .px(px(8.))
                 .rounded(px(6.))
                 .overflow_hidden()
-                .opacity(if is_faded { 0.40 } else { 1.0 })
+                .opacity(blk_alpha)
                 .bg(blk_bg)
+                .border_1()
+                .border_color(blk_border_c)
                 .when(is_running, |d| d.border_r_2().border_color(run_edge))
                 .text_color(blk_fg)
                 .text_size(px(12.))
@@ -1171,7 +1375,17 @@ impl Render for AgentLanes {
                 .gap(px(5.))
                 .cursor_pointer()
                 .focus_visible(move |s| s.border_1().border_color(p.focus))
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_task_id = Some(hov_tid.clone());
+                        cx.notify();
+                    } else if this.hovered_task_id.as_ref() == Some(&hov_tid) {
+                        this.hovered_task_id = None;
+                        cx.notify();
+                    }
+                }))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.last_selected_task = Some(snap_task.clone());
                     let next = if this.selected_task_id.as_ref() == Some(&click_tid) {
                         None
                     } else {
@@ -1184,6 +1398,7 @@ impl Render for AgentLanes {
                 .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
                     match ev.keystroke.key.as_str() {
                         "enter" | "space" | " " => {
+                            this.last_selected_task = Some(snap_task_key.clone());
                             let next = if this.selected_task_id.as_ref() == Some(&key_tid) {
                                 None
                             } else {
@@ -1203,6 +1418,15 @@ impl Render for AgentLanes {
                         _ => {}
                     }
                 }))
+                .when(is_done, |d| {
+                    d.child(pro_check_draw(
+                        pro_eid(&self.id, format!("lane-chk-{tid}")),
+                        true,
+                        12.0,
+                        false,
+                        p.green_ink,
+                    ))
+                })
                 .when(!task.tools.is_empty(), |d| d.child(tools_row))
                 .child(div().min_w_0().truncate().child(title_txt))
                 .when_some(inline_controls, |d, ctrl| d.child(ctrl));
@@ -1211,10 +1435,12 @@ impl Render for AgentLanes {
         }
 
         // Click-to-inspect popover (`ask` decision card for `Waiting`, or dark summary card for other states!)
-        let selected_snapshot = self
+        let active_selected = self
             .selected_task_id
             .as_ref()
             .and_then(|sid| self.tasks.iter().find(|t| &t.id == sid).cloned());
+        let pop_is_open = active_selected.is_some();
+        let selected_snapshot = active_selected.or_else(|| self.last_selected_task.clone());
         let selected_agent_name = selected_snapshot.as_ref().and_then(|st| {
             self.agents
                 .iter()
@@ -1244,7 +1470,9 @@ impl Render for AgentLanes {
                     true,
                     cx,
                     move |this, _, cx| {
-                        let run_now = this.current_now_ms(disabled_motion(cx));
+                        let run_now = this.current_now_ms(
+                            disabled_motion(cx) || Theme::global(cx).reduced_motion,
+                        );
                         this.reject_task(rej_id.as_ref(), run_now, cx);
                     },
                 );
@@ -1259,62 +1487,63 @@ impl Render for AgentLanes {
                         this.approve_task(app_id.as_ref(), cx);
                     },
                 );
-                Some(pro_presence(
-                    pro_eid(&self.id, "lane-ask-pop"),
-                    true,
-                    0.18,
-                    0.14,
-                    move |amt| {
-                        let place_above = selected_lane_idx >= 2;
-                        let top_y = if place_above {
-                            ((selected_lane_idx as f32) * LANE_H - 96.0).max(4.0)
-                        } else {
-                            (selected_lane_idx as f32 + 1.0) * LANE_H - 4.0
-                        };
+                let place_above = selected_lane_idx >= 2;
+                let top_y = if place_above {
+                    ((selected_lane_idx as f32) * LANE_H - 96.0).max(4.0)
+                } else {
+                    (selected_lane_idx as f32 + 1.0) * LANE_H - 4.0
+                };
+                let card = div()
+                    .id("lane-decision-dialog")
+                    .role(Role::Dialog)
+                    .w(px(284.))
+                    .p(px(12.))
+                    .rounded(px(10.))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
                         div()
-                            .id("lane-decision-dialog")
-                            .role(Role::Dialog)
-                            .absolute()
-                            .right(px(8.))
-                            .top(px(top_y + 4. * (1. - amt)))
-                            .w(px(284.))
-                            .p(px(12.))
-                            .rounded(px(10.))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .shadow_md()
-                            .opacity(amt)
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(st_title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(17.))
+                            .text_color(p.text)
+                            .child(ask_txt),
+                    )
+                    .child(
+                        div()
+                            .mt(px(6.))
                             .flex()
-                            .flex_col()
-                            .gap(px(4.))
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .child(st_title),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(17.))
-                                    .text_color(p.text)
-                                    .child(ask_txt),
-                            )
-                            .child(
-                                div()
-                                    .mt(px(6.))
-                                    .flex()
-                                    .items_center()
-                                    .justify_end()
-                                    .gap(px(6.))
-                                    .child(btn_rej)
-                                    .child(btn_app),
-                            )
-                            .into_any_element()
-                    },
-                ))
+                            .items_center()
+                            .justify_end()
+                            .gap(px(6.))
+                            .child(btn_rej)
+                            .child(btn_app),
+                    )
+                    .into_any_element();
+                let mut cell = Some(card);
+                Some(
+                    div()
+                        .absolute()
+                        .right(px(8.))
+                        .top(px(top_y))
+                        .child(pro_popover_presence(
+                            pro_eid(&self.id, "lane-ask-pop"),
+                            pop_is_open,
+                            move || cell.take().unwrap_or_else(|| div().into_any_element()),
+                        ))
+                        .into_any_element(),
+                )
             } else {
                 let ag_lbl = selected_agent_name.unwrap_or_default();
                 let dur_mins = ((sel_task
@@ -1327,90 +1556,91 @@ impl Render for AgentLanes {
                 let open_tid = st_id.clone();
                 let open_lbl = tr(cx, "Open run →", "打开运行记录 →").to_string();
                 let ent = cx.entity().clone();
-                Some(pro_presence(
-                    pro_eid(&self.id, "lane-sum-pop"),
-                    true,
-                    0.18,
-                    0.14,
-                    move |amt| {
-                        let tip_bg: Hsla = if p.dark {
-                            rgb(0x27272b).into()
-                        } else {
-                            rgb(0x18181b).into()
-                        };
-                        let top_y = ((selected_lane_idx as f32 + 1.0) * LANE_H - 4.0)
-                            .min(track_h - 68.0)
-                            .max(4.0);
-                        let mut b_col = div().flex().flex_col().gap(px(3.));
-                        for b in &bullets {
-                            b_col = b_col.child(
-                                div()
-                                    .flex()
-                                    .items_start()
-                                    .gap(px(6.))
-                                    .text_size(px(11.5))
-                                    .line_height(px(16.))
-                                    .text_color(hsla(0., 0., 1., 0.84))
-                                    .child(
-                                        div()
-                                            .mt(px(6.))
-                                            .size(px(3.5))
-                                            .flex_none()
-                                            .rounded_full()
-                                            .bg(hsla(0., 0., 1., 0.5)),
-                                    )
-                                    .child(b.clone()),
-                            );
-                        }
+                let tip_bg: Hsla = if p.dark {
+                    rgb(0x27272b).into()
+                } else {
+                    rgb(0x18181b).into()
+                };
+                let top_y = ((selected_lane_idx as f32 + 1.0) * LANE_H - 4.0)
+                    .min(track_h - 68.0)
+                    .max(4.0);
+                let mut b_col = div().flex().flex_col().gap(px(3.));
+                for b in &bullets {
+                    b_col = b_col.child(
                         div()
-                            .absolute()
-                            .right(px(16.))
-                            .top(px(top_y + 3. * (1. - amt)))
-                            .max_w(px(248.))
-                            .px(px(10.))
-                            .py(px(8.))
-                            .rounded(px(8.))
-                            .bg(tip_bg)
-                            .shadow_md()
-                            .opacity(amt)
                             .flex()
-                            .flex_col()
-                            .gap(px(4.))
+                            .items_start()
+                            .gap(px(6.))
+                            .text_size(px(11.5))
+                            .line_height(px(16.))
+                            .text_color(hsla(0., 0., 1., 0.84))
                             .child(
                                 div()
-                                    .text_size(px(11.))
-                                    .text_color(hsla(0., 0., 1., 0.55))
-                                    .child(format!("{ag_lbl} · {dur_mins}m")),
+                                    .mt(px(6.))
+                                    .size(px(3.5))
+                                    .flex_none()
+                                    .rounded_full()
+                                    .bg(hsla(0., 0., 1., 0.5)),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(0xffffff))
-                                    .child(st_title),
-                            )
-                            .when(!bullets.is_empty(), |d| d.child(b_col))
-                            .child(
-                                div()
-                                    .id(SharedString::from(format!("open-run-{open_tid}")))
-                                    .role(Role::Button)
-                                    .mt(px(2.))
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(0x82bcff))
-                                    .cursor_pointer()
-                                    .on_click(move |_, _, cx| {
-                                        ent.update(cx, |this, cx| {
-                                            cx.emit(AgentLanesEvent::OpenTask(open_tid.clone()));
-                                            this.selected_task_id = None;
-                                            cx.notify();
-                                        });
-                                    })
-                                    .child(open_lbl),
-                            )
-                            .into_any_element()
-                    },
-                ))
+                            .child(b.clone()),
+                    );
+                }
+                let card = div()
+                    .max_w(px(248.))
+                    .px(px(10.))
+                    .py(px(8.))
+                    .rounded(px(8.))
+                    .bg(tip_bg)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(hsla(0., 0., 1., 0.55))
+                            .child(format!("{ag_lbl} · {dur_mins}m")),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(0xffffff))
+                            .child(st_title),
+                    )
+                    .when(!bullets.is_empty(), |d| d.child(b_col))
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("open-run-{open_tid}")))
+                            .role(Role::Button)
+                            .mt(px(2.))
+                            .text_size(px(11.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(0x82bcff))
+                            .cursor_pointer()
+                            .on_click(move |_, _, cx| {
+                                ent.update(cx, |this, cx| {
+                                    cx.emit(AgentLanesEvent::OpenTask(open_tid.clone()));
+                                    this.selected_task_id = None;
+                                    cx.notify();
+                                });
+                            })
+                            .child(open_lbl),
+                    )
+                    .into_any_element();
+                let mut cell = Some(card);
+                Some(
+                    div()
+                        .absolute()
+                        .right(px(16.))
+                        .top(px(top_y))
+                        .child(pro_popover_presence(
+                            pro_eid(&self.id, "lane-sum-pop"),
+                            pop_is_open,
+                            move || cell.take().unwrap_or_else(|| div().into_any_element()),
+                        ))
+                        .into_any_element(),
+                )
             }
         } else {
             None

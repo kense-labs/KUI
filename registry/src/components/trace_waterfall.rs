@@ -7,9 +7,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_shimmer_text,
-        pro_skeleton_bar, pro_spring_f32, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, tr,
     },
+    foundation::Theme,
     primitives::{
         control::activate,
         family::disabled_motion,
@@ -688,6 +690,8 @@ pub struct TraceWaterfall {
     mark_slowest: bool,
     collapsed: HashSet<SharedString>,
     open_id: Option<SharedString>,
+    hovered_id: Option<SharedString>,
+    metric_mode: SharedString,
     focused_row: usize,
     loading: bool,
     empty: bool,
@@ -713,6 +717,8 @@ impl TraceWaterfall {
             mark_slowest: true,
             collapsed: HashSet::new(),
             open_id: None,
+            hovered_id: None,
+            metric_mode: SharedString::from("cost"),
             focused_row: 0,
             loading: false,
             empty: false,
@@ -896,7 +902,7 @@ impl TraceWaterfall {
 impl Render for TraceWaterfall {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed = self.started_at.elapsed().as_secs_f32();
         let card_bg: Hsla = if p.dark {
             rgb(0x1c1c1f).into()
@@ -1028,6 +1034,68 @@ impl Render for TraceWaterfall {
             TraceSpanStatus::Failed => (p.red_soft, p.red_ink, tr(cx, "Failed", "失败"), false),
         };
 
+        let mode_sensor = pro_selection_sensor();
+        let cur_metric = self.metric_mode.clone();
+        let metric_switch = div()
+            .id(pro_eid(&self.id, "trace-mode-switch"))
+            .role(Role::Group)
+            .aria_label(tr(cx, "Span metric", "跨度指标"))
+            .relative()
+            .p(px(2.0))
+            .rounded(px(7.0))
+            .bg(p.chip)
+            .flex()
+            .items_center()
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "trace-mode-pill"),
+                cur_metric.clone(),
+                mode_sensor.clone(),
+                5.0,
+                card_bg,
+                Some(p.line),
+                true,
+            ))
+            .children(
+                [
+                    ("cost", tr(cx, "Cost", "费用")),
+                    ("tokens", tr(cx, "Tokens", "Token")),
+                ]
+                .into_iter()
+                .map(|(k, lbl)| {
+                    let active = cur_metric.as_ref() == k;
+                    let key_ss = SharedString::from(k);
+                    let focus_c = p.focus;
+                    activate(
+                        div()
+                            .id(pro_eid(&self.id, format!("trace-mode-{k}")))
+                            .role(Role::Button)
+                            .aria_label(lbl)
+                            .tab_index(0)
+                            .relative()
+                            .h(px(22.0))
+                            .px(px(9.0))
+                            .rounded(px(5.0))
+                            .text_size(px(11.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(if active { p.ink } else { p.text })
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .focus_visible(move |s| s.border_1().border_color(focus_c))
+                            .when(active, |d| d.child(pro_mark_selected(&mode_sensor)))
+                            .child(lbl),
+                        cx,
+                        move |this, _, cx| {
+                            if this.metric_mode != key_ss {
+                                this.metric_mode = key_ss.clone();
+                                cx.notify();
+                            }
+                        },
+                    )
+                }),
+            );
+
         let head_bar = div()
             .w_full()
             .px(px(if is_stack { 12.0 } else { 16.0 }))
@@ -1035,6 +1103,7 @@ impl Render for TraceWaterfall {
             .border_b_1()
             .border_color(p.line)
             .flex()
+            .flex_wrap()
             .items_center()
             .gap(px(8.0))
             .child(pro_svg("0 0 14 14", SPARK_SVG, 14.0, p.blue))
@@ -1054,6 +1123,7 @@ impl Render for TraceWaterfall {
                     .truncate()
                     .child(task_subtitle),
             )
+            .child(metric_switch)
             .child(
                 div()
                     .id(pro_eid(&self.id, "trace-status"))
@@ -1062,9 +1132,6 @@ impl Render for TraceWaterfall {
                     .px(px(7.0))
                     .rounded(px(5.0))
                     .bg(pill_bg)
-                    .text_color(pill_fg)
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
                     .gap(px(5.0))
@@ -1076,46 +1143,91 @@ impl Render for TraceWaterfall {
                                 .bg(pill_fg.opacity(pulse_alpha)),
                         )
                     })
-                    .child(pill_lbl),
+                    .when(summary.run_status == TraceSpanStatus::Done, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, "tw-done-chk"),
+                            true,
+                            12.0,
+                            false,
+                            pill_fg,
+                        ))
+                    })
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "tw-status-lbl"),
+                        pill_lbl,
+                        12.0,
+                        FontWeight::MEDIUM,
+                        pill_fg,
+                    )),
             );
 
-        // 6-column stats strip (wraps 3x2 below 560px).
-        let stat_items: [(SharedString, String, bool, bool); 6] = [
+        // 6-column rolling stats strip (wraps 3x2 below 560px).
+        let dur_stat = if summary.total_duration_ms < 1_000 {
+            (summary.total_duration_ms as f64, 0usize, "", "ms")
+        } else {
+            (summary.total_duration_ms as f64 / 1_000.0, 1usize, "", "s")
+        };
+        let cost_decimals = if summary.total_cost < 0.01 && summary.total_cost > 1e-6 {
+            4
+        } else if summary.total_cost < 1.0 {
+            3
+        } else {
+            2
+        };
+        let tok_stat = if summary.total_tokens < 1_000 {
+            (summary.total_tokens as f64, 0usize, "", "")
+        } else {
+            (summary.total_tokens as f64 / 1_000.0, 1usize, "", "k")
+        };
+
+        let stat_items: [(SharedString, f64, usize, &'static str, &'static str, bool); 6] = [
             (
                 tr(cx, "DURATION", "总耗时").into(),
-                format_span_ms(summary.total_duration_ms),
+                dur_stat.0,
+                dur_stat.1,
+                dur_stat.2,
+                dur_stat.3,
                 false,
-                is_live,
             ),
             (
                 tr(cx, "COST", "总费用").into(),
-                format_span_usd(summary.total_cost),
+                summary.total_cost,
+                cost_decimals,
+                "$",
+                "",
                 false,
-                is_live,
             ),
             (
                 tr(cx, "TOKENS", "TOKEN").into(),
-                format_span_tokens(summary.total_tokens),
+                tok_stat.0,
+                tok_stat.1,
+                tok_stat.2,
+                tok_stat.3,
                 false,
-                is_live,
             ),
             (
                 tr(cx, "LLM CALLS", "模型调用").into(),
-                format!("{}", summary.llm_calls),
-                false,
+                summary.llm_calls as f64,
+                0,
+                "",
+                "",
                 false,
             ),
             (
                 tr(cx, "TOOL CALLS", "工具调用").into(),
-                format!("{}", summary.tool_calls),
-                false,
+                summary.tool_calls as f64,
+                0,
+                "",
+                "",
                 false,
             ),
             (
                 tr(cx, "ERRORS", "错误数").into(),
-                format!("{}", summary.error_count),
+                summary.error_count as f64,
+                0,
+                "",
+                "",
                 summary.error_count > 0,
-                false,
             ),
         ];
 
@@ -1126,27 +1238,20 @@ impl Render for TraceWaterfall {
             .border_color(p.line)
             .flex()
             .when(is_stack, |d| d.flex_wrap().gap_y(px(10.0)));
-        for (idx, (lbl, val, is_err_stat, shimmer)) in stat_items.into_iter().enumerate() {
+        for (idx, (lbl, val_num, dec, pfx, sfx, is_err_stat)) in stat_items.into_iter().enumerate()
+        {
             let show_left_sep = if is_stack { idx % 3 != 0 } else { idx > 0 };
             let val_color = if is_err_stat { p.red_ink } else { p.ink };
-            let val_el: AnyElement = if shimmer && !reduced {
-                pro_shimmer_text(
-                    pro_eid(&self.id, format!("tstat-{idx}")),
-                    val,
-                    val_color,
-                    p.strong,
-                    15.0,
-                    FontWeight::MEDIUM,
-                    true,
-                )
-            } else {
-                div()
-                    .text_size(px(15.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(val_color)
-                    .child(val)
-                    .into_any_element()
-            };
+            let val_el = pro_rolling_number(
+                pro_eid(&self.id, format!("tstat-roll-{idx}")),
+                val_num,
+                dec,
+                pfx,
+                sfx,
+                15.0,
+                FontWeight::MEDIUM,
+                val_color,
+            );
             stats_strip = stats_strip.child(
                 div()
                     .when(is_stack, |d| d.w(relative(1.0 / 3.0)).px(px(12.0)))
@@ -1227,7 +1332,15 @@ impl Render for TraceWaterfall {
         }
 
         if is_live {
-            let now_frac = (now_ms as f32 / axis_ms).clamp(0.0, 0.995);
+            let raw_now_frac = (now_ms as f32 / axis_ms).clamp(0.0, 0.995);
+            let now_frac = pro_spring_f32(
+                pro_eid(&self.id, "trace-now-frac"),
+                raw_now_frac,
+                0.24,
+                window,
+                cx,
+            )
+            .clamp(0.0, 0.995);
             tick_overlay = tick_overlay.child(
                 div()
                     .absolute()
@@ -1270,25 +1383,100 @@ impl Render for TraceWaterfall {
             0.45 + 0.55 * (0.5 + 0.5 * ((elapsed / 1.1) * std::f32::consts::TAU).sin())
         };
 
-        let mut rows_col = div()
-            .relative()
-            .w_full()
-            .pt(px(4.0))
-            .pb(px(14.0))
-            .flex()
-            .flex_col();
+        struct TraceBranchMeta {
+            id: SharedString,
+            level: usize,
+            has_children: bool,
+            folded: bool,
+        }
+
+        fn pack_trace_branches(
+            cursor: &mut usize,
+            min_level: usize,
+            items: &mut [Option<AnyElement>],
+            metas: &[TraceBranchMeta],
+            base_id: &ElementId,
+        ) -> Vec<AnyElement> {
+            let mut out = Vec::new();
+            while *cursor < metas.len() && metas[*cursor].level >= min_level {
+                let idx = *cursor;
+                *cursor += 1;
+                let row_el = items[idx]
+                    .take()
+                    .unwrap_or_else(|| div().into_any_element());
+                if metas[idx].has_children
+                    && *cursor < metas.len()
+                    && metas[*cursor].level > metas[idx].level
+                {
+                    let child_els =
+                        pack_trace_branches(cursor, metas[idx].level + 1, items, metas, base_id);
+                    let est_h = (child_els.len() as f32 * 30.0).max(30.0);
+                    let is_expanded = !metas[idx].folded;
+                    let fold_id = pro_eid(base_id, format!("tbranch-{}", metas[idx].id));
+                    let mut children_wrap = Some(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .children(child_els)
+                            .into_any_element(),
+                    );
+                    let branch_fold = pro_fold(fold_id, is_expanded, est_h, 0.0, move || {
+                        children_wrap
+                            .take()
+                            .unwrap_or_else(|| div().into_any_element())
+                    });
+                    out.push(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .child(row_el)
+                            .child(branch_fold)
+                            .into_any_element(),
+                    );
+                } else {
+                    out.push(row_el);
+                }
+            }
+            out
+        }
+
+        let any_hov = pro_spring_f32(
+            pro_eid(&self.id, "tw-any-hov"),
+            if self.hovered_id.is_some() { 1.0 } else { 0.0 },
+            0.20,
+            window,
+            cx,
+        );
+        let show_tokens_mode = self.metric_mode.as_ref() == "tokens";
+
+        let mut row_items: Vec<Option<AnyElement>> = Vec::with_capacity(summary.rows.len());
+        let mut row_metas: Vec<TraceBranchMeta> = Vec::with_capacity(summary.rows.len());
         let mut vis_idx = 0usize;
 
         for row in &summary.rows {
-            if !row.visible {
-                continue;
-            }
-            let my_vis = vis_idx;
-            vis_idx += 1;
+            let my_vis_opt = if row.visible {
+                let v = vis_idx;
+                vis_idx += 1;
+                Some(v)
+            } else {
+                None
+            };
 
             let row_id = row.id.clone();
             let is_open = self.open_id.as_ref() == Some(&row_id);
+            let is_hov = self.hovered_id.as_ref() == Some(&row_id);
             let is_slowest = summary.slowest_id.as_ref() == Some(&row_id);
+
+            let hov_amt = pro_spring_f32(
+                pro_eid(&self.id, format!("tw-hov-{row_id}")),
+                if is_hov || is_open { 1.0 } else { 0.0 },
+                0.20,
+                window,
+                cx,
+            );
+            let row_dim = 1.0 - 0.28 * any_hov * (1.0 - hov_amt);
 
             let (bar_bg, bar_edge, bar_ink, mark_c) = if row.status == TraceSpanStatus::Failed {
                 (
@@ -1347,7 +1535,8 @@ impl Render for TraceWaterfall {
             )
             .clamp(0.004, 1.0 - s_frac);
 
-            let bar_h = if is_stack { 10.0 } else { 14.0 };
+            let base_bar_h = if is_stack { 10.0 } else { 14.0 };
+            let bar_h = base_bar_h + 1.5 * hov_amt;
             let is_running = row.status == TraceSpanStatus::Running;
             let folded = row.folded;
             let folded_marks = row.folded_marks.clone();
@@ -1355,7 +1544,7 @@ impl Render for TraceWaterfall {
             let tool_mark_c = p.cyan.opacity(0.75);
             let err_mark_c = p.red.opacity(0.80);
             let agent_mark_c = p.muted;
-            let bar_border = if is_open { mark_c } else { bar_edge };
+            let bar_border = pro_mix_color(bar_edge, mark_c, hov_amt);
 
             let bar_canvas = canvas(
                 |_, _, _| (),
@@ -1373,12 +1562,13 @@ impl Render for TraceWaterfall {
                         size(px(bw), px(bar_h)),
                     );
                     let r = px(3.5);
+                    let fill_alpha = (if folded { 0.78 } else { 1.0 }) * row_dim;
                     window.paint_quad(quad(
                         bar_rect,
                         Corners::all(r),
-                        bar_bg.opacity(if folded { 0.78 } else { 1.0 }),
+                        bar_bg.opacity(bar_bg.a * fill_alpha),
                         Edges::all(px(1.0)),
-                        bar_border,
+                        bar_border.opacity(bar_border.a * row_dim),
                         BorderStyle::Solid,
                     ));
 
@@ -1404,7 +1594,9 @@ impl Render for TraceWaterfall {
                                 point(bounds.left() + px(mx), bounds.top() + px(my)),
                                 size(px(mw), px(mh)),
                             );
-                            window.paint_quad(fill(m_rect, mc).corner_radii(px(1.5)));
+                            window.paint_quad(
+                                fill(m_rect, mc.opacity(mc.a * row_dim)).corner_radii(px(1.5)),
+                            );
                         }
                     }
 
@@ -1442,7 +1634,18 @@ impl Render for TraceWaterfall {
             .absolute()
             .inset_0();
 
-            let tag_text = if row.cost > 1e-6 {
+            let span_tot_tok = row.tokens_in + row.tokens_out;
+            let tag_text = if show_tokens_mode {
+                if span_tot_tok > 0 {
+                    format!(
+                        "{} · {} tok",
+                        format_span_ms(row.duration_ms),
+                        format_span_tokens(span_tot_tok)
+                    )
+                } else {
+                    format_span_ms(row.duration_ms)
+                }
+            } else if row.cost > 1e-6 {
                 format!(
                     "{} · {}",
                     format_span_ms(row.duration_ms),
@@ -1603,7 +1806,7 @@ impl Render for TraceWaterfall {
 
             let name_cell = div()
                 .when(!is_stack, |d| d.w(px(name_w)).flex_none().h(px(30.0)))
-                .when(is_stack, |d| d.w_full().h(px(28.0)))
+                .when(is_stack, |d| d.w_full().flex_none().min_w_0().h(px(28.0)))
                 .flex()
                 .items_center()
                 .min_w_0()
@@ -1713,6 +1916,7 @@ impl Render for TraceWaterfall {
             let sel_bg = p.accent_soft.opacity(if p.dark { 0.45 } else { 0.55 });
             let focus_c = p.focus;
             let click_id = row_id.clone();
+            let hov_id = row_id.clone();
             let aria = format!(
                 "{}, {}, {}, {}",
                 row.name,
@@ -1727,13 +1931,26 @@ impl Render for TraceWaterfall {
                     .role(Role::ListBoxOption)
                     .aria_label(aria)
                     .aria_expanded(is_open)
-                    .tab_index(if my_vis == self.focused_row { 0 } else { -1 })
+                    .tab_index(if my_vis_opt == Some(self.focused_row) {
+                        0
+                    } else {
+                        -1
+                    })
                     .w_full()
                     .pl(px(pad_l))
                     .pr(px(pad_r))
                     .when(is_open, |d| d.bg(sel_bg))
                     .hover(move |s| s.bg(hover_bg))
                     .focus_visible(move |s| s.border_1().border_color(focus_c))
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        if *inside {
+                            this.hovered_id = Some(hov_id.clone());
+                            cx.notify();
+                        } else if this.hovered_id.as_ref() == Some(&hov_id) {
+                            this.hovered_id = None;
+                            cx.notify();
+                        }
+                    }))
                     .cursor_pointer()
                     .map(|d| {
                         if !is_stack {
@@ -1754,18 +1971,21 @@ impl Render for TraceWaterfall {
                     }),
                 cx,
                 move |this, _, cx| {
-                    this.focused_row = my_vis;
+                    if let Some(v) = my_vis_opt {
+                        this.focused_row = v;
+                    }
                     this.toggle_open(click_id.clone(), cx);
                 },
             );
 
-            // Expandable span inspector (`pro_fold`) right beneath the selected span row!
+            // Expandable span inspector (`pro_fold` + `pro_popover_presence`) right beneath the selected span row!
             let inspector_el = {
                 let span_name = row.name.clone();
                 let kind_subtitle: SharedString = match &row.model {
                     Some(m) => format!("{} · {m}", row.kind.label(cx)).into(),
                     None => row.kind.label(cx).into(),
                 };
+                let span_is_done = row.status == TraceSpanStatus::Done;
                 let (st_bg, st_fg, st_lbl): (Hsla, Hsla, SharedString) = match row.status {
                     TraceSpanStatus::Running => {
                         (p.accent_soft, p.blue, tr(cx, "Running", "运行中").into())
@@ -1816,7 +2036,6 @@ impl Render for TraceWaterfall {
                 let tok_hdr: SharedString = tr(cx, "TOKENS", "TOKEN").into();
                 let close_aria: SharedString =
                     tr(cx, "Close span inspector", "关闭跨度详情").into();
-                let close_row_id = row_id.clone();
                 let close_entity = cx.entity().downgrade();
                 let indent_l = pad_l + (depth as f32 * 14.0) + if is_stack { 6.0 } else { 20.0 };
                 let wash_bg = pro_mix_color(card_bg, p.ink, if p.dark { 0.035 } else { 0.025 });
@@ -1831,6 +2050,8 @@ impl Render for TraceWaterfall {
                 let red_soft_c = p.red_soft;
                 let red_ink_c = p.red_ink;
                 let inspector_id = pro_eid(&self.id, format!("insp-close-{row_id}"));
+                let done_chk_id = pro_eid(&self.id, format!("insp-chk-{row_id}"));
+                let pop_id = pro_eid(&self.id, format!("tpop-{row_id}"));
 
                 pro_fold(
                     pro_eid(&self.id, format!("tfold-{row_id}")),
@@ -1911,6 +2132,16 @@ impl Render for TraceWaterfall {
                                             .text_color(st_fg)
                                             .flex()
                                             .items_center()
+                                            .gap(px(4.0))
+                                            .when(span_is_done, |d| {
+                                                d.child(pro_check_draw(
+                                                    done_chk_id,
+                                                    true,
+                                                    12.0,
+                                                    false,
+                                                    st_fg,
+                                                ))
+                                            })
                                             .child(st_lbl),
                                     )
                                     .child(close_btn),
@@ -2065,27 +2296,47 @@ impl Render for TraceWaterfall {
                             card = card.child(io_row);
                         }
 
-                        let _ = &close_row_id;
+                        let mut cell = Some(card.into_any_element());
                         div()
                             .w_full()
                             .pl(px(indent_l))
                             .pr(px(pad_r))
                             .py(px(6.0))
-                            .child(card)
+                            .child(pro_popover_presence(pop_id, is_open, move || {
+                                cell.take().unwrap_or_else(|| div().into_any_element())
+                            }))
                             .into_any_element()
                     },
                 )
             };
 
-            rows_col = rows_col.child(
+            row_metas.push(TraceBranchMeta {
+                id: row_id,
+                level: row.level,
+                has_children: row.has_children,
+                folded: row.folded,
+            });
+            row_items.push(Some(
                 div()
                     .w_full()
                     .flex()
                     .flex_col()
                     .child(row_btn)
-                    .child(inspector_el),
-            );
+                    .child(inspector_el)
+                    .into_any_element(),
+            ));
         }
+
+        let mut cur = 0usize;
+        let tree_els = pack_trace_branches(&mut cur, 0, &mut row_items, &row_metas, &self.id);
+        let rows_col = div()
+            .relative()
+            .w_full()
+            .pt(px(4.0))
+            .pb(px(14.0))
+            .flex()
+            .flex_col()
+            .children(tree_els);
 
         let measure_cell = self.measured_w.clone();
         div()

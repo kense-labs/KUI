@@ -7,12 +7,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_skeleton_bar, tr,
+        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_skeleton_bar, pro_swap_label, tr,
     },
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
-        family::Slide,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_raw_svg, pro_svg},
     },
 };
@@ -66,12 +66,7 @@ impl InspectComposerRegion {
     ];
 
     fn from_index(idx: usize) -> Self {
-        match idx % 4 {
-            0 => Self::Message,
-            1 => Self::Toolbar,
-            2 => Self::Selector,
-            _ => Self::SendFooter,
-        }
+        Self::ALL[idx % Self::ALL.len()]
     }
 
     fn index(self) -> usize {
@@ -173,6 +168,121 @@ fn region_box(region: InspectComposerRegion, mirror: bool) -> RegionBox {
             gap_label: "10px",
             dim_prefix: "W Fill",
             dim_px: "308 px",
+        },
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ComposerTargetBox {
+    rb: RegionBox,
+    region: InspectComposerRegion,
+    sub_tag: Option<(&'static str, &'static str)>,
+}
+
+impl ComposerTargetBox {
+    fn tag_label(self, cx: &App) -> &'static str {
+        if let Some((en, zh)) = self.sub_tag {
+            tr(cx, en, zh)
+        } else {
+            self.region.label(cx)
+        }
+    }
+}
+
+fn composer_target_box(target_idx: usize, mirror: bool) -> ComposerTargetBox {
+    match target_idx {
+        0..=3 => {
+            let region = InspectComposerRegion::from_index(target_idx);
+            ComposerTargetBox {
+                rb: region_box(region, mirror),
+                region,
+                sub_tag: None,
+            }
+        }
+        4 => ComposerTargetBox {
+            rb: RegionBox {
+                fx: 6.0,
+                fy: 64.0,
+                fw: 34.0,
+                fh: 36.0,
+                pad: 3.0,
+                guide_x: 23.0,
+                guide_y0: 56.0,
+                guide_y1: 64.0,
+                gap_label: "8px",
+                dim_prefix: "W Fixed",
+                dim_px: "28 × 28 px",
+            },
+            region: InspectComposerRegion::Toolbar,
+            sub_tag: Some(("Attach +", "添加附件")),
+        },
+        5 => ComposerTargetBox {
+            rb: RegionBox {
+                fx: 244.0,
+                fy: 64.0,
+                fw: 34.0,
+                fh: 36.0,
+                pad: 3.0,
+                guide_x: 261.0,
+                guide_y0: 56.0,
+                guide_y1: 64.0,
+                gap_label: "8px",
+                dim_prefix: "W Fixed",
+                dim_px: "28 × 28 px",
+            },
+            region: InspectComposerRegion::Toolbar,
+            sub_tag: Some(("Voice Mic", "语音输入")),
+        },
+        6 => ComposerTargetBox {
+            rb: RegionBox {
+                fx: 278.0,
+                fy: 64.0,
+                fw: 34.0,
+                fh: 36.0,
+                pad: 3.0,
+                guide_x: 295.0,
+                guide_y0: 56.0,
+                guide_y1: 64.0,
+                gap_label: "8px",
+                dim_prefix: "W Fixed",
+                dim_px: "28 × 28 px",
+            },
+            region: InspectComposerRegion::Toolbar,
+            sub_tag: Some(("Send Button", "发送按钮")),
+        },
+        7 => ComposerTargetBox {
+            rb: RegionBox {
+                fx: 8.0,
+                fy: 107.0,
+                fw: 132.0,
+                fh: 30.0,
+                pad: 4.0,
+                guide_x: 68.0,
+                guide_y0: 98.0,
+                guide_y1: 107.0,
+                gap_label: "9px",
+                dim_prefix: "W Hug",
+                dim_px: "124 px",
+            },
+            region: InspectComposerRegion::SendFooter,
+            sub_tag: Some(("Folder Scope", "目录范围")),
+        },
+        _ => ComposerTargetBox {
+            rb: RegionBox {
+                fx: 154.0,
+                fy: 107.0,
+                fw: 158.0,
+                fh: 30.0,
+                pad: 4.0,
+                guide_x: 232.0,
+                guide_y0: 98.0,
+                guide_y1: 107.0,
+                gap_label: "9px",
+                dim_prefix: "W Hug",
+                dim_px: "150 px",
+            },
+            region: InspectComposerRegion::SendFooter,
+            sub_tag: Some(("Connect Apps", "连接应用")),
         },
     }
 }
@@ -779,12 +889,18 @@ pub struct InspectComposer {
     delay_ms: u64,
     mirror: bool,
     flat: bool,
-    hovered_region: Option<InspectComposerRegion>,
+    manual_target: Option<usize>,
+    pinned_target: Option<usize>,
     pinned_region: Option<InspectComposerRegion>,
     fx_slide: Slide,
     fy_slide: Slide,
     fw_slide: Slide,
     fh_slide: Slide,
+    pad_slide: Slide,
+    gx_slide: Slide,
+    gy0_slide: Slide,
+    gy1_slide: Slide,
+    press_slide: Slide,
     loading: bool,
     empty: bool,
     clock: Instant,
@@ -811,15 +927,21 @@ impl InspectComposer {
             delay_ms: 600,
             mirror: true,
             flat: false,
-            hovered_region: None,
+            manual_target: None,
+            pinned_target: None,
             pinned_region: None,
             fx_slide: Slide::new(r0.fx),
             fy_slide: Slide::new(r0.fy),
             fw_slide: Slide::new(r0.fw),
             fh_slide: Slide::new(r0.fh),
+            pad_slide: Slide::new(r0.pad),
+            gx_slide: Slide::new(r0.guide_x),
+            gy0_slide: Slide::new(r0.guide_y0),
+            gy1_slide: Slide::new(r0.guide_y1),
+            press_slide: Slide::snappy(0.),
             loading: false,
             empty: false,
-            clock: Instant::now(),
+            clock: cx.background_executor().now(),
             stage_bounds: Rc::new(Cell::new(Bounds::default())),
             plate_cache: Rc::new(RefCell::new(ComposerPlateCache::new())),
         }
@@ -895,7 +1017,7 @@ impl InspectComposer {
     pub fn set_playing(&mut self, playing: bool, cx: &mut Context<Self>) {
         if self.playing != playing {
             self.playing = playing;
-            self.clock = Instant::now();
+            self.clock = cx.background_executor().now();
             cx.emit(InspectComposerEvent::PlayingChanged(playing));
             cx.notify();
         }
@@ -912,8 +1034,11 @@ impl InspectComposer {
         region: Option<InspectComposerRegion>,
         cx: &mut Context<Self>,
     ) {
-        if self.pinned_region != region {
+        if self.pinned_region != region
+            || self.pinned_target != region.map(InspectComposerRegion::index)
+        {
             self.pinned_region = region;
+            self.pinned_target = region.map(InspectComposerRegion::index);
             cx.emit(InspectComposerEvent::PinRegion(region));
             cx.notify();
         }
@@ -955,7 +1080,34 @@ impl InspectComposer {
         }
     }
 
-    fn hit_region(&self, pos: Point<Pixels>) -> Option<InspectComposerRegion> {
+    fn hit_target_uv(u: f32, v: f32) -> Option<usize> {
+        if !(0.0..=COMP_W).contains(&u) || !(0.0..=BODY_H).contains(&v) {
+            return None;
+        }
+        if v < 60.0 {
+            Some(0)
+        } else if v < 104.0 {
+            if (4.0..=39.0).contains(&u) {
+                Some(4)
+            } else if (40.0..=142.0).contains(&u) {
+                Some(2)
+            } else if (242.0..=277.0).contains(&u) {
+                Some(5)
+            } else if (278.0..=316.0).contains(&u) {
+                Some(6)
+            } else {
+                Some(1)
+            }
+        } else if (6.0..=142.0).contains(&u) {
+            Some(7)
+        } else if (152.0..=314.0).contains(&u) {
+            Some(8)
+        } else {
+            Some(3)
+        }
+    }
+
+    fn hit_target(&self, pos: Point<Pixels>) -> Option<usize> {
         let b = self.stage_bounds.get();
         if b.size.width <= px(2.) {
             return None;
@@ -964,20 +1116,7 @@ impl InspectComposer {
         let sy = f32::from(pos.y - b.origin.y);
         let tf = ComposerTilt::new(self.flat, self.mirror);
         let (u, v) = tf.unproject(sx, sy);
-        if !(0.0..=COMP_W).contains(&u) || !(0.0..=BODY_H).contains(&v) {
-            return None;
-        }
-        if v < 60.0 {
-            Some(InspectComposerRegion::Message)
-        } else if v < 104.0 {
-            if (40.0..=142.0).contains(&u) {
-                Some(InspectComposerRegion::Selector)
-            } else {
-                Some(InspectComposerRegion::Toolbar)
-            }
-        } else {
-            Some(InspectComposerRegion::SendFooter)
-        }
+        Self::hit_target_uv(u, v)
     }
 }
 
@@ -985,14 +1124,16 @@ impl Render for InspectComposer {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let elapsed = now.saturating_duration_since(self.clock);
 
         if self.loading {
             let phase = if reduced {
                 0.0
             } else {
                 w.request_animation_frame();
-                (self.clock.elapsed().as_secs_f32() / 1.4).fract()
+                (elapsed.as_secs_f32() / 1.4).fract()
             };
             return div()
                 .id(pro_eid(&self.id, "loading"))
@@ -1037,33 +1178,60 @@ impl Render for InspectComposer {
                 .into_any_element();
         }
 
-        let elapsed_ms = self.clock.elapsed().as_millis() as u64;
-        let interactive_override = self.hovered_region.or(self.pinned_region);
+        let elapsed_ms = elapsed.as_millis() as u64;
+        let interactive_override = self
+            .manual_target
+            .or(self.pinned_target)
+            .or_else(|| self.pinned_region.map(InspectComposerRegion::index));
         let auto_animate = !reduced && self.playing && interactive_override.is_none();
 
-        let (active_region, reveal) = if let Some(pinned) = interactive_override {
-            (pinned, 1.0)
+        let (active_target_idx, reveal) = if let Some(target_idx) = interactive_override {
+            (target_idx, 1.0)
         } else if reduced || !self.playing {
-            (InspectComposerRegion::Message, 1.0)
+            (0, 1.0)
         } else {
-            step_composer_timeline(self.playing, self.hold_ms, self.delay_ms, elapsed_ms)
+            let (reg, rev) =
+                step_composer_timeline(self.playing, self.hold_ms, self.delay_ms, elapsed_ms);
+            (reg.index(), rev)
         };
 
-        let rb = region_box(active_region, self.mirror);
-        self.fx_slide.duration(rb.fx, 0.28, cx);
-        self.fy_slide.duration(rb.fy, 0.28, cx);
-        self.fw_slide.duration(rb.fw, 0.28, cx);
-        self.fh_slide.duration(rb.fh, 0.28, cx);
-        let (cur_fx, cur_fy, cur_fw, cur_fh) = if reduced {
-            (rb.fx, rb.fy, rb.fw, rb.fh)
-        } else {
-            (
-                self.fx_slide.get(w, cx),
-                self.fy_slide.get(w, cx),
-                self.fw_slide.get(w, cx),
-                self.fh_slide.get(w, cx),
-            )
-        };
+        let tb = composer_target_box(active_target_idx, self.mirror);
+        let rb = tb.rb;
+        self.fx_slide.duration(rb.fx, 0.24, cx);
+        self.fy_slide.duration(rb.fy, 0.24, cx);
+        self.fw_slide.duration(rb.fw, 0.24, cx);
+        self.fh_slide.duration(rb.fh, 0.24, cx);
+        self.pad_slide.duration(rb.pad, 0.22, cx);
+        self.gx_slide.duration(rb.guide_x, 0.24, cx);
+        self.gy0_slide.duration(rb.guide_y0, 0.24, cx);
+        self.gy1_slide.duration(rb.guide_y1, 0.24, cx);
+
+        let (cur_fx, cur_fy, cur_fw, cur_fh, cur_pad, cur_gx, cur_gy0, cur_gy1, press_t) =
+            if reduced {
+                (
+                    rb.fx,
+                    rb.fy,
+                    rb.fw,
+                    rb.fh,
+                    rb.pad,
+                    rb.guide_x,
+                    rb.guide_y0,
+                    rb.guide_y1,
+                    0.0,
+                )
+            } else {
+                (
+                    self.fx_slide.get(w, cx),
+                    self.fy_slide.get(w, cx),
+                    self.fw_slide.get(w, cx),
+                    self.fh_slide.get(w, cx),
+                    self.pad_slide.get(w, cx),
+                    self.gx_slide.get(w, cx),
+                    self.gy0_slide.get(w, cx),
+                    self.gy1_slide.get(w, cx),
+                    self.press_slide.get(w, cx),
+                )
+            };
 
         let main_msg: SharedString = self.message.clone().unwrap_or_else(|| {
             tr(
@@ -1100,10 +1268,10 @@ impl Render for InspectComposer {
             fy_q: (cur_fy * 10.).round() as i32,
             fw_q: (cur_fw * 10.).round() as i32,
             fh_q: (cur_fh * 10.).round() as i32,
-            pad_q: (rb.pad * 10.).round() as i32,
-            gx_q: (rb.guide_x * 10.).round() as i32,
-            gy0_q: (rb.guide_y0 * 10.).round() as i32,
-            gy1_q: (rb.guide_y1 * 10.).round() as i32,
+            pad_q: (cur_pad * 10.).round() as i32,
+            gx_q: (cur_gx * 10.).round() as i32,
+            gy0_q: (cur_gy0 * 10.).round() as i32,
+            gy1_q: (cur_gy1 * 10.).round() as i32,
             reveal_q: (reveal * 1000.).round() as u16,
         };
 
@@ -1117,25 +1285,59 @@ impl Render for InspectComposer {
             .h(px(STAGE_H as f32))
             .flex_none()
             .overflow_hidden()
+            .cursor_pointer()
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
-                let hit = this.hit_region(e.position);
-                if this.hovered_region != hit {
-                    this.hovered_region = hit;
+                let hit = this.hit_target(e.position);
+                if this.manual_target != hit {
+                    let was_some = this.manual_target.is_some();
+                    this.manual_target = hit;
+                    if hit.is_none()
+                        && was_some
+                        && this.pinned_target.is_none()
+                        && this.pinned_region.is_none()
+                    {
+                        this.clock = cx.background_executor().now();
+                    }
                     cx.notify();
                 }
             }))
             .on_hover(cx.listener(|this, over: &bool, _, cx| {
-                if !*over && this.hovered_region.take().is_some() {
+                if !*over && this.manual_target.take().is_some() {
+                    this.press_slide.duration(0., 0.12, cx);
+                    if this.pinned_target.is_none() && this.pinned_region.is_none() {
+                        this.clock = cx.background_executor().now();
+                    }
                     cx.notify();
                 }
             }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, _, cx| {
-                    let hit = this.hit_region(e.position);
-                    let next = if this.pinned_region == hit { None } else { hit };
-                    this.pinned_region = next;
-                    cx.emit(InspectComposerEvent::PinRegion(next));
+                    this.press_slide.duration(1., 0.08, cx);
+                    let hit = this.hit_target(e.position);
+                    let next_target = if this.pinned_target == hit { None } else { hit };
+                    let next_region =
+                        next_target.map(|idx| composer_target_box(idx, this.mirror).region);
+                    this.pinned_target = next_target;
+                    this.pinned_region = next_region;
+                    if next_target.is_none() && this.manual_target.is_none() {
+                        this.clock = cx.background_executor().now();
+                    }
+                    cx.emit(InspectComposerEvent::PinRegion(next_region));
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.press_slide.duration(0., 0.14, cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.press_slide.duration(0., 0.14, cx);
                     cx.notify();
                 }),
             )
@@ -1205,7 +1407,13 @@ impl Render for InspectComposer {
         } else {
             cur_fx
         };
-        let (tag_x, tag_y) = tf.project(tag_u, cur_fy - 17.0);
+        let (tag_x, tag_y) = tf.project(tag_u, cur_fy - 17.0 + press_t * 1.0);
+        let is_pinned = self.pinned_target.is_some() || self.pinned_region.is_some();
+        let tag_text = if is_pinned {
+            format!("{} •", tb.tag_label(cx))
+        } else {
+            tb.tag_label(cx).to_string()
+        };
         scene = scene.child(
             div()
                 .absolute()
@@ -1220,18 +1428,17 @@ impl Render for InspectComposer {
                 .gap(px(3.))
                 .opacity(tag_a * stage_mask_alpha(tag_x + 20., tag_y + 7., self.mirror))
                 .child(pro_svg("0 0 12 12", LAYER_TAG_SVG, 9., white_ink))
-                .child(
-                    div()
-                        .text_size(px(9.))
-                        .line_height(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(white_ink)
-                        .child(active_region.label(cx)),
-                ),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "layer-tag"),
+                    tag_text,
+                    9.,
+                    FontWeight::MEDIUM,
+                    white_ink,
+                )),
         );
 
-        // Top blue padding badge (`10` or `6`)
-        let pad_num = format!("{:.0}", rb.pad);
+        // Top blue padding badge (`10`, `6`, `4`, or `3`)
+        let pad_num = format!("{:.0}", cur_pad.round());
         let pad_top_u = cur_fx + cur_fw * 0.68;
         let (pt_x, pt_y) = tf.project(pad_top_u, cur_fy - 2.0);
         scene = scene.child(
@@ -1281,13 +1488,13 @@ impl Render for InspectComposer {
                 .child(pad_num),
         );
 
-        // Red spacing guide badge (`14px` / `8px` / `10px`)
+        // Red spacing guide badge (`14px` / `8px` / `10px` / `9px`)
         let red_u = if self.mirror {
-            (rb.guide_x - 32.0).max(16.0)
+            (cur_gx - 32.0).max(16.0)
         } else {
-            rb.guide_x + 6.0
+            cur_gx + 6.0
         };
-        let red_v = (rb.guide_y0 + rb.guide_y1) * 0.5 - 6.5;
+        let red_v = (cur_gy0 + cur_gy1) * 0.5 - 6.5;
         let (rx, ry) = tf.project(red_u, red_v);
         scene = scene.child(
             div()
@@ -1301,15 +1508,17 @@ impl Render for InspectComposer {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_size(px(8.5))
-                .line_height(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(white_ink)
                 .opacity(dim_a * stage_mask_alpha(rx, ry, self.mirror))
-                .child(rb.gap_label),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "gap-tag"),
+                    rb.gap_label,
+                    8.5,
+                    FontWeight::MEDIUM,
+                    white_ink,
+                )),
         );
 
-        // Dimension pill (`W Fill 300 px` / `W Hug 84 px`)
+        // Dimension pill (`W Fill 300 px` / `W Hug 84 px` / `W Fixed 28 × 28 px`)
         let size_u = if self.mirror {
             (cur_fx + cur_fw - 88.0).max(cur_fx)
         } else {
@@ -1336,19 +1545,18 @@ impl Render for InspectComposer {
                         .text_color(white_ink.opacity(0.76))
                         .child(rb.dim_prefix),
                 )
-                .child(
-                    div()
-                        .text_size(px(9.))
-                        .line_height(px(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(white_ink)
-                        .child(rb.dim_px),
-                ),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "dim-px"),
+                    rb.dim_px,
+                    9.,
+                    FontWeight::MEDIUM,
+                    white_ink,
+                )),
         );
 
         // Hand cursor
         let cur_u = cur_fx + cur_fw * 0.72;
-        let (cx_p, cy_p) = tf.project(cur_u, cur_fy + cur_fh - 16.0);
+        let (cx_p, cy_p) = tf.project(cur_u, cur_fy + cur_fh - 16.0 + press_t * 1.5);
         let cur_slide = (1. - cur_a) * 6.0;
         scene = scene.child(
             div()
@@ -1383,30 +1591,43 @@ impl Render for InspectComposer {
             .on_key_down(cx.listener(
                 |this, e: &KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
                     "down" | "right" | "j" => {
-                        let cur = this.pinned_region.map_or(0, InspectComposerRegion::index);
-                        let next = Some(InspectComposerRegion::ALL[(cur + 1) % 4]);
-                        this.pinned_region = next;
-                        cx.emit(InspectComposerEvent::PinRegion(next));
+                        let cur = this
+                            .pinned_target
+                            .or_else(|| this.pinned_region.map(InspectComposerRegion::index))
+                            .unwrap_or(0);
+                        let next_idx = (cur + 1) % 9;
+                        let next_reg = composer_target_box(next_idx, this.mirror).region;
+                        this.pinned_target = Some(next_idx);
+                        this.pinned_region = Some(next_reg);
+                        cx.emit(InspectComposerEvent::PinRegion(Some(next_reg)));
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "up" | "left" | "k" => {
-                        let cur = this.pinned_region.map_or(0, InspectComposerRegion::index);
-                        let next = Some(InspectComposerRegion::ALL[(cur + 3) % 4]);
-                        this.pinned_region = next;
-                        cx.emit(InspectComposerEvent::PinRegion(next));
+                        let cur = this
+                            .pinned_target
+                            .or_else(|| this.pinned_region.map(InspectComposerRegion::index))
+                            .unwrap_or(0);
+                        let next_idx = (cur + 8) % 9;
+                        let next_reg = composer_target_box(next_idx, this.mirror).region;
+                        this.pinned_target = Some(next_idx);
+                        this.pinned_region = Some(next_reg);
+                        cx.emit(InspectComposerEvent::PinRegion(Some(next_reg)));
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "escape" => {
+                        this.pinned_target = None;
                         this.pinned_region = None;
+                        this.manual_target = None;
+                        this.clock = cx.background_executor().now();
                         cx.emit(InspectComposerEvent::PinRegion(None));
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "enter" | "space" | " " => {
                         this.playing = !this.playing;
-                        this.clock = Instant::now();
+                        this.clock = cx.background_executor().now();
                         cx.emit(InspectComposerEvent::PlayingChanged(this.playing));
                         cx.stop_propagation();
                         cx.notify();
@@ -1422,9 +1643,11 @@ impl Render for InspectComposer {
 #[cfg(test)]
 mod tests {
     use super::{
-        ComposerPlateKey, ComposerTilt, InspectComposerRegion, STAGE_W, rasterize_composer_plate,
-        region_box, step_composer_timeline,
+        COMP_W, ComposerPlateKey, ComposerTilt, InspectComposer, InspectComposerRegion, STAGE_W,
+        rasterize_composer_plate, region_box, step_composer_timeline,
     };
+    use gpui::{MouseButton, MouseDownEvent, MouseMoveEvent, TestAppContext, point, px, size};
+    use std::time::Duration;
 
     #[test]
     fn mirrored_composer_homography_roundtrips_and_cycles_all_four_regions() {
@@ -1495,5 +1718,99 @@ mod tests {
             max_red > 70,
             "expected red spacing guide, max R-B={max_red}"
         );
+    }
+
+    #[gpui::test]
+    fn hovering_toolbar_and_footer_subregions_glides_inspector_and_resumes_tour(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            InspectComposer::new("test-inspect-composer", cx)
+                .with_flat(true)
+                .with_mirror(false)
+                .with_delay(300)
+                .with_hold(500)
+        });
+        vcx.simulate_resize(size(px(600.), px(480.)));
+        vcx.run_until_parked();
+
+        let (send_pt, apps_pt, out_pt) = vcx.update(|_, app| {
+            let b = view.read(app).stage_bounds.get();
+            let tf = ComposerTilt::new(true, false);
+            let (sx, sy) = tf.project(295.0, 80.0);
+            let (ax, ay) = tf.project(220.0, 120.0);
+            (
+                point(b.origin.x + px(sx), b.origin.y + px(sy)),
+                point(b.origin.x + px(ax), b.origin.y + px(ay)),
+                point(b.origin.x + px(4.0), b.origin.y + px(4.0)),
+            )
+        });
+
+        // Hover over circular Send button (`u = 295, v = 80` -> target 6)
+        vcx.simulate_event(MouseMoveEvent {
+            position: send_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.run_until_parked();
+        exec.advance_clock(Duration::from_millis(320));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let this = view.read(app);
+            assert_eq!(this.manual_target, Some(6));
+            assert!((this.fx_slide.value(app) - 278.0).abs() < 4.0);
+            assert!((this.fw_slide.value(app) - 34.0).abs() < 4.0);
+        });
+
+        // Click on Connect Apps chip (`u = 220, v = 120` -> target 8) to pin
+        vcx.simulate_event(MouseMoveEvent {
+            position: apps_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.simulate_event(MouseDownEvent {
+            position: apps_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.run_until_parked();
+        vcx.update(|_, app| {
+            let this = view.read(app);
+            assert_eq!(this.pinned_target, Some(8));
+            assert_eq!(
+                this.pinned_region(),
+                Some(InspectComposerRegion::SendFooter)
+            );
+        });
+
+        // Click again to unpin and leave stage -> resumes automatic tour
+        vcx.simulate_event(MouseDownEvent {
+            position: apps_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseMoveEvent {
+            position: out_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.run_until_parked();
+        exec.advance_clock(Duration::from_millis(600));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+        vcx.update(|_, app| {
+            let this = view.read(app);
+            assert_eq!(this.manual_target, None);
+            assert_eq!(this.pinned_target, None);
+            assert!((this.fw_slide.value(app) - COMP_W).abs() < 4.0);
+        });
     }
 }

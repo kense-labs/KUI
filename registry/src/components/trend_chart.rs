@@ -6,10 +6,11 @@
 use crate::{
     components::pro_chrome::{
         ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, tr,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        tr,
     },
     primitives::{
-        family::{PhaseClock, disabled_motion},
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::ProIcon,
     },
 };
@@ -231,6 +232,25 @@ fn resample_opt_series(src: &[Option<f32>], len: usize) -> Vec<Option<f32>> {
         .collect()
 }
 
+fn sample_opt_series_at(vals: &[Option<f32>], frac: f32) -> Option<f32> {
+    if vals.is_empty() {
+        return None;
+    }
+    if vals.len() == 1 {
+        return vals[0];
+    }
+    let pos = frac.clamp(0.0, 1.0) * (vals.len() - 1) as f32;
+    let i0 = (pos.floor() as usize).min(vals.len() - 1);
+    let i1 = (i0 + 1).min(vals.len() - 1);
+    let u = pos - i0 as f32;
+    match (vals[i0], vals[i1]) {
+        (Some(a), Some(b)) => Some(a + (b - a) * u),
+        (Some(a), None) if u < 0.5 => Some(a),
+        (None, Some(b)) if u >= 0.5 => Some(b),
+        _ => None,
+    }
+}
+
 fn paint_dashed_polyline(
     pts: &[Point<Pixels>],
     stroke_w: f32,
@@ -288,6 +308,19 @@ struct TrendMorphState {
     from_series: Vec<Vec<Option<f32>>>,
     to_series: Vec<Vec<Option<f32>>>,
     clock: PhaseClock,
+    area_mix: Slide,
+    bar_mix: Slide,
+    scrub_x: Slide,
+    scrub_presence: Slide,
+    scrub_ready: bool,
+    bar_hover_slides: Vec<Slide>,
+    bar_spot_mix: Slide,
+}
+
+struct TrendTipGlideState {
+    x: Slide,
+    presence: Slide,
+    ready: bool,
 }
 
 #[derive(Clone)]
@@ -338,93 +371,156 @@ impl RenderOnce for TrendPlotCanvas {
             .iter()
             .map(|s| s.values.iter().map(|opt| opt.map(|v| v as f32)).collect())
             .collect();
+        let n_pts = target_vecs.iter().map(Vec::len).max().unwrap_or(0);
         let init_v = target_vecs.clone();
+        let init_area = if self.spec.variant == TrendVariant::Area {
+            1.0
+        } else {
+            0.0
+        };
+        let init_bar = if self.spec.variant == TrendVariant::Bar {
+            1.0
+        } else {
+            0.0
+        };
+
         let st = w.use_keyed_state(pro_eid(&self.spec.id, "trc-morph"), cx, |_, _| {
             TrendMorphState {
                 from_series: init_v.clone(),
                 to_series: init_v,
                 clock: PhaseClock::default(),
+                area_mix: Slide::new(init_area),
+                bar_mix: Slide::new(init_bar),
+                scrub_x: Slide::snappy(0.0),
+                scrub_presence: Slide::snappy(0.0),
+                scrub_ready: false,
+                bar_hover_slides: (0..n_pts).map(|_| Slide::snappy(0.0)).collect(),
+                bar_spot_mix: Slide::snappy(0.0),
             }
         });
 
-        let morphed: Vec<Vec<Option<f32>>> = st.update(cx, |s, cx| {
-            let age = s.clock.time(0.32, w, cx);
-            let cur_t = pro_ease((age / 0.32).clamp(0., 1.));
-            if s.to_series != target_vecs {
-                let mut next_from = Vec::with_capacity(target_vecs.len());
-                for (si, tgt) in target_vecs.iter().enumerate() {
-                    let tlen = tgt.len();
-                    let fa = s
-                        .from_series
-                        .get(si)
-                        .map(|v| resample_opt_series(v, tlen))
-                        .unwrap_or_else(|| tgt.clone());
-                    let fb = s
-                        .to_series
-                        .get(si)
-                        .map(|v| resample_opt_series(v, tlen))
-                        .unwrap_or_else(|| tgt.clone());
-                    let blended = fa
-                        .into_iter()
-                        .zip(fb)
-                        .map(|(a, b)| match (a, b) {
-                            (Some(va), Some(vb)) => Some(va + (vb - va) * cur_t),
-                            (_, other) => other,
-                        })
-                        .collect();
-                    next_from.push(blended);
-                }
-                s.from_series = next_from;
-                s.to_series = target_vecs.clone();
-                s.clock.restart(cx);
-            }
-            let age2 = s.clock.time(0.32, w, cx);
-            let t = if reduced {
-                1.0
-            } else {
-                pro_ease((age2 / 0.32).clamp(0., 1.))
-            };
-            if t >= 0.999 || s.from_series.len() != s.to_series.len() {
-                s.to_series.clone()
-            } else {
-                s.from_series
-                    .iter()
-                    .zip(&s.to_series)
-                    .map(|(fa, tb)| {
-                        fa.iter()
-                            .zip(tb)
-                            .map(|(&a, &b)| match (a, b) {
-                                (Some(va), Some(vb)) => Some(va + (vb - va) * t),
+        let target_area = if self.spec.variant == TrendVariant::Area {
+            1.0
+        } else {
+            0.0
+        };
+        let target_bar = if self.spec.variant == TrendVariant::Bar {
+            1.0
+        } else {
+            0.0
+        };
+        let active_idx = self.spec.active_idx;
+
+        let (morphed, area_t, bar_t, guide_frac, scrub_alpha, bar_hovs, bar_spot) =
+            st.update(cx, |s, cx| {
+                let age = s.clock.time(0.32, w, cx);
+                let cur_t = pro_ease((age / 0.32).clamp(0., 1.));
+                if s.to_series != target_vecs {
+                    let mut next_from = Vec::with_capacity(target_vecs.len());
+                    for (si, tgt) in target_vecs.iter().enumerate() {
+                        let tlen = tgt.len();
+                        let fa = s
+                            .from_series
+                            .get(si)
+                            .map(|v| resample_opt_series(v, tlen))
+                            .unwrap_or_else(|| tgt.clone());
+                        let fb = s
+                            .to_series
+                            .get(si)
+                            .map(|v| resample_opt_series(v, tlen))
+                            .unwrap_or_else(|| tgt.clone());
+                        let blended = fa
+                            .into_iter()
+                            .zip(fb)
+                            .map(|(a, b)| match (a, b) {
+                                (Some(va), Some(vb)) => Some(va + (vb - va) * cur_t),
                                 (_, other) => other,
                             })
+                            .collect();
+                        next_from.push(blended);
+                    }
+                    s.from_series = next_from;
+                    s.to_series = target_vecs.clone();
+                    s.clock.restart(cx);
+                }
+                let age2 = s.clock.time(0.32, w, cx);
+                let t = if reduced {
+                    1.0
+                } else {
+                    pro_ease((age2 / 0.32).clamp(0., 1.))
+                };
+                let morphed_vals: Vec<Vec<Option<f32>>> =
+                    if t >= 0.999 || s.from_series.len() != s.to_series.len() {
+                        s.to_series.clone()
+                    } else {
+                        s.from_series
+                            .iter()
+                            .zip(&s.to_series)
+                            .map(|(fa, tb)| {
+                                fa.iter()
+                                    .zip(tb)
+                                    .map(|(&a, &b)| match (a, b) {
+                                        (Some(va), Some(vb)) => Some(va + (vb - va) * t),
+                                        (_, other) => other,
+                                    })
+                                    .collect()
+                            })
                             .collect()
-                    })
-                    .collect()
-            }
-        });
+                    };
 
-        let zero_anchor = self.spec.zero || self.spec.variant == TrendVariant::Bar;
+                s.area_mix.duration(target_area, 0.28, cx);
+                s.bar_mix.duration(target_bar, 0.32, cx);
+                let a_mix = s.area_mix.get(w, cx).clamp(0.0, 1.0);
+                let b_mix = s.bar_mix.get(w, cx).clamp(0.0, 1.0);
+
+                if let Some(idx) = active_idx {
+                    let target_gx = if self.spec.variant == TrendVariant::Bar {
+                        (idx as f32 + 0.5) / n_pts.max(1) as f32
+                    } else {
+                        idx as f32 / (n_pts.saturating_sub(1)).max(1) as f32
+                    };
+                    if !s.scrub_ready {
+                        s.scrub_x.reset(target_gx);
+                        s.scrub_ready = true;
+                    } else {
+                        s.scrub_x.set(target_gx, cx);
+                    }
+                    s.scrub_presence.set(1.0, cx);
+                } else {
+                    s.scrub_presence.set(0.0, cx);
+                    if s.scrub_presence.value(cx) < 0.04 {
+                        s.scrub_ready = false;
+                    }
+                }
+                let g_frac = s.scrub_x.get(w, cx).clamp(0.0, 1.0);
+                let g_alpha = s.scrub_presence.get(w, cx).clamp(0.0, 1.0);
+
+                if s.bar_hover_slides.len() < n_pts {
+                    s.bar_hover_slides.resize_with(n_pts, || Slide::snappy(0.0));
+                } else if s.bar_hover_slides.len() > n_pts {
+                    s.bar_hover_slides.truncate(n_pts);
+                }
+                s.bar_spot_mix
+                    .set(if active_idx.is_some() { 1.0 } else { 0.0 }, cx);
+                let b_spot = s.bar_spot_mix.get(w, cx).clamp(0.0, 1.0);
+                let mut hovs = Vec::with_capacity(n_pts);
+                for (di, sl) in s.bar_hover_slides.iter_mut().enumerate().take(n_pts) {
+                    let th = match active_idx {
+                        Some(ai) if ai == di => 1.0,
+                        Some(ai) if ai.abs_diff(di) == 1 => 0.35,
+                        _ => 0.0,
+                    };
+                    sl.set(th, cx);
+                    hovs.push(sl.get(w, cx).clamp(0.0, 1.0));
+                }
+
+                (morphed_vals, a_mix, b_mix, g_frac, g_alpha, hovs, b_spot)
+            });
+
+        let zero_anchor = self.spec.zero || self.spec.variant == TrendVariant::Bar || bar_t > 0.02;
         let (dom_min, dom_max, has_data) = compute_axis_domain(&self.spec.series, zero_anchor);
         let anim_min = pro_spring_f32(pro_eid(&self.spec.id, "dmin"), dom_min as f32, 0.32, w, cx);
         let anim_max = pro_spring_f32(pro_eid(&self.spec.id, "dmax"), dom_max as f32, 0.32, w, cx);
-
-        let n_pts = self
-            .spec
-            .series
-            .iter()
-            .map(|s| s.values.len())
-            .max()
-            .unwrap_or(0);
-        let target_gx = self
-            .spec
-            .active_idx
-            .map(|idx| idx as f32 / (n_pts.saturating_sub(1)).max(1) as f32)
-            .unwrap_or(0.0);
-        let guide_frac = if reduced || self.spec.active_idx.is_none() {
-            target_gx
-        } else {
-            pro_spring_f32(pro_eid(&self.spec.id, "gx"), target_gx, 0.12, w, cx)
-        };
 
         let grid_c: Hsla = if dark {
             hsla(0., 0., 1., 0.08)
@@ -432,9 +528,9 @@ impl RenderOnce for TrendPlotCanvas {
             hsla(0., 0., 0., 0.06)
         };
         let guide_c: Hsla = if dark {
-            hsla(0., 0., 1., 0.18)
+            hsla(0., 0., 1., 0.20)
         } else {
-            hsla(0., 0., 0., 0.12)
+            hsla(0., 0., 0., 0.14)
         };
         let prev_fallback: Hsla = if dark {
             hsla(0., 0., 1., 0.36)
@@ -444,7 +540,6 @@ impl RenderOnce for TrendPlotCanvas {
 
         let variant = self.spec.variant;
         let show_grid = self.spec.axis != TrendAxisMode::None && variant != TrendVariant::Sparkline;
-        let active_idx = self.spec.active_idx;
         let series_meta = self.spec.series.clone();
         let card_bg = self.card_bg;
         let sink = self.spec.bounds_sink.clone();
@@ -484,7 +579,8 @@ impl RenderOnce for TrendPlotCanvas {
                     bounds.top() + px(pad_y + ty * (bh - 2.0 * pad_y))
                 };
 
-                if variant == TrendVariant::Bar {
+                // 1. Paint spring-morphing bars whenever `bar_t > 0.004`.
+                if bar_t > 0.004 {
                     let slot_w = bw / n_pts as f32;
                     let group_w = (slot_w * 0.68).clamp(3.0, 28.0);
                     let s_cnt = morphed.len().max(1);
@@ -493,7 +589,6 @@ impl RenderOnce for TrendPlotCanvas {
                         ((group_w - inner_gap * (s_cnt - 1) as f32) / s_cnt as f32).max(1.5);
                     let zero_y = f32::from(map_y(0.0f32.clamp(anim_min, anim_max)));
 
-                    // Draw previous bars first, current bars second.
                     for (si, s_vals) in morphed.iter().enumerate() {
                         let meta = &series_meta[si];
                         let base_c = meta.color.unwrap_or(p.blue);
@@ -502,110 +597,124 @@ impl RenderOnce for TrendPlotCanvas {
                                 continue;
                             };
                             let y_val = f32::from(map_y(v));
-                            let raw_h = (zero_y - y_val).abs() * mount_reveal;
-                            let h_px = raw_h.max(1.5);
+                            let raw_h = (zero_y - y_val).abs() * mount_reveal * bar_t;
+                            if raw_h <= 0.6 {
+                                continue;
+                            }
+                            let hov_boost = bar_hovs.get(di).copied().unwrap_or(0.0);
+                            let h_px = (raw_h * (1.0 + 0.025 * hov_boost)).max(1.5);
                             let y0 = if v >= 0.0 { zero_y - h_px } else { zero_y };
                             let slot_cx = f32::from(bounds.left()) + (di as f32 + 0.5) * slot_w;
                             let x0 = slot_cx - group_w * 0.5 + si as f32 * (bar_w + inner_gap);
-                            let dimmed = active_idx.is_some_and(|ai| ai != di);
-                            let alpha = match (meta.previous, dimmed) {
-                                (true, true) => 0.14,
-                                (true, false) => 0.32,
-                                (false, true) => 0.38,
-                                (false, false) => 0.92,
-                            };
+
+                            let rest_a = if meta.previous { 0.32 } else { 0.92 };
+                            let dim_a = if meta.previous { 0.14 } else { 0.36 };
+                            let eff_a =
+                                (rest_a - bar_spot * (rest_a - dim_a) * (1.0 - hov_boost)) * bar_t;
                             let r = px(3.0f32.min(bar_w * 0.5).min(h_px * 0.5));
                             window.paint_quad(
                                 fill(
                                     Bounds::new(point(px(x0), px(y0)), size(px(bar_w), px(h_px))),
-                                    base_c.opacity(alpha),
+                                    base_c.opacity(eff_a.clamp(0.0, 1.0)),
                                 )
                                 .corner_radii(r),
                             );
                         }
                     }
-                    return;
                 }
 
-                let map_x = |i: usize, len: usize| -> Pixels {
-                    let tx = i as f32 / (len.saturating_sub(1)).max(1) as f32;
-                    bounds.left() + px(tx * bw)
-                };
-
-                // Paint previous series first underneath current series.
-                let mut order: Vec<usize> = (0..morphed.len()).collect();
-                order.sort_by_key(|&si| !series_meta[si].previous);
-
-                for si in order {
-                    let s_vals = &morphed[si];
-                    let meta = &series_meta[si];
-                    let color =
-                        meta.color
-                            .unwrap_or(if meta.previous { prev_fallback } else { p.blue });
-                    let max_vis_i =
-                        (((s_vals.len().saturating_sub(1)) as f32 * mount_reveal).ceil() as usize)
-                            .min(s_vals.len().saturating_sub(1));
-
-                    // Split into contiguous non-None segments so missing points leave clean gaps.
-                    let mut run: Vec<Point<Pixels>> = Vec::new();
-                    let flush_run = |seg: &[Point<Pixels>], window: &mut Window| {
-                        if seg.len() < 2 {
-                            return;
-                        }
-                        if variant == TrendVariant::Area && !meta.previous {
-                            let mut area = PathBuilder::fill();
-                            let first = seg[0];
-                            let last = seg[seg.len() - 1];
-                            area.move_to(point(first.x, bounds.bottom()));
-                            area.line_to(first);
-                            for &pt in seg.iter().skip(1) {
-                                area.line_to(pt);
-                            }
-                            area.line_to(point(last.x, bounds.bottom()));
-                            area.close();
-                            if let Ok(path) = area.build() {
-                                window.paint_path(
-                                    path,
-                                    linear_gradient(
-                                        180.,
-                                        linear_color_stop(
-                                            color.opacity(if dark { 0.22 } else { 0.16 }),
-                                            0.,
-                                        ),
-                                        linear_color_stop(color.opacity(0.0), 1.),
-                                    ),
-                                );
-                            }
-                        }
-                        if meta.previous {
-                            paint_dashed_polyline(seg, 1.3, 3.2, 3.2, color, window);
-                        } else {
-                            let mut line = PathBuilder::stroke(px(1.65));
-                            for (pi, &pt) in seg.iter().enumerate() {
-                                if pi == 0 {
-                                    line.move_to(pt);
-                                } else {
-                                    line.line_to(pt);
-                                }
-                            }
-                            if let Ok(path) = line.build() {
-                                window.paint_path(path, color);
-                            }
-                        }
+                // 2. Paint smooth curves & area fills whenever `line_t = (1.0 - bar_t) > 0.004`.
+                let line_t = (1.0 - bar_t).clamp(0.0, 1.0);
+                if line_t > 0.004 {
+                    let map_x = |i: usize, len: usize| -> Pixels {
+                        let line_tx = i as f32 / (len.saturating_sub(1)).max(1) as f32;
+                        let bar_tx = (i as f32 + 0.5) / len.max(1) as f32;
+                        let tx = line_tx + (bar_tx - line_tx) * bar_t;
+                        bounds.left() + px(tx * bw)
                     };
 
-                    for (i, &opt_v) in s_vals.iter().enumerate().take(max_vis_i + 1) {
-                        if let Some(v) = opt_v {
-                            run.push(point(map_x(i, s_vals.len()), map_y(v)));
+                    let mut order: Vec<usize> = (0..morphed.len()).collect();
+                    order.sort_by_key(|&si| !series_meta[si].previous);
+
+                    for si in order {
+                        let s_vals = &morphed[si];
+                        let meta = &series_meta[si];
+                        let color = meta.color.unwrap_or(if meta.previous {
+                            prev_fallback
                         } else {
-                            flush_run(&run, window);
-                            run.clear();
+                            p.blue
+                        });
+                        let max_vis_i = (((s_vals.len().saturating_sub(1)) as f32 * mount_reveal)
+                            .ceil() as usize)
+                            .min(s_vals.len().saturating_sub(1));
+
+                        let mut run: Vec<Point<Pixels>> = Vec::new();
+                        let flush_run = |seg: &[Point<Pixels>], window: &mut Window| {
+                            if seg.len() < 2 {
+                                return;
+                            }
+                            if area_t > 0.005 && !meta.previous {
+                                let mut area = PathBuilder::fill();
+                                let first = seg[0];
+                                let last = seg[seg.len() - 1];
+                                area.move_to(point(first.x, bounds.bottom()));
+                                area.line_to(first);
+                                for &pt in seg.iter().skip(1) {
+                                    area.line_to(pt);
+                                }
+                                area.line_to(point(last.x, bounds.bottom()));
+                                area.close();
+                                if let Ok(path) = area.build() {
+                                    let top_a = (if dark { 0.22 } else { 0.16 }) * area_t * line_t;
+                                    window.paint_path(
+                                        path,
+                                        linear_gradient(
+                                            180.,
+                                            linear_color_stop(color.opacity(top_a), 0.),
+                                            linear_color_stop(color.opacity(0.0), 1.),
+                                        ),
+                                    );
+                                }
+                            }
+                            if meta.previous {
+                                paint_dashed_polyline(
+                                    seg,
+                                    1.3,
+                                    3.2,
+                                    3.2,
+                                    color.opacity(color.a * line_t),
+                                    window,
+                                );
+                            } else {
+                                let mut line = PathBuilder::stroke(px(1.65));
+                                for (pi, &pt) in seg.iter().enumerate() {
+                                    if pi == 0 {
+                                        line.move_to(pt);
+                                    } else {
+                                        line.line_to(pt);
+                                    }
+                                }
+                                if let Ok(path) = line.build() {
+                                    window.paint_path(path, color.opacity(color.a * line_t));
+                                }
+                            }
+                        };
+
+                        for (i, &opt_v) in s_vals.iter().enumerate().take(max_vis_i + 1) {
+                            if let Some(v) = opt_v {
+                                run.push(point(map_x(i, s_vals.len()), map_y(v)));
+                            } else {
+                                flush_run(&run, window);
+                                run.clear();
+                            }
                         }
+                        flush_run(&run, window);
                     }
-                    flush_run(&run, window);
                 }
 
-                if let Some(idx) = active_idx {
+                // 3. Paint `Slide::snappy` gliding crosshair & curve-riding active point dots.
+                if scrub_alpha > 0.01 && line_t > 0.05 {
+                    let eff_sc = scrub_alpha * line_t;
                     let gx = bounds.left() + px(guide_frac.clamp(0., 1.) * bw);
                     if variant != TrendVariant::Sparkline {
                         window.paint_quad(fill(
@@ -613,11 +722,11 @@ impl RenderOnce for TrendPlotCanvas {
                                 point(gx, bounds.top() - px(4.)),
                                 size(px(1.), px(bh + 4.)),
                             ),
-                            guide_c,
+                            guide_c.opacity(guide_c.a * eff_sc),
                         ));
                     }
                     for (si, s_vals) in morphed.iter().enumerate() {
-                        let Some(Some(v)) = s_vals.get(idx).copied() else {
+                        let Some(v) = sample_opt_series_at(s_vals, guide_frac) else {
                             continue;
                         };
                         let meta = &series_meta[si];
@@ -639,7 +748,7 @@ impl RenderOnce for TrendPlotCanvas {
                                     point(gx - px(halo_r), py - px(halo_r)),
                                     size(px(halo_r * 2.), px(halo_r * 2.)),
                                 ),
-                                card_bg,
+                                card_bg.opacity(eff_sc),
                             )
                             .corner_radii(px(99.)),
                         );
@@ -649,7 +758,7 @@ impl RenderOnce for TrendPlotCanvas {
                                     point(gx - px(dot_r), py - px(dot_r)),
                                     size(px(dot_r * 2.), px(dot_r * 2.)),
                                 ),
-                                color,
+                                color.opacity(color.a * eff_sc),
                             )
                             .corner_radii(px(99.)),
                         );
@@ -658,6 +767,7 @@ impl RenderOnce for TrendPlotCanvas {
             },
         )
         .w_full()
+        .flex_none()
         .h(px(self.spec.height))
     }
 }
@@ -927,6 +1037,7 @@ impl TrendChart {
         &self,
         spec: TrendPlotSpec,
         card_bg: Hsla,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let p = ProPalette::get(cx);
@@ -959,22 +1070,53 @@ impl TrendChart {
         let compact_tag_mode =
             spec.variant == TrendVariant::Sparkline || spec.axis == TrendAxisMode::None;
 
-        let tip_overlay: Option<AnyElement> = spec
-            .active_idx
-            .filter(|_| spec.tooltip && has_data && n_pts > 0)
-            .and_then(|idx| {
-                let bw = spec
-                    .bounds_sink
-                    .get()
-                    .map(|b| f32::from(b.size.width))
-                    .unwrap_or(if compact_tag_mode { 160. } else { 440. });
+        let bw = spec
+            .bounds_sink
+            .get()
+            .map(|b| f32::from(b.size.width))
+            .unwrap_or(if compact_tag_mode { 160. } else { 440. });
+
+        let tip_glide_st = w.use_keyed_state(pro_eid(&spec.id, "tip-glide"), cx, |_, _| {
+            TrendTipGlideState {
+                x: Slide::snappy(0.0),
+                presence: Slide::snappy(0.0),
+                ready: false,
+            }
+        });
+        let (gliding_gx, tip_alpha) = tip_glide_st.update(cx, |gs, cx| {
+            if let Some(idx) = spec
+                .active_idx
+                .filter(|_| spec.tooltip && has_data && n_pts > 0)
+            {
                 let frac = if spec.variant == TrendVariant::Bar {
                     (idx as f32 + 0.5) / n_pts.max(1) as f32
                 } else {
                     idx as f32 / (n_pts.saturating_sub(1)).max(1) as f32
                 };
-                let gx_px = frac * bw;
+                let target_px = frac * bw;
+                if !gs.ready {
+                    gs.x.reset(target_px);
+                    gs.ready = true;
+                } else {
+                    gs.x.set(target_px, cx);
+                }
+                gs.presence.set(1.0, cx);
+            } else {
+                gs.presence.set(0.0, cx);
+                if gs.presence.value(cx) < 0.04 {
+                    gs.ready = false;
+                }
+            }
+            (
+                gs.x.get(w, cx).clamp(0.0, bw.max(1.0)),
+                gs.presence.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
 
+        let tip_overlay: Option<AnyElement> = spec
+            .active_idx
+            .filter(|_| spec.tooltip && has_data && n_pts > 0)
+            .and_then(|idx| {
                 if compact_tag_mode {
                     let s0 = spec.series.first()?;
                     let val = (*s0.values.get(idx)?)?;
@@ -990,12 +1132,13 @@ impl TrendChart {
                         rgb(0xfcfcfc).into()
                     };
                     let tag_w = 88.0f32;
-                    let left_px = (gx_px - tag_w * 0.5).clamp(0.0, (bw - tag_w).max(0.0));
+                    let left_px = (gliding_gx - tag_w * 0.5).clamp(0.0, (bw - tag_w).max(0.0));
                     return Some(
                         div()
                             .absolute()
-                            .top(px(-20.))
+                            .top(px(-20. + 2. * (1. - tip_alpha)))
                             .left(px(left_px))
+                            .opacity(tip_alpha)
                             .px(px(6.))
                             .py(px(2.))
                             .rounded(px(5.))
@@ -1088,18 +1231,19 @@ impl TrendChart {
                 }
 
                 let tip_w = 162.0f32;
-                let flip_left = idx * 2 > n_pts.saturating_sub(1);
+                let flip_left = gliding_gx > bw * 0.5;
                 let left_px = if flip_left {
-                    (gx_px - tip_w - 14.0).max(0.0)
+                    (gliding_gx - tip_w - 14.0).max(0.0)
                 } else {
-                    (gx_px + 14.0).min((bw - tip_w).max(0.0))
+                    (gliding_gx + 14.0).min((bw - tip_w).max(0.0))
                 };
 
                 Some(
                     div()
                         .absolute()
-                        .top(px(-8.))
+                        .top(px(-8. + 3. * (1. - tip_alpha)))
                         .left(px(left_px))
+                        .opacity(tip_alpha)
                         .w(px(tip_w))
                         .px(px(10.))
                         .py(px(7.))
@@ -1108,15 +1252,13 @@ impl TrendChart {
                         .border_1()
                         .border_color(p.line_strong)
                         .shadow_lg()
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .line_height(px(19.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .truncate()
-                                .child(head_date),
-                        )
+                        .child(pro_swap_label(
+                            pro_eid(&spec.id, "tip-head"),
+                            head_date,
+                            13.,
+                            FontWeight::MEDIUM,
+                            p.strong,
+                        ))
                         .child(rows)
                         .into_any_element(),
                 )
@@ -1158,6 +1300,7 @@ impl TrendChart {
             .role(Role::Group)
             .aria_label(aria_lbl)
             .w_full()
+            .flex_none()
             .h(px(plot_h))
             .relative()
             .cursor(if has_data {
@@ -1211,6 +1354,7 @@ impl TrendChart {
 
         let x_axis = div()
             .w_full()
+            .flex_none()
             .h(px(16.))
             .flex()
             .items_center()
@@ -1439,30 +1583,82 @@ impl Render for TrendChart {
                 .track_focus(&self.focus)
                 .w_full()
                 .on_key_down(cx.listener(Self::handle_key_down))
-                .child(self.render_plot_widget(spec, card_bg, cx))
+                .child(self.render_plot_widget(spec, card_bg, w, cx))
                 .into_any_element();
         }
 
         let (labels, tip_labels, spend_cur, spend_prev, tokens, reqs, cpr) =
             showcase_dataset(&self.showcase_range);
         let is_30d = self.showcase_range.as_ref() == "30d";
-        let spend_headline = if is_30d { 11.4 } else { 2.7 };
-        let spend_delta = if is_30d { 21.8 } else { 16.5 };
-        let tok_headline = if is_30d { 1.08 } else { 257.7 };
-        let tok_suffix = if is_30d { "B" } else { "M" };
-        let tok_dec = if is_30d { 2 } else { 1 };
-        let req_headline = if is_30d { 612.4 } else { 144.6 };
-        let cpr_headline = if is_30d { 18.65 } else { 18.60 };
+
+        let (spend_headline, spend_dec, spend_delta, spend_caption): (
+            f64,
+            usize,
+            f64,
+            SharedString,
+        ) = if let Some(idx) = active_idx
+            && let (Some(&sc), Some(&sp)) = (spend_cur.get(idx), spend_prev.get(idx))
+        {
+            let dlt = if sp > 1e-9 {
+                ((sc - sp) / sp) * 100.0
+            } else {
+                0.0
+            };
+            let date_str = tip_labels
+                .get(idx)
+                .or_else(|| labels.get(idx))
+                .cloned()
+                .unwrap_or_default();
+            (
+                sc / 1_000.0,
+                2,
+                dlt,
+                format!("{} \u{00b7} {date_str}", tr(cx, "AI spend", "AI 支出")).into(),
+            )
+        } else {
+            (
+                if is_30d { 11.4 } else { 2.7 },
+                1,
+                if is_30d { 21.8 } else { 16.5 },
+                tr(cx, "AI spend", "AI 支出").into(),
+            )
+        };
+
+        let (tok_headline, tok_dec, tok_suffix) = if let Some(idx) = active_idx
+            && let Some(&tv) = tokens.get(idx)
+        {
+            (tv, 1usize, "M")
+        } else if is_30d {
+            (1.08, 2usize, "B")
+        } else {
+            (257.7, 1usize, "M")
+        };
+        let req_headline = active_idx
+            .and_then(|idx| reqs.get(idx).copied())
+            .unwrap_or(if is_30d { 612.4 } else { 144.6 });
+        let cpr_headline = active_idx
+            .and_then(|idx| cpr.get(idx).copied())
+            .unwrap_or(if is_30d { 18.65 } else { 18.60 });
 
         let pill_fill: Hsla = if dark {
-            hsla(0., 0., 1., 0.10)
+            rgb(0x28282c).into()
         } else {
-            hsla(0., 0., 0., 0.06)
+            rgb(0xffffff).into()
+        };
+        let pill_border: Hsla = if dark {
+            hsla(0., 0., 1., 0.11)
+        } else {
+            hsla(0., 0., 0., 0.08)
         };
         let track_bg: Hsla = if dark {
+            hsla(0., 0., 1., 0.05)
+        } else {
+            hsla(0., 0., 0., 0.04)
+        };
+        let seg_hover: Hsla = if dark {
             hsla(0., 0., 1., 0.04)
         } else {
-            hsla(0., 0., 0., 0.03)
+            hsla(0., 0., 0., 0.025)
         };
 
         let var_sensor = pro_selection_sensor();
@@ -1476,6 +1672,8 @@ impl Render for TrendChart {
             .p(px(2.))
             .rounded(px(7.))
             .bg(track_bg)
+            .border_1()
+            .border_color(p.line)
             .flex()
             .items_center()
             .gap(px(2.))
@@ -1485,8 +1683,8 @@ impl Render for TrendChart {
                 var_sensor.clone(),
                 5.5,
                 pill_fill,
-                None,
-                false,
+                Some(pill_border),
+                !dark,
             ));
 
         for (v_opt, v_en, v_zh) in [
@@ -1513,6 +1711,9 @@ impl Render for TrendChart {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if selected { p.ink } else { p.text })
                     .cursor_pointer()
+                    .when(!selected, move |d| {
+                        d.hover(move |s| s.bg(seg_hover).text_color(p.ink))
+                    })
                     .when(selected, |d| d.child(pro_mark_selected(&var_sensor)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if this.variant != v_opt {
@@ -1531,6 +1732,8 @@ impl Render for TrendChart {
             .p(px(2.))
             .rounded(px(7.))
             .bg(track_bg)
+            .border_1()
+            .border_color(p.line)
             .flex()
             .items_center()
             .gap(px(2.))
@@ -1540,8 +1743,8 @@ impl Render for TrendChart {
                 rng_sensor.clone(),
                 5.5,
                 pill_fill,
-                None,
-                false,
+                Some(pill_border),
+                !dark,
             ));
 
         for (rid, rlbl) in [("7d", "7D"), ("30d", "30D")] {
@@ -1563,6 +1766,9 @@ impl Render for TrendChart {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if selected { p.ink } else { p.text })
                     .cursor_pointer()
+                    .when(!selected, move |d| {
+                        d.hover(move |s| s.bg(seg_hover).text_color(p.ink))
+                    })
                     .when(selected, |d| d.child(pro_mark_selected(&rng_sensor)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if this.showcase_range.as_ref() != rid {
@@ -1598,13 +1804,21 @@ impl Render for TrendChart {
             empty_text: empty_str.clone(),
             bounds_sink: self.plot_bounds[0].clone(),
         };
-        let main_plot = self.render_plot_widget(main_spec, card_bg, cx);
+        let main_plot = self.render_plot_widget(main_spec, card_bg, w, cx);
 
-        let (dbg, dfg): (Hsla, Hsla) = if dark {
-            (hsla(145. / 360., 0.46, 0.65, 0.14), rgb(0x5fc88a).into())
+        let delta_up = spend_delta >= 0.0;
+        let (dbg, dfg): (Hsla, Hsla) = if delta_up {
+            if dark {
+                (hsla(145. / 360., 0.46, 0.65, 0.14), rgb(0x5fc88a).into())
+            } else {
+                (hsla(145. / 360., 0.49, 0.58, 0.10), rgb(0x1e8a4f).into())
+            }
+        } else if dark {
+            (hsla(4. / 360., 1.0, 0.69, 0.14), rgb(0xff6b5f).into())
         } else {
-            (hsla(145. / 360., 0.49, 0.58, 0.10), rgb(0x1e8a4f).into())
+            (hsla(4. / 360., 0.86, 0.58, 0.09), rgb(0xf04438).into())
         };
+        let delta_sign = if delta_up { "+ " } else { "\u{2212} " };
 
         let main_card = div()
             .w_full()
@@ -1631,13 +1845,13 @@ impl Render for TrendChart {
                             .flex()
                             .flex_col()
                             .gap(px(2.))
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.text)
-                                    .child(tr(cx, "AI spend", "AI 支出")),
-                            )
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "sp-cap"),
+                                spend_caption,
+                                13.,
+                                FontWeight::MEDIUM,
+                                p.text,
+                            ))
                             .child(
                                 div()
                                     .flex()
@@ -1646,7 +1860,7 @@ impl Render for TrendChart {
                                     .child(pro_rolling_number(
                                         pro_eid(&self.id, "sp-tot"),
                                         spend_headline,
-                                        1,
+                                        spend_dec,
                                         "$",
                                         "k",
                                         24.,
@@ -1663,9 +1877,9 @@ impl Render for TrendChart {
                                             .items_center()
                                             .child(pro_rolling_number(
                                                 pro_eid(&self.id, "sp-dlt"),
-                                                spend_delta,
+                                                spend_delta.abs(),
                                                 1,
-                                                "+ ",
+                                                delta_sign,
                                                 "%",
                                                 12.,
                                                 FontWeight::MEDIUM,
@@ -1764,7 +1978,7 @@ impl Render for TrendChart {
                 empty_text: empty_str.clone(),
                 bounds_sink: self.plot_bounds[slot_i].clone(),
             };
-            let sub_plot = self.render_plot_widget(sub_spec, card_bg, cx);
+            let sub_plot = self.render_plot_widget(sub_spec, card_bg, w, cx);
             mini_row = mini_row.child(
                 div()
                     .flex_1()
@@ -1818,8 +2032,9 @@ impl Render for TrendChart {
 
 #[cfg(test)]
 mod tests {
-    use super::{TrendChart, TrendSeries, TrendVariant, compute_axis_domain};
-    use gpui::{AppContext, TestAppContext};
+    use super::{TrendChart, TrendSeries, TrendVariant, compute_axis_domain, sample_opt_series_at};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[test]
     fn axis_domain_supports_zero_anchor_and_zoomed_rates() {
@@ -1852,6 +2067,42 @@ mod tests {
             assert_eq!(c.active_index(), None);
             c.set_controlled_index(Some(2), cx);
             assert_eq!(c.active_index(), Some(2));
+        });
+    }
+
+    #[gpui::test]
+    fn showcase_variant_and_range_morph_without_collapsing(cx: &mut TestAppContext) {
+        assert_eq!(
+            sample_opt_series_at(&[Some(10.0), Some(20.0)], 0.5),
+            Some(15.0)
+        );
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (chart, w) = cx.add_window_view(|_, cx| TrendChart::new("trc-showcase", cx));
+        w.simulate_resize(size(px(600.), px(460.)));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            chart.update(app, |c, cx| {
+                c.variant = TrendVariant::Bar;
+                c.showcase_range = "30d".into();
+                c.set_hover_idx(Some(4), cx);
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(80));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let c = chart.read(app);
+            assert_eq!(c.active_index(), Some(4));
+            assert!(
+                c.plot_bounds[0]
+                    .get()
+                    .is_some_and(|b| b.size.height > px(100.))
+            );
         });
     }
 }

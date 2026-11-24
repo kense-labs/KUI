@@ -7,8 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_skeleton_bar, pro_spring_bar,
-        pro_spring_f32, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_progress_ring, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -18,7 +19,6 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
-use std::f32::consts::{FRAC_PI_2, TAU};
 use web_time::Instant;
 
 const ICON_MINIMIZE: &str = r#"<path d="M9.5 2.5v4h4M9.5 6.5l4.5-4.5M6.5 13.5v-4h-4M6.5 9.5 2 14" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>"#;
@@ -205,126 +205,6 @@ pub fn default_setup_groups(zh: bool) -> Vec<SetupGroup> {
             .with_open(false),
         ]
     }
-}
-
-/// Paint a `16x16` task indicator circle (filled + progressive check stroke, solid current ring, or dashed pending ring).
-#[allow(clippy::too_many_arguments)]
-fn render_task_checkbox(
-    id: ElementId,
-    done: bool,
-    is_next_current: bool,
-    accent: Hsla,
-    ring_col: Hsla,
-    faint_col: Hsla,
-    w: &mut Window,
-    cx: &mut App,
-) -> AnyElement {
-    let prog = pro_spring_f32(pro_eid(&id, "chk-draw"), f32::from(done), 0.28, w, cx).clamp(0., 1.);
-
-    canvas(
-        |_, _, _| (),
-        move |bounds, _, window, _| {
-            let center = bounds.center();
-            let side = f32::from(bounds.size.width).min(f32::from(bounds.size.height));
-            if side <= 2. {
-                return;
-            }
-
-            if prog > 0.01 {
-                let r = (side * 0.44) * (0.65 + 0.35 * prog);
-                let mut fill_circle = PathBuilder::fill();
-                let steps = 28usize;
-                for i in 0..=steps {
-                    let a = (i as f32 / steps as f32) * TAU;
-                    let pt = center + point(px(r * a.cos()), px(r * a.sin()));
-                    if i == 0 {
-                        fill_circle.move_to(pt);
-                    } else {
-                        fill_circle.line_to(pt);
-                    }
-                }
-                fill_circle.close();
-                if let Ok(path) = fill_circle.build() {
-                    window.paint_path(path, accent.opacity(prog));
-                }
-
-                // Draw two-segment check mark progressively along `prog`
-                let p0 = point(
-                    bounds.left() + px(side * 0.31),
-                    bounds.top() + px(side * 0.51),
-                );
-                let p1 = point(
-                    bounds.left() + px(side * 0.44),
-                    bounds.top() + px(side * 0.64),
-                );
-                let p2 = point(
-                    bounds.left() + px(side * 0.69),
-                    bounds.top() + px(side * 0.37),
-                );
-
-                let stroke_p = ((prog - 0.15) / 0.85).clamp(0., 1.);
-                if stroke_p > 0.01 {
-                    let mut chk = PathBuilder::stroke(px(1.5));
-                    chk.move_to(p0);
-                    let knee = 0.38;
-                    if stroke_p <= knee {
-                        let u = stroke_p / knee;
-                        chk.line_to(point(p0.x + (p1.x - p0.x) * u, p0.y + (p1.y - p0.y) * u));
-                    } else {
-                        chk.line_to(p1);
-                        let u = (stroke_p - knee) / (1. - knee);
-                        chk.line_to(point(p1.x + (p2.x - p1.x) * u, p1.y + (p2.y - p1.y) * u));
-                    }
-                    if let Ok(path) = chk.build() {
-                        window.paint_path(path, rgb(0xffffff).opacity(prog));
-                    }
-                }
-            }
-
-            if prog < 0.99 {
-                let inv = 1. - prog;
-                let r = side * 0.405;
-                if is_next_current {
-                    let mut ring = PathBuilder::stroke(px(1.15));
-                    let steps = 28usize;
-                    for i in 0..=steps {
-                        let a = (i as f32 / steps as f32) * TAU;
-                        let pt = center + point(px(r * a.cos()), px(r * a.sin()));
-                        if i == 0 {
-                            ring.move_to(pt);
-                        } else {
-                            ring.line_to(pt);
-                        }
-                    }
-                    if let Ok(path) = ring.build() {
-                        window.paint_path(path, ring_col.opacity(inv));
-                    }
-                } else {
-                    let dashes = 8usize;
-                    for d in 0..dashes {
-                        let a0 = (d as f32 / dashes as f32) * TAU - FRAC_PI_2;
-                        let a1 = a0 + (TAU / dashes as f32) * 0.52;
-                        let mut seg = PathBuilder::stroke(px(1.1));
-                        for k in 0..=4usize {
-                            let a = a0 + (a1 - a0) * (k as f32 / 4.);
-                            let pt = center + point(px(r * a.cos()), px(r * a.sin()));
-                            if k == 0 {
-                                seg.move_to(pt);
-                            } else {
-                                seg.line_to(pt);
-                            }
-                        }
-                        if let Ok(path) = seg.build() {
-                            window.paint_path(path, faint_col.opacity(inv));
-                        }
-                    }
-                }
-            }
-        },
-    )
-    .size(px(16.))
-    .flex_none()
-    .into_any_element()
 }
 
 /// Render single-line text with an animated left-to-right strikethrough line (`0.0..=1.0`).
@@ -680,44 +560,52 @@ impl Render for SetupGuide {
         if self.dismissed {
             let reopen_lbl: SharedString = tr(cx, "Reopen setup guide", "重新打开配置向导").into();
             let (done, total) = self.progress_counts();
+            let reopen_bg: Hsla = if p.dark {
+                rgb(0x1c1c1e).into()
+            } else {
+                rgb(0xffffff).into()
+            };
             return div()
                 .id(self.id.clone())
                 .w_full()
                 .flex()
                 .justify_center()
                 .child(
-                    div()
-                        .id(pro_eid(&self.id, "reopen-pill"))
-                        .role(Role::Button)
-                        .aria_label(reopen_lbl.clone())
-                        .tab_index(0)
-                        .h(px(34.))
-                        .px(px(12.))
-                        .rounded(px(8.))
-                        .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_sm()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .on_click(cx.listener(|v, _, _, cx| {
+                    pro_tactile(
+                        pro_eid(&self.id, "reopen-pill"),
+                        reopen_lbl.clone(),
+                        8.,
+                        reopen_bg,
+                        p.hover,
+                        p.line_strong,
+                        p.line_strong,
+                        false,
+                        div()
+                            .h(px(34.))
+                            .px(px(12.))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .whitespace_nowrap()
+                            .child(pro_icon(ProIcon::Tasks, 14., p.blue))
+                            .child(reopen_lbl)
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .text_color(p.muted)
+                                    .child(format!("{done}/{total}")),
+                            ),
+                        cx,
+                        |v, _, cx| {
                             v.dismissed = false;
                             cx.notify();
-                        }))
-                        .child(pro_icon(ProIcon::Tasks, 14., p.blue))
-                        .child(reopen_lbl)
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(p.muted)
-                                .child(format!("{done}/{total}")),
-                        ),
+                        },
+                    )
+                    .flex_none()
+                    .shadow_sm(),
                 )
                 .into_any_element();
         }
@@ -747,11 +635,6 @@ impl Render for SetupGuide {
         } else {
             rgba(0x0060e2c4).into()
         };
-        let ring_col: Hsla = if p.dark {
-            hsla(0., 0., 1., 0.28)
-        } else {
-            hsla(0., 0., 0., 0.22)
-        };
 
         let title_str: SharedString = self
             .title
@@ -774,6 +657,7 @@ impl Render for SetupGuide {
         };
         let edit_lbl: SharedString = tr(cx, "Edit", "编辑").into();
         let close_aria: SharedString = tr(cx, "Close setup guide", "关闭配置向导").into();
+        let is_min = self.minimized;
 
         let header = div()
             .pl(px(16.))
@@ -801,79 +685,79 @@ impl Render for SetupGuide {
                     .gap(px(2.))
                     .when(self.show_edit, |d| {
                         d.child(
-                            div()
-                                .id(pro_eid(&self.id, "edit-btn"))
-                                .role(Role::Button)
-                                .aria_label(edit_lbl.clone())
-                                .tab_index(0)
-                                .h(px(28.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .flex()
-                                .items_center()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.text)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|_, _, _, cx| {
+                            pro_tactile(
+                                pro_eid(&self.id, "edit-btn"),
+                                edit_lbl.clone(),
+                                6.,
+                                transparent_black(),
+                                p.hover,
+                                transparent_black(),
+                                transparent_black(),
+                                false,
+                                div()
+                                    .h(px(28.))
+                                    .px(px(8.))
+                                    .flex()
+                                    .items_center()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.text)
+                                    .whitespace_nowrap()
+                                    .child(edit_lbl),
+                                cx,
+                                |_, _, cx| {
                                     cx.emit(SetupGuideEvent::EditRequested);
-                                }))
-                                .child(edit_lbl),
+                                },
+                            )
+                            .flex_none(),
                         )
                     })
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "min-btn"))
-                            .role(Role::Button)
-                            .aria_label(min_aria)
-                            .tab_index(0)
-                            .size(px(28.))
-                            .rounded(px(6.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_click(cx.listener(|v, _, _, cx| {
-                                v.minimized = !v.minimized;
-                                cx.emit(SetupGuideEvent::Minimized(v.minimized));
-                                cx.notify();
-                            }))
-                            .child(pro_svg(
-                                "0 0 16 16",
-                                if self.minimized {
-                                    ICON_EXPAND
-                                } else {
-                                    ICON_MINIMIZE
-                                },
-                                15.,
-                                p.muted,
-                            )),
-                    )
-                    .when(self.show_close, |d| {
-                        d.child(
+                        pro_tactile(
+                            pro_eid(&self.id, "min-btn"),
+                            min_aria,
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            is_min,
                             div()
-                                .id(pro_eid(&self.id, "close-btn"))
-                                .role(Role::Button)
-                                .aria_label(close_aria)
-                                .tab_index(0)
                                 .size(px(28.))
-                                .rounded(px(6.))
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|v, _, _, cx| {
+                                .child(pro_svg(
+                                    "0 0 16 16",
+                                    if is_min { ICON_EXPAND } else { ICON_MINIMIZE },
+                                    15.,
+                                    p.muted,
+                                )),
+                            cx,
+                            |v, _, cx| {
+                                v.minimized = !v.minimized;
+                                cx.emit(SetupGuideEvent::Minimized(v.minimized));
+                                cx.notify();
+                            },
+                        )
+                        .flex_none(),
+                    )
+                    .when(self.show_close, |d| {
+                        d.child(
+                            pro_icon_btn(
+                                pro_eid(&self.id, "close-btn"),
+                                close_aria,
+                                ProIcon::Close,
+                                28.,
+                                false,
+                                cx,
+                                |v, _, cx| {
                                     v.dismissed = true;
                                     cx.emit(SetupGuideEvent::Dismissed);
                                     cx.notify();
-                                }))
-                                .child(pro_icon(ProIcon::Close, 15., p.muted)),
+                                },
+                            )
+                            .flex_none(),
                         )
                     }),
             );
@@ -899,14 +783,13 @@ impl Render for SetupGuide {
                 track_bg,
                 bar_fill,
             )))
-            .child(
-                div()
-                    .flex_none()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(if all_finished { p.green_ink } else { p.muted })
-                    .child(count_caption),
-            );
+            .child(div().flex_none().child(pro_swap_label(
+                pro_eid(&self.id, "overall-cnt-lbl"),
+                count_caption,
+                12.,
+                FontWeight::NORMAL,
+                if all_finished { p.green_ink } else { p.muted },
+            )));
 
         // Identify the very first incomplete task globally so its circle gets a solid current ring
         let mut first_incomplete: Option<(usize, usize)> = None;
@@ -947,6 +830,27 @@ impl Render for SetupGuide {
                 cx,
             );
 
+            let g_ratio_target = if g_total == 0 {
+                0.0
+            } else {
+                g_done as f32 / g_total as f32
+            };
+            let g_ratio = pro_spring_f32(
+                pro_eid(&self.id, format!("grp-ring-sp-{g_id}")),
+                g_ratio_target,
+                0.26,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            let g_ring = pro_progress_ring(
+                g_ratio,
+                14.,
+                1.8,
+                if g_complete { p.green } else { accent_col },
+                track_bg,
+            );
+
             let g_id_click = g_id.clone();
             let g_id_key = g_id.clone();
             let group_head = div()
@@ -965,6 +869,7 @@ impl Render for SetupGuide {
                 .justify_between()
                 .gap(px(8.))
                 .cursor_pointer()
+                .active(|s| s.top(px(0.75)))
                 .when(!g_open, move |d| d.hover(move |s| s.bg(p.hover)))
                 .focus_visible(move |s| s.border_1().border_color(p.focus))
                 .on_key_down(cx.listener(move |v, ev: &KeyDownEvent, w, cx| {
@@ -984,12 +889,14 @@ impl Render for SetupGuide {
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(p.muted)
-                                .child(format!("{g_done}/{g_total}")),
-                        )
+                        .child(g_ring)
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, format!("grp-cnt-{g_id}")),
+                            format!("{g_done}/{g_total}"),
+                            11.5,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        ))
                         .child(pro_icon(
                             if g_open {
                                 ProIcon::ChevronUp
@@ -1009,16 +916,26 @@ impl Render for SetupGuide {
                 let is_done = task.done;
                 let is_next = first_incomplete == Some((g_idx, t_idx));
 
-                let chk_el = render_task_checkbox(
-                    pro_eid(&self.id, format!("task-chk-{t_id}")),
-                    is_done,
-                    is_next,
-                    accent_col,
-                    ring_col,
-                    p.faint,
-                    w,
-                    cx,
-                );
+                let chk_el = div()
+                    .relative()
+                    .size(px(16.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(is_next && !is_done, |d| {
+                        d.rounded_full()
+                            .border_1()
+                            .border_color(accent_col.opacity(0.45))
+                    })
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("task-chk-{t_id}")),
+                        is_done,
+                        16.,
+                        false,
+                        accent_col,
+                    ))
+                    .into_any_element();
                 let title_el = render_strikethrough_label(
                     pro_eid(&self.id, format!("task-lbl-{t_id}")),
                     task.label.clone(),
@@ -1032,43 +949,48 @@ impl Render for SetupGuide {
                 );
 
                 let action_btn = task.action_label.clone().map(|act_lbl| {
+                    let act_rest_bg: Hsla = if is_done {
+                        transparent_black()
+                    } else if is_next {
+                        p.card
+                    } else {
+                        p.chip
+                    };
+                    let act_rest_bdr: Hsla = if is_next && !is_done {
+                        p.line_strong
+                    } else {
+                        p.line
+                    };
                     div()
-                        .id(pro_eid(&self.id, format!("task-act-{t_id}")))
-                        .role(Role::Button)
-                        .aria_label(act_lbl.clone())
-                        .tab_index(0)
-                        .h(px(23.))
-                        .px(px(7.5))
                         .flex_none()
-                        .rounded(px(5.))
-                        .bg(if is_done {
-                            transparent_black()
-                        } else if is_next {
-                            p.card
-                        } else {
-                            p.chip
-                        })
-                        .border_1()
-                        .border_color(if is_done {
-                            p.line
-                        } else if is_next {
-                            p.line_strong
-                        } else {
-                            p.line
-                        })
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(if is_done { p.muted } else { p.ink })
-                        .flex()
-                        .items_center()
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.chip_hover).text_color(p.strong))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(move |v, _, _, cx| {
-                            cx.stop_propagation();
-                            v.trigger_task_action(g_idx, t_idx, cx);
-                        }))
-                        .child(act_lbl)
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, format!("task-act-{t_id}")),
+                                act_lbl.clone(),
+                                5.,
+                                act_rest_bg,
+                                p.chip_hover,
+                                act_rest_bdr,
+                                p.line_strong,
+                                false,
+                                div()
+                                    .h(px(23.))
+                                    .px(px(7.5))
+                                    .flex()
+                                    .items_center()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(if is_done { p.muted } else { p.ink })
+                                    .whitespace_nowrap()
+                                    .child(act_lbl),
+                                cx,
+                                move |v, _, cx| {
+                                    v.trigger_task_action(g_idx, t_idx, cx);
+                                },
+                            )
+                            .flex_none(),
+                        )
                 });
 
                 tasks_list = tasks_list.child(
@@ -1087,6 +1009,7 @@ impl Render for SetupGuide {
                         .justify_between()
                         .gap(px(8.))
                         .cursor_pointer()
+                        .active(|s| s.top(px(0.75)))
                         .hover(move |s| s.bg(p.hover))
                         .focus_visible(move |s| s.border_1().border_color(p.focus))
                         .on_key_down(cx.listener(move |v, ev: &KeyDownEvent, w, cx| {

@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
-        pro_pill_indicator, pro_presence, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_bar, pro_switch, pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_switch, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -491,7 +492,7 @@ impl ModelPicker {
 }
 
 impl Render for ModelPicker {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let width = self.measured_width.get();
         let measure_cell = self.measured_width.clone();
@@ -569,37 +570,14 @@ impl Render for ModelPicker {
         let active_idx = self.inspected_idx.min(self.models.len().saturating_sub(1));
         let inspected_model = self.models.get(active_idx).cloned();
 
-        // Trigger button with crossfading model name + bulb indicator when extended thinking is on.
-        let trigger_btn = div()
-            .id(pro_eid(&self.id, "mdp-trigger"))
-            .role(Role::Button)
-            .aria_label(format!(
-                "Model: {}{}",
-                selected_model.name,
-                if self.thinking {
-                    ", Extended thinking on"
-                } else {
-                    ""
-                }
-            ))
-            .aria_expanded(self.open)
-            .tab_index(0)
+        // Trigger button with crossfading model name (`pro_tactile` + `pro_swap_label`) + bulb indicator.
+        let trigger_inner = div()
             .h(px(28.))
             .pl(px(6.))
             .pr(px(7.))
-            .rounded(px(6.))
-            .bg(if self.open {
-                p.hover
-            } else {
-                transparent_black()
-            })
-            .cursor_pointer()
             .flex()
             .items_center()
             .gap(px(6.))
-            .hover(move |s| s.bg(p.hover))
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
-            .on_click(cx.listener(|this, _, _, cx| this.toggle_open(cx)))
             .child(
                 if let Some(mark) = pro_app_artwork(&selected_model.provider, 15., cx) {
                     mark
@@ -607,14 +585,12 @@ impl Render for ModelPicker {
                     pro_app_tile(&selected_model.provider, 18., cx)
                 },
             )
-            .child(pro_view_transition(
-                pro_eid(&self.id, "trigger-name-vtx"),
-                selected_model.id.clone(),
-                div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if self.open { p.strong } else { p.text })
-                    .child(selected_model.name),
+            .child(pro_swap_label(
+                pro_eid(&self.id, "trigger-name-lbl"),
+                selected_model.name.clone(),
+                13.,
+                FontWeight::MEDIUM,
+                if self.open { p.strong } else { p.text },
             ))
             .when(self.thinking, |d| {
                 d.child(pro_svg("0 0 14 14", SVG_BULB, 14., p.blue))
@@ -628,6 +604,34 @@ impl Render for ModelPicker {
                 13.,
                 p.muted,
             ));
+
+        let trigger_btn = pro_tactile(
+            pro_eid(&self.id, "mdp-trigger"),
+            format!(
+                "Model: {}{}",
+                selected_model.name,
+                if self.thinking {
+                    ", Extended thinking on"
+                } else {
+                    ""
+                }
+            ),
+            6.,
+            if self.open {
+                p.hover
+            } else {
+                transparent_black()
+            },
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            self.open,
+            trigger_inner,
+            cx,
+            |this, _, cx| this.toggle_open(cx),
+        )
+        .flex_none()
+        .aria_expanded(self.open);
 
         let trigger_bar = if self.demo_chrome {
             div()
@@ -724,8 +728,23 @@ impl Render for ModelPicker {
                     )
                 });
 
-            // Model rows with spring capability bars (`pro_spring_bar`)
-            let mut rows_col = div().flex().flex_col().gap(px(2.));
+            // Model rows with liquid `pro_pill_indicator`, `pro_check_draw`, and `pro_spring_bar`
+            let row_sensor = pro_selection_sensor();
+            let mut rows_col =
+                div()
+                    .relative()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(pro_pill_indicator(
+                        pro_eid(&base_id, "mdp-row-pill"),
+                        format!("row-{active_idx}"),
+                        row_sensor.clone(),
+                        7.,
+                        p.chip,
+                        Some(p.line_soft),
+                        false,
+                    ));
             let track_col = if p.dark {
                 hsla(0., 0., 1., 0.08)
             } else {
@@ -743,6 +762,14 @@ impl Render for ModelPicker {
                 let dim_row = pointing && !is_lit;
                 let ent_hov = entity.clone();
                 let ent_clk = entity.clone();
+                let lit_t = pro_spring_f32(
+                    pro_eid(&base_id, format!("bar-lit-{mi}")),
+                    f32::from(is_lit),
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0., 1.);
 
                 let meters_el = if narrow {
                     div().into_any_element()
@@ -756,7 +783,7 @@ impl Render for ModelPicker {
                     };
                     let r_qual = ((f32::from(met.quality) / 5.0 + q_bonus).min(1.0)) * scale;
                     let r_cost = (f32::from(met.cost) / 5.0) * scale;
-                    let fill_c = if is_lit { p.blue } else { rest_fill };
+                    let fill_c = pro_mix_color(rest_fill, p.blue, lit_t);
 
                     div()
                         .flex_none()
@@ -806,17 +833,18 @@ impl Render for ModelPicker {
                         .aria_label(format!("{}, {}", m.name, m.description))
                         .aria_selected(is_selected)
                         .tab_index(0)
+                        .relative()
                         .min_h(px(44.))
                         .px(px(8.))
                         .py(px(6.))
                         .rounded(px(7.))
-                        .bg(if is_lit { p.chip } else { transparent_black() })
                         .when(dim_row, |d| d.opacity(0.62))
                         .cursor_pointer()
                         .flex()
                         .items_center()
                         .gap(px(9.))
                         .focus_visible(move |s| s.border_1().border_color(p.focus))
+                        .when(is_lit, |d| d.child(pro_mark_selected(&row_sensor)))
                         .on_hover(move |inside: &bool, _, app| {
                             ent_hov.update(app, |this, cx| {
                                 if *inside {
@@ -844,7 +872,7 @@ impl Render for ModelPicker {
                                     div()
                                         .flex()
                                         .items_center()
-                                        .gap(px(4.))
+                                        .gap(px(5.))
                                         .min_w_0()
                                         .child(
                                             div()
@@ -854,9 +882,20 @@ impl Render for ModelPicker {
                                                 .text_color(p.strong)
                                                 .child(m.name),
                                         )
-                                        .when(is_selected, |d| {
-                                            d.child(pro_icon(ProIcon::Check, 12., p.blue))
-                                        }),
+                                        .child(
+                                            div()
+                                                .w(px(if is_selected { 14. } else { 0. }))
+                                                .h(px(14.))
+                                                .flex_none()
+                                                .overflow_hidden()
+                                                .child(pro_check_draw(
+                                                    pro_eid(&base_id, format!("mdp-chk-{mi}")),
+                                                    is_selected,
+                                                    14.,
+                                                    false,
+                                                    p.blue,
+                                                )),
+                                        ),
                                 )
                                 .child(
                                     div()
@@ -1164,19 +1203,9 @@ impl Render for ModelPicker {
                 .child(tray)
                 .into_any_element()
         };
-        let menu_el = pro_presence(
-            pro_eid(&self.id, "mdp-menu"),
-            self.open,
-            0.20,
-            0.14,
-            move |amt| {
-                div()
-                    .w_full()
-                    .opacity(amt)
-                    .child(menu_body)
-                    .into_any_element()
-            },
-        );
+        let menu_el = pro_popover_presence(pro_eid(&self.id, "mdp-menu"), self.open, move || {
+            div().w_full().child(menu_body).into_any_element()
+        });
 
         let mut stack = div().w_full().max_w(px(368.)).flex().flex_col().gap(px(6.));
         if self.side == ModelMenuSide::Top {

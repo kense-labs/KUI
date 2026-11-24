@@ -6,9 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_mark_selected, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_f32, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -589,8 +590,10 @@ pub type CursorEntry = (SharedString, LiveCursor);
 struct GlidingPointerState {
     tx: f32,
     ty: f32,
+    dimmed: bool,
     x: Slide,
     y: Slide,
+    alpha: Slide,
 }
 
 #[derive(IntoElement)]
@@ -616,20 +619,33 @@ impl RenderOnce for GlidingPointer {
     fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
         let tx = self.target_x;
         let ty = self.target_y;
+        let init_dim = self.dimmed;
+        let init_alpha = if init_dim { 0.22 } else { 1.0 };
         let st = w.use_keyed_state(pro_eid(&self.id, "glide"), cx, |_, _| GlidingPointerState {
             tx,
             ty,
+            dimmed: init_dim,
             x: Slide::new(tx),
             y: Slide::new(ty),
+            alpha: Slide::snappy(init_alpha),
         });
-        let (cur_x, cur_y) = st.update(cx, |s, cx| {
+        let (cur_x, cur_y, ptr_alpha) = st.update(cx, |s, cx| {
             if (s.tx - tx).abs() > 0.4 || (s.ty - ty).abs() > 0.4 {
                 s.tx = tx;
                 s.ty = ty;
                 s.x.duration(tx, self.glide_secs, cx);
                 s.y.duration(ty, self.glide_secs, cx);
             }
-            (s.x.get(w, cx), s.y.get(w, cx))
+            if s.dimmed != self.dimmed {
+                s.dimmed = self.dimmed;
+                s.alpha
+                    .duration(if self.dimmed { 0.22 } else { 1.0 }, 0.20, cx);
+            }
+            (
+                s.x.get(w, cx),
+                s.y.get(w, cx),
+                s.alpha.get(w, cx).clamp(0.18, 1.0),
+            )
         });
 
         let flag_bg: Hsla = if self.dark {
@@ -715,7 +731,7 @@ impl RenderOnce for GlidingPointer {
             .absolute()
             .left(px(cur_x))
             .top(px(cur_y))
-            .opacity(if self.dimmed { 0.22 } else { 1.0 })
+            .opacity(ptr_alpha)
             .when(!self.free_handle, |d| {
                 d.child(
                     div()
@@ -819,6 +835,8 @@ pub struct AgentCursors {
     following: Option<SharedString>,
     hovered_agent: Option<SharedString>,
     open_suggestion: Option<SharedString>,
+    last_open_sug: Option<DocSuggestion>,
+    toast: Option<(SharedString, Instant)>,
     fixed_height: Option<f32>,
     live_demo: bool,
     loading: bool,
@@ -853,6 +871,8 @@ impl AgentCursors {
             following: None,
             hovered_agent: None,
             open_suggestion: None,
+            last_open_sug: None,
+            toast: None,
             fixed_height: None,
             live_demo: true,
             loading: false,
@@ -988,6 +1008,7 @@ impl AgentCursors {
         else {
             return false;
         };
+        self.last_open_sug = Some(found.clone());
         let (next_blocks, next_suggestions) =
             accept_suggestion(&self.blocks, &self.suggestions, suggestion_id);
         self.blocks = next_blocks;
@@ -995,6 +1016,10 @@ impl AgentCursors {
         if self.open_suggestion.as_deref() == Some(suggestion_id) {
             self.open_suggestion = None;
         }
+        self.toast = Some((
+            tr(cx, "Suggestion accepted", "已采纳修改建议").into(),
+            Instant::now(),
+        ));
         cx.emit(AgentCursorsEvent::AcceptSuggestion(found));
         cx.notify();
         true
@@ -1010,6 +1035,7 @@ impl AgentCursors {
             return false;
         };
         let removed = self.suggestions.remove(idx);
+        self.last_open_sug = Some(removed.clone());
         if self.open_suggestion.as_deref() == Some(suggestion_id) {
             self.open_suggestion = None;
         }
@@ -1031,6 +1057,14 @@ impl AgentCursors {
             self.suggestions = ns;
         }
         self.open_suggestion = None;
+        self.toast = Some((
+            format!(
+                "{count} {}",
+                tr(cx, "suggestions accepted", "处建议已全部采纳")
+            )
+            .into(),
+            Instant::now(),
+        ));
         cx.emit(AgentCursorsEvent::AcceptAll(count));
         cx.notify();
         count
@@ -1046,6 +1080,10 @@ impl AgentCursors {
             return false;
         };
         let removed = self.comments.remove(idx);
+        self.toast = Some((
+            tr(cx, "Comment resolved", "评论已标记已解决").into(),
+            Instant::now(),
+        ));
         cx.emit(AgentCursorsEvent::ResolveComment(removed));
         cx.notify();
         true
@@ -1137,6 +1175,8 @@ impl AgentCursors {
             let ag_col = self.agent_color(sug.agent.as_ref(), p);
             let is_open = self.open_suggestion.as_ref() == Some(&sug.id);
             let sug_id = sug.id.clone();
+            let sug_snap_key = sug.clone();
+            let sug_snap_click = sug.clone();
 
             // Live letter-by-letter typing for Coder's rollout patch while live_demo is active.
             let ins_full = sug.insert.as_ref();
@@ -1184,6 +1224,7 @@ impl AgentCursors {
                                 if this.open_suggestion.as_ref() == Some(&sug_id) {
                                     this.open_suggestion = None;
                                 } else {
+                                    this.last_open_sug = Some(sug_snap_key.clone());
                                     this.open_suggestion = Some(sug_id.clone());
                                 }
                                 cx.stop_propagation();
@@ -1201,6 +1242,7 @@ impl AgentCursors {
                         if this.open_suggestion.as_ref() == Some(&sug_id) {
                             this.open_suggestion = None;
                         } else {
+                            this.last_open_sug = Some(sug_snap_click.clone());
                             this.open_suggestion = Some(sug_id.clone());
                         }
                         cx.notify();
@@ -1264,18 +1306,23 @@ impl Render for AgentCursors {
         };
         let card_border = p.line;
 
-        // Top view tabs (Doc / Table)
+        // Top view tabs (Doc / Table) with 4-edge liquid pill indicator
         let tab_sensor = pro_selection_sensor();
         let active_tab_key = self.active_tab.clone();
-        let mut tabs_bar = div()
+        let mut tabs_track = div()
             .id(pro_eid(&self.id, "tabs"))
             .role(Role::TabList)
             .aria_label(tr(cx, "Views", "视图"))
-            .mb(px(6.0))
+            .h(px(32.0))
+            .p(px(2.0))
+            .rounded(px(8.0))
+            .bg(p.chip)
+            .border_1()
+            .border_color(p.line_soft)
             .relative()
             .flex()
             .items_center()
-            .gap(px(6.0))
+            .gap(px(2.0))
             .child(pro_pill_indicator(
                 pro_eid(&self.id, "tab-pill"),
                 active_tab_key.clone(),
@@ -1290,7 +1337,7 @@ impl Render for AgentCursors {
             let selected = self.active_tab == tab.id;
             let tid = tab.id.clone();
             let lbl = tab.text(cx).to_string();
-            tabs_bar = tabs_bar.child(
+            tabs_track = tabs_track.child(
                 div()
                     .id(pro_eid(&self.id, format!("tab-{tid}")))
                     .role(Role::Tab)
@@ -1299,9 +1346,8 @@ impl Render for AgentCursors {
                     .tab_index(if selected { 0 } else { -1 })
                     .relative()
                     .h(px(28.0))
-                    .px(px(10.0))
+                    .px(px(12.0))
                     .rounded(px(6.0))
-                    .when(!selected, |d| d.bg(p.chip))
                     .flex()
                     .items_center()
                     .text_size(px(13.0))
@@ -1321,11 +1367,14 @@ impl Render for AgentCursors {
                     .child(div().relative().child(lbl)),
             );
         }
+        let tabs_bar = div().mb(px(6.0)).flex().items_center().child(tabs_track);
 
         // Header bar inside the document sheet
         let total_cost: f64 = self.agents.iter().filter_map(|a| a.cost).sum();
         let sug_count = self.suggestions.len();
-        let sug_label = if sug_count == 1 {
+        let sug_label = if sug_count == 0 {
+            tr(cx, "All accepted", "已全部采纳").to_string()
+        } else if sug_count == 1 {
             tr(cx, "1 suggestion", "1 处建议").to_string()
         } else {
             format!("{} {}", sug_count, tr(cx, "suggestions", "处建议"))
@@ -1390,61 +1439,23 @@ impl Render for AgentCursors {
             .inset_0();
 
             let mark = self.render_agent_mark(&agent, 15.0, elapsed_ms, &p, cx);
-            people_row = people_row.child(
+            let tip_primary = p.primary;
+            let tip_on = p.on_primary;
+            let tip_pop =
                 div()
-                    .id(pro_eid(&self.id, format!("face-{aid}")))
-                    .role(Role::Button)
-                    .aria_label(aria)
-                    .aria_toggled(is_followed.into())
-                    .tab_index(0)
-                    .relative()
-                    .size(px(26.0))
-                    .rounded_full()
-                    .bg(if is_followed { tint_bg } else { card_bg })
-                    .border_1()
-                    .border_color(if is_followed { ag_col } else { p.line })
-                    .opacity(if present { 1.0 } else { 0.42 })
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_hover(cx.listener({
-                        let aid = aid.clone();
-                        move |this, inside: &bool, _, cx| {
-                            if *inside {
-                                this.hovered_agent = Some(aid.clone());
-                            } else if this.hovered_agent.as_ref() == Some(&aid) {
-                                this.hovered_agent = None;
-                            }
-                            cx.notify();
-                        }
-                    }))
-                    .on_key_down(cx.listener({
-                        let aid = aid.clone();
-                        move |this, ev: &KeyDownEvent, _, cx| {
-                            if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                                this.toggle_follow(aid.as_ref(), cx);
-                                cx.stop_propagation();
-                            }
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.toggle_follow(aid.as_ref(), cx);
-                    }))
-                    .child(arc_ring)
-                    .child(mark)
-                    .when(is_hovered, |d| {
-                        d.child(
+                    .absolute()
+                    .top(px(31.0))
+                    .right(px(-4.0))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, format!("face-tip-{aid}")),
+                        is_hovered,
+                        move || {
                             div()
-                                .absolute()
-                                .top(px(31.0))
-                                .right(px(-4.0))
                                 .px(px(8.0))
                                 .py(px(4.5))
                                 .rounded(px(6.0))
-                                .bg(p.primary)
-                                .text_color(p.on_primary)
+                                .bg(tip_primary)
+                                .text_color(tip_on)
                                 .shadow_md()
                                 .whitespace_nowrap()
                                 .flex()
@@ -1459,11 +1470,55 @@ impl Render for AgentCursors {
                                 .child(
                                     div()
                                         .text_size(px(11.0))
-                                        .text_color(p.on_primary.opacity(0.76))
+                                        .text_color(tip_on.opacity(0.76))
                                         .child(doing_tip),
-                                ),
-                        )
-                    }),
+                                )
+                                .into_any_element()
+                        },
+                    ));
+
+            let aid_click = aid.clone();
+            let aid_hover = aid.clone();
+            let ring_btn = pro_tactile(
+                pro_eid(&self.id, format!("face-{aid}")),
+                aria,
+                999.,
+                if is_followed { tint_bg } else { card_bg },
+                tint_bg,
+                if is_followed { ag_col } else { p.line },
+                ag_col,
+                is_followed,
+                div()
+                    .size(px(26.0))
+                    .relative()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(arc_ring)
+                    .child(mark),
+                cx,
+                move |this, _, cx| {
+                    this.toggle_follow(aid_click.as_ref(), cx);
+                },
+            )
+            .size(px(26.0))
+            .rounded_full()
+            .opacity(if present { 1.0 } else { 0.42 })
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_agent = Some(aid_hover.clone());
+                } else if this.hovered_agent.as_ref() == Some(&aid_hover) {
+                    this.hovered_agent = None;
+                }
+                cx.notify();
+            }));
+
+            people_row = people_row.child(
+                div()
+                    .relative()
+                    .size(px(26.0))
+                    .child(ring_btn)
+                    .child(tip_pop),
             );
         }
 
@@ -1497,10 +1552,25 @@ impl Render for AgentCursors {
                     .flex_none()
                     .flex()
                     .items_center()
-                    .gap(px(7.0))
+                    .gap(px(6.0))
                     .text_size(px(12.0))
                     .text_color(p.muted)
-                    .child(sug_label)
+                    .when(sug_count == 0, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, "accept-all-chk"),
+                            true,
+                            14.0,
+                            false,
+                            p.green,
+                        ))
+                    })
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "sug-count-lbl"),
+                        sug_label,
+                        12.0,
+                        FontWeight::NORMAL,
+                        if sug_count == 0 { p.green_ink } else { p.muted },
+                    ))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "total-cost"),
                         total_cost,
@@ -1662,6 +1732,7 @@ impl Render for AgentCursors {
 
         let mut sheet = div()
             .w_full()
+            .relative()
             .rounded(px(12.0))
             .bg(card_bg)
             .border_1()
@@ -1671,7 +1742,8 @@ impl Render for AgentCursors {
             .flex()
             .flex_col()
             .child(header)
-            .child(transitioned_body);
+            .child(transitioned_body)
+            .child(pro_toast_banner(self.toast.clone()));
 
         if let Some(h) = self.fixed_height {
             sheet = sheet.h(px(h));
@@ -2025,9 +2097,14 @@ impl AgentCursors {
             }
         }
 
-        // Open suggestion review popover card (when user clicked an inline suggestion)
-        let suggestion_popover = self.open_suggestion.as_ref().and_then(|sid| {
-            let sug = self.suggestions.iter().find(|s| &s.id == sid)?.clone();
+        // Open suggestion review popover card with bidirectional spring presence
+        let active_sug = self
+            .open_suggestion
+            .as_ref()
+            .and_then(|sid| self.suggestions.iter().find(|s| &s.id == sid).cloned());
+        let shown_sug = active_sug.clone().or_else(|| self.last_open_sug.clone());
+        let sug_is_open = active_sug.is_some();
+        let suggestion_popover = shown_sug.map(|sug| {
             let agent = self.agents.iter().find(|a| a.id == sug.agent).cloned();
             let ag_name = agent
                 .as_ref()
@@ -2048,110 +2125,117 @@ impl AgentCursors {
                 96.0
             };
 
-            Some(
-                div()
-                    .id(pro_eid(&self.id, "sug-popover"))
-                    .role(Role::Group)
-                    .aria_label(format!("{ag_name} {}", tr(cx, "suggestion", "修改建议")))
-                    .absolute()
-                    .right(px(28.0))
-                    .top(px(top_y))
-                    .w(px(264.0))
-                    .p(px(11.0))
-                    .rounded(px(10.0))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .shadow_lg()
-                    .flex()
-                    .flex_col()
-                    .gap(px(7.0))
-                    .child(
+            let close_btn = pro_icon_btn(
+                pro_eid(&self.id, "sug-pop-close"),
+                tr(cx, "Close", "关闭"),
+                ProIcon::Close,
+                22.0,
+                false,
+                cx,
+                |this, _, cx| {
+                    this.open_suggestion = None;
+                    cx.notify();
+                },
+            );
+            let rej_btn = pro_btn(
+                pro_eid(&self.id, "sug-reject"),
+                tr(cx, "Reject", "拒绝"),
+                None,
+                ProBtnStyle::Secondary,
+                true,
+                cx,
+                move |this, _, cx| {
+                    this.reject_one(sid_reject.as_ref(), cx);
+                },
+            );
+            let acc_btn = pro_btn(
+                pro_eid(&self.id, "sug-accept"),
+                tr(cx, "Accept", "采纳"),
+                Some(ProIcon::Check),
+                ProBtnStyle::Primary,
+                true,
+                cx,
+                move |this, _, cx| {
+                    this.accept_one(sid_accept.as_ref(), cx);
+                },
+            );
+            let aria_sug = format!("{ag_name} {}", tr(cx, "suggestion", "修改建议"));
+            let suggests_lbl = tr(cx, "suggests", "建议").to_string();
+            let pop_id = pro_eid(&self.id, "sug-popover");
+            let p_card = *p;
+
+            div()
+                .absolute()
+                .right(px(28.0))
+                .top(px(top_y))
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "sug-pop-pres"),
+                    sug_is_open,
+                    move || {
                         div()
+                            .id(pop_id)
+                            .role(Role::Group)
+                            .aria_label(aria_sug)
+                            .w(px(264.0))
+                            .p(px(11.0))
+                            .rounded(px(10.0))
+                            .bg(p_card.card)
+                            .border_1()
+                            .border_color(p_card.line_strong)
+                            .shadow_lg()
                             .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(6.0))
+                            .flex_col()
+                            .gap(px(7.0))
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
+                                    .justify_between()
                                     .gap(px(6.0))
-                                    .when_some(mark, |d, m| d.child(m))
                                     .child(
                                         div()
-                                            .text_size(px(12.5))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(p.ink)
-                                            .child(ag_name),
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(6.0))
+                                            .when_some(mark, |d, m| d.child(m))
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(p_card.ink)
+                                                    .child(ag_name),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.0))
+                                                    .text_color(p_card.muted)
+                                                    .child(suggests_lbl),
+                                            ),
                                     )
-                                    .child(
-                                        div()
-                                            .text_size(px(12.0))
-                                            .text_color(p.muted)
-                                            .child(tr(cx, "suggests", "建议")),
-                                    ),
+                                    .child(close_btn),
                             )
                             .child(
                                 div()
-                                    .id(pro_eid(&self.id, "sug-pop-close"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Close", "关闭"))
-                                    .tab_index(0)
-                                    .size(px(22.0))
-                                    .rounded(px(5.0))
+                                    .text_size(px(12.5))
+                                    .line_height(px(18.0))
+                                    .text_color(p_card.text)
+                                    .child(note),
+                            )
+                            .child(
+                                div()
                                     .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(p.hover))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.open_suggestion = None;
-                                        cx.notify();
-                                    }))
-                                    .child(pro_icon(ProIcon::Close, 12.0, p.muted)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .line_height(px(18.0))
-                            .text_color(p.text)
-                            .child(note),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_end()
-                            .gap(px(6.0))
-                            .pt(px(2.0))
-                            .child(pro_btn(
-                                pro_eid(&self.id, "sug-reject"),
-                                tr(cx, "Reject", "拒绝"),
-                                None,
-                                ProBtnStyle::Secondary,
-                                true,
-                                cx,
-                                move |this, _, cx| {
-                                    this.reject_one(sid_reject.as_ref(), cx);
-                                },
-                            ))
-                            .child(pro_btn(
-                                pro_eid(&self.id, "sug-accept"),
-                                tr(cx, "Accept", "采纳"),
-                                Some(ProIcon::Check),
-                                ProBtnStyle::Primary,
-                                true,
-                                cx,
-                                move |this, _, cx| {
-                                    this.accept_one(sid_accept.as_ref(), cx);
-                                },
-                            )),
-                    ),
-            )
+                                    .justify_end()
+                                    .gap(px(6.0))
+                                    .pt(px(2.0))
+                                    .child(rej_btn)
+                                    .child(acc_btn),
+                            )
+                            .into_any_element()
+                    },
+                ))
         });
 
-        // Margin comment pins & expandable cards
+        // Margin comment pins & expandable cards with bidirectional spring presence
         let mut comments_layer = div().absolute().inset_0();
         for comment in self.comments.clone() {
             let cid = comment.id.clone();
@@ -2160,7 +2244,10 @@ impl AgentCursors {
                 .as_ref()
                 .map(|a| a.label(cx).to_string())
                 .unwrap_or_else(|| comment.agent.to_string());
-            let mark = agent
+            let mark_open = agent
+                .as_ref()
+                .map(|a| self.render_agent_mark(a, 14.0, elapsed_ms, p, cx));
+            let mark_pin = agent
                 .as_ref()
                 .map(|a| self.render_agent_mark(a, 14.0, elapsed_ms, p, cx));
             let pin_bg: Hsla = if p.dark {
@@ -2181,208 +2268,234 @@ impl AgentCursors {
 
             let pin_x = (comment.x * 640.0).clamp(12.0, 420.0);
             let pin_y = comment.y;
+            let is_cmt_open = comment.open;
 
-            if comment.open {
-                let cid_toggle = cid.clone();
-                let cid_reply = cid.clone();
-                let cid_resolve = cid.clone();
-                let body_str = comment.body(cx).to_string();
-                let reply_count = comment.replies.len();
+            // Expanded comment card
+            let cid_toggle = cid.clone();
+            let cid_reply = cid.clone();
+            let cid_resolve = cid.clone();
+            let body_str = comment.body(cx).to_string();
+            let reply_count = comment.replies.len();
+            let latest_reply = comment.replies.last().cloned();
+            let cmt_from_aria = format!("{} {ag_name}", tr(cx, "Comment from", "评论来自"));
+            let now_lbl = tr(cx, "now", "刚刚").to_string();
+            let you_prefix = tr(cx, "You", "你").to_string();
 
-                comments_layer = comments_layer.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("cmt-open-{cid}")))
-                        .role(Role::Group)
-                        .aria_label(format!("{} {ag_name}", tr(cx, "Comment from", "评论来自")))
-                        .absolute()
-                        .right(px(16.0))
-                        .top(px(pin_y))
-                        .w(px(248.0))
-                        .p(px(10.0))
-                        .rounded(px(10.0))
-                        .bg(pin_bg)
-                        .border_1()
-                        .border_color(pin_soft)
-                        .shadow_lg()
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.0))
-                        .child(
+            let fold_btn = pro_tactile(
+                pro_eid(&self.id, format!("cmt-fold-{cid}")),
+                tr(cx, "Collapse comment", "收起评论"),
+                5.0,
+                transparent_black(),
+                pin_soft,
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .size(px(20.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_icon(ProIcon::Minus, 11.0, pin_ink.opacity(0.7))),
+                cx,
+                move |this, _, cx| {
+                    if let Some(c) = this.comments.iter_mut().find(|c| c.id == cid_toggle) {
+                        c.open = false;
+                        cx.notify();
+                    }
+                },
+            )
+            .size(px(20.0));
+
+            let reply_btn = pro_tactile(
+                pro_eid(&self.id, format!("cmt-reply-{cid}")),
+                tr(cx, "Reply to comment", "快速回复"),
+                6.0,
+                pin_soft,
+                pin_ink.opacity(0.18),
+                transparent_black(),
+                pin_ink.opacity(0.24),
+                false,
+                div()
+                    .h(px(28.0))
+                    .px(px(9.0))
+                    .flex()
+                    .items_center()
+                    .text_size(px(12.0))
+                    .text_color(pin_ink.opacity(0.78))
+                    .child(tr(cx, "Reply “Use Nov 3”…", "回复“统一用 Nov 3”…")),
+                cx,
+                move |this, _, cx| {
+                    let reply_txt = SharedString::from(tr(
+                        cx,
+                        "Use \"Nov 3\" everywhere",
+                        "统一采用 \"Nov 3\" 格式",
+                    ));
+                    if let Some(c) = this.comments.iter_mut().find(|c| c.id == cid_reply) {
+                        c.replies.push(reply_txt.clone());
+                        cx.emit(AgentCursorsEvent::ReplyComment {
+                            comment_id: cid_reply.clone(),
+                            text: reply_txt,
+                        });
+                        cx.notify();
+                    }
+                },
+            )
+            .flex_1()
+            .min_w_0();
+
+            let res_btn = pro_tactile(
+                pro_eid(&self.id, format!("cmt-res-{cid}")),
+                tr(cx, "Resolve comment", "标记评论已解决"),
+                6.0,
+                pin_ink,
+                p.green,
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .size(px(28.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("cmt-chk-{cid}")),
+                        true,
+                        15.0,
+                        false,
+                        p.green,
+                    )),
+                cx,
+                move |this, _, cx| {
+                    this.resolve_comment(cid_resolve.as_ref(), cx);
+                },
+            )
+            .size(px(28.0))
+            .flex_none();
+
+            let open_card_id = pro_eid(&self.id, format!("cmt-open-{cid}"));
+            let ag_name_open = ag_name.clone();
+            comments_layer =
+                comments_layer.child(div().absolute().right(px(16.0)).top(px(pin_y)).child(
+                    pro_popover_presence(
+                        pro_eid(&self.id, format!("cmt-open-pop-{cid}")),
+                        is_cmt_open,
+                        move || {
                             div()
+                                .id(open_card_id)
+                                .role(Role::Group)
+                                .aria_label(cmt_from_aria)
+                                .w(px(248.0))
+                                .p(px(10.0))
+                                .rounded(px(10.0))
+                                .bg(pin_bg)
+                                .border_1()
+                                .border_color(pin_soft)
+                                .shadow_lg()
                                 .flex()
-                                .items_center()
-                                .gap(px(6.0))
-                                .when_some(mark, |d, m| d.child(m))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(px(12.0))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(pin_ink)
-                                        .child(ag_name),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(11.0))
-                                        .text_color(pin_ink.opacity(0.52))
-                                        .child(tr(cx, "now", "刚刚")),
-                                )
-                                .child(
-                                    div()
-                                        .id(pro_eid(&self.id, format!("cmt-fold-{cid}")))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Collapse comment", "收起评论"))
-                                        .tab_index(0)
-                                        .size(px(20.0))
-                                        .rounded(px(5.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .hover(move |s| s.bg(pin_soft))
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            if let Some(c) = this
-                                                .comments
-                                                .iter_mut()
-                                                .find(|c| c.id == cid_toggle)
-                                            {
-                                                c.open = false;
-                                                cx.notify();
-                                            }
-                                        }))
-                                        .child(pro_icon(
-                                            ProIcon::Minus,
-                                            11.0,
-                                            pin_ink.opacity(0.7),
-                                        )),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.5))
-                                .line_height(px(18.5))
-                                .text_color(pin_ink.opacity(0.88))
-                                .child(body_str),
-                        )
-                        .when(reply_count > 0, |card| {
-                            let latest = comment.replies[reply_count - 1].clone();
-                            card.child(
-                                div()
-                                    .px(px(8.0))
-                                    .py(px(4.5))
-                                    .rounded(px(6.0))
-                                    .bg(pin_soft)
-                                    .text_size(px(11.5))
-                                    .text_color(pin_ink.opacity(0.85))
-                                    .child(format!("{}: {latest}", tr(cx, "You", "你"))),
-                            )
-                        })
-                        .child(
-                            div()
-                                .pt(px(2.0))
-                                .flex()
-                                .items_center()
+                                .flex_col()
                                 .gap(px(6.0))
                                 .child(
                                     div()
-                                        .id(pro_eid(&self.id, format!("cmt-reply-{cid}")))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Reply to comment", "快速回复"))
-                                        .tab_index(0)
-                                        .flex_1()
-                                        .h(px(28.0))
-                                        .px(px(9.0))
-                                        .rounded(px(6.0))
-                                        .bg(pin_soft)
                                         .flex()
                                         .items_center()
-                                        .text_size(px(12.0))
-                                        .text_color(pin_ink.opacity(0.75))
-                                        .cursor_pointer()
-                                        .hover(move |s| s.bg(pin_ink.opacity(0.18)))
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            let reply_txt = SharedString::from(tr(
-                                                cx,
-                                                "Use \"Nov 3\" everywhere",
-                                                "统一采用 \"Nov 3\" 格式",
-                                            ));
-                                            if let Some(c) =
-                                                this.comments.iter_mut().find(|c| c.id == cid_reply)
-                                            {
-                                                c.replies.push(reply_txt.clone());
-                                                cx.emit(AgentCursorsEvent::ReplyComment {
-                                                    comment_id: cid_reply.clone(),
-                                                    text: reply_txt,
-                                                });
-                                                cx.notify();
-                                            }
-                                        }))
-                                        .child(tr(cx, "Reply “Use Nov 3”…", "回复“统一用 Nov 3”…")),
+                                        .gap(px(6.0))
+                                        .when_some(mark_open, |d, m| d.child(m))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_size(px(12.0))
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(pin_ink)
+                                                .child(ag_name_open),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(11.0))
+                                                .text_color(pin_ink.opacity(0.52))
+                                                .child(now_lbl),
+                                        )
+                                        .child(fold_btn),
                                 )
                                 .child(
                                     div()
-                                        .id(pro_eid(&self.id, format!("cmt-res-{cid}")))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Resolve comment", "标记评论已解决"))
-                                        .tab_index(0)
-                                        .size(px(28.0))
-                                        .flex_none()
-                                        .rounded(px(6.0))
-                                        .bg(pin_ink)
+                                        .text_size(px(12.5))
+                                        .line_height(px(18.5))
+                                        .text_color(pin_ink.opacity(0.88))
+                                        .child(body_str),
+                                )
+                                .when(reply_count > 0, |card| {
+                                    if let Some(latest) = latest_reply {
+                                        card.child(
+                                            div()
+                                                .px(px(8.0))
+                                                .py(px(4.5))
+                                                .rounded(px(6.0))
+                                                .bg(pin_soft)
+                                                .text_size(px(11.5))
+                                                .text_color(pin_ink.opacity(0.85))
+                                                .child(format!("{you_prefix}: {latest}")),
+                                        )
+                                    } else {
+                                        card
+                                    }
+                                })
+                                .child(
+                                    div()
+                                        .pt(px(2.0))
                                         .flex()
                                         .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .hover(move |s| s.opacity(0.86))
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.resolve_comment(cid_resolve.as_ref(), cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::Check, 13.0, pin_bg)),
-                                ),
-                        ),
-                );
-            } else {
-                let cid_open = cid.clone();
-                let aria = format!(
-                    "{} {ag_name}: {}",
-                    tr(cx, "Comment from", "评论来自"),
-                    comment.body(cx)
-                );
-                comments_layer = comments_layer.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("cmt-pin-{cid}")))
-                        .role(Role::Button)
-                        .aria_label(aria)
-                        .aria_expanded(false)
-                        .tab_index(0)
-                        .absolute()
-                        .left(px(pin_x))
-                        .top(px(pin_y))
-                        .size(px(28.0))
-                        .rounded_tl(px(14.0))
-                        .rounded_tr(px(14.0))
-                        .rounded_br(px(14.0))
-                        .rounded_bl(px(3.0))
-                        .bg(pin_bg)
-                        .border_1()
-                        .border_color(pin_soft)
-                        .shadow_md()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(c) = this.comments.iter_mut().find(|c| c.id == cid_open) {
-                                c.open = true;
-                                cx.notify();
-                            }
-                        }))
-                        .when_some(mark, |d, m| d.child(m)),
-                );
-            }
+                                        .gap(px(6.0))
+                                        .child(reply_btn)
+                                        .child(res_btn),
+                                )
+                                .into_any_element()
+                        },
+                    ),
+                ));
+
+            // Collapsed comment pin
+            let cid_open = cid.clone();
+            let pin_aria = format!(
+                "{} {ag_name}: {}",
+                tr(cx, "Comment from", "评论来自"),
+                comment.body(cx)
+            );
+            let pin_btn = pro_tactile(
+                pro_eid(&self.id, format!("cmt-pin-{cid}")),
+                pin_aria,
+                14.0,
+                pin_bg,
+                pin_bg,
+                pin_soft,
+                p.blue,
+                false,
+                div()
+                    .size(px(28.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when_some(mark_pin, |d, m| d.child(m)),
+                cx,
+                move |this, _, cx| {
+                    if let Some(c) = this.comments.iter_mut().find(|c| c.id == cid_open) {
+                        c.open = true;
+                        cx.notify();
+                    }
+                },
+            )
+            .size(px(28.0))
+            .shadow_md();
+
+            comments_layer =
+                comments_layer.child(div().absolute().left(px(pin_x)).top(px(pin_y)).child(
+                    pro_popover_presence(
+                        pro_eid(&self.id, format!("cmt-pin-pop-{cid}")),
+                        !is_cmt_open,
+                        move || pin_btn.into_any_element(),
+                    ),
+                ));
         }
 
         // Gliding cursors layer

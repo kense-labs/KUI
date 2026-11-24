@@ -6,8 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_fold, pro_presence,
-        pro_skeleton_bar, pro_switch, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_icon_btn, pro_popover_presence, pro_presence, pro_skeleton_bar,
+        pro_swap_label, pro_switch, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
@@ -106,6 +107,7 @@ pub struct IntegrationSettings {
     key_revealed: bool,
     key_just_generated: bool,
     copied_at: Option<Instant>,
+    regenerated_at: Option<Instant>,
     gen_seq: u32,
     tz_open: bool,
     tz_query: String,
@@ -145,6 +147,7 @@ impl IntegrationSettings {
             key_revealed: false,
             key_just_generated: false,
             copied_at: None,
+            regenerated_at: None,
             gen_seq: 1,
             tz_open: false,
             tz_query: String::new(),
@@ -280,6 +283,7 @@ impl IntegrationSettings {
         self.draft.api_key = new_key.clone();
         self.key_revealed = true;
         self.key_just_generated = true;
+        self.regenerated_at = Some(Instant::now());
         if let Some(ed) = &self.key_editor {
             ed.update(cx, |e, cx| {
                 e.revealed = true;
@@ -566,7 +570,10 @@ impl Render for IntegrationSettings {
         let recently_copied = self
             .copied_at
             .is_some_and(|t0| t0.elapsed().as_secs_f32() < 1.8);
-        if recently_copied && !disabled_motion(cx) {
+        let recently_regenerated = self
+            .regenerated_at
+            .is_some_and(|t0| t0.elapsed().as_secs_f32() < 1.8);
+        if (recently_copied || recently_regenerated) && !disabled_motion(cx) {
             w.request_animation_frame();
         }
 
@@ -628,14 +635,13 @@ impl Render for IntegrationSettings {
                                 )
                             }),
                     )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(meta_line),
-                    ),
+                    .child(div().min_w_0().truncate().child(pro_swap_label(
+                        pro_eid(&self.id, "hdr-meta"),
+                        meta_line,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))),
             )
             .child(pro_switch(
                 pro_eid(&self.id, "master-switch"),
@@ -661,105 +667,183 @@ impl Render for IntegrationSettings {
             })
             .unwrap_or_else(|| div().flex_1().into_any_element());
 
-        let reveal_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "key-reveal"))
-                .role(Role::Button)
-                .aria_label(tr(
-                    cx,
-                    if self.key_revealed {
-                        "Hide API key"
-                    } else {
-                        "Reveal API key"
-                    },
-                    if self.key_revealed {
-                        "隐藏 API 密钥"
-                    } else {
-                        "显示 API 密钥"
-                    },
-                ))
-                .tab_index(0)
-                .size(px(28.))
-                .flex_none()
-                .rounded(px(6.))
-                .bg(if self.key_revealed {
-                    p.chip
+        let reveal_btn = pro_icon_btn(
+            pro_eid(&self.id, "key-reveal"),
+            tr(
+                cx,
+                if self.key_revealed {
+                    "Hide API key"
                 } else {
-                    transparent_black()
-                })
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(pro_icon(
-                    ProIcon::Eye,
-                    14.5,
-                    if self.key_revealed { p.ink } else { p.muted },
-                )),
+                    "Reveal API key"
+                },
+                if self.key_revealed {
+                    "隐藏 API 密钥"
+                } else {
+                    "显示 API 密钥"
+                },
+            ),
+            ProIcon::Eye,
+            28.,
+            self.key_revealed,
             cx,
             |this, _, cx| {
                 this.toggle_key_reveal(cx);
             },
-        );
+        )
+        .flex_none();
 
-        let copy_btn = activate(
+        let copy_lbl = if recently_copied {
+            tr(cx, "Copied", "已复制")
+        } else {
+            tr(cx, "Copy", "复制")
+        };
+        let copy_icon_slot = div()
+            .relative()
+            .size(px(14.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .opacity(if recently_copied { 0.0 } else { 1.0 })
+                    .child(pro_icon(ProIcon::Copy, 13.5, p.muted)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .opacity(if recently_copied { 1.0 } else { 0.0 })
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "key-copy-chk"),
+                        recently_copied,
+                        14.,
+                        false,
+                        p.green,
+                    )),
+            );
+
+        let copy_btn = pro_tactile(
+            pro_eid(&self.id, "key-copy"),
+            tr(cx, "Copy API key", "复制 API 密钥"),
+            6.,
+            if recently_copied {
+                p.green_soft
+            } else {
+                transparent_black()
+            },
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            recently_copied,
             div()
-                .id(pro_eid(&self.id, "key-copy"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Copy API key", "复制 API 密钥"))
-                .tab_index(0)
-                .size(px(28.))
-                .flex_none()
-                .rounded(px(6.))
+                .h(px(28.))
+                .px(px(8.))
                 .flex()
                 .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(if recently_copied {
-                    pro_icon(ProIcon::Check, 14.5, p.green)
-                } else {
-                    pro_icon(ProIcon::Copy, 14.5, p.muted)
-                }),
+                .gap(px(5.))
+                .whitespace_nowrap()
+                .child(copy_icon_slot)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "key-copy-lbl"),
+                    copy_lbl,
+                    12.,
+                    FontWeight::MEDIUM,
+                    if recently_copied { p.green_ink } else { p.text },
+                )),
             cx,
             |this, _, cx| {
                 this.copy_api_key(cx);
             },
-        );
+        )
+        .flex_none();
 
-        let regen_btn = activate(
+        let regen_lbl = if recently_regenerated {
+            tr(cx, "Regenerated", "已重新生成")
+        } else {
+            tr(cx, "Regenerate", "重新生成")
+        };
+        let regen_icon_slot = div()
+            .relative()
+            .size(px(14.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .opacity(if recently_regenerated { 0.0 } else { 1.0 })
+                    .child(pro_icon(ProIcon::KeyLock, 13.5, p.muted)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .opacity(if recently_regenerated { 1.0 } else { 0.0 })
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "key-regen-chk"),
+                        recently_regenerated,
+                        14.,
+                        false,
+                        p.green,
+                    )),
+            );
+
+        let regen_btn = pro_tactile(
+            pro_eid(&self.id, "key-regen"),
+            tr(cx, "Generate a new API key", "生成新的 API 密钥"),
+            6.,
+            if recently_regenerated {
+                p.green_soft
+            } else {
+                p.card
+            },
+            p.hover,
+            if recently_regenerated {
+                p.green.opacity(0.38)
+            } else {
+                p.line
+            },
+            p.line_strong,
+            recently_regenerated,
             div()
-                .id(pro_eid(&self.id, "key-regen"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Generate a new API key", "生成新的 API 密钥"))
-                .tab_index(0)
                 .h(px(28.))
                 .px(px(10.))
-                .flex_none()
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line)
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.strong)
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover).border_color(p.line_strong))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .child(pro_icon(ProIcon::KeyLock, 13.5, p.muted))
-                .child(tr(cx, "Regenerate", "重新生成")),
+                .whitespace_nowrap()
+                .child(regen_icon_slot)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "key-regen-lbl"),
+                    regen_lbl,
+                    12.5,
+                    FontWeight::MEDIUM,
+                    if recently_regenerated {
+                        p.green_ink
+                    } else {
+                        p.strong
+                    },
+                )),
             cx,
             |this, w, cx| {
                 this.generate_new_key(Some(w), cx);
             },
-        );
+        )
+        .flex_none();
 
+        let new_key_note = SharedString::from(tr(
+            cx,
+            "New key generated — copy it now and save changes to activate.",
+            "已生成新密钥——请立即复制并点击下方保存以生效。",
+        ));
+        let new_key_color = p.green_ink;
         let key_section = div()
             .w_full()
             .p(if narrow { px(14.) } else { px(16.) })
@@ -801,13 +885,19 @@ impl Render for IntegrationSettings {
                     .child(copy_btn)
                     .child(regen_btn),
             )
-            .when(self.key_just_generated, |d| {
-                d.child(div().text_size(px(12.)).text_color(p.green_ink).child(tr(
-                    cx,
-                    "New key generated — copy it now and save changes to activate.",
-                    "已生成新密钥——请立即复制并点击下方保存以生效。",
-                )))
-            });
+            .child(pro_fold(
+                pro_eid(&self.id, "new-key-fold"),
+                self.key_just_generated,
+                18.,
+                6.,
+                move || {
+                    div()
+                        .text_size(px(12.))
+                        .text_color(new_key_color)
+                        .child(new_key_note)
+                        .into_any_element()
+                },
+            ));
 
         let url_valid = self.is_url_valid();
         let url_ed_el = self
@@ -988,9 +1078,13 @@ impl Render for IntegrationSettings {
                         .cursor_pointer()
                         .hover(move |s| s.bg(p.hover))
                         .child(div().min_w_0().truncate().child(zone.clone()))
-                        .when(selected, |d| {
-                            d.child(pro_icon(ProIcon::Check, 13.5, p.blue))
-                        }),
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("tz-chk-{z_idx}")),
+                            selected,
+                            13.5,
+                            false,
+                            p.blue,
+                        )),
                     cx,
                     move |this, _, cx| {
                         this.select_time_zone(z_clone.clone(), cx);
@@ -1028,32 +1122,29 @@ impl Render for IntegrationSettings {
                     .text_color(p.ink)
                     .child(tr(cx, "Time zone", "同步时区")),
             )
-            .child(activate(
+            .child(pro_tactile(
+                pro_eid(&self.id, "tz-btn"),
+                format!(
+                    "{}: {}",
+                    tr(cx, "Time zone", "同步时区"),
+                    self.draft.time_zone
+                ),
+                8.,
+                p.card,
+                p.card,
+                if tz_open { p.line_strong } else { p.line },
+                p.line_strong,
+                tz_open,
                 div()
-                    .id(pro_eid(&self.id, "tz-btn"))
-                    .role(Role::Button)
-                    .aria_label(format!(
-                        "{}: {}",
-                        tr(cx, "Time zone", "同步时区"),
-                        self.draft.time_zone
-                    ))
-                    .tab_index(0)
                     .w_full()
                     .h(px(34.))
                     .px(px(10.))
-                    .rounded(px(8.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(if tz_open { p.line_strong } else { p.line })
                     .flex()
                     .items_center()
                     .justify_between()
                     .gap(px(8.))
                     .text_size(px(13.))
                     .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(p.line_strong))
-                    .focus_visible(move |s| s.border_color(p.focus))
                     .child(
                         div()
                             .min_w_0()
@@ -1061,12 +1152,13 @@ impl Render for IntegrationSettings {
                             .items_center()
                             .gap(px(7.))
                             .child(pro_icon(ProIcon::Clock, 15., p.muted))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(self.draft.time_zone.clone()),
-                            ),
+                            .child(div().min_w_0().truncate().child(pro_swap_label(
+                                pro_eid(&self.id, "tz-cur-lbl"),
+                                self.draft.time_zone.clone(),
+                                13.,
+                                FontWeight::NORMAL,
+                                p.ink,
+                            ))),
                     )
                     .child(pro_icon(
                         if tz_open {
@@ -1088,19 +1180,16 @@ impl Render for IntegrationSettings {
                     cx.notify();
                 },
             ))
-            .child(pro_presence(
+            .child(pro_popover_presence(
                 pro_eid(&self.id, "tz-pres"),
                 tz_open,
-                0.18,
-                0.14,
-                move |amt| {
+                move || {
                     div()
                         .occlude()
                         .absolute()
-                        .bottom(px(58. - 4. * (1. - amt)))
+                        .bottom(px(58.))
                         .left(px(16.))
                         .right(px(16.))
-                        .opacity(amt)
                         .child(tz_menu)
                         .into_any_element()
                 },
@@ -1135,57 +1224,50 @@ impl Render for IntegrationSettings {
             tr(cx, "Unsaved changes", "有未保存的更改")
         };
 
-        let discard_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "dirty-discard"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Discard changes", "放弃更改"))
-                .tab_index(0)
-                .h(px(28.))
-                .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line)
-                .flex()
-                .items_center()
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.strong)
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover).border_color(p.line_strong))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .child(tr(cx, "Discard", "放弃")),
+        let discard_btn = pro_btn(
+            pro_eid(&self.id, "dirty-discard"),
+            tr(cx, "Discard", "放弃"),
+            None,
+            ProBtnStyle::Secondary,
+            true,
             cx,
             |this, w, cx| {
                 this.discard_changes(Some(w), cx);
             },
         );
 
-        let save_btn = activate(
+        let save_btn = if can_save {
+            pro_btn(
+                pro_eid(&self.id, "dirty-save"),
+                tr(cx, "Save changes", "保存更改"),
+                None,
+                ProBtnStyle::Primary,
+                true,
+                cx,
+                |this, _, cx| {
+                    this.save_changes(cx);
+                },
+            )
+            .into_any_element()
+        } else {
             div()
                 .id(pro_eid(&self.id, "dirty-save"))
                 .role(Role::Button)
                 .aria_label(tr(cx, "Save changes", "保存更改"))
-                .tab_index(if can_save { 0 } else { -1 })
+                .tab_index(-1)
                 .h(px(28.))
                 .px(px(12.))
                 .rounded(px(6.))
                 .bg(p.primary)
-                .opacity(if can_save { 1.0 } else { 0.40 })
+                .opacity(0.40)
                 .flex()
                 .items_center()
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.on_primary)
-                .when(can_save, |d| d.cursor_pointer().hover(|s| s.opacity(0.90)))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(tr(cx, "Save changes", "保存更改")),
-            cx,
-            |this, _, cx| {
-                this.save_changes(cx);
-            },
-        );
+                .child(tr(cx, "Save changes", "保存更改"))
+                .into_any_element()
+        };
 
         let note_color = if !can_save && self.draft.enabled {
             p.red_ink

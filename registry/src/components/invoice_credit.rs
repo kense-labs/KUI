@@ -6,15 +6,17 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
+        pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::{UiLanguage, activate},
         editor::{EditEvent, Editor, InputMode},
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon},
+        pro_icons::{ProIcon, pro_app_artwork},
     },
 };
 use gpui::{prelude::*, *};
@@ -262,6 +264,112 @@ fn default_invoice_lines() -> Vec<InvoiceLine> {
     ]
 }
 
+#[derive(IntoElement)]
+struct AddedLineFold {
+    id: ElementId,
+    animate_in: bool,
+    content: AnyElement,
+}
+
+impl RenderOnce for AddedLineFold {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        if !self.animate_in {
+            return div()
+                .id(self.id)
+                .w_full()
+                .child(self.content)
+                .into_any_element();
+        }
+        let st = w.use_keyed_state(pro_eid(&self.id, "lfold"), cx, |_, inner_cx| {
+            let mut slide = Slide::new(0.);
+            slide.duration(1., 0.25, inner_cx);
+            (slide, Rc::new(Cell::new(px(38.))))
+        });
+        let (amt, h_cell) = st.update(cx, |s, cx| (s.0.get(w, cx).clamp(0., 1.), s.1.clone()));
+        let h = h_cell.get();
+        div()
+            .id(self.id)
+            .w_full()
+            .flex_none()
+            .when(amt < 0.998, |v| v.h(h * amt).overflow_hidden())
+            .opacity(amt)
+            .child(
+                div()
+                    .relative()
+                    .top(px(5. * (1. - amt)))
+                    .w_full()
+                    .flex_none()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(b) = bounds.first()
+                            && b.size.height > px(0.)
+                        {
+                            h_cell.set(b.size.height);
+                        }
+                    })
+                    .child(self.content),
+            )
+            .into_any_element()
+    }
+}
+
+type SheetClickCallback = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+#[derive(IntoElement)]
+struct BackSheetPeek {
+    id: ElementId,
+    aria: SharedString,
+    top: f32,
+    inset: f32,
+    rest_bg: Hsla,
+    hover_bg: Hsla,
+    border: Hsla,
+    on_click: SheetClickCallback,
+}
+
+impl RenderOnce for BackSheetPeek {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(pro_eid(&self.id, "peek-hov"), cx, |_, _| Slide::snappy(0.));
+        let hov = st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.));
+        let bg = pro_mix_color(self.rest_bg, self.hover_bg, hov);
+        let on_click = self.on_click;
+        div()
+            .id(self.id)
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .tab_index(-1)
+            .absolute()
+            .top(px(self.top - 2.5 * hov))
+            .left(px(self.inset))
+            .right(px(self.inset))
+            .h(px(48.))
+            .rounded(px(12.))
+            .bg(bg)
+            .border_1()
+            .border_color(self.border)
+            .cursor_pointer()
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.set(if *inside { 1. } else { 0. }, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_click(move |ev, w, cx| (on_click)(ev, w, cx))
+    }
+}
+
+fn addon_line_pool() -> [(&'static str, f64, f64); 4] {
+    [
+        ("Dedicated SSO & SCIM add-on", 1.0, 240.0),
+        ("Priority SLA support", 1.0, 350.0),
+        ("Webhook burst overage (per 10k)", 6.0, 18.0),
+        ("Warehouse sync connector", 1.0, 190.0),
+    ]
+}
+
 /// Stacked-paper `Invoice` and `Credit note` billing block with spring sheet swap and live rolling totals.
 pub struct InvoiceCreditBlock {
     id: ElementId,
@@ -276,6 +384,8 @@ pub struct InvoiceCreditBlock {
     currency: SharedString,
     lines: Vec<InvoiceLine>,
     credit_states: Vec<LineCreditState>,
+    added_line_ids: Vec<SharedString>,
+    addon_seq: usize,
     view: BillingSheetView,
     sheet_slide: Slide,
     issued: bool,
@@ -310,6 +420,8 @@ impl InvoiceCreditBlock {
             currency: "$".into(),
             lines,
             credit_states,
+            added_line_ids: Vec::new(),
+            addon_seq: 0,
             view: BillingSheetView::Invoice,
             sheet_slide: Slide::new(0.),
             issued: false,
@@ -652,6 +764,37 @@ impl InvoiceCreditBlock {
         self.empty
     }
 
+    fn append_addon_line(&mut self, cx: &mut Context<Self>) {
+        if self.issued {
+            return;
+        }
+        let pool = addon_line_pool();
+        let (name, qty, rate) = pool[self.addon_seq % pool.len()];
+        self.addon_seq += 1;
+        let lid: SharedString = format!("addon-{}", self.addon_seq).into();
+        let line = InvoiceLine::new(lid.clone(), name, qty, rate, 0.20).with_group("Add-ons");
+        let max_amt = line.subtotal().max(0.0);
+        self.added_line_ids.push(lid.clone());
+        self.lines.push(line);
+        self.credit_states.push(LineCreditState {
+            line_id: lid,
+            checked: true,
+            amount: max_amt,
+            max_amount: max_amt,
+            check_slide: Slide::new(1.),
+            editor: None,
+        });
+        self.toast = Some((
+            if UiLanguage::current(cx) == UiLanguage::Chinese {
+                format!("已新增明细项：{name}").into()
+            } else {
+                format!("Added line item · {name}").into()
+            },
+            Instant::now(),
+        ));
+        cx.notify();
+    }
+
     fn ensure_line_editors(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         let (_, _, decimals) = resolve_currency(&self.currency);
         for idx in 0..self.credit_states.len() {
@@ -832,7 +975,13 @@ impl InvoiceCreditBlock {
                             .gap(px(8.))
                             .text_size(px(12.))
                             .text_color(p.muted)
-                            .child(due_caption)
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "inv-due-caption-lbl"),
+                                due_caption,
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
                             .when(self.issued, |d| {
                                 d.child(
                                     div()
@@ -1050,61 +1199,86 @@ impl InvoiceCreditBlock {
                 "—".to_owned()
             };
 
-            table_rows = table_rows.child(
-                div()
-                    .min_h(px(36.))
-                    .py(px(7.))
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .text_size(px(13.))
-                    .child(
+            let is_added = self.added_line_ids.contains(&line.id);
+            let row_el = div()
+                .min_h(px(36.))
+                .py(px(7.))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .text_size(px(13.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .when(indented, |d| d.pl(px(14.)))
+                        .text_color(p.ink)
+                        .truncate()
+                        .child(line.name.clone()),
+                )
+                .child(
+                    div()
+                        .w(px(58.))
+                        .flex_none()
+                        .text_right()
+                        .text_color(p.text)
+                        .child(format_qty(line.qty)),
+                )
+                .when(!compact, |d| {
+                    d.child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .when(indented, |d| d.pl(px(14.)))
-                            .text_color(p.ink)
-                            .truncate()
-                            .child(line.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .w(px(58.))
+                            .w(px(76.))
                             .flex_none()
                             .text_right()
                             .text_color(p.text)
-                            .child(format_qty(line.qty)),
+                            .child(rate_str),
                     )
-                    .when(!compact, |d| {
-                        d.child(
-                            div()
-                                .w(px(76.))
-                                .flex_none()
-                                .text_right()
-                                .text_color(p.text)
-                                .child(rate_str),
-                        )
-                        .child(
-                            div()
-                                .w(px(48.))
-                                .flex_none()
-                                .text_right()
-                                .text_color(p.muted)
-                                .child(tax_pct),
-                        )
-                    })
                     .child(
                         div()
-                            .w(px(86.))
+                            .w(px(48.))
                             .flex_none()
                             .text_right()
-                            .text_color(p.ink)
-                            .child(amt_str),
-                    ),
-            );
+                            .text_color(p.muted)
+                            .child(tax_pct),
+                    )
+                })
+                .child(
+                    div()
+                        .w(px(86.))
+                        .flex_none()
+                        .text_right()
+                        .text_color(p.ink)
+                        .child(amt_str),
+                );
+            table_rows = table_rows.child(AddedLineFold {
+                id: pro_eid(&self.id, format!("inv-line-{}", line.id)),
+                animate_in: is_added,
+                content: row_el.into_any_element(),
+            });
         }
 
-        // Totals block right-aligned
+        let add_line_row = if !self.issued {
+            Some(div().mt(px(6.)).flex().child(pro_btn(
+                pro_eid(&self.id, "inv-add-line"),
+                tr(cx, "Add line item", "添加明细行"),
+                Some(ProIcon::Plus),
+                ProBtnStyle::Ghost,
+                true,
+                cx,
+                |this, _, cx| {
+                    this.append_addon_line(cx);
+                },
+            )))
+        } else {
+            None
+        };
+
+        // Totals block right-aligned (rolling numbers when line items or applied credits change)
+        let credit_no_lbl = format!("{} ({})", tr(cx, "Credit note", "贷项冲抵"), self.credit_no);
+        let cred_prefix = format!("-{sym}");
+        let green_ink = p.green_ink;
+        let base_id_cred = self.id.clone();
+
         let totals = div()
             .mt(px(16.))
             .ml_auto()
@@ -1117,24 +1291,36 @@ impl InvoiceCreditBlock {
             .child(
                 div()
                     .flex()
+                    .items_center()
                     .justify_between()
                     .child(div().text_color(p.muted).child(tr(cx, "Subtotal", "小计")))
-                    .child(
-                        div()
-                            .text_color(p.ink)
-                            .child(format_money(inv_sub, sym, decimals)),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "inv-roll-sub"),
+                        inv_sub,
+                        decimals,
+                        sym,
+                        "",
+                        13.,
+                        FontWeight::NORMAL,
+                        p.ink,
+                    )),
             )
             .child(
                 div()
                     .flex()
+                    .items_center()
                     .justify_between()
                     .child(div().text_color(p.muted).child(tr(cx, "Tax", "税额")))
-                    .child(
-                        div()
-                            .text_color(p.ink)
-                            .child(format_money(inv_tax, sym, decimals)),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "inv-roll-tax"),
+                        inv_tax,
+                        decimals,
+                        sym,
+                        "",
+                        13.,
+                        FontWeight::NORMAL,
+                        p.ink,
+                    )),
             )
             .child(
                 div()
@@ -1143,6 +1329,7 @@ impl InvoiceCreditBlock {
                     .border_t_1()
                     .border_color(p.line)
                     .flex()
+                    .items_center()
                     .justify_between()
                     .child(
                         div()
@@ -1150,33 +1337,43 @@ impl InvoiceCreditBlock {
                             .text_color(p.ink)
                             .child(tr(cx, "Total", "合计")),
                     )
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .child(format_money(inv_total, sym, decimals)),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "inv-roll-total"),
+                        inv_total,
+                        decimals,
+                        sym,
+                        "",
+                        13.,
+                        FontWeight::MEDIUM,
+                        p.strong,
+                    )),
             )
-            .when(self.issued, |d| {
-                d.child(
+            .child(pro_fold(
+                pro_eid(&self.id, "inv-cred-fold"),
+                self.issued,
+                24.,
+                0.,
+                move || {
                     div()
                         .pt(px(4.))
                         .flex()
+                        .items_center()
                         .justify_between()
                         .text_size(px(12.))
-                        .child(div().text_color(p.green_ink).child(format!(
-                            "{} ({})",
-                            tr(cx, "Credit note", "贷项冲抵"),
-                            self.credit_no
-                        )))
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.green_ink)
-                                .child(format!("-{}", format_money(cred_total, sym, decimals))),
-                        ),
-                )
-            });
+                        .child(div().text_color(green_ink).child(credit_no_lbl))
+                        .child(pro_rolling_number(
+                            pro_eid(&base_id_cred, "inv-roll-cred"),
+                            cred_total,
+                            decimals,
+                            cred_prefix,
+                            "",
+                            12.,
+                            FontWeight::MEDIUM,
+                            green_ink,
+                        ))
+                        .into_any_element()
+                },
+            ));
 
         div()
             .flex()
@@ -1186,6 +1383,7 @@ impl InvoiceCreditBlock {
             .child(terms_block)
             .child(table_head)
             .child(table_rows)
+            .when_some(add_line_row, |d, row| d.child(row))
             .child(totals)
     }
 
@@ -1275,13 +1473,13 @@ impl InvoiceCreditBlock {
                                 )
                             }),
                     )
-                    .child(
-                        div()
-                            .mt(px(4.))
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(status_line),
-                    ),
+                    .child(div().mt(px(4.)).child(pro_swap_label(
+                        pro_eid(&self.id, "cn-status-lbl"),
+                        status_line,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))),
             )
             .child(self.render_seller_brand(&p, cx));
 
@@ -1393,40 +1591,48 @@ impl InvoiceCreditBlock {
             let max_amt = st.max_amount;
             let ed_click = st.editor.clone();
             let issued = self.issued;
+            let is_added = self.added_line_ids.contains(&line.id);
 
-            let checkbox_bg = pro_mix_color(p.card, p.accent_info, check_t);
-            let checkbox_border = pro_mix_color(p.line_strong, p.accent_info, check_t);
-
-            let checkbox = activate(
+            let chk_draw = pro_check_draw(
+                pro_eid(&self.id, format!("chk-draw-{}", st.line_id)),
+                checked,
+                16.,
+                true,
+                p.accent_info,
+            );
+            let checkbox = if issued {
                 div()
                     .id(pro_eid(&self.id, format!("chk-{}", st.line_id)))
-                    .role(Role::CheckBox)
-                    .aria_label(format!("Credit {}", line.name))
-                    .aria_toggled(checked.into())
-                    .tab_index(if issued { -1 } else { 0 })
                     .size(px(16.))
-                    .rounded(px(4.))
-                    .bg(checkbox_bg)
-                    .border_1()
-                    .border_color(checkbox_border)
                     .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .when(!issued, |d| d.cursor_pointer())
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .when(check_t > 0.05, |d| {
-                        d.child(div().opacity(check_t).child(pro_icon(
-                            ProIcon::Check,
-                            11.5,
-                            rgb(0xffffff).into(),
-                        )))
-                    }),
-                cx,
-                move |this, w, cx| {
-                    this.toggle_credit_line(&lid_chk, Some(w), cx);
-                },
-            );
+                    .child(chk_draw)
+                    .into_any_element()
+            } else {
+                pro_tactile(
+                    pro_eid(&self.id, format!("chk-{}", st.line_id)),
+                    format!("Credit {}", line.name),
+                    5.,
+                    transparent_black(),
+                    transparent_black(),
+                    transparent_black(),
+                    transparent_black(),
+                    checked,
+                    div()
+                        .size(px(20.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(chk_draw),
+                    cx,
+                    move |this, w, cx| {
+                        this.toggle_credit_line(&lid_chk, Some(w), cx);
+                    },
+                )
+                .flex_none()
+                .into_any_element()
+            };
+
+            let row_alpha = 0.45 + 0.55 * check_t;
 
             let amount_box = if issued {
                 div()
@@ -1456,26 +1662,17 @@ impl InvoiceCreditBlock {
                     .bg(p.chip)
                     .border_1()
                     .border_color(p.line)
-                    .opacity(if checked { 1.0 } else { 0.55 })
+                    .opacity(0.55 + 0.45 * check_t)
                     .flex_none()
                     .flex()
                     .items_center()
                     .gap(px(3.))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("step-dec-{}", st.line_id)))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Decrease credit amount", "减少冲抵金额"))
-                            .tab_index(0)
-                            .size(px(20.))
-                            .rounded(px(4.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .child(pro_icon(ProIcon::Minus, 11., p.muted)),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, format!("step-dec-{}", st.line_id)),
+                        tr(cx, "Decrease credit amount", "减少冲抵金额"),
+                        ProIcon::Minus,
+                        20.,
+                        false,
                         cx,
                         move |this, w, cx| {
                             let next = (cur_amt - step).max(0.0);
@@ -1512,21 +1709,12 @@ impl InvoiceCreditBlock {
                                 )
                             }),
                     )
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("step-inc-{}", st.line_id)))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Increase credit amount", "增加冲抵金额"))
-                            .tab_index(0)
-                            .size(px(20.))
-                            .rounded(px(4.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .child(pro_icon(ProIcon::Plus, 11., p.muted)),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, format!("step-inc-{}", st.line_id)),
+                        tr(cx, "Increase credit amount", "增加冲抵金额"),
+                        ProIcon::Plus,
+                        20.,
+                        false,
                         cx,
                         move |this, w, cx| {
                             let next = (cur_amt + step).min(max_amt);
@@ -1536,39 +1724,59 @@ impl InvoiceCreditBlock {
                     .into_any_element()
             };
 
-            tray_rows = tray_rows.child(
-                div()
-                    .min_h(px(42.))
-                    .py(px(5.))
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .child(checkbox)
-                    .child(
+            let row_el = div()
+                .min_h(px(42.))
+                .py(px(5.))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(checkbox)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .opacity(row_alpha)
+                        .text_size(px(13.))
+                        .text_color(p.ink)
+                        .truncate()
+                        .child(line.name.clone()),
+                )
+                .when(!compact, |d| {
+                    d.child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .opacity(if checked { 1.0 } else { 0.45 })
+                            .w(px(88.))
+                            .flex_none()
+                            .opacity(row_alpha)
+                            .text_right()
                             .text_size(px(13.))
-                            .text_color(p.ink)
-                            .truncate()
-                            .child(line.name.clone()),
+                            .text_color(p.text)
+                            .child(format_money(line.subtotal(), sym, decimals)),
                     )
-                    .when(!compact, |d| {
-                        d.child(
-                            div()
-                                .w(px(88.))
-                                .flex_none()
-                                .opacity(if checked { 1.0 } else { 0.45 })
-                                .text_right()
-                                .text_size(px(13.))
-                                .text_color(p.text)
-                                .child(format_money(line.subtotal(), sym, decimals)),
-                        )
-                    })
-                    .child(amount_box),
-            );
+                })
+                .child(amount_box);
+
+            tray_rows = tray_rows.child(AddedLineFold {
+                id: pro_eid(&self.id, format!("cn-line-{}", st.line_id)),
+                animate_in: is_added,
+                content: row_el.into_any_element(),
+            });
         }
+
+        let cn_add_line = if !self.issued {
+            Some(div().mt(px(4.)).flex().child(pro_btn(
+                pro_eid(&self.id, "cn-add-line"),
+                tr(cx, "Add line item", "添加明细行"),
+                Some(ProIcon::Plus),
+                ProBtnStyle::Ghost,
+                true,
+                cx,
+                |this, _, cx| {
+                    this.append_addon_line(cx);
+                },
+            )))
+        } else {
+            None
+        };
 
         let tray = div()
             .flex()
@@ -1582,7 +1790,8 @@ impl InvoiceCreditBlock {
                     .child(tr(cx, "LINES TO CREDIT", "冲抵明细行")),
             )
             .child(tray_head)
-            .child(tray_rows);
+            .child(tray_rows)
+            .when_some(cn_add_line, |d, btn| d.child(btn));
 
         // Live rolling Credit Note totals
         let adj_prefix = if cred_total > 0.000_5 {
@@ -1697,28 +1906,12 @@ impl InvoiceCreditBlock {
                 .items_center()
                 .justify_end()
                 .gap(px(8.))
-                .child(activate(
-                    div()
-                        .id(pro_eid(&self.id, "undo-credit-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Undo credit note", "撤回并重新编辑"))
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(12.))
-                        .rounded(px(6.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .hover(move |s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .cursor_pointer()
-                        .child(pro_icon(ProIcon::Undo, 13.5, p.muted))
-                        .child(tr(cx, "Edit credit note", "撤回并修改")),
+                .child(pro_btn(
+                    pro_eid(&self.id, "undo-credit-btn"),
+                    tr(cx, "Edit credit note", "撤回并修改"),
+                    Some(ProIcon::Undo),
+                    ProBtnStyle::Secondary,
+                    true,
                     cx,
                     |this, _, cx| {
                         this.undo_credit_note(cx);
@@ -1730,6 +1923,56 @@ impl InvoiceCreditBlock {
                 .credit_states
                 .iter()
                 .any(|s| !s.checked || (s.amount - s.max_amount).abs() > 0.005);
+            let reset_btn = pro_btn(
+                pro_eid(&self.id, "reset-credit-lines"),
+                tr(cx, "Reset full amount", "恢复全额"),
+                None,
+                ProBtnStyle::Ghost,
+                true,
+                cx,
+                move |this, w, cx| {
+                    for st in &mut this.credit_states {
+                        st.checked = true;
+                        st.amount = st.max_amount;
+                        st.check_slide.duration(1., 0.20, cx);
+                        if let Some(ed) = &st.editor {
+                            let full = format!("{:.dec_reset$}", st.max_amount);
+                            ed.update(cx, |e, cx| e.set_value(full, w, cx));
+                        }
+                    }
+                    cx.notify();
+                },
+            );
+
+            let issue_btn = if can_issue {
+                pro_btn(
+                    pro_eid(&self.id, "issue-credit-btn"),
+                    tr(cx, "Issue credit note", "签发贷项通知单"),
+                    Some(ProIcon::Check),
+                    ProBtnStyle::Primary,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.issue_credit_note(cx);
+                    },
+                )
+                .into_any_element()
+            } else {
+                div()
+                    .id(pro_eid(&self.id, "issue-credit-btn"))
+                    .h(px(28.))
+                    .px(px(12.))
+                    .rounded(px(7.))
+                    .bg(p.primary)
+                    .text_color(p.on_primary)
+                    .opacity(0.40)
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .flex()
+                    .items_center()
+                    .child(tr(cx, "Issue credit note", "签发贷项通知单"))
+                    .into_any_element()
+            };
 
             div()
                 .mt(px(22.))
@@ -1737,62 +1980,12 @@ impl InvoiceCreditBlock {
                 .items_center()
                 .justify_end()
                 .gap(px(8.))
-                .when(needs_reset, |d| {
-                    d.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "reset-credit-lines"))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .cursor_pointer()
-                            .child(tr(cx, "Reset full amount", "恢复全额")),
-                        cx,
-                        move |this, w, cx| {
-                            for st in &mut this.credit_states {
-                                st.checked = true;
-                                st.amount = st.max_amount;
-                                st.check_slide.duration(1., 0.20, cx);
-                                if let Some(ed) = &st.editor {
-                                    let full = format!("{:.dec_reset$}", st.max_amount);
-                                    ed.update(cx, |e, cx| e.set_value(full, w, cx));
-                                }
-                            }
-                            cx.notify();
-                        },
-                    ))
-                })
-                .child(activate(
-                    div()
-                        .id(pro_eid(&self.id, "issue-credit-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Issue credit note", "签发贷项通知单"))
-                        .tab_index(if can_issue { 0 } else { -1 })
-                        .h(px(28.))
-                        .px(px(12.))
-                        .rounded(px(6.))
-                        .bg(p.primary)
-                        .text_color(p.on_primary)
-                        .opacity(if can_issue { 1.0 } else { 0.35 })
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .flex()
-                        .items_center()
-                        .when(can_issue, |d| d.cursor_pointer())
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .child(tr(cx, "Issue credit note", "签发贷项通知单")),
-                    cx,
-                    |this, _, cx| {
-                        this.issue_credit_note(cx);
-                    },
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "reset-credit-pres"),
+                    needs_reset,
+                    move || reset_btn.into_any_element(),
                 ))
+                .child(issue_btn)
         };
 
         div()
@@ -1961,54 +2154,44 @@ impl Render for InvoiceCreditBlock {
             ),
         ] {
             let active = self.view == v_kind;
-            seg = seg.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("doc-tab-{}", v_kind.key())))
-                    .role(Role::Tab)
-                    .aria_selected(active)
-                    .tab_index(if active { 0 } else { -1 })
-                    .h(px(28.))
-                    .px(px(if ultra_compact { 9. } else { 12. }))
-                    .relative()
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if active { p.ink } else { p.text })
-                    .cursor_pointer()
-                    .when(active, |d| d.child(pro_mark_selected(&seg_sensor)))
-                    .child(lbl),
-                cx,
-                move |this, _, cx| {
-                    this.set_view(v_kind, cx);
-                },
-            ));
+            seg = seg.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("doc-tab-{}", v_kind.key())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    div()
+                        .h(px(28.))
+                        .px(px(if ultra_compact { 9. } else { 12. }))
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if active { p.ink } else { p.text })
+                        .child(lbl),
+                    cx,
+                    move |this, _, cx| {
+                        this.set_view(v_kind, cx);
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(active, |d| d.child(pro_mark_selected(&seg_sensor))),
+            );
         }
 
         let cur_view = self.view;
-        let pdf_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "pdf-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Download PDF", "导出 PDF"))
-                .tab_index(0)
-                .h(px(28.))
-                .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .hover(move |s| s.bg(p.chip_hover))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.strong)
-                .cursor_pointer()
-                .child(pro_icon(ProIcon::Download, 13.5, p.text))
-                .child("PDF"),
+        let pdf_btn = pro_btn(
+            pro_eid(&self.id, "pdf-btn"),
+            "PDF",
+            Some(ProIcon::Download),
+            ProBtnStyle::Secondary,
+            true,
             cx,
             move |this, _, cx| {
                 this.toast = Some((
@@ -2020,67 +2203,33 @@ impl Render for InvoiceCreditBlock {
             },
         );
 
-        let flip_btn = match self.view {
-            BillingSheetView::Invoice => {
-                let lbl = if self.issued {
+        let (flip_lbl, flip_icon, flip_next) = match self.view {
+            BillingSheetView::Invoice => (
+                if self.issued {
                     tr(cx, "View credit note", "查看贷项单")
                 } else {
                     tr(cx, "Credit invoice", "开具贷项冲抵")
-                };
-                activate(
-                    div()
-                        .id(pro_eid(&self.id, "bar-credit-invoice"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .hover(move |s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .cursor_pointer()
-                        .child(pro_icon(ProIcon::Undo, 13.5, p.text))
-                        .child(lbl),
-                    cx,
-                    |this, _, cx| {
-                        this.set_view(BillingSheetView::CreditNote, cx);
-                    },
-                )
-            }
-            BillingSheetView::CreditNote => activate(
-                div()
-                    .id(pro_eid(&self.id, "bar-view-invoice"))
-                    .role(Role::Button)
-                    .tab_index(0)
-                    .h(px(28.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .hover(move |s| s.bg(p.chip_hover))
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .cursor_pointer()
-                    .child(pro_icon(ProIcon::ArrowLeft, 13.5, p.text))
-                    .child(tr(cx, "View invoice", "返回原账单")),
-                cx,
-                |this, _, cx| {
-                    this.set_view(BillingSheetView::Invoice, cx);
                 },
+                ProIcon::Undo,
+                BillingSheetView::CreditNote,
+            ),
+            BillingSheetView::CreditNote => (
+                tr(cx, "View invoice", "返回原账单"),
+                ProIcon::ArrowLeft,
+                BillingSheetView::Invoice,
             ),
         };
+        let flip_btn = pro_btn(
+            pro_eid(&self.id, "bar-credit-invoice"),
+            flip_lbl,
+            Some(flip_icon),
+            ProBtnStyle::Secondary,
+            true,
+            cx,
+            move |this, _, cx| {
+                this.set_view(flip_next, cx);
+            },
+        );
 
         let top_bar = div()
             .mb(px(12.))
@@ -2153,28 +2302,18 @@ impl Render for InvoiceCreditBlock {
             BillingSheetView::Invoice => tr(cx, "Bring Invoice to front", "切换至原账单"),
         };
 
-        let back_sheet_peek = activate(
-            div()
-                .id(pro_eid(&self.id, "back-sheet-peek"))
-                .role(Role::Button)
-                .aria_label(back_aria)
-                .tab_index(-1)
-                .absolute()
-                .top(px(back_top))
-                .left(px(back_inset))
-                .right(px(back_inset))
-                .h(px(48.))
-                .rounded(px(12.))
-                .bg(back_surface)
-                .border_1()
-                .border_color(p.line_strong)
-                .hover(move |st| st.bg(p.card))
-                .cursor_pointer(),
-            cx,
-            move |this, _, cx| {
+        let back_sheet_peek = BackSheetPeek {
+            id: pro_eid(&self.id, "back-sheet-peek"),
+            aria: back_aria.into(),
+            top: back_top,
+            inset: back_inset,
+            rest_bg: back_surface,
+            hover_bg: p.card,
+            border: p.line_strong,
+            on_click: Rc::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 this.set_view(back_peek_target, cx);
-            },
-        );
+            })),
+        };
 
         let front_sheet = if s < 0.5 {
             build_front_sheet("sheet-invoice", inv_depth, inv_body)

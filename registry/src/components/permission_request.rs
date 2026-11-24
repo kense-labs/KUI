@@ -7,22 +7,21 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_eid, pro_empty_state, pro_fold,
-        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_selection_sensor,
-        pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator,
+        pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashSet, rc::Rc};
 use web_time::Instant;
 
-const CIRCLE_CHECK_SVG: &str = r#"<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 12.5L10.5 15L16 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>"#;
 const CIRCLE_CROSS_SVG: &str = r#"<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"></circle><path d="m8.8 8.8 6.4 6.4M15.2 8.8l-6.4 6.4" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>"#;
 const WARN_MINI_SVG: &str = r#"<path d="M13.92 21H10.08C5.44 21 3.13 21 2.28 19.49C1.42 17.99 2.61 15.99 4.98 12L6.9 8.75C9.18 4.92 10.31 3 12 3C13.69 3 14.82 4.92 17.1 8.75L19.02 12C21.39 15.99 22.58 17.99 21.72 19.49C20.87 21 18.56 21 13.92 21Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 9V13" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="16.7" r="1" fill="currentColor"></circle>"#;
 const DANGER_MINI_SVG: &str = r#"<path d="M5.92 5.92C8.16 3.68 9.28 2.56 10.59 2.2C11.51 1.93 12.49 1.93 13.41 2.2C14.72 2.56 15.84 3.68 18.08 5.92C20.32 8.16 21.44 9.28 21.8 10.59C22.07 11.51 22.07 12.49 21.8 13.41C21.44 14.72 20.32 15.84 18.08 18.08C15.84 20.32 14.72 21.44 13.41 21.8C12.49 22.07 11.51 22.07 10.59 21.8C9.28 21.44 8.16 20.32 5.92 18.08C3.68 15.84 2.56 14.72 2.2 13.41C1.93 12.49 1.93 11.51 2.2 10.59C2.56 9.28 3.68 8.16 5.92 5.92Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 8V12.2" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="15.8" r="1" fill="currentColor"></circle>"#;
@@ -184,6 +183,181 @@ fn format_remaining_grant(rem_secs: u32, zh: bool) -> String {
     }
 }
 
+#[derive(IntoElement)]
+struct PrTactileBtn {
+    id: ElementId,
+    aria: SharedString,
+    flex_fill: bool,
+    pad_l: f32,
+    pad_r: f32,
+    rest_bg: Hsla,
+    hover_bg: Hsla,
+    fg: Hsla,
+    border: Hsla,
+    elevated: bool,
+    content: AnyElement,
+    #[allow(clippy::type_complexity)]
+    on_click: Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
+}
+
+impl RenderOnce for PrTactileBtn {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let st = w.use_keyed_state(pro_eid(&self.id, "pr-tbtn"), cx, |_, _| {
+            (Slide::snappy(0.0), Slide::snappy(0.0))
+        });
+        let (hov, down) = st.update(cx, |s, cx| {
+            (
+                s.0.get(w, cx).clamp(0.0, 1.0),
+                s.1.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+        let face_bg = pro_mix_color(self.rest_bg, self.hover_bg, hov);
+        let border = self.border;
+        let dark = p.dark;
+        let elevated = self.elevated;
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 1.0 || bh <= 1.0 {
+                    return;
+                }
+                let ix = (bw * 0.022 * down).clamp(0.0, 2.0);
+                let iy = (bh * 0.042 * down).clamp(0.0, 1.3);
+                let rect = Bounds::new(
+                    point(bounds.origin.x + px(ix), bounds.origin.y + px(iy)),
+                    size(px((bw - 2.0 * ix).max(1.0)), px((bh - 2.0 * iy).max(1.0))),
+                );
+                let r = px(7.0)
+                    .min(rect.size.width / 2.0)
+                    .min(rect.size.height / 2.0);
+                if !dark && elevated && hov > 0.02 && down < 0.7 {
+                    let sh = 0.045 * hov * (1.0 - down);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(point(rect.origin.x, rect.origin.y + px(1.0)), rect.size),
+                            black().opacity(sh),
+                        )
+                        .corner_radii(r),
+                    );
+                }
+                window.paint_quad(quad(
+                    rect,
+                    Corners::all(r),
+                    face_bg,
+                    Edges::all(px(if border.a > 0.001 { 1.0 } else { 0.0 })),
+                    border,
+                    BorderStyle::Solid,
+                ));
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        let on_click = self.on_click;
+        div()
+            .id(self.id)
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .tab_index(0)
+            .when(self.flex_fill, |d| d.flex_1())
+            .h(px(30.0))
+            .pl(px(self.pad_l))
+            .pr(px(self.pad_r))
+            .relative()
+            .rounded(px(7.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(13.0))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(self.fg)
+            .whitespace_nowrap()
+            .cursor_pointer()
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.0.set(if *inside { 1.0 } else { 0.0 }, cx);
+                        if !*inside {
+                            s.1.set(0.0, cx);
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(1.0, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(0.0, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up_out(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(0.0, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_key_down({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | " " | "space") {
+                        st.update(cx, |s, cx| {
+                            s.1.set(1.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_key_up({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | " " | "space") {
+                        st.update(cx, |s, cx| {
+                            s.1.set(0.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_click(move |ev, w, cx| (on_click)(ev, w, cx))
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(0.5 * down))
+                    .flex()
+                    .items_center()
+                    .gap(px(7.0))
+                    .child(self.content),
+            )
+    }
+}
+
 /// Granular scope consent card that folds into a live draining status line with `Revoke`.
 pub struct PermissionRequest {
     id: ElementId,
@@ -199,11 +373,13 @@ pub struct PermissionRequest {
     preview: Vec<PermissionPreviewItem>,
     preview_limit: usize,
     preview_expanded: bool,
+    expanded_items: HashSet<SharedString>,
     scopes: Vec<PermissionScope>,
     scope: PermissionScope,
     duration_mins: u32,
     decision: Option<PermissionDecision>,
     granted_at: Option<Instant>,
+    settled_clock: PhaseClock,
     boot_at: Instant,
     measured_width: Rc<Cell<f32>>,
     toast: Option<(SharedString, Instant)>,
@@ -231,6 +407,7 @@ impl PermissionRequest {
             preview: default_preview_items(),
             preview_limit: 3,
             preview_expanded: false,
+            expanded_items: HashSet::new(),
             scopes: vec![
                 PermissionScope::Once,
                 PermissionScope::Timed,
@@ -240,6 +417,7 @@ impl PermissionRequest {
             duration_mins: 60,
             decision: None,
             granted_at: None,
+            settled_clock: PhaseClock::default(),
             boot_at: Instant::now(),
             measured_width: Rc::new(Cell::new(400.0)),
             toast: None,
@@ -380,6 +558,7 @@ impl PermissionRequest {
         };
         self.decision = Some(dec);
         self.granted_at = Some(Instant::now());
+        self.settled_clock.restart(cx);
         self.toast = Some((
             effective_scope.button_label(self.duration_mins, cx),
             Instant::now(),
@@ -596,7 +775,7 @@ impl Render for PermissionRequest {
             .collect();
         let extra_cnt = extra_preview.len();
 
-        let render_prev_item = |item: &PermissionPreviewItem, cx: &App| {
+        let render_prev_item = |item: &PermissionPreviewItem, cx: &Context<Self>| {
             let lbl: SharedString =
                 if item.label.as_ref() == "Deploys to production after the merge" {
                     tr(
@@ -608,14 +787,58 @@ impl Render for PermissionRequest {
                 } else {
                     item.label.clone()
                 };
-            div()
+            let item_open = self.expanded_items.contains(&item.id);
+            let item_id = item.id.clone();
+            let detail_lines: Vec<(Hsla, &'static str, SharedString)> = match item.id.as_ref() {
+                "cart" => vec![
+                    (p.red_ink, "−", "if (cart.isLocked) return null;".into()),
+                    (
+                        p.green_ink,
+                        "+",
+                        "await cart.acquireCheckoutLease({ timeoutMs: 1200 });".into(),
+                    ),
+                ],
+                "spec" => vec![
+                    (
+                        p.green_ink,
+                        "+",
+                        "test('retries transient 409 checkout lock', async () => {".into(),
+                    ),
+                    (
+                        p.green_ink,
+                        "+",
+                        "  await expect(submitOrder(cart)).resolves.toBeOk();".into(),
+                    ),
+                ],
+                "deploy" => vec![(
+                    p.text,
+                    "·",
+                    tr(
+                        cx,
+                        "pipeline: web-prod · region: us-east-1 · auto-rollback: on",
+                        "流水线: web-prod · 区域: us-east-1 · 自动回滚: 已开启",
+                    )
+                    .into(),
+                )],
+                _ => vec![(
+                    p.muted,
+                    "·",
+                    format!(
+                        "{} · {}",
+                        item.label,
+                        item.meta.as_deref().unwrap_or("impact verified")
+                    )
+                    .into(),
+                )],
+            };
+
+            let row_face = div()
                 .w_full()
                 .min_h(px(30.0))
                 .px(px(6.0))
-                .rounded(px(6.0))
                 .flex()
                 .items_center()
-                .gap(px(10.0))
+                .gap(px(8.0))
                 .child(pro_icon(item.icon, 14.5, p.muted))
                 .child(
                     div()
@@ -624,7 +847,7 @@ impl Render for PermissionRequest {
                         .text_size(px(12.5))
                         .text_color(p.ink)
                         .truncate()
-                        .child(lbl),
+                        .child(lbl.clone()),
                 )
                 .when_some(item.meta.clone(), |d, meta| {
                     d.child(
@@ -636,6 +859,80 @@ impl Render for PermissionRequest {
                             .child(meta),
                     )
                 })
+                .child(pro_icon(
+                    if item_open {
+                        ProIcon::ChevronUp
+                    } else {
+                        ProIcon::ChevronDown
+                    },
+                    11.5,
+                    p.faint,
+                ));
+
+            let row_btn = pro_tactile(
+                pro_eid(&self.id, format!("pr-item-{}", item.id)),
+                lbl,
+                6.0,
+                transparent_black(),
+                wash_bg,
+                transparent_black(),
+                transparent_black(),
+                item_open,
+                row_face,
+                cx,
+                move |this, _, cx| {
+                    if this.expanded_items.contains(&item_id) {
+                        this.expanded_items.remove(&item_id);
+                    } else {
+                        this.expanded_items.insert(item_id.clone());
+                    }
+                    cx.notify();
+                },
+            )
+            .w_full();
+
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .child(row_btn)
+                .child(pro_fold(
+                    pro_eid(&self.id, format!("pr-item-fold-{}", item.id)),
+                    item_open,
+                    44.0,
+                    0.0,
+                    move || {
+                        let mut snippet = div()
+                            .ml(px(26.0))
+                            .mr(px(4.0))
+                            .mb(px(4.0))
+                            .px(px(8.0))
+                            .py(px(5.0))
+                            .rounded(px(6.0))
+                            .bg(wash_bg)
+                            .border_1()
+                            .border_color(p.line_soft)
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0));
+                        for (col, sigil, line) in detail_lines {
+                            snippet = snippet.child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.0))
+                                    .font_family("Menlo")
+                                    .text_size(px(10.5))
+                                    .line_height(px(15.0))
+                                    .text_color(col)
+                                    .child(div().w(px(8.0)).flex_none().child(sigil))
+                                    .child(div().flex_1().min_w_0().truncate().child(line)),
+                            );
+                        }
+                        snippet.into_any_element()
+                    },
+                ))
         };
 
         let mut prev_list = div().w_full().flex().flex_col();
@@ -714,28 +1011,21 @@ impl Render for PermissionRequest {
                         0.0,
                         move || extra_list.into_any_element(),
                     ))
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "pr-more-btn"))
-                            .role(Role::Button)
-                            .aria_label(more_txt.clone())
-                            .tab_index(0)
-                            .ml(px(30.0))
-                            .py(px(2.0))
-                            .self_start()
-                            .text_size(px(12.0))
-                            .text_color(p.muted)
-                            .cursor_pointer()
-                            .hover(move |s| s.text_color(p.ink))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.preview_expanded = !this.preview_expanded;
-                                cx.emit(PermissionRequestEvent::PreviewExpanded(
-                                    this.preview_expanded,
-                                ));
-                                cx.notify();
-                            }))
-                            .child(more_txt),
-                    )
+                    .child(div().ml(px(22.0)).self_start().child(pro_btn(
+                        pro_eid(&self.id, "pr-more-btn"),
+                        more_txt,
+                        None,
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        |this, _, cx| {
+                            this.preview_expanded = !this.preview_expanded;
+                            cx.emit(PermissionRequestEvent::PreviewExpanded(
+                                this.preview_expanded,
+                            ));
+                            cx.notify();
+                        },
+                    )))
                 })
         });
 
@@ -748,9 +1038,12 @@ impl Render for PermissionRequest {
             let mut strip = div()
                 .relative()
                 .w_full()
+                .p(px(2.5))
+                .rounded(px(8.0))
+                .bg(fill_bg)
                 .flex()
                 .items_center()
-                .gap(px(if narrow { 4.0 } else { 8.0 }))
+                .gap(px(2.0))
                 .child(pro_pill_indicator(
                     pro_eid(&self.id, "pr-scope-pill"),
                     cur_scope.key(),
@@ -774,14 +1067,9 @@ impl Render for PermissionRequest {
                         .tab_index(if selected { 0 } else { -1 })
                         .relative()
                         .flex_1()
-                        .h(px(26.0))
+                        .h(px(25.0))
                         .px(px(6.0))
                         .rounded(px(6.0))
-                        .bg(if selected {
-                            transparent_black()
-                        } else {
-                            fill_bg
-                        })
                         .flex()
                         .items_center()
                         .justify_center()
@@ -789,13 +1077,7 @@ impl Render for PermissionRequest {
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if selected { p.strong } else { p.text })
                         .cursor_pointer()
-                        .hover(move |s| {
-                            if selected {
-                                s
-                            } else {
-                                s.bg(p.chip_hover).text_color(p.ink)
-                            }
-                        })
+                        .hover(move |s| if selected { s } else { s.text_color(p.ink) })
                         .focus_visible(move |s| s.border_1().border_color(p.focus))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                             this.set_scope(sc_val, cx);
@@ -839,6 +1121,54 @@ impl Render for PermissionRequest {
         } else {
             p.on_primary
         };
+
+        let deny_inner = div()
+            .flex()
+            .items_center()
+            .gap(px(7.0))
+            .child(deny_lbl)
+            .when(!narrow, |d| {
+                d.child(
+                    div()
+                        .h(px(18.0))
+                        .px(px(4.5))
+                        .rounded(px(4.0))
+                        .bg(fill_bg)
+                        .flex()
+                        .items_center()
+                        .text_size(px(10.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.muted)
+                        .child("Esc"),
+                )
+            });
+
+        let allow_inner = div()
+            .flex()
+            .items_center()
+            .gap(px(7.0))
+            .child(pro_swap_label(
+                pro_eid(&self.id, "pr-allow-lbl"),
+                allow_lbl.clone(),
+                13.0,
+                FontWeight::MEDIUM,
+                primary_fg,
+            ))
+            .when(!narrow, |d| {
+                d.child(
+                    div()
+                        .h(px(18.0))
+                        .px(px(4.5))
+                        .rounded(px(4.0))
+                        .bg(primary_fg.opacity(0.16))
+                        .flex()
+                        .items_center()
+                        .text_size(px(10.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(primary_fg.opacity(0.78))
+                        .child("↵"),
+                )
+            });
 
         let ask_tree = div()
             .w_full()
@@ -940,13 +1270,13 @@ impl Render for PermissionRequest {
                     .flex_col()
                     .gap(px(10.0))
                     .when_some(scope_selector, |d, ss| d.child(ss))
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .line_height(px(15.0))
-                            .text_color(p.muted)
-                            .child(scope_hint),
-                    )
+                    .child(div().w_full().overflow_hidden().child(pro_swap_label(
+                        pro_eid(&self.id, "pr-scope-hint"),
+                        scope_hint,
+                        11.0,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )))
                     .child(
                         div()
                             .w_full()
@@ -954,104 +1284,50 @@ impl Render for PermissionRequest {
                             .items_center()
                             .justify_end()
                             .gap(px(8.0))
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "pr-deny-btn"))
-                                    .role(Role::Button)
-                                    .aria_label(deny_lbl)
-                                    .tab_index(0)
-                                    .when(narrow, |d| d.flex_1())
-                                    .h(px(30.0))
-                                    .pl(px(12.0))
-                                    .pr(px(if narrow { 12.0 } else { 8.0 }))
-                                    .rounded(px(7.0))
-                                    .bg(card_bg)
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .gap(px(7.0))
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(wash_bg))
-                                    .focus_visible(move |s| s.border_color(p.focus))
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                        this.deny(cx);
-                                    }))
-                                    .child(deny_lbl)
-                                    .when(!narrow, |d| {
-                                        d.child(
-                                            div()
-                                                .h(px(18.0))
-                                                .px(px(4.5))
-                                                .rounded(px(4.0))
-                                                .bg(fill_bg)
-                                                .flex()
-                                                .items_center()
-                                                .text_size(px(10.0))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.muted)
-                                                .child("Esc"),
-                                        )
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "pr-allow-btn"))
-                                    .role(Role::Button)
-                                    .aria_label(allow_lbl.clone())
-                                    .tab_index(0)
-                                    .when(narrow, |d| d.flex_1())
-                                    .h(px(30.0))
-                                    .pl(px(12.0))
-                                    .pr(px(if narrow { 12.0 } else { 8.0 }))
-                                    .rounded(px(7.0))
-                                    .bg(primary_bg)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .gap(px(7.0))
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(primary_fg)
-                                    .cursor_pointer()
-                                    .hover(move |s| {
-                                        s.bg(pro_mix_color(primary_bg, primary_fg, 0.12))
-                                    })
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                        this.allow(cx);
-                                    }))
-                                    .child(allow_lbl)
-                                    .when(!narrow, |d| {
-                                        d.child(
-                                            div()
-                                                .h(px(18.0))
-                                                .px(px(4.5))
-                                                .rounded(px(4.0))
-                                                .bg(primary_fg.opacity(0.16))
-                                                .flex()
-                                                .items_center()
-                                                .text_size(px(10.0))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(primary_fg.opacity(0.78))
-                                                .child("↵"),
-                                        )
-                                    }),
-                            ),
+                            .child(PrTactileBtn {
+                                id: pro_eid(&self.id, "pr-deny-btn"),
+                                aria: deny_lbl.into(),
+                                flex_fill: narrow,
+                                pad_l: 12.0,
+                                pad_r: if narrow { 12.0 } else { 8.0 },
+                                rest_bg: card_bg,
+                                hover_bg: wash_bg,
+                                fg: p.ink,
+                                border: p.line_strong,
+                                elevated: true,
+                                content: deny_inner.into_any_element(),
+                                on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                    this.deny(cx);
+                                })),
+                            })
+                            .child(PrTactileBtn {
+                                id: pro_eid(&self.id, "pr-allow-btn"),
+                                aria: allow_lbl,
+                                flex_fill: narrow,
+                                pad_l: 12.0,
+                                pad_r: if narrow { 12.0 } else { 8.0 },
+                                rest_bg: primary_bg,
+                                hover_bg: pro_mix_color(primary_bg, primary_fg, 0.12),
+                                fg: primary_fg,
+                                border: transparent_black(),
+                                elevated: true,
+                                content: allow_inner.into_any_element(),
+                                on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                    this.allow(cx);
+                                })),
+                            }),
                     ),
             );
 
-        // 2. Resolved Status Line (matching `permission-request/light.png` & `dark.png`)
+        // 2. Resolved Status Line (with progressive `pro_check_draw` & tactile `Revoke`)
         let dec_val = self.decision.unwrap_or(PermissionDecision {
             allowed: true,
             scope: PermissionScope::Timed,
             expired: false,
         });
         let zh = UiLanguage::current(cx) == UiLanguage::Chinese;
+        let settled_age = self.settled_clock.time(0.28, w, cx);
+        let settled_chk_on = dec_val.allowed && (disabled_motion(cx) || settled_age > 0.012);
 
         let (icon_el, head_lead, note_line, ghost_lbl): (
             AnyElement,
@@ -1093,7 +1369,13 @@ impl Render for PermissionRequest {
                 }
             };
             (
-                pro_svg("0 0 24 24", CIRCLE_CHECK_SVG, 17.5, p.green_ink),
+                pro_check_draw(
+                    pro_eid(&self.id, "pr-settled-chk"),
+                    settled_chk_on,
+                    18.0,
+                    false,
+                    p.green,
+                ),
                 lead,
                 note,
                 tr(cx, "Revoke", "撤销"),
@@ -1169,30 +1451,17 @@ impl Render for PermissionRequest {
                             .child(note_line),
                     ),
             )
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "pr-revoke-btn"))
-                    .role(Role::Button)
-                    .aria_label(ghost_lbl)
-                    .tab_index(0)
-                    .h(px(28.0))
-                    .px(px(10.0))
-                    .flex_none()
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.text)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(fill_bg).text_color(p.ink))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.revoke(cx);
-                    }))
-                    .child(ghost_lbl),
-            )
+            .child(pro_btn(
+                pro_eid(&self.id, "pr-revoke-btn"),
+                ghost_lbl,
+                None,
+                ProBtnStyle::Ghost,
+                true,
+                cx,
+                |this, _, cx| {
+                    this.revoke(cx);
+                },
+            ))
             .when_some(drain_ratio, |d, ratio| {
                 d.child(
                     div()

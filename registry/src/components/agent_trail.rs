@@ -6,16 +6,20 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_shimmer_text, pro_skeleton_bar, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
+        pro_tactile, tr,
     },
     primitives::{
-        family::disabled_motion,
+        family::{PhaseClock, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{collections::HashSet, f32::consts::TAU};
+use std::{
+    collections::{HashMap, HashSet},
+    f32::consts::TAU,
+};
 use web_time::Instant;
 
 const STEP_ROW_H: f32 = 32.0;
@@ -24,7 +28,6 @@ const MAIN_RAIL_X: f32 = 17.0;
 const SUB_RAIL_X: f32 = 29.0;
 const LOOP_SECS: f32 = 2.40;
 
-const CHECK_MARK_SVG: &str = r#"<path d="M4.8 8.3L7.0 10.4L11.2 5.8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const FAIL_MARK_SVG: &str = r#"<path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>"#;
 const PAUSE_MARK_SVG: &str = r#"<path d="M6.4 5.4V10.6M9.6 5.4V10.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>"#;
 const DASH_MARK_SVG: &str = r#"<path d="M5.3 8H10.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>"#;
@@ -416,6 +419,8 @@ pub struct AgentTrail {
     unfolded_sub_ids: HashSet<SharedString>,
     open_ask_id: Option<SharedString>,
     hovered_step: Option<SharedString>,
+    pressed_step: Option<SharedString>,
+    done_clocks: HashMap<SharedString, PhaseClock>,
     started_at: Instant,
     loading: bool,
     empty: bool,
@@ -445,6 +450,8 @@ impl AgentTrail {
             unfolded_sub_ids: HashSet::new(),
             open_ask_id: None,
             hovered_step: None,
+            pressed_step: None,
+            done_clocks: HashMap::new(),
             started_at: Instant::now(),
             loading: false,
             empty: false,
@@ -547,10 +554,12 @@ impl AgentTrail {
             if step.duration.is_none() {
                 step.duration = Some("2s".into());
             }
+            let sid = step.id.clone();
+            self.done_clocks.entry(sid.clone()).or_default().restart(cx);
             if self.open_ask_id.as_deref() == Some(step_id) {
                 self.open_ask_id = None;
             }
-            cx.emit(AgentTrailEvent::Approve(step.id.clone()));
+            cx.emit(AgentTrailEvent::Approve(sid));
             cx.notify();
         }
     }
@@ -570,6 +579,8 @@ impl AgentTrail {
 
 #[allow(clippy::too_many_arguments)]
 fn paint_step_marker(
+    check_id: ElementId,
+    done_drawn: bool,
     kind_state: TrailStepState,
     gate: bool,
     spin_angle: f32,
@@ -592,7 +603,7 @@ fn paint_step_marker(
             .flex()
             .items_center()
             .justify_center()
-            .child(pro_svg("0 0 16 16", CHECK_MARK_SVG, 16., accent))
+            .child(pro_check_draw(check_id, done_drawn, 13.5, false, accent))
             .into_any_element(),
         TrailStepState::Running => canvas(
             |_, _, _| (),
@@ -903,10 +914,40 @@ impl Render for AgentTrail {
                     .child(
                         div()
                             .flex_none()
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .text_color(p.muted)
-                            .child(format!("{done_count}/{total_count}")),
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(div().w(px(36.)).child(pro_spring_bar(
+                                pro_eid(&self.id, "trail-hdr-bar"),
+                                if total_count > 0 {
+                                    done_count as f32 / total_count as f32
+                                } else {
+                                    0.0
+                                },
+                                4.,
+                                2.,
+                                p.chip,
+                                accent,
+                            )))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .text_size(px(12.))
+                                    .line_height(px(16.))
+                                    .text_color(p.muted)
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "trail-done-n"),
+                                        done_count as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
+                                    .child(format!("/{total_count}")),
+                            ),
                     )
                     .into_any_element(),
             )
@@ -1054,8 +1095,21 @@ impl Render for AgentTrail {
 
             let top_seg_color = if prev_done { accent } else { rail_line };
             let bot_seg_color = if cur_done { accent } else { rail_line };
+            let done_drawn = if cur_done {
+                if reduced {
+                    true
+                } else if let Some(clk) = self.done_clocks.get(&step_id) {
+                    clk.time(0.28, window, cx) > 0.012
+                } else {
+                    true
+                }
+            } else {
+                false
+            };
 
             let marker_el = paint_step_marker(
+                pro_eid(&self.id, format!("step-chk-{step_id}")),
+                done_drawn,
                 step.state,
                 step.gate,
                 spin_angle,
@@ -1114,6 +1168,32 @@ impl Render for AgentTrail {
                 TrailStepState::Running => {
                     let live_secs = step.elapsed_offset_secs + elapsed_secs.floor() as u64;
                     let status_word = step.display_status(cx).to_string();
+                    let timer_el = if live_secs < 60 {
+                        div()
+                            .min_w(px(26.))
+                            .flex()
+                            .justify_end()
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("run-sec-{step_id}")),
+                                live_secs as f64,
+                                0,
+                                "",
+                                "s",
+                                12.,
+                                FontWeight::NORMAL,
+                                p.faint,
+                            ))
+                            .into_any_element()
+                    } else {
+                        div()
+                            .min_w(px(26.))
+                            .text_right()
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(p.faint)
+                            .child(format_trail_secs(live_secs))
+                            .into_any_element()
+                    };
                     div()
                         .flex()
                         .items_center()
@@ -1127,43 +1207,20 @@ impl Render for AgentTrail {
                             FontWeight::MEDIUM,
                             true,
                         ))
-                        .child(
-                            div()
-                                .min_w(px(26.))
-                                .text_right()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
-                                .text_color(p.faint)
-                                .child(format_trail_secs(live_secs)),
-                        )
+                        .child(timer_el)
                         .into_any_element()
                 }
                 TrailStepState::Waiting => {
                     let ask_toggle_id = step_id.clone();
-                    div()
-                        .id(pro_eid(&self.id, format!("needs-btn-{step_id}")))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Needs your approval", "等待您的审批"))
+                    let needs_inner = div()
                         .h(px(20.))
                         .px(px(7.))
-                        .rounded(px(6.))
-                        .bg(p.amber_soft)
-                        .text_color(p.amber_ink)
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
                         .flex()
                         .items_center()
                         .gap(px(4.))
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            cx.stop_propagation();
-                            if this.open_ask_id.as_ref() == Some(&ask_toggle_id) {
-                                this.open_ask_id = None;
-                            } else {
-                                this.open_ask_id = Some(ask_toggle_id.clone());
-                            }
-                            cx.notify();
-                        }))
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.amber_ink)
                         .child(tr(cx, "Needs you", "待您确认"))
                         .child(pro_icon(
                             if ask_open {
@@ -1173,8 +1230,29 @@ impl Render for AgentTrail {
                             },
                             11.,
                             p.amber_ink,
-                        ))
-                        .into_any_element()
+                        ));
+                    pro_tactile(
+                        pro_eid(&self.id, format!("needs-btn-{step_id}")),
+                        SharedString::from(tr(cx, "Needs your approval", "等待您的审批")),
+                        6.,
+                        p.amber_soft,
+                        p.amber.opacity(0.24),
+                        transparent_black(),
+                        transparent_black(),
+                        ask_open,
+                        needs_inner,
+                        cx,
+                        move |this, _, cx| {
+                            if this.open_ask_id.as_ref() == Some(&ask_toggle_id) {
+                                this.open_ask_id = None;
+                            } else {
+                                this.open_ask_id = Some(ask_toggle_id.clone());
+                            }
+                            cx.notify();
+                        },
+                    )
+                    .flex_none()
+                    .into_any_element()
                 }
                 TrailStepState::Pending if step.gate => div()
                     .h(px(20.))
@@ -1227,9 +1305,11 @@ impl Render for AgentTrail {
             };
 
             let hover_id = step_id.clone();
+            let press_id = step_id.clone();
             let click_id = step_id.clone();
             let key_id = step_id.clone();
             let declined = step.state == TrailStepState::Declined;
+            let is_pressed = self.pressed_step.as_ref() == Some(&step_id);
 
             let mut row = div()
                 .id(pro_eid(&self.id, format!("step-row-{step_id}")))
@@ -1245,9 +1325,12 @@ impl Render for AgentTrail {
                 .px(px(8.))
                 .rounded(px(6.))
                 .relative()
+                .top(px(if is_pressed { 0.5 } else { 0.0 }))
                 .flex()
                 .items_center()
-                .bg(if is_interactive && is_hovered {
+                .bg(if is_interactive && is_pressed {
+                    p.chip
+                } else if is_interactive && is_hovered {
                     p.hover
                 } else {
                     transparent_black()
@@ -1259,6 +1342,9 @@ impl Render for AgentTrail {
                     } else {
                         None
                     };
+                    if !*inside && this.pressed_step.as_ref() == Some(&hover_id) {
+                        this.pressed_step = None;
+                    }
                     if this.hovered_step != next {
                         this.hovered_step = next;
                         cx.notify();
@@ -1267,6 +1353,29 @@ impl Render for AgentTrail {
 
             if is_interactive {
                 row = row
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.pressed_step = Some(press_id.clone());
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            if this.pressed_step.take().is_some() {
+                                cx.notify();
+                            }
+                        }),
+                    )
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            if this.pressed_step.take().is_some() {
+                                cx.notify();
+                            }
+                        }),
+                    )
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         if has_substeps {
                             this.toggle_step_expanded(click_id.as_ref(), cx);
@@ -1541,6 +1650,35 @@ impl Render for AgentTrail {
                                         sub.title.to_string()
                                     };
 
+                                    let sub_lead: AnyElement = if sub.state
+                                        == TrailSubstepState::Done
+                                    {
+                                        div()
+                                            .ml(px(-3.5))
+                                            .flex_none()
+                                            .child(pro_check_draw(
+                                                SharedString::from(format!(
+                                                    "sub-chk-{}-{si}",
+                                                    step_id_fold
+                                                )),
+                                                true,
+                                                12.,
+                                                false,
+                                                if parent_step_done { accent } else { p.muted },
+                                            ))
+                                            .into_any_element()
+                                    } else {
+                                        div()
+                                            .size(px(5.))
+                                            .flex_none()
+                                            .rounded_full()
+                                            .bg(dot_bg)
+                                            .when(sub.state == TrailSubstepState::Pending, |d| {
+                                                d.border_1().border_color(p.faint)
+                                            })
+                                            .into_any_element()
+                                    };
+
                                     sub_col = sub_col.child(
                                         div()
                                             .w_full()
@@ -1549,18 +1687,12 @@ impl Render for AgentTrail {
                                             .pr(px(8.))
                                             .flex()
                                             .items_center()
-                                            .gap(px(14.))
-                                            .child(
-                                                div()
-                                                    .size(px(5.))
-                                                    .flex_none()
-                                                    .rounded_full()
-                                                    .bg(dot_bg)
-                                                    .when(
-                                                        sub.state == TrailSubstepState::Pending,
-                                                        |d| d.border_1().border_color(p.faint),
-                                                    ),
-                                            )
+                                            .gap(px(if sub.state == TrailSubstepState::Done {
+                                                10.5
+                                            } else {
+                                                14.
+                                            }))
+                                            .child(sub_lead)
                                             .child(
                                                 div()
                                                     .min_w_0()

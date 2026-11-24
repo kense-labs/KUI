@@ -7,20 +7,21 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, ProSelectionSensor, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_pill_indicator, pro_presence, pro_progress_ring, pro_selection_sensor,
-        pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_popover_presence, pro_progress_ring, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 const STEER_CORNER_SVG: &str = r#"<path d="M4 3v2.1c0 2 0 3 .15 3.84.8 4.6 4.76 8.22 9.8 8.95.92.11 2.85.11 5.05.11m-2 3c.6-.59 3-2.16 3-3s-2.4-2.41-3-3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>"#;
@@ -222,6 +223,9 @@ pub struct RunControls {
     error_note: SharedString,
     steers: Vec<RunSteerChip>,
     queue: Vec<RunQueuedMessage>,
+    steer_slides: HashMap<usize, Slide>,
+    queue_slides: HashMap<SharedString, Slide>,
+    done_clock: PhaseClock,
     mode: RunMode,
     permission: RunPermission,
     perm_menu_open: bool,
@@ -266,6 +270,9 @@ impl RunControls {
                 "q1",
                 "Add a packing list for March weather",
             )],
+            steer_slides: HashMap::new(),
+            queue_slides: HashMap::new(),
+            done_clock: PhaseClock::default(),
             mode: RunMode::Act,
             permission: RunPermission::AskFirst,
             perm_menu_open: false,
@@ -467,6 +474,9 @@ impl RunControls {
         }
         let at = self.word_cursor;
         let steer_text = SharedString::from(trimmed.clone());
+        let mut st_slide = Slide::new(8.0);
+        st_slide.duration(0.0, 0.22, cx);
+        self.steer_slides.insert(self.steers.len(), st_slide);
         self.steers.push(RunSteerChip::new(at, steer_text.clone()));
         let extra_words = split_stream_words(&format!(
             "\n\nGot it ({trimmed}) – adjusting the remaining itinerary around that preference right away."
@@ -491,6 +501,9 @@ impl RunControls {
         let id = SharedString::from(format!("q-{}", self.next_seq));
         self.next_seq += 1;
         let text = SharedString::from(trimmed);
+        let mut q_slide = Slide::new(8.0);
+        q_slide.duration(0.0, 0.22, cx);
+        self.queue_slides.insert(id.clone(), q_slide);
         self.queue.push(RunQueuedMessage {
             id: id.clone(),
             text: text.clone(),
@@ -767,6 +780,7 @@ impl Render for RunControls {
             self.last_frame = Some(now);
             if self.word_cursor >= self.words.len() {
                 self.status = RunControlStatus::Done;
+                self.done_clock.restart(cx);
                 self.last_frame = None;
             } else {
                 w.request_animation_frame();
@@ -777,6 +791,8 @@ impl Render for RunControls {
 
         let elapsed_ms = self.anim_started.elapsed().as_secs_f32() * 1000.0;
         let is_running = self.status == RunControlStatus::Running;
+        let done_age = self.done_clock.time(0.28, w, cx);
+        let done_chk_on = self.status == RunControlStatus::Done && (reduced || done_age > 0.012);
 
         // Top conversation log (252px scrollable height)
         let log_body: AnyElement = if self.status == RunControlStatus::Idle || self.prompt.is_none()
@@ -809,25 +825,15 @@ impl Render for RunControls {
                         )),
                 )
                 .when(!self.queue.is_empty(), |d| {
-                    d.child(
-                        div()
-                            .id(pro_eid(&self.id, "idle-run-queued"))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .mt(px(4.))
-                            .h(px(26.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .bg(p.primary)
-                            .text_color(p.on_primary)
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _, _, cx| this.run_next_queued(cx)))
-                            .child(tr(cx, "Run queued message", "运行排队消息")),
-                    )
+                    d.child(div().mt(px(4.)).child(pro_btn(
+                        pro_eid(&self.id, "idle-run-queued"),
+                        tr(cx, "Run queued message", "运行排队消息"),
+                        Some(ProIcon::Play),
+                        ProBtnStyle::Primary,
+                        true,
+                        cx,
+                        |this, _, cx| this.run_next_queued(cx),
+                    )))
                 })
                 .into_any_element()
         } else {
@@ -868,9 +874,21 @@ impl Render for RunControls {
                 .text_color(p.ink);
 
             for idx in 0..shown_limit {
-                for st in self.steers.iter().filter(|s| s.word_index == idx) {
+                for (st_i, st) in self
+                    .steers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.word_index == idx)
+                {
+                    let dy = if reduced {
+                        0.0
+                    } else {
+                        self.steer_slides.get(&st_i).map_or(0.0, |sl| sl.get(w, cx))
+                    };
                     flow = flow.child(
                         div()
+                            .relative()
+                            .top(px(dy))
                             .h(px(20.))
                             .pl(px(6.))
                             .pr(px(8.))
@@ -893,9 +911,21 @@ impl Render for RunControls {
                     flow = flow.child(tok.clone());
                 }
             }
-            for st in self.steers.iter().filter(|s| s.word_index == shown_limit) {
+            for (st_i, st) in self
+                .steers
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.word_index == shown_limit)
+            {
+                let dy = if reduced {
+                    0.0
+                } else {
+                    self.steer_slides.get(&st_i).map_or(0.0, |sl| sl.get(w, cx))
+                };
                 flow = flow.child(
                     div()
+                        .relative()
+                        .top(px(dy))
                         .h(px(20.))
                         .pl(px(6.))
                         .pr(px(8.))
@@ -982,21 +1012,15 @@ impl Render for RunControls {
                             )
                             .child(tr(cx, "to stop", "停止输出")),
                     )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "sim-drop-btn"))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .px(px(6.))
-                            .py(px(2.))
-                            .rounded(px(5.))
-                            .hover(|s| s.bg(p.hover).text_color(p.ink))
-                            .cursor_pointer()
-                            .text_size(px(11.5))
-                            .text_color(p.faint)
-                            .on_click(cx.listener(|this, _, _, cx| this.simulate_error(cx)))
-                            .child(tr(cx, "Simulate drop", "模拟中断")),
-                    ),
+                    .child(pro_btn(
+                        pro_eid(&self.id, "sim-drop-btn"),
+                        tr(cx, "Simulate drop", "模拟中断"),
+                        None,
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        |this, _, cx| this.simulate_error(cx),
+                    )),
                 RunControlStatus::Stopped => div()
                     .pl(px(24.))
                     .mt(px(10.))
@@ -1016,65 +1040,33 @@ impl Render for RunControls {
                             .flex()
                             .items_center()
                             .gap(px(4.))
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "act-resume"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(10.))
-                                    .rounded(px(7.))
-                                    .bg(p.primary)
-                                    .text_color(p.on_primary)
-                                    .hover(|s| s.opacity(0.9))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .cursor_pointer()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .on_click(cx.listener(|this, _, _, cx| this.resume_run(cx)))
-                                    .child(pro_icon(ProIcon::Play, 12., p.on_primary))
-                                    .child(tr(cx, "Resume", "继续")),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "act-retry-stop"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(8.))
-                                    .rounded(px(7.))
-                                    .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .cursor_pointer()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .on_click(cx.listener(|this, _, _, cx| this.retry_run(cx)))
-                                    .child(pro_icon(ProIcon::Refresh, 12., p.muted))
-                                    .child(tr(cx, "Retry", "重试")),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "act-dismiss-stop"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(8.))
-                                    .rounded(px(7.))
-                                    .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_turn(cx)))
-                                    .child(tr(cx, "Dismiss", "忽略")),
-                            ),
+                            .child(pro_btn(
+                                pro_eid(&self.id, "act-resume"),
+                                tr(cx, "Resume", "继续"),
+                                Some(ProIcon::Play),
+                                ProBtnStyle::Primary,
+                                true,
+                                cx,
+                                |this, _, cx| this.resume_run(cx),
+                            ))
+                            .child(pro_btn(
+                                pro_eid(&self.id, "act-retry-stop"),
+                                tr(cx, "Retry", "重试"),
+                                Some(ProIcon::Refresh),
+                                ProBtnStyle::Ghost,
+                                true,
+                                cx,
+                                |this, _, cx| this.retry_run(cx),
+                            ))
+                            .child(pro_btn(
+                                pro_eid(&self.id, "act-dismiss-stop"),
+                                tr(cx, "Dismiss", "忽略"),
+                                None,
+                                ProBtnStyle::Ghost,
+                                true,
+                                cx,
+                                |this, _, cx| this.dismiss_turn(cx),
+                            )),
                     ),
                 RunControlStatus::Error => div()
                     .pl(px(24.))
@@ -1096,45 +1088,24 @@ impl Render for RunControls {
                             .flex()
                             .items_center()
                             .gap(px(4.))
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "act-retry-err"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(10.))
-                                    .rounded(px(7.))
-                                    .bg(p.primary)
-                                    .text_color(p.on_primary)
-                                    .hover(|s| s.opacity(0.9))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .cursor_pointer()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .on_click(cx.listener(|this, _, _, cx| this.retry_run(cx)))
-                                    .child(pro_icon(ProIcon::Refresh, 12., p.on_primary))
-                                    .child(tr(cx, "Retry from here", "从断点重试")),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "act-dismiss-err"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(8.))
-                                    .rounded(px(7.))
-                                    .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_turn(cx)))
-                                    .child(tr(cx, "Dismiss", "关闭")),
-                            ),
+                            .child(pro_btn(
+                                pro_eid(&self.id, "act-retry-err"),
+                                tr(cx, "Retry from here", "从断点重试"),
+                                Some(ProIcon::Refresh),
+                                ProBtnStyle::Primary,
+                                true,
+                                cx,
+                                |this, _, cx| this.retry_run(cx),
+                            ))
+                            .child(pro_btn(
+                                pro_eid(&self.id, "act-dismiss-err"),
+                                tr(cx, "Dismiss", "关闭"),
+                                None,
+                                ProBtnStyle::Ghost,
+                                true,
+                                cx,
+                                |this, _, cx| this.dismiss_turn(cx),
+                            )),
                     ),
                 RunControlStatus::Done => div()
                     .pl(px(24.))
@@ -1155,48 +1126,25 @@ impl Render for RunControls {
                             .items_center()
                             .gap(px(6.))
                             .when(!self.queue.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .id(pro_eid(&self.id, "act-run-next"))
-                                        .role(Role::Button)
-                                        .tab_index(0)
-                                        .h(px(26.))
-                                        .px(px(9.))
-                                        .rounded(px(6.))
-                                        .bg(p.accent_soft)
-                                        .text_color(p.blue)
-                                        .hover(|s| s.bg(p.blue.opacity(0.22)))
-                                        .flex()
-                                        .items_center()
-                                        .cursor_pointer()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.run_next_queued(cx)),
-                                        )
-                                        .child(tr(cx, "Send Next queued", "发送排队消息")),
-                                )
+                                d.child(pro_btn(
+                                    pro_eid(&self.id, "act-run-next"),
+                                    tr(cx, "Send Next queued", "发送排队消息"),
+                                    None,
+                                    ProBtnStyle::Secondary,
+                                    true,
+                                    cx,
+                                    |this, _, cx| this.run_next_queued(cx),
+                                ))
                             })
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "act-retry-done"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(26.))
-                                    .px(px(8.))
-                                    .rounded(px(6.))
-                                    .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(4.))
-                                    .cursor_pointer()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .on_click(cx.listener(|this, _, _, cx| this.retry_run(cx)))
-                                    .child(pro_icon(ProIcon::Refresh, 12., p.muted))
-                                    .child(tr(cx, "Retry", "重新生成")),
-                            ),
+                            .child(pro_btn(
+                                pro_eid(&self.id, "act-retry-done"),
+                                tr(cx, "Retry", "重新生成"),
+                                Some(ProIcon::Refresh),
+                                ProBtnStyle::Ghost,
+                                true,
+                                cx,
+                                |this, _, cx| this.retry_run(cx),
+                            )),
                     ),
                 RunControlStatus::Idle => div(),
             };
@@ -1231,7 +1179,18 @@ impl Render for RunControls {
                         .items_center()
                         .gap(px(8.))
                         .text_size(px(12.))
-                        .child(self.render_pixel_mark(is_running, elapsed_ms, &p, cx))
+                        .child(if self.status == RunControlStatus::Done {
+                            pro_check_draw(
+                                pro_eid(&self.id, "rc-done-chk"),
+                                done_chk_on,
+                                16.0,
+                                false,
+                                p.green,
+                            )
+                        } else {
+                            self.render_pixel_mark(is_running, elapsed_ms, &p, cx)
+                                .into_any_element()
+                        })
                         .child(
                             div()
                                 .font_weight(FontWeight::MEDIUM)
@@ -1239,22 +1198,25 @@ impl Render for RunControls {
                                 .truncate()
                                 .child(self.agent.name.clone()),
                         )
-                        .child(
-                            div()
-                                .text_color(if self.status == RunControlStatus::Error {
-                                    p.red_ink
-                                } else {
-                                    p.muted
-                                })
-                                .child(state_text),
-                        ),
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "rc-state-lbl"),
+                            state_text,
+                            12.0,
+                            FontWeight::NORMAL,
+                            if self.status == RunControlStatus::Error {
+                                p.red_ink
+                            } else {
+                                p.muted
+                            },
+                        )),
                 )
                 .child(flow)
                 .child(after_row)
                 .into_any_element()
         };
 
-        // Queued messages list inside composer tray
+        // Queued messages list inside composer tray (wrapped in smooth `pro_fold`)
+        let has_queue = !self.queue.is_empty();
         let mut queue_rows = div()
             .id(pro_eid(&self.id, "tray-queue-scroll"))
             .max_h(px(124.))
@@ -1272,8 +1234,17 @@ impl Render for RunControls {
             } else {
                 format!("#{}", q_idx + 1)
             };
+            let q_dy = if reduced {
+                0.0
+            } else {
+                self.queue_slides
+                    .get(&q_msg.id)
+                    .map_or(0.0, |sl| sl.get(w, cx))
+            };
             queue_rows = queue_rows.child(
                 div()
+                    .relative()
+                    .top(px(q_dy))
                     .h(px(30.))
                     .pl(px(8.))
                     .pr(px(2.))
@@ -1297,25 +1268,26 @@ impl Render for RunControls {
                             .text_color(p.faint)
                             .child(pos_lbl),
                     )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, format!("unq-{}", q_msg.id)))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .size(px(24.))
-                            .rounded(px(6.))
-                            .hover(|s| s.bg(p.hover).text_color(p.ink))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.remove_queued(&qid, cx);
-                            }))
-                            .child(pro_icon(ProIcon::Close, 12., p.muted)),
-                    ),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, format!("unq-{}", q_msg.id)),
+                        tr(cx, "Remove queued prompt", "移除排队提示词"),
+                        ProIcon::Close,
+                        24.0,
+                        false,
+                        cx,
+                        move |this, _, cx| {
+                            this.remove_queued(&qid, cx);
+                        },
+                    )),
             );
         }
+        let queue_tray_fold = pro_fold(
+            pro_eid(&self.id, "rc-queue-fold"),
+            has_queue,
+            38.0,
+            0.0,
+            move || queue_rows.into_any_element(),
+        );
 
         // Mode toggle (Chat | Act) with pro_pill_indicator
         let mode_strip = div()
@@ -1346,8 +1318,9 @@ impl Render for RunControls {
                     let selected = self.mode == m;
                     div()
                         .id(pro_eid(&self.id, format!("mode-{}", m.key())))
-                        .role(Role::Button)
-                        .tab_index(0)
+                        .role(Role::RadioButton)
+                        .aria_toggled(selected.into())
+                        .tab_index(if selected { 0 } else { -1 })
                         .relative()
                         .h(px(24.))
                         .px(px(10.))
@@ -1358,19 +1331,21 @@ impl Render for RunControls {
                         .text_size(px(12.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if selected { p.ink } else { p.muted })
+                        .hover(move |s| if selected { s } else { s.text_color(p.ink) })
                         .on_click(cx.listener(move |this, _, _, cx| this.set_mode(m, cx)))
                         .when(selected, |d| d.child(pro_mark_selected(&self.mode_sensor)))
                         .child(lbl)
                 }),
             );
 
-        // Permission posture button & popover menu
+        // Permission posture button & `pro_popover_presence` menu
         let act_enabled = self.mode == RunMode::Act;
         let is_alert_perm = act_enabled && self.permission == RunPermission::FullAccess;
         let perm_fg = if is_alert_perm { p.red_ink } else { p.muted };
         let perm_btn = div()
             .id(pro_eid(&self.id, "perm-trigger"))
             .role(Role::Button)
+            .aria_expanded(self.perm_menu_open && act_enabled)
             .aria_label(SharedString::from(format!(
                 "{}: {}",
                 tr(cx, "Permissions", "权限策略"),
@@ -1409,95 +1384,114 @@ impl Render for RunControls {
                 14.,
                 perm_fg,
             ))
-            .when(!compact, |d| d.child(self.permission.label(cx)))
-            .child(pro_icon(ProIcon::ChevronDown, 11., perm_fg));
+            .when(!compact, |d| {
+                d.child(pro_swap_label(
+                    pro_eid(&self.id, "perm-trig-lbl"),
+                    self.permission.label(cx),
+                    12.5,
+                    FontWeight::NORMAL,
+                    perm_fg,
+                ))
+            })
+            .child(pro_icon(
+                if self.perm_menu_open && act_enabled {
+                    ProIcon::ChevronUp
+                } else {
+                    ProIcon::ChevronDown
+                },
+                11.,
+                perm_fg,
+            ));
 
-        let perm_menu = pro_presence(
-            pro_eid(&self.id, "perm-menu-pres"),
-            self.perm_menu_open && act_enabled,
-            0.18,
-            0.14,
-            {
-                let cur_perm = self.permission;
-                let base_id = self.id.clone();
-                let items: Vec<AnyElement> = RunPermission::ALL
-                    .into_iter()
-                    .map(|pm| {
-                        let checked = cur_perm == pm;
-                        let danger = pm == RunPermission::FullAccess;
-                        let ic_col = if danger { p.red_ink } else { p.muted };
-                        div()
-                            .id(pro_eid(&base_id, format!("perm-opt-{pm:?}")))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .w_full()
-                            .px(px(8.))
-                            .py(px(6.))
-                            .rounded(px(6.))
-                            .hover(|s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .cursor_pointer()
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.set_permission(pm, cx);
-                            }))
-                            .child(pro_icon(
-                                if danger {
-                                    ProIcon::Bolt
-                                } else if pm == RunPermission::AutoEdits {
-                                    ProIcon::Sparkles
-                                } else {
-                                    ProIcon::Shield
-                                },
-                                14.,
-                                ic_col,
-                            ))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .text_size(px(12.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(if danger { p.red_ink } else { p.ink })
-                                            .child(pm.label(cx)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(p.muted)
-                                            .child(pm.description(cx)),
-                                    ),
-                            )
-                            .when(checked, |d| d.child(pro_icon(ProIcon::Check, 13., p.ink)))
-                            .into_any_element()
-                    })
-                    .collect();
-                move |amt| {
+        let cur_perm = self.permission;
+        let mut perm_menu_col = div()
+            .w(px(272.))
+            .p(px(4.))
+            .rounded(px(10.))
+            .bg(if p.dark { rgb(0x1f1f23).into() } else { p.card })
+            .border_1()
+            .border_color(p.line_strong)
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .gap(px(2.));
+        for pm in RunPermission::ALL {
+            let checked = cur_perm == pm;
+            let danger = pm == RunPermission::FullAccess;
+            let ic_col = if danger { p.red_ink } else { p.muted };
+            let opt_inner = div()
+                .w_full()
+                .px(px(8.))
+                .py(px(6.))
+                .flex()
+                .items_center()
+                .gap(px(9.))
+                .child(pro_icon(
+                    if danger {
+                        ProIcon::Bolt
+                    } else if pm == RunPermission::AutoEdits {
+                        ProIcon::Sparkles
+                    } else {
+                        ProIcon::Shield
+                    },
+                    14.,
+                    ic_col,
+                ))
+                .child(
                     div()
-                        .absolute()
-                        .bottom(px(34.0 - 4.0 * (1.0 - amt)))
-                        .left(px(0.))
-                        .opacity(amt)
-                        .w(px(272.))
-                        .p(px(4.))
-                        .rounded(px(10.))
-                        .bg(if p.dark { rgb(0x1f1f23).into() } else { p.card })
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
+                        .flex_1()
+                        .min_w_0()
                         .flex()
                         .flex_col()
-                        .gap(px(2.))
-                        .children(items)
-                        .into_any_element()
-                }
-            },
-        );
+                        .child(
+                            div()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if danger { p.red_ink } else { p.ink })
+                                .child(pm.label(cx)),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(p.muted)
+                                .child(pm.description(cx)),
+                        ),
+                )
+                .child(pro_check_draw(
+                    pro_eid(&self.id, format!("perm-chk-{pm:?}")),
+                    checked,
+                    15.0,
+                    false,
+                    if danger { p.red } else { p.primary },
+                ));
+            perm_menu_col = perm_menu_col.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("perm-opt-{pm:?}")),
+                    pm.label(cx),
+                    6.0,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    checked,
+                    opt_inner,
+                    cx,
+                    move |this, _, cx| {
+                        this.set_permission(pm, cx);
+                    },
+                )
+                .w_full(),
+            );
+        }
+        let perm_menu = div()
+            .absolute()
+            .bottom(px(34.0))
+            .left(px(0.))
+            .child(pro_popover_presence(
+                pro_eid(&self.id, "perm-menu-pres"),
+                self.perm_menu_open && act_enabled,
+                move || perm_menu_col.into_any_element(),
+            ));
 
         // Context-window fill ring + right action controls
         let ctx_pct = (self.context_used * 100.0).round() as u32;
@@ -1511,25 +1505,14 @@ impl Render for RunControls {
 
         let ed_for_queue = self.editor.clone();
         let queue_inline_btn = (is_running && has_draft).then(|| {
-            div()
-                .id(pro_eid(&self.id, "inline-queue-btn"))
-                .role(Role::Button)
-                .tab_index(0)
-                .h(px(28.))
-                .px(px(8.))
-                .rounded(px(7.))
-                .bg(p.subtle)
-                .border_1()
-                .border_color(p.line_strong)
-                .hover(|s| s.bg(p.chip_hover))
-                .flex()
-                .items_center()
-                .gap(px(4.))
-                .cursor_pointer()
-                .text_size(px(12.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.ink)
-                .on_click(cx.listener(move |this, _, w, cx| {
+            pro_btn(
+                pro_eid(&self.id, "inline-queue-btn"),
+                format!("{}  ⌥↵", tr(cx, "Queue", "排队")),
+                None,
+                ProBtnStyle::Secondary,
+                true,
+                cx,
+                move |this, w, cx| {
                     if let Some(ed) = &ed_for_queue {
                         let v = ed.read(cx).value().trim().to_owned();
                         if !v.is_empty() {
@@ -1537,12 +1520,28 @@ impl Render for RunControls {
                             ed.update(cx, |e, cx| e.set_value("", w, cx));
                         }
                     }
-                }))
-                .child(tr(cx, "Queue", "排队"))
-                .child(div().text_size(px(10.5)).text_color(p.muted).child("⌥↵"))
+                },
+            )
         });
 
         let ed_for_round = self.editor.clone();
+        let round_st = w.use_keyed_state(pro_eid(&self.id, "rc-round-st"), cx, |_, _| {
+            (Slide::snappy(0.0), Slide::snappy(0.0))
+        });
+        let (round_hov, round_down) = round_st.update(cx, |s, cx| {
+            (
+                s.0.get(w, cx).clamp(0.0, 1.0),
+                s.1.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+        let round_bg = pro_mix_color(
+            p.primary,
+            pro_mix_color(p.primary, p.on_primary, 0.14),
+            round_hov,
+        );
+        let round_scale = 1.0 - 0.08 * round_down;
+        let round_side = 28.0 * round_scale;
+        let round_inset = (28.0 - round_side) * 0.5;
         let round_btn = if is_running && !has_draft {
             div()
                 .id(pro_eid(&self.id, "round-stop-btn"))
@@ -1554,16 +1553,62 @@ impl Render for RunControls {
                 )))
                 .tab_index(0)
                 .size(px(28.))
+                .relative()
                 .flex_none()
                 .rounded_full()
-                .bg(p.primary)
-                .hover(|s| s.opacity(0.9))
-                .flex()
-                .items_center()
-                .justify_center()
                 .cursor_pointer()
+                .on_hover({
+                    let round_st = round_st.clone();
+                    move |inside, w, cx| {
+                        round_st.update(cx, |s, cx| {
+                            s.0.set(if *inside { 1.0 } else { 0.0 }, cx);
+                            if !*inside {
+                                s.1.set(0.0, cx);
+                            }
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                })
+                .on_mouse_down(MouseButton::Left, {
+                    let round_st = round_st.clone();
+                    move |_, w, cx| {
+                        round_st.update(cx, |s, cx| {
+                            s.1.set(1.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                })
+                .on_mouse_up(MouseButton::Left, {
+                    let round_st = round_st.clone();
+                    move |_, w, cx| {
+                        round_st.update(cx, |s, cx| {
+                            s.1.set(0.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                })
                 .on_click(cx.listener(|this, _, _, cx| this.stop_run(cx)))
-                .child(pro_svg("0 0 24 24", STOP_SQUARE_SVG, 14., p.on_primary))
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(round_inset))
+                        .top(px(round_inset))
+                        .size(px(round_side))
+                        .rounded_full()
+                        .bg(round_bg)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_svg(
+                            "0 0 24 24",
+                            STOP_SQUARE_SVG,
+                            14. * round_scale,
+                            p.on_primary,
+                        )),
+                )
         } else {
             div()
                 .id(pro_eid(&self.id, "round-send-btn"))
@@ -1575,13 +1620,45 @@ impl Render for RunControls {
                 }))
                 .tab_index(0)
                 .size(px(28.))
+                .relative()
                 .flex_none()
                 .rounded_full()
-                .bg(p.primary)
                 .opacity(if has_draft { 1.0 } else { 0.24 })
                 .when(has_draft, |d| {
                     d.cursor_pointer()
-                        .hover(|s| s.opacity(0.9))
+                        .on_hover({
+                            let round_st = round_st.clone();
+                            move |inside, w, cx| {
+                                round_st.update(cx, |s, cx| {
+                                    s.0.set(if *inside { 1.0 } else { 0.0 }, cx);
+                                    if !*inside {
+                                        s.1.set(0.0, cx);
+                                    }
+                                    cx.notify();
+                                });
+                                w.refresh();
+                            }
+                        })
+                        .on_mouse_down(MouseButton::Left, {
+                            let round_st = round_st.clone();
+                            move |_, w, cx| {
+                                round_st.update(cx, |s, cx| {
+                                    s.1.set(1.0, cx);
+                                    cx.notify();
+                                });
+                                w.refresh();
+                            }
+                        })
+                        .on_mouse_up(MouseButton::Left, {
+                            let round_st = round_st.clone();
+                            move |_, w, cx| {
+                                round_st.update(cx, |s, cx| {
+                                    s.1.set(0.0, cx);
+                                    cx.notify();
+                                });
+                                w.refresh();
+                            }
+                        })
                         .on_click(cx.listener(move |this, _, w, cx| {
                             if let Some(ed) = &ed_for_round {
                                 let v = ed.read(cx).value().trim().to_owned();
@@ -1592,10 +1669,19 @@ impl Render for RunControls {
                             }
                         }))
                 })
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(pro_icon(ProIcon::ArrowUp, 14., p.on_primary))
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(if has_draft { round_inset } else { 0.0 }))
+                        .top(px(if has_draft { round_inset } else { 0.0 }))
+                        .size(px(if has_draft { round_side } else { 28.0 }))
+                        .rounded_full()
+                        .bg(if has_draft { round_bg } else { p.primary })
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_icon(ProIcon::ArrowUp, 14., p.on_primary)),
+                )
         };
 
         let write_card = div()
@@ -1650,16 +1736,16 @@ impl Render for RunControls {
                                         p.line_strong,
                                     ))
                                     .when(!compact, |d| {
-                                        d.child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .text_color(if ctx_warn {
-                                                    p.orange
-                                                } else {
-                                                    p.muted
-                                                })
-                                                .child(format!("{ctx_pct}%")),
-                                        )
+                                        d.child(pro_rolling_number(
+                                            pro_eid(&self.id, "rc-ctx-pct"),
+                                            ctx_pct as f64,
+                                            0,
+                                            "",
+                                            "%",
+                                            12.0,
+                                            FontWeight::NORMAL,
+                                            if ctx_warn { p.orange } else { p.muted },
+                                        ))
                                     }),
                             )
                             .when_some(queue_inline_btn, |d, qb| d.child(qb))
@@ -1674,7 +1760,7 @@ impl Render for RunControls {
             .bg(p.tray)
             .flex()
             .flex_col()
-            .when(!self.queue.is_empty(), |d| d.child(queue_rows))
+            .child(queue_tray_fold)
             .child(write_card);
 
         let outer_card = div()
@@ -1703,6 +1789,12 @@ impl Render for RunControls {
             .role(Role::Region)
             .aria_label(SharedString::from(format!("{} run", self.agent.name)))
             .track_focus(&self.focus)
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                if this.perm_menu_open {
+                    this.perm_menu_open = false;
+                    cx.notify();
+                }
+            }))
             .on_key_down(cx.listener(Self::handle_key_down))
             .relative()
             .w_full()

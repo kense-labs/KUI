@@ -5,14 +5,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_ease, pro_eid,
-        pro_empty_state, pro_modal_appear, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_ease,
+        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::activate,
         family::Slide,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon},
+        pro_icons::{ProIcon, pro_app_artwork},
     },
 };
 use gpui::{prelude::*, *};
@@ -250,6 +251,7 @@ pub struct AgentMetroMap {
     train_slides: Vec<Slide>,
     hover_focus: Option<MetroHoverFocus>,
     modal_target: Option<MetroModalTarget>,
+    last_modal_target: Option<MetroModalTarget>,
     toast: Option<(SharedString, Instant)>,
     loading: bool,
     empty: bool,
@@ -279,6 +281,7 @@ impl AgentMetroMap {
             train_slides,
             hover_focus: None,
             modal_target: None,
+            last_modal_target: None,
             toast: None,
             loading: false,
             empty: false,
@@ -509,20 +512,12 @@ impl AgentMetroMap {
             .collect();
         let is_interchange = serving.len() >= 2;
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "m-close-st"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close station card", "关闭站点详情"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "m-close-st"),
+            tr(cx, "Close station card", "关闭站点详情"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.modal_target = None;
@@ -531,13 +526,14 @@ impl AgentMetroMap {
             },
         );
 
-        let (st_text, st_bg, st_fg) = match station.status {
+        let (st_text, st_bg, st_fg, st_passed_chk) = match station.status {
             MetroStationStatus::Waiting => (
                 tr(cx, "Needs approval", "等待批准"),
                 p.amber_soft,
                 p.amber_ink,
+                false,
             ),
-            MetroStationStatus::Failed => (tr(cx, "Failed", "失败"), p.red_soft, p.red_ink),
+            MetroStationStatus::Failed => (tr(cx, "Failed", "失败"), p.red_soft, p.red_ink, false),
             MetroStationStatus::Normal => {
                 let any_here = serving.iter().any(|(_, l)| {
                     l.status == MetroLineStatus::Running && l.at.as_ref() == Some(&sid)
@@ -548,11 +544,12 @@ impl AgentMetroMap {
                         tr(cx, "Train at station", "智能体在此站"),
                         p.accent_soft,
                         p.blue,
+                        false,
                     )
                 } else if any_passed {
-                    (tr(cx, "Passed", "已通过"), p.green_soft, p.green_ink)
+                    (tr(cx, "Passed", "已通过"), p.green_soft, p.green_ink, true)
                 } else {
-                    (tr(cx, "Upcoming", "前方站点"), p.chip, p.muted)
+                    (tr(cx, "Upcoming", "前方站点"), p.chip, p.muted, false)
                 }
             }
         };
@@ -657,6 +654,16 @@ impl AgentMetroMap {
                             .font_weight(FontWeight::MEDIUM)
                             .flex()
                             .items_center()
+                            .gap(px(3.5))
+                            .when(st_passed_chk, |d| {
+                                d.child(pro_check_draw(
+                                    pro_eid(&self.id, format!("m-stdlg-chk-{sid}")),
+                                    true,
+                                    12.0,
+                                    false,
+                                    st_fg,
+                                ))
+                            })
                             .child(st_text),
                     )
                     .child(close_btn),
@@ -733,22 +740,7 @@ impl AgentMetroMap {
             );
         }
 
-        div()
-            .id(pro_eid(&self.id, "m-scrim-st"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.modal_target = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "m-modal-st"),
-                sid,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
-            .into_any_element()
+        dialog.into_any_element()
     }
 
     fn render_line_dialog(
@@ -763,20 +755,12 @@ impl AgentMetroMap {
         let pkey = infer_provider_key(&line.model);
         let cur_idx = stop_index_for_line(line);
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "m-close-ln"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close line card", "关闭线路详情"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "m-close-ln"),
+            tr(cx, "Close line card", "关闭线路详情"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.modal_target = None;
@@ -819,14 +803,23 @@ impl AgentMetroMap {
                     .items_center()
                     .gap(px(8.))
                     .text_size(px(12.))
-                    .child(
+                    .child(if passed && !is_here {
+                        pro_check_draw(
+                            pro_eid(&self.id, format!("m-ln-chk-{lid}-{si}")),
+                            true,
+                            12.0,
+                            false,
+                            lcol,
+                        )
+                    } else {
                         div()
                             .size(px(11.))
                             .rounded_full()
                             .bg(p.card)
                             .border_2()
-                            .border_color(if passed { lcol } else { lcol.opacity(0.32) }),
-                    )
+                            .border_color(if passed { lcol } else { lcol.opacity(0.32) })
+                            .into_any_element()
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -910,33 +903,21 @@ impl AgentMetroMap {
                             .px(px(6.))
                             .rounded(px(4.))
                             .bg(p.chip)
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
                             .flex()
                             .items_center()
-                            .child(line.status.label(cx)),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("m-ln-st-{lid}")),
+                                line.status.label(cx),
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     )
                     .child(close_btn),
             )
             .child(stops);
 
-        div()
-            .id(pro_eid(&self.id, "m-scrim-ln"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.modal_target = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "m-modal-ln"),
-                lid,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
-            .into_any_element()
+        dialog.into_any_element()
     }
 }
 
@@ -1072,6 +1053,10 @@ impl Render for AgentMetroMap {
             .clone()
             .unwrap_or_else(|| tr(cx, "Ship v2.4", "发版 v2.4 路线图").into());
 
+        if let Some(mt) = &self.modal_target {
+            self.last_modal_target = Some(mt.clone());
+        }
+
         // Determine lit line ids based on hover or open modal
         let active_focus = self
             .hover_focus
@@ -1091,6 +1076,66 @@ impl Render for AgentMetroMap {
                 .collect(),
         });
 
+        // Pre-sample smooth spring opacities for lines, legend pills, and stations!
+        let line_opacities: Vec<f32> = self
+            .lines
+            .iter()
+            .enumerate()
+            .map(|(li, ln)| {
+                let dimmed = lit_line_ids
+                    .as_ref()
+                    .map(|lit| !lit.contains(&ln.id))
+                    .unwrap_or(false);
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("mln-op-{li}")),
+                    if dimmed { 0.25 } else { 1.0 },
+                    0.22,
+                    w,
+                    cx,
+                )
+            })
+            .collect();
+
+        let leg_opacities: Vec<f32> = self
+            .lines
+            .iter()
+            .enumerate()
+            .map(|(li, ln)| {
+                let dimmed = lit_line_ids
+                    .as_ref()
+                    .map(|lit| !lit.contains(&ln.id))
+                    .unwrap_or(false);
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("mleg-op-{li}")),
+                    if dimmed { 0.42 } else { 1.0 },
+                    0.20,
+                    w,
+                    cx,
+                )
+            })
+            .collect();
+
+        let mut st_opacities: HashMap<SharedString, f32> =
+            HashMap::with_capacity(self.stations.len());
+        for st in &self.stations {
+            let st_dimmed = match &active_focus {
+                Some(MetroHoverFocus::Line(lid)) => !self
+                    .lines
+                    .iter()
+                    .any(|l| &l.id == lid && l.stations.contains(&st.id)),
+                Some(MetroHoverFocus::Station(sid)) => sid != &st.id,
+                None => false,
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("mst-op-{}", st.id)),
+                if st_dimmed { 0.28 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
+            st_opacities.insert(st.id.clone(), op);
+        }
+
         // Legend bar
         let mut legend = div().flex().flex_wrap().items_center().gap(px(6.));
         let chip_surface: Hsla = if p.dark {
@@ -1104,74 +1149,73 @@ impl Render for AgentMetroMap {
             let pkey = infer_provider_key(&ln.model);
             let lid = ln.id.clone();
             let lid_hov = ln.id.clone();
-            let dimmed = lit_line_ids
-                .as_ref()
-                .map(|lit| !lit.contains(&ln.id))
-                .unwrap_or(false);
-            let hov_border = p.line_strong;
-            let focus_c = p.focus;
+            let leg_op = leg_opacities.get(li).copied().unwrap_or(1.0);
+            let is_line_sel = self.modal_target == Some(MetroModalTarget::Line(lid.clone()));
 
-            legend = legend.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("mleg-{li}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{}, {}", ln.name, ln.model))
-                    .tab_index(0)
-                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                        let next = if *hovered {
-                            Some(MetroHoverFocus::Line(lid_hov.clone()))
-                        } else if this.hover_focus == Some(MetroHoverFocus::Line(lid_hov.clone())) {
-                            None
-                        } else {
-                            this.hover_focus.clone()
-                        };
-                        if this.hover_focus != next {
-                            this.hover_focus = next;
-                            cx.notify();
-                        }
-                    }))
-                    .h(px(28.))
-                    .pl(px(8.))
-                    .pr(px(8.))
-                    .rounded(px(7.))
-                    .bg(chip_surface)
-                    .border_1()
-                    .border_color(p.line)
-                    .opacity(if dimmed { 0.42 } else { 1.0 })
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_border))
-                    .focus_visible(move |s| s.border_color(focus_c))
-                    .child(div().w(px(12.)).h(px(3.)).rounded(px(1.5)).bg(lcol))
-                    .child(
-                        div()
-                            .size(px(18.))
-                            .rounded(px(5.))
-                            .bg(p.card)
-                            .border_1()
-                            .border_color(p.line)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .children(pro_app_artwork(pkey, 11., cx)),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(ln.name.clone()),
-                    ),
-                cx,
-                move |this, _, cx| {
-                    let target = lid.clone();
-                    this.modal_target = Some(MetroModalTarget::Line(target.clone()));
-                    cx.emit(AgentMetroMapEvent::LineSelected { line_id: target });
-                    cx.notify();
-                },
-            ));
+            legend = legend.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("mleg-{li}")),
+                    format!("{}, {}", ln.name, ln.model),
+                    7.0,
+                    chip_surface,
+                    pro_mix_color(chip_surface, lcol, if p.dark { 0.12 } else { 0.06 }),
+                    if is_line_sel {
+                        lcol.opacity(0.65)
+                    } else {
+                        p.line
+                    },
+                    p.line_strong,
+                    is_line_sel,
+                    div()
+                        .h(px(28.))
+                        .pl(px(8.))
+                        .pr(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(div().w(px(12.)).h(px(3.)).rounded(px(1.5)).bg(lcol))
+                        .child(
+                            div()
+                                .size(px(18.))
+                                .rounded(px(5.))
+                                .bg(p.card)
+                                .border_1()
+                                .border_color(p.line)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .children(pro_app_artwork(pkey, 11., cx)),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(ln.name.clone()),
+                        ),
+                    cx,
+                    move |this, _, cx| {
+                        let target = lid.clone();
+                        this.modal_target = Some(MetroModalTarget::Line(target.clone()));
+                        cx.emit(AgentMetroMapEvent::LineSelected { line_id: target });
+                        cx.notify();
+                    },
+                )
+                .opacity(leg_op)
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    let next = if *hovered {
+                        Some(MetroHoverFocus::Line(lid_hov.clone()))
+                    } else if this.hover_focus == Some(MetroHoverFocus::Line(lid_hov.clone())) {
+                        None
+                    } else {
+                        this.hover_focus.clone()
+                    };
+                    if this.hover_focus != next {
+                        this.hover_focus = next;
+                        cx.notify();
+                    }
+                })),
+            );
         }
 
         let header = div()
@@ -1213,19 +1257,16 @@ impl Render for AgentMetroMap {
             train_pos: f32,
             status: MetroLineStatus,
             color: Hsla,
-            dimmed: bool,
+            vis: f32,
         }
 
         let mut line_renders: Vec<LineRenderData> = Vec::with_capacity(self.lines.len());
-        let mut train_markers: Vec<(SharedString, Hsla, (f32, f32), bool)> = Vec::new();
+        let mut train_markers: Vec<(SharedString, Hsla, (f32, f32), f32)> = Vec::new();
 
         for (li, ln) in self.lines.iter().enumerate() {
             let lcol = self.line_color(li, ln, &p);
             let slid = self.train_slides[li].get(w, cx);
-            let dimmed = lit_line_ids
-                .as_ref()
-                .map(|lit| !lit.contains(&ln.id))
-                .unwrap_or(false);
+            let vis = line_opacities.get(li).copied().unwrap_or(1.0);
 
             let mut segs: Vec<Vec<(f32, f32)>> = Vec::new();
             for pair in ln.stations.windows(2) {
@@ -1243,14 +1284,14 @@ impl Render for AgentMetroMap {
                 };
                 if ln.status == MetroLineStatus::Running {
                     let pt = sample_train_point(&ln.stations, &segs, &st_px, clamped);
-                    train_markers.push((ln.id.clone(), lcol, pt, dimmed));
+                    train_markers.push((ln.id.clone(), lcol, pt, vis));
                 }
                 line_renders.push(LineRenderData {
                     segments: segs,
                     train_pos: clamped,
                     status: ln.status,
                     color: lcol,
-                    dimmed,
+                    vis,
                 });
             } else {
                 line_renders.push(LineRenderData {
@@ -1258,7 +1299,7 @@ impl Render for AgentMetroMap {
                     train_pos: 0.0,
                     status: MetroLineStatus::Idle,
                     color: lcol,
-                    dimmed,
+                    vis,
                 });
             }
         }
@@ -1276,7 +1317,7 @@ impl Render for AgentMetroMap {
                 let oy = f32::from(bounds.origin.y);
 
                 for lr in &line_renders {
-                    let dim_mul = if lr.dimmed { 0.25 } else { 1.0 };
+                    let dim_mul = lr.vis;
                     for (si, pts) in lr.segments.iter().enumerate() {
                         if pts.len() < 2 {
                             continue;
@@ -1312,12 +1353,19 @@ impl Render for AgentMetroMap {
 
                         // Traveling light ahead of active train on the immediate upcoming segment
                         if lr.status == MetroLineStatus::Running
-                            && !lr.dimmed
+                            && dim_mul > 0.5
                             && let Some(ph) = light_phase
                         {
                             let cur_seg = lr.train_pos.floor() as usize;
                             if si == cur_seg {
-                                paint_ahead_pulse(pts, ox, oy, ph, lr.color, window);
+                                paint_ahead_pulse(
+                                    pts,
+                                    ox,
+                                    oy,
+                                    ph,
+                                    lr.color.opacity(dim_mul),
+                                    window,
+                                );
                             }
                         }
                     }
@@ -1337,7 +1385,7 @@ impl Render for AgentMetroMap {
             };
             let count = st_line_counts.get(&st.id).copied().unwrap_or(1);
             let is_hub = count >= 2;
-            let dot_side = if is_hub { 13.0 } else { 9.5 };
+            let dot_side: f32 = if is_hub { 13.0 } else { 9.5 };
 
             let serving_colors: Vec<Hsla> = self
                 .lines
@@ -1349,15 +1397,13 @@ impl Render for AgentMetroMap {
             let primary_line_col = serving_colors.first().copied().unwrap_or(p.blue);
 
             let any_passed_or_here = self.lines.iter().any(|l| station_passed_by_line(l, &st.id));
-
-            let st_dimmed = match &active_focus {
-                Some(MetroHoverFocus::Line(lid)) => !self
-                    .lines
-                    .iter()
-                    .any(|l| &l.id == lid && l.stations.contains(&st.id)),
-                Some(MetroHoverFocus::Station(sid)) => sid != &st.id,
-                None => false,
-            };
+            let any_here = self
+                .lines
+                .iter()
+                .any(|l| l.status == MetroLineStatus::Running && l.at.as_ref() == Some(&st.id));
+            let st_completed =
+                st.status == MetroStationStatus::Normal && any_passed_or_here && !any_here;
+            let st_op = st_opacities.get(&st.id).copied().unwrap_or(1.0);
 
             let (ring_bg, ring_border) = match st.status {
                 MetroStationStatus::Waiting => (p.amber_soft, p.amber),
@@ -1393,36 +1439,23 @@ impl Render for AgentMetroMap {
 
             let sid_click = st.id.clone();
             let sid_hov = st.id.clone();
-            let focus_c = p.focus;
+            let is_st_sel = self.modal_target == Some(MetroModalTarget::Station(st.id.clone()));
 
-            let hit_btn = activate(
+            let hit_btn = pro_tactile(
+                pro_eid(&self.id, format!("mst-{}", st.id)),
+                disp_lbl.clone(),
+                11.0,
+                transparent_black(),
+                p.hover.opacity(0.65),
+                transparent_black(),
+                transparent_black(),
+                is_st_sel,
                 div()
-                    .id(pro_eid(&self.id, format!("mst-{}", st.id)))
-                    .role(Role::Button)
-                    .aria_label(disp_lbl.clone())
-                    .tab_index(0)
-                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                        let next = if *hovered {
-                            Some(MetroHoverFocus::Station(sid_hov.clone()))
-                        } else if this.hover_focus
-                            == Some(MetroHoverFocus::Station(sid_hov.clone()))
-                        {
-                            None
-                        } else {
-                            this.hover_focus.clone()
-                        };
-                        if this.hover_focus != next {
-                            this.hover_focus = next;
-                            cx.notify();
-                        }
-                    }))
                     .size(px(22.))
-                    .rounded_full()
+                    .relative()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_1().border_color(focus_c))
                     .when(st.status == MetroStationStatus::Waiting && !reduced, |d| {
                         let halo = 15.0 + 5.0 * breathe;
                         d.child(
@@ -1433,14 +1466,31 @@ impl Render for AgentMetroMap {
                                 .bg(p.amber.opacity(0.24 * (1.0 - breathe * 0.4))),
                         )
                     })
-                    .child(
+                    .child(if st_completed {
+                        div()
+                            .size(px(dot_side.max(12.5)))
+                            .rounded_full()
+                            .bg(p.card)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("mst-chk-{}", st.id)),
+                                true,
+                                12.0,
+                                false,
+                                primary_line_col,
+                            ))
+                            .into_any_element()
+                    } else {
                         div()
                             .size(px(dot_side))
                             .rounded_full()
                             .bg(ring_bg)
                             .border_2()
-                            .border_color(ring_border),
-                    ),
+                            .border_color(ring_border)
+                            .into_any_element()
+                    }),
                 cx,
                 move |this, _, cx| {
                     let target = sid_click.clone();
@@ -1448,7 +1498,21 @@ impl Render for AgentMetroMap {
                     cx.emit(AgentMetroMapEvent::StationSelected { station_id: target });
                     cx.notify();
                 },
-            );
+            )
+            .size(px(22.))
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                let next = if *hovered {
+                    Some(MetroHoverFocus::Station(sid_hov.clone()))
+                } else if this.hover_focus == Some(MetroHoverFocus::Station(sid_hov.clone())) {
+                    None
+                } else {
+                    this.hover_focus.clone()
+                };
+                if this.hover_focus != next {
+                    this.hover_focus = next;
+                    cx.notify();
+                }
+            }));
 
             let label_patch = div()
                 .px(px(3.5))
@@ -1478,7 +1542,7 @@ impl Render for AgentMetroMap {
                     .left(px(lx))
                     .top(px(ly.max(2.0)))
                     .w(px(box_w))
-                    .opacity(if st_dimmed { 0.30 } else { 1.0 })
+                    .opacity(st_op)
                     .flex()
                     .flex_col()
                     .items_center()
@@ -1496,23 +1560,24 @@ impl Render for AgentMetroMap {
 
         // White agent train chips riding on top of active stations/rails
         let mut train_elements: Vec<AnyElement> = Vec::with_capacity(train_markers.len());
-        for (ti, (lid, lcol, (tx, ty), dimmed)) in train_markers.into_iter().enumerate() {
-            // Slight offset if two trains share the exact same interchange pixel
+        for (ti, (lid, lcol, (tx, ty), vis)) in train_markers.into_iter().enumerate() {
             let offset_y = (ti % 2) as f32 * 0.0;
             let lid_click = lid.clone();
             train_elements.push(
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("mtrain-{lid}")),
+                    format!("{lid} train"),
+                    7.0,
+                    p.card,
+                    p.hover,
+                    transparent_black(),
+                    lcol.opacity(0.55),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("mtrain-{lid}")))
-                        .role(Role::Button)
-                        .aria_label(format!("{lid} train"))
-                        .absolute()
-                        .left(px(tx - 11.0))
-                        .top(px(ty - 11.0 + offset_y))
-                        .opacity(if dimmed { 0.30 } else { 1.0 })
-                        .cursor_pointer()
-                        .shadow_sm()
-                        .rounded(px(7.))
+                        .size(px(22.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
                         .child(pro_agent_avatar(&lid, lcol, 22., true, elapsed_ms, cx)),
                     cx,
                     move |this, _, cx| {
@@ -1522,19 +1587,70 @@ impl Render for AgentMetroMap {
                         cx.notify();
                     },
                 )
+                .size(px(22.))
+                .absolute()
+                .left(px(tx - 11.0))
+                .top(px(ty - 11.0 + offset_y))
+                .opacity(vis)
+                .shadow_sm()
                 .into_any_element(),
             );
         }
 
-        let open_modal = self.modal_target.clone().and_then(|target| match target {
-            MetroModalTarget::Station(sid) => {
-                let st = self.stations.iter().find(|s| s.id == sid)?;
-                Some(self.render_station_dialog(st, &p, cx))
-            }
-            MetroModalTarget::Line(lid) => {
-                let (idx, ln) = self.lines.iter().enumerate().find(|(_, l)| l.id == lid)?;
-                Some(self.render_line_dialog(idx, ln, &p, cx))
-            }
+        let modal_open = self.modal_target.is_some();
+        let shown_target = self
+            .modal_target
+            .clone()
+            .or_else(|| self.last_modal_target.clone());
+        let open_modal = shown_target.and_then(|target| {
+            let (key, card): (SharedString, AnyElement) = match target {
+                MetroModalTarget::Station(sid) => {
+                    let st = self.stations.iter().find(|s| s.id == sid)?;
+                    (
+                        format!("st:{sid}").into(),
+                        self.render_station_dialog(st, &p, cx),
+                    )
+                }
+                MetroModalTarget::Line(lid) => {
+                    let (idx, ln) = self.lines.iter().enumerate().find(|(_, l)| l.id == lid)?;
+                    (
+                        format!("ln:{lid}").into(),
+                        self.render_line_dialog(idx, ln, &p, cx),
+                    )
+                }
+            };
+            let scrim_alpha = if p.dark { 0.46 } else { 0.20 };
+            let on_scrim_click = cx.listener(|this, _, w, cx| {
+                this.modal_target = None;
+                this.focus.focus(w, cx);
+                cx.notify();
+            });
+            let card_vtx = pro_view_transition(pro_eid(&self.id, "m-modal-vtx"), key, card);
+            let card_pop =
+                pro_popover_presence(pro_eid(&self.id, "m-modal-pop"), modal_open, move || {
+                    card_vtx
+                });
+            Some(pro_presence(
+                pro_eid(&self.id, "m-modal-pres"),
+                modal_open,
+                0.18,
+                0.14,
+                move |amt| {
+                    let mut scrim = div()
+                        .id(pro_eid(&ElementId::Name("m-scrim".into()), "ov"))
+                        .absolute()
+                        .inset_0()
+                        .bg(hsla(0., 0., 0., scrim_alpha * amt))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .p(px(16.));
+                    if modal_open {
+                        scrim = scrim.on_click(on_scrim_click);
+                    }
+                    scrim.child(card_pop).into_any_element()
+                },
+            ))
         });
 
         div()

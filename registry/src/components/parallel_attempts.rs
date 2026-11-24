@@ -5,9 +5,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mix_color, pro_rolling_number, pro_shimmer_text,
-        pro_skeleton_bar, pro_spring_bar, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_mix_color, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_view_transition, tr,
     },
+    foundation::Theme,
     primitives::{
         family::disabled_motion,
         pro_icons::{ProIcon, person_initials, pro_app_artwork, pro_icon, pro_svg},
@@ -239,6 +241,7 @@ pub struct ParallelAttempts {
     final_targets: Vec<ParallelAttempt>,
     picked_override: Option<SharedString>,
     inspected_id: Option<SharedString>,
+    last_diff_attempt: Option<ParallelAttempt>,
     hovered_id: Option<SharedString>,
     race_started: Option<Instant>,
     started_at: Instant,
@@ -264,6 +267,7 @@ impl ParallelAttempts {
             final_targets: targets,
             picked_override: None,
             inspected_id: None,
+            last_diff_attempt: None,
             hovered_id: None,
             race_started: None,
             started_at: Instant::now(),
@@ -494,7 +498,7 @@ fn format_took(ms: u64) -> String {
 impl Render for ParallelAttempts {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         self.advance_live_race(window, reduced);
 
         let elapsed_s = self.started_at.elapsed().as_secs_f32();
@@ -592,7 +596,6 @@ impl Render for ParallelAttempts {
         } else {
             hsla(215. / 360., 1.0, 0.44, 0.78)
         };
-        let replay_hover = p.chip_hover;
         let header = div()
             .w_full()
             .mb(px(12.))
@@ -656,30 +659,17 @@ impl Render for ParallelAttempts {
                         FontWeight::MEDIUM,
                         p.ink,
                     ))
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "replay-race"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Replay parallel race", "重放并行竞速"))
-                            .tab_index(0)
-                            .h(px(24.))
-                            .px(px(7.))
-                            .rounded(px(6.))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(replay_hover))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.start_race(cx);
-                            }))
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(pro_icon(ProIcon::Refresh, 12., p.muted))
-                            .child(tr(cx, "Re-run", "重跑")),
-                    ),
+                    .child(pro_btn(
+                        pro_eid(&self.id, "replay-race"),
+                        tr(cx, "Re-run", "重跑"),
+                        Some(ProIcon::Refresh),
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        |this, _, cx| {
+                            this.start_race(cx);
+                        },
+                    )),
             );
 
         let best_id = self.best_attempt_id();
@@ -689,6 +679,21 @@ impl Render for ParallelAttempts {
             .clone()
             .or_else(|| picked_id.clone())
             .or_else(|| self.attempts.first().map(|a| a.id.clone()));
+
+        let mut row_opacities = Vec::with_capacity(self.attempts.len());
+        for attempt in &self.attempts {
+            let is_picked = picked_id.as_ref() == Some(&attempt.id);
+            let is_inspected = inspected_id.as_ref() == Some(&attempt.id);
+            let is_hovered = self.hovered_id.as_ref() == Some(&attempt.id);
+            let quiet = picked_id.is_some() && !is_picked && !is_inspected && !is_hovered;
+            row_opacities.push(pro_spring_f32(
+                pro_eid(&self.id, format!("pa-op-{}", attempt.id)),
+                if quiet { 0.56 } else { 1.0 },
+                0.22,
+                window,
+                cx,
+            ));
+        }
 
         let track_c: Hsla = if p.dark {
             hsla(0., 0., 1., 0.055)
@@ -715,19 +720,25 @@ impl Render for ParallelAttempts {
             let is_picked = picked_id.as_ref() == Some(&attempt.id);
             let is_inspected = inspected_id.as_ref() == Some(&attempt.id);
             let is_hovered = self.hovered_id.as_ref() == Some(&attempt.id);
-            let quiet = picked_id.is_some() && !is_picked && !is_inspected && !is_hovered;
+            let row_op = row_opacities[idx];
 
             let row_bg = if is_picked {
                 pro_mix_color(panel_bg, p.green, if p.dark { 0.075 } else { 0.045 })
             } else {
                 panel_bg
             };
+            let row_hover_bg = pro_mix_color(row_bg, p.hover, 0.85);
             let row_border = if is_picked {
                 p.green.opacity(if p.dark { 0.45 } else { 0.36 })
             } else if is_inspected {
                 p.blue.opacity(0.45)
             } else {
                 panel_border
+            };
+            let row_hover_border = if is_picked {
+                p.green.opacity(0.65)
+            } else {
+                p.line_strong
             };
 
             let bar_fill = match attempt.status {
@@ -850,20 +861,28 @@ impl Render for ParallelAttempts {
                                     .child(tr(cx, "Best", "最佳")),
                             )
                         })
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(p.ink)
-                                .child(sc.to_string()),
-                        )
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, format!("sc-{}", attempt.id)),
+                            sc as f64,
+                            0,
+                            "",
+                            "",
+                            13.,
+                            FontWeight::SEMIBOLD,
+                            p.ink,
+                        ))
                         .into_any_element()
                 }
-                AttemptStatus::Running => div()
-                    .text_size(px(13.))
-                    .text_color(p.muted)
-                    .child(format!("{:.0} %", prog * 100.0))
-                    .into_any_element(),
+                AttemptStatus::Running => pro_rolling_number(
+                    pro_eid(&self.id, format!("pct-{}", attempt.id)),
+                    (prog * 100.0) as f64,
+                    0,
+                    "",
+                    " %",
+                    13.,
+                    FontWeight::NORMAL,
+                    p.muted,
+                ),
                 AttemptStatus::Failed => div()
                     .text_size(px(12.5))
                     .font_weight(FontWeight::MEDIUM)
@@ -888,12 +907,21 @@ impl Render for ParallelAttempts {
                     .flex()
                     .items_center()
                     .justify_end()
-                    .gap(px(4.))
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.green_ink)
-                    .child(pro_icon(ProIcon::Check, 11.5, p.green_ink))
-                    .child(tr(cx, "Using", "已采用"))
+                    .gap(px(5.))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("pick-chk-{}", attempt.id)),
+                        true,
+                        13.,
+                        false,
+                        p.green,
+                    ))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, format!("pick-lbl-{}", attempt.id)),
+                        tr(cx, "Using", "已采用"),
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.green_ink,
+                    ))
                     .into_any_element()
             } else if is_hovered && attempt.status == AttemptStatus::Done {
                 div()
@@ -921,35 +949,12 @@ impl Render for ParallelAttempts {
             let row_aria = format!("{} — {}", attempt.name, attempt.display_approach(cx));
             let tile = model_tile(attempt.icon.as_deref(), attempt.name.as_ref(), &p, cx);
 
-            let row = div()
-                .id(pro_eid(&self.id, format!("row-{}", attempt.id)))
-                .role(Role::RadioButton)
-                .aria_label(row_aria)
-                .tab_index(0)
+            let row_inner = div()
                 .w_full()
                 .min_h(px(ROW_H))
                 .pl(px(12.))
                 .pr(px(16.))
                 .py(px(11.))
-                .rounded(px(10.))
-                .bg(row_bg)
-                .border_1()
-                .border_color(row_border)
-                .when(!p.dark, |d| d.shadow_sm())
-                .opacity(if quiet { 0.56 } else { 1.0 })
-                .cursor_pointer()
-                .focus_visible(move |s| s.border_2().border_color(p.focus))
-                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                    if *inside {
-                        this.hovered_id = Some(id_hover.clone());
-                    } else if this.hovered_id.as_ref() == Some(&id_hover) {
-                        this.hovered_id = None;
-                    }
-                    cx.notify();
-                }))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.pick_attempt(id_click.as_ref(), cx);
-                }))
                 .flex()
                 .items_center()
                 .gap(px(14.))
@@ -1007,14 +1012,49 @@ impl Render for ParallelAttempts {
                         .child(bottom_right),
                 );
 
+            let row = pro_tactile(
+                pro_eid(&self.id, format!("row-{}", attempt.id)),
+                row_aria,
+                10.,
+                row_bg,
+                row_hover_bg,
+                row_border,
+                row_hover_border,
+                is_picked || is_inspected,
+                row_inner,
+                cx,
+                move |this, _, cx| {
+                    this.pick_attempt(id_click.as_ref(), cx);
+                },
+            )
+            .role(Role::RadioButton)
+            .w_full()
+            .when(!p.dark, |d| d.shadow_sm())
+            .opacity(row_op)
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_id = Some(id_hover.clone());
+                } else if this.hovered_id.as_ref() == Some(&id_hover) {
+                    this.hovered_id = None;
+                }
+                cx.notify();
+            }));
+
             rows_col = rows_col.child(row);
         }
 
-        // Diff / output preview for the inspected or winning attempt
-        let inspector = self.inspected_attempt().and_then(|att| {
-            if att.diff_lines.is_empty() {
-                return None;
-            }
+        // Diff / output preview for the inspected or winning attempt (with bidirectional fold)
+        let active_diff_att = self
+            .inspected_attempt()
+            .filter(|a| !a.diff_lines.is_empty())
+            .cloned();
+        if let Some(att) = &active_diff_att {
+            self.last_diff_attempt = Some(att.clone());
+        }
+        let has_diff_open = active_diff_att.is_some();
+        let diff_att = active_diff_att.or_else(|| self.last_diff_attempt.clone());
+
+        let inspector = diff_att.map(|att| {
             let is_winner = picked_id.as_ref() == Some(&att.id);
             let file = att
                 .diff_file
@@ -1056,6 +1096,34 @@ impl Render for ParallelAttempts {
                 );
             }
 
+            let active_lbl = tr(cx, "Active patch", "当前采用补丁").to_string();
+            let chk_el = pro_check_draw(
+                pro_eid(&self.id, "active-patch-chk"),
+                is_winner,
+                12.,
+                false,
+                p.green,
+            );
+            let adds_num = pro_rolling_number(
+                pro_eid(&self.id, "diff-adds"),
+                adds as f64,
+                0,
+                "+",
+                "",
+                11.5,
+                FontWeight::MEDIUM,
+                p.green_ink,
+            );
+            let dels_num = pro_rolling_number(
+                pro_eid(&self.id, "diff-dels"),
+                dels as f64,
+                0,
+                "-",
+                "",
+                11.5,
+                FontWeight::MEDIUM,
+                p.red_ink,
+            );
             let card = div()
                 .w_full()
                 .mt(px(10.))
@@ -1096,24 +1164,12 @@ impl Render for ParallelAttempts {
                                 .flex()
                                 .items_center()
                                 .gap(px(8.))
-                                .child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.green_ink)
-                                        .child(format!("+{adds}")),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.red_ink)
-                                        .child(format!("-{dels}")),
-                                )
+                                .child(adds_num)
+                                .child(dels_num)
                                 .when(is_winner, |d| {
                                     d.child(
                                         div()
-                                            .h(px(18.))
+                                            .h(px(19.))
                                             .px(px(6.))
                                             .rounded(px(4.))
                                             .bg(p.green_soft)
@@ -1122,18 +1178,23 @@ impl Render for ParallelAttempts {
                                             .text_color(p.green_ink)
                                             .flex()
                                             .items_center()
-                                            .child(tr(cx, "Active patch", "当前采用补丁")),
+                                            .gap(px(4.))
+                                            .child(chk_el)
+                                            .child(active_lbl),
                                     )
                                 }),
                         ),
                 )
                 .child(code_col);
 
-            Some(pro_view_transition(
-                pro_eid(&self.id, "diff-vtx"),
-                att.id.clone(),
-                card,
-            ))
+            let vtx_card = pro_view_transition(pro_eid(&self.id, "diff-vtx"), att.id.clone(), card);
+            pro_fold(
+                pro_eid(&self.id, "diff-fold"),
+                has_diff_open,
+                148.0,
+                0.0,
+                move || vtx_card,
+            )
         });
 
         div()

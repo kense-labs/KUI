@@ -6,14 +6,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::{UiLanguage, activate},
-        family::{PhaseClock, disabled_motion},
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_svg},
     },
 };
@@ -290,6 +290,22 @@ fn resample_f32(src: &[f32], len: usize) -> Vec<f32> {
         .collect()
 }
 
+fn sample_finite(vals: &[f32], pos: f32) -> Option<f32> {
+    if vals.is_empty() {
+        return None;
+    }
+    let clamped = pos.clamp(0., (vals.len() - 1) as f32);
+    let i0 = (clamped.floor() as usize).min(vals.len() - 1);
+    let i1 = (i0 + 1).min(vals.len() - 1);
+    let frac = clamped - i0 as f32;
+    match (vals[i0].is_finite(), vals[i1].is_finite()) {
+        (true, true) => Some(vals[i0] + (vals[i1] - vals[i0]) * frac),
+        (true, false) => Some(vals[i0]),
+        (false, true) => Some(vals[i1]),
+        (false, false) => None,
+    }
+}
+
 struct SeriesMorphState {
     from_cur: Vec<f32>,
     to_cur: Vec<f32>,
@@ -297,6 +313,9 @@ struct SeriesMorphState {
     to_prev: Option<Vec<f32>>,
     morph_clock: PhaseClock,
     mount_clock: PhaseClock,
+    scrub_pos: Slide,
+    scrub_alpha: Slide,
+    was_scrubbing: bool,
 }
 
 #[derive(IntoElement)]
@@ -328,11 +347,17 @@ impl RenderOnce for KpiInteractiveSeries {
                 to_prev: init_p,
                 morph_clock: PhaseClock::default(),
                 mount_clock,
+                scrub_pos: Slide::snappy(0.),
+                scrub_alpha: Slide::snappy(0.),
+                was_scrubbing: false,
             }
         });
 
         let reduced = disabled_motion(cx);
-        let (cur_vals, prev_vals, reveal) = st.update(cx, |s, cx| {
+        let valid_hover = self
+            .hover_idx
+            .filter(|&idx| idx < self.current.len() && self.current[idx].is_finite());
+        let (cur_vals, prev_vals, reveal, scrub_pos, scrub_alpha) = st.update(cx, |s, cx| {
             let age = s.morph_clock.time(0.30, w, cx);
             let cur_t = pro_ease((age / 0.30).clamp(0., 1.));
             if s.to_cur != self.current || s.to_prev != self.previous {
@@ -392,7 +417,22 @@ impl RenderOnce for KpiInteractiveSeries {
             } else {
                 pro_ease((mount_age / 0.56).clamp(0., 1.))
             };
-            (cur, prev, rev)
+
+            if let Some(hi) = valid_hover {
+                if !s.was_scrubbing && s.scrub_alpha.value(cx) < 0.08 {
+                    s.scrub_pos.reset(hi as f32);
+                } else {
+                    s.scrub_pos.set(hi as f32, cx);
+                }
+                s.scrub_alpha.set(1., cx);
+                s.was_scrubbing = true;
+            } else {
+                s.scrub_alpha.set(0., cx);
+                s.was_scrubbing = false;
+            }
+            let sp = s.scrub_pos.get(w, cx);
+            let sa = s.scrub_alpha.get(w, cx).clamp(0., 1.);
+            (cur, prev, rev, sp, sa)
         });
 
         let accent = self.accent;
@@ -401,7 +441,6 @@ impl RenderOnce for KpiInteractiveSeries {
         let guide_color = self.guide_color;
         let show_grid = self.show_grid;
         let fill_alpha = self.fill_alpha;
-        let hover_idx = self.hover_idx;
 
         canvas(
             |_, _, _| (),
@@ -432,6 +471,14 @@ impl RenderOnce for KpiInteractiveSeries {
 
                 let map_pt = |idx: usize, count: usize, val: f32| -> Point<Pixels> {
                     let tx = idx as f32 / count.saturating_sub(1).max(1) as f32;
+                    let ty = 1. - ((val - min_v) / span).clamp(0., 1.);
+                    point(
+                        bounds.left() + px(tx * bw),
+                        bounds.top() + px(pad_y + ty * plot_h),
+                    )
+                };
+                let map_pos = |pos: f32, count: usize, val: f32| -> Point<Pixels> {
+                    let tx = (pos / count.saturating_sub(1).max(1) as f32).clamp(0., 1.);
                     let ty = 1. - ((val - min_v) / span).clamp(0., 1.);
                     point(
                         bounds.left() + px(tx * bw),
@@ -538,60 +585,67 @@ impl RenderOnce for KpiInteractiveSeries {
                     window.paint_path(path, accent);
                 }
 
-                // Hover scrubber guide & ringed markers
-                if let Some(hi) = hover_idx.filter(|&idx| idx < cur_vals.len())
-                    && cur_vals[hi].is_finite()
+                // Spring-gliding hover scrubber guide & ringed markers
+                if scrub_alpha > 0.01
+                    && let Some(cur_y) = sample_finite(&cur_vals, scrub_pos)
                 {
-                    let cur_pt = map_pt(hi, cur_vals.len(), cur_vals[hi]);
+                    let cur_pt = map_pos(scrub_pos, cur_vals.len(), cur_y);
                     let mut guide = PathBuilder::stroke(px(1.));
                     guide.move_to(point(cur_pt.x, bounds.top()));
                     guide.line_to(point(cur_pt.x, bounds.bottom()));
                     if let Ok(path) = guide.build() {
-                        window.paint_path(path, guide_color);
+                        window.paint_path(path, guide_color.opacity(guide_color.a * scrub_alpha));
                     }
 
+                    let scale = 0.78 + 0.22 * scrub_alpha;
                     if let Some(prev) = &prev_vals
-                        && hi < prev.len()
-                        && prev[hi].is_finite()
+                        && prev.len() >= 2
                     {
-                        let prev_pt = map_pt(hi, prev.len(), prev[hi]);
-                        let r_out = px(4.5);
-                        let r_in = px(3.0);
-                        window.paint_quad(
-                            fill(
-                                Bounds::new(
-                                    prev_pt - point(r_out, r_out),
-                                    size(r_out * 2., r_out * 2.),
-                                ),
-                                card_bg,
-                            )
-                            .corner_radii(r_out),
-                        );
-                        window.paint_quad(
-                            fill(
-                                Bounds::new(
-                                    prev_pt - point(r_in, r_in),
-                                    size(r_in * 2., r_in * 2.),
-                                ),
-                                accent.opacity(0.55),
-                            )
-                            .corner_radii(r_in),
-                        );
+                        let prev_pos = if cur_vals.len() > 1 {
+                            (scrub_pos / (cur_vals.len() - 1) as f32) * (prev.len() - 1) as f32
+                        } else {
+                            0.
+                        };
+                        if let Some(prev_y) = sample_finite(prev, prev_pos) {
+                            let prev_pt = map_pos(prev_pos, prev.len(), prev_y);
+                            let r_out = px(4.5 * scale);
+                            let r_in = px(3.0 * scale);
+                            window.paint_quad(
+                                fill(
+                                    Bounds::new(
+                                        prev_pt - point(r_out, r_out),
+                                        size(r_out * 2., r_out * 2.),
+                                    ),
+                                    card_bg.opacity(scrub_alpha),
+                                )
+                                .corner_radii(r_out),
+                            );
+                            window.paint_quad(
+                                fill(
+                                    Bounds::new(
+                                        prev_pt - point(r_in, r_in),
+                                        size(r_in * 2., r_in * 2.),
+                                    ),
+                                    accent.opacity(0.55 * scrub_alpha),
+                                )
+                                .corner_radii(r_in),
+                            );
+                        }
                     }
 
-                    let r_out = px(if show_grid { 5.5 } else { 4.5 });
-                    let r_in = px(if show_grid { 3.75 } else { 3.0 });
+                    let r_out = px(if show_grid { 5.5 } else { 4.5 } * scale);
+                    let r_in = px(if show_grid { 3.75 } else { 3.0 } * scale);
                     window.paint_quad(
                         fill(
                             Bounds::new(cur_pt - point(r_out, r_out), size(r_out * 2., r_out * 2.)),
-                            card_bg,
+                            card_bg.opacity(scrub_alpha),
                         )
                         .corner_radii(r_out),
                     );
                     window.paint_quad(
                         fill(
                             Bounds::new(cur_pt - point(r_in, r_in), size(r_in * 2., r_in * 2.)),
-                            accent,
+                            accent.opacity(scrub_alpha),
                         )
                         .corner_radii(r_in),
                     );
@@ -600,6 +654,114 @@ impl RenderOnce for KpiInteractiveSeries {
         )
         .w_full()
         .h(px(self.height))
+    }
+}
+
+struct ScrubOverlayState {
+    last_idx: usize,
+    x_ratio: Slide,
+    alpha: Slide,
+    was_open: bool,
+    host_w: Rc<Cell<f32>>,
+}
+
+#[derive(IntoElement)]
+struct ScrubReadoutOverlay {
+    id: ElementId,
+    active_idx: Option<usize>,
+    count: usize,
+    pill_width: f32,
+    fallback_w: f32,
+    top: f32,
+    render_pill: Box<dyn FnOnce(usize) -> AnyElement>,
+}
+
+impl RenderOnce for ScrubReadoutOverlay {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let fallback_w = self.fallback_w;
+        let st = w.use_keyed_state(pro_eid(&self.id, "scrub-pop"), cx, |_, _| {
+            ScrubOverlayState {
+                last_idx: 0,
+                x_ratio: Slide::snappy(0.5),
+                alpha: Slide::snappy(0.),
+                was_open: false,
+                host_w: Rc::new(Cell::new(fallback_w)),
+            }
+        });
+
+        let count = self.count;
+        let (shown_idx, rx, amt, host_cell) = st.update(cx, |s, cx| {
+            if let Some(di) = self.active_idx.filter(|&d| d < count) {
+                let ratio = if count > 1 {
+                    di as f32 / (count - 1) as f32
+                } else {
+                    0.5
+                };
+                if !s.was_open && s.alpha.value(cx) < 0.08 {
+                    s.x_ratio.reset(ratio);
+                } else {
+                    s.x_ratio.set(ratio, cx);
+                }
+                s.last_idx = di;
+                s.alpha.set(1., cx);
+                s.was_open = true;
+            } else {
+                s.alpha.set(0., cx);
+                s.was_open = false;
+            }
+            let rx = s.x_ratio.get(w, cx).clamp(0., 1.);
+            let amt = s.alpha.get(w, cx).clamp(0., 1.);
+            (
+                s.last_idx.min(count.saturating_sub(1)),
+                rx,
+                amt,
+                s.host_w.clone(),
+            )
+        });
+
+        let cw = host_cell.get().max(self.pill_width + 8.);
+        let measure_cell = host_cell.clone();
+        let sensor = canvas(
+            move |b, window, _| {
+                let nw = f32::from(b.size.width);
+                if nw > 12. && (measure_cell.get() - nw).abs() > 1.0 {
+                    measure_cell.set(nw);
+                    window.request_animation_frame();
+                }
+            },
+            |_, _, _, _| (),
+        )
+        .w_full()
+        .h(px(0.));
+
+        if amt <= 0.01 || count == 0 {
+            return div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .top_0()
+                .child(sensor)
+                .into_any_element();
+        }
+
+        let left_px =
+            (rx * cw - self.pill_width * 0.5).clamp(4., (cw - self.pill_width - 4.).max(4.));
+        let pill = (self.render_pill)(shown_idx);
+        div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .top_0()
+            .child(sensor)
+            .child(
+                div()
+                    .absolute()
+                    .left(px(left_px))
+                    .top(px(self.top + 4. * (1. - amt)))
+                    .opacity(amt)
+                    .child(pill),
+            )
+            .into_any_element()
     }
 }
 
@@ -1072,6 +1234,7 @@ pub struct KpiBoardBlock {
     setup_label: Option<SharedString>,
     action_label: Option<SharedString>,
     data: HashMap<SharedString, KpiBoardData>,
+    selected_stat: Option<usize>,
     hover_stat: Option<(usize, usize)>,
     hover_overview: Option<usize>,
     hover_focus: Option<usize>,
@@ -1104,6 +1267,7 @@ impl KpiBoardBlock {
             setup_label: Some("Set up".into()),
             action_label: Some("See full analytics".into()),
             data: default_board_data(),
+            selected_stat: None,
             hover_stat: None,
             hover_overview: None,
             hover_focus: None,
@@ -1377,6 +1541,7 @@ impl KpiBoardBlock {
         &self,
         card_idx: usize,
         spec: &KpiStatCardSpec,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let p = ProPalette::get(cx);
@@ -1398,46 +1563,69 @@ impl KpiBoardBlock {
         let count = spec.series.len();
         let stat_id = spec.id.clone();
 
-        let floating_tag = hover_day.map(|di| {
-            let val_str = format_stat_point(spec, spec.series[di]);
-            let date_str = spec
-                .dates
-                .get(di)
-                .cloned()
-                .unwrap_or_else(|| SharedString::from(format!("Day {}", di + 1)));
-            let on_right_half = count > 1 && di * 2 >= count;
-            let chip_bg: Hsla = if p.dark {
-                rgb(0xf4f4f5).into()
-            } else {
-                rgb(0x18181b).into()
-            };
-            let chip_fg: Hsla = if p.dark {
-                rgb(0x111113).into()
-            } else {
-                rgb(0xfafafa).into()
-            };
-            let mut tag = div()
-                .absolute()
-                .top(px(2.))
-                .px(px(7.))
-                .py(px(2.))
-                .rounded(px(5.))
-                .bg(chip_bg)
-                .text_color(chip_fg)
-                .text_size(px(11.))
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .whitespace_nowrap()
-                .child(div().font_weight(FontWeight::MEDIUM).child(val_str))
-                .child(div().opacity(0.68).child(date_str));
-            if on_right_half {
-                tag = tag.left(px(4.));
-            } else {
-                tag = tag.right(px(4.));
-            }
-            tag
-        });
+        let is_selected = self.selected_stat == Some(card_idx);
+        let dimmed = self.selected_stat.is_some_and(|sel| sel != card_idx);
+        let card_alpha = pro_spring_f32(
+            pro_eid(&self.id, format!("stat-alpha-{}", spec.id)),
+            if dimmed { 0.72 } else { 1.0 },
+            0.22,
+            w,
+            cx,
+        );
+        let sel_mix = pro_spring_f32(
+            pro_eid(&self.id, format!("stat-sel-{}", spec.id)),
+            if is_selected { 1.0 } else { 0.0 },
+            0.22,
+            w,
+            cx,
+        );
+        let card_border = pro_mix_color(p.line, p.blue.opacity(0.65), sel_mix);
+
+        let spec_clone = spec.clone();
+        let floating_overlay = ScrubReadoutOverlay {
+            id: pro_eid(&self.id, format!("stat-tag-{}", spec.id)),
+            active_idx: hover_day,
+            count,
+            pill_width: 108.,
+            fallback_w: 240.,
+            top: 2.,
+            render_pill: Box::new(move |di| {
+                let val_str = format_stat_point(
+                    &spec_clone,
+                    spec_clone.series.get(di).copied().unwrap_or(0.0),
+                );
+                let date_str = spec_clone
+                    .dates
+                    .get(di)
+                    .cloned()
+                    .unwrap_or_else(|| SharedString::from(format!("Day {}", di + 1)));
+                let chip_bg: Hsla = if p.dark {
+                    rgb(0xf4f4f5).into()
+                } else {
+                    rgb(0x18181b).into()
+                };
+                let chip_fg: Hsla = if p.dark {
+                    rgb(0x111113).into()
+                } else {
+                    rgb(0xfafafa).into()
+                };
+                div()
+                    .px(px(7.))
+                    .py(px(2.))
+                    .rounded(px(5.))
+                    .bg(chip_bg)
+                    .text_color(chip_fg)
+                    .text_size(px(11.))
+                    .shadow_sm()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .whitespace_nowrap()
+                    .child(div().font_weight(FontWeight::MEDIUM).child(val_str))
+                    .child(div().opacity(0.68).child(date_str))
+                    .into_any_element()
+            }),
+        };
 
         let hit_slices = div()
             .absolute()
@@ -1471,77 +1659,105 @@ impl KpiBoardBlock {
                 )
             }));
 
+        let header_content = div()
+            .w_full()
+            .p(px(6.))
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(p.text)
+                    .truncate()
+                    .child(card_label.clone()),
+            )
+            .child(pro_rolling_number(
+                pro_eid(&self.id, format!("stat-num-{}", spec.id)),
+                shown_val,
+                spec.decimals,
+                spec.prefix.clone(),
+                spec.suffix.clone(),
+                24.,
+                FontWeight::MEDIUM,
+                p.strong,
+            ))
+            .child(
+                div()
+                    .mt(px(2.))
+                    .min_h(px(20.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .when_some(delta_opt, |d, (pct, good)| {
+                        d.child(self.render_delta_badge(pct, good, cx)).child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(p.muted)
+                                .truncate()
+                                .child(compare_lbl),
+                        )
+                    }),
+            );
+
         div()
             .flex_1()
             .min_w_0()
             .rounded(px(10.))
             .bg(p.card)
             .border_1()
-            .border_color(p.line)
-            .p(px(15.))
+            .border_color(card_border)
+            .opacity(card_alpha)
+            .when(sel_mix > 0.1, |d| d.shadow_sm())
+            .p(px(9.))
             .flex()
             .flex_col()
-            .gap(px(10.))
+            .gap(px(6.))
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(p.text)
-                            .truncate()
-                            .child(card_label),
-                    )
-                    .child(pro_rolling_number(
-                        pro_eid(&self.id, format!("stat-num-{}", spec.id)),
-                        shown_val,
-                        spec.decimals,
-                        spec.prefix.clone(),
-                        spec.suffix.clone(),
-                        24.,
-                        FontWeight::MEDIUM,
-                        p.strong,
-                    ))
-                    .child(
-                        div()
-                            .mt(px(2.))
-                            .min_h(px(20.))
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .when_some(delta_opt, |d, (pct, good)| {
-                                d.child(self.render_delta_badge(pct, good, cx)).child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(p.muted)
-                                        .truncate()
-                                        .child(compare_lbl),
-                                )
-                            }),
-                    ),
+                pro_tactile(
+                    pro_eid(&self.id, format!("stat-card-{}", spec.id)),
+                    card_label,
+                    8.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    is_selected,
+                    header_content,
+                    cx,
+                    move |this, _, cx| {
+                        this.selected_stat = if this.selected_stat == Some(card_idx) {
+                            None
+                        } else {
+                            Some(card_idx)
+                        };
+                        cx.notify();
+                    },
+                )
+                .w_full(),
             )
             .child(
-                div()
-                    .relative()
-                    .w_full()
-                    .h(px(46.))
-                    .child(KpiInteractiveSeries {
-                        id: pro_eid(&self.id, format!("stat-spark-{}", spec.id)),
-                        current: pts_f32,
-                        previous: None,
-                        accent: p.blue,
-                        card_bg: p.card,
-                        grid_color: p.line_soft,
-                        guide_color: p.line_strong,
-                        show_grid: false,
-                        fill_alpha: 0.16,
-                        height: 46.,
-                        hover_idx: hover_day,
-                    })
-                    .when_some(floating_tag, |d, tag| d.child(tag))
-                    .child(hit_slices),
+                div().px(px(6.)).pb(px(6.)).child(
+                    div()
+                        .relative()
+                        .w_full()
+                        .h(px(46.))
+                        .child(KpiInteractiveSeries {
+                            id: pro_eid(&self.id, format!("stat-spark-{}", spec.id)),
+                            current: pts_f32,
+                            previous: None,
+                            accent: p.blue,
+                            card_bg: p.card,
+                            grid_color: p.line_soft,
+                            guide_color: p.line_strong,
+                            show_grid: false,
+                            fill_alpha: 0.16,
+                            height: 46.,
+                            hover_idx: hover_day,
+                        })
+                        .child(floating_overlay)
+                        .child(hit_slices),
+                ),
             )
     }
 
@@ -1586,30 +1802,41 @@ impl KpiBoardBlock {
                 let selected = seg.id == self.active_segment;
                 let seg_id = seg.id.clone();
                 let seg_text = self.translate_text(&seg.label, cx).to_owned();
-                row = row.child(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("ov-seg-{seg_id}")))
-                        .role(Role::Tab)
-                        .aria_label(seg_text.clone())
-                        .tab_index(0)
-                        .relative()
-                        .h(px(24.))
-                        .px(px(9.))
-                        .rounded(px(6.))
-                        .when(selected, |d| d.child(pro_mark_selected(&sensor)))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .flex()
-                        .items_center()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(if selected { p.strong } else { p.muted })
-                        .cursor_pointer()
-                        .child(seg_text),
-                    cx,
-                    move |this, _, cx| {
-                        this.set_segment(seg_id.clone(), cx);
-                    },
-                ));
+                let seg_hover = if selected {
+                    transparent_black()
+                } else {
+                    p.hover
+                };
+                row = row.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("ov-seg-{seg_id}")),
+                        seg_text.clone(),
+                        6.,
+                        transparent_black(),
+                        seg_hover,
+                        transparent_black(),
+                        transparent_black(),
+                        selected,
+                        div()
+                            .h(px(24.))
+                            .px(px(9.))
+                            .flex()
+                            .items_center()
+                            .whitespace_nowrap()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(if selected { p.strong } else { p.muted })
+                            .child(seg_text),
+                        cx,
+                        move |this, _, cx| {
+                            this.set_segment(seg_id.clone(), cx);
+                        },
+                    )
+                    .role(Role::Tab)
+                    .relative()
+                    .flex_none()
+                    .when(selected, |d| d.child(pro_mark_selected(&sensor))),
+                );
             }
             Some(row)
         } else {
@@ -1621,103 +1848,107 @@ impl KpiBoardBlock {
         let count = cur_slice.len();
         let hover_di = self.hover_overview.filter(|&d| d < count);
 
-        let tooltip_el = hover_di.map(|di| {
-            let date_str = overview
-                .dates
-                .get(di)
-                .cloned()
-                .unwrap_or_else(|| SharedString::from(format!("Day {}", di + 1)));
-            let cur_v = cur_slice.get(di).copied().unwrap_or(0.0);
-            let prev_v = prev_slice.get(di).copied().unwrap_or(0.0);
-            let on_right_half = count > 1 && di * 2 >= count;
-            let pop_bg: Hsla = if p.dark {
-                rgb(0x252528).into()
-            } else {
-                rgb(0xffffff).into()
-            };
-            let mut pop = div()
-                .absolute()
-                .top(px(6.))
-                .min_w(px(164.))
-                .px(px(10.))
-                .py(px(8.))
-                .rounded(px(10.))
-                .bg(pop_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_md()
-                .flex()
-                .flex_col()
-                .gap(px(5.))
-                .child(
-                    div()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .pb(px(4.))
-                        .border_b_1()
-                        .border_color(p.line)
-                        .child(date_str),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_color(p.text)
-                                .child(div().size(px(8.)).rounded(px(2.)).bg(p.blue))
-                                .child(cur_lbl.clone()),
-                        )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .child(format_money_compact(cur_v)),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_color(p.muted)
-                                .child(
-                                    div()
-                                        .w(px(8.))
-                                        .h(px(2.))
-                                        .rounded(px(1.))
-                                        .bg(p.blue.opacity(0.42)),
-                                )
-                                .child(prev_lbl.clone()),
-                        )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.text)
-                                .child(format_money_compact(prev_v)),
-                        ),
-                );
-            if on_right_half {
-                pop = pop.left(px(10.));
-            } else {
-                pop = pop.right(px(10.));
-            }
-            pop
-        });
+        let ov_dates = overview.dates.clone();
+        let cur_vec = cur_slice.to_vec();
+        let prev_vec = prev_slice.to_vec();
+        let cur_tip_lbl = cur_lbl.clone();
+        let prev_tip_lbl = prev_lbl.clone();
+        let tooltip_overlay = ScrubReadoutOverlay {
+            id: pro_eid(&self.id, "ov-tip"),
+            active_idx: hover_di,
+            count,
+            pill_width: 174.,
+            fallback_w: 500.,
+            top: 6.,
+            render_pill: Box::new(move |di| {
+                let date_str = ov_dates
+                    .get(di)
+                    .cloned()
+                    .unwrap_or_else(|| SharedString::from(format!("Day {}", di + 1)));
+                let cur_v = cur_vec.get(di).copied().unwrap_or(0.0);
+                let prev_v = prev_vec.get(di).copied().unwrap_or(0.0);
+                let pop_bg: Hsla = if p.dark {
+                    rgb(0x252528).into()
+                } else {
+                    rgb(0xffffff).into()
+                };
+                div()
+                    .min_w(px(164.))
+                    .px(px(10.))
+                    .py(px(8.))
+                    .rounded(px(10.))
+                    .bg(pop_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(5.))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .pb(px(4.))
+                            .border_b_1()
+                            .border_color(p.line)
+                            .child(date_str),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.text)
+                                    .child(div().size(px(8.)).rounded(px(2.)).bg(p.blue))
+                                    .child(cur_tip_lbl),
+                            )
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(format_money_compact(cur_v)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.muted)
+                                    .child(
+                                        div()
+                                            .w(px(8.))
+                                            .h(px(2.))
+                                            .rounded(px(1.))
+                                            .bg(p.blue.opacity(0.42)),
+                                    )
+                                    .child(prev_tip_lbl),
+                            )
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.text)
+                                    .child(format_money_compact(prev_v)),
+                            ),
+                    )
+                    .into_any_element()
+            }),
+        };
 
         let hit_slices = div()
             .absolute()
@@ -1873,7 +2104,7 @@ impl KpiBoardBlock {
                                 height: 152.,
                                 hover_idx: hover_di,
                             })
-                            .when_some(tooltip_el, |d, tip| d.child(tip))
+                            .child(tooltip_overlay)
                             .child(hit_slices),
                     )
                     .child(
@@ -1919,6 +2150,54 @@ impl KpiBoardBlock {
         let unit_suffix = format!(" {}", focus.unit_for_count(cur_total));
         let cur_f32: Vec<f32> = focus.current.iter().map(|&v| v as f32).collect();
 
+        let focus_clone = focus.clone();
+        let focus_overlay = ScrubReadoutOverlay {
+            id: pro_eid(&self.id, "focus-tag"),
+            active_idx: hover_di,
+            count,
+            pill_width: 112.,
+            fallback_w: 248.,
+            top: 2.,
+            render_pill: Box::new(move |di| {
+                let cv = focus_clone.current.get(di).copied().unwrap_or(0.0);
+                let val_str = format!(
+                    "{} {}",
+                    format_grouped_int(cv),
+                    focus_clone.unit_for_count(cv)
+                );
+                let date_str = focus_clone
+                    .dates
+                    .get(di)
+                    .cloned()
+                    .unwrap_or_else(|| SharedString::from(format!("Day {}", di + 1)));
+                let chip_bg: Hsla = if p.dark {
+                    rgb(0xf4f4f5).into()
+                } else {
+                    rgb(0x18181b).into()
+                };
+                let chip_fg: Hsla = if p.dark {
+                    rgb(0x111113).into()
+                } else {
+                    rgb(0xfafafa).into()
+                };
+                div()
+                    .px(px(7.))
+                    .py(px(2.))
+                    .rounded(px(5.))
+                    .bg(chip_bg)
+                    .text_color(chip_fg)
+                    .text_size(px(11.))
+                    .shadow_sm()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .whitespace_nowrap()
+                    .child(div().font_weight(FontWeight::MEDIUM).child(val_str))
+                    .child(div().opacity(0.68).child(date_str))
+                    .into_any_element()
+            }),
+        };
+
         let hit_slices = div()
             .absolute()
             .inset_0()
@@ -1952,28 +2231,25 @@ impl KpiBoardBlock {
 
         let setup_btn = self.setup_label.as_ref().map(|lbl| {
             let text = self.translate_text(lbl, cx).to_owned();
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, "focus-setup"),
+                text.clone(),
+                6.,
+                p.card,
+                p.hover,
+                p.line_strong,
+                p.line_strong,
+                false,
                 div()
-                    .id(pro_eid(&self.id, "focus-setup"))
-                    .role(Role::Button)
-                    .aria_label(text.clone())
-                    .tab_index(0)
                     .h(px(28.))
                     .px(px(9.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .flex_none()
                     .flex()
                     .items_center()
                     .gap(px(5.))
+                    .whitespace_nowrap()
                     .text_size(px(12.5))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.strong)
-                    .cursor_pointer()
                     .child(pro_svg("0 0 14 14", SLIDERS_SETUP_SVG, 12., p.muted))
                     .child(text),
                 cx,
@@ -1986,33 +2262,17 @@ impl KpiBoardBlock {
                     cx.notify();
                 },
             )
+            .flex_none()
         });
 
         let action_btn = self.action_label.as_ref().map(|lbl| {
             let text = self.translate_text(lbl, cx).to_owned();
-            activate(
-                div()
-                    .id(pro_eid(&self.id, "focus-action"))
-                    .role(Role::Button)
-                    .aria_label(text.clone())
-                    .tab_index(0)
-                    .w_full()
-                    .h(px(32.))
-                    .px(px(12.))
-                    .rounded(px(8.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .cursor_pointer()
-                    .child(text),
+            pro_btn(
+                pro_eid(&self.id, "focus-action"),
+                text,
+                None,
+                ProBtnStyle::Secondary,
+                false,
                 cx,
                 |this, _, cx| {
                     this.toast = Some((
@@ -2023,6 +2283,8 @@ impl KpiBoardBlock {
                     cx.notify();
                 },
             )
+            .w_full()
+            .justify_center()
         });
 
         div()
@@ -2147,6 +2409,7 @@ impl KpiBoardBlock {
                                 height: 58.,
                                 hover_idx: hover_di,
                             })
+                            .child(focus_overlay)
                             .child(hit_slices),
                     )
                     .child(
@@ -2163,12 +2426,16 @@ impl KpiBoardBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(prev_lbl)
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.text)
-                                            .child(format_grouped_int(legend_prev)),
-                                    ),
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "focus-leg-prev"),
+                                        legend_prev,
+                                        0,
+                                        "",
+                                        "",
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.text,
+                                    )),
                             )
                             .child(
                                 div()
@@ -2176,12 +2443,16 @@ impl KpiBoardBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(cur_lbl)
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .child(format_grouped_int(legend_cur)),
-                                    ),
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "focus-leg-cur"),
+                                        legend_cur,
+                                        0,
+                                        "",
+                                        "",
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.strong,
+                                    )),
                             ),
                     ),
             )
@@ -2281,31 +2552,42 @@ impl Render for KpiBoardBlock {
             let selected = opt.id == self.active_range;
             let rid = opt.id.clone();
             let rlabel = opt.label.clone();
-            range_bar = range_bar.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("range-opt-{rid}")))
-                    .role(Role::Tab)
-                    .aria_label(rlabel.clone())
-                    .tab_index(0)
-                    .relative()
-                    .h(px(24.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .when(selected, |d| d.child(pro_mark_selected(&range_sensor)))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if selected { p.strong } else { p.text })
-                    .cursor_pointer()
-                    .child(rlabel),
-                cx,
-                move |this, _, cx| {
-                    this.set_range(rid.clone(), cx);
-                },
-            ));
+            let opt_hover = if selected {
+                transparent_black()
+            } else {
+                p.hover
+            };
+            range_bar = range_bar.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("range-opt-{rid}")),
+                    rlabel.clone(),
+                    6.,
+                    transparent_black(),
+                    opt_hover,
+                    transparent_black(),
+                    transparent_black(),
+                    selected,
+                    div()
+                        .h(px(24.))
+                        .px(px(10.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .whitespace_nowrap()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if selected { p.strong } else { p.text })
+                        .child(rlabel),
+                    cx,
+                    move |this, _, cx| {
+                        this.set_range(rid.clone(), cx);
+                    },
+                )
+                .role(Role::Tab)
+                .relative()
+                .flex_none()
+                .when(selected, |d| d.child(pro_mark_selected(&range_sensor))),
+            );
         }
 
         let top_bar = div()
@@ -2353,7 +2635,7 @@ impl Render for KpiBoardBlock {
                 .when(stack_stats, |d| d.flex_col())
                 .gap(px(if stack_stats { 8. } else { 12. }));
             for (idx, stat) in board.stats.iter().enumerate() {
-                stats_row = stats_row.child(self.render_stat_card(idx, stat, cx));
+                stats_row = stats_row.child(self.render_stat_card(idx, stat, w, cx));
             }
 
             let ov_card = self.render_overview_card(&board.overview, cx);

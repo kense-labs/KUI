@@ -2,16 +2,17 @@
 //!
 //! Aggregates flat records across user-chosen `Measure`, `Slice`, and `Segment` dimensions,
 //! animates stacked bar heights via `Slide` springs, displays a pointer hover tooltip, and
-//! links bar segments bidirectionally with the breakdown table and toggleable legend below.
+//! links bar segments bidirectionally with the breakdown matrix and toggleable legend below.
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator, pro_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, tr,
     },
     primitives::{
         control::activate,
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon},
     },
 };
@@ -234,6 +235,11 @@ pub struct BreakdownChart {
     hidden_segments: HashSet<SharedString>,
     hovered_slice: Option<SharedString>,
     hovered_segment: Option<SharedString>,
+    bar_slides: Vec<Vec<Slide>>,
+    bars_seeded: bool,
+    y_max_slide: Slide,
+    col_spotlights: Vec<Slide>,
+    seg_spotlights: Vec<Slide>,
     picker: Option<ActivePicker>,
     loading: bool,
     empty: bool,
@@ -264,6 +270,11 @@ impl BreakdownChart {
             hidden_segments: HashSet::new(),
             hovered_slice: None,
             hovered_segment: None,
+            bar_slides: Vec::new(),
+            bars_seeded: false,
+            y_max_slide: Slide::new(100.0),
+            col_spotlights: Vec::new(),
+            seg_spotlights: Vec::new(),
             picker: None,
             loading: false,
             empty: false,
@@ -597,6 +608,17 @@ impl Render for BreakdownChart {
         }
 
         let (slices, segments, matrix, grand_total) = self.compute_matrix();
+        let slice_totals: Vec<f64> = matrix
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .enumerate()
+                    .filter(|(g_idx, _)| !self.hidden_segments.contains(&segments[*g_idx]))
+                    .map(|(_, &v)| v)
+                    .sum()
+            })
+            .collect();
+
         let active_measure = self
             .measures
             .iter()
@@ -611,6 +633,48 @@ impl Render for BreakdownChart {
             active_measure.unit_zh.as_ref(),
         )
         .to_string();
+
+        // Dynamic rolling header total when hovering a slice, segment, or matrix cell!
+        let (shown_grand, shown_unit): (f64, SharedString) =
+            match (self.hovered_slice.as_ref(), self.hovered_segment.as_ref()) {
+                (Some(hs), Some(hg)) => {
+                    let s_i = slices.iter().position(|x| x == hs);
+                    let g_i = segments.iter().position(|x| x == hg);
+                    if let (Some(si), Some(gi)) = (s_i, g_i) {
+                        let cell_v = if self.hidden_segments.contains(hg) {
+                            0.0
+                        } else {
+                            matrix[si][gi]
+                        };
+                        (cell_v, format!("{hs} \u{00b7} {hg} {unit_text}").into())
+                    } else {
+                        (grand_total, unit_text.clone().into())
+                    }
+                }
+                (Some(hs), None) => {
+                    if let Some(si) = slices.iter().position(|x| x == hs) {
+                        (
+                            slice_totals[si],
+                            format!("{hs} \u{00b7} {unit_text}").into(),
+                        )
+                    } else {
+                        (grand_total, unit_text.clone().into())
+                    }
+                }
+                (None, Some(hg)) => {
+                    if let Some(gi) = segments.iter().position(|x| x == hg) {
+                        let seg_sum: f64 = if self.hidden_segments.contains(hg) {
+                            0.0
+                        } else {
+                            (0..slices.len()).map(|si| matrix[si][gi]).sum()
+                        };
+                        (seg_sum, format!("{hg} \u{00b7} {unit_text}").into())
+                    } else {
+                        (grand_total, unit_text.clone().into())
+                    }
+                }
+                (None, None) => (grand_total, unit_text.clone().into()),
+            };
 
         let header = div()
             .w_full()
@@ -636,7 +700,7 @@ impl Render for BreakdownChart {
                     .gap(px(5.))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "grand-roll"),
-                        grand_total,
+                        shown_grand,
                         0,
                         "",
                         "",
@@ -644,15 +708,16 @@ impl Render for BreakdownChart {
                         FontWeight::MEDIUM,
                         p.ink,
                     ))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(unit_text.clone()),
-                    ),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "grand-unit"),
+                        shown_unit,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
 
-        // 3 Pickers: Measure | Slice | Segment
+        // 3 Pickers: Measure | Slice | Segment (using `pro_popover_presence` + `pro_check_draw` + `pro_swap_label`)
         let cur_measure_lbl = tr(
             cx,
             active_measure.label.as_ref(),
@@ -708,7 +773,15 @@ impl Render for BreakdownChart {
                     .cursor_pointer()
                     .hover(move |s| s.bg(p.hover))
                     .child(mlbl)
-                    .when(sel, |d| d.child(pro_icon(ProIcon::Check, 13., p.blue))),
+                    .when(sel, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, format!("m-chk-{mk}")),
+                            true,
+                            14.,
+                            false,
+                            p.blue,
+                        ))
+                    }),
                 cx,
                 move |this, _, cx| {
                     this.set_measure(&mk, cx);
@@ -749,7 +822,15 @@ impl Render for BreakdownChart {
                     .cursor_pointer()
                     .hover(move |s| s.bg(p.hover))
                     .child(dlbl)
-                    .when(sel, |el| el.child(pro_icon(ProIcon::Check, 13., p.blue))),
+                    .when(sel, |el| {
+                        el.child(pro_check_draw(
+                            pro_eid(&self.id, format!("sl-chk-{dk}")),
+                            true,
+                            14.,
+                            false,
+                            p.blue,
+                        ))
+                    }),
                 cx,
                 move |this, _, cx| {
                     this.set_slice(&dk, cx);
@@ -793,7 +874,15 @@ impl Render for BreakdownChart {
                     .cursor_pointer()
                     .hover(move |s| s.bg(p.hover))
                     .child(dlbl)
-                    .when(sel, |el| el.child(pro_icon(ProIcon::Check, 13., p.blue))),
+                    .when(sel, |el| {
+                        el.child(pro_check_draw(
+                            pro_eid(&self.id, format!("sg-chk-{dk}")),
+                            true,
+                            14.,
+                            false,
+                            p.blue,
+                        ))
+                    }),
                 cx,
                 move |this, _, cx| {
                     this.set_segment(&dk, cx);
@@ -819,7 +908,13 @@ impl Render for BreakdownChart {
                 .hover(move |s| s.bg(p.hover))
                 .child(tr(cx, "None", "不拆分"))
                 .when(none_sel, |el| {
-                    el.child(pro_icon(ProIcon::Check, 13., p.blue))
+                    el.child(pro_check_draw(
+                        pro_eid(&self.id, "sg-chk-none"),
+                        true,
+                        14.,
+                        false,
+                        p.blue,
+                    ))
                 }),
             cx,
             |this, _, cx| {
@@ -835,6 +930,20 @@ impl Render for BreakdownChart {
                                 menu: Div,
                                 align_right: bool,
                                 cx: &mut Context<Self>| {
+            let pop_layer = {
+                let inner = pro_popover_presence(
+                    pro_eid(&self.id, format!("{id_sfx}-pop")),
+                    open,
+                    move || menu.into_any_element(),
+                );
+                let wrap = div().occlude().absolute().top(px(50.)).child(inner);
+                if align_right {
+                    wrap.right_0().into_any_element()
+                } else {
+                    wrap.left_0().into_any_element()
+                }
+            };
+
             div()
                 .flex_1()
                 .min_w_0()
@@ -873,7 +982,13 @@ impl Render for BreakdownChart {
                         .cursor_pointer()
                         .hover(move |s| s.border_color(p.line_strong))
                         .focus_visible(move |s| s.border_color(p.focus))
-                        .child(div().min_w_0().truncate().child(val))
+                        .child(div().min_w_0().overflow_hidden().child(pro_swap_label(
+                            pro_eid(&self.id, format!("{id_sfx}-lbl")),
+                            val,
+                            12.5,
+                            FontWeight::MEDIUM,
+                            p.strong,
+                        )))
                         .child(pro_icon(
                             if open {
                                 ProIcon::ChevronUp
@@ -893,25 +1008,7 @@ impl Render for BreakdownChart {
                         cx.notify();
                     },
                 ))
-                .child(pro_presence(
-                    pro_eid(&self.id, format!("{id_sfx}-pres")),
-                    open,
-                    0.16,
-                    0.12,
-                    move |amt| {
-                        let pop = div()
-                            .occlude()
-                            .absolute()
-                            .top(px(50. - 4. * (1. - amt)))
-                            .opacity(amt)
-                            .child(menu);
-                        if align_right {
-                            pop.right_0().into_any_element()
-                        } else {
-                            pop.left_0().into_any_element()
-                        }
-                    },
-                ))
+                .child(pop_layer)
         };
 
         let m_col = build_picker_col(
@@ -956,17 +1053,7 @@ impl Render for BreakdownChart {
             .child(sl_col)
             .child(sg_col);
 
-        // Compute nice rounded Y scale max
-        let slice_totals: Vec<f64> = matrix
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .enumerate()
-                    .filter(|(g_idx, _)| !self.hidden_segments.contains(&segments[*g_idx]))
-                    .map(|(_, &v)| v)
-                    .sum()
-            })
-            .collect();
+        // Compute nice rounded Y scale max and spring-morph stacked bar segments via positional `Slide`s!
         let raw_max = slice_totals
             .iter()
             .copied()
@@ -974,6 +1061,51 @@ impl Render for BreakdownChart {
             .max(1.0);
         let y_max = nice_axis_ceiling(raw_max);
         let plot_h = 188.0_f32;
+
+        if !self.bars_seeded {
+            self.y_max_slide.reset(y_max as f32);
+        } else {
+            self.y_max_slide.duration(y_max as f32, 0.34, cx);
+        }
+        let anim_y_max = self.y_max_slide.get(w, cx).max(1.0) as f64;
+
+        // Sync positional `bar_slides[s_idx][g_idx]`, `col_spotlights`, and `seg_spotlights`.
+        let n_slices = slices.len();
+        let n_segs = segments.len();
+        if self.bar_slides.len() < n_slices {
+            self.bar_slides.resize_with(n_slices, Vec::new);
+        }
+        for row_slides in &mut self.bar_slides[..n_slices] {
+            if row_slides.len() < n_segs {
+                row_slides.resize_with(n_segs, || Slide::new(0.0));
+            }
+        }
+        if self.col_spotlights.len() < n_slices {
+            self.col_spotlights
+                .resize_with(n_slices, || Slide::snappy(1.0));
+        } else if self.col_spotlights.len() > n_slices {
+            self.col_spotlights.truncate(n_slices);
+        }
+        if self.seg_spotlights.len() < n_segs {
+            self.seg_spotlights
+                .resize_with(n_segs, || Slide::snappy(1.0));
+        } else if self.seg_spotlights.len() > n_segs {
+            self.seg_spotlights.truncate(n_segs);
+        }
+
+        let mut col_alphas = Vec::with_capacity(n_slices);
+        for (s_idx, s_name) in slices.iter().enumerate() {
+            let dim_col = self.hovered_slice.as_ref().is_some_and(|hs| hs != s_name);
+            self.col_spotlights[s_idx].set(if dim_col { 0.34 } else { 1.0 }, cx);
+            col_alphas.push(self.col_spotlights[s_idx].get(w, cx).clamp(0.20, 1.0));
+        }
+
+        let mut seg_alphas = Vec::with_capacity(n_segs);
+        for (g_idx, g_name) in segments.iter().enumerate() {
+            let dim_seg = self.hovered_segment.as_ref().is_some_and(|hg| hg != g_name);
+            self.seg_spotlights[g_idx].set(if dim_seg { 0.22 } else { 1.0 }, cx);
+            seg_alphas.push(self.seg_spotlights[g_idx].get(w, cx).clamp(0.15, 1.0));
+        }
 
         // Horizontal gridlines + right Y ticks
         let mut grid_layer = div().absolute().inset_0();
@@ -1016,16 +1148,19 @@ impl Render for BreakdownChart {
             .items_end()
             .gap(px(6.));
         let mut xaxis_row = div()
+            .w_full()
+            .flex_none()
             .mt(px(8.))
-            .mr(px(34.))
+            .pr(px(34.))
             .flex()
             .items_center()
             .gap(px(6.));
 
+        let first_seed = !self.bars_seeded;
         for (s_idx, s_name) in slices.iter().enumerate() {
             let s_total = slice_totals[s_idx];
             let slice_active = self.hovered_slice.as_ref() == Some(s_name);
-            let dim_col = self.hovered_slice.is_some() && !slice_active;
+            let col_alpha = col_alphas[s_idx];
 
             let mut stack_col = div()
                 .w(if narrow { px(14.) } else { px(18.) })
@@ -1038,28 +1173,21 @@ impl Render for BreakdownChart {
             for (g_idx, g_name) in segments.iter().enumerate() {
                 let hidden = self.hidden_segments.contains(g_name);
                 let cell_val = if hidden { 0.0 } else { matrix[s_idx][g_idx] };
-                let target_h = ((cell_val / y_max) as f32 * plot_h).clamp(0.0, plot_h);
-                let anim_h = pro_spring_f32(
-                    pro_eid(&self.id, format!("bar-h-{s_name}-{g_name}")),
-                    target_h,
-                    0.34,
-                    w,
-                    cx,
-                )
-                .max(0.0);
+                let target_h = ((cell_val / anim_y_max) as f32 * plot_h).clamp(0.0, plot_h);
+                if first_seed {
+                    self.bar_slides[s_idx][g_idx].reset(target_h);
+                } else {
+                    self.bar_slides[s_idx][g_idx].duration(target_h, 0.34, cx);
+                }
+                let anim_h = self.bar_slides[s_idx][g_idx].get(w, cx).max(0.0);
 
                 if anim_h <= 0.4 {
                     continue;
                 }
                 let base_c = self.segment_color(g_name, g_idx, &p);
-                let seg_dim = self.hovered_segment.as_ref().is_some_and(|hs| hs != g_name);
-                let seg_c = if seg_dim {
-                    base_c.opacity(0.24)
-                } else {
-                    base_c
-                };
+                let seg_c = base_c.opacity(base_c.a * seg_alphas[g_idx]);
 
-                stack_col = stack_col.child(div().w_full().h(px(anim_h)).bg(seg_c));
+                stack_col = stack_col.child(div().w_full().flex_none().h(px(anim_h)).bg(seg_c));
             }
 
             let s_hov = s_name.clone();
@@ -1074,7 +1202,7 @@ impl Render for BreakdownChart {
                     .h_full()
                     .relative()
                     .rounded(px(6.))
-                    .opacity(if dim_col { 0.36 } else { 1.0 })
+                    .opacity(col_alpha)
                     .cursor_pointer()
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
@@ -1140,8 +1268,26 @@ impl Render for BreakdownChart {
                     }),
             );
         }
+        // Clear any unused trailing bar_slides if slice/segment count shrank so future growth starts clean.
+        for row_slides in &mut self.bar_slides[n_slices..] {
+            for sl in row_slides.iter_mut() {
+                sl.duration(0.0, 0.24, cx);
+                let _ = sl.get(w, cx);
+            }
+        }
+        for row_slides in &mut self.bar_slides[..n_slices] {
+            for sl in &mut row_slides[n_segs..] {
+                sl.duration(0.0, 0.24, cx);
+                let _ = sl.get(w, cx);
+            }
+        }
+        self.bars_seeded = true;
 
-        // Hover breakdown tooltip
+        // Hover breakdown tooltip with `pro_popover_presence` + `pro_rolling_number`
+        let tip_open = self
+            .hovered_slice
+            .as_ref()
+            .is_some_and(|hs| slices.contains(hs));
         let tooltip_el = if let Some(hov_s) = &self.hovered_slice
             && let Some(s_idx) = slices.iter().position(|x| x == hov_s)
         {
@@ -1162,8 +1308,10 @@ impl Render for BreakdownChart {
                 }
                 let val = matrix[s_idx][g_idx];
                 let sw = self.segment_color(g_name, g_idx, &p);
+                let seg_hi = self.hovered_segment.as_ref() == Some(g_name);
                 tip_rows = tip_rows.child(
                     div()
+                        .opacity(seg_alphas[g_idx].max(0.45))
                         .flex()
                         .items_center()
                         .justify_between()
@@ -1175,7 +1323,16 @@ impl Render for BreakdownChart {
                                 .items_center()
                                 .gap(px(6.))
                                 .child(div().size(px(8.)).rounded(px(2.)).bg(sw))
-                                .child(div().text_color(p.text).child(g_name.clone())),
+                                .child(
+                                    div()
+                                        .font_weight(if seg_hi {
+                                            FontWeight::MEDIUM
+                                        } else {
+                                            FontWeight::NORMAL
+                                        })
+                                        .text_color(if seg_hi { p.strong } else { p.text })
+                                        .child(g_name.clone()),
+                                ),
                         )
                         .child(
                             div()
@@ -1186,32 +1343,53 @@ impl Render for BreakdownChart {
                 );
             }
 
-            let card = div()
-                .min_w(px(156.))
-                .py(px(7.))
-                .px(px(10.))
-                .rounded(px(9.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_md()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(14.))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .child(hov_s.clone())
-                        .child(format!("{tot:.0}")),
-                )
-                .when(self.segment_key.as_ref() != "none", |d| d.child(tip_rows));
+            let hov_title = hov_s.clone();
+            let show_segs = self.segment_key.as_ref() != "none";
+            let tip_id = pro_eid(&self.id, "tip-pres");
+            let tot_id = pro_eid(&self.id, "tip-tot");
+            let title_id = pro_eid(&self.id, "tip-title");
 
-            let pos_wrap = div().absolute().top(px(4.)).child(card);
+            let card_pop = pro_popover_presence(tip_id, tip_open, move || {
+                div()
+                    .min_w(px(156.))
+                    .py(px(7.))
+                    .px(px(10.))
+                    .rounded(px(9.))
+                    .bg(p.card)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(14.))
+                            .child(pro_swap_label(
+                                title_id,
+                                hov_title,
+                                12.5,
+                                FontWeight::MEDIUM,
+                                p.strong,
+                            ))
+                            .child(pro_rolling_number(
+                                tot_id,
+                                tot,
+                                0,
+                                "",
+                                "",
+                                12.5,
+                                FontWeight::MEDIUM,
+                                p.strong,
+                            )),
+                    )
+                    .when(show_segs, |d| d.child(tip_rows))
+                    .into_any_element()
+            });
+
+            let pos_wrap = div().absolute().top(px(4.)).child(card_pop);
             if place_left {
                 pos_wrap.left(px(8.)).into_any_element()
             } else {
@@ -1231,6 +1409,7 @@ impl Render for BreakdownChart {
             .child(
                 div()
                     .w_full()
+                    .flex_none()
                     .h(px(plot_h))
                     .relative()
                     .child(grid_layer)
@@ -1258,7 +1437,7 @@ impl Render for BreakdownChart {
                 5.,
                 p.card,
                 Some(p.line),
-                true,
+                !p.dark,
             ))
             .children(
                 [
@@ -1287,6 +1466,7 @@ impl Render for BreakdownChart {
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(if sel { p.ink } else { p.muted })
                             .cursor_pointer()
+                            .when(!sel, move |d| d.hover(move |s| s.text_color(p.ink)))
                             .when(sel, |d| d.child(pro_mark_selected(&mode_sensor)))
                             .child(lbl),
                         cx,
@@ -1310,12 +1490,12 @@ impl Render for BreakdownChart {
             .gap(px(8.))
             .child(div().text_size(px(11.)).text_color(p.muted).child(tr(
                 cx,
-                "Hover any row to highlight across bars",
-                "悬停任一表格行即可联动高亮柱状图",
+                "Hover any row or matrix cell to highlight across bars",
+                "悬停任一表格行或单元格即可联动高亮柱状图",
             )))
             .child(mode_pill_strip);
 
-        // Linked Breakdown Table
+        // Linked Breakdown Table (hovering individual matrix cells cross-highlights `(column, segment)`!)
         let linked_table = match self.table_mode {
             BreakdownTableMode::BySegment => {
                 let mut head_row = div()
@@ -1376,6 +1556,11 @@ impl Render for BreakdownChart {
                     let sw = self.segment_color(g_name, g_idx, &p);
                     let g_hov = g_name.clone();
                     let g_tog = g_name.to_string();
+                    let row_alpha = if hidden {
+                        0.40
+                    } else {
+                        seg_alphas[g_idx].max(0.55)
+                    };
 
                     let mut tr_el = activate(
                         div()
@@ -1393,7 +1578,7 @@ impl Render for BreakdownChart {
                             } else {
                                 transparent_black()
                             })
-                            .opacity(if hidden { 0.42 } else { 1.0 })
+                            .opacity(row_alpha)
                             .cursor_pointer()
                             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                                 if *inside {
@@ -1424,17 +1609,18 @@ impl Render for BreakdownChart {
                                             .child(g_name.clone()),
                                     ),
                             )
-                            .child(
-                                div()
-                                    .w(px(54.))
-                                    .flex_none()
-                                    .flex()
-                                    .justify_end()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{row_sum:.0}")),
-                            ),
+                            .child(div().w(px(54.)).flex_none().flex().justify_end().child(
+                                pro_rolling_number(
+                                    pro_eid(&self.id, format!("tseg-tot-{g_idx}")),
+                                    row_sum,
+                                    0,
+                                    "",
+                                    "",
+                                    12.5,
+                                    FontWeight::MEDIUM,
+                                    p.ink,
+                                ),
+                            )),
                         cx,
                         move |this, _, cx| {
                             if this.segment_key.as_ref() != "none" {
@@ -1447,11 +1633,24 @@ impl Render for BreakdownChart {
                         for (s_idx, s_name) in slices.iter().enumerate() {
                             let v = matrix[s_idx][g_idx];
                             let s_act = self.hovered_slice.as_ref() == Some(s_name);
+                            let cell_hot = s_act && row_active;
+                            let cs_name = s_name.clone();
+                            let cg_name = g_name.clone();
                             tr_el = tr_el.child(
                                 div()
+                                    .id(pro_eid(&self.id, format!("mcell-{g_idx}-{s_idx}")))
                                     .flex_1()
                                     .min_w_0()
+                                    .h(px(24.))
+                                    .px(px(4.))
+                                    .rounded(px(4.))
+                                    .bg(if cell_hot {
+                                        p.select
+                                    } else {
+                                        transparent_black()
+                                    })
                                     .flex()
+                                    .items_center()
                                     .justify_end()
                                     .text_size(px(12.5))
                                     .font_weight(if s_act || row_active {
@@ -1459,7 +1658,22 @@ impl Render for BreakdownChart {
                                     } else {
                                         FontWeight::NORMAL
                                     })
-                                    .text_color(if s_act || row_active { p.ink } else { p.text })
+                                    .text_color(if cell_hot {
+                                        p.strong
+                                    } else if s_act || row_active {
+                                        p.ink
+                                    } else {
+                                        p.text
+                                    })
+                                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                                        if *inside {
+                                            this.hovered_slice = Some(cs_name.clone());
+                                            this.hovered_segment = Some(cg_name.clone());
+                                        } else if this.hovered_slice.as_ref() == Some(&cs_name) {
+                                            this.hovered_slice = None;
+                                        }
+                                        cx.notify();
+                                    }))
                                     .child(format!("{v:.0}")),
                             );
                         }
@@ -1521,6 +1735,7 @@ impl Render for BreakdownChart {
                 if !narrow {
                     for (g_idx, g_name) in segments.iter().enumerate() {
                         let sw = self.segment_color(g_name, g_idx, &p);
+                        let g_act = self.hovered_segment.as_ref() == Some(g_name);
                         head_row = head_row.child(
                             div()
                                 .flex_1()
@@ -1529,6 +1744,7 @@ impl Render for BreakdownChart {
                                 .items_center()
                                 .justify_end()
                                 .gap(px(4.))
+                                .text_color(if g_act { p.ink } else { p.muted })
                                 .child(div().size(px(6.)).rounded(px(1.5)).bg(sw))
                                 .child(div().truncate().child(g_name.to_uppercase())),
                         );
@@ -1558,6 +1774,7 @@ impl Render for BreakdownChart {
                             } else {
                                 transparent_black()
                             })
+                            .opacity(col_alphas[s_idx].max(0.55))
                             .cursor_pointer()
                             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                                 if *inside {
@@ -1580,17 +1797,18 @@ impl Render for BreakdownChart {
                                     .text_color(p.ink)
                                     .child(s_name.clone()),
                             )
-                            .child(
-                                div()
-                                    .w(px(64.))
-                                    .flex_none()
-                                    .flex()
-                                    .justify_end()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{s_tot:.0}")),
-                            ),
+                            .child(div().w(px(64.)).flex_none().flex().justify_end().child(
+                                pro_rolling_number(
+                                    pro_eid(&self.id, format!("tsl-tot-{s_idx}")),
+                                    s_tot,
+                                    0,
+                                    "",
+                                    "",
+                                    12.5,
+                                    FontWeight::MEDIUM,
+                                    p.ink,
+                                ),
+                            )),
                         cx,
                         move |_, _, cx| {
                             cx.emit(BreakdownChartEvent::SliceFocused(s_click.clone()));
@@ -1601,15 +1819,43 @@ impl Render for BreakdownChart {
                         for (g_idx, g_name) in segments.iter().enumerate() {
                             let hidden = self.hidden_segments.contains(g_name);
                             let v = matrix[s_idx][g_idx];
+                            let g_act = self.hovered_segment.as_ref() == Some(g_name);
+                            let cell_hot = row_act && g_act;
+                            let cs_name = s_name.clone();
+                            let cg_name = g_name.clone();
                             tr_el = tr_el.child(
                                 div()
+                                    .id(pro_eid(&self.id, format!("scell-{s_idx}-{g_idx}")))
                                     .flex_1()
                                     .min_w_0()
+                                    .h(px(24.))
+                                    .px(px(4.))
+                                    .rounded(px(4.))
+                                    .bg(if cell_hot {
+                                        p.select
+                                    } else {
+                                        transparent_black()
+                                    })
                                     .flex()
+                                    .items_center()
                                     .justify_end()
                                     .opacity(if hidden { 0.35 } else { 1.0 })
                                     .text_size(px(12.5))
-                                    .text_color(p.text)
+                                    .font_weight(if cell_hot {
+                                        FontWeight::MEDIUM
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
+                                    .text_color(if cell_hot { p.strong } else { p.text })
+                                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                                        if *inside {
+                                            this.hovered_slice = Some(cs_name.clone());
+                                            this.hovered_segment = Some(cg_name.clone());
+                                        } else if this.hovered_segment.as_ref() == Some(&cg_name) {
+                                            this.hovered_segment = None;
+                                        }
+                                        cx.notify();
+                                    }))
                                     .child(format!("{v:.0}")),
                             );
                         }
@@ -1627,48 +1873,64 @@ impl Render for BreakdownChart {
             }
         };
 
-        // Interactive segment legend footer
+        // Interactive segment legend footer (`pro_tactile` chips + `Slide::snappy` dim/highlight)
         let footer = if self.segment_key.as_ref() != "none" {
             let mut legend_strip = div().flex().flex_wrap().items_center().gap(px(4.));
             for (g_idx, g_name) in segments.iter().enumerate() {
                 let hidden = self.hidden_segments.contains(g_name);
                 let sw = self.segment_color(g_name, g_idx, &p);
+                let is_hov = self.hovered_segment.as_ref() == Some(g_name);
                 let g_hov = g_name.clone();
                 let g_tog = g_name.to_string();
+                let chip_alpha = if hidden {
+                    0.42
+                } else {
+                    (0.45 + 0.55 * seg_alphas[g_idx]).clamp(0.45, 1.0)
+                };
 
-                legend_strip = legend_strip.child(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("leg-chip-{g_idx}")))
-                        .role(Role::Button)
-                        .aria_label(format!("Toggle {g_name}"))
-                        .tab_index(0)
-                        .h(px(26.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .opacity(if hidden { 0.42 } else { 1.0 })
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.text)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                legend_strip = legend_strip.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("leg-chip-{g_idx}")),
+                        format!("Toggle {g_name}"),
+                        6.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        sw.opacity(0.32),
+                        is_hov && !hidden,
+                        div()
+                            .h(px(26.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .whitespace_nowrap()
+                            .child(div().size(px(8.)).flex_none().rounded(px(2.)).bg(sw))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(if is_hov { p.ink } else { p.text })
+                                    .child(g_name.clone()),
+                            ),
+                        cx,
+                        move |this, _, cx| {
+                            this.toggle_segment_visibility(&g_tog, cx);
+                        },
+                    )
+                    .flex_none()
+                    .opacity(chip_alpha)
+                    .on_hover(cx.listener(
+                        move |this, inside: &bool, _, cx| {
                             if *inside {
                                 this.hovered_segment = Some(g_hov.clone());
                             } else if this.hovered_segment.as_ref() == Some(&g_hov) {
                                 this.hovered_segment = None;
                             }
                             cx.notify();
-                        }))
-                        .child(div().size(px(8.)).rounded(px(2.)).bg(sw))
-                        .child(g_name.clone()),
-                    cx,
-                    move |this, _, cx| {
-                        this.toggle_segment_visibility(&g_tog, cx);
-                    },
-                ));
+                        },
+                    )),
+                );
             }
 
             let has_hidden = !self.hidden_segments.is_empty();
@@ -1685,28 +1947,33 @@ impl Render for BreakdownChart {
                 .gap(px(8.))
                 .child(legend_strip)
                 .when(has_hidden, |d| {
-                    d.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "leg-reset"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Show all segments", "恢复全部"))
-                            .tab_index(0)
-                            .h(px(26.))
-                            .px(px(9.))
-                            .rounded(px(6.))
-                            .flex()
-                            .items_center()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.blue)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .child(tr(cx, "Reset", "重置")),
-                        cx,
-                        |this, _, cx| {
-                            this.reset_hidden_segments(cx);
-                        },
-                    ))
+                    d.child(
+                        pro_tactile(
+                            pro_eid(&self.id, "leg-reset"),
+                            tr(cx, "Show all segments", "恢复全部"),
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            p.blue.opacity(0.28),
+                            false,
+                            div()
+                                .h(px(26.))
+                                .px(px(9.))
+                                .flex()
+                                .items_center()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.blue)
+                                .whitespace_nowrap()
+                                .child(tr(cx, "Reset", "重置")),
+                            cx,
+                            |this, _, cx| {
+                                this.reset_hidden_segments(cx);
+                            },
+                        )
+                        .flex_none(),
+                    )
                 })
                 .into_any_element()
         } else {
@@ -1850,7 +2117,8 @@ fn default_sprint_records() -> Vec<BreakdownRecord> {
 #[cfg(test)]
 mod tests {
     use super::BreakdownChart;
-    use gpui::{AppContext, TestAppContext};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[gpui::test]
     fn sprint_dataset_aggregates_212_tasks_and_switches_dimensions_cleanly(
@@ -1878,6 +2146,40 @@ mod tests {
             let (team_slices, _, _, pts_total) = bc.compute_matrix();
             assert_eq!(team_slices.len(), 4);
             assert!(pts_total > 212.0);
+        });
+    }
+
+    #[gpui::test]
+    fn switching_slice_springs_positional_bars_smoothly(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (chart, w) = cx.add_window_view(|_, cx| BreakdownChart::new("bc-spring", cx));
+        w.simulate_resize(size(px(600.), px(520.)));
+        w.run_until_parked();
+
+        let h0 = w.update(|_, app| chart.read(app).bar_slides[0][0].value(app));
+        w.update(|_, app| {
+            chart.update(app, |bc, cx| {
+                bc.set_measure("points", cx);
+                bc.set_slice("team", cx);
+                bc.hovered_segment = Some("Urgent".into());
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(70));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let bc = chart.read(app);
+            let h_mid = bc.bar_slides[0][0].value(app);
+            assert!(
+                (h_mid - h0).abs() > 0.1,
+                "expected positional bar slide to morph smoothly, got {h0} -> {h_mid}"
+            );
+            let dim_seg = bc.seg_spotlights[1].value(app);
+            assert!(dim_seg < 0.95 && dim_seg >= 0.22);
         });
     }
 }

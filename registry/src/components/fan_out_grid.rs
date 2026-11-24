@@ -6,11 +6,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_presence,
-        pro_rolling_number, pro_skeleton_bar, tr,
+        ProPalette, pro_app_tile, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile, tr,
     },
+    foundation::Theme,
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -424,6 +426,10 @@ pub struct FanOutGrid {
     focused_idx: Option<usize>,
     pinned_id: Option<SharedString>,
     active_filter: Option<FanOutStatus>,
+    tip_x: Slide,
+    tip_y: Slide,
+    tip_ready: bool,
+    last_tip_idx: Option<usize>,
     measured_grid_w: Rc<Cell<f32>>,
     started_at: Instant,
     loading: bool,
@@ -451,6 +457,10 @@ impl FanOutGrid {
             focused_idx: None,
             pinned_id: None,
             active_filter: None,
+            tip_x: Slide::snappy(8.0),
+            tip_y: Slide::snappy(48.0),
+            tip_ready: false,
+            last_tip_idx: None,
             measured_grid_w: Rc::new(Cell::new(DEFAULT_PANEL_W - 2.0 * PANEL_PAD_X)),
             started_at: Instant::now(),
             loading: false,
@@ -631,7 +641,7 @@ impl FanOutGrid {
 impl Render for FanOutGrid {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed_s = self.started_at.elapsed().as_secs_f32();
         let panel_bg: Hsla = if p.dark {
             rgb(0x1c1c1f).into()
@@ -1090,21 +1100,42 @@ impl Render for FanOutGrid {
             }))
             .child(matrix_canvas);
 
-        // Legend filter buttons + Retry failed button
+        // Legend filter buttons with liquid pill indicator + Retry failed button
         let legend_entries = [
             (FanOutStatus::Done, counts.done, "done"),
             (FanOutStatus::Running, counts.running, "running"),
             (FanOutStatus::Retrying, counts.retrying, "retrying"),
             (FanOutStatus::Failed, counts.failed, "failed"),
         ];
+        let flt_sensor = pro_selection_sensor();
+        let active_slug = self.active_filter.map(|st| match st {
+            FanOutStatus::Done => "done",
+            FanOutStatus::Running => "running",
+            FanOutStatus::Retrying => "retrying",
+            FanOutStatus::Failed => "failed",
+            FanOutStatus::Queued => "queued",
+        });
         let mut legend = div()
             .id(pro_eid(&self.id, "legend"))
             .role(Role::Group)
             .aria_label(tr(cx, "Show only status", "按状态筛选"))
+            .relative()
             .flex()
             .flex_wrap()
             .items_center()
             .gap(px(2.));
+
+        if let Some(sel_slug) = active_slug {
+            legend = legend.child(pro_pill_indicator(
+                pro_eid(&self.id, "flt-ind"),
+                sel_slug,
+                flt_sensor.clone(),
+                6.0,
+                p.chip,
+                Some(p.line),
+                false,
+            ));
+        }
 
         for (st, cnt, slug) in legend_entries {
             if cnt == 0 && self.active_filter != Some(st) {
@@ -1113,90 +1144,107 @@ impl Render for FanOutGrid {
             let sc = status_colors(st, &p);
             let pressed = self.active_filter == Some(st);
             let other_active = self.active_filter.is_some() && !pressed;
-            let hover_bg = p.chip_hover;
-            let hover_ink = p.ink;
+            let dim_t = pro_spring_f32(
+                pro_eid(&self.id, format!("flt-dim-{slug}")),
+                if other_active { 0.45 } else { 1.0 },
+                0.20,
+                window,
+                cx,
+            );
+            let flt_s = flt_sensor.clone();
             legend = legend.child(
                 div()
-                    .id(pro_eid(&self.id, format!("flt-{slug}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {}", cnt, st.legend_word(cx)))
-                    .tab_index(0)
-                    .h(px(FOOT_H))
-                    .px(px(6.))
-                    .rounded(px(6.))
-                    .bg(if pressed { p.chip } else { transparent_black() })
-                    .opacity(if other_active { 0.45 } else { 1.0 })
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .text_size(px(12.))
-                    .text_color(if pressed { p.ink } else { p.muted })
-                    .hover(move |s| s.bg(hover_bg).text_color(hover_ink))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.toggle_filter(st, cx);
-                    }))
+                    .relative()
+                    .opacity(dim_t)
+                    .when(pressed, move |d| d.child(pro_mark_selected(&flt_s)))
                     .child(
-                        div()
-                            .size(px(8.))
-                            .rounded(px(2.5))
-                            .bg(sc.bg)
-                            .border_1()
-                            .border_color(sc.edge),
-                    )
-                    .child(
-                        div()
-                            .text_color(p.ink)
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(cnt.to_string()),
-                    )
-                    .child(st.legend_word(cx)),
+                        pro_tactile(
+                            pro_eid(&self.id, format!("flt-{slug}")),
+                            format!("{} {}", cnt, st.legend_word(cx)),
+                            6.0,
+                            transparent_black(),
+                            p.chip_hover,
+                            transparent_black(),
+                            p.line,
+                            pressed,
+                            div()
+                                .h(px(FOOT_H))
+                                .px(px(6.))
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .text_size(px(12.))
+                                .text_color(if pressed { p.ink } else { p.muted })
+                                .child(
+                                    div()
+                                        .size(px(8.))
+                                        .rounded(px(2.5))
+                                        .bg(sc.bg)
+                                        .border_1()
+                                        .border_color(sc.edge),
+                                )
+                                .child(
+                                    div()
+                                        .text_color(p.ink)
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(cnt.to_string()),
+                                )
+                                .child(st.legend_word(cx)),
+                            cx,
+                            move |this, _, cx| {
+                                this.toggle_filter(st, cx);
+                            },
+                        )
+                        .w_auto(),
+                    ),
             );
         }
 
         let failed_sc = status_colors(FanOutStatus::Failed, &p);
-        let retry_hover_bg = failed_sc.bg;
+        let retry_label = tr(
+            cx,
+            &format!("Retry {} failed", counts.failed),
+            &format!("重试 {} 个失败项", counts.failed),
+        )
+        .to_string();
+        let retry_tactile = pro_tactile(
+            pro_eid(&self.id, "retry-btn"),
+            retry_label.clone(),
+            6.0,
+            transparent_black(),
+            failed_sc.bg,
+            transparent_black(),
+            failed_sc.edge,
+            false,
+            div()
+                .h(px(FOOT_H))
+                .px(px(7.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .text_size(px(12.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(failed_sc.ink)
+                .child(pro_icon(ProIcon::Refresh, 13., failed_sc.ink))
+                .child(retry_label),
+            cx,
+            |this, _, cx| {
+                this.retry_failed(cx);
+            },
+        )
+        .w_auto();
         let retry_btn = pro_presence(
             pro_eid(&self.id, "retry-pres"),
             counts.failed > 0,
             0.20,
             0.16,
             {
-                let id_base = self.id.clone();
-                let failed_n = counts.failed;
-                let label = tr(
-                    cx,
-                    &format!("Retry {failed_n} failed"),
-                    &format!("重试 {failed_n} 个失败项"),
-                )
-                .to_string();
-                let retry_click = cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.retry_failed(cx);
-                });
+                let mut btn_opt = Some(retry_tactile);
                 move |amt| {
                     div()
-                        .id(pro_eid(&id_base, "retry-btn"))
-                        .role(Role::Button)
-                        .aria_label(label.clone())
-                        .tab_index(0)
                         .ml_auto()
-                        .h(px(FOOT_H))
-                        .px(px(7.))
-                        .rounded(px(6.))
                         .opacity(amt)
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(failed_sc.ink)
-                        .hover(move |s| s.bg(retry_hover_bg))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(retry_click)
-                        .child(pro_icon(ProIcon::Refresh, 13., failed_sc.ink))
-                        .child(label)
+                        .children(btn_opt.take())
                         .into_any_element()
                 }
             },
@@ -1214,17 +1262,33 @@ impl Render for FanOutGrid {
         let panel_h = PANEL_PAD_TOP + metrics.height + PANEL_GAP + FOOT_H + PANEL_PAD_BOTTOM;
         let panel_w = cur_grid_w + 2.0 * PANEL_PAD_X;
 
-        // Floating detail card anchored to hovered/focused/pinned cell
-        let tip_overlay = if let Some(idx) = active_idx
-            && let Some(task) = self.tasks.get(idx)
-        {
+        // Floating detail card anchored to hovered/focused/pinned cell with `Slide::snappy` X/Y glide
+        if let Some(idx) = active_idx {
+            self.last_tip_idx = Some(idx);
             let col = idx % metrics.cols;
             let row = idx / metrics.cols;
             let cell_cx = PANEL_PAD_X + col as f32 * metrics.step_x + CELL_SIDE * 0.5;
             let cell_top = PANEL_PAD_TOP + row as f32 * metrics.step_y;
-            let left_px = (cell_cx - TIP_W * 0.5).clamp(8.0, (panel_w - TIP_W - 8.0).max(8.0));
-            let bottom_px = panel_h - cell_top + 8.0;
+            let target_left = (cell_cx - TIP_W * 0.5).clamp(8.0, (panel_w - TIP_W - 8.0).max(8.0));
+            let target_bottom = panel_h - cell_top + 8.0;
+            if reduced || !self.tip_ready {
+                self.tip_x.reset(target_left);
+                self.tip_y.reset(target_bottom);
+                self.tip_ready = true;
+            } else {
+                self.tip_x.duration(target_left, 0.18, cx);
+                self.tip_y.duration(target_bottom, 0.18, cx);
+            }
+        } else {
+            self.tip_ready = false;
+        }
+        let tip_left_px = self.tip_x.get(window, cx);
+        let tip_bottom_px = self.tip_y.get(window, cx);
+        let show_tip = active_idx.is_some();
+        let display_idx = active_idx.or(self.last_tip_idx);
 
+        let tip_data = display_idx.and_then(|idx| {
+            let task = self.tasks.get(idx)?;
             let sc = status_colors(task.status, &p);
             let mut meta_parts: Vec<String> = Vec::new();
             if let Some(w) = &task.worker {
@@ -1251,110 +1315,127 @@ impl Render for FanOutGrid {
             }
             let meta_line = meta_parts.join(" · ");
             let label_str = task.display_label(cx).to_string();
-            let status_str = task.status.label(cx);
+            let status_str = task.status.label(cx).to_string();
             let err_str = task.display_error(cx).map(str::to_string);
             let res_str = task.display_result(cx).map(str::to_string);
             let is_pinned = pinned_idx == Some(idx);
             let pin_hint = if is_pinned {
-                Some(tr(
-                    cx,
-                    "Pinned · click cell or Esc to release",
-                    "已固定 · 点击单元格或按 Esc 取消",
-                ))
+                Some(
+                    tr(
+                        cx,
+                        "Pinned · click cell or Esc to release",
+                        "已固定 · 点击单元格或按 Esc 取消",
+                    )
+                    .to_string(),
+                )
             } else {
                 None
             };
+            Some((
+                sc, label_str, status_str, meta_line, err_str, res_str, pin_hint,
+            ))
+        });
 
-            Some(
-                div()
-                    .absolute()
-                    .left(px(left_px))
-                    .bottom(px(bottom_px))
-                    .w(px(TIP_W))
-                    .px(px(12.))
-                    .pt(px(9.))
-                    .pb(px(10.))
-                    .rounded(px(10.))
-                    .bg(tip_bg)
-                    .border_1()
-                    .border_color(if p.dark {
-                        hsla(0., 0., 1., 0.14)
-                    } else {
-                        hsla(0., 0., 0., 0.09)
-                    })
-                    .shadow_lg()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
+        let tip_overlay = pro_popover_presence(
+            pro_eid(&self.id, "cell-tip-pop"),
+            show_tip && tip_data.is_some(),
+            {
+                let mut data_opt = tip_data;
+                move || {
+                    let Some((sc, label_str, status_str, meta_line, err_str, res_str, pin_hint)) =
+                        data_opt.take()
+                    else {
+                        return div().into_any_element();
+                    };
+                    div()
+                        .absolute()
+                        .left(px(tip_left_px))
+                        .bottom(px(tip_bottom_px))
+                        .w(px(TIP_W))
+                        .px(px(12.))
+                        .pt(px(9.))
+                        .pb(px(10.))
+                        .rounded(px(10.))
+                        .bg(tip_bg)
+                        .border_1()
+                        .border_color(if p.dark {
+                            hsla(0., 0., 1., 0.14)
+                        } else {
+                            hsla(0., 0., 0., 0.09)
+                        })
+                        .shadow_lg()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(13.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(label_str),
+                                )
+                                .child(
+                                    div()
+                                        .h(px(18.))
+                                        .px(px(6.))
+                                        .flex_none()
+                                        .rounded(px(4.))
+                                        .bg(sc.bg)
+                                        .text_size(px(11.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(sc.ink)
+                                        .flex()
+                                        .items_center()
+                                        .child(status_str),
+                                ),
+                        )
+                        .when(!meta_line.is_empty(), |d| {
+                            d.child(
                                 div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(label_str),
+                                    .text_size(px(11.5))
+                                    .text_color(p.muted)
+                                    .child(meta_line),
                             )
-                            .child(
+                        })
+                        .when_some(err_str, |d, err| {
+                            d.child(
                                 div()
-                                    .h(px(18.))
-                                    .px(px(6.))
-                                    .flex_none()
-                                    .rounded(px(4.))
-                                    .bg(sc.bg)
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(sc.ink)
-                                    .flex()
-                                    .items_center()
-                                    .child(status_str),
-                            ),
-                    )
-                    .when(!meta_line.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(p.muted)
-                                .child(meta_line),
-                        )
-                    })
-                    .when_some(err_str, |d, err| {
-                        d.child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(17.))
-                                .text_color(failed_sc.ink)
-                                .child(err),
-                        )
-                    })
-                    .when_some(res_str, |d, res| {
-                        d.child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(17.))
-                                .text_color(p.text)
-                                .child(res),
-                        )
-                    })
-                    .when_some(pin_hint, |d, hint| {
-                        d.child(
-                            div()
-                                .pt(px(2.))
-                                .text_size(px(10.5))
-                                .text_color(pro_mix_color(p.muted, p.blue, 0.45))
-                                .child(hint),
-                        )
-                    }),
-            )
-        } else {
-            None
-        };
+                                    .text_size(px(12.))
+                                    .line_height(px(17.))
+                                    .text_color(failed_sc.ink)
+                                    .child(err),
+                            )
+                        })
+                        .when_some(res_str, |d, res| {
+                            d.child(
+                                div()
+                                    .text_size(px(12.))
+                                    .line_height(px(17.))
+                                    .text_color(p.text)
+                                    .child(res),
+                            )
+                        })
+                        .when_some(pin_hint, |d, hint| {
+                            d.child(
+                                div()
+                                    .pt(px(2.))
+                                    .text_size(px(10.5))
+                                    .text_color(pro_mix_color(p.muted, p.blue, 0.45))
+                                    .child(hint),
+                            )
+                        })
+                        .into_any_element()
+                }
+            },
+        );
 
         let panel = div()
             .relative()
@@ -1372,7 +1453,7 @@ impl Render for FanOutGrid {
             .gap(px(PANEL_GAP))
             .child(grid_el)
             .child(footer)
-            .children(tip_overlay);
+            .child(tip_overlay);
 
         div()
             .id(self.id.clone())

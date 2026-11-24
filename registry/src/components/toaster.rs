@@ -7,7 +7,7 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, pro_spring_f32,
+        ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, pro_spring_f32, pro_tactile,
         pro_view_transition, tr,
     },
     foundation::Theme,
@@ -149,18 +149,43 @@ struct LiveToast {
     active_elapsed_ms: f32,
     promise_elapsed_ms: f32,
     swipe_release: Slide,
+    top_slide: Slide,
+    scale_slide: Slide,
+    alpha_slide: Slide,
+    last_targets: (f32, f32, f32),
 }
 
 impl LiveToast {
-    fn from_spec(spec: ToastItem) -> Self {
+    fn from_spec_at_slot(spec: ToastItem, slot: usize, entering: bool) -> Self {
+        let init_top = if entering { -16.0 } else { slot as f32 * 13.0 };
+        let init_scale = if entering {
+            0.96
+        } else {
+            (1.0 - slot as f32 * 0.06).max(0.84)
+        };
+        let init_alpha = if slot == 0 { 1.0 } else { 0.0 };
         Self {
             spec,
             last_tick: Instant::now(),
             active_elapsed_ms: 0.,
             promise_elapsed_ms: 0.,
             swipe_release: Slide::snappy(0.),
+            top_slide: Slide::snappy(init_top),
+            scale_slide: Slide::snappy(init_scale),
+            alpha_slide: Slide::snappy(init_alpha),
+            last_targets: (init_top, init_scale, init_alpha),
         }
     }
+}
+
+struct ExitingToast {
+    spec: ToastItem,
+    base_top: f32,
+    base_scale: f32,
+    start_dx: f32,
+    travel_dx: f32,
+    exit_slide: Slide,
+    started_at: Instant,
 }
 
 #[derive(Clone, Copy)]
@@ -389,7 +414,11 @@ fn seed_initial_toasts(zh: bool) -> Vec<LiveToast> {
                 .with_duration_ms(None),
         ]
     };
-    items.into_iter().map(LiveToast::from_spec).collect()
+    items
+        .into_iter()
+        .enumerate()
+        .map(|(slot, spec)| LiveToast::from_spec_at_slot(spec, slot, false))
+        .collect()
 }
 
 /// Calm stacked notification toaster with trigger buttons, hover fan-out, and swipe dismiss.
@@ -426,6 +455,9 @@ pub struct Toaster {
     active_drag: Option<ActiveDrag>,
     next_id: u64,
     toasts: Vec<LiveToast>,
+    exiting_toasts: Vec<ExitingToast>,
+    stack_h_slide: Slide,
+    last_stack_h: f32,
     seeded_lang_zh: bool,
     custom_seeded: bool,
     started_at: Instant,
@@ -456,6 +488,9 @@ impl Toaster {
             active_drag: None,
             next_id: 4,
             toasts: seed_initial_toasts(zh),
+            exiting_toasts: Vec::new(),
+            stack_h_slide: Slide::snappy(108.),
+            last_stack_h: 108.,
             seeded_lang_zh: zh,
             custom_seeded: false,
             started_at: Instant::now(),
@@ -504,7 +539,11 @@ impl Toaster {
     pub fn with_toasts(mut self, items: Vec<ToastItem>) -> Self {
         let max_id = items.iter().map(|t| t.id).max().unwrap_or(0);
         self.next_id = max_id + 1;
-        self.toasts = items.into_iter().map(LiveToast::from_spec).collect();
+        self.toasts = items
+            .into_iter()
+            .enumerate()
+            .map(|(slot, spec)| LiveToast::from_spec_at_slot(spec, slot, false))
+            .collect();
         self.custom_seeded = true;
         self
     }
@@ -547,7 +586,8 @@ impl Toaster {
         let id = item.id;
         let kind = item.kind;
         self.next_id = self.next_id.max(id + 1);
-        self.toasts.insert(0, LiveToast::from_spec(item));
+        self.toasts
+            .insert(0, LiveToast::from_spec_at_slot(item, 0, true));
         if self.toasts.len() > 8 {
             self.toasts.truncate(8);
         }
@@ -556,12 +596,30 @@ impl Toaster {
         id
     }
 
-    /// Dismiss a single toast by `id`, emitting [`ToasterEvent::Dismissed`].
-    pub fn dismiss(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
+    fn dismiss_with_motion(
+        &mut self,
+        id: u64,
+        start_dx: f32,
+        travel_dx: f32,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if let Some(pos) = self.toasts.iter().position(|t| t.spec.id == id) {
-            self.toasts.remove(pos);
+            let removed = self.toasts.remove(pos);
             if self.hovered_card_id == Some(id) {
                 self.hovered_card_id = None;
+            }
+            if !disabled_motion(cx) && pos < self.visible_toasts {
+                let mut exit_slide = Slide::snappy(0.);
+                exit_slide.duration(1.0, 0.22, cx);
+                self.exiting_toasts.push(ExitingToast {
+                    spec: removed.spec,
+                    base_top: removed.last_targets.0.max(0.),
+                    base_scale: removed.last_targets.1,
+                    start_dx,
+                    travel_dx,
+                    exit_slide,
+                    started_at: Instant::now(),
+                });
             }
             cx.emit(ToasterEvent::Dismissed(id));
             cx.notify();
@@ -569,6 +627,11 @@ impl Toaster {
         } else {
             false
         }
+    }
+
+    /// Dismiss a single toast by `id`, emitting [`ToasterEvent::Dismissed`].
+    pub fn dismiss(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
+        self.dismiss_with_motion(id, 0.0, 56.0, cx)
     }
 
     /// Dismiss the newest toast at the front of the stack.
@@ -683,7 +746,8 @@ impl Toaster {
             return;
         };
         if drag.current_dx.abs() >= SWIPE_THRESHOLD {
-            self.dismiss(drag.toast_id, cx);
+            let dir = if drag.current_dx >= 0.0 { 1.0 } else { -1.0 };
+            self.dismiss_with_motion(drag.toast_id, drag.current_dx, dir * 130.0, cx);
         } else {
             if let Some(t) = self.toasts.iter_mut().find(|t| t.spec.id == drag.toast_id) {
                 t.swipe_release.reset(drag.current_dx);
@@ -822,39 +886,34 @@ impl Render for Toaster {
                                  preset: &'static str,
                                  label: SharedString,
                                  icon_el: AnyElement| {
-            div()
-                .id(pro_eid(&self.id, btn_id))
-                .role(Role::Button)
-                .aria_label(label.clone())
-                .tab_index(0)
-                .flex_1()
-                .h(px(32.))
-                .px(px(10.))
-                .rounded(px(6.))
-                .bg(card_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .flex()
-                .items_center()
-                .gap(px(7.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.strong)
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .on_key_down(cx.listener(move |v, ev: &KeyDownEvent, w, cx| {
-                    if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
-                        w.prevent_default();
-                        cx.stop_propagation();
-                        v.trigger_preset(preset, cx);
-                    }
-                }))
-                .on_click(cx.listener(move |v, _, _, cx| {
+            pro_tactile(
+                pro_eid(&self.id, btn_id),
+                label.clone(),
+                6.,
+                card_bg,
+                p.hover,
+                p.line_strong,
+                p.line_strong,
+                false,
+                div()
+                    .w_full()
+                    .h(px(32.))
+                    .px(px(10.))
+                    .flex()
+                    .items_center()
+                    .gap(px(7.))
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .child(icon_el)
+                    .child(div().truncate().child(label)),
+                cx,
+                move |v, _, cx| {
                     v.trigger_preset(preset, cx);
-                }))
-                .child(icon_el)
-                .child(div().truncate().child(label))
+                },
+            )
+            .flex_1()
+            .min_w_0()
         };
 
         let trigger_section = if self.show_triggers {
@@ -1018,6 +1077,7 @@ impl Render for Toaster {
 
         // Build stacked toast region (render back-to-front so index 0 paints on top!)
         let fanned = self.is_fanned_out();
+        let paused = self.hovered_stack || self.keyboard_expanded || self.active_drag.is_some();
         let visible_n = self.toasts.len().min(self.visible_toasts);
         let stack_target_h = if visible_n == 0 {
             72.0
@@ -1026,14 +1086,21 @@ impl Render for Toaster {
         } else {
             CARD_HEIGHT + (visible_n.saturating_sub(1)) as f32 * 14.0 + 12.0
         };
-        let stack_h = pro_spring_f32(
-            pro_eid(&self.id, "stack-region-h"),
-            stack_target_h,
-            0.30,
-            w,
-            cx,
-        )
-        .max(72.0);
+        if (self.last_stack_h - stack_target_h).abs() > 0.25 {
+            self.last_stack_h = stack_target_h;
+            self.stack_h_slide.duration(stack_target_h, 0.28, cx);
+        }
+        let stack_h = self.stack_h_slide.get(w, cx).max(72.0);
+
+        if reduced {
+            self.exiting_toasts.clear();
+        } else {
+            self.exiting_toasts
+                .retain(|et| et.started_at.elapsed().as_secs_f32() < 0.25);
+            if !self.exiting_toasts.is_empty() {
+                w.request_animation_frame();
+            }
+        }
 
         let spin_secs = self.started_at.elapsed().as_secs_f32();
         let mut stack_container = div()
@@ -1055,9 +1122,93 @@ impl Render for Toaster {
                 }
             }));
 
-        // Collect snapshot data first so we can call `pro_spring_f32(..., w, cx)` cleanly
+        // Render exiting dismissed toasts smoothly sliding out via `Slide`
+        struct ExitRenderSpec {
+            id: u64,
+            kind: ToastKind,
+            title: SharedString,
+            desc: Option<SharedString>,
+            top: f32,
+            scale: f32,
+            dx: f32,
+            opacity: f32,
+        }
+        let mut exit_specs = Vec::with_capacity(self.exiting_toasts.len());
+        for et in &mut self.exiting_toasts {
+            let u = et.exit_slide.get(w, cx).clamp(0.0, 1.0);
+            exit_specs.push(ExitRenderSpec {
+                id: et.spec.id,
+                kind: et.spec.kind,
+                title: et.spec.title.clone(),
+                desc: et.spec.description.clone(),
+                top: et.base_top - 4.0 * u,
+                scale: (et.base_scale * (1.0 - 0.04 * u)).clamp(0.82, 1.0),
+                dx: et.start_dx + et.travel_dx * u,
+                opacity: (1.0 - u).clamp(0.0, 1.0),
+            });
+        }
+
+        for ex in exit_specs {
+            let ex_eid = pro_eid(&self.id, format!("toast-exit-{}", ex.id));
+            let inset_x = ((1.0 - ex.scale) * CARD_WIDTH * 0.5).max(0.);
+            let card_h = CARD_HEIGHT * (0.90 + 0.10 * ex.scale);
+            let status_icon =
+                render_toast_status_icon(pro_eid(&ex_eid, "icon"), ex.kind, spin_secs, &p, w, cx);
+            stack_container = stack_container.child(
+                div()
+                    .absolute()
+                    .top(px(ex.top))
+                    .left(px(inset_x + ex.dx))
+                    .w(px((CARD_WIDTH - 2. * inset_x).max(160.)))
+                    .h(px(card_h))
+                    .opacity(ex.opacity)
+                    .rounded(px(10.))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(card_border)
+                    .shadow_md()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .size_full()
+                            .px(px(12.))
+                            .py(px(11.))
+                            .flex()
+                            .items_center()
+                            .gap(px(9.))
+                            .child(status_icon)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .text_size(px(13.))
+                                            .line_height(px(19.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.strong)
+                                            .truncate()
+                                            .child(ex.title),
+                                    )
+                                    .when_some(ex.desc, |d, desc| {
+                                        d.child(
+                                            div()
+                                                .text_size(px(12.5))
+                                                .line_height(px(18.))
+                                                .text_color(p.text)
+                                                .truncate()
+                                                .child(desc),
+                                        )
+                                    }),
+                            ),
+                    ),
+            );
+        }
+
+        // Collect snapshot data and step per-card `Slide` springs (`0.94 -> 1.0` scale & vertical offset)
         struct CardRenderSpec {
-            slot: usize,
             id: u64,
             kind: ToastKind,
             title: SharedString,
@@ -1065,11 +1216,40 @@ impl Render for Toaster {
             action: Option<SharedString>,
             timer_frac: Option<f32>,
             drag_dx: f32,
+            anim_top: f32,
+            anim_scale: f32,
+            anim_content: f32,
         }
 
         let mut specs_rev: Vec<CardRenderSpec> = Vec::with_capacity(visible_n);
         for slot in (0..visible_n).rev() {
+            let target_top = if fanned {
+                slot as f32 * (CARD_HEIGHT + FAN_GAP)
+            } else {
+                slot as f32 * 13.0
+            };
+            // Stacked scale: slot 0 = 1.00, slot 1 = 0.94, slot 2 = 0.88 -> fans out to 1.00!
+            let target_scale = if fanned {
+                1.0
+            } else {
+                (1.0 - slot as f32 * 0.06).max(0.84)
+            };
+            let target_alpha = if fanned || slot == 0 { 1.0 } else { 0.0 };
+
             let t = &mut self.toasts[slot];
+            if (t.last_targets.0 - target_top).abs() > 0.1
+                || (t.last_targets.1 - target_scale).abs() > 0.002
+                || (t.last_targets.2 - target_alpha).abs() > 0.01
+            {
+                t.last_targets = (target_top, target_scale, target_alpha);
+                t.top_slide.duration(target_top, 0.28, cx);
+                t.scale_slide.duration(target_scale, 0.28, cx);
+                t.alpha_slide.duration(target_alpha, 0.22, cx);
+            }
+            let anim_top = t.top_slide.get(w, cx);
+            let anim_scale = t.scale_slide.get(w, cx).clamp(0.80, 1.04);
+            let anim_content = t.alpha_slide.get(w, cx).clamp(0.0, 1.0);
+
             let release_dx = t.swipe_release.get(w, cx);
             let drag_dx = if let Some(d) = self.active_drag
                 && d.toast_id == t.spec.id
@@ -1087,7 +1267,6 @@ impl Render for Toaster {
                 None
             };
             specs_rev.push(CardRenderSpec {
-                slot,
                 id: t.spec.id,
                 kind: t.spec.kind,
                 title: t.spec.title.clone(),
@@ -1095,34 +1274,17 @@ impl Render for Toaster {
                 action: t.spec.action_label.clone(),
                 timer_frac,
                 drag_dx,
+                anim_top,
+                anim_scale,
+                anim_content,
             });
         }
 
         for card in specs_rev {
-            let target_top = if fanned {
-                card.slot as f32 * (CARD_HEIGHT + FAN_GAP)
-            } else {
-                card.slot as f32 * 13.0
-            };
-            // Scale proxy (`1.0`, `0.95`, `0.90` -> `0px`, `8.5px`, `17px` horizontal inset per side)
-            let target_scale = if fanned {
-                1.0
-            } else {
-                (1.0 - card.slot as f32 * 0.05).max(0.85)
-            };
-            let target_content_alpha = if fanned || card.slot == 0 { 1.0 } else { 0.0 };
-
+            let anim_top = card.anim_top;
+            let anim_scale = card.anim_scale;
+            let anim_content = card.anim_content;
             let card_eid = pro_eid(&self.id, format!("toast-{}", card.id));
-            let anim_top = pro_spring_f32(pro_eid(&card_eid, "top"), target_top, 0.32, w, cx);
-            let anim_scale = pro_spring_f32(pro_eid(&card_eid, "scale"), target_scale, 0.32, w, cx);
-            let anim_content = pro_spring_f32(
-                pro_eid(&card_eid, "cnt-a"),
-                target_content_alpha,
-                0.24,
-                w,
-                cx,
-            )
-            .clamp(0., 1.);
 
             let inset_x = ((1.0 - anim_scale) * CARD_WIDTH * 0.5).max(0.);
             let card_h = CARD_HEIGHT * (0.90 + 0.10 * anim_scale);
@@ -1169,38 +1331,43 @@ impl Render for Toaster {
             let id_for_action = card.id;
             let action_el = card.action.clone().map(|act_lbl| {
                 let lbl_for_cb = act_lbl.clone();
+                let act_rest: Hsla = if p.dark {
+                    hsla(0., 0., 1., 0.07)
+                } else {
+                    p.card
+                };
                 div()
-                    .id(pro_eid(&card_eid, "act-btn"))
-                    .role(Role::Button)
-                    .aria_label(act_lbl.clone())
-                    .tab_index(0)
-                    .h(px(27.))
-                    .px(px(10.))
                     .flex_none()
-                    .rounded(px(6.))
-                    .bg(if p.dark {
-                        hsla(0., 0., 1., 0.07)
-                    } else {
-                        p.card
-                    })
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .flex()
-                    .items_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.chip_hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
-                    .on_click(cx.listener(move |v, _, _, cx| {
-                        cx.stop_propagation();
-                        v.handle_toast_action(id_for_action, lbl_for_cb.clone(), cx);
-                    }))
-                    .child(act_lbl)
+                    .child(
+                        pro_tactile(
+                            pro_eid(&card_eid, "act-btn"),
+                            act_lbl.clone(),
+                            6.,
+                            act_rest,
+                            p.chip_hover,
+                            p.line_strong,
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(27.))
+                                .px(px(10.))
+                                .flex()
+                                .items_center()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.strong)
+                                .whitespace_nowrap()
+                                .child(act_lbl),
+                            cx,
+                            move |v, _, cx| {
+                                v.handle_toast_action(id_for_action, lbl_for_cb.clone(), cx);
+                            },
+                        )
+                        .flex_none(),
+                    )
             });
 
             let is_card_hovered = self.hovered_card_id == Some(card.id);
@@ -1298,6 +1465,11 @@ impl Render for Toaster {
                         .child(close_btn),
                 )
                 .when_some(card.timer_frac, |d, frac| {
+                    let bar_col = if paused {
+                        p.blue.opacity(0.45)
+                    } else {
+                        hairline_col
+                    };
                     d.child(
                         div()
                             .absolute()
@@ -1306,7 +1478,7 @@ impl Render for Toaster {
                             .bottom_0()
                             .h(px(1.5))
                             .opacity(anim_content)
-                            .child(div().h_full().w(relative(frac)).bg(hairline_col)),
+                            .child(div().h_full().w(relative(frac)).bg(bar_col)),
                     )
                 });
 

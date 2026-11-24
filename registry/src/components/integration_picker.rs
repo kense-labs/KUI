@@ -7,8 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_selection_sensor, pro_skeleton_bar, pro_switch, pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        pro_switch, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -876,24 +877,27 @@ impl Render for IntegrationPicker {
             .gap(px(6.))
             .when(self.show_back, |d| {
                 d.child(
-                    div()
-                        .id(pro_eid(&self.id, "back-btn"))
-                        .role(Role::Button)
-                        .aria_label(back_aria)
-                        .tab_index(0)
-                        .size(px(28.))
-                        .flex_none()
-                        .rounded(px(6.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(|_, _, _, cx| {
+                    pro_tactile(
+                        pro_eid(&self.id, "back-btn"),
+                        back_aria,
+                        6.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        false,
+                        div()
+                            .size(px(28.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_svg("0 0 16 16", ICON_BACK, 16., p.muted)),
+                        cx,
+                        |_, _, cx| {
                             cx.emit(IntegrationPickerEvent::Back);
-                        }))
-                        .child(pro_svg("0 0 16 16", ICON_BACK, 16., p.muted)),
+                        },
+                    )
+                    .flex_none(),
                 )
             })
             .child(
@@ -1010,7 +1014,10 @@ impl Render for IntegrationPicker {
                             .gap(px(10.))
                             .cursor_pointer()
                             .when(is_sel, |d| d.child(pro_mark_selected(&sensor)))
-                            .when(!is_sel, move |d| d.hover(move |s| s.bg(p.hover)))
+                            .when(!is_sel, move |d| {
+                                d.hover(move |s| s.bg(p.hover.opacity(0.45)))
+                            })
+                            .active(move |s| s.top(px(1.)))
                             .on_click(cx.listener(move |v, _, _, cx| {
                                 v.selected_id = svc_id.clone();
                                 cx.emit(IntegrationPickerEvent::Selected(svc_id.clone()));
@@ -1203,8 +1210,24 @@ impl Render for IntegrationPicker {
                 )));
 
             // Build the two connection tiles: Workspace vs Personal
+            let ws_amt = pro_spring_f32(
+                pro_eid(&self.id, format!("tile-sp-{svc_id}-ws")),
+                if svc.workspace_connected { 1.0 } else { 0.0 },
+                0.22,
+                w,
+                cx,
+            );
+            let ps_amt = pro_spring_f32(
+                pro_eid(&self.id, format!("tile-sp-{svc_id}-ps")),
+                if svc.personal_connected { 1.0 } else { 0.0 },
+                0.22,
+                w,
+                cx,
+            );
+
             let build_scope_tile = |target: ConnectionTarget,
                                     connected: bool,
+                                    conn_amt: f32,
                                     scopes: SharedString,
                                     lead_ic: ProIcon| {
                 let id_for_sw = svc_id.clone();
@@ -1223,27 +1246,44 @@ impl Render for IntegrationPicker {
                 } else {
                     tr(cx, "Connect", "立即连接").into()
                 };
+                let active_bg = if p.dark {
+                    hsla(210. / 360., 0.85, 0.60, 0.025 + 0.055 * conn_amt)
+                } else {
+                    hsla(212. / 360., 0.90, 0.48, 0.018 + 0.032 * conn_amt)
+                };
+                let tile_bg = if conn_amt > 0.01 {
+                    active_bg
+                } else {
+                    soft_surface
+                };
+                let tile_border = if conn_amt > 0.01 {
+                    accent_col.opacity(0.10 + 0.24 * conn_amt)
+                } else {
+                    p.line
+                };
+                let btn_rest_bg: Hsla = if connected { p.card } else { p.primary };
+                let btn_hover_bg: Hsla = if connected {
+                    p.hover
+                } else if p.dark {
+                    hsla(0., 0., 1., 0.88)
+                } else {
+                    hsla(0., 0., 0., 0.84)
+                };
+                let btn_rest_bdr: Hsla = if connected {
+                    p.line_strong
+                } else {
+                    transparent_black()
+                };
+                let btn_fg: Hsla = if connected { p.text } else { p.on_primary };
 
                 div()
                     .flex_1()
                     .min_w(px(152.))
                     .p(px(10.))
                     .rounded(px(8.))
-                    .bg(if connected {
-                        if p.dark {
-                            hsla(210. / 360., 0.85, 0.60, 0.08)
-                        } else {
-                            hsla(212. / 360., 0.90, 0.48, 0.045)
-                        }
-                    } else {
-                        soft_surface
-                    })
+                    .bg(tile_bg)
                     .border_1()
-                    .border_color(if connected {
-                        accent_col.opacity(0.32)
-                    } else {
-                        p.line
-                    })
+                    .border_color(tile_border)
                     .flex()
                     .flex_col()
                     .gap(px(6.))
@@ -1315,42 +1355,54 @@ impl Render for IntegrationPicker {
                                     .flex()
                                     .items_center()
                                     .gap(px(4.))
-                                    .text_size(px(11.))
-                                    .text_color(if connected { p.green_ink } else { p.muted })
-                                    .child(div().size(px(5.5)).rounded_full().bg(if connected {
-                                        p.green
-                                    } else {
-                                        p.faint
-                                    }))
-                                    .child(status_lbl),
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, format!("chk-{svc_id}-{tile_key}")),
+                                        connected,
+                                        12.,
+                                        false,
+                                        p.green,
+                                    ))
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, format!("st-{svc_id}-{tile_key}")),
+                                        status_lbl,
+                                        11.,
+                                        FontWeight::NORMAL,
+                                        if connected { p.green_ink } else { p.muted },
+                                    )),
                             )
                             .child(
-                                div()
-                                    .id(pro_eid(&self.id, format!("act-{svc_id}-{tile_key}")))
-                                    .role(Role::Button)
-                                    .aria_label(btn_lbl.clone())
-                                    .tab_index(0)
-                                    .h(px(22.))
-                                    .px(px(7.))
-                                    .rounded(px(5.))
-                                    .bg(if connected { p.card } else { p.primary })
-                                    .border_1()
-                                    .border_color(if connected {
-                                        p.line_strong
-                                    } else {
-                                        transparent_black()
-                                    })
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if connected { p.text } else { p.on_primary })
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(move |v, _, _, cx| {
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("act-{svc_id}-{tile_key}")),
+                                    btn_lbl.clone(),
+                                    5.,
+                                    btn_rest_bg,
+                                    btn_hover_bg,
+                                    btn_rest_bdr,
+                                    p.line_strong,
+                                    false,
+                                    div()
+                                        .h(px(22.))
+                                        .px(px(8.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .whitespace_nowrap()
+                                        .child(pro_swap_label(
+                                            pro_eid(
+                                                &self.id,
+                                                format!("act-lbl-{svc_id}-{tile_key}"),
+                                            ),
+                                            btn_lbl,
+                                            11.,
+                                            FontWeight::MEDIUM,
+                                            btn_fg,
+                                        )),
+                                    cx,
+                                    move |v, _, cx| {
                                         v.toggle_target(&id_for_btn, target, cx);
-                                    }))
-                                    .child(btn_lbl),
+                                    },
+                                )
+                                .flex_none(),
                             ),
                     )
             };
@@ -1358,12 +1410,14 @@ impl Render for IntegrationPicker {
             let ws_tile = build_scope_tile(
                 ConnectionTarget::Workspace,
                 svc.workspace_connected,
+                ws_amt,
                 svc.workspace_scopes.clone(),
                 ProIcon::Building,
             );
             let ps_tile = build_scope_tile(
                 ConnectionTarget::Personal,
                 svc.personal_connected,
+                ps_amt,
                 svc.personal_scopes.clone(),
                 ProIcon::User,
             );
@@ -1471,34 +1525,36 @@ impl Render for IntegrationPicker {
                         })
                         .child(
                             div().pt(px(2.)).flex().items_center().child(
-                                div()
-                                    .id(pro_eid(&self.id, format!("explore-{}", svc.id)))
-                                    .role(Role::Button)
-                                    .aria_label(explore_lbl.clone())
-                                    .tab_index(0)
-                                    .h(px(27.))
-                                    .pl(px(10.))
-                                    .pr(px(6.))
-                                    .rounded(px(6.))
-                                    .bg(p.card)
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(4.))
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(p.hover))
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(move |_, _, _, cx| {
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("explore-{}", svc.id)),
+                                    explore_lbl.clone(),
+                                    6.,
+                                    p.card,
+                                    p.hover,
+                                    p.line_strong,
+                                    p.line_strong,
+                                    false,
+                                    div()
+                                        .h(px(27.))
+                                        .pl(px(10.))
+                                        .pr(px(6.))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(4.))
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.strong)
+                                        .whitespace_nowrap()
+                                        .child(explore_lbl)
+                                        .child(pro_svg("0 0 16 16", ICON_CHEVRON_R, 14., p.muted)),
+                                    cx,
+                                    move |_, _, cx| {
                                         cx.emit(IntegrationPickerEvent::Explore(
                                             explore_id.clone(),
                                         ));
-                                    }))
-                                    .child(explore_lbl)
-                                    .child(pro_svg("0 0 16 16", ICON_CHEVRON_R, 14., p.muted)),
+                                    },
+                                )
+                                .flex_none(),
                             ),
                         ),
                 );
@@ -1553,7 +1609,13 @@ impl Render for IntegrationPicker {
                     .items_center()
                     .gap(px(6.))
                     .child(div().size(px(6.)).rounded(px(2.)).bg(p.green))
-                    .child(count_text),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "foot-cnt"),
+                        count_text,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             )
             .when(!stacked, |d| {
                 d.child(

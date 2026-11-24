@@ -7,20 +7,50 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_fold, pro_skeleton_bar,
+        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_mix_color, pro_popover_presence, pro_skeleton_bar, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         clipboard,
         control::UiLanguage,
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, person_initials, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
+
+#[derive(IntoElement)]
+struct CiteGlideArrow {
+    id: ElementId,
+    active: bool,
+    size: f32,
+    rest_color: Hsla,
+    active_color: Hsla,
+}
+
+impl RenderOnce for CiteGlideArrow {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let init = self.active;
+        let st = w.use_keyed_state(self.id, cx, |_, _| (init, Slide::snappy(f32::from(init))));
+        let t = st.update(cx, |s, cx| {
+            if s.0 != self.active {
+                s.0 = self.active;
+                s.1.set(f32::from(self.active), cx);
+            }
+            s.1.get(w, cx).clamp(0., 1.)
+        });
+        let col = pro_mix_color(self.rest_color, self.active_color, t);
+        div()
+            .relative()
+            .left(px(2.0 * t))
+            .flex_none()
+            .child(pro_icon(ProIcon::ArrowRight, self.size, col))
+    }
+}
 
 /// Grounding source entry wired to one or more [`CitedSegment`] claims.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -385,8 +415,11 @@ pub struct CitedAnswer {
     pages_read: Option<usize>,
     open_source_id: Option<SharedString>,
     hovered_marker: Option<(usize, SharedString)>,
+    last_hovered_marker: Option<SharedString>,
     hovered_source: Option<SharedString>,
+    hovered_action: bool,
     copied_quote_for: Option<(SharedString, Instant)>,
+    copied_all_at: Option<Instant>,
     action_label: Option<SharedString>,
     loading: bool,
     empty: bool,
@@ -410,8 +443,11 @@ impl CitedAnswer {
             pages_read: Some(12),
             open_source_id: Some("caching".into()),
             hovered_marker: None,
+            last_hovered_marker: None,
             hovered_source: None,
+            hovered_action: false,
             copied_quote_for: None,
+            copied_all_at: None,
             action_label: Some("Follow up".into()),
             loading: false,
             empty: false,
@@ -560,6 +596,12 @@ impl Render for CitedAnswer {
         let compact = width < 420.;
 
         if let Some((_, started)) = self.copied_quote_for
+            && started.elapsed().as_secs_f32() < 2.2
+            && !reduced
+        {
+            w.request_animation_frame();
+        }
+        if let Some(started) = self.copied_all_at
             && started.elapsed().as_secs_f32() < 2.2
             && !reduced
         {
@@ -833,6 +875,87 @@ impl Render for CitedAnswer {
             prose_col = prose_col.child(para_col);
         }
 
+        // Hovered citation preview card (`pro_popover_presence` smooth enter & exit!)
+        let hover_pop_cid = self
+            .hovered_marker
+            .as_ref()
+            .map(|(_, cid)| cid.clone())
+            .filter(|cid| self.open_source_id.as_ref() != Some(cid));
+        let hover_pop_open = hover_pop_cid.is_some();
+        if let Some(ref cid) = hover_pop_cid {
+            self.last_hovered_marker = Some(cid.clone());
+        }
+        let shown_pop_cid = hover_pop_cid.or_else(|| self.last_hovered_marker.clone());
+        let hover_pop_data = shown_pop_cid.and_then(|cid| {
+            self.sources
+                .iter()
+                .enumerate()
+                .find(|(_, s)| s.id == cid)
+                .map(|(i, s)| (i, s.clone(), render_source_glyph(i, s, 15., cx)))
+        });
+        let hover_cite_popover = pro_popover_presence(
+            pro_eid(&self.id, "hover-cite-pop"),
+            hover_pop_open,
+            move || {
+                let Some((idx, s, glyph)) = hover_pop_data else {
+                    return div().into_any_element();
+                };
+                div()
+                    .mt(px(10.))
+                    .p(px(10.))
+                    .rounded(px(8.))
+                    .bg(if p.dark { rgb(0x222226) } else { rgb(0xffffff) })
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(glyph)
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.strong)
+                                    .child(s.site.clone()),
+                            )
+                            .child(
+                                div()
+                                    .px(px(4.5))
+                                    .rounded(px(4.))
+                                    .bg(p.accent_soft)
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.blue)
+                                    .child(format!("[{}]", idx + 1)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(px(11.))
+                                    .text_color(p.muted)
+                                    .child(s.domain_hint()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(17.5))
+                            .text_color(p.text)
+                            .line_clamp(2)
+                            .child(s.quote),
+                    )
+                    .into_any_element()
+            },
+        );
+
         // Source Rows wired two-way + `pro_fold` quoted passage directly underneath each source!
         let mut sources_list = div().mt(px(14.)).w_full().flex().flex_col().gap(px(6.));
         for (idx, src) in self.sources.iter().cloned().enumerate() {
@@ -861,30 +984,12 @@ impl Render for CitedAnswer {
             let sid_hov = sid.clone();
             let sid_clk = sid.clone();
 
-            let row_header = div()
-                .id(pro_eid(&self.id, format!("source-row-{idx}")))
-                .role(Role::Button)
-                .aria_label(format!("Source {}: {} — {}", num, src.site, src.title))
-                .aria_expanded(is_open)
-                .tab_index(0)
+            let row_header_inner = div()
                 .px(px(10.))
                 .py(px(8.))
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .cursor_pointer()
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                    if *inside {
-                        this.hovered_source = Some(sid_hov.clone());
-                    } else if this.hovered_source.as_ref() == Some(&sid_hov) {
-                        this.hovered_source = None;
-                    }
-                    cx.notify();
-                }))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.toggle_source_preview(sid_clk.clone(), cx);
-                }))
                 .child(render_source_glyph(idx, &src, 18., cx))
                 .child(
                     div().flex_1().min_w_0().flex().flex_col().child(
@@ -946,172 +1051,233 @@ impl Render for CitedAnswer {
                     p.muted,
                 ));
 
+            let row_header = pro_tactile(
+                pro_eid(&self.id, format!("source-row-{idx}")),
+                format!("Source {}: {} — {}", num, src.site, src.title),
+                7.,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                is_spotlit || is_open,
+                row_header_inner,
+                cx,
+                move |this, _, cx| {
+                    this.toggle_source_preview(sid_clk.clone(), cx);
+                },
+            )
+            .aria_expanded(is_open)
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_source = Some(sid_hov.clone());
+                } else if this.hovered_source.as_ref() == Some(&sid_hov) {
+                    this.hovered_source = None;
+                }
+                cx.notify();
+            }));
+
+            let quote_fold_body: AnyElement = {
+                let domain = src.domain_hint();
+                let date = src.date.clone();
+                let title = src.title.clone();
+                let src_open = src.clone();
+                let sid_copy = sid.clone();
+                let copy_txt: SharedString = if just_copied_this {
+                    tr(cx, "Quote copied", "已复制引文").into()
+                } else {
+                    tr(cx, "Copy quote", "复制引文").into()
+                };
+                let open_txt: SharedString = tr(cx, "Open source", "打开原文").into();
+                let is_row_hov = self.hovered_source.as_ref() == Some(&sid);
+
+                let mut quote_wrap = div()
+                    .pl(px(10.))
+                    .border_l_2()
+                    .border_color(p.blue.opacity(0.60))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_x(px(3.5))
+                    .gap_y(px(2.));
+
+                for (span_str, highlighted) in quote_runs {
+                    for word in span_str.split_whitespace() {
+                        quote_wrap = quote_wrap.child(
+                            div()
+                                .when(highlighted, |d| d.px(px(3.)).rounded(px(3.)).bg(mark_bg))
+                                .text_size(px(12.))
+                                .line_height(px(18.5))
+                                .font_weight(if highlighted {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .text_color(if highlighted { p.strong } else { p.text })
+                                .child(word.to_owned()),
+                        );
+                    }
+                }
+
+                let open_btn_inner = div()
+                    .h(px(26.))
+                    .px(px(9.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .whitespace_nowrap()
+                    .child(open_txt.clone())
+                    .child(CiteGlideArrow {
+                        id: pro_eid(&self.id, format!("open-src-arr-{idx}")),
+                        active: is_row_hov,
+                        size: 12.,
+                        rest_color: p.muted,
+                        active_color: p.strong,
+                    });
+
+                let copy_icon_slot = div()
+                    .relative()
+                    .size(px(13.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(!just_copied_this, |d| {
+                        d.child(pro_icon(ProIcon::Copy, 13., p.muted))
+                    })
+                    .child(
+                        div()
+                            .when(!just_copied_this, |d| d.absolute().inset_0().opacity(0.))
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("copy-quote-chk-{idx}")),
+                                just_copied_this,
+                                13.,
+                                false,
+                                p.green,
+                            )),
+                    );
+
+                let copy_btn_inner = div()
+                    .h(px(26.))
+                    .px(px(9.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .child(copy_icon_slot)
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, format!("copy-quote-lbl-{idx}")),
+                        copy_txt.clone(),
+                        12.,
+                        FontWeight::MEDIUM,
+                        if just_copied_this {
+                            p.green_ink
+                        } else {
+                            p.text
+                        },
+                    ));
+
+                div()
+                    .px(px(12.))
+                    .pb(px(11.))
+                    .pt(px(6.))
+                    .border_t_1()
+                    .border_color(p.line)
+                    .flex()
+                    .flex_col()
+                    .gap(px(7.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(8.))
+                            .text_size(px(11.5))
+                            .text_color(p.muted)
+                            .child(match date {
+                                Some(dt) => format!("{domain} · {dt}"),
+                                None => domain,
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(title),
+                    )
+                    .child(quote_wrap)
+                    .child(
+                        div()
+                            .pt(px(2.))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("open-src-{idx}")),
+                                    open_txt,
+                                    6.,
+                                    p.card,
+                                    p.hover,
+                                    p.line_strong,
+                                    p.line_strong,
+                                    false,
+                                    open_btn_inner,
+                                    cx,
+                                    move |this, _, cx| {
+                                        let s_ev = src_open.clone();
+                                        this.toast = Some((
+                                            SharedString::from(format!(
+                                                "{} · {}",
+                                                s_ev.site,
+                                                s_ev.domain_hint()
+                                            )),
+                                            Instant::now(),
+                                        ));
+                                        cx.emit(CitedAnswerEvent::OpenSource(s_ev));
+                                        cx.notify();
+                                    },
+                                )
+                                .flex_none(),
+                            )
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("copy-quote-{idx}")),
+                                    copy_txt,
+                                    6.,
+                                    if just_copied_this {
+                                        p.green_soft
+                                    } else {
+                                        transparent_black()
+                                    },
+                                    p.hover,
+                                    transparent_black(),
+                                    if just_copied_this {
+                                        p.green.opacity(0.35)
+                                    } else {
+                                        transparent_black()
+                                    },
+                                    just_copied_this,
+                                    copy_btn_inner,
+                                    cx,
+                                    move |this, _, cx| {
+                                        this.copy_quote(sid_copy.clone(), cx);
+                                    },
+                                )
+                                .flex_none(),
+                            ),
+                    )
+                    .into_any_element()
+            };
+
             let quote_fold = pro_fold(
                 pro_eid(&self.id, format!("quote-fold-{idx}")),
                 is_open,
                 118.,
                 0.,
-                {
-                    let domain = src.domain_hint();
-                    let date = src.date.clone();
-                    let title = src.title.clone();
-                    let src_open = src.clone();
-                    let sid_copy = sid.clone();
-                    let entity = cx.entity().clone();
-                    let base_id = self.id.clone();
-                    let copy_txt = if just_copied_this {
-                        tr(cx, "Quote copied", "已复制引文").to_owned()
-                    } else {
-                        tr(cx, "Copy quote", "复制引文").to_owned()
-                    };
-                    let open_txt = tr(cx, "Open source", "打开原文").to_owned();
-
-                    move || {
-                        let mut quote_wrap = div()
-                            .pl(px(10.))
-                            .border_l_2()
-                            .border_color(p.blue.opacity(0.60))
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap_x(px(3.5))
-                            .gap_y(px(2.));
-
-                        for (span_str, highlighted) in quote_runs {
-                            for word in span_str.split_whitespace() {
-                                quote_wrap = quote_wrap.child(
-                                    div()
-                                        .when(highlighted, |d| {
-                                            d.px(px(3.)).rounded(px(3.)).bg(mark_bg)
-                                        })
-                                        .text_size(px(12.))
-                                        .line_height(px(18.5))
-                                        .font_weight(if highlighted {
-                                            FontWeight::MEDIUM
-                                        } else {
-                                            FontWeight::NORMAL
-                                        })
-                                        .text_color(if highlighted { p.strong } else { p.text })
-                                        .child(word.to_owned()),
-                                );
-                            }
-                        }
-
-                        let ent_copy = entity.clone();
-                        let ent_open = entity;
-
-                        div()
-                            .px(px(12.))
-                            .pb(px(11.))
-                            .pt(px(6.))
-                            .border_t_1()
-                            .border_color(p.line)
-                            .flex()
-                            .flex_col()
-                            .gap(px(7.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(8.))
-                                    .text_size(px(11.5))
-                                    .text_color(p.muted)
-                                    .child(match date {
-                                        Some(dt) => format!("{domain} · {dt}"),
-                                        None => domain,
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .child(title),
-                            )
-                            .child(quote_wrap)
-                            .child(
-                                div()
-                                    .pt(px(2.))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&base_id, format!("open-src-{idx}")))
-                                            .role(Role::Button)
-                                            .aria_label(open_txt.clone())
-                                            .tab_index(0)
-                                            .h(px(26.))
-                                            .px(px(9.))
-                                            .rounded(px(6.))
-                                            .bg(p.card)
-                                            .border_1()
-                                            .border_color(p.line_strong)
-                                            .cursor_pointer()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(5.))
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .hover(move |s| s.bg(p.hover))
-                                            .on_click(move |_, _, app| {
-                                                let s_ev = src_open.clone();
-                                                ent_open.update(app, |this, cx| {
-                                                    this.toast = Some((
-                                                        SharedString::from(format!(
-                                                            "{} · {}",
-                                                            s_ev.site,
-                                                            s_ev.domain_hint()
-                                                        )),
-                                                        Instant::now(),
-                                                    ));
-                                                    cx.emit(CitedAnswerEvent::OpenSource(s_ev));
-                                                    cx.notify();
-                                                });
-                                            })
-                                            .child(open_txt)
-                                            .child(pro_icon(ProIcon::ExternalArrow, 12., p.muted)),
-                                    )
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&base_id, format!("copy-quote-{idx}")))
-                                            .role(Role::Button)
-                                            .aria_label(copy_txt.clone())
-                                            .tab_index(0)
-                                            .h(px(26.))
-                                            .px(px(9.))
-                                            .rounded(px(6.))
-                                            .cursor_pointer()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(5.))
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(if just_copied_this {
-                                                p.green_ink
-                                            } else {
-                                                p.text
-                                            })
-                                            .hover(move |s| s.bg(p.hover))
-                                            .on_click(move |_, _, app| {
-                                                let sid_c = sid_copy.clone();
-                                                ent_copy.update(app, |this, cx| {
-                                                    this.copy_quote(sid_c, cx);
-                                                });
-                                            })
-                                            .child(if just_copied_this {
-                                                pro_icon(ProIcon::Check, 13., p.green_ink)
-                                            } else {
-                                                pro_icon(ProIcon::Copy, 13., p.muted)
-                                            })
-                                            .child(copy_txt),
-                                    ),
-                            )
-                            .into_any_element()
-                    }
-                },
+                move || quote_fold_body,
             );
 
             sources_list = sources_list.child(
@@ -1145,10 +1311,17 @@ impl Render for CitedAnswer {
             .copied_quote_for
             .as_ref()
             .is_some_and(|(_, t)| t.elapsed().as_secs_f32() < 2.0);
-        let (tray_key, tray_caption, tray_ok) = if any_just_copied {
+        let all_just_copied = self
+            .copied_all_at
+            .is_some_and(|t| t.elapsed().as_secs_f32() < 2.0);
+        let (tray_key, tray_caption, tray_ok) = if any_just_copied || all_just_copied {
             (
                 SharedString::from("copied"),
-                tr(cx, "Quote copied to clipboard", "引文已复制到剪贴板").to_owned(),
+                if all_just_copied {
+                    tr(cx, "Copied answer & citations", "已复制全文与引用").to_owned()
+                } else {
+                    tr(cx, "Quote copied to clipboard", "引文已复制到剪贴板").to_owned()
+                },
                 true,
             )
         } else if let Some(spot_id) = active_source_spotlight
@@ -1186,6 +1359,47 @@ impl Render for CitedAnswer {
             )
         };
 
+        let copy_all_lbl = if all_just_copied {
+            tr(cx, "Copied", "已复制")
+        } else {
+            tr(cx, "Copy", "复制")
+        };
+        let copy_all_icon = div()
+            .relative()
+            .size(px(13.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .when(!all_just_copied, |d| {
+                d.child(pro_icon(ProIcon::Copy, 13., p.muted))
+            })
+            .child(
+                div()
+                    .when(!all_just_copied, |d| d.absolute().inset_0().opacity(0.))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "tray-copy-chk"),
+                        all_just_copied,
+                        13.,
+                        false,
+                        p.green,
+                    )),
+            );
+        let copy_all_inner = div()
+            .h(px(28.))
+            .px(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(5.))
+            .child(copy_all_icon)
+            .child(pro_swap_label(
+                pro_eid(&self.id, "tray-copy-lbl"),
+                copy_all_lbl,
+                12.,
+                FontWeight::MEDIUM,
+                if all_just_copied { p.green_ink } else { p.text },
+            ));
+
         let footer_tray = div()
             .h(px(44.))
             .px(px(if compact { 14. } else { 20. }))
@@ -1194,7 +1408,7 @@ impl Render for CitedAnswer {
             .flex()
             .items_center()
             .justify_between()
-            .gap(px(10.))
+            .gap(px(8.))
             .child(
                 div().flex_1().min_w_0().child(pro_view_transition(
                     pro_eid(&self.id, "tray-vtx"),
@@ -1211,41 +1425,104 @@ impl Render for CitedAnswer {
                         .child(tray_caption),
                 )),
             )
-            .when_some(self.action_label.clone(), |d, act_lbl| {
-                let lbl_emit = act_lbl.clone();
-                d.child(
-                    div()
-                        .id(pro_eid(&self.id, "tray-action"))
-                        .role(Role::Button)
-                        .aria_label(act_lbl.clone())
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .hover(move |s| s.bg(p.hover))
-                        .focus_visible(move |s| s.border_color(p.focus))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.toast = Some((
-                                SharedString::from(format!("{}: {}", lbl_emit, this.sources.len())),
-                                Instant::now(),
-                            ));
-                            cx.emit(CitedAnswerEvent::ActionClicked(lbl_emit.clone()));
-                            cx.notify();
-                        }))
-                        .child(act_lbl)
-                        .child(pro_icon(ProIcon::ArrowRight, 13., p.muted)),
-                )
-            });
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, "tray-copy-btn"),
+                            tr(cx, "Copy answer", "复制全文"),
+                            6.,
+                            if all_just_copied {
+                                p.green_soft
+                            } else {
+                                transparent_black()
+                            },
+                            p.hover,
+                            transparent_black(),
+                            if all_just_copied {
+                                p.green.opacity(0.35)
+                            } else {
+                                transparent_black()
+                            },
+                            all_just_copied,
+                            copy_all_inner,
+                            cx,
+                            |this, _, cx| {
+                                let joined = this
+                                    .segments
+                                    .iter()
+                                    .map(|s| s.text.as_ref())
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                clipboard::write(&joined, cx).detach();
+                                this.copied_all_at = Some(Instant::now());
+                                cx.notify();
+                            },
+                        )
+                        .flex_none(),
+                    )
+                    .when_some(self.action_label.clone(), |d, act_lbl| {
+                        let lbl_emit = act_lbl.clone();
+                        let act_hov = self.hovered_action;
+                        let act_inner = div()
+                            .h(px(28.))
+                            .px(px(10.))
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .whitespace_nowrap()
+                            .child(act_lbl.clone())
+                            .child(CiteGlideArrow {
+                                id: pro_eid(&self.id, "tray-act-arr"),
+                                active: act_hov,
+                                size: 13.,
+                                rest_color: p.muted,
+                                active_color: p.strong,
+                            });
+                        d.child(
+                            pro_tactile(
+                                pro_eid(&self.id, "tray-action"),
+                                act_lbl,
+                                6.,
+                                p.card,
+                                p.hover,
+                                p.line_strong,
+                                p.line_strong,
+                                false,
+                                act_inner,
+                                cx,
+                                move |this, _, cx| {
+                                    this.toast = Some((
+                                        SharedString::from(format!(
+                                            "{}: {}",
+                                            lbl_emit,
+                                            this.sources.len()
+                                        )),
+                                        Instant::now(),
+                                    ));
+                                    cx.emit(CitedAnswerEvent::ActionClicked(lbl_emit.clone()));
+                                    cx.notify();
+                                },
+                            )
+                            .flex_none()
+                            .on_hover(cx.listener(
+                                |this, inside: &bool, _, cx| {
+                                    if this.hovered_action != *inside {
+                                        this.hovered_action = *inside;
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                        )
+                    }),
+            );
 
         div()
             .id(self.id.clone())
@@ -1293,6 +1570,7 @@ impl Render for CitedAnswer {
                             .flex_col()
                             .child(head_row)
                             .child(prose_col)
+                            .child(hover_cite_popover)
                             .child(sources_list),
                     )
                     .child(footer_tray),

@@ -7,14 +7,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_pill_indicator,
-        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_step_transition,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_bar, pro_step_transition, pro_swap_label, pro_tactile,
         pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
         editor::{EditEvent, Editor, InputMode},
-        family::{PhaseClock, Slide, disabled_motion},
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon},
     },
 };
@@ -174,66 +175,6 @@ pub enum StepperFormEvent {
     Reset,
 }
 
-#[derive(IntoElement)]
-struct AnimatedCheckMark {
-    id: ElementId,
-    side: f32,
-    stroke_w: f32,
-    color: Hsla,
-}
-
-impl RenderOnce for AnimatedCheckMark {
-    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
-        let reduced = disabled_motion(cx);
-        let st = w.use_keyed_state(pro_eid(&self.id, "chk-draw"), cx, |_, inner_cx| {
-            let mut clk = PhaseClock::default();
-            clk.restart(inner_cx);
-            clk
-        });
-        let progress = if reduced {
-            1.0
-        } else {
-            st.update(cx, |clk, cx| (clk.time(0.32, w, cx) / 0.32).clamp(0.0, 1.0))
-        };
-        let side = self.side;
-        let sw = self.stroke_w;
-        let col = self.color;
-
-        canvas(
-            |_, _, _| (),
-            move |bounds, _, window, _| {
-                if progress <= 0.01 {
-                    return;
-                }
-                let x0 = f32::from(bounds.left());
-                let y0 = f32::from(bounds.top());
-                let p0 = (x0 + side * 0.18, y0 + side * 0.54);
-                let p1 = (x0 + side * 0.42, y0 + side * 0.76);
-                let p2 = (x0 + side * 0.84, y0 + side * 0.26);
-
-                let mut pb = PathBuilder::stroke(px(sw));
-                pb.move_to(point(px(p0.0), px(p0.1)));
-                let knee_t = (progress / 0.38).clamp(0.0, 1.0);
-                pb.line_to(point(
-                    px(p0.0 + (p1.0 - p0.0) * knee_t),
-                    px(p0.1 + (p1.1 - p0.1) * knee_t),
-                ));
-                if progress > 0.38 {
-                    let tail_t = ((progress - 0.38) / 0.62).clamp(0.0, 1.0);
-                    pb.line_to(point(
-                        px(p1.0 + (p2.0 - p1.0) * tail_t),
-                        px(p1.1 + (p2.1 - p1.1) * tail_t),
-                    ));
-                }
-                if let Ok(path) = pb.build() {
-                    window.paint_path(path, col);
-                }
-            },
-        )
-        .size(px(side))
-    }
-}
-
 /// Multi-step onboarding & workspace setup wizard card.
 pub struct StepperForm {
     id: ElementId,
@@ -243,6 +184,7 @@ pub struct StepperForm {
     initial_values: StepperValues,
     step: usize,
     completed: bool,
+    copied_url_at: Option<Instant>,
     slug_manually_edited: bool,
     submit_label: SharedString,
     submit_label_zh: SharedString,
@@ -281,6 +223,7 @@ impl StepperForm {
             initial_values: defaults,
             step: 0,
             completed: false,
+            copied_url_at: None,
             slug_manually_edited: false,
             submit_label: "Create workspace".into(),
             submit_label_zh: "创建工作区".into(),
@@ -718,6 +661,50 @@ impl StepperForm {
 
             let url_full = format!("https://kense.app/{}", self.values.workspace_slug);
             let url_copy = url_full.clone();
+            let recently_copied_url = self
+                .copied_url_at
+                .is_some_and(|t0| t0.elapsed().as_secs_f32() < 1.8);
+            let copy_url_lbl = tr(
+                cx,
+                if recently_copied_url {
+                    "Copied URL"
+                } else {
+                    "Copy URL"
+                },
+                if recently_copied_url {
+                    "已复制链接"
+                } else {
+                    "复制链接"
+                },
+            );
+            let copy_url_icon = div()
+                .relative()
+                .size(px(14.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .opacity(if recently_copied_url { 0.0 } else { 1.0 })
+                        .child(pro_icon(ProIcon::Copy, 13.5, p.muted)),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .opacity(if recently_copied_url { 1.0 } else { 0.0 })
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, "copy-ws-chk"),
+                            recently_copied_url,
+                            14.,
+                            false,
+                            p.green,
+                        )),
+                );
 
             return div()
                 .w_full()
@@ -736,12 +723,13 @@ impl StepperForm {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(AnimatedCheckMark {
-                            id: pro_eid(&self.id, "done-hero-chk"),
-                            side: 19.,
-                            stroke_w: 2.2,
-                            color: p.green,
-                        }),
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, "done-hero-chk"),
+                            true,
+                            22.,
+                            false,
+                            p.green,
+                        )),
                 )
                 .child(
                     div()
@@ -762,62 +750,68 @@ impl StepperForm {
                         .items_center()
                         .justify_center()
                         .gap(px(8.))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "copy-ws-url"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Copy workspace URL", "复制工作区链接"))
-                                .tab_index(0)
-                                .h(px(28.))
-                                .px(px(10.))
-                                .rounded(px(6.))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line)
-                                .flex()
-                                .items_center()
-                                .gap(px(5.))
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover).border_color(p.line_strong))
-                                .child(pro_icon(ProIcon::Copy, 13.5, p.muted))
-                                .child(tr(cx, "Copy URL", "复制链接")),
-                            cx,
-                            move |this, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(url_copy.clone()));
-                                this.toast = Some((
-                                    SharedString::from(tr(
-                                        cx,
-                                        "Workspace URL copied",
-                                        "工作区链接已复制",
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, "copy-ws-url"),
+                                tr(cx, "Copy workspace URL", "复制工作区链接"),
+                                6.,
+                                if recently_copied_url {
+                                    p.green_soft
+                                } else {
+                                    p.card
+                                },
+                                p.hover,
+                                if recently_copied_url {
+                                    p.green.opacity(0.38)
+                                } else {
+                                    p.line
+                                },
+                                p.line_strong,
+                                recently_copied_url,
+                                div()
+                                    .h(px(28.))
+                                    .px(px(10.))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .whitespace_nowrap()
+                                    .child(copy_url_icon)
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "copy-ws-lbl"),
+                                        copy_url_lbl,
+                                        12.5,
+                                        FontWeight::MEDIUM,
+                                        if recently_copied_url {
+                                            p.green_ink
+                                        } else {
+                                            p.strong
+                                        },
                                     )),
-                                    Instant::now(),
-                                ));
-                                cx.notify();
-                            },
-                        ))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "reset-wizard"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Reset onboarding wizard", "重置向导"))
-                                .tab_index(0)
-                                .h(px(28.))
-                                .px(px(12.))
-                                .rounded(px(6.))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .gap(px(5.))
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .hover(|s| s.opacity(0.90))
-                                .child(pro_icon(ProIcon::Refresh, 13., p.on_primary))
-                                .child(tr(cx, "Reset", "重新开始")),
+                                cx,
+                                move |this, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        url_copy.clone(),
+                                    ));
+                                    this.copied_url_at = Some(Instant::now());
+                                    this.toast = Some((
+                                        SharedString::from(tr(
+                                            cx,
+                                            "Workspace URL copied",
+                                            "工作区链接已复制",
+                                        )),
+                                        Instant::now(),
+                                    ));
+                                    cx.notify();
+                                },
+                            )
+                            .flex_none(),
+                        )
+                        .child(pro_btn(
+                            pro_eid(&self.id, "reset-wizard"),
+                            tr(cx, "Reset", "重新开始"),
+                            Some(ProIcon::Refresh),
+                            ProBtnStyle::Primary,
+                            true,
                             cx,
                             |this, w, cx| {
                                 this.reset(Some(w), cx);
@@ -1014,20 +1008,12 @@ impl StepperForm {
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.ink)
                             .child(email.clone())
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("rm-inv-{idx}")))
-                                    .role(Role::Button)
-                                    .aria_label(format!("Remove {email}"))
-                                    .tab_index(0)
-                                    .size(px(18.))
-                                    .rounded(px(4.))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(p.chip_hover))
-                                    .child(pro_icon(ProIcon::Close, 11.5, p.muted)),
+                            .child(pro_icon_btn(
+                                pro_eid(&self.id, format!("rm-inv-{idx}")),
+                                format!("Remove {email}"),
+                                ProIcon::Close,
+                                18.,
+                                false,
                                 cx,
                                 move |this, _, cx| {
                                     this.remove_invite(idx, cx);
@@ -1305,28 +1291,33 @@ impl StepperForm {
                                     .text_color(p.ink)
                                     .child(val),
                             )
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("rev-edit-{r_idx}")))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Edit step", "返回修改"))
-                                    .tab_index(0)
-                                    .h(px(24.))
-                                    .px(px(8.))
-                                    .rounded(px(5.))
-                                    .flex()
-                                    .items_center()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.blue)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(p.hover))
-                                    .child(tr(cx, "Edit", "修改")),
-                                cx,
-                                move |this, _, cx| {
-                                    this.go_to_step(step_target, cx);
-                                },
-                            )),
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("rev-edit-{r_idx}")),
+                                    tr(cx, "Edit step", "返回修改"),
+                                    5.,
+                                    transparent_black(),
+                                    p.hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    false,
+                                    div()
+                                        .h(px(24.))
+                                        .px(px(8.))
+                                        .flex()
+                                        .items_center()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.blue)
+                                        .whitespace_nowrap()
+                                        .child(tr(cx, "Edit", "修改")),
+                                    cx,
+                                    move |this, _, cx| {
+                                        this.go_to_step(step_target, cx);
+                                    },
+                                )
+                                .flex_none(),
+                            ),
                     );
                 }
 
@@ -1433,12 +1424,35 @@ impl Render for StepperForm {
                 .into_any_element();
         }
 
-        if let Some((_, t0)) = &self.shake_at
-            && t0.elapsed().as_secs_f32() < 0.40
+        if ((self
+            .shake_at
+            .as_ref()
+            .is_some_and(|(_, t0)| t0.elapsed().as_secs_f32() < 0.40))
+            || (self
+                .copied_url_at
+                .as_ref()
+                .is_some_and(|t0| t0.elapsed().as_secs_f32() < 1.8)))
             && !disabled_motion(cx)
         {
             w.request_animation_frame();
         }
+
+        // Keep hero check state mounted across completion transitions so stroke animates on complete
+        let pre_hero_slot = if !self.completed {
+            div()
+                .size(px(0.))
+                .overflow_hidden()
+                .opacity(0.)
+                .child(pro_check_draw(
+                    pro_eid(&self.id, "done-hero-chk"),
+                    false,
+                    22.,
+                    false,
+                    p.green,
+                ))
+        } else {
+            div()
+        };
 
         // Top step indicator bar
         let total_steps = self.steps.len();
@@ -1481,54 +1495,57 @@ impl Render for StepperForm {
             for (idx, sm) in self.steps.iter().enumerate() {
                 let is_done = self.completed || idx < self.step;
                 let is_current = !self.completed && idx == self.step;
-                let fill_target = if is_done || is_current { 1.0 } else { 0.0 };
-                let bar_fill = pro_spring_f32(
-                    pro_eid(&self.id, format!("sbar-fill-{idx}")),
-                    fill_target,
-                    0.30,
-                    w,
-                    cx,
-                )
-                .clamp(0.0, 1.0);
+                let fill_target = if is_done {
+                    1.0
+                } else if is_current {
+                    0.55
+                } else {
+                    0.0
+                };
 
                 let stitle = tr(cx, sm.title.as_ref(), sm.title_zh.as_ref()).to_uppercase();
-                let mark_el: AnyElement = if is_done {
-                    AnimatedCheckMark {
-                        id: pro_eid(&self.id, format!("step-chk-{idx}")),
-                        side: 12.,
-                        stroke_w: 2.1,
-                        color: p.blue,
-                    }
-                    .into_any_element()
-                } else {
-                    div()
-                        .text_size(px(10.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(if is_current { p.blue } else { p.faint })
-                        .child(format!("{}", idx + 1))
-                        .into_any_element()
-                };
+                let mark_el = div()
+                    .relative()
+                    .size(px(16.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("step-chk-{idx}")),
+                        is_done,
+                        15.,
+                        false,
+                        p.blue,
+                    ))
+                    .child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .opacity(if is_done { 0.0 } else { 1.0 })
+                            .text_size(px(9.5))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(if is_current { p.blue } else { p.faint })
+                            .child(format!("{}", idx + 1)),
+                    )
+                    .into_any_element();
 
                 let step_inner = div()
                     .w_full()
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(2.))
-                            .rounded(px(1.))
-                            .bg(p.line)
-                            .overflow_hidden()
-                            .child(
-                                div()
-                                    .h_full()
-                                    .w(relative(bar_fill))
-                                    .rounded(px(1.))
-                                    .bg(p.blue),
-                            ),
-                    )
+                    .child(pro_spring_bar(
+                        pro_eid(&self.id, format!("sbar-fill-{idx}")),
+                        fill_target,
+                        2.5,
+                        1.25,
+                        p.line,
+                        p.blue,
+                    ))
                     .child(
                         div()
                             .flex()
@@ -1555,25 +1572,24 @@ impl Render for StepperForm {
 
                 let clickable_back = !self.completed && idx < self.step;
                 let cell = if clickable_back {
-                    activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("step-jump-{idx}")))
-                            .role(Role::Button)
-                            .aria_label(format!("Jump back to {stitle}"))
-                            .tab_index(0)
-                            .flex_1()
-                            .min_w_0()
-                            .p(px(3.))
-                            .m(px(-3.))
-                            .rounded(px(6.))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .child(step_inner),
+                    pro_tactile(
+                        pro_eid(&self.id, format!("step-jump-{idx}")),
+                        format!("Jump back to {stitle}"),
+                        6.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        false,
+                        div().w_full().p(px(3.)).child(step_inner),
                         cx,
                         move |this, _, cx| {
                             this.go_to_step(idx, cx);
                         },
                     )
+                    .flex_1()
+                    .min_w_0()
+                    .m(px(-3.))
                     .into_any_element()
                 } else {
                     div()
@@ -1641,30 +1657,12 @@ impl Render for StepperForm {
         let can_go_back = self.step > 0;
 
         let back_btn = if can_go_back {
-            activate(
-                div()
-                    .id(pro_eid(&self.id, "foot-back"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Back", "上一步"))
-                    .tab_index(0)
-                    .h(px(28.))
-                    .pl(px(8.))
-                    .pr(px(10.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line)
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover).border_color(p.line_strong))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .child(pro_icon(ProIcon::ChevronLeft, 14., p.muted))
-                    .child(tr(cx, "Back", "上一步")),
+            pro_btn(
+                pro_eid(&self.id, "foot-back"),
+                tr(cx, "Back", "上一步"),
+                Some(ProIcon::ChevronLeft),
+                ProBtnStyle::Secondary,
+                true,
                 cx,
                 |this, _, cx| {
                     this.prev_step(cx);
@@ -1675,31 +1673,40 @@ impl Render for StepperForm {
             div().into_any_element()
         };
 
-        let next_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "foot-next"))
-                .role(Role::Button)
-                .aria_label(primary_label.clone())
-                .tab_index(0)
-                .h(px(28.))
-                .px(px(12.))
-                .rounded(px(6.))
-                .bg(p.primary)
-                .opacity(if step_valid { 1.0 } else { 0.45 })
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.on_primary)
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.90))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(primary_label),
-            cx,
-            |this, w, cx| {
-                this.next_or_submit(Some(w), cx);
-            },
+        let next_btn = div().opacity(if step_valid { 1.0 } else { 0.45 }).child(
+            pro_tactile(
+                pro_eid(&self.id, "foot-next"),
+                primary_label.clone(),
+                6.,
+                p.primary,
+                if p.dark {
+                    hsla(0., 0., 1., 0.88)
+                } else {
+                    hsla(0., 0., 0., 0.84)
+                },
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .h(px(28.))
+                    .px(px(12.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .whitespace_nowrap()
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "foot-next-lbl"),
+                        primary_label,
+                        12.5,
+                        FontWeight::MEDIUM,
+                        p.on_primary,
+                    )),
+                cx,
+                |this, w, cx| {
+                    this.next_or_submit(Some(w), cx);
+                },
+            )
+            .flex_none(),
         );
 
         let footer_fold = pro_fold(
@@ -1756,6 +1763,7 @@ impl Render for StepperForm {
             .flex()
             .flex_col()
             .child(sensor)
+            .child(pre_hero_slot)
             .child(
                 div()
                     .w_full()

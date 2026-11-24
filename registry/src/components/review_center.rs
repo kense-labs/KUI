@@ -8,9 +8,10 @@
 use crate::{
     components::pro_chrome::{
         ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_app_tile, pro_btn,
-        pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator, pro_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar,
-        pro_toast_banner, tr,
+        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mark_selected, pro_pill_indicator, pro_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -618,6 +619,7 @@ pub struct ReviewCenter {
     editor: Option<Entity<Editor>>,
     editor_focused: bool,
     stamp_ghost: Option<StampGhost>,
+    approve_clock: PhaseClock,
     card_clock: PhaseClock,
     card_slide: Slide,
     card_dir: f32,
@@ -662,6 +664,7 @@ impl ReviewCenter {
             editor: None,
             editor_focused: false,
             stamp_ghost: None,
+            approve_clock: PhaseClock::default(),
             card_clock: PhaseClock::default(),
             card_slide: Slide::new(0.0),
             card_dir: 1.0,
@@ -1037,6 +1040,9 @@ impl ReviewCenter {
             reason: reason.clone(),
             started_at: Instant::now(),
         });
+        if decision == ReviewDecisionKind::Approved {
+            self.approve_clock.restart(cx);
+        }
         self.decided.push(DecidedRecord {
             id: item.id.clone(),
             title: item.title.clone(),
@@ -1196,8 +1202,8 @@ impl ReviewCenter {
                 }
             }
             "s" | "S" => self.skip_current(cx),
-            "j" | "J" | "down" => self.step_selection(1, cx),
-            "k" | "K" | "up" => self.step_selection(-1, cx),
+            "j" | "J" | "down" | "right" => self.step_selection(1, cx),
+            "k" | "K" | "up" | "left" => self.step_selection(-1, cx),
             "f" | "F" => self.cycle_flag(cx),
             "z" | "Z" => self.undo_last(cx),
             "escape" => {
@@ -1472,14 +1478,24 @@ impl ReviewCenter {
                                 .py(px(2.))
                                 .child(
                                     div()
-                                        .px(px(5.))
-                                        .py(px(2.))
-                                        .rounded(px(4.))
+                                        .px(px(6.))
+                                        .py(px(3.))
+                                        .rounded(px(5.))
                                         .bg(p.green_soft)
+                                        .flex()
+                                        .items_start()
+                                        .gap(px(6.))
                                         .text_size(px(13.))
                                         .line_height(px(21.))
                                         .text_color(p.green_ink)
-                                        .child(edited.clone()),
+                                        .child(div().mt(px(4.)).flex_none().child(pro_check_draw(
+                                            pro_eid(&self.id, format!("edit-chk-{}", item.id)),
+                                            true,
+                                            13.,
+                                            false,
+                                            p.green_ink,
+                                        )))
+                                        .child(div().flex_1().min_w_0().child(edited.clone())),
                                 ),
                         ),
                 );
@@ -1793,33 +1809,41 @@ impl ReviewCenter {
             }
             let flag_btn = (!flags.is_empty() && interactive).then(|| {
                 let shown_idx = self.active_flag_idx.map(|i| i + 1).unwrap_or(0);
-                div()
-                    .id(pro_eid(&self.id, "cycle-flag-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
+                let flag_lbl = if shown_idx > 0 {
+                    format!(
+                        "{shown_idx}/{} {}",
+                        flags.len(),
+                        tr(cx, "flagged", "处存疑")
+                    )
+                } else {
+                    format!("{} {}", flags.len(), tr(cx, "flagged", "处存疑"))
+                };
+                let flag_inner = div()
                     .h(px(22.))
                     .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.amber_soft)
                     .flex()
                     .items_center()
                     .gap(px(5.))
-                    .cursor_pointer()
                     .text_size(px(11.5))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.amber_ink)
-                    .on_click(cx.listener(|this, _, _, cx| this.cycle_flag(cx)))
                     .child(pro_icon(ProIcon::AlertTriangle, 12., p.amber_ink))
-                    .child(if shown_idx > 0 {
-                        format!(
-                            "{shown_idx}/{} {}",
-                            flags.len(),
-                            tr(cx, "flagged", "处存疑")
-                        )
-                    } else {
-                        format!("{} {}", flags.len(), tr(cx, "flagged", "处存疑"))
-                    })
-                    .child(self.render_kbd("F", false, p))
+                    .child(flag_lbl.clone())
+                    .child(self.render_kbd("F", false, p));
+                pro_tactile(
+                    pro_eid(&self.id, "cycle-flag-btn"),
+                    SharedString::from(flag_lbl),
+                    5.,
+                    p.amber_soft,
+                    p.amber.opacity(0.24),
+                    transparent_black(),
+                    transparent_black(),
+                    shown_idx > 0,
+                    flag_inner,
+                    cx,
+                    |this, _, cx| this.cycle_flag(cx),
+                )
+                .flex_none()
             });
             div()
                 .w_full()
@@ -1833,22 +1857,32 @@ impl ReviewCenter {
                 .when_some(flag_btn, |d, fb| d.child(fb))
         });
 
-        // Active Agent's note floating inspection card
-        let note_card = if interactive {
-            self.active_flag_idx
-                .and_then(|idx| flags.get(idx))
-                .map(|(expr, note, src)| {
+        // Active Agent's note floating inspection card via smooth pro_fold
+        let note_fold = if interactive && !flags.is_empty() {
+            let active_flag = self.active_flag_idx.and_then(|idx| flags.get(idx)).cloned();
+            let note_open = active_flag.is_some();
+            let p_note = *p;
+            let note_heading = tr(cx, "AGENT'S NOTE", "智能体存疑说明").to_owned();
+            Some(pro_fold(
+                pro_eid(&self.id, format!("note-fold-{}", item.id)),
+                note_open,
+                96.,
+                0.,
+                move || {
+                    let Some((expr, note, src)) = active_flag else {
+                        return div().into_any_element();
+                    };
                     div()
                         .w_full()
                         .p(px(12.))
                         .rounded(px(10.))
-                        .bg(if p.dark {
+                        .bg(if p_note.dark {
                             rgb(0x202024).into()
                         } else {
-                            p.subtle
+                            p_note.subtle
                         })
                         .border_1()
-                        .border_color(p.orange.opacity(0.42))
+                        .border_color(p_note.orange.opacity(0.42))
                         .shadow_sm()
                         .flex()
                         .flex_col()
@@ -1866,46 +1900,52 @@ impl ReviewCenter {
                                         .gap(px(6.))
                                         .text_size(px(10.5))
                                         .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(p.amber_ink)
-                                        .child(pro_icon(ProIcon::AlertTriangle, 12., p.amber_ink))
-                                        .child(tr(cx, "AGENT'S NOTE", "智能体存疑说明")),
+                                        .text_color(p_note.amber_ink)
+                                        .child(pro_icon(
+                                            ProIcon::AlertTriangle,
+                                            12.,
+                                            p_note.amber_ink,
+                                        ))
+                                        .child(note_heading),
                                 )
                                 .child(
                                     div()
                                         .px(px(6.))
                                         .py(px(1.))
                                         .rounded(px(4.))
-                                        .bg(p.amber_soft)
+                                        .bg(p_note.amber_soft)
                                         .font_family("Menlo")
                                         .text_size(px(11.))
-                                        .text_color(p.amber_ink)
+                                        .text_color(p_note.amber_ink)
                                         .truncate()
                                         .max_w(px(180.))
-                                        .child(expr.clone()),
+                                        .child(expr),
                                 ),
                         )
                         .child(
                             div()
                                 .text_size(px(13.))
                                 .line_height(px(19.))
-                                .text_color(p.ink)
-                                .child(note.clone()),
+                                .text_color(p_note.ink)
+                                .child(note),
                         )
-                        .when_some(src.clone(), |d, source_lbl| {
+                        .when_some(src, |d, source_lbl| {
                             d.child(
                                 div().pt(px(2.)).flex().child(
                                     div()
                                         .px(px(6.))
                                         .py(px(2.))
                                         .rounded(px(5.))
-                                        .bg(p.chip)
+                                        .bg(p_note.chip)
                                         .text_size(px(11.5))
-                                        .text_color(p.text)
+                                        .text_color(p_note.text)
                                         .child(source_lbl),
                                 ),
                             )
                         })
-                })
+                        .into_any_element()
+                },
+            ))
         } else {
             None
         };
@@ -1946,7 +1986,7 @@ impl ReviewCenter {
                 )
             })
             .child(proposal)
-            .when_some(note_card, |d, nc| d.child(nc))
+            .when_some(note_fold, |d, nf| d.child(nf))
             .when_some(foot, |d, f| d.child(f))
     }
 }
@@ -2210,22 +2250,30 @@ impl Render for ReviewCenter {
                     .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if selected { p.ink } else { p.muted })
+                    .hover(move |s| if selected { s } else { s.text_color(p.ink) })
                     .on_click(cx.listener(move |this, _, _, cx| this.set_filter(flt, cx)))
                     .when(selected, |d| {
                         d.child(pro_mark_selected(&self.filter_sensor))
                     })
                     .child(lbl)
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(if selected { p.muted } else { p.faint })
-                            .child(format!("{cnt}")),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("flt-cnt-{}", flt.key())),
+                        cnt as f64,
+                        0,
+                        "",
+                        "",
+                        11.5,
+                        FontWeight::NORMAL,
+                        if selected { p.muted } else { p.faint },
+                    )),
             );
         }
 
         let vis = self.visible_indices();
         let cur_idx = self.current_item_index();
+        let cur_vis_pos = cur_idx
+            .and_then(|ci| vis.iter().position(|&x| x == ci))
+            .unwrap_or(0);
         let mut queue_list = div()
             .id(pro_eid(&self.id, "queue-scroll"))
             .flex_1()
@@ -2273,99 +2321,108 @@ impl Render for ReviewCenter {
                     ReviewRisk::Medium => p.amber_ink,
                     ReviewRisk::Low => p.muted,
                 };
-                queue_list = queue_list.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("qrow-{}", it.id)))
-                        .role(Role::Button)
-                        .aria_label(SharedString::from(format!(
-                            "{}. {}, {}, {}m",
-                            it.title,
-                            it.kind_label,
-                            it.risk.label(cx),
-                            it.waiting_mins
-                        )))
-                        .tab_index(0)
-                        .w_full()
-                        .h(px(56.))
-                        .px(px(10.))
-                        .rounded(px(8.))
-                        .bg(if is_cur {
-                            if p.dark {
-                                hsla(0., 0., 1., 0.06)
-                            } else {
-                                p.card
-                            }
-                        } else {
-                            transparent_black()
-                        })
-                        .when(is_cur, |d| d.border_1().border_color(p.line).shadow_xs())
-                        .hover(move |s| if is_cur { s } else { s.bg(p.hover) })
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select_item(item_id.clone(), 1.0, cx);
-                        }))
-                        .child(tile)
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(8.))
-                                        .min_w_0()
-                                        .child(
+                let row_aria = SharedString::from(format!(
+                    "{}. {}, {}, {}m",
+                    it.title,
+                    it.kind_label,
+                    it.risk.label(cx),
+                    it.waiting_mins
+                ));
+                let row_rest = if is_cur {
+                    if p.dark {
+                        hsla(0., 0., 1., 0.06)
+                    } else {
+                        p.card
+                    }
+                } else {
+                    transparent_black()
+                };
+                let row_hover = if is_cur { row_rest } else { p.hover };
+                let row_bdr = if is_cur { p.line } else { transparent_black() };
+                let row_inner = div()
+                    .w_full()
+                    .h(px(56.))
+                    .px(px(10.))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(tile)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .text_size(px(13.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .truncate()
+                                            .child(it.title.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_none()
+                                            .text_size(px(12.))
+                                            .text_color(wait_col)
+                                            .child(format!("{}m", it.waiting_mins)),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .text_size(px(12.))
+                                    .text_color(p.muted)
+                                    .child(it.kind_label.clone())
+                                    .when(it.risk != ReviewRisk::Low, |d| {
+                                        d.child(div().text_color(p.faint).child("·")).child(
                                             div()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .text_size(px(13.))
+                                                .text_color(risk_col)
                                                 .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.ink)
-                                                .truncate()
-                                                .child(it.title.clone()),
+                                                .child(it.risk.short_label(cx)),
                                         )
-                                        .child(
-                                            div()
-                                                .flex_none()
-                                                .text_size(px(12.))
-                                                .text_color(wait_col)
-                                                .child(format!("{}m", it.waiting_mins)),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(5.))
-                                        .text_size(px(12.))
-                                        .text_color(p.muted)
-                                        .child(it.kind_label.clone())
-                                        .when(it.risk != ReviewRisk::Low, |d| {
-                                            d.child(div().text_color(p.faint).child("·")).child(
-                                                div()
-                                                    .text_color(risk_col)
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child(it.risk.short_label(cx)),
-                                            )
-                                        })
-                                        .when(skipped, |d| {
-                                            d.child(div().text_color(p.faint).child("·")).child(
-                                                div().text_color(p.faint).child(tr(
-                                                    cx,
-                                                    "Skipped",
-                                                    "已跳过",
-                                                )),
-                                            )
-                                        }),
-                                ),
-                        ),
+                                    })
+                                    .when(skipped, |d| {
+                                        d.child(div().text_color(p.faint).child("·")).child(
+                                            div().text_color(p.faint).child(tr(
+                                                cx,
+                                                "Skipped",
+                                                "已跳过",
+                                            )),
+                                        )
+                                    }),
+                            ),
+                    );
+                queue_list = queue_list.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("qrow-{}", it.id)),
+                        row_aria,
+                        8.,
+                        row_rest,
+                        row_hover,
+                        row_bdr,
+                        row_bdr,
+                        is_cur,
+                        row_inner,
+                        cx,
+                        move |this, _, cx| {
+                            this.select_item(item_id.clone(), 1.0, cx);
+                        },
+                    )
+                    .w_full()
+                    .when(is_cur, |d| d.shadow_xs()),
                 );
             }
         }
@@ -2394,59 +2451,73 @@ impl Render for ReviewCenter {
             )
             .child(queue_list);
 
-        // Main detail inspection stage
+        // Main detail inspection stage with smooth pro_view_transition across items
+        let approve_drawn = reduced || self.approve_clock.time(0.28, w, cx) > 0.012;
         let cur_item_cloned = self.current_item().cloned();
         let detail_body = if let Some(item) = &cur_item_cloned {
-            div()
-                .relative()
-                .top(px(card_dy))
-                .opacity(card_alpha)
-                .child(self.render_item_card(item, true, &p, cx))
-                .into_any_element()
+            pro_view_transition(
+                pro_eid(&self.id, "rc-item-view-tx"),
+                item.id.clone(),
+                div()
+                    .w_full()
+                    .relative()
+                    .top(px(card_dy))
+                    .opacity(card_alpha)
+                    .child(self.render_item_card(item, true, &p, cx)),
+            )
         } else {
-            div()
-                .w_full()
-                .h_full()
-                .py(px(56.))
-                .px(px(24.))
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(8.))
-                .child(
-                    div()
-                        .size(px(40.))
-                        .rounded(px(10.))
-                        .bg(p.green_soft)
-                        .border_1()
-                        .border_color(p.green.opacity(0.32))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(pro_icon(ProIcon::Check, 18., p.green_ink)),
-                )
-                .child(
-                    div()
-                        .text_size(px(15.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .child(tr(cx, "All caught up", "已全部审阅完毕")),
-                )
-                .child(
-                    div()
-                        .max_w(px(280.))
-                        .text_size(px(13.))
-                        .line_height(px(19.))
-                        .text_color(p.muted)
-                        .text_center()
-                        .child(tr(
-                            cx,
-                            "Every queued proposal in this view has been resolved.",
-                            "当前筛选视图下的所有智能体提案均已处理完成。",
-                        )),
-                )
-                .into_any_element()
+            pro_view_transition(
+                pro_eid(&self.id, "rc-item-view-tx"),
+                "rc-all-caught-up",
+                div()
+                    .w_full()
+                    .h_full()
+                    .py(px(56.))
+                    .px(px(24.))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .size(px(40.))
+                            .rounded(px(10.))
+                            .bg(p.green_soft)
+                            .border_1()
+                            .border_color(p.green.opacity(0.32))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, "caught-up-chk"),
+                                approve_drawn,
+                                18.,
+                                false,
+                                p.green_ink,
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(15.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(tr(cx, "All caught up", "已全部审阅完毕")),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(280.))
+                            .text_size(px(13.))
+                            .line_height(px(19.))
+                            .text_color(p.muted)
+                            .text_center()
+                            .child(tr(
+                                cx,
+                                "Every queued proposal in this view has been resolved.",
+                                "当前筛选视图下的所有智能体提案均已处理完成。",
+                            )),
+                    ),
+            )
         };
 
         // Animated resolution stamp overlay on leaving card
@@ -2454,19 +2525,23 @@ impl Render for ReviewCenter {
             let fade_out = 1.0 - pro_ease(((progress - 0.35) / 0.65).clamp(0.0, 1.0));
             let stamp_pop = pro_ease((progress / 0.35).clamp(0.0, 1.0));
             let lift_y = -8.0 * pro_ease(progress);
-            let (stamp_col, stamp_bg, stamp_icon, stamp_word) = match g.decision {
-                ReviewDecisionKind::Approved => (
-                    p.green_ink,
-                    p.green_soft,
-                    ProIcon::Check,
-                    tr(cx, "APPROVED", "已批准"),
+            let (stamp_col, stamp_bg, stamp_word) = match g.decision {
+                ReviewDecisionKind::Approved => {
+                    (p.green_ink, p.green_soft, tr(cx, "APPROVED", "已批准"))
+                }
+                ReviewDecisionKind::Rejected => {
+                    (p.red_ink, p.red_soft, tr(cx, "REJECTED", "已驳回"))
+                }
+            };
+            let stamp_mark = match g.decision {
+                ReviewDecisionKind::Approved => pro_check_draw(
+                    pro_eid(&self.id, format!("stamp-chk-{}", g.item.id)),
+                    approve_drawn,
+                    14.,
+                    false,
+                    stamp_col,
                 ),
-                ReviewDecisionKind::Rejected => (
-                    p.red_ink,
-                    p.red_soft,
-                    ProIcon::Close,
-                    tr(cx, "REJECTED", "已驳回"),
-                ),
+                ReviewDecisionKind::Rejected => pro_icon(ProIcon::Close, 14., stamp_col),
             };
             div()
                 .absolute()
@@ -2495,7 +2570,7 @@ impl Render for ReviewCenter {
                         .text_size(px(12.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(stamp_col)
-                        .child(pro_icon(stamp_icon, 14., stamp_col))
+                        .child(stamp_mark)
                         .child(stamp_word)
                         .when_some(g.reason, |d, r| {
                             d.child(
@@ -2507,7 +2582,7 @@ impl Render for ReviewCenter {
                 )
         });
 
-        // Bottom action bar (`Approve A`, `Edit E`, `Reject R`, `Skip S` + `Undo Z`)
+        // Bottom action bar (`Approve A`, `Edit E`, `Reject R`, `Skip S` + `< >` + `Undo Z`)
         let has_current = cur_item_cloned.is_some();
         let last_decided = self.decided.last().and_then(|rec| {
             (rec.decided_at.elapsed().as_secs_f32() < 8.0)
@@ -2559,52 +2634,48 @@ impl Render for ReviewCenter {
             for (r_idx, r_lbl) in self.reasons.iter().take(4).enumerate() {
                 let reason_val = r_lbl.clone();
                 let key_num = format!("{}", r_idx + 1);
-                row = row.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("reason-btn-{r_idx}")))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .hover(|s| s.border_color(p.red.opacity(0.45)).bg(p.red_soft))
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .cursor_pointer()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.reject_current(Some(reason_val.clone()), cx);
-                        }))
-                        .child(self.render_kbd(&key_num, false, &p))
-                        .child(r_lbl.clone()),
-                );
-            }
-            row = row.child(
-                div()
-                    .id(pro_eid(&self.id, "cancel-reject-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
+                let r_inner = div()
                     .h(px(28.))
                     .px(px(8.))
-                    .rounded(px(6.))
                     .flex()
                     .items_center()
-                    .cursor_pointer()
-                    .text_size(px(12.))
-                    .text_color(p.muted)
-                    .hover(|s| s.text_color(p.ink))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.reject_picker_open = false;
-                        cx.notify();
-                    }))
-                    .child(tr(cx, "Cancel", "取消")),
-            );
+                    .gap(px(5.))
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .child(self.render_kbd(&key_num, false, &p))
+                    .child(r_lbl.clone());
+                row = row.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("reason-btn-{r_idx}")),
+                        r_lbl.clone(),
+                        6.,
+                        p.card,
+                        p.red_soft,
+                        p.line_strong,
+                        p.red.opacity(0.45),
+                        false,
+                        r_inner,
+                        cx,
+                        move |this, _, cx| {
+                            this.reject_current(Some(reason_val.clone()), cx);
+                        },
+                    )
+                    .flex_none(),
+                );
+            }
+            row = row.child(pro_btn(
+                pro_eid(&self.id, "cancel-reject-btn"),
+                tr(cx, "Cancel", "取消"),
+                None,
+                ProBtnStyle::Ghost,
+                true,
+                cx,
+                |this, _, cx| {
+                    this.reject_picker_open = false;
+                    cx.notify();
+                },
+            ));
             row.into_any_element()
         } else {
             let show_kbd = !compact;
@@ -2614,37 +2685,21 @@ impl Render for ReviewCenter {
                              primary: bool,
                              icon_el: AnyElement,
                              handler: fn(&mut Self, &mut Window, &mut Context<Self>)|
-             -> Stateful<Div> {
-                let (bg, fg, bdr) = if primary {
-                    (p.primary, p.on_primary, transparent_black())
-                } else {
+             -> AnyElement {
+                let (bg, hov_bg, fg, bdr) = if primary {
                     (
-                        if p.dark { rgb(0x26262a).into() } else { p.card },
-                        p.strong,
-                        p.line_strong,
+                        p.primary,
+                        p.primary.opacity(0.90),
+                        p.on_primary,
+                        transparent_black(),
                     )
+                } else {
+                    let rest = if p.dark { rgb(0x26262a).into() } else { p.card };
+                    (rest, p.chip_hover, p.strong, p.line_strong)
                 };
-                div()
-                    .id(pro_eid(&self.id, id_sfx.to_owned()))
-                    .role(Role::Button)
-                    .tab_index(0)
+                let inner = div()
                     .h(px(28.))
                     .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(bg)
-                    .when(!primary, |d| d.border_1().border_color(bdr))
-                    .opacity(if has_current { 1.0 } else { 0.45 })
-                    .when(has_current, |d| {
-                        d.cursor_pointer()
-                            .hover(move |s| {
-                                if primary {
-                                    s.opacity(0.92)
-                                } else {
-                                    s.bg(p.chip_hover)
-                                }
-                            })
-                            .on_click(cx.listener(move |this, _, w, cx| handler(this, w, cx)))
-                    })
                     .flex()
                     .items_center()
                     .gap(px(6.))
@@ -2653,8 +2708,76 @@ impl Render for ReviewCenter {
                     .text_color(fg)
                     .child(icon_el)
                     .child(label.to_owned())
-                    .when(show_kbd, |d| d.child(self.render_kbd(kbd, primary, &p)))
+                    .when(show_kbd, |d| d.child(self.render_kbd(kbd, primary, &p)));
+
+                if has_current {
+                    pro_tactile(
+                        pro_eid(&self.id, id_sfx.to_owned()),
+                        SharedString::from(label.to_owned()),
+                        6.,
+                        bg,
+                        hov_bg,
+                        bdr,
+                        bdr,
+                        false,
+                        inner,
+                        cx,
+                        handler,
+                    )
+                    .flex_none()
+                    .into_any_element()
+                } else {
+                    div()
+                        .id(pro_eid(&self.id, id_sfx.to_owned()))
+                        .h(px(28.))
+                        .rounded(px(6.))
+                        .bg(bg)
+                        .when(!primary, |d| d.border_1().border_color(bdr))
+                        .opacity(0.45)
+                        .child(inner)
+                        .into_any_element()
+                }
             };
+
+            let nav_pager = (vis.len() > 1 && !compact).then(|| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(2.))
+                    .ml(px(2.))
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "nav-prev-item"),
+                        SharedString::from(tr(cx, "Previous proposal", "上一项提案")),
+                        ProIcon::ChevronLeft,
+                        28.,
+                        false,
+                        cx,
+                        |this, _, cx| this.step_selection(-1, cx),
+                    ))
+                    .child(
+                        div()
+                            .min_w(px(30.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "nav-pos-swap"),
+                                format!("{}/{}", cur_vis_pos + 1, vis.len()),
+                                11.5,
+                                FontWeight::MEDIUM,
+                                p.muted,
+                            )),
+                    )
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "nav-next-item"),
+                        SharedString::from(tr(cx, "Next proposal", "下一项提案")),
+                        ProIcon::ChevronRight,
+                        28.,
+                        false,
+                        cx,
+                        |this, _, cx| this.step_selection(1, cx),
+                    ))
+            });
 
             div()
                 .flex()
@@ -2696,6 +2819,7 @@ impl Render for ReviewCenter {
                     pro_icon(ProIcon::ChevronRight, 14., p.muted),
                     |this, _, cx| this.skip_current(cx),
                 ))
+                .when_some(nav_pager, |d, np| d.child(np))
                 .into_any_element()
         };
 
@@ -2714,32 +2838,43 @@ impl Render for ReviewCenter {
                 });
                 let last_dec = last_summary.as_ref().map(|(dec, _)| *dec);
                 let summary_txt = last_summary.map(|(_, lbl)| lbl).filter(|_| !compact);
-                let undo_btn = div()
-                    .id(pro_eid(&self.id, "undo-last-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
+                let undo_word = tr(cx, "Undo", "撤销").to_owned();
+                let undo_inner = div()
                     .h(px(26.))
                     .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(p.subtle)
-                    .border_1()
-                    .border_color(p.line)
-                    .hover(|s| s.bg(p.chip_hover))
                     .flex()
                     .items_center()
                     .gap(px(5.))
-                    .cursor_pointer()
                     .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.strong)
-                    .on_click(cx.listener(|this, _, _, cx| this.undo_last(cx)))
                     .child(if last_dec == Some(ReviewDecisionKind::Rejected) {
                         pro_icon(ProIcon::Close, 12., p.red_ink)
                     } else {
-                        pro_icon(ProIcon::Check, 12., p.green_ink)
+                        pro_check_draw(
+                            pro_eid(&self.id, "undo-last-chk"),
+                            approve_drawn,
+                            12.,
+                            false,
+                            p.green_ink,
+                        )
                     })
-                    .child(tr(cx, "Undo", "撤销"))
+                    .child(undo_word.clone())
                     .child(self.render_kbd("Z", false, &p));
+                let undo_btn = pro_tactile(
+                    pro_eid(&self.id, "undo-last-btn"),
+                    undo_word,
+                    6.,
+                    p.subtle,
+                    p.chip_hover,
+                    p.line,
+                    p.line_strong,
+                    false,
+                    undo_inner,
+                    cx,
+                    |this, _, cx| this.undo_last(cx),
+                )
+                .flex_none();
                 move |amt| {
                     div()
                         .opacity(amt)

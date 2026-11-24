@@ -6,9 +6,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_skeleton_bar,
-        pro_toast_banner, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_mix_color,
+        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, tr,
     },
+    foundation::Theme,
     primitives::{
         control::activate,
         family::disabled_motion,
@@ -248,6 +250,7 @@ pub struct AgentRecap {
     limit: usize,
     replay_ms: u64,
     spotlight_id: Option<SharedString>,
+    last_spotlight_id: Option<SharedString>,
     loading: bool,
     empty: bool,
     started_at: Instant,
@@ -274,6 +277,7 @@ impl AgentRecap {
             limit: 3,
             replay_ms: 1_200,
             spotlight_id: None,
+            last_spotlight_id: None,
             loading: false,
             empty: false,
             started_at: Instant::now(),
@@ -359,6 +363,7 @@ impl AgentRecap {
                 format!("{}: {}", tr(cx, "Opened review", "已打开复核"), ev.title).into();
             self.toast = Some((msg, Instant::now()));
         }
+        self.last_spotlight_id = Some(id.clone());
         self.spotlight_id = Some(id.clone());
         cx.emit(AgentRecapEvent::Review(id));
         cx.notify();
@@ -394,6 +399,9 @@ impl AgentRecap {
 
     fn set_spotlight(&mut self, next: Option<SharedString>, cx: &mut Context<Self>) {
         if self.spotlight_id != next {
+            if let Some(id) = &next {
+                self.last_spotlight_id = Some(id.clone());
+            }
             self.spotlight_id = next.clone();
             cx.emit(AgentRecapEvent::SpotlightChanged(next));
             cx.notify();
@@ -429,17 +437,17 @@ impl AgentRecap {
         let is_hot = self.spotlight_id.as_ref() == Some(&ev.id);
         let is_quiet = matches!(state, RecapCardState::Resolved | RecapCardState::Undone);
 
+        let is_done_check = state == RecapCardState::Resolved
+            || (ev.kind == RecapKind::Done && state == RecapCardState::Open);
+
         let mark_el: AnyElement = if state == RecapCardState::Resolved {
-            div()
-                .size(px(18.0))
-                .flex_none()
-                .rounded(px(5.0))
-                .bg(p.green_soft)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(pro_icon(ProIcon::Check, 11.5, p.green_ink))
-                .into_any_element()
+            pro_check_draw(
+                pro_eid(&self.id, format!("rcard-chk-{}", ev.id)),
+                true,
+                18.0,
+                true,
+                p.green_ink,
+            )
         } else if let Some(logo) = &ev.logo
             && let Some(art) = pro_app_artwork(logo, 11.5, cx)
         {
@@ -460,6 +468,14 @@ impl AgentRecap {
                 })
                 .child(art)
                 .into_any_element()
+        } else if is_done_check {
+            pro_check_draw(
+                pro_eid(&self.id, format!("rcard-chk-{}", ev.id)),
+                true,
+                18.0,
+                true,
+                p.green_ink,
+            )
         } else {
             div()
                 .size(px(18.0))
@@ -521,12 +537,18 @@ impl AgentRecap {
                         .flex_none()
                         .rounded(px(4.0))
                         .bg(p.chip)
-                        .text_size(px(10.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.text)
                         .flex()
                         .items_center()
-                        .child(format!("{cnt}")),
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, format!("rcard-cnt-{}", ev.id)),
+                            cnt as f64,
+                            0,
+                            "",
+                            "",
+                            10.5,
+                            FontWeight::MEDIUM,
+                            p.text,
+                        )),
                 )
             })
             .child(
@@ -537,11 +559,10 @@ impl AgentRecap {
                     .child(ev.at.clone()),
             );
 
-        // Footer row (`height: 24px`): state pill on left + action buttons on right.
+        // Footer row (`height: 24px`): state pill on left + tactile action buttons on right.
         let ev_id = ev.id.clone();
         let hover_ghost = p.hover;
         let hover_main = pro_mix_color(card_bg, p.ink, 0.04);
-        let focus_c = p.focus;
 
         let foot_row = match (ev.kind, state) {
             (RecapKind::Needs, RecapCardState::Open) => {
@@ -555,56 +576,66 @@ impl AgentRecap {
                     .w_full()
                     .h(px(24.0))
                     .mt(px(6.0))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .flex()
                     .items_center()
                     .justify_end()
                     .gap(px(4.0))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("rev-{ev_id}")))
-                            .role(Role::Button)
-                            .aria_label(format!("Review: {}", ev.title))
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(8.0))
-                            .rounded(px(6.0))
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_ghost))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
-                            .child(tr(cx, "Review", "查看")),
-                        cx,
-                        move |this, _, cx| this.run_review(rev_id.clone(), cx),
-                    ))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("act-{ev_id}")))
-                            .role(Role::Button)
-                            .aria_label(format!("{act_lbl}: {}", ev.title))
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(9.0))
-                            .rounded(px(6.0))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .when(!p.dark, |d| d.shadow_xs())
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_main))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
-                            .child(act_lbl),
-                        cx,
-                        move |this, _, cx| this.run_primary(pri_id.clone(), cx),
-                    ))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("rev-{ev_id}")),
+                            format!("Review: {}", ev.title),
+                            6.0,
+                            transparent_black(),
+                            hover_ghost,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .h(px(24.0))
+                                .px(px(8.0))
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.muted)
+                                .flex()
+                                .items_center()
+                                .child(tr(cx, "Review", "查看")),
+                            cx,
+                            move |this, _, cx| {
+                                cx.stop_propagation();
+                                this.run_review(rev_id.clone(), cx);
+                            },
+                        )
+                        .w_auto(),
+                    )
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("act-{ev_id}")),
+                            format!("{act_lbl}: {}", ev.title),
+                            6.0,
+                            card_bg,
+                            hover_main,
+                            p.line_strong,
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(24.0))
+                                .px(px(9.0))
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .flex()
+                                .items_center()
+                                .child(act_lbl),
+                            cx,
+                            move |this, _, cx| {
+                                cx.stop_propagation();
+                                this.run_primary(pri_id.clone(), cx);
+                            },
+                        )
+                        .w_auto()
+                        .when(!p.dark, |d| d.shadow_xs()),
+                    )
             }
             (RecapKind::Failed, RecapCardState::Open) => {
                 let act_lbl: SharedString = ev
@@ -616,34 +647,38 @@ impl AgentRecap {
                     .w_full()
                     .h(px(24.0))
                     .mt(px(6.0))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .flex()
                     .items_center()
                     .justify_end()
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("retry-{ev_id}")))
-                            .role(Role::Button)
-                            .aria_label(format!("{act_lbl}: {}", ev.title))
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(9.0))
-                            .rounded(px(6.0))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .when(!p.dark, |d| d.shadow_xs())
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_main))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
-                            .child(act_lbl),
-                        cx,
-                        move |this, _, cx| this.run_primary(pri_id.clone(), cx),
-                    ))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("retry-{ev_id}")),
+                            format!("{act_lbl}: {}", ev.title),
+                            6.0,
+                            card_bg,
+                            hover_main,
+                            p.line_strong,
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(24.0))
+                                .px(px(9.0))
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .flex()
+                                .items_center()
+                                .child(act_lbl),
+                            cx,
+                            move |this, _, cx| {
+                                cx.stop_propagation();
+                                this.run_primary(pri_id.clone(), cx);
+                            },
+                        )
+                        .w_auto()
+                        .when(!p.dark, |d| d.shadow_xs()),
+                    )
             }
             (_, RecapCardState::Undone) => {
                 let redo_id = ev_id.clone();
@@ -651,6 +686,7 @@ impl AgentRecap {
                     .w_full()
                     .h(px(24.0))
                     .mt(px(6.0))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .flex()
                     .items_center()
                     .justify_between()
@@ -660,34 +696,43 @@ impl AgentRecap {
                             .px(px(6.0))
                             .rounded(px(5.0))
                             .bg(p.chip)
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
                             .flex()
                             .items_center()
-                            .child(tr(cx, "Undone", "已撤销")),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("rcard-st-{ev_id}")),
+                                tr(cx, "Undone", "已撤销"),
+                                11.5,
+                                FontWeight::MEDIUM,
+                                p.muted,
+                            )),
                     )
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("redo-{ev_id}")))
-                            .role(Role::Button)
-                            .aria_label(format!("Redo: {}", ev.title))
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(8.0))
-                            .rounded(px(6.0))
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_ghost))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
-                            .child(tr(cx, "Redo", "重做")),
-                        cx,
-                        move |this, _, cx| this.run_redo(redo_id.clone(), cx),
-                    ))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("redo-{ev_id}")),
+                            format!("Redo: {}", ev.title),
+                            6.0,
+                            transparent_black(),
+                            hover_ghost,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .h(px(24.0))
+                                .px(px(8.0))
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.muted)
+                                .flex()
+                                .items_center()
+                                .child(tr(cx, "Redo", "重做")),
+                            cx,
+                            move |this, _, cx| {
+                                cx.stop_propagation();
+                                this.run_redo(redo_id.clone(), cx);
+                            },
+                        )
+                        .w_auto(),
+                    )
             }
             _ => {
                 let badge_lbl: SharedString = if state == RecapCardState::Resolved {
@@ -704,6 +749,7 @@ impl AgentRecap {
                     .w_full()
                     .h(px(24.0))
                     .mt(px(6.0))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .flex()
                     .items_center()
                     .justify_between()
@@ -713,80 +759,112 @@ impl AgentRecap {
                             .px(px(6.0))
                             .rounded(px(5.0))
                             .bg(p.green_soft)
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.green_ink)
                             .flex()
                             .items_center()
-                            .child(badge_lbl),
+                            .gap(px(4.0))
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("rcard-pill-chk-{ev_id}")),
+                                true,
+                                12.0,
+                                false,
+                                p.green_ink,
+                            ))
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("rcard-st-{ev_id}")),
+                                badge_lbl,
+                                11.5,
+                                FontWeight::MEDIUM,
+                                p.green_ink,
+                            )),
                     )
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("undo-{ev_id}")))
-                            .role(Role::Button)
-                            .aria_label(format!("Undo: {}", ev.title))
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(8.0))
-                            .rounded(px(6.0))
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_ghost))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
-                            .child(tr(cx, "Undo", "撤销")),
-                        cx,
-                        move |this, _, cx| this.run_undo(undo_id.clone(), cx),
-                    ))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("undo-{ev_id}")),
+                            format!("Undo: {}", ev.title),
+                            6.0,
+                            transparent_black(),
+                            hover_ghost,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .h(px(24.0))
+                                .px(px(8.0))
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.muted)
+                                .flex()
+                                .items_center()
+                                .child(tr(cx, "Undo", "撤销")),
+                            cx,
+                            move |this, _, cx| {
+                                cx.stop_propagation();
+                                this.run_undo(undo_id.clone(), cx);
+                            },
+                        )
+                        .w_auto(),
+                    )
             }
         };
 
         let hov_id = ev.id.clone();
+        let click_id = ev.id.clone();
         let border_c = if is_hot { p.blue.opacity(0.65) } else { p.line };
-        div()
-            .id(pro_eid(&self.id, format!("rcard-{}", ev.id)))
-            .w_full()
-            .h(px(CARD_H))
-            .px(px(10.0))
-            .py(px(9.0))
-            .rounded(px(10.0))
-            .bg(card_bg)
-            .border_1()
-            .border_color(border_c)
-            .when(!p.dark, |d| d.shadow_xs())
-            .flex()
-            .flex_col()
-            .justify_between()
-            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                let next = if *inside {
-                    Some(hov_id.clone())
-                } else if this.spotlight_id.as_ref() == Some(&hov_id) {
+        pro_tactile(
+            pro_eid(&self.id, format!("rcard-{}", ev.id)),
+            format!("{} · {}", ev.at, ev.title),
+            10.0,
+            card_bg,
+            pro_mix_color(card_bg, p.ink, 0.02),
+            border_c,
+            p.blue.opacity(0.55),
+            is_hot,
+            div()
+                .w_full()
+                .h(px(CARD_H))
+                .px(px(10.0))
+                .py(px(9.0))
+                .flex()
+                .flex_col()
+                .justify_between()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.0))
+                        .child(top_row)
+                        .child(meta_row),
+                )
+                .child(foot_row),
+            cx,
+            move |this, _, cx| {
+                let next = if this.spotlight_id.as_ref() == Some(&click_id) {
                     None
                 } else {
-                    this.spotlight_id.clone()
+                    Some(click_id.clone())
                 };
                 this.set_spotlight(next, cx);
-            }))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(top_row)
-                    .child(meta_row),
-            )
-            .child(foot_row)
-            .into_any_element()
+            },
+        )
+        .when(!p.dark, |d| d.shadow_xs())
+        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+            let next = if *inside {
+                Some(hov_id.clone())
+            } else if this.spotlight_id.as_ref() == Some(&hov_id) {
+                None
+            } else {
+                this.spotlight_id.clone()
+            };
+            this.set_spotlight(next, cx);
+        }))
+        .into_any_element()
     }
 }
 
 impl Render for AgentRecap {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed_secs = self.started_at.elapsed().as_secs_f32();
         let card_bg: Hsla = if p.dark {
             rgb(0x1c1c1f).into()
@@ -913,13 +991,23 @@ impl Render for AgentRecap {
                             .flex()
                             .items_center()
                             .gap(px(5.0))
-                            .child(pro_svg("0 0 16 16", ICON_DONE_SVG, 14.0, p.muted))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{done_cnt}")),
-                            )
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, "recap-head-done-chk"),
+                                done_cnt > 0,
+                                14.0,
+                                false,
+                                p.green_ink,
+                            ))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "recap-cnt-done"),
+                                done_cnt as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
                             .child(tr(cx, "done", "已完成")),
                     )
                     .child(
@@ -928,12 +1016,16 @@ impl Render for AgentRecap {
                             .items_center()
                             .gap(px(5.0))
                             .child(pro_svg("0 0 16 16", ICON_NEEDS_SVG, 14.0, p.muted))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{needs_cnt}")),
-                            )
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "recap-cnt-needs"),
+                                needs_cnt as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
                             .child(tr(cx, "need you", "待确认")),
                     )
                     .child(
@@ -942,12 +1034,16 @@ impl Render for AgentRecap {
                             .items_center()
                             .gap(px(5.0))
                             .child(pro_svg("0 0 16 16", ICON_FAILED_SVG, 14.0, p.muted))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{failed_cnt}")),
-                            )
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "recap-cnt-failed"),
+                                failed_cnt as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
                             .child(tr(cx, "failed", "失败")),
                     ),
             );
@@ -999,11 +1095,37 @@ impl Render for AgentRecap {
             hsla(0., 0., 0., 0.07)
         };
 
-        let spotlight_u: Option<f32> = self
+        let tip_ref_id = self
             .spotlight_id
             .as_ref()
+            .or(self.last_spotlight_id.as_ref());
+        let target_u = tip_ref_id
             .and_then(|sid| self.events.iter().find(|e| &e.id == sid))
-            .map(|e| e.position);
+            .map(|e| e.position)
+            .unwrap_or(0.5);
+        let smooth_u = pro_spring_f32(
+            pro_eid(&self.id, "recap-spot-u"),
+            target_u,
+            0.22,
+            window,
+            cx,
+        );
+        let spot_alpha = pro_spring_f32(
+            pro_eid(&self.id, "recap-spot-alpha"),
+            if self.spotlight_id.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            0.18,
+            window,
+            cx,
+        );
+        let spotlight_u: Option<(f32, f32)> = if spot_alpha > 0.01 {
+            Some((smooth_u, spot_alpha))
+        } else {
+            None
+        };
         let cursor_c: Hsla = if p.dark {
             hsla(0., 0., 1., 0.28)
         } else {
@@ -1043,13 +1165,13 @@ impl Render for AgentRecap {
                     }
                 }
 
-                if let Some(su) = spotlight_u {
+                if let Some((su, sa)) = spotlight_u {
                     let cx_line = bounds.left() + px(su * w);
                     let mut cur = PathBuilder::stroke(px(1.0));
                     cur.move_to(point(cx_line, bounds.top()));
                     cur.line_to(point(cx_line, bounds.bottom()));
                     if let Ok(path) = cur.build() {
-                        window.paint_path(path, cursor_c);
+                        window.paint_path(path, cursor_c.opacity(cursor_c.a * sa));
                     }
                 }
 
@@ -1124,7 +1246,13 @@ impl Render for AgentRecap {
             let is_hot = self.spotlight_id.as_ref() == Some(&ev.id);
             let val = eval_recap_curve(ev.position, &peaks);
             let py = (CHART_H - 6.0) - val * usable_h;
-            let dot_sz = if is_hot { 8.5 } else { 6.0 };
+            let dot_sz = pro_spring_f32(
+                pro_eid(&self.id, format!("pdot-sz-{}", ev.id)),
+                if is_hot { 9.0 } else { 6.0 },
+                0.20,
+                window,
+                cx,
+            );
             let hit_sz = 18.0_f32;
             let ev_id = ev.id.clone();
             let hov_id = ev.id.clone();
@@ -1177,7 +1305,11 @@ impl Render for AgentRecap {
             ));
         }
 
-        if let Some(sid) = &self.spotlight_id
+        let tip_open = self.spotlight_id.is_some();
+        if let Some(sid) = self
+            .spotlight_id
+            .as_ref()
+            .or(self.last_spotlight_id.as_ref())
             && let Some(ev) = self.events.iter().find(|e| &e.id == sid)
         {
             let tip_bg: Hsla = if p.dark {
@@ -1190,7 +1322,8 @@ impl Render for AgentRecap {
             } else {
                 rgb(0xfafafa).into()
             };
-            let clamped_u = ev.position.clamp(0.14, 0.86);
+            let clamped_u = smooth_u.clamp(0.14, 0.86);
+            let tip_txt = format!("{} · {}", ev.at, ev.title);
             dots_layer = dots_layer.child(
                 div()
                     .absolute()
@@ -1200,19 +1333,24 @@ impl Render for AgentRecap {
                     .w(px(192.0))
                     .flex()
                     .justify_center()
-                    .child(
-                        div()
-                            .max_w(px(240.0))
-                            .px(px(8.0))
-                            .py(px(3.0))
-                            .rounded(px(6.0))
-                            .bg(tip_bg)
-                            .shadow_sm()
-                            .text_size(px(11.5))
-                            .text_color(tip_fg)
-                            .truncate()
-                            .child(format!("{} · {}", ev.at, ev.title)),
-                    ),
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, "recap-tip-pop"),
+                        tip_open,
+                        move || {
+                            div()
+                                .max_w(px(240.0))
+                                .px(px(8.0))
+                                .py(px(3.0))
+                                .rounded(px(6.0))
+                                .bg(tip_bg)
+                                .shadow_sm()
+                                .text_size(px(11.5))
+                                .text_color(tip_fg)
+                                .truncate()
+                                .child(tip_txt)
+                                .into_any_element()
+                        },
+                    )),
             );
         }
 
@@ -1344,13 +1482,19 @@ impl Render for AgentRecap {
                                     .px(px(5.0))
                                     .rounded(px(6.0))
                                     .bg(p.chip)
-                                    .text_size(px(11.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.text)
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(format!("{total_in_lane}")),
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, format!("lane-cnt-{kind:?}")),
+                                        total_in_lane as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        11.0,
+                                        FontWeight::MEDIUM,
+                                        p.text,
+                                    )),
                             ),
                     )
                     .child(cards_area),

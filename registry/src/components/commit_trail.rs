@@ -7,11 +7,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_person_avatar, pro_presence, pro_shimmer_text, pro_skeleton_bar, tr,
+        ProPalette, pro_agent_avatar, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_person_avatar, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, tr,
     },
     primitives::{
-        family::disabled_motion,
+        family::{PhaseClock, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -27,8 +28,6 @@ const SUB_ROW_H: f32 = 24.0;
 const MAIN_RAIL_X: f32 = 17.0;
 const SUB_RAIL_X: f32 = 29.0;
 const LOOP_SECS: f32 = 2.40;
-
-const CHECK_SVG: &str = r#"<path d="M4.8 8.3L7.0 10.4L11.2 5.8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 const REF_FILE_SVG: &str = r#"<path d="M8 7L16 7M8 11L12 11M13 21.5V18C13 16.3431 14.3431 15 16 15H19.5M20 13.5V9C20 5.68629 18.3137 3 14 3H10C5.68629 3 4 5.68629 4 9V15C4 18.3137 5.68629 21 10 21H13.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
@@ -531,8 +530,10 @@ pub struct CommitTrail {
     expanded_merges: HashSet<SharedString>,
     branch_menu_open: bool,
     hovered_row: Option<SharedString>,
+    pressed_row: Option<SharedString>,
     hovered_ref: Option<(SharedString, SharedString, bool)>,
     copied_hash: Option<(SharedString, Instant)>,
+    copy_clock: PhaseClock,
     has_more: bool,
     max_height: Option<f32>,
     started_at: Instant,
@@ -560,8 +561,10 @@ impl CommitTrail {
             expanded_merges,
             branch_menu_open: false,
             hovered_row: None,
+            pressed_row: None,
             hovered_ref: None,
             copied_hash: None,
+            copy_clock: PhaseClock::default(),
             has_more: true,
             max_height: None,
             started_at: Instant::now(),
@@ -829,6 +832,7 @@ impl CommitTrail {
         has_rail_below: bool,
         rail_color: Hsla,
         elapsed_ms: f32,
+        copy_drawn: bool,
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -869,9 +873,13 @@ impl CommitTrail {
         let faint_c = p.faint;
         let hover_c = p.hover;
         let with_word = tr(cx, "with", "协同").to_string();
-        let files_word = tr(cx, "files", "个文件").to_string();
-        let file_word = tr(cx, "file", "个文件").to_string();
-        let is_zh = tr(cx, "en", "zh") == "zh";
+        let files_suffix = if tr(cx, "en", "zh") == "zh" {
+            " 个文件"
+        } else if files == Some(1) {
+            " file"
+        } else {
+            " files"
+        };
         let author_el = render_author_inline(&author, elapsed_ms, default_agent_c, text_c, cx);
         let co_el = co_author
             .as_ref()
@@ -879,6 +887,7 @@ impl CommitTrail {
         let ent = cx.entity().clone();
         let copy_hash = cid.clone();
         let short_hash: SharedString = cid.chars().take(8).collect::<String>().into();
+        let det_base_id = self.id.clone();
 
         pro_fold(
             pro_eid(&self.id, format!("cmt-det-{}", commit.id)),
@@ -903,6 +912,7 @@ impl CommitTrail {
                     .child(div().text_color(faint_c).child("·"))
                     .child(div().truncate().child(full_date));
 
+                let copy_cid = copy_hash.clone();
                 let copy_btn = div()
                     .id(SharedString::from(format!("copy-hash-{copy_hash}")))
                     .role(Role::Button)
@@ -919,19 +929,22 @@ impl CommitTrail {
                         cx.write_to_clipboard(ClipboardItem::new_string(copy_hash.to_string()));
                         ent.update(cx, |this, cx| {
                             this.copied_hash = Some((copy_hash.clone(), Instant::now()));
+                            this.copy_clock.restart(cx);
                             cx.emit(CommitTrailEvent::CopiedHash(copy_hash.clone()));
                             cx.notify();
                         });
                     })
-                    .child(pro_icon(
-                        if is_copied {
-                            ProIcon::Check
-                        } else {
-                            ProIcon::Copy
-                        },
-                        12.5,
-                        if is_copied { green_c } else { faint_c },
-                    ));
+                    .child(if is_copied {
+                        pro_check_draw(
+                            pro_eid(&det_base_id, format!("copy-chk-{copy_cid}")),
+                            copy_drawn,
+                            12.5,
+                            false,
+                            green_c,
+                        )
+                    } else {
+                        pro_icon(ProIcon::Copy, 12.5, faint_c)
+                    });
 
                 let mut line2 = div()
                     .h(px(22.))
@@ -949,16 +962,18 @@ impl CommitTrail {
                     .child(copy_btn);
 
                 if let Some(fc) = files {
-                    let flbl = if is_zh {
-                        format!("{fc} {files_word}")
-                    } else if fc == 1 {
-                        format!("1 {file_word}")
-                    } else {
-                        format!("{fc} {files_word}")
-                    };
-                    line2 = line2
-                        .child(div().text_color(faint_c).child("·"))
-                        .child(flbl);
+                    line2 = line2.child(div().text_color(faint_c).child("·")).child(
+                        pro_rolling_number(
+                            pro_eid(&det_base_id, format!("det-files-{copy_cid}")),
+                            fc as f64,
+                            0,
+                            "",
+                            files_suffix,
+                            12.,
+                            FontWeight::NORMAL,
+                            muted_c,
+                        ),
+                    );
                 }
                 if added.is_some() || removed.is_some() {
                     let a = added.unwrap_or(0);
@@ -969,8 +984,26 @@ impl CommitTrail {
                             .items_center()
                             .gap(px(5.))
                             .ml(px(2.))
-                            .child(div().text_color(green_c).child(format!("+{a}")))
-                            .child(div().text_color(red_c).child(format!("−{r}"))),
+                            .child(pro_rolling_number(
+                                pro_eid(&det_base_id, format!("det-add-{copy_cid}")),
+                                a as f64,
+                                0,
+                                "+",
+                                "",
+                                12.,
+                                FontWeight::MEDIUM,
+                                green_c,
+                            ))
+                            .child(pro_rolling_number(
+                                pro_eid(&det_base_id, format!("det-rem-{copy_cid}")),
+                                r as f64,
+                                0,
+                                "−",
+                                "",
+                                12.,
+                                FontWeight::MEDIUM,
+                                red_c,
+                            )),
                     );
                 }
 
@@ -1059,47 +1092,36 @@ impl Render for CommitTrail {
         } else {
             self.landed_commit_count()
         };
-        let count_text = if tr(cx, "en", "zh") == "zh" {
-            format!("{landed_count} 次提交")
+        let count_suffix = if tr(cx, "en", "zh") == "zh" {
+            " 次提交"
         } else if landed_count == 1 {
-            "1 commit".to_string()
+            " commit"
         } else {
-            format!("{landed_count} commits")
+            " commits"
         };
+        let copy_drawn = reduced || self.copy_clock.time(0.26, window, cx) > 0.012;
 
         let can_switch_branch = self.branches.len() >= 2;
         let menu_open = self.branch_menu_open;
         let branch_btn = if can_switch_branch {
-            div()
-                .id(pro_eid(&self.id, "branch-btn"))
-                .role(Role::Button)
-                .aria_label(format!(
-                    "{}: {}",
-                    tr(cx, "Switch branch", "切换分支"),
-                    self.active_branch
-                ))
-                .tab_index(0)
+            let br_aria = SharedString::from(format!(
+                "{}: {}",
+                tr(cx, "Switch branch", "切换分支"),
+                self.active_branch
+            ));
+            let br_inner = div()
                 .h(px(24.))
-                .px(px(4.))
-                .ml(px(-4.))
-                .rounded(px(6.))
+                .px(px(5.))
                 .flex()
                 .items_center()
                 .gap(px(4.))
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.branch_menu_open = !this.branch_menu_open;
-                    cx.notify();
-                }))
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .child(self.active_branch.clone()),
-                )
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "branch-lbl-swap"),
+                    self.active_branch.clone(),
+                    13.,
+                    FontWeight::MEDIUM,
+                    p.strong,
+                ))
                 .child(pro_icon(
                     if menu_open {
                         ProIcon::ChevronUp
@@ -1108,8 +1130,30 @@ impl Render for CommitTrail {
                     },
                     12.,
                     p.faint,
-                ))
-                .into_any_element()
+                ));
+            pro_tactile(
+                pro_eid(&self.id, "branch-btn"),
+                br_aria,
+                6.,
+                if menu_open {
+                    p.chip
+                } else {
+                    transparent_black()
+                },
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                menu_open,
+                br_inner,
+                cx,
+                |this, _, cx| {
+                    this.branch_menu_open = !this.branch_menu_open;
+                    cx.notify();
+                },
+            )
+            .ml(px(-4.))
+            .flex_none()
+            .into_any_element()
         } else {
             div()
                 .text_size(px(13.))
@@ -1182,10 +1226,18 @@ impl Render for CommitTrail {
             .child(
                 div()
                     .flex_none()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(p.muted)
-                    .child(count_text),
+                    .flex()
+                    .items_center()
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "landed-cnt"),
+                        landed_count as f64,
+                        0,
+                        "",
+                        count_suffix,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
 
         if self.loading {
@@ -1401,7 +1453,13 @@ impl Render for CommitTrail {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(pro_svg("0 0 16 16", CHECK_SVG, 16., accent))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("cmt-chk-{cid}")),
+                        true,
+                        13.5,
+                        false,
+                        accent,
+                    ))
                     .into_any_element()
             };
 
@@ -1491,9 +1549,11 @@ impl Render for CommitTrail {
             };
 
             let hov_id = cid.clone();
+            let press_id = cid.clone();
             let act_id = cid.clone();
             let key_id = cid.clone();
             let interactive = !cmt.pending;
+            let is_pressed = self.pressed_row.as_ref() == Some(&cid);
 
             let mut row = div()
                 .id(pro_eid(&self.id, format!("cmt-row-{cid}")))
@@ -1509,9 +1569,12 @@ impl Render for CommitTrail {
                 .px(px(8.))
                 .rounded(px(6.))
                 .relative()
+                .top(px(if is_pressed { 0.5 } else { 0.0 }))
                 .flex()
                 .items_center()
-                .bg(if (interactive && is_hovered) || is_open {
+                .bg(if interactive && is_pressed {
+                    p.chip
+                } else if (interactive && is_hovered) || is_open {
                     p.hover
                 } else {
                     transparent_black()
@@ -1519,6 +1582,9 @@ impl Render for CommitTrail {
                 .focus_visible(move |s| s.border_1().border_color(p.focus))
                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                     let next = if *inside { Some(hov_id.clone()) } else { None };
+                    if !*inside && this.pressed_row.as_ref() == Some(&hov_id) {
+                        this.pressed_row = None;
+                    }
                     if this.hovered_row != next {
                         this.hovered_row = next;
                         cx.notify();
@@ -1527,6 +1593,29 @@ impl Render for CommitTrail {
 
             if interactive {
                 row = row
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.pressed_row = Some(press_id.clone());
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            if this.pressed_row.take().is_some() {
+                                cx.notify();
+                            }
+                        }),
+                    )
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            if this.pressed_row.take().is_some() {
+                                cx.notify();
+                            }
+                        }),
+                    )
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.activate_commit(act_id.as_ref(), is_merge, cx);
                     }))
@@ -1697,6 +1786,7 @@ impl Render for CommitTrail {
                         rail_line
                     },
                     elapsed_ms,
+                    copy_drawn,
                     &p,
                     cx,
                 ));
@@ -1805,8 +1895,9 @@ impl Render for CommitTrail {
                                 ),
                         );
 
-                    let sub_detail =
-                        self.render_commit_detail(sub, true, false, accent, elapsed_ms, &p, cx);
+                    let sub_detail = self.render_commit_detail(
+                        sub, true, false, accent, elapsed_ms, copy_drawn, &p, cx,
+                    );
                     sub_rows_vec.push(
                         div()
                             .w_full()
@@ -1882,64 +1973,80 @@ impl Render for CommitTrail {
             list_col.into_any_element()
         };
 
-        // Branch switcher popover menu (`pro_presence`)
-        let branches_snapshot = self.branches.clone();
+        // Branch switcher popover menu (`pro_popover_presence`)
         let active_br = self.active_branch.clone();
-        let ent_menu = cx.entity().clone();
-        let menu_layer = pro_presence(
-            pro_eid(&self.id, "branch-menu"),
-            menu_open,
-            0.18,
-            0.14,
-            move |amt| {
-                let mut col = div()
-                    .id("cmt-branch-popup")
-                    .role(Role::Menu)
-                    .absolute()
-                    .top(px(38. - 3. * (1. - amt)))
-                    .left(px(12.))
-                    .min_w(px(184.))
-                    .p(px(4.))
-                    .rounded(px(11.))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .shadow_md()
-                    .opacity(amt)
+        let branch_rows: Vec<AnyElement> = self
+            .branches
+            .iter()
+            .enumerate()
+            .map(|(bi, br)| {
+                let selected = br == &active_br;
+                let br_name = br.clone();
+                let inner = div()
+                    .w_full()
+                    .h(px(30.))
+                    .px(px(8.))
                     .flex()
-                    .flex_col()
-                    .gap(px(2.));
-
-                for (bi, br) in branches_snapshot.iter().enumerate() {
-                    let selected = br == &active_br;
-                    let br_name = br.clone();
-                    let ent = ent_menu.clone();
-                    col = col.child(
-                        div()
-                            .id(SharedString::from(format!("br-opt-{bi}-{br_name}")))
-                            .role(Role::MenuItemRadio)
-                            .h(px(30.))
-                            .px(px(8.))
-                            .rounded(px(6.))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .cursor_pointer()
-                            .text_size(px(13.))
-                            .text_color(p.ink)
-                            .hover(move |s| s.bg(p.hover))
-                            .on_click(move |_, _, cx| {
-                                ent.update(cx, |this, cx| {
-                                    this.select_branch(br_name.as_ref(), cx);
-                                });
-                            })
-                            .child(div().flex_1().truncate().child(br.clone()))
-                            .when(selected, |d| d.child(pro_icon(ProIcon::Check, 13., accent))),
-                    );
-                }
-                col.into_any_element()
-            },
-        );
+                    .items_center()
+                    .gap(px(8.))
+                    .text_size(px(13.))
+                    .text_color(p.ink)
+                    .child(div().flex_1().truncate().child(br.clone()))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("br-chk-{bi}")),
+                        selected,
+                        13.,
+                        false,
+                        accent,
+                    ));
+                pro_tactile(
+                    SharedString::from(format!("br-opt-{bi}-{br_name}")),
+                    br.clone(),
+                    6.,
+                    if selected {
+                        p.select
+                    } else {
+                        transparent_black()
+                    },
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    selected,
+                    inner,
+                    cx,
+                    move |this, _, cx| {
+                        this.select_branch(br_name.as_ref(), cx);
+                    },
+                )
+                .w_full()
+                .into_any_element()
+            })
+            .collect();
+        let menu_layer = div()
+            .absolute()
+            .top(px(38.))
+            .left(px(12.))
+            .child(pro_popover_presence(
+                pro_eid(&self.id, "branch-menu"),
+                menu_open,
+                move || {
+                    div()
+                        .id("cmt-branch-popup")
+                        .role(Role::Menu)
+                        .min_w(px(184.))
+                        .p(px(4.))
+                        .rounded(px(11.))
+                        .bg(card_bg)
+                        .border_1()
+                        .border_color(p.line_strong)
+                        .shadow_md()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .children(branch_rows)
+                        .into_any_element()
+                },
+            ));
 
         div()
             .id(self.id.clone())

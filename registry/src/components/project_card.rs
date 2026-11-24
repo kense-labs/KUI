@@ -7,8 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_person_avatar,
-        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_view_transition, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_mix_color, pro_person_avatar, pro_pill_indicator, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -187,101 +189,6 @@ pub fn hit_test_ring_segment(dx: f32, dy: f32, count: usize) -> Option<usize> {
     }
     let frac = (angle / TAU).clamp(0., 0.9999);
     Some(((frac * count as f32).floor() as usize).min(count - 1))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn render_subtask_tick(
-    id: ElementId,
-    done: bool,
-    hot: bool,
-    accent: Hsla,
-    ring_idle: Hsla,
-    ring_hot: Hsla,
-    w: &mut Window,
-    cx: &mut App,
-) -> AnyElement {
-    let prog = pro_spring_f32(pro_eid(&id, "tick"), f32::from(done), 0.26, w, cx).clamp(0., 1.);
-    let ring_col = if hot { ring_hot } else { ring_idle };
-
-    canvas(
-        |_, _, _| (),
-        move |bounds, _, window, _| {
-            let center = bounds.center();
-            let side = f32::from(bounds.size.width).min(f32::from(bounds.size.height));
-            if side <= 2. {
-                return;
-            }
-            if prog < 0.99 {
-                let r = side * 0.395;
-                let mut ring = PathBuilder::stroke(px(1.15));
-                let steps = 26usize;
-                for i in 0..=steps {
-                    let a = (i as f32 / steps as f32) * TAU;
-                    let pt = center + point(px(r * a.cos()), px(r * a.sin()));
-                    if i == 0 {
-                        ring.move_to(pt);
-                    } else {
-                        ring.line_to(pt);
-                    }
-                }
-                if let Ok(path) = ring.build() {
-                    window.paint_path(path, ring_col.opacity(1. - prog));
-                }
-            }
-
-            if prog > 0.01 {
-                let r = (side * 0.435) * (0.55 + 0.45 * prog);
-                let mut disc = PathBuilder::fill();
-                let steps = 26usize;
-                for i in 0..=steps {
-                    let a = (i as f32 / steps as f32) * TAU;
-                    let pt = center + point(px(r * a.cos()), px(r * a.sin()));
-                    if i == 0 {
-                        disc.move_to(pt);
-                    } else {
-                        disc.line_to(pt);
-                    }
-                }
-                disc.close();
-                if let Ok(path) = disc.build() {
-                    window.paint_path(path, accent.opacity(prog));
-                }
-
-                let stroke_p = ((prog - 0.16) / 0.84).clamp(0., 1.);
-                if stroke_p > 0.01 {
-                    let p0 = point(
-                        bounds.left() + px(side * 0.32),
-                        bounds.top() + px(side * 0.51),
-                    );
-                    let p1 = point(
-                        bounds.left() + px(side * 0.44),
-                        bounds.top() + px(side * 0.63),
-                    );
-                    let p2 = point(
-                        bounds.left() + px(side * 0.68),
-                        bounds.top() + px(side * 0.37),
-                    );
-                    let mut chk = PathBuilder::stroke(px(1.5));
-                    chk.move_to(p0);
-                    let knee = 0.38;
-                    if stroke_p <= knee {
-                        let u = stroke_p / knee;
-                        chk.line_to(point(p0.x + (p1.x - p0.x) * u, p0.y + (p1.y - p0.y) * u));
-                    } else {
-                        chk.line_to(p1);
-                        let u = (stroke_p - knee) / (1. - knee);
-                        chk.line_to(point(p1.x + (p2.x - p1.x) * u, p1.y + (p2.y - p1.y) * u));
-                    }
-                    if let Ok(path) = chk.build() {
-                        window.paint_path(path, rgb(0xffffff).opacity(prog));
-                    }
-                }
-            }
-        },
-    )
-    .size(px(16.))
-    .flex_none()
-    .into_any_element()
 }
 
 /// Two-line compact project card unfolding a segmented progress ring, people filter, and status picker.
@@ -643,9 +550,9 @@ impl Render for ProjectCard {
             .and_then(|idx| self.tasks.get(idx))
             .and_then(|t| t.assignee.clone());
 
-        // Pre-sample per-segment stroke width & opacity springs for the multi-arc ring
+        // Pre-sample per-segment completion, stroke width & opacity springs for the multi-arc ring
         let seg_count = self.tasks.len();
-        let mut seg_specs: Vec<(bool, f32, f32)> = Vec::with_capacity(seg_count);
+        let mut seg_specs: Vec<(f32, f32, f32)> = Vec::with_capacity(seg_count);
         for (i, t) in self.tasks.iter().enumerate() {
             let is_hot = self.hovered_task_idx == Some(i);
             let is_dim = if let Some(ref flt) = active_filter {
@@ -653,6 +560,14 @@ impl Render for ProjectCard {
             } else {
                 false
             };
+            let done_t = pro_spring_f32(
+                pro_eid(&self.id, format!("seg-d-{i}")),
+                if t.done { 1.0 } else { 0.0 },
+                0.26,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
             let sw = pro_spring_f32(
                 pro_eid(&self.id, format!("seg-w-{i}")),
                 if is_hot { 4.25 } else { 3.0 },
@@ -668,7 +583,7 @@ impl Render for ProjectCard {
                 cx,
             )
             .clamp(0.15, 1.0);
-            seg_specs.push((t.done, sw, alpha));
+            seg_specs.push((done_t, sw, alpha));
         }
 
         let ring_bounds_cell = self.ring_bounds.clone();
@@ -693,19 +608,18 @@ impl Render for ProjectCard {
                     (0.24f32).min(TAU / (n as f32 * 3.2))
                 };
                 let slice = TAU / n as f32;
-                for (i, &(done, sw, alpha)) in seg_specs.iter().enumerate() {
+                for (i, &(done_t, sw, alpha)) in seg_specs.iter().enumerate() {
                     let a0 = -FRAC_PI_2 + i as f32 * slice + gap_rad * 0.5;
                     let a1 = -FRAC_PI_2 + (i + 1) as f32 * slice - gap_rad * 0.5;
                     if a1 <= a0 {
                         continue;
                     }
-                    let col = if done {
-                        accent_col.opacity(alpha)
-                    } else if hot_idx == Some(i) {
-                        ring_hot_track.opacity(alpha)
+                    let base_track = if hot_idx == Some(i) {
+                        ring_hot_track
                     } else {
-                        ring_track.opacity(alpha)
+                        ring_track
                     };
+                    let col = pro_mix_color(base_track, accent_col, done_t).opacity(alpha);
                     let steps = 14usize;
                     let mut pb = PathBuilder::stroke(px(sw));
                     for k in 0..=steps {
@@ -821,7 +735,13 @@ impl Render for ProjectCard {
                 cx.notify();
             }))
             .child(pro_svg("0 0 12 12", ICON_HALF_CIRCLE, 12., st_fg))
-            .child(st_lbl);
+            .child(pro_swap_label(
+                pro_eid(&self.id, "st-pill-lbl"),
+                st_lbl,
+                12.,
+                FontWeight::MEDIUM,
+                st_fg,
+            ));
 
         // Overlapping teammate avatars
         let mut people_row = div().flex_none().flex().items_center();
@@ -864,6 +784,7 @@ impl Render for ProjectCard {
                     .items_center()
                     .justify_center()
                     .cursor_pointer()
+                    .active(|s| s.top(px(0.75)))
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_hover(cx.listener(move |v, inside: &bool, _, cx| {
                         if *inside {
@@ -955,15 +876,26 @@ impl Render for ProjectCard {
             )
             .child(people_row);
 
-        // Inline status picker fold
+        // Inline status picker fold with gliding pill indicator
         let cur_status = self.status;
+        let st_sensor = pro_selection_sensor();
         let mut status_strip = div()
+            .relative()
             .px(px(12.))
             .pb(px(10.))
             .pt(px(2.))
             .flex()
             .flex_wrap()
-            .gap(px(4.));
+            .gap(px(4.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "st-pill-glide"),
+                format!("{cur_status:?}"),
+                st_sensor.clone(),
+                6.,
+                p.select,
+                Some(p.line_strong),
+                false,
+            ));
         for opt in ProjectStatus::ALL {
             let (opt_fg, _) = opt.colors(&p);
             let selected = opt == cur_status;
@@ -975,16 +907,16 @@ impl Render for ProjectCard {
                     .aria_label(opt_lbl.clone())
                     .aria_toggled(selected.into())
                     .tab_index(0)
+                    .relative()
                     .h(px(24.))
                     .px(px(7.))
                     .rounded(px(6.))
-                    .bg(if selected {
-                        p.select
-                    } else {
-                        transparent_black()
-                    })
                     .border_1()
-                    .border_color(if selected { p.line_strong } else { p.line })
+                    .border_color(if selected {
+                        transparent_black()
+                    } else {
+                        p.line
+                    })
                     .flex()
                     .items_center()
                     .gap(px(5.))
@@ -992,7 +924,10 @@ impl Render for ProjectCard {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if selected { p.ink } else { p.text })
                     .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                    .when(!selected, move |d| {
+                        d.hover(move |s| s.bg(p.hover).text_color(p.ink))
+                    })
+                    .when(selected, |d| d.child(pro_mark_selected(&st_sensor)))
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_key_down(cx.listener(move |v, ev: &KeyDownEvent, w, cx| {
                         if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
@@ -1018,6 +953,12 @@ impl Render for ProjectCard {
             move || status_strip.into_any_element(),
         );
 
+        let bar_ratio = if total_count == 0 {
+            0.0
+        } else {
+            done_count as f32 / total_count as f32
+        };
+
         // Subtask rows (cross-linked with ring segments and teammate avatars)
         let mut tasks_col = div()
             .mx(px(12.))
@@ -1026,7 +967,15 @@ impl Render for ProjectCard {
             .border_color(p.line)
             .flex()
             .flex_col()
-            .gap(px(1.));
+            .gap(px(1.))
+            .child(div().pb(px(5.)).child(pro_spring_bar(
+                pro_eid(&self.id, "sub-prog-bar"),
+                bar_ratio,
+                2.5,
+                1.25,
+                ring_track,
+                accent_col,
+            )));
 
         let tasks_snapshot = self.tasks.clone();
         for (t_idx, task) in tasks_snapshot.into_iter().enumerate() {
@@ -1054,15 +1003,12 @@ impl Render for ProjectCard {
             )
             .clamp(0., 1.);
 
-            let tick_el = render_subtask_tick(
+            let tick_el = pro_check_draw(
                 pro_eid(&self.id, format!("sub-chk-{}", task.id)),
                 task.done,
-                is_hot,
+                15.5,
+                false,
                 accent_col,
-                p.faint,
-                p.muted,
-                w,
-                cx,
             );
 
             let trailing_avatar = task.assignee.as_ref().map(|person| {
@@ -1090,6 +1036,7 @@ impl Render for ProjectCard {
                     .items_center()
                     .gap(px(10.))
                     .cursor_pointer()
+                    .active(|s| s.top(px(0.75)))
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_hover(cx.listener(move |v, inside: &bool, _, cx| {
                         if *inside {
@@ -1182,48 +1129,55 @@ impl Render for ProjectCard {
             .items_center()
             .justify_between()
             .gap(px(8.))
-            .child(
-                div().flex_1().min_w_0().child(pro_view_transition(
-                    pro_eid(&self.id, "tray-cap-vtx"),
-                    footer_caption.clone(),
-                    div()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(p.muted)
-                        .truncate()
-                        .child(footer_caption),
-                )),
-            )
+            .child(div().flex_1().min_w_0().truncate().child(pro_swap_label(
+                pro_eid(&self.id, "tray-cap-vtx"),
+                footer_caption,
+                12.,
+                FontWeight::NORMAL,
+                p.muted,
+            )))
             .child(
                 div()
-                    .id(pro_eid(&self.id, "open-action-btn"))
-                    .role(Role::Button)
-                    .aria_label(open_cta.clone())
-                    .tab_index(0)
-                    .h(px(28.))
-                    .pl(px(10.))
-                    .pr(px(7.))
                     .flex_none()
-                    .rounded(px(6.))
-                    .bg(p.primary)
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.on_primary)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(hover_primary))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        cx.stop_propagation();
-                        cx.emit(ProjectCardEvent::ActionClicked);
-                    }))
-                    .child(open_cta)
-                    .child(pro_svg("0 0 12 12", ICON_ARROW_RIGHT_SM, 12., p.on_primary)),
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, "open-action-btn"),
+                            open_cta.clone(),
+                            6.,
+                            p.primary,
+                            hover_primary,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .h(px(28.))
+                                .pl(px(10.))
+                                .pr(px(7.))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .text_size(px(13.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.on_primary)
+                                .whitespace_nowrap()
+                                .child(open_cta)
+                                .child(pro_svg(
+                                    "0 0 12 12",
+                                    ICON_ARROW_RIGHT_SM,
+                                    12.,
+                                    p.on_primary,
+                                )),
+                            cx,
+                            |_, _, cx| {
+                                cx.emit(ProjectCardEvent::ActionClicked);
+                            },
+                        )
+                        .flex_none(),
+                    ),
             );
 
-        let est_body_h = (self.tasks.len() as f32) * 33.0 + 58.0;
+        let est_body_h = (self.tasks.len() as f32) * 33.0 + 66.0;
         let unfold_body = pro_fold(
             pro_eid(&self.id, "card-body-fold"),
             open,

@@ -5,7 +5,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, pro_toast_banner, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_popover_presence,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     primitives::{
         clipboard,
@@ -21,7 +23,6 @@ use web_time::Instant;
 const TITLE_BADGE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="4.5" fill="#0060e2"/><path d="M6 7.5h8M6 10h8M6 12.5h5" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round"/></svg>"##;
 const UNDO_SVG: &str = r#"<path d="M5.5 3.5 2.5 6.5l3 3M2.5 6.5h7a3.5 3.5 0 0 1 0 7H7" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const REDO_SVG: &str = r#"<path d="m10.5 3.5 3 3-3 3M13.5 6.5h-7a3.5 3.5 0 0 0 0 7H9" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const CHECK_TINY_SVG: &str = r#"<path d="m3.5 8.25 2.75 2.75L12.5 4.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const MINUS_TINY_SVG: &str =
     r#"<path d="M4 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>"#;
 const COL_TEXT_SVG: &str = r#"<path d="M3 4h10M3 7h10M3 10h10M3 13h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path>"#;
@@ -387,6 +388,8 @@ pub struct DataTable {
     dragging_cells: bool,
     editing_cell: Option<DataCellPos>,
     tag_picker_cell: Option<(DataCellPos, usize)>,
+    last_tag_picker: Option<(DataCellPos, usize)>,
+    last_checked_cnt: usize,
     sort: Option<(usize, SortDirection)>,
     undo_stack: Vec<TableSnapshot>,
     redo_stack: Vec<TableSnapshot>,
@@ -483,6 +486,8 @@ impl DataTable {
             dragging_cells: false,
             editing_cell: None,
             tag_picker_cell: None,
+            last_tag_picker: None,
+            last_checked_cnt: 1,
             sort: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -1360,33 +1365,14 @@ impl DataTable {
         on_toggle: impl Fn(&mut Self, &ClickEvent, &mut Window, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let on = state.unwrap_or(true);
-        let check_bg: Hsla = if on {
-            if p.dark {
-                hsla(0., 0., 1., 0.90)
-            } else {
-                hsla(0., 0., 0., 0.88)
-            }
-        } else if p.dark {
-            rgb(0x1c1c1e).into()
+        let checked = state == Some(true);
+        let indeterminate = state.is_none();
+        let active_col: Hsla = if p.dark {
+            rgb(0x3b9eff).into()
         } else {
-            rgb(0xffffff).into()
+            rgb(0x0060e2).into()
         };
-        let mark_fg: Hsla = if p.dark {
-            rgb(0x1c1c1e).into()
-        } else {
-            rgb(0xfcfcfc).into()
-        };
-        let ring: Hsla = if p.dark {
-            hsla(0., 0., 1., 0.28)
-        } else {
-            hsla(0., 0., 0., 0.22)
-        };
-        let ring_hover: Hsla = if p.dark {
-            hsla(0., 0., 1., 0.45)
-        } else {
-            hsla(0., 0., 0., 0.40)
-        };
+        let box_id = pro_eid(&id, "box");
 
         div()
             .id(id)
@@ -1398,26 +1384,34 @@ impl DataTable {
             .items_center()
             .justify_center()
             .cursor_pointer()
+            .active(|s| s.top(px(0.75)))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(on_toggle))
             .child(
                 div()
+                    .relative()
                     .size(px(14.))
-                    .rounded(px(4.))
-                    .bg(check_bg)
-                    .when(!on, |d| {
-                        d.border_1()
-                            .border_color(ring)
-                            .hover(move |s| s.border_color(ring_hover))
-                    })
                     .flex()
                     .items_center()
                     .justify_center()
-                    .when(state == Some(true), |d| {
-                        d.child(pro_svg("0 0 16 16", CHECK_TINY_SVG, 11., mark_fg))
-                    })
-                    .when(state.is_none(), |d| {
-                        d.child(pro_svg("0 0 16 16", MINUS_TINY_SVG, 11., mark_fg))
+                    .child(pro_check_draw(box_id, checked, 14., true, active_col))
+                    .when(indeterminate, |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .rounded(px(4.))
+                                .bg(active_col)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(pro_svg(
+                                    "0 0 16 16",
+                                    MINUS_TINY_SVG,
+                                    11.,
+                                    rgb(0xffffff).into(),
+                                )),
+                        )
                     }),
             )
     }
@@ -1548,44 +1542,78 @@ impl Render for DataTable {
                     .flex()
                     .items_center()
                     .gap(px(2.))
-                    .child(
+                    .child(if can_undo {
+                        pro_tactile(
+                            pro_eid(&self.id, "undo-btn"),
+                            tr(cx, "Undo (Cmd+Z)", "撤销 (Cmd+Z)"),
+                            6.,
+                            transparent_black(),
+                            wash,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .size(px(28.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(pro_svg("0 0 16 16", UNDO_SVG, 16., icon_color)),
+                            cx,
+                            |this, _, cx| this.undo(cx),
+                        )
+                        .flex_none()
+                        .into_any_element()
+                    } else {
                         div()
                             .id(pro_eid(&self.id, "undo-btn"))
                             .role(Role::Button)
                             .aria_label(tr(cx, "Undo (Cmd+Z)", "撤销 (Cmd+Z)"))
-                            .tab_index(if can_undo { 0 } else { -1 })
+                            .tab_index(-1)
                             .size(px(28.))
                             .rounded(px(6.))
                             .flex()
                             .items_center()
                             .justify_center()
-                            .opacity(if can_undo { 1.0 } else { 0.38 })
-                            .when(can_undo, |d| {
-                                d.cursor_pointer()
-                                    .hover(move |s| s.bg(wash))
-                                    .on_click(cx.listener(|this, _, _, cx| this.undo(cx)))
-                            })
-                            .child(pro_svg("0 0 16 16", UNDO_SVG, 16., icon_color)),
-                    )
-                    .child(
+                            .opacity(0.38)
+                            .child(pro_svg("0 0 16 16", UNDO_SVG, 16., icon_color))
+                            .into_any_element()
+                    })
+                    .child(if can_redo {
+                        pro_tactile(
+                            pro_eid(&self.id, "redo-btn"),
+                            tr(cx, "Redo (Cmd+Shift+Z)", "重做 (Cmd+Shift+Z)"),
+                            6.,
+                            transparent_black(),
+                            wash,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .size(px(28.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(pro_svg("0 0 16 16", REDO_SVG, 16., icon_color)),
+                            cx,
+                            |this, _, cx| this.redo(cx),
+                        )
+                        .flex_none()
+                        .into_any_element()
+                    } else {
                         div()
                             .id(pro_eid(&self.id, "redo-btn"))
                             .role(Role::Button)
                             .aria_label(tr(cx, "Redo (Cmd+Shift+Z)", "重做 (Cmd+Shift+Z)"))
-                            .tab_index(if can_redo { 0 } else { -1 })
+                            .tab_index(-1)
                             .size(px(28.))
                             .rounded(px(6.))
                             .flex()
                             .items_center()
                             .justify_center()
-                            .opacity(if can_redo { 1.0 } else { 0.38 })
-                            .when(can_redo, |d| {
-                                d.cursor_pointer()
-                                    .hover(move |s| s.bg(wash))
-                                    .on_click(cx.listener(|this, _, _, cx| this.redo(cx)))
-                            })
-                            .child(pro_svg("0 0 16 16", REDO_SVG, 16., icon_color)),
-                    ),
+                            .opacity(0.38)
+                            .child(pro_svg("0 0 16 16", REDO_SVG, 16., icon_color))
+                            .into_any_element()
+                    }),
             );
 
         if self.empty || self.rows.is_empty() {
@@ -1693,16 +1721,23 @@ impl Render for DataTable {
                 th_cell = th_cell.flex_1();
             }
 
-            th_cell = th_cell.child(
+            th_cell = th_cell.child(pro_tactile(
+                pro_eid(&self.id, format!("th-{col_idx}")),
+                format!("{} {}", tr(cx, "Sort by", "排序按"), col_label),
+                6.,
+                if sorted_dir.is_some() {
+                    wash.opacity(0.6)
+                } else {
+                    transparent_black()
+                },
+                wash,
+                transparent_black(),
+                transparent_black(),
+                sorted_dir.is_some(),
                 div()
-                    .id(pro_eid(&self.id, format!("th-{col_idx}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {}", tr(cx, "Sort by", "排序按"), col_label))
-                    .tab_index(0)
                     .w_full()
                     .h(px(28.))
                     .px(px(6.))
-                    .rounded(px(6.))
                     .flex()
                     .items_center()
                     .gap(px(6.))
@@ -1710,13 +1745,12 @@ impl Render for DataTable {
                     .line_height(px(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(label_fg)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(wash).text_color(p.ink))
-                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_sort(col_idx, cx)))
                     .when_some(icon_el, |d, ic| d.child(ic))
                     .child(div().truncate().child(col_label))
                     .when_some(sort_glyph, |d, sg| d.child(div().ml_auto().child(sg))),
-            );
+                cx,
+                move |this, _, cx| this.toggle_sort(col_idx, cx),
+            ));
             thead_row = thead_row.child(th_cell);
         }
 
@@ -1731,6 +1765,18 @@ impl Render for DataTable {
             let row = self.rows[backing_r].clone();
             let row_id = row.id.clone();
             let is_row_checked = self.checked.contains(&row_id);
+            let chk_amt = pro_spring_f32(
+                pro_eid(&self.id, format!("tr-chk-sp-{}", row.id)),
+                if is_row_checked { 1.0 } else { 0.0 },
+                0.18,
+                w,
+                cx,
+            );
+            let row_bg: Hsla = if chk_amt > 0.01 {
+                sel_fill.opacity(sel_fill.a * chk_amt)
+            } else {
+                transparent_black()
+            };
 
             let mut tr_el = div()
                 .id(pro_eid(&self.id, format!("tr-{}", row.id)))
@@ -1740,11 +1786,7 @@ impl Render for DataTable {
                 .border_color(row_line)
                 .flex()
                 .items_center()
-                .bg(if is_row_checked {
-                    sel_fill
-                } else {
-                    transparent_black()
-                })
+                .bg(row_bg)
                 .when(!is_row_checked, |d| d.hover(move |s| s.bg(row_hover)))
                 .child(
                     div()
@@ -1989,7 +2031,20 @@ impl Render for DataTable {
             tbody = tbody.child(tr_el);
         }
 
-        let picker_overlay: Option<AnyElement> = self.tag_picker_cell.and_then(|(pos, hi_idx)| {
+        let sort_key = match self.sort {
+            Some((c, SortDirection::Asc)) => format!("s-{c}-asc"),
+            Some((c, SortDirection::Desc)) => format!("s-{c}-desc"),
+            None => "unsorted".to_string(),
+        };
+        let transitioned_tbody =
+            pro_view_transition(pro_eid(&self.id, "sort-vtx"), sort_key, tbody);
+
+        if let Some(tp) = self.tag_picker_cell {
+            self.last_tag_picker = Some(tp);
+        }
+        let picker_open = self.tag_picker_cell.is_some();
+        let picker_target = self.tag_picker_cell.or(self.last_tag_picker);
+        let picker_menu: Option<AnyElement> = picker_target.and_then(|(pos, hi_idx)| {
             let col = self.columns.get(pos.col)?;
             let backing_r = *vis_indices.get(pos.row)?;
             let current_val = self.rows[backing_r].cell(&col.key).to_string();
@@ -2002,6 +2057,7 @@ impl Render for DataTable {
             }
             let mut menu = div()
                 .id(pro_eid(&self.id, "tag-picker"))
+                .occlude()
                 .absolute()
                 .top(px(pop_top))
                 .left(px(pop_left.min(520.)))
@@ -2061,15 +2117,35 @@ impl Render for DataTable {
                                 .font_weight(FontWeight::MEDIUM)
                                 .child(opt.clone()),
                         )
-                        .when(selected, |d| {
-                            d.child(pro_svg("0 0 16 16", CHECK_TINY_SVG, 12., accent))
-                        }),
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("tag-chk-{opt_i}")),
+                            selected,
+                            13.,
+                            false,
+                            accent,
+                        )),
                 );
             }
             Some(menu.into_any_element())
         });
+        let picker_overlay = picker_menu.map(|menu_el| {
+            pro_popover_presence(
+                pro_eid(&self.id, "tag-picker-pres"),
+                picker_open,
+                move || menu_el,
+            )
+        });
 
         let checked_cnt = self.checked.len();
+        if checked_cnt > 0 {
+            self.last_checked_cnt = checked_cnt;
+        }
+        let bulk_open = checked_cnt > 0;
+        let display_cnt = if bulk_open {
+            checked_cnt
+        } else {
+            self.last_checked_cnt.max(1)
+        };
         let danger_fg: Hsla = if dark {
             rgb(0xff6b5f).into()
         } else {
@@ -2077,91 +2153,132 @@ impl Render for DataTable {
         };
         let danger_wash = danger_fg.opacity(if dark { 0.14 } else { 0.08 });
 
-        let footer_left: AnyElement = if checked_cnt > 0 {
+        let bulk_clear_btn = pro_tactile(
+            pro_eid(&self.id, "bulk-clear"),
+            tr(cx, "Clear selection", "清除勾选"),
+            6.,
+            transparent_black(),
+            wash,
+            transparent_black(),
+            transparent_black(),
+            false,
             div()
-                .pl(px(8.))
+                .h(px(26.))
+                .px(px(9.))
                 .flex()
                 .items_center()
-                .gap(px(4.))
-                .child(
-                    div()
-                        .mr(px(6.))
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .child(format!("{checked_cnt} {}", tr(cx, "selected", "项已选"))),
-                )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "bulk-clear"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Clear selection", "清除勾选"))
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .flex()
-                        .items_center()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.text)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(wash).text_color(p.ink))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.checked.clear();
-                            cx.emit(DataTableEvent::SelectionChanged(Vec::new()));
-                            cx.notify();
-                        }))
-                        .child(tr(cx, "Clear", "取消选择")),
-                )
-                .when(self.editable, |d| {
-                    d.child(
-                        div()
-                            .id(pro_eid(&self.id, "bulk-delete"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Delete selected rows", "删除已选行"))
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .flex()
-                            .items_center()
-                            .text_size(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(danger_fg)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(danger_wash))
-                            .on_click(cx.listener(|this, _, _, cx| this.delete_checked_rows(cx)))
-                            .child(tr(cx, "Delete", "删除")),
-                    )
-                })
-                .into_any_element()
-        } else if self.editable {
-            div()
-                .id(pro_eid(&self.id, "add-row"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Add row", "添加行"))
-                .tab_index(0)
-                .h(px(28.))
-                .pl(px(8.))
-                .pr(px(10.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .text_size(px(13.))
+                .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.text)
-                .cursor_pointer()
-                .hover(move |s| s.bg(wash).text_color(p.ink))
-                .on_click(cx.listener(|this, _, w, cx| this.add_row(w, cx)))
-                .child(pro_svg("0 0 16 16", PLUS_ROW_SVG, 16., icon_color))
-                .child(tr(cx, "Add row", "添加行"))
-                .into_any_element()
+                .whitespace_nowrap()
+                .child(tr(cx, "Clear", "取消选择")),
+            cx,
+            |this, _, cx| {
+                this.checked.clear();
+                cx.emit(DataTableEvent::SelectionChanged(Vec::new()));
+                cx.notify();
+            },
+        )
+        .flex_none();
+
+        let bulk_del_btn = self.editable.then(|| {
+            pro_tactile(
+                pro_eid(&self.id, "bulk-delete"),
+                tr(cx, "Delete selected rows", "删除已选行"),
+                6.,
+                danger_wash.opacity(0.55),
+                danger_wash,
+                danger_fg.opacity(0.24),
+                danger_fg.opacity(0.42),
+                false,
+                div()
+                    .h(px(26.))
+                    .px(px(9.))
+                    .flex()
+                    .items_center()
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(danger_fg)
+                    .whitespace_nowrap()
+                    .child(tr(cx, "Delete", "删除")),
+                cx,
+                |this, _, cx| this.delete_checked_rows(cx),
+            )
+            .flex_none()
+        });
+
+        let sel_count_lbl = format!("{display_cnt} {}", tr(cx, "selected", "项已选"));
+        let bulk_pill = div()
+            .absolute()
+            .bottom(px(52.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(
+                div()
+                    .occlude()
+                    .h(px(36.))
+                    .pl(px(12.))
+                    .pr(px(6.))
+                    .rounded(px(9.))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_lg()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(div().size(px(6.)).rounded_full().bg(accent))
+                    .child(div().mr(px(4.)).child(pro_swap_label(
+                        pro_eid(&self.id, "bulk-cnt-lbl"),
+                        sel_count_lbl,
+                        12.5,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )))
+                    .child(div().w(px(1.)).h(px(14.)).bg(row_line))
+                    .child(bulk_clear_btn)
+                    .when_some(bulk_del_btn, |d, btn| d.child(btn)),
+            )
+            .into_any_element();
+        let bulk_floating =
+            pro_popover_presence(pro_eid(&self.id, "bulk-pop"), bulk_open, move || bulk_pill);
+
+        let footer_left: AnyElement = if self.editable {
+            pro_tactile(
+                pro_eid(&self.id, "add-row"),
+                tr(cx, "Add row", "添加行"),
+                6.,
+                transparent_black(),
+                wash,
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .h(px(28.))
+                    .pl(px(8.))
+                    .pr(px(10.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.text)
+                    .whitespace_nowrap()
+                    .child(pro_svg("0 0 16 16", PLUS_ROW_SVG, 16., icon_color))
+                    .child(tr(cx, "Add row", "添加行")),
+                cx,
+                |this, w, cx| this.add_row(w, cx),
+            )
+            .flex_none()
+            .into_any_element()
         } else {
             div().pl(px(8.)).into_any_element()
         };
 
+        let summary_lbl = self.summary_text(cx);
         let footer_bar = div()
             .min_h(px(44.))
             .pl(px(8.))
@@ -2174,14 +2291,13 @@ impl Render for DataTable {
             .justify_between()
             .gap(px(12.))
             .child(footer_left)
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(p.muted)
-                    .truncate()
-                    .child(self.summary_text(cx)),
-            );
+            .child(div().truncate().child(pro_swap_label(
+                pro_eid(&self.id, "summary-lbl"),
+                summary_lbl,
+                12.,
+                FontWeight::NORMAL,
+                p.muted,
+            )));
 
         div()
             .id(self.id.clone())
@@ -2228,10 +2344,11 @@ impl Render for DataTable {
                             .flex()
                             .flex_col()
                             .child(thead_row)
-                            .child(tbody),
+                            .child(transitioned_tbody),
                     ),
             )
             .child(footer_bar)
+            .child(bulk_floating)
             .when_some(picker_overlay, |d, pop| d.child(pop))
             .child(pro_toast_banner(self.toast.clone()))
             .into_any_element()

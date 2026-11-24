@@ -6,15 +6,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_mark_selected, pro_modal_appear, pro_pill_indicator, pro_presence, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_modal_appear, pro_pill_indicator,
+        pro_popover_presence, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::{UiLanguage, activate},
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -466,6 +467,346 @@ fn translate_app_desc<'a>(id: &str, fallback: &'a str, cx: &App) -> &'a str {
     }
 }
 
+struct AppCardAnim {
+    hover: Slide,
+    conn_val: bool,
+    conn_slide: Slide,
+}
+
+#[derive(IntoElement)]
+struct AppCardSurface {
+    id: ElementId,
+    connected: bool,
+    content: AnyElement,
+}
+
+impl RenderOnce for AppCardSurface {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_conn = self.connected;
+        let st = w.use_keyed_state(pro_eid(&self.id, "card-surf"), cx, |_, _| AppCardAnim {
+            hover: Slide::snappy(0.),
+            conn_val: init_conn,
+            conn_slide: Slide::snappy(f32::from(init_conn)),
+        });
+        let (hov, conn_t) = st.update(cx, |s, cx| {
+            if s.conn_val != self.connected {
+                s.conn_val = self.connected;
+                s.conn_slide.duration(f32::from(self.connected), 0.22, cx);
+            }
+            (
+                s.hover.get(w, cx).clamp(0., 1.),
+                s.conn_slide.get(w, cx).clamp(0., 1.),
+            )
+        });
+
+        let rest_border = pro_mix_color(p.line, p.green.opacity(0.24), conn_t * 0.45);
+        let border = pro_mix_color(rest_border, p.line_strong, hov);
+        let bg = pro_mix_color(p.card, pro_mix_color(p.card, p.ink, 0.018), hov);
+        let dark = p.dark;
+
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                if bounds.size.width <= px(2.) || bounds.size.height <= px(2.) {
+                    return;
+                }
+                let r = px(12.);
+                if hov > 0.015 {
+                    let sh_alpha = if dark { 0.24 } else { 0.055 } * hov;
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(
+                                point(bounds.origin.x, bounds.origin.y + px(2. * hov)),
+                                bounds.size,
+                            ),
+                            black().opacity(sh_alpha),
+                        )
+                        .corner_radii(r),
+                    );
+                }
+                window.paint_quad(quad(
+                    bounds,
+                    Corners::all(r),
+                    bg,
+                    Edges::all(px(1.)),
+                    border,
+                    BorderStyle::Solid,
+                ));
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        div()
+            .id(self.id)
+            .flex_1()
+            .relative()
+            .rounded(px(12.))
+            .p(px(16.))
+            .flex()
+            .flex_col()
+            .justify_between()
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.hover.set(if *inside { 1. } else { 0. }, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(-0.6 * hov))
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .justify_between()
+                    .child(self.content),
+            )
+    }
+}
+
+struct AppConnectBtnAnim {
+    hover: Slide,
+    press: Slide,
+    conn_val: bool,
+    conn_slide: Slide,
+}
+
+type AppClickCallback = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+#[derive(IntoElement)]
+struct AppConnectBtn {
+    id: ElementId,
+    app_name: SharedString,
+    connected: bool,
+    on_click: AppClickCallback,
+}
+
+impl RenderOnce for AppConnectBtn {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_conn = self.connected;
+        let st = w.use_keyed_state(pro_eid(&self.id, "cbtn-st"), cx, |_, _| AppConnectBtnAnim {
+            hover: Slide::snappy(0.),
+            press: Slide::snappy(0.),
+            conn_val: init_conn,
+            conn_slide: Slide::snappy(f32::from(init_conn)),
+        });
+        let (hov, down, conn_t) = st.update(cx, |s, cx| {
+            if s.conn_val != self.connected {
+                s.conn_val = self.connected;
+                s.conn_slide.duration(f32::from(self.connected), 0.24, cx);
+            }
+            (
+                s.hover.get(w, cx).clamp(0., 1.),
+                s.press.get(w, cx).clamp(0., 1.),
+                s.conn_slide.get(w, cx).clamp(0., 1.),
+            )
+        });
+
+        let unconn_bg = pro_mix_color(p.card, p.chip_hover, hov);
+        let conn_bg = pro_mix_color(p.green_soft, p.red_soft, hov);
+        let face_bg = pro_mix_color(unconn_bg, conn_bg, conn_t);
+
+        let unconn_border = p.line_strong;
+        let conn_border = pro_mix_color(p.green.opacity(0.24), p.red.opacity(0.28), hov);
+        let border = pro_mix_color(unconn_border, conn_border, conn_t);
+
+        let conn_fg = pro_mix_color(p.green_ink, p.red_ink, hov);
+        let fg = pro_mix_color(p.ink, conn_fg, conn_t);
+
+        let disconnect_intent = self.connected && hov > 0.45;
+        let label_txt = if !self.connected {
+            tr(cx, "Connect", "连接")
+        } else if disconnect_intent {
+            tr(cx, "Disconnect", "断开连接")
+        } else {
+            tr(cx, "Connected", "已连接")
+        };
+        let aria_txt = if self.connected {
+            format!("{} {}", tr(cx, "Disconnect", "断开连接"), self.app_name)
+        } else {
+            format!("{} {}", tr(cx, "Connect", "连接"), self.app_name)
+        };
+
+        let dark = p.dark;
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 1. || bh <= 1. {
+                    return;
+                }
+                let ix = (bw * 0.022 * down).clamp(0., 2.0);
+                let iy = (bh * 0.042 * down).clamp(0., 1.3);
+                let rect = Bounds::new(
+                    point(bounds.origin.x + px(ix), bounds.origin.y + px(iy)),
+                    size(px((bw - 2. * ix).max(1.)), px((bh - 2. * iy).max(1.))),
+                );
+                let r = px(6.).min(rect.size.width / 2.).min(rect.size.height / 2.);
+                if !dark && hov > 0.02 && down < 0.7 {
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(point(rect.origin.x, rect.origin.y + px(1.)), rect.size),
+                            black().opacity(0.04 * hov * (1. - down)),
+                        )
+                        .corner_radii(r),
+                    );
+                }
+                window.paint_quad(quad(
+                    rect,
+                    Corners::all(r),
+                    face_bg,
+                    Edges::all(px(1.)),
+                    border,
+                    BorderStyle::Solid,
+                ));
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        let show_icon = self.connected || conn_t > 0.03;
+        let chk_alpha = ((1. - hov * 1.45).clamp(0., 1.) * conn_t).clamp(0., 1.);
+        let close_alpha = (((hov - 0.30) / 0.50).clamp(0., 1.) * conn_t).clamp(0., 1.);
+
+        let on_click = self.on_click;
+        div()
+            .id(self.id.clone())
+            .role(Role::Button)
+            .aria_label(aria_txt)
+            .tab_index(0)
+            .self_start()
+            .h(px(28.))
+            .px(px(10.))
+            .relative()
+            .rounded(px(6.))
+            .flex()
+            .items_center()
+            .cursor_pointer()
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.hover.set(if *inside { 1. } else { 0. }, cx);
+                        if !*inside {
+                            s.press.set(0., cx);
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(1., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up_out(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_key_down({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
+                        st.update(cx, |s, cx| {
+                            s.press.set(1., cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_key_up({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
+                        st.update(cx, |s, cx| {
+                            s.press.set(0., cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_click(move |ev, w, cx| (on_click)(ev, w, cx))
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(0.5 * down))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .when(show_icon, |d| {
+                        d.child(
+                            div()
+                                .relative()
+                                .size(px(14.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(div().opacity(chk_alpha).child(pro_check_draw(
+                                    pro_eid(&self.id, "chk"),
+                                    self.connected,
+                                    13.5,
+                                    false,
+                                    p.green,
+                                )))
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .inset_0()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .opacity(close_alpha)
+                                        .child(pro_icon(ProIcon::Close, 12.5, fg)),
+                                ),
+                        )
+                    })
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "lbl"),
+                        label_txt,
+                        12.5,
+                        FontWeight::MEDIUM,
+                        fg,
+                    )),
+            )
+    }
+}
+
 #[derive(Clone)]
 struct ConnectDialogState {
     app_id: SharedString,
@@ -485,7 +826,6 @@ pub struct AppDirectoryBlock {
     active_category: SharedString,
     status_filter: AppStatusFilter,
     filter_menu_open: bool,
-    hovered_connected_id: Option<SharedString>,
     connect_modal: Option<ConnectDialogState>,
     search_editor: Option<Entity<Editor>>,
     api_key_editor: Option<Entity<Editor>>,
@@ -516,7 +856,6 @@ impl AppDirectoryBlock {
             active_category: "essentials".into(),
             status_filter: AppStatusFilter::All,
             filter_menu_open: false,
-            hovered_connected_id: None,
             connect_modal: None,
             search_editor: None,
             api_key_editor: None,
@@ -794,7 +1133,6 @@ impl AppDirectoryBlock {
             } else {
                 format!("Disconnected {name}").into()
             };
-            self.hovered_connected_id = None;
             self.toast = Some((msg, Instant::now()));
             cx.emit(AppDirectoryEvent::Toggled {
                 id,
@@ -898,28 +1236,17 @@ impl AppDirectoryBlock {
             let count = self.category_count(&cat_id);
             let cid = cat_id.clone();
 
-            let mut item = div()
-                .id(pro_eid(&self.id, format!("cat-{cat_id}")))
-                .role(Role::Button)
-                .aria_label(format!("{label} ({count})"))
-                .aria_selected(active)
-                .tab_index(0)
-                .relative()
+            let mut inner = div()
                 .h(px(28.))
                 .px(px(8.))
-                .rounded(px(6.))
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .cursor_pointer()
-                .when(!sidebar_mode, |d| d.flex_none())
-                .hover(move |s| if active { s } else { s.bg(p.hover) })
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .when(active, |d| d.child(pro_mark_selected(&nav_sensor)))
                 .child(pro_icon(icon, 13.5, if active { p.ink } else { p.muted }))
                 .child(
                     div()
                         .when(sidebar_mode, |d| d.flex_1().min_w_0().truncate())
+                        .when(!sidebar_mode, |d| d.whitespace_nowrap())
                         .text_size(px(13.))
                         .font_weight(if active {
                             FontWeight::MEDIUM
@@ -927,11 +1254,11 @@ impl AppDirectoryBlock {
                             FontWeight::NORMAL
                         })
                         .text_color(if active { p.ink } else { p.text })
-                        .child(label),
+                        .child(label.clone()),
                 );
 
             if sidebar_mode {
-                item = item.child(
+                inner = inner.child(
                     div()
                         .flex_none()
                         .text_size(px(12.))
@@ -940,14 +1267,32 @@ impl AppDirectoryBlock {
                 );
             }
 
-            container = container.child(activate(item, cx, move |this, _, cx| {
-                if this.active_category != cid {
-                    this.active_category = cid.clone();
-                    this.filter_menu_open = false;
-                    cx.emit(AppDirectoryEvent::CategorySelected(cid.clone()));
-                    cx.notify();
-                }
-            }));
+            let row = pro_tactile(
+                pro_eid(&self.id, format!("cat-{cat_id}")),
+                format!("{label} ({count})"),
+                6.,
+                transparent_black(),
+                if active { transparent_black() } else { p.hover },
+                transparent_black(),
+                transparent_black(),
+                active,
+                inner,
+                cx,
+                move |this, _, cx| {
+                    if this.active_category != cid {
+                        this.active_category = cid.clone();
+                        this.filter_menu_open = false;
+                        cx.emit(AppDirectoryEvent::CategorySelected(cid.clone()));
+                        cx.notify();
+                    }
+                },
+            )
+            .relative()
+            .when(sidebar_mode, |d| d.w_full())
+            .when(!sidebar_mode, |d| d.flex_none())
+            .when(active, |d| d.child(pro_mark_selected(&nav_sensor)));
+
+            container = container.child(row);
         }
 
         container.into_any_element()
@@ -987,113 +1332,31 @@ impl AppDirectoryBlock {
             pro_app_tile(&app.name, 32., cx)
         };
 
-        let is_disconnect_hover = self
-            .hovered_connected_id
-            .as_ref()
-            .is_some_and(|hid| hid == &app.id);
-
         let app_id = app.id.clone();
-        let app_name = app.name.clone();
-        let action_btn = if app.connected {
-            let hover_id = app.id.clone();
-            let click_id = app.id.clone();
-            let (btn_bg, btn_fg, btn_icon, btn_lbl) = if is_disconnect_hover {
-                (
-                    p.red_soft,
-                    p.red_ink,
-                    ProIcon::Close,
-                    tr(cx, "Disconnect", "断开连接"),
-                )
-            } else {
-                (
-                    p.green_soft,
-                    p.green_ink,
-                    ProIcon::Link,
-                    tr(cx, "Connected", "已连接"),
-                )
-            };
-            activate(
-                div()
-                    .id(pro_eid(&self.id, format!("conn-btn-{app_id}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {app_name}", tr(cx, "Disconnect", "断开连接")))
-                    .tab_index(0)
-                    .self_start()
-                    .h(px(28.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .bg(btn_bg)
-                    .text_color(btn_fg)
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                        if *inside {
-                            this.hovered_connected_id = Some(hover_id.clone());
-                        } else if this
-                            .hovered_connected_id
-                            .as_ref()
-                            .is_some_and(|h| h == &hover_id)
-                        {
-                            this.hovered_connected_id = None;
-                        }
-                        cx.notify();
-                    }))
-                    .child(pro_icon(btn_icon, 12.5, btn_fg))
-                    .child(btn_lbl),
-                cx,
-                move |this, _, cx| {
+        let click_id = app.id.clone();
+        let is_connected = app.connected;
+        let on_click: AppClickCallback =
+            Rc::new(cx.listener(move |this, _: &ClickEvent, w, cx| {
+                if is_connected {
                     this.disconnect_app(&click_id, cx);
-                },
-            )
-            .into_any_element()
-        } else {
-            let click_id = app.id.clone();
-            activate(
-                div()
-                    .id(pro_eid(&self.id, format!("conn-btn-{app_id}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {app_name}", tr(cx, "Connect", "连接")))
-                    .tab_index(0)
-                    .self_start()
-                    .h(px(28.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .text_color(p.ink)
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .flex()
-                    .items_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.chip_hover))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .child(tr(cx, "Connect", "连接")),
-                cx,
-                move |this, w, cx| {
+                } else {
                     this.open_connect_modal(click_id.clone(), w, cx);
-                },
-            )
-            .into_any_element()
-        };
+                }
+            }));
 
-        div()
-            .id(pro_eid(&self.id, format!("card-{}", app.id)))
-            .rounded(px(12.))
-            .bg(p.card)
-            .border_1()
-            .border_color(p.line)
-            .p(px(16.))
+        let action_btn = AppConnectBtn {
+            id: pro_eid(&self.id, format!("conn-btn-{app_id}")),
+            app_name: app.name.clone(),
+            connected: app.connected,
+            on_click,
+        }
+        .into_any_element();
+
+        let body = div()
+            .flex_1()
             .flex()
             .flex_col()
             .justify_between()
-            .hover(move |s| s.border_color(p.line_strong))
             .child(
                 div()
                     .flex()
@@ -1159,8 +1422,14 @@ impl AppDirectoryBlock {
                             .child(desc_str),
                     ),
             )
-            .child(action_btn)
-            .into_any_element()
+            .child(action_btn);
+
+        AppCardSurface {
+            id: pro_eid(&self.id, format!("card-{}", app.id)),
+            connected: app.connected,
+            content: body.into_any_element(),
+        }
+        .into_any_element()
     }
 
     fn render_discover_card(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -1189,8 +1458,42 @@ impl AppDirectoryBlock {
             format!("Explore {} more integrations", extra_count.max(1)).into()
         };
 
+        let browse_btn = pro_tactile(
+            pro_eid(&self.id, "discover-browse-all"),
+            tr(cx, "Browse all apps", "浏览全部应用"),
+            6.,
+            p.card,
+            p.chip_hover,
+            p.line_strong,
+            p.line_strong,
+            false,
+            div()
+                .h(px(28.))
+                .pl(px(10.))
+                .pr(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(4.))
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.ink)
+                .whitespace_nowrap()
+                .child(tr(cx, "Browse all", "查看全部"))
+                .child(pro_icon(ProIcon::ChevronRight, 13., p.muted)),
+            cx,
+            |this, _, cx| {
+                this.active_category = "all".into();
+                cx.emit(AppDirectoryEvent::CategorySelected("all".into()));
+                cx.notify();
+            },
+        )
+        .mt(px(16.))
+        .self_start()
+        .flex_none();
+
         div()
             .id(pro_eid(&self.id, "discover-card"))
+            .flex_1()
             .rounded(px(12.))
             .bg(p.subtle)
             .border_1()
@@ -1227,38 +1530,7 @@ impl AppDirectoryBlock {
                             .child(caption),
                     ),
             )
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "discover-browse-all"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Browse all apps", "浏览全部应用"))
-                    .tab_index(0)
-                    .mt(px(16.))
-                    .self_start()
-                    .h(px(28.))
-                    .pl(px(10.))
-                    .pr(px(8.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.chip_hover))
-                    .child(tr(cx, "Browse all", "查看全部"))
-                    .child(pro_icon(ProIcon::ChevronRight, 13., p.muted)),
-                cx,
-                |this, _, cx| {
-                    this.active_category = "all".into();
-                    cx.emit(AppDirectoryEvent::CategorySelected("all".into()));
-                    cx.notify();
-                },
-            ))
+            .child(browse_btn)
             .into_any_element()
     }
 
@@ -1300,39 +1572,43 @@ impl AppDirectoryBlock {
             (AppAuthKind::ApiKey, tr(cx, "API Key", "API 密钥")),
         ] {
             let active = modal.auth_mode == mode;
-            seg = seg.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("modal-tab-{}", mode.key())))
-                    .role(Role::Tab)
-                    .aria_selected(active)
-                    .tab_index(0)
-                    .flex_1()
-                    .h(px(26.))
-                    .relative()
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if active { p.ink } else { p.text })
-                    .cursor_pointer()
-                    .when(active, |d| d.child(pro_mark_selected(&auth_sensor)))
-                    .child(lbl),
-                cx,
-                move |this, _, cx| {
-                    if let Some(m) = &mut this.connect_modal {
-                        m.auth_mode = mode;
-                        cx.notify();
-                    }
-                },
-            ));
+            seg = seg.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("modal-tab-{}", mode.key())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    div()
+                        .h(px(26.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if active { p.ink } else { p.text })
+                        .child(lbl),
+                    cx,
+                    move |this, _, cx| {
+                        if let Some(m) = &mut this.connect_modal {
+                            m.auth_mode = mode;
+                            cx.notify();
+                        }
+                    },
+                )
+                .flex_1()
+                .relative()
+                .when(active, |d| d.child(pro_mark_selected(&auth_sensor))),
+            );
         }
 
         let body = match modal.auth_mode {
             AppAuthKind::OAuth => {
                 let mut scopes_list = div().flex().flex_col().gap(px(6.));
-                for scope in &app.scopes {
+                for (s_idx, scope) in app.scopes.iter().enumerate() {
                     scopes_list = scopes_list.child(
                         div()
                             .flex()
@@ -1341,11 +1617,13 @@ impl AppDirectoryBlock {
                             .text_size(px(12.5))
                             .line_height(px(18.))
                             .text_color(p.text)
-                            .child(
-                                div()
-                                    .mt(px(3.))
-                                    .child(pro_icon(ProIcon::Check, 13., p.green)),
-                            )
+                            .child(div().mt(px(2.)).child(pro_check_draw(
+                                pro_eid(&self.id, format!("scope-chk-{}-{s_idx}", app.id)),
+                                true,
+                                14.,
+                                false,
+                                p.green,
+                            )))
                             .child(div().flex_1().min_w_0().child(scope.clone())),
                     );
                 }
@@ -1493,20 +1771,12 @@ impl AppDirectoryBlock {
                                     ),
                             ),
                     )
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "modal-close"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Close dialog", "关闭弹窗"))
-                            .tab_index(0)
-                            .size(px(28.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .child(pro_icon(ProIcon::Close, 14., p.muted)),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "modal-close"),
+                        tr(cx, "Close dialog", "关闭弹窗"),
+                        ProIcon::Close,
+                        28.,
+                        false,
                         cx,
                         |this, w, cx| {
                             this.connect_modal = None;
@@ -1516,7 +1786,11 @@ impl AppDirectoryBlock {
                     )),
             )
             .child(seg)
-            .child(body)
+            .child(pro_view_transition(
+                pro_eid(&self.id, "modal-auth-vtx"),
+                modal.auth_mode.key(),
+                body,
+            ))
             .child(
                 div()
                     .mt(px(18.))
@@ -1564,7 +1838,7 @@ impl AppDirectoryBlock {
             )
             .child(pro_modal_appear(
                 pro_eid(&self.id, "connect-modal-appear"),
-                format!("{}-{}", modal.app_id, modal.auth_mode.key()),
+                modal.app_id.clone(),
                 if p.dark { 0.56 } else { 0.32 },
                 dialog,
             ))
@@ -1819,29 +2093,31 @@ impl Render for AppDirectoryBlock {
                             )),
                     ),
             )
-            .child(
+            .child({
+                let live_t = pro_spring_f32(
+                    pro_eid(&self.id, "conn-dot-sp"),
+                    if connected_n > 0 { 1. } else { 0. },
+                    0.24,
+                    w,
+                    cx,
+                )
+                .clamp(0., 1.);
+                let dot_c = pro_mix_color(p.faint, p.green, live_t);
                 div()
                     .flex_none()
                     .when(!single_col, |d| d.mt(px(6.)))
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(div().size(px(6.5)).rounded_full().bg(if connected_n > 0 {
-                        p.green
-                    } else {
-                        p.faint
-                    }))
-                    .child(pro_rolling_number(
+                    .child(div().size(px(6.5)).rounded_full().bg(dot_c))
+                    .child(pro_swap_label(
                         pro_eid(&self.id, "connected-roll"),
-                        connected_n as f64,
-                        0,
-                        "",
-                        connected_suffix,
+                        format!("{connected_n}{connected_suffix}"),
                         12.5,
-                        FontWeight::NORMAL,
+                        FontWeight::MEDIUM,
                         p.muted,
-                    )),
-            );
+                    ))
+            });
 
         let query = self.current_query(cx);
         let has_query = !query.is_empty();
@@ -1881,20 +2157,12 @@ impl Render for AppDirectoryBlock {
                 )
             })
             .when(has_query, |d| {
-                d.child(activate(
-                    div()
-                        .id(pro_eid(&self.id, "search-clear"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Clear search", "清空搜索"))
-                        .tab_index(0)
-                        .size(px(18.))
-                        .rounded(px(4.))
-                        .hover(move |s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .child(pro_icon(ProIcon::Close, 11., p.muted)),
+                d.child(pro_icon_btn(
+                    pro_eid(&self.id, "search-clear"),
+                    tr(cx, "Clear search", "清空搜索"),
+                    ProIcon::Close,
+                    20.,
+                    false,
                     cx,
                     move |this, w, cx| {
                         if let Some(ed) = &ed_clear {
@@ -1913,32 +2181,35 @@ impl Render for AppDirectoryBlock {
             tr(cx, "Filter", "筛选")
         };
 
-        let filter_btn = activate(
+        let filter_fg = if filter_active { p.accent_info } else { p.ink };
+        let filter_btn = pro_tactile(
+            pro_eid(&self.id, "filter-trigger"),
+            tr(cx, "Filter apps by status", "按连接状态筛选"),
+            8.,
+            if filter_active { p.accent_soft } else { p.card },
+            if filter_active {
+                p.accent_info.opacity(0.20)
+            } else {
+                p.chip_hover
+            },
+            if filter_active {
+                p.accent_info.opacity(0.28)
+            } else {
+                p.line_strong
+            },
+            if filter_active {
+                p.accent_info.opacity(0.36)
+            } else {
+                p.line_strong
+            },
+            self.filter_menu_open,
             div()
-                .id(pro_eid(&self.id, "filter-trigger"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Filter apps by status", "按连接状态筛选"))
-                .aria_expanded(self.filter_menu_open)
-                .tab_index(0)
                 .h(px(32.))
                 .px(px(12.))
-                .rounded(px(8.))
-                .bg(if filter_active { p.accent_soft } else { p.card })
-                .border_1()
-                .border_color(if filter_active {
-                    p.accent_info.opacity(0.28)
-                } else {
-                    p.line_strong
-                })
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(if filter_active { p.accent_info } else { p.ink })
-                .cursor_pointer()
-                .hover(move |s| if filter_active { s } else { s.bg(p.chip_hover) })
-                .focus_visible(move |s| s.border_color(p.focus))
+                .whitespace_nowrap()
                 .child(pro_icon(
                     ProIcon::Filter,
                     13.5,
@@ -1948,13 +2219,20 @@ impl Render for AppDirectoryBlock {
                         p.muted
                     },
                 ))
-                .child(filter_btn_label),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "filter-btn-lbl"),
+                    filter_btn_label,
+                    13.,
+                    FontWeight::MEDIUM,
+                    filter_fg,
+                )),
             cx,
             |this, _, cx| {
                 this.filter_menu_open = !this.filter_menu_open;
                 cx.notify();
             },
-        );
+        )
+        .flex_none();
 
         let cur_status = self.status_filter;
         let menu_items: Vec<(AppStatusFilter, &'static str)> = AppStatusFilter::ALL
@@ -1977,59 +2255,61 @@ impl Render for AppDirectoryBlock {
                 .gap(px(1.));
             for (st, lbl) in menu_items {
                 let checked = cur_status == st;
-                menu_box = menu_box.child(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("fmenu-{st:?}")))
-                        .role(Role::MenuItemRadio)
-                        .aria_toggled(checked.into())
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.))
-                        .text_size(px(13.))
-                        .font_weight(if checked {
-                            FontWeight::MEDIUM
-                        } else {
-                            FontWeight::NORMAL
-                        })
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .child(lbl)
-                        .when(checked, |d| {
-                            d.child(pro_icon(ProIcon::Check, 13., p.accent_info))
-                        }),
-                    cx,
-                    move |this, _, cx| {
-                        this.status_filter = st;
-                        this.filter_menu_open = false;
-                        cx.emit(AppDirectoryEvent::FilterChanged(st));
-                        cx.notify();
-                    },
-                ));
+                menu_box = menu_box.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("fmenu-{st:?}")),
+                        lbl,
+                        6.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        checked,
+                        div()
+                            .h(px(28.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(8.))
+                            .text_size(px(13.))
+                            .font_weight(if checked {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .text_color(p.ink)
+                            .child(lbl)
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("fmenu-chk-{st:?}")),
+                                checked,
+                                14.,
+                                false,
+                                p.accent_info,
+                            )),
+                        cx,
+                        move |this, _, cx| {
+                            this.status_filter = st;
+                            this.filter_menu_open = false;
+                            cx.emit(AppDirectoryEvent::FilterChanged(st));
+                            cx.notify();
+                        },
+                    )
+                    .w_full(),
+                );
             }
             menu_box
         };
 
-        let filter_pop = pro_presence(
-            pro_eid(&self.id, "filter-menu-pres"),
-            self.filter_menu_open,
-            0.16,
-            0.14,
-            move |amt| {
-                div()
-                    .absolute()
-                    .top(px(38. - 4. * (1. - amt)))
-                    .right_0()
-                    .opacity(amt)
-                    .child(menu_el)
-                    .into_any_element()
-            },
-        );
+        let filter_pop = div()
+            .absolute()
+            .top(px(38.))
+            .right_0()
+            .child(pro_popover_presence(
+                pro_eid(&self.id, "filter-menu-pres"),
+                self.filter_menu_open,
+                move || menu_el.into_any_element(),
+            ));
 
         let tools_row = div()
             .mt(px(22.))
@@ -2151,21 +2431,22 @@ impl Render for AppDirectoryBlock {
                     .role(Role::Status)
                     .mb(px(12.))
                     .flex()
-                    .items_baseline()
+                    .items_center()
                     .gap(px(6.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .child(section_heading.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(format!("{result_count}")),
-                    ),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "sec-head-lbl"),
+                        section_heading.clone(),
+                        13.,
+                        FontWeight::MEDIUM,
+                        p.strong,
+                    ))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "sec-cnt-lbl"),
+                        format!("{result_count}"),
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             )
             .child(pro_view_transition(
                 pro_eid(&self.id, "grid-vtx"),

@@ -7,12 +7,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_connector_pulse, pro_eid, pro_empty_state,
-        pro_shimmer_text, pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_connector_pulse, pro_eid,
+        pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         family::disabled_motion,
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
@@ -366,6 +368,8 @@ pub struct JudgeBracket {
     step_started: Instant,
     live: bool,
     selected_match: Option<MatchKey>,
+    hovered_match: Option<MatchKey>,
+    last_verdict_reason: Option<SharedString>,
     boot_at: Instant,
     measured_width: Rc<Cell<f32>>,
     toast: Option<(SharedString, Instant)>,
@@ -394,6 +398,8 @@ impl JudgeBracket {
             step_started: now,
             live: true,
             selected_match: None,
+            hovered_match: None,
+            last_verdict_reason: None,
             boot_at: now,
             measured_width: Rc::new(Cell::new(680.0)),
             toast: None,
@@ -791,7 +797,6 @@ impl Render for JudgeBracket {
         } else {
             rgb(0x006dcb).into()
         };
-        let focus_col = p.focus;
         let hover_border = p.line_strong;
 
         // 1. Header Bar
@@ -800,7 +805,6 @@ impl Render for JudgeBracket {
         } else {
             round_title(total_rounds.saturating_sub(1), total_rounds, cx)
         };
-        let progress_txt = format!("{cur_round_lbl} · {decided_matches}/{total_matches}");
 
         let head_bar = div()
             .w_full()
@@ -869,11 +873,94 @@ impl Render for JudgeBracket {
                     })
                     .child(
                         div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(progress_txt),
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "jb-round-lbl"),
+                                cur_round_lbl,
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child(div().text_size(px(12.)).text_color(p.faint).child("·"))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "jb-decided-cnt"),
+                                decided_matches as f64,
+                                0,
+                                "",
+                                format!("/{total_matches}"),
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.muted,
+                            )),
                     ),
             );
+
+        // Connected-branch spotlight from hovered match
+        let spotlight_key = self.hovered_match;
+        let spotlight_cids: Vec<SharedString> = spotlight_key
+            .and_then(|hk| rounds.get(hk.round).and_then(|rm| rm.get(hk.index)))
+            .map(|hm| {
+                [hm.upper.as_ref(), hm.lower.as_ref()]
+                    .into_iter()
+                    .flatten()
+                    .map(|c| c.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let is_lineage = |a: MatchKey, b: MatchKey| -> bool {
+            if a.round == b.round {
+                a.index == b.index
+            } else if a.round < b.round {
+                (a.index >> (b.round - a.round)) == b.index
+            } else {
+                (b.index >> (a.round - b.round)) == a.index
+            }
+        };
+
+        let mut match_opacities: Vec<Vec<f32>> = Vec::with_capacity(total_rounds);
+        for (r, r_matches) in rounds.iter().enumerate() {
+            let mut row_ops = Vec::with_capacity(r_matches.len());
+            for (m_idx, rm) in r_matches.iter().enumerate() {
+                let mk = rm.key;
+                let lit = match spotlight_key {
+                    None => true,
+                    Some(hk) if mk == hk => true,
+                    Some(hk) if is_lineage(mk, hk) => {
+                        if spotlight_cids.is_empty() {
+                            true
+                        } else if mk.round < hk.round {
+                            rm.verdict
+                                .as_ref()
+                                .is_some_and(|v| spotlight_cids.contains(&v.winner_id))
+                                || (rm.verdict.is_none()
+                                    && [rm.upper.as_ref(), rm.lower.as_ref()]
+                                        .into_iter()
+                                        .flatten()
+                                        .any(|c| spotlight_cids.contains(&c.id)))
+                        } else {
+                            (rm.upper.is_none() && rm.lower.is_none())
+                                || [rm.upper.as_ref(), rm.lower.as_ref()]
+                                    .into_iter()
+                                    .flatten()
+                                    .any(|c| spotlight_cids.contains(&c.id))
+                        }
+                    }
+                    Some(_) => false,
+                };
+                let target_op = if lit { 1.0 } else { 0.34 };
+                row_ops.push(pro_spring_f32(
+                    pro_eid(&self.id, format!("jb-mop-{r}-{m_idx}")),
+                    target_op,
+                    0.22,
+                    w,
+                    cx,
+                ));
+            }
+            match_opacities.push(row_ops);
+        }
 
         // Slot visual builder
         let champ_id = champ.as_ref().map(|c| c.id.clone());
@@ -974,19 +1061,30 @@ impl Render for JudgeBracket {
                 .when(is_final_slot && is_winner && champ_id.is_some(), |d| {
                     d.child(pro_svg("0 0 24 24", TROPHY_CUP_SVG, 13., brand_fg))
                 })
+                .when(is_winner && !(is_final_slot && champ_id.is_some()), |d| {
+                    d.child(pro_check_draw(
+                        pro_eid(&self.id, format!("slot-chk-{slot_key}")),
+                        true,
+                        12.,
+                        false,
+                        p.green,
+                    ))
+                })
                 .when_some(score, |d, sc| {
-                    d.child(
-                        div()
-                            .flex_none()
-                            .text_size(px(11.5))
-                            .font_weight(if is_winner {
-                                FontWeight::SEMIBOLD
-                            } else {
-                                FontWeight::NORMAL
-                            })
-                            .text_color(if is_winner { p.strong } else { p.muted })
-                            .child(format!("{sc:.1}")),
-                    )
+                    d.child(div().flex_none().child(pro_rolling_number(
+                        pro_eid(&self.id, format!("slot-sc-{slot_key}")),
+                        sc as f64,
+                        1,
+                        "",
+                        "",
+                        11.5,
+                        if is_winner {
+                            FontWeight::SEMIBOLD
+                        } else {
+                            FontWeight::NORMAL
+                        },
+                        if is_winner { p.strong } else { p.muted },
+                    )))
                 })
         };
 
@@ -1002,9 +1100,10 @@ impl Render for JudgeBracket {
                         .text_color(p.muted)
                         .child(round_title(r, total_rounds, cx)),
                 );
-                for m in r_matches {
+                for (m_idx, m) in r_matches.iter().enumerate() {
                     let mk = m.key;
                     let is_sel = mk == inspected_key;
+                    let m_op = match_opacities[r][m_idx];
                     let w_id = m.verdict.as_ref().map(|v| v.winner_id.clone());
                     let sc_u = m.verdict.as_ref().map(|v| v.scores[0]);
                     let sc_l = m.verdict.as_ref().map(|v| v.scores[1]);
@@ -1012,56 +1111,72 @@ impl Render for JudgeBracket {
                     let lo_won = w_id.is_some() && m.lower.as_ref().map(|c| &c.id) == w_id.as_ref();
                     let is_fin = r + 1 == total_rounds;
 
-                    col = col.child(activate(
-                        div()
-                            .id(pro_eid(
-                                &self.id,
-                                format!("mstack-{}-{}", mk.round, mk.index),
-                            ))
-                            .role(Role::Button)
-                            .aria_label(round_match_title(mk, total_rounds, cx))
-                            .aria_selected(is_sel)
-                            .tab_index(0)
-                            .p(px(6.))
-                            .rounded(px(12.))
-                            .bg(if is_sel { well_bg } else { transparent_black() })
-                            .border_1()
-                            .border_color(if is_sel {
-                                path_blue.opacity(0.5)
-                            } else {
-                                p.line
-                            })
-                            .cursor_pointer()
-                            .flex()
-                            .flex_col()
-                            .gap(px(4.))
-                            .child(build_slot(
-                                m.upper.as_ref(),
-                                sc_u,
-                                up_won,
-                                lo_won,
-                                m.judging,
-                                is_fin,
-                                None,
-                                format!("{}-{}-u", mk.round, mk.index),
-                                cx,
-                            ))
-                            .child(build_slot(
-                                m.lower.as_ref(),
-                                sc_l,
-                                lo_won,
-                                up_won,
-                                m.judging,
-                                is_fin,
-                                None,
-                                format!("{}-{}-l", mk.round, mk.index),
-                                cx,
-                            )),
+                    let inner_stack = div()
+                        .w_full()
+                        .p(px(6.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(build_slot(
+                            m.upper.as_ref(),
+                            sc_u,
+                            up_won,
+                            lo_won,
+                            m.judging,
+                            is_fin,
+                            None,
+                            format!("{}-{}-u", mk.round, mk.index),
+                            cx,
+                        ))
+                        .child(build_slot(
+                            m.lower.as_ref(),
+                            sc_l,
+                            lo_won,
+                            up_won,
+                            m.judging,
+                            is_fin,
+                            None,
+                            format!("{}-{}-l", mk.round, mk.index),
+                            cx,
+                        ));
+
+                    let stack_card = pro_tactile(
+                        pro_eid(&self.id, format!("mstack-{}-{}", mk.round, mk.index)),
+                        round_match_title(mk, total_rounds, cx),
+                        12.,
+                        if is_sel { well_bg } else { transparent_black() },
+                        well_bg,
+                        if is_sel {
+                            path_blue.opacity(0.5)
+                        } else {
+                            p.line
+                        },
+                        if is_sel {
+                            path_blue.opacity(0.75)
+                        } else {
+                            hover_border
+                        },
+                        is_sel,
+                        inner_stack,
                         cx,
                         move |this, _, cx| {
                             this.select_match(Some(mk), cx);
                         },
+                    )
+                    .w_full()
+                    .opacity(m_op)
+                    .on_hover(cx.listener(
+                        move |this, inside: &bool, _, cx| {
+                            if *inside {
+                                this.hovered_match = Some(mk);
+                            } else if this.hovered_match == Some(mk) {
+                                this.hovered_match = None;
+                            }
+                            cx.notify();
+                        },
                     ));
+
+                    col = col.child(stack_card);
                 }
             }
             col.into_any_element()
@@ -1124,19 +1239,29 @@ impl Render for JudgeBracket {
             }
 
             // Precompute connector arms from each match's upper & lower slots into the next round's slot!
-            #[derive(Clone)]
+            #[derive(Clone, Copy)]
             enum ArmState {
                 Open,
                 Won,
                 Lost,
                 ChampPath,
             }
-            let mut arms: Vec<(Point<Pixels>, Point<Pixels>, ArmState)> = Vec::new();
+            #[derive(Clone, Copy)]
+            struct BracketArm {
+                p0: Point<Pixels>,
+                p1: Point<Pixels>,
+                state: ArmState,
+                vis_a: f32,
+                spt_a: f32,
+            }
+            let mut arms: Vec<BracketArm> = Vec::new();
+            let mut arm_idx = 0usize;
             for r in 0..total_rounds.saturating_sub(1) {
                 let x_right = r as f32 * (col_w + col_gap) + col_w;
                 let x_next_left = (r + 1) as f32 * (col_w + col_gap);
                 for (m_idx, rm) in rounds[r].iter().enumerate() {
                     let (cy_u, cy_l) = slot_centers[r][m_idx];
+                    let dst_mk = MatchKey::new(r + 1, m_idx / 2);
                     let next_cy = if m_idx % 2 == 0 {
                         slot_centers[r + 1][m_idx / 2].0
                     } else {
@@ -1165,16 +1290,47 @@ impl Render for JudgeBracket {
                         }
                         Some(_) => ArmState::Lost,
                     };
-                    arms.push((
-                        point(px(x_right), px(cy_u)),
-                        point(px(x_next_left), px(next_cy)),
-                        up_state,
-                    ));
-                    arms.push((
-                        point(px(x_right), px(cy_l)),
-                        point(px(x_next_left), px(next_cy)),
-                        lo_state,
-                    ));
+
+                    for (cy_slot, slot_c, st) in [
+                        (cy_u, rm.upper.as_ref(), up_state),
+                        (cy_l, rm.lower.as_ref(), lo_state),
+                    ] {
+                        let spt_on = spotlight_key.is_some_and(|hk| {
+                            is_lineage(rm.key, hk)
+                                && is_lineage(dst_mk, hk)
+                                && slot_c.is_some_and(|c| {
+                                    spotlight_cids.contains(&c.id) && !matches!(st, ArmState::Lost)
+                                })
+                        });
+                        let vis_target = match spotlight_key {
+                            None => 1.0,
+                            Some(_) if spt_on => 1.0,
+                            Some(hk) if rm.key == hk && !matches!(st, ArmState::Lost) => 0.88,
+                            Some(_) => 0.28,
+                        };
+                        let vis_a = pro_spring_f32(
+                            pro_eid(&self.id, format!("jb-arm-op-{arm_idx}")),
+                            vis_target,
+                            0.22,
+                            w,
+                            cx,
+                        );
+                        let spt_a = pro_spring_f32(
+                            pro_eid(&self.id, format!("jb-arm-sp-{arm_idx}")),
+                            f32::from(spt_on),
+                            0.22,
+                            w,
+                            cx,
+                        );
+                        arm_idx += 1;
+                        arms.push(BracketArm {
+                            p0: point(px(x_right), px(cy_slot)),
+                            p1: point(px(x_next_left), px(next_cy)),
+                            state: st,
+                            vis_a,
+                            spt_a,
+                        });
+                    }
                 }
             }
 
@@ -1184,28 +1340,51 @@ impl Render for JudgeBracket {
                     let ox = surface.origin.x;
                     let oy = surface.origin.y;
                     // Paint non-winner arms first so winner / champion paths sit cleanly on top!
-                    for (p0, p1, st) in &arms {
-                        let a = point(ox + p0.x, oy + p0.y);
-                        let b = point(ox + p1.x, oy + p1.y);
-                        match st {
+                    for arm in &arms {
+                        let a = point(ox + arm.p0.x, oy + arm.p0.y);
+                        let b = point(ox + arm.p1.x, oy + arm.p1.y);
+                        match arm.state {
                             ArmState::Lost => {
-                                paint_dashed_arm(a, b, rail_col, window);
+                                paint_dashed_arm(
+                                    a,
+                                    b,
+                                    rail_col.opacity(rail_col.a * arm.vis_a),
+                                    window,
+                                );
                             }
                             ArmState::Open => {
+                                let base_c = pro_mix_color(rail_col, path_blue, arm.spt_a * 0.72);
                                 pro_connector_pulse(
-                                    a, b, 6.0, false, rail_col, rail_col, None, 1.4, window,
+                                    a,
+                                    b,
+                                    6.0,
+                                    false,
+                                    base_c.opacity(base_c.a * arm.vis_a),
+                                    rgb(0xc6e6ff).into(),
+                                    if arm.spt_a > 0.25 { pulse_t } else { None },
+                                    1.4 + 0.35 * arm.spt_a,
+                                    window,
                                 );
                             }
                             _ => {}
                         }
                     }
-                    for (p0, p1, st) in &arms {
-                        let a = point(ox + p0.x, oy + p0.y);
-                        let b = point(ox + p1.x, oy + p1.y);
-                        match st {
+                    for arm in &arms {
+                        let a = point(ox + arm.p0.x, oy + arm.p0.y);
+                        let b = point(ox + arm.p1.x, oy + arm.p1.y);
+                        match arm.state {
                             ArmState::Won => {
+                                let base_c = pro_mix_color(won_col, path_blue, arm.spt_a);
                                 pro_connector_pulse(
-                                    a, b, 6.0, false, won_col, won_col, None, 1.55, window,
+                                    a,
+                                    b,
+                                    6.0,
+                                    false,
+                                    base_c.opacity(base_c.a * arm.vis_a),
+                                    rgb(0xc6e6ff).into(),
+                                    if arm.spt_a > 0.25 { pulse_t } else { None },
+                                    1.55 + 0.30 * arm.spt_a,
+                                    window,
                                 );
                             }
                             ArmState::ChampPath => {
@@ -1214,10 +1393,10 @@ impl Render for JudgeBracket {
                                     b,
                                     6.0,
                                     false,
-                                    path_blue,
+                                    path_blue.opacity(path_blue.a * arm.vis_a),
                                     rgb(0xc6e6ff).into(),
                                     pulse_t,
-                                    1.85,
+                                    1.85 + 0.25 * arm.spt_a,
                                     window,
                                 );
                             }
@@ -1245,6 +1424,7 @@ impl Render for JudgeBracket {
                     let box_h = (cy_l + 20.0) - top_y;
                     let mk = rm.key;
                     let is_sel = mk == inspected_key;
+                    let m_op = match_opacities[r][m_idx];
                     let w_id = rm.verdict.as_ref().map(|v| v.winner_id.clone());
                     let sc_u = rm.verdict.as_ref().map(|v| v.scores[0]);
                     let sc_l = rm.verdict.as_ref().map(|v| v.scores[1]);
@@ -1253,52 +1433,71 @@ impl Render for JudgeBracket {
                     let lo_won =
                         w_id.is_some() && rm.lower.as_ref().map(|c| &c.id) == w_id.as_ref();
 
-                    let match_btn = activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("mbtn-{}-{}", mk.round, mk.index)))
-                            .role(Role::Button)
-                            .aria_label(round_match_title(mk, total_rounds, cx))
-                            .aria_selected(is_sel)
-                            .tab_index(0)
-                            .w(px(col_w))
-                            .h(px(box_h))
-                            .rounded(px(11.))
-                            .when(is_sel, |d| {
-                                d.border_1().border_color(path_blue.opacity(0.45))
-                            })
-                            .hover(move |s| s.border_1().border_color(hover_border))
-                            .focus_visible(move |s| s.border_2().border_color(focus_col))
-                            .cursor_pointer()
-                            .flex()
-                            .flex_col()
-                            .justify_between()
-                            .child(build_slot(
-                                rm.upper.as_ref(),
-                                sc_u,
-                                up_won,
-                                lo_won,
-                                rm.judging,
-                                is_fin,
-                                Some(col_w),
-                                format!("{}-{}-u", mk.round, mk.index),
-                                cx,
-                            ))
-                            .child(build_slot(
-                                rm.lower.as_ref(),
-                                sc_l,
-                                lo_won,
-                                up_won,
-                                rm.judging,
-                                is_fin,
-                                Some(col_w),
-                                format!("{}-{}-l", mk.round, mk.index),
-                                cx,
-                            )),
+                    let match_inner = div()
+                        .w(px(col_w))
+                        .h(px(box_h))
+                        .flex()
+                        .flex_col()
+                        .justify_between()
+                        .child(build_slot(
+                            rm.upper.as_ref(),
+                            sc_u,
+                            up_won,
+                            lo_won,
+                            rm.judging,
+                            is_fin,
+                            Some(col_w),
+                            format!("{}-{}-u", mk.round, mk.index),
+                            cx,
+                        ))
+                        .child(build_slot(
+                            rm.lower.as_ref(),
+                            sc_l,
+                            lo_won,
+                            up_won,
+                            rm.judging,
+                            is_fin,
+                            Some(col_w),
+                            format!("{}-{}-l", mk.round, mk.index),
+                            cx,
+                        ));
+
+                    let match_btn = pro_tactile(
+                        pro_eid(&self.id, format!("mbtn-{}-{}", mk.round, mk.index)),
+                        round_match_title(mk, total_rounds, cx),
+                        11.,
+                        transparent_black(),
+                        well_bg,
+                        if is_sel {
+                            path_blue.opacity(0.45)
+                        } else {
+                            transparent_black()
+                        },
+                        if is_sel {
+                            path_blue.opacity(0.75)
+                        } else {
+                            hover_border
+                        },
+                        is_sel,
+                        match_inner,
                         cx,
                         move |this, _, cx| {
                             this.select_match(Some(mk), cx);
                         },
-                    );
+                    )
+                    .w(px(col_w))
+                    .h(px(box_h))
+                    .opacity(m_op)
+                    .on_hover(cx.listener(
+                        move |this, inside: &bool, _, cx| {
+                            if *inside {
+                                this.hovered_match = Some(mk);
+                            } else if this.hovered_match == Some(mk) {
+                                this.hovered_match = None;
+                            }
+                            cx.notify();
+                        },
+                    ));
 
                     bracket_canvas = bracket_canvas.child(
                         div()
@@ -1325,6 +1524,11 @@ impl Render for JudgeBracket {
             .and_then(|rm| rm.get(inspected_key.index))
             .cloned()
             .or_else(|| rounds.first().and_then(|r| r.first()).cloned());
+
+        if let Some(im_v) = inspected_match.as_ref().and_then(|im| im.verdict.as_ref()) {
+            self.last_verdict_reason = Some(im_v.reason.clone());
+        }
+        let cached_reason = self.last_verdict_reason.clone();
 
         let match_panel = if let Some(im) = inspected_match {
             let match_heading = round_match_title(im.key, total_rounds, cx);
@@ -1364,7 +1568,8 @@ impl Render for JudgeBracket {
             let render_answer_card = |opt_c: Option<&BracketContender>,
                                       score: Option<f32>,
                                       won: bool,
-                                      lost: bool|
+                                      lost: bool,
+                                      side_tag: &'static str|
              -> Div {
                 let Some(c) = opt_c else {
                     return div()
@@ -1426,23 +1631,55 @@ impl Render for JudgeBracket {
                             .when_some(score, |d, sc| {
                                 d.child(
                                     div()
-                                        .h(px(18.))
+                                        .h(px(19.))
                                         .px(px(6.))
                                         .rounded(px(4.))
                                         .bg(if won { p.green_soft } else { p.chip })
-                                        .text_color(if won { p.green_ink } else { p.muted })
-                                        .text_size(px(11.))
-                                        .font_weight(FontWeight::MEDIUM)
                                         .flex()
                                         .items_center()
                                         .gap(px(4.))
                                         .when(won, |b| {
-                                            b.child(pro_icon(ProIcon::Check, 11., p.green_ink))
+                                            b.child(pro_check_draw(
+                                                pro_eid(
+                                                    &self.id,
+                                                    format!("ans-chk-{side_tag}-{}", c.id),
+                                                ),
+                                                true,
+                                                12.,
+                                                false,
+                                                p.green,
+                                            ))
                                         })
-                                        .child(format!("{sc:.1}")),
+                                        .child(pro_rolling_number(
+                                            pro_eid(
+                                                &self.id,
+                                                format!("ans-sc-{side_tag}-{}", c.id),
+                                            ),
+                                            sc as f64,
+                                            1,
+                                            "",
+                                            "",
+                                            11.,
+                                            FontWeight::MEDIUM,
+                                            if won { p.green_ink } else { p.muted },
+                                        )),
                                 )
                             }),
                     )
+                    .when_some(score, |d, sc| {
+                        d.child(pro_spring_bar(
+                            pro_eid(&self.id, format!("ans-bar-{side_tag}")),
+                            (sc / 10.0).clamp(0.0, 1.0),
+                            4.0,
+                            2.0,
+                            p.chip,
+                            if won {
+                                p.green
+                            } else {
+                                path_blue.opacity(0.55)
+                            },
+                        ))
+                    })
                     .child(
                         div()
                             .text_size(px(11.))
@@ -1480,10 +1717,17 @@ impl Render for JudgeBracket {
                 champ.clone()
             };
             let live_now = self.live;
+            let verdict_reason_txt = im
+                .verdict
+                .as_ref()
+                .map(|v| v.reason.clone())
+                .or(cached_reason);
+            let verdict_open = im.verdict.is_some() && verdict_reason_txt.is_some();
+            let v_ink = p.ink;
 
             pro_view_transition(
                 pro_eid(&self.id, "jb-panel-vtx"),
-                format!("{}:{}:{}", im.key.round, im.key.index, im.verdict.is_some()),
+                format!("{}:{}", im.key.round, im.key.index),
                 div()
                     .id(pro_eid(&self.id, "jb-panel"))
                     .role(Role::Status)
@@ -1512,8 +1756,12 @@ impl Render for JudgeBracket {
                             )
                             .child(meta_right),
                     )
-                    .when_some(im.verdict.as_ref(), |d, v| {
-                        d.child(
+                    .child(pro_fold(
+                        pro_eid(&self.id, "jb-verdict-fold"),
+                        verdict_open,
+                        38.0,
+                        10.0,
+                        move || {
                             div()
                                 .px(px(10.))
                                 .py(px(7.))
@@ -1521,26 +1769,51 @@ impl Render for JudgeBracket {
                                 .bg(brand_bg)
                                 .text_size(px(12.))
                                 .line_height(px(18.))
-                                .text_color(p.ink)
-                                .child(v.reason.clone()),
-                        )
-                    })
+                                .text_color(v_ink)
+                                .child(verdict_reason_txt.unwrap_or_default())
+                                .into_any_element()
+                        },
+                    ))
                     .child(if stacked {
                         div()
                             .w_full()
                             .flex()
                             .flex_col()
                             .gap(px(8.))
-                            .child(render_answer_card(im.upper.as_ref(), sc_u, up_won, lo_won))
-                            .child(render_answer_card(im.lower.as_ref(), sc_l, lo_won, up_won))
+                            .child(render_answer_card(
+                                im.upper.as_ref(),
+                                sc_u,
+                                up_won,
+                                lo_won,
+                                "u",
+                            ))
+                            .child(render_answer_card(
+                                im.lower.as_ref(),
+                                sc_l,
+                                lo_won,
+                                up_won,
+                                "l",
+                            ))
                     } else {
                         div()
                             .w_full()
                             .flex()
                             .items_stretch()
                             .gap(px(10.))
-                            .child(render_answer_card(im.upper.as_ref(), sc_u, up_won, lo_won))
-                            .child(render_answer_card(im.lower.as_ref(), sc_l, lo_won, up_won))
+                            .child(render_answer_card(
+                                im.upper.as_ref(),
+                                sc_u,
+                                up_won,
+                                lo_won,
+                                "u",
+                            ))
+                            .child(render_answer_card(
+                                im.lower.as_ref(),
+                                sc_l,
+                                lo_won,
+                                up_won,
+                                "l",
+                            ))
                     })
                     .child(
                         div()

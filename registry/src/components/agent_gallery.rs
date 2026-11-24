@@ -6,8 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
-        pro_person_avatar, pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_person_avatar, pro_pill_indicator,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
@@ -602,6 +603,74 @@ fn translate_kpi_label<'a>(label: &'a str, cx: &App) -> &'a str {
     }
 }
 
+fn parse_kpi_numeric(raw: &str) -> Option<(String, f64, usize, String)> {
+    let trimmed = raw.trim();
+    let num_start = trimmed.find(|c: char| c.is_ascii_digit() || c == '-')?;
+    let prefix = trimmed[..num_start].to_owned();
+    let rest = &trimmed[num_start..];
+    let mut num_end = 0usize;
+    let mut saw_dot = false;
+    for (i, ch) in rest.char_indices() {
+        if ch.is_ascii_digit() || (i == 0 && ch == '-') || ch == ',' {
+            num_end = i + ch.len_utf8();
+        } else if ch == '.' && !saw_dot {
+            saw_dot = true;
+            num_end = i + 1;
+        } else {
+            break;
+        }
+    }
+    let num_slice = rest[..num_end].replace(',', "");
+    let val: f64 = num_slice.parse().ok()?;
+    let decimals = num_slice
+        .split_once('.')
+        .map(|(_, frac)| frac.len())
+        .unwrap_or(0);
+    let suffix = rest[num_end..].to_owned();
+    Some((prefix, val, decimals, suffix))
+}
+
+#[derive(IntoElement)]
+struct ContextNoteEntrance {
+    id: ElementId,
+    parent_gap: f32,
+    content: AnyElement,
+}
+
+impl RenderOnce for ContextNoteEntrance {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(pro_eid(&self.id, "note-enter"), cx, |_, inner_cx| {
+            let mut slide = Slide::new(0.);
+            slide.duration(1., 0.26, inner_cx);
+            (slide, Rc::new(Cell::new(px(36.))))
+        });
+        let (amt, h_cell) = st.update(cx, |s, cx| (s.0.get(w, cx).clamp(0., 1.), s.1.clone()));
+        let h = h_cell.get();
+        div()
+            .id(self.id)
+            .mt(px(-self.parent_gap * (1. - amt)))
+            .w_full()
+            .flex_none()
+            .when(amt < 0.998, |v| v.h(h * amt).overflow_hidden())
+            .opacity(amt)
+            .child(
+                div()
+                    .relative()
+                    .top(px(6. * (1. - amt)))
+                    .w_full()
+                    .flex_none()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(b) = bounds.first()
+                            && b.size.height > px(0.)
+                        {
+                            h_cell.set(b.size.height);
+                        }
+                    })
+                    .child(self.content),
+            )
+    }
+}
+
 /// Feature-section gallery block showcasing expandable gradient agent panels and a live product screen.
 pub struct AgentGalleryBlock {
     id: ElementId,
@@ -615,7 +684,8 @@ pub struct AgentGalleryBlock {
     pos_slide: Slide,
     open_slides: Vec<Slide>,
     hover_slides: Vec<Slide>,
-    user_notes: Vec<(SharedString, SharedString)>,
+    user_notes: Vec<(usize, SharedString, SharedString)>,
+    next_note_seq: usize,
     composer_editor: Option<Entity<Editor>>,
     search_filter_all: bool,
     loading: bool,
@@ -653,6 +723,7 @@ impl AgentGalleryBlock {
             open_slides,
             hover_slides,
             user_notes: Vec::new(),
+            next_note_seq: 0,
             composer_editor: None,
             search_filter_all: true,
             loading: false,
@@ -833,7 +904,10 @@ impl AgentGalleryBlock {
         }
         let item_id = self.items[self.active_index].id.clone();
         let text: SharedString = raw.into();
-        self.user_notes.insert(0, (item_id.clone(), text.clone()));
+        let seq = self.next_note_seq;
+        self.next_note_seq += 1;
+        self.user_notes
+            .insert(0, (seq, item_id.clone(), text.clone()));
         ed.update(cx, |e, cx| e.set_value("", w, cx));
         self.toast = Some((
             tr(cx, "Added to agent context", "已添加到智能体上下文").into(),
@@ -1066,6 +1140,7 @@ impl AgentGalleryBlock {
         &self,
         item: &GalleryItem,
         open_amt: f32,
+        is_active: bool,
         compact: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -1135,61 +1210,50 @@ impl AgentGalleryBlock {
             .justify_center()
             .children(pro_app_artwork("kense", 12., cx));
 
-        let switcher = activate(
+        let id_sfx = if is_active {
+            String::new()
+        } else {
+            format!("-cls-{}", item.id)
+        };
+
+        let switcher = pro_tactile(
+            pro_eid(&self.id, format!("screen-switcher{id_sfx}")),
+            tr(cx, "Switch showcase agent", "切换展示智能体"),
+            6.,
+            screen_card,
+            p.hover,
+            p.line_strong,
+            p.line_strong,
+            false,
             div()
-                .id(pro_eid(&self.id, "screen-switcher"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Switch showcase agent", "切换展示智能体"))
-                .tab_index(0)
                 .h(px(26.))
                 .pl(px(6.))
                 .pr(px(7.))
-                .rounded(px(6.))
-                .bg(screen_card)
-                .border_1()
-                .border_color(p.line_strong)
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_color(p.focus))
                 .child(small_mark)
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .truncate()
-                        .child(display_name.clone()),
-                )
+                .child(pro_swap_label(
+                    pro_eid(&self.id, format!("screen-sw-lbl{id_sfx}")),
+                    display_name.clone(),
+                    12.,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ))
                 .child(pro_svg("0 0 24 24", CHEVRON_UP_DOWN_SVG, 11., p.muted)),
             cx,
             |this, _, cx| {
                 this.select_next(cx);
             },
-        );
+        )
+        .flex_none();
 
-        let new_agent_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "screen-new-agent"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "New agent", "新建智能体"))
-                .tab_index(0)
-                .h(px(26.))
-                .px(px(9.))
-                .rounded(px(6.))
-                .bg(p.primary)
-                .text_color(p.on_primary)
-                .text_size(px(12.))
-                .font_weight(FontWeight::MEDIUM)
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .cursor_pointer()
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(pro_icon(ProIcon::Plus, 12., p.on_primary))
-                .child(tr(cx, "New agent", "新建智能体")),
+        let new_agent_btn = pro_btn(
+            pro_eid(&self.id, format!("screen-new-agent{id_sfx}")),
+            tr(cx, "New agent", "新建智能体"),
+            Some(ProIcon::Plus),
+            ProBtnStyle::Primary,
+            true,
             cx,
             |this, _, cx| {
                 this.toast = Some((
@@ -1234,12 +1298,39 @@ impl AgentGalleryBlock {
                     .text_size(px(11.5))
                     .text_color(p.muted)
                     .child(pro_icon(ProIcon::Refresh, 11., p.faint))
-                    .child(item.synced_ago.clone()),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, format!("screen-sync-lbl{id_sfx}")),
+                        item.synced_ago.clone(),
+                        11.5,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
 
         let kpi_count = if compact { 2 } else { 4 };
         let mut kpi_row = div().mt(px(16.)).flex().items_center().gap(px(14.));
-        for kpi in item.kpis.iter().take(kpi_count) {
+        for (kpi_idx, kpi) in item.kpis.iter().take(kpi_count).enumerate() {
+            let val_el =
+                if is_active && let Some((pfx, num, dec, sfx)) = parse_kpi_numeric(&kpi.value) {
+                    pro_rolling_number(
+                        pro_eid(&self.id, format!("screen-kpi-roll-{kpi_idx}")),
+                        num,
+                        dec,
+                        pfx,
+                        sfx,
+                        12.5,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )
+                } else {
+                    div()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.ink)
+                        .child(kpi.value.clone())
+                        .into_any_element()
+                };
+
             kpi_row = kpi_row.child(
                 div()
                     .flex_1()
@@ -1261,14 +1352,7 @@ impl AgentGalleryBlock {
                                     .truncate()
                                     .child(translate_kpi_label(&kpi.label, cx).to_owned()),
                             )
-                            .child(
-                                div()
-                                    .mt(px(1.))
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(kpi.value.clone()),
-                            ),
+                            .child(div().mt(px(1.)).child(val_el)),
                     )
                     .child(Self::render_mini_sparkline(&kpi.spark, p.faint, p.muted)),
             );
@@ -1290,7 +1374,7 @@ impl AgentGalleryBlock {
             .items_center()
             .self_start()
             .child(pro_pill_indicator(
-                pro_eid(&self.id, "screen-tabs-pill"),
+                pro_eid(&self.id, format!("screen-tabs-pill{id_sfx}")),
                 self.screen_tab.key(),
                 tab_sensor.clone(),
                 6.,
@@ -1302,41 +1386,50 @@ impl AgentGalleryBlock {
         for tab in GalleryScreenTab::ALL {
             let active = self.screen_tab == tab;
             let item_id = item.id.clone();
-            tabs_bar = tabs_bar.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("screen-tab-{}", tab.key())))
-                    .role(Role::Tab)
-                    .aria_selected(active)
-                    .tab_index(0)
-                    .relative()
-                    .h(px(25.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if active { p.ink } else { p.text })
-                    .cursor_pointer()
-                    .when(active, |d| d.child(pro_mark_selected(&tab_sensor)))
-                    .child(tab.label(cx)),
-                cx,
-                move |this, _, cx| {
-                    if this.screen_tab != tab {
-                        this.screen_tab = tab;
-                        cx.emit(AgentGalleryEvent::TabChanged {
-                            item_id: item_id.clone(),
-                            tab,
-                        });
-                        cx.notify();
-                    }
-                },
-            ));
+            let tab_lbl = tab.label(cx);
+            tabs_bar = tabs_bar.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("screen-tab-{}{id_sfx}", tab.key())),
+                    tab_lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    div()
+                        .h(px(25.))
+                        .px(px(10.))
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if active { p.ink } else { p.text })
+                        .child(tab_lbl),
+                    cx,
+                    move |this, _, cx| {
+                        if this.screen_tab != tab {
+                            this.screen_tab = tab;
+                            cx.emit(AgentGalleryEvent::TabChanged {
+                                item_id: item_id.clone(),
+                                tab,
+                            });
+                            cx.notify();
+                        }
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(active, |d| d.child(pro_mark_selected(&tab_sensor))),
+            );
         }
 
         let tab_body = match self.screen_tab {
-            GalleryScreenTab::Context => self.render_context_tab(item, screen_card, &p, cx),
-            GalleryScreenTab::Runs => self.render_runs_tab(item, screen_card, &p, cx),
+            GalleryScreenTab::Context => {
+                self.render_context_tab(item, &id_sfx, screen_card, &p, cx)
+            }
+            GalleryScreenTab::Runs => self.render_runs_tab(item, &id_sfx, screen_card, &p, cx),
             GalleryScreenTab::Tools => self.render_tools_tab(item, screen_card, &p, cx),
             GalleryScreenTab::Settings => self.render_settings_tab(item, screen_card, &p, cx),
         };
@@ -1369,7 +1462,7 @@ impl AgentGalleryBlock {
             .child(kpi_row)
             .child(tabs_bar)
             .child(pro_view_transition(
-                pro_eid(&self.id, "screen-tab-vtx"),
+                pro_eid(&self.id, format!("screen-tab-vtx{id_sfx}")),
                 format!("{}-{}", item.id, self.screen_tab.key()),
                 tab_body,
             ));
@@ -1401,6 +1494,7 @@ impl AgentGalleryBlock {
     fn render_context_tab(
         &self,
         item: &GalleryItem,
+        id_sfx: &str,
         screen_card: Hsla,
         p: &ProPalette,
         cx: &mut Context<Self>,
@@ -1439,34 +1533,39 @@ impl AgentGalleryBlock {
                             .child(tr(cx, "Search context...", "搜索上下文...")),
                     ),
             )
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "screen-ctx-filter"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Toggle context filter", "切换上下文筛选"))
-                    .tab_index(0)
-                    .h(px(27.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(screen_card)
-                    .border_1()
-                    .border_color(p.line)
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover))
-                    .child(pro_icon(ProIcon::Filter, 12., p.muted))
-                    .child(filter_label),
-                cx,
-                |this, _, cx| {
-                    this.search_filter_all = !this.search_filter_all;
-                    cx.notify();
-                },
-            ));
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("screen-ctx-filter{id_sfx}")),
+                    tr(cx, "Toggle context filter", "切换上下文筛选"),
+                    6.,
+                    screen_card,
+                    p.hover,
+                    p.line,
+                    p.line_strong,
+                    !self.search_filter_all,
+                    div()
+                        .h(px(27.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .whitespace_nowrap()
+                        .child(pro_icon(ProIcon::Filter, 12., p.muted))
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, format!("screen-ctx-flbl{id_sfx}")),
+                            filter_label,
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        )),
+                    cx,
+                    |this, _, cx| {
+                        this.search_filter_all = !this.search_filter_all;
+                        cx.notify();
+                    },
+                )
+                .flex_none(),
+            );
 
         let composer_box = div()
             .flex_1()
@@ -1506,26 +1605,12 @@ impl AgentGalleryBlock {
                     .items_center()
                     .justify_between()
                     .child(pro_icon(ProIcon::Paperclip, 13., p.muted))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "screen-add-ctx"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Add context", "添加上下文"))
-                            .tab_index(0)
-                            .h(px(24.))
-                            .px(px(8.))
-                            .rounded(px(5.))
-                            .bg(screen_card)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .flex()
-                            .items_center()
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .child(tr(cx, "Add context", "添加上下文")),
+                    .child(pro_btn(
+                        pro_eid(&self.id, format!("screen-add-ctx{id_sfx}")),
+                        tr(cx, "Add context", "添加上下文"),
+                        Some(ProIcon::Plus),
+                        ProBtnStyle::Secondary,
+                        true,
                         cx,
                         |this, w, cx| {
                             this.submit_context(w, cx);
@@ -1542,40 +1627,42 @@ impl AgentGalleryBlock {
                 .child(composer_box),
         );
 
-        for (idx, (note_item_id, note_text)) in self.user_notes.iter().enumerate() {
+        for (seq, note_item_id, note_text) in &self.user_notes {
             if note_item_id == &item.id {
-                feed = feed.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("unote-{idx}")))
-                        .flex()
-                        .items_start()
-                        .gap(px(10.))
-                        .child(
-                            div()
-                                .size(px(24.))
-                                .rounded_full()
-                                .bg(p.chip)
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(pro_icon(ProIcon::Note, 12., p.muted)),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .rounded(px(8.))
-                                .bg(p.subtle)
-                                .border_1()
-                                .border_color(p.line)
-                                .px(px(10.))
-                                .py(px(6.))
-                                .text_size(px(12.))
-                                .text_color(p.ink)
-                                .child(note_text.clone()),
-                        ),
-                );
+                let row = div()
+                    .flex()
+                    .items_start()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .size(px(24.))
+                            .rounded_full()
+                            .bg(p.chip)
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_icon(ProIcon::Note, 12., p.muted)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .rounded(px(8.))
+                            .bg(p.subtle)
+                            .border_1()
+                            .border_color(p.line)
+                            .px(px(10.))
+                            .py(px(6.))
+                            .text_size(px(12.))
+                            .text_color(p.ink)
+                            .child(note_text.clone()),
+                    );
+                feed = feed.child(ContextNoteEntrance {
+                    id: pro_eid(&self.id, format!("unote-{seq}{id_sfx}")),
+                    parent_gap: 10.,
+                    content: row.into_any_element(),
+                });
             }
         }
 
@@ -1636,6 +1723,7 @@ impl AgentGalleryBlock {
     fn render_runs_tab(
         &self,
         item: &GalleryItem,
+        id_sfx: &str,
         screen_card: Hsla,
         p: &ProPalette,
         cx: &App,
@@ -1672,20 +1760,13 @@ impl AgentGalleryBlock {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(
-                        div()
-                            .size(px(18.))
-                            .rounded_full()
-                            .bg(p.green_soft)
-                            .text_color(p.green_ink)
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(format!("{}", idx + 1)),
-                    )
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("step-chk-{}-{idx}{id_sfx}", item.id)),
+                        true,
+                        16.,
+                        false,
+                        p.green,
+                    ))
                     .child(
                         div()
                             .flex_1()
@@ -2090,14 +2171,20 @@ impl Render for AgentGalleryBlock {
                 translate_agent_name(&item_snapshot.id, &item_snapshot.name, cx).into()
             };
 
+            let is_open = idx == self.active_index;
             let screen_el = if open_amt > 0.02 {
-                Some(self.render_product_screen(&item_snapshot, open_amt, ultra_narrow, cx))
+                Some(self.render_product_screen(
+                    &item_snapshot,
+                    open_amt,
+                    is_open,
+                    ultra_narrow,
+                    cx,
+                ))
             } else {
                 None
             };
 
             let label_alpha = (1.0 - open_amt * 2.5).clamp(0., 1.);
-            let is_open = idx == self.active_index;
 
             let mut panel = div()
                 .id(pro_eid(&self.id, format!("panel-{idx}")))
@@ -2241,53 +2328,35 @@ impl Render for AgentGalleryBlock {
             open_w
         };
 
-        let prev_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "prev-agent"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Previous agent", "上一个智能体"))
-                .tab_index(0)
-                .size(px(28.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.chip_hover))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .child(pro_icon(ProIcon::ChevronLeft, 14., p.ink)),
+        let prev_btn = pro_icon_btn(
+            pro_eid(&self.id, "prev-agent"),
+            tr(cx, "Previous agent", "上一个智能体"),
+            ProIcon::ChevronLeft,
+            28.,
+            false,
             cx,
             |this, _, cx| {
                 this.select_prev(cx);
             },
-        );
+        )
+        .bg(p.card)
+        .border_1()
+        .border_color(p.line_strong);
 
-        let next_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "next-agent"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Next agent", "下一个智能体"))
-                .tab_index(0)
-                .size(px(28.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.chip_hover))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .child(pro_icon(ProIcon::ChevronRight, 14., p.ink)),
+        let next_btn = pro_icon_btn(
+            pro_eid(&self.id, "next-agent"),
+            tr(cx, "Next agent", "下一个智能体"),
+            ProIcon::ChevronRight,
+            28.,
+            false,
             cx,
             |this, _, cx| {
                 this.select_next(cx);
             },
-        );
+        )
+        .bg(p.card)
+        .border_1()
+        .border_color(p.line_strong);
 
         let footer = div()
             .w(px(foot_w))

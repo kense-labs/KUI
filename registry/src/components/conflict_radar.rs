@@ -7,13 +7,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_eid, pro_empty_state,
-        pro_skeleton_bar, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         family::disabled_motion,
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -438,7 +440,13 @@ impl Render for ConflictRadar {
                         .text_size(px(12.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.green_ink)
-                        .child(pro_icon(ProIcon::Check, 12.5, p.green_ink))
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, "merged-chk"),
+                            true,
+                            13.0,
+                            false,
+                            p.green,
+                        ))
                         .child(tr(cx, "Merged", "已合并分支")),
                 )
                 .child(pro_btn(
@@ -466,19 +474,11 @@ impl Render for ConflictRadar {
                 },
             )
             .into_any_element()
-        } else {
-            let wait_txt = if running_n > 0 {
-                if tr(cx, "en", "zh") == "zh" {
-                    format!("等待 {running_n} 个分支完成")
-                } else {
-                    format!("Waiting for {running_n} agents")
-                }
-            } else if unresolved_n == 1 {
-                tr(cx, "1 conflict left", "剩余 1 处冲突").to_string()
-            } else if tr(cx, "en", "zh") == "zh" {
-                format!("剩余 {unresolved_n} 处冲突")
+        } else if running_n > 0 {
+            let wait_txt = if tr(cx, "en", "zh") == "zh" {
+                format!("等待 {running_n} 个分支完成")
             } else {
-                format!("{unresolved_n} conflicts left")
+                format!("Waiting for {running_n} agents")
             };
             div()
                 .h(px(26.0))
@@ -493,6 +493,35 @@ impl Render for ConflictRadar {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.muted)
                 .child(wait_txt)
+                .into_any_element()
+        } else {
+            let is_zh = tr(cx, "en", "zh") == "zh";
+            let suffix = if is_zh {
+                " 处冲突待解"
+            } else if unresolved_n == 1 {
+                " conflict left"
+            } else {
+                " conflicts left"
+            };
+            div()
+                .h(px(26.0))
+                .px(px(9.0))
+                .rounded(px(6.0))
+                .bg(p.chip)
+                .border_1()
+                .border_color(p.line)
+                .flex()
+                .items_center()
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, "unresolved-cnt"),
+                    unresolved_n as f64,
+                    0,
+                    if is_zh { "剩余 " } else { "" },
+                    suffix,
+                    12.0,
+                    FontWeight::MEDIUM,
+                    p.muted,
+                ))
                 .into_any_element()
         };
 
@@ -623,8 +652,8 @@ impl Render for ConflictRadar {
                 .into_any_element();
         }
 
-        let matrix = self.render_matrix(elapsed_secs, elapsed_ms, reduced, &p, cx);
-        let picker = self.render_resolution_picker(elapsed_ms, &p, cx);
+        let matrix = self.render_matrix(elapsed_secs, elapsed_ms, reduced, &p, w, cx);
+        let picker = self.render_resolution_picker(elapsed_ms, &p, w, cx);
 
         div()
             .id(self.id.clone())
@@ -658,16 +687,28 @@ impl ConflictRadar {
         elapsed_ms: f32,
         reduced: bool,
         p: &ProPalette,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let col_w = 104.0f32;
         let n_agents = self.agents.len();
         let right_w = col_w * n_agents as f32;
+        let active_col_focus = self
+            .hovered_agent_col
+            .or_else(|| self.hovered_cell.map(|(_, c)| c));
 
         // Column header row
         let mut head_cells = div().w(px(right_w)).flex_none().h_full().flex();
         for (c_idx, ag) in self.agents.iter().enumerate() {
             let hovered = self.hovered_agent_col == Some(c_idx);
+            let col_lit = active_col_focus.is_none_or(|fc| fc == c_idx);
+            let col_op = pro_spring_f32(
+                pro_eid(&self.id, format!("cr-hcol-op-{c_idx}")),
+                if col_lit { 1.0 } else { 0.48 },
+                0.20,
+                w,
+                cx,
+            );
             let avatar_col = ag.color.unwrap_or(p.accent_info);
             let is_running = ag.status == RadarAgentStatus::Running;
             let avatar =
@@ -691,6 +732,136 @@ impl ConflictRadar {
             let kept_count = self.resolved.values().filter(|&aid| aid == &ag.id).count();
             let model_str = ag.model.clone();
 
+            let status_lbl = if is_running {
+                tr(cx, "Running", "编写中").to_string()
+            } else {
+                tr(cx, "Ready", "已就绪").to_string()
+            };
+            let files_lbl = tr(cx, "files", "文件").to_string();
+            let open_lbl = tr(cx, "open", "冲突").to_string();
+            let kept_lbl = tr(cx, "kept", "采纳").to_string();
+            let kpi_files_id = pro_eid(&self.id, format!("kpi-f-{c_idx}"));
+            let kpi_open_id = pro_eid(&self.id, format!("kpi-o-{c_idx}"));
+            let kpi_kept_id = pro_eid(&self.id, format!("kpi-k-{c_idx}"));
+            let p_copy = *p;
+            let name_for_pop = name_txt.clone();
+
+            let pop_presence = pro_popover_presence(
+                pro_eid(&self.id, format!("hcol-pop-{c_idx}")),
+                hovered,
+                move || {
+                    div()
+                        .w(px(214.0))
+                        .p(px(10.0))
+                        .rounded(px(9.0))
+                        .bg(p_copy.card)
+                        .border_1()
+                        .border_color(p_copy.line_strong)
+                        .shadow_lg()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.0))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(p_copy.strong)
+                                        .child(name_for_pop),
+                                )
+                                .child(
+                                    div()
+                                        .px(px(6.0))
+                                        .h(px(18.0))
+                                        .rounded(px(4.5))
+                                        .bg(if is_running {
+                                            p_copy.accent_soft
+                                        } else {
+                                            p_copy.chip
+                                        })
+                                        .flex()
+                                        .items_center()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(if is_running {
+                                            p_copy.accent_info
+                                        } else {
+                                            p_copy.muted
+                                        })
+                                        .child(status_lbl),
+                                ),
+                        )
+                        .when_some(model_str, |d, m| {
+                            d.child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(11.0))
+                                    .text_color(p_copy.muted)
+                                    .child(m),
+                            )
+                        })
+                        .child(
+                            div()
+                                .pt(px(4.0))
+                                .flex()
+                                .gap(px(5.0))
+                                .child(kpi_mini_badge(
+                                    kpi_files_id,
+                                    files_touched,
+                                    &files_lbl,
+                                    p_copy.ink,
+                                    p_copy.muted,
+                                    p_copy.subtle,
+                                    p_copy.line,
+                                ))
+                                .child(kpi_mini_badge(
+                                    kpi_open_id,
+                                    open_conflicts,
+                                    &open_lbl,
+                                    if open_conflicts > 0 {
+                                        p_copy.amber_ink
+                                    } else {
+                                        p_copy.ink
+                                    },
+                                    p_copy.muted,
+                                    p_copy.subtle,
+                                    p_copy.line,
+                                ))
+                                .child(kpi_mini_badge(
+                                    kpi_kept_id,
+                                    kept_count,
+                                    &kept_lbl,
+                                    if kept_count > 0 {
+                                        p_copy.green_ink
+                                    } else {
+                                        p_copy.ink
+                                    },
+                                    p_copy.muted,
+                                    p_copy.subtle,
+                                    p_copy.line,
+                                )),
+                        )
+                        .into_any_element()
+                },
+            );
+            let positioned_pop = if c_idx + 1 == n_agents {
+                div()
+                    .absolute()
+                    .top(px(34.0))
+                    .right(px(6.0))
+                    .child(pop_presence)
+            } else {
+                div()
+                    .absolute()
+                    .top(px(34.0))
+                    .left(px(-36.0))
+                    .child(pop_presence)
+            };
+
             head_cells = head_cells.child(
                 div()
                     .id(pro_eid(&self.id, format!("head-col-{c_idx}")))
@@ -712,111 +883,24 @@ impl ConflictRadar {
                         }
                         cx.notify();
                     }))
-                    .child(avatar)
                     .child(
                         div()
-                            .truncate()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(name_txt.clone()),
-                    )
-                    .when(hovered, |cell| {
-                        let pop_el = div()
-                            .w(px(214.0))
-                            .p(px(10.0))
-                            .rounded(px(9.0))
-                            .bg(p.card)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .shadow_lg()
                             .flex()
-                            .flex_col()
-                            .gap(px(4.0))
+                            .items_center()
+                            .gap(px(6.0))
+                            .min_w_0()
+                            .opacity(col_op)
+                            .child(avatar)
                             .child(
                                 div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .child(
-                                        div()
-                                            .text_size(px(12.5))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(p.strong)
-                                            .child(name_txt),
-                                    )
-                                    .child(
-                                        div()
-                                            .px(px(6.0))
-                                            .h(px(18.0))
-                                            .rounded(px(4.5))
-                                            .bg(if is_running { p.accent_soft } else { p.chip })
-                                            .flex()
-                                            .items_center()
-                                            .text_size(px(10.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(if is_running {
-                                                p.accent_info
-                                            } else {
-                                                p.muted
-                                            })
-                                            .child(if is_running {
-                                                tr(cx, "Running", "编写中")
-                                            } else {
-                                                tr(cx, "Ready", "已就绪")
-                                            }),
-                                    ),
-                            )
-                            .when_some(model_str, |d, m| {
-                                d.child(
-                                    div()
-                                        .truncate()
-                                        .text_size(px(11.0))
-                                        .text_color(p.muted)
-                                        .child(m),
-                                )
-                            })
-                            .child(
-                                div()
-                                    .pt(px(4.0))
-                                    .flex()
-                                    .gap(px(5.0))
-                                    .child(kpi_mini_badge(
-                                        files_touched,
-                                        tr(cx, "files", "文件"),
-                                        p.ink,
-                                        p.muted,
-                                        p.subtle,
-                                        p.line,
-                                    ))
-                                    .child(kpi_mini_badge(
-                                        open_conflicts,
-                                        tr(cx, "open", "冲突"),
-                                        if open_conflicts > 0 {
-                                            p.amber_ink
-                                        } else {
-                                            p.ink
-                                        },
-                                        p.muted,
-                                        p.subtle,
-                                        p.line,
-                                    ))
-                                    .child(kpi_mini_badge(
-                                        kept_count,
-                                        tr(cx, "kept", "采纳"),
-                                        if kept_count > 0 { p.green_ink } else { p.ink },
-                                        p.muted,
-                                        p.subtle,
-                                        p.line,
-                                    )),
-                            );
-                        let positioned = if c_idx + 1 == n_agents {
-                            div().absolute().top(px(34.0)).right(px(6.0)).child(pop_el)
-                        } else {
-                            div().absolute().top(px(34.0)).left(px(-36.0)).child(pop_el)
-                        };
-                        cell.child(positioned)
-                    }),
+                                    .truncate()
+                                    .text_size(px(12.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.muted)
+                                    .child(name_txt),
+                            ),
+                    )
+                    .child(positioned_pop),
             );
         }
 
@@ -861,6 +945,22 @@ impl ConflictRadar {
             let is_settled = has_overlap && chosen_agent.is_some();
             let is_open_conflict = has_overlap && chosen_agent.is_none();
             let is_selected = self.selected_path.as_ref() == Some(&file.path);
+
+            let row_lit = if let Some((hr, _)) = self.hovered_cell {
+                hr == r_idx
+            } else if let Some(hc) = self.hovered_agent_col {
+                let ag_id = &self.agents[hc].id;
+                file.edits.iter().any(|e| &e.agent_id == ag_id)
+            } else {
+                true
+            };
+            let row_op = pro_spring_f32(
+                pro_eid(&self.id, format!("cr-row-op-{r_idx}")),
+                if row_lit { 1.0 } else { 0.38 },
+                0.20,
+                w,
+                cx,
+            );
 
             let dot_col = if is_open_conflict {
                 p.amber_ink
@@ -926,7 +1026,7 @@ impl ConflictRadar {
                 let cell_hovered = self.hovered_cell == Some((r_idx, c_idx));
                 let is_conflict_participant = overlap_cols.contains(&c_idx);
 
-                let (bar_w, bar_h, bar_rad, bar_bg, bar_edge, tip_state) = match edit_opt {
+                let (target_bar_w, bar_h, bar_rad, bar_bg, bar_edge, tip_state) = match edit_opt {
                     None => (4.0, 4.0, 99.0, p.chip_hover, transparent_black(), None),
                     Some(ed) => {
                         if is_conflict_participant {
@@ -989,7 +1089,19 @@ impl ConflictRadar {
                     }
                 };
 
+                let bar_w = pro_spring_f32(
+                    pro_eid(&self.id, format!("cr-bw-{r_idx}-{c_idx}")),
+                    target_bar_w,
+                    0.24,
+                    w,
+                    cx,
+                );
+
                 let ag_lbl = ag.display_name(cx).to_string();
+                let cell_pop_id = pro_eid(&self.id, format!("cell-pop-{r_idx}-{c_idx}"));
+                let cell_num_id = pro_eid(&self.id, format!("cell-lns-{r_idx}-{c_idx}"));
+                let p_cell = *p;
+
                 cells_row = cells_row.child(
                     div()
                         .id(pro_eid(&self.id, format!("cell-{r_idx}-{c_idx}")))
@@ -1015,71 +1127,87 @@ impl ConflictRadar {
                                 .h(px(bar_h))
                                 .rounded(px(bar_rad))
                                 .bg(bar_bg)
+                                .opacity(row_op)
                                 .when(bar_edge.a > 0.01, |d| d.border_1().border_color(bar_edge)),
                         )
-                        .when_some(
-                            tip_state.filter(|_| cell_hovered),
-                            |cell, (st_lbl, s_bg, s_fg, (l0, l1))| {
-                                let tip_box = div()
-                                    .px(px(8.5))
-                                    .py(px(5.5))
-                                    .rounded(px(7.0))
-                                    .bg(p.card)
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .shadow_md()
-                                    .whitespace_nowrap()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.0))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.5))
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .text_color(p.ink)
-                                                    .child(ag_lbl),
-                                            )
-                                            .child(
-                                                div()
-                                                    .px(px(5.0))
-                                                    .h(px(16.0))
-                                                    .rounded(px(4.0))
-                                                    .bg(s_bg)
-                                                    .flex()
-                                                    .items_center()
-                                                    .text_size(px(10.0))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(s_fg)
-                                                    .child(st_lbl),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .text_color(p.muted)
-                                            .child(format!("Lines {l0}–{l1}")),
-                                    );
-                                let pos = if c_idx + 1 == n_agents {
+                        .when_some(tip_state, |cell, (st_lbl, s_bg, s_fg, (l0, l1))| {
+                            let span_lines = l1.saturating_sub(l0) + 1;
+                            let tip_presence =
+                                pro_popover_presence(cell_pop_id, cell_hovered, move || {
                                     div()
-                                        .absolute()
-                                        .bottom(px(30.0))
-                                        .right(px(6.0))
-                                        .child(tip_box)
-                                } else {
-                                    div()
-                                        .absolute()
-                                        .bottom(px(30.0))
-                                        .left(px(-16.0))
-                                        .child(tip_box)
-                                };
-                                cell.child(pos)
-                            },
-                        ),
+                                        .px(px(8.5))
+                                        .py(px(5.5))
+                                        .rounded(px(7.0))
+                                        .bg(p_cell.card)
+                                        .border_1()
+                                        .border_color(p_cell.line_strong)
+                                        .shadow_md()
+                                        .whitespace_nowrap()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(2.0))
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(6.0))
+                                                .child(
+                                                    div()
+                                                        .text_size(px(11.5))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(p_cell.ink)
+                                                        .child(ag_lbl),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .px(px(5.0))
+                                                        .h(px(16.0))
+                                                        .rounded(px(4.0))
+                                                        .bg(s_bg)
+                                                        .flex()
+                                                        .items_center()
+                                                        .text_size(px(10.0))
+                                                        .font_weight(FontWeight::MEDIUM)
+                                                        .text_color(s_fg)
+                                                        .child(st_lbl),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(5.0))
+                                                .text_size(px(11.0))
+                                                .text_color(p_cell.muted)
+                                                .child(format!("L{l0}–{l1} ·"))
+                                                .child(pro_rolling_number(
+                                                    cell_num_id,
+                                                    span_lines as f64,
+                                                    0,
+                                                    "",
+                                                    " ln",
+                                                    11.0,
+                                                    FontWeight::MEDIUM,
+                                                    p_cell.ink,
+                                                )),
+                                        )
+                                        .into_any_element()
+                                });
+                            let pos = if c_idx + 1 == n_agents {
+                                div()
+                                    .absolute()
+                                    .bottom(px(30.0))
+                                    .right(px(6.0))
+                                    .child(tip_presence)
+                            } else {
+                                div()
+                                    .absolute()
+                                    .bottom(px(30.0))
+                                    .left(px(-16.0))
+                                    .child(tip_presence)
+                            };
+                            cell.child(pos)
+                        }),
                 );
             }
 
@@ -1094,15 +1222,33 @@ impl ConflictRadar {
             };
 
             let file_path = file.path.clone();
-            let hover_bg = p.hover;
+            let file_aria = file.path.clone();
+            let lead_indicator: AnyElement = if is_settled {
+                pro_check_draw(
+                    pro_eid(&self.id, format!("frow-chk-{r_idx}")),
+                    true,
+                    12.0,
+                    false,
+                    p.green,
+                )
+            } else {
+                div()
+                    .size(px(6.0))
+                    .rounded_full()
+                    .flex_none()
+                    .bg(dot_col)
+                    .into_any_element()
+            };
+
             let file_cell = div()
                 .flex_1()
                 .min_w_0()
                 .px(px(16.0))
+                .opacity(row_op)
                 .flex()
                 .items_center()
                 .gap(px(9.0))
-                .child(div().size(px(6.0)).rounded_full().flex_none().bg(dot_col))
+                .child(lead_indicator)
                 .child(
                     div()
                         .flex_1()
@@ -1126,42 +1272,54 @@ impl ConflictRadar {
                         ),
                 );
 
-            let mut row_el = div()
-                .id(pro_eid(&self.id, format!("frow-{r_idx}")))
+            if has_overlap {
+                let row_inner = div()
+                    .h(px(36.0))
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .child(file_cell)
+                    .child(cells_row);
+
+                let tact_row = pro_tactile(
+                    pro_eid(&self.id, format!("frow-{r_idx}")),
+                    file_aria,
+                    0.0,
+                    row_bg,
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    is_selected,
+                    row_inner,
+                    cx,
+                    move |this, _, cx| {
+                        this.selected_path = Some(file_path.clone());
+                        cx.emit(ConflictRadarEvent::SelectedFile(file_path.clone()));
+                        cx.notify();
+                    },
+                )
                 .role(Role::Row)
                 .h(px(36.0))
                 .w_full()
                 .border_t_1()
-                .border_color(p.line)
-                .bg(row_bg)
-                .flex()
-                .items_center();
+                .border_color(p.line);
 
-            if has_overlap {
-                row_el = row_el
-                    .cursor_pointer()
-                    .tab_index(0)
-                    .hover(move |s| s.bg(hover_bg))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_key_down(cx.listener({
-                        let file_path = file_path.clone();
-                        move |this, ev: &KeyDownEvent, _, cx| {
-                            if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                                this.selected_path = Some(file_path.clone());
-                                cx.emit(ConflictRadarEvent::SelectedFile(file_path.clone()));
-                                cx.stop_propagation();
-                                cx.notify();
-                            }
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.selected_path = Some(file_path.clone());
-                        cx.emit(ConflictRadarEvent::SelectedFile(file_path.clone()));
-                        cx.notify();
-                    }));
+                table = table.child(tact_row);
+            } else {
+                let row_el = div()
+                    .id(pro_eid(&self.id, format!("frow-{r_idx}")))
+                    .role(Role::Row)
+                    .h(px(36.0))
+                    .w_full()
+                    .border_t_1()
+                    .border_color(p.line)
+                    .bg(row_bg)
+                    .flex()
+                    .items_center()
+                    .child(file_cell)
+                    .child(cells_row);
+                table = table.child(row_el);
             }
-
-            table = table.child(row_el.child(file_cell).child(cells_row));
         }
 
         table
@@ -1171,6 +1329,7 @@ impl ConflictRadar {
         &self,
         elapsed_ms: f32,
         p: &ProPalette,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let conflict_files: Vec<RadarFile> = self
@@ -1213,8 +1372,31 @@ impl ConflictRadar {
         let min_line = target.edits.iter().map(|e| e.lines.0).min().unwrap_or(1);
         let max_line = target.edits.iter().map(|e| e.lines.1).max().unwrap_or(1);
 
-        // Quick file conflict switcher tabs when multiple conflicting files exist
-        let mut conflict_tabs = div().flex().items_center().gap(px(5.0));
+        // Quick file conflict switcher tabs with liquid `pro_pill_indicator`
+        let tab_sensor = pro_selection_sensor();
+        let pill_fill: Hsla = if p.dark {
+            rgb(0x26262a).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let mut conflict_tabs = div()
+            .relative()
+            .p(px(2.0))
+            .rounded(px(7.0))
+            .bg(p.chip)
+            .flex()
+            .items_center()
+            .gap(px(3.0))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "ctab-pill"),
+                target.path.clone(),
+                tab_sensor.clone(),
+                5.5,
+                pill_fill,
+                Some(p.line_strong),
+                true,
+            ));
+
         for cf in &conflict_files {
             let active = cf.path == target.path;
             let settled = self.resolved.contains_key(&cf.path);
@@ -1227,20 +1409,10 @@ impl ConflictRadar {
                     .aria_label(short_name.clone())
                     .aria_toggled(active.into())
                     .tab_index(0)
+                    .relative()
                     .h(px(22.0))
                     .px(px(7.5))
-                    .rounded(px(5.0))
-                    .bg(if active {
-                        p.select
-                    } else {
-                        transparent_black()
-                    })
-                    .border_1()
-                    .border_color(if active {
-                        p.line_strong
-                    } else {
-                        transparent_black()
-                    })
+                    .rounded(px(5.5))
                     .cursor_pointer()
                     .flex()
                     .items_center()
@@ -1253,11 +1425,22 @@ impl ConflictRadar {
                         cx.emit(ConflictRadarEvent::SelectedFile(cpath.clone()));
                         cx.notify();
                     }))
-                    .child(div().size(px(5.5)).rounded_full().bg(if settled {
-                        p.green_ink
+                    .when(active, |d| d.child(pro_mark_selected(&tab_sensor)))
+                    .child(if settled {
+                        pro_check_draw(
+                            pro_eid(&self.id, format!("ctab-chk-{}", cf.path)),
+                            true,
+                            12.0,
+                            false,
+                            p.green,
+                        )
                     } else {
-                        p.amber_ink
-                    }))
+                        div()
+                            .size(px(5.5))
+                            .rounded_full()
+                            .bg(p.amber_ink)
+                            .into_any_element()
+                    })
                     .child(short_name),
             );
         }
@@ -1282,6 +1465,13 @@ impl ConflictRadar {
             };
             let is_kept = chosen_id.as_ref() == Some(&ag.id);
             let is_lost = chosen_id.is_some() && !is_kept;
+            let card_op = pro_spring_f32(
+                pro_eid(&self.id, format!("way-op-{}-{}", target.path, ag.id)),
+                if is_lost { 0.56 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
             let avatar_col = ag.color.unwrap_or(p.accent_info);
             let avatar = pro_agent_avatar(ag.id.as_ref(), avatar_col, 18.0, false, elapsed_ms, cx);
             let ag_name = ag.display_name(cx).to_string();
@@ -1291,104 +1481,117 @@ impl ConflictRadar {
                 .to_string();
             let path_for_pick = target.path.clone();
             let aid_for_pick = ag.id.clone();
-            let hover_bg = p.select;
+            let line_span = ed.lines.1.saturating_sub(ed.lines.0) + 1;
 
-            ways_row = ways_row.child(
-                div()
-                    .id(pro_eid(&self.id, format!("way-{}-{}", target.path, ag.id)))
-                    .role(Role::RadioButton)
-                    .aria_label(format!("{ag_name}: {summary_txt}"))
-                    .aria_toggled(is_kept.into())
-                    .tab_index(0)
-                    .flex_1()
-                    .min_w_0()
-                    .p(px(11.0))
-                    .rounded(px(8.0))
-                    .bg(if is_kept { p.card } else { p.subtle })
-                    .border_1()
-                    .border_color(if is_kept {
-                        p.green.opacity(0.55)
-                    } else {
-                        p.line
-                    })
-                    .opacity(if is_lost { 0.56 } else { 1.0 })
-                    .hover(move |s| s.bg(hover_bg).opacity(if is_lost { 0.85 } else { 1.0 }))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .cursor_pointer()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.5))
-                    .on_key_down(cx.listener({
-                        let path_for_pick = path_for_pick.clone();
-                        let aid_for_pick = aid_for_pick.clone();
-                        move |this, ev: &KeyDownEvent, _, cx| {
-                            if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                                this.resolve_conflict(
-                                    path_for_pick.as_ref(),
-                                    aid_for_pick.as_ref(),
-                                    cx,
-                                );
-                                cx.stop_propagation();
-                            }
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.resolve_conflict(path_for_pick.as_ref(), aid_for_pick.as_ref(), cx);
-                    }))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(7.0))
-                            .child(avatar)
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(ag_name),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.0))
-                                    .text_color(p.muted)
-                                    .child(format!("L{}–{}", ed.lines.0, ed.lines.1)),
-                            )
-                            .child(if is_kept {
-                                div()
-                                    .h(px(18.0))
-                                    .px(px(6.0))
-                                    .rounded(px(4.5))
-                                    .bg(p.green_soft)
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(3.0))
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.green_ink)
-                                    .child(pro_icon(ProIcon::Check, 10.5, p.green_ink))
-                                    .child(tr(cx, "Kept", "已选"))
-                                    .into_any_element()
-                            } else {
-                                div()
-                                    .size(px(14.0))
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .into_any_element()
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .line_height(px(17.5))
-                            .text_color(p.text)
-                            .child(summary_txt),
-                    ),
-            );
+            let way_inner = div()
+                .w_full()
+                .p(px(11.0))
+                .flex()
+                .flex_col()
+                .gap(px(6.5))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(7.0))
+                        .child(avatar)
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(ag_name.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .text_size(px(11.0))
+                                .text_color(p.muted)
+                                .child(format!("L{}–{}", ed.lines.0, ed.lines.1))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("way-ln-{}-{}", target.path, ag.id)),
+                                    line_span as f64,
+                                    0,
+                                    "(",
+                                    ")",
+                                    10.5,
+                                    FontWeight::NORMAL,
+                                    p.faint,
+                                )),
+                        )
+                        .child(if is_kept {
+                            div()
+                                .h(px(18.0))
+                                .px(px(6.0))
+                                .rounded(px(4.5))
+                                .bg(p.green_soft)
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .text_size(px(10.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.green_ink)
+                                .child(pro_check_draw(
+                                    pro_eid(&self.id, format!("way-chk-{}-{}", target.path, ag.id)),
+                                    true,
+                                    12.0,
+                                    false,
+                                    p.green,
+                                ))
+                                .child(tr(cx, "Kept", "已选"))
+                                .into_any_element()
+                        } else {
+                            div()
+                                .size(px(14.0))
+                                .rounded_full()
+                                .border_1()
+                                .border_color(p.line_strong)
+                                .into_any_element()
+                        }),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .line_height(px(17.5))
+                        .text_color(p.text)
+                        .child(summary_txt.clone()),
+                );
+
+            let way_card = pro_tactile(
+                pro_eid(&self.id, format!("way-{}-{}", target.path, ag.id)),
+                format!("{ag_name}: {summary_txt}"),
+                8.0,
+                if is_kept { p.card } else { p.subtle },
+                p.select,
+                if is_kept {
+                    p.green.opacity(0.55)
+                } else {
+                    p.line
+                },
+                if is_kept {
+                    p.green.opacity(0.78)
+                } else {
+                    p.line_strong
+                },
+                is_kept,
+                way_inner,
+                cx,
+                move |this, _, cx| {
+                    this.resolve_conflict(path_for_pick.as_ref(), aid_for_pick.as_ref(), cx);
+                },
+            )
+            .role(Role::RadioButton)
+            .aria_toggled(is_kept.into())
+            .flex_1()
+            .min_w_0()
+            .opacity(card_op);
+
+            ways_row = ways_row.child(way_card);
         }
 
         let inner = div()
@@ -1457,6 +1660,7 @@ fn legend_pill(bg: Hsla, edge: Hsla, label: &str) -> Div {
 }
 
 fn kpi_mini_badge(
+    num_id: ElementId,
     num: usize,
     lbl: &str,
     num_c: Hsla,
@@ -1476,13 +1680,16 @@ fn kpi_mini_badge(
         .items_center()
         .justify_center()
         .gap(px(3.5))
-        .child(
-            div()
-                .text_size(px(11.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(num_c)
-                .child(num.to_string()),
-        )
+        .child(pro_rolling_number(
+            num_id,
+            num as f64,
+            0,
+            "",
+            "",
+            11.5,
+            FontWeight::SEMIBOLD,
+            num_c,
+        ))
         .child(
             div()
                 .text_size(px(10.5))

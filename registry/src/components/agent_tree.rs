@@ -5,15 +5,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_connector_pulse,
-        pro_eid, pro_empty_state, pro_fold, pro_modal_appear, pro_rolling_number, pro_skeleton_bar,
-        pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mix_color,
+        pro_popover_presence, pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::{
-        control::activate,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
-    },
+    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
 };
 use gpui::{prelude::*, *};
 use std::{
@@ -211,8 +209,11 @@ pub struct AgentTree {
     root: Option<TreeAgent>,
     custom_data: bool,
     collapsed: HashSet<SharedString>,
+    hovered_id: Option<SharedString>,
     selected_id: Option<SharedString>,
+    last_selected_id: Option<SharedString>,
     header_pop: Option<HeaderFilterPopover>,
+    last_header_pop: Option<HeaderFilterPopover>,
     spawn_counter: usize,
     toast: Option<(SharedString, Instant)>,
     loading: bool,
@@ -235,8 +236,11 @@ impl AgentTree {
             root: Some(default_tree_root()),
             custom_data: false,
             collapsed: HashSet::new(),
+            hovered_id: None,
             selected_id: None,
+            last_selected_id: None,
             header_pop: None,
+            last_header_pop: None,
             spawn_counter: 0,
             toast: None,
             loading: false,
@@ -416,9 +420,11 @@ impl AgentTree {
         &self,
         node: &TreeAgent,
         full_width: bool,
+        dimmed: bool,
         sensor: Rc<Cell<Option<Bounds<Pixels>>>>,
         live_secs: u64,
         p: &ProPalette,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let nid = node.id.clone();
@@ -432,6 +438,21 @@ impl AgentTree {
         } else {
             node.elapsed_secs
         };
+        let target_op = if dimmed {
+            0.32
+        } else if node.status.is_muted() {
+            0.60
+        } else {
+            1.0
+        };
+        let card_op = pro_spring_f32(
+            pro_eid(&self.id, format!("tnode-op-{nid}")),
+            target_op,
+            0.22,
+            w,
+            cx,
+        )
+        .clamp(0.0, 1.0);
 
         let disp_name = if self.custom_data {
             node.name.clone()
@@ -477,7 +498,7 @@ impl AgentTree {
             )
         };
 
-        let status_pill = render_tree_status(node.status, p, cx);
+        let status_pill = render_tree_status(&self.id, &nid, node.status, p, cx);
 
         let mut task_row = div()
             .w_full()
@@ -565,31 +586,27 @@ impl AgentTree {
         };
 
         let hover_border = p.line_strong;
-        let focus_c = p.focus;
         let click_id = nid.clone();
+        let hov_id = nid.clone();
+        let is_sel = self.selected_id.as_ref() == Some(&nid);
 
-        let card = activate(
+        let card = pro_tactile(
+            pro_eid(&self.id, format!("tnode-{nid}")),
+            format!("{disp_name}: {}", node.status.label(cx)),
+            8.,
+            p.card,
+            pro_mix_color(p.card, p.hover, 0.72),
+            p.line,
+            hover_border,
+            is_sel,
             div()
-                .id(pro_eid(&self.id, format!("tnode-{nid}")))
-                .role(Role::TreeItem)
-                .aria_label(format!("{disp_name}: {}", node.status.label(cx)))
-                .tab_index(0)
-                .when(full_width, |d| d.w_full())
-                .when(!full_width, |d| d.w(px(220.)))
+                .w_full()
                 .relative()
-                .opacity(if node.status.is_muted() { 0.60 } else { 1.0 })
-                .rounded(px(8.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line)
                 .p(px(10.))
                 .pb(px(8.))
                 .flex()
                 .flex_col()
                 .gap(px(6.))
-                .cursor_pointer()
-                .hover(move |s| s.border_color(hover_border))
-                .focus_visible(move |s| s.border_color(focus_c))
                 .child(
                     canvas(
                         move |bounds, _, _| {
@@ -685,38 +702,53 @@ impl AgentTree {
                 let target = click_id.clone();
                 this.header_pop = None;
                 this.selected_id = Some(target.clone());
+                this.last_selected_id = Some(target.clone());
                 cx.emit(AgentTreeEvent::Selected { agent_id: target });
                 cx.notify();
             },
-        );
+        )
+        .role(Role::TreeItem)
+        .when(full_width, |d| d.w_full())
+        .when(!full_width, |d| d.w(px(220.)))
+        .opacity(card_op)
+        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+            let next = if *hovered {
+                Some(hov_id.clone())
+            } else if this.hovered_id.as_ref() == Some(&hov_id) {
+                None
+            } else {
+                this.hovered_id.clone()
+            };
+            if this.hovered_id != next {
+                this.hovered_id = next;
+                cx.notify();
+            }
+        }));
 
         if has_children && is_folded {
             let sub_cost: f64 = node.children.iter().map(rollup_cost).sum();
             let sub_run = count_descendants_by(node, |n| n.status == TreeStatus::Running);
             let sub_wait = count_descendants_by(node, |n| n.status == TreeStatus::Waiting);
             let unfold_id = nid.clone();
-            let hov_chip = p.chip_hover;
-            let summary_line = activate(
+            let summary_line = pro_tactile(
+                pro_eid(&self.id, format!("folded-line-{nid}")),
+                tr(cx, "Unfold branch", "展开已折叠分支"),
+                6.,
+                p.chip,
+                p.chip_hover,
+                p.line,
+                p.line_strong,
+                false,
                 div()
-                    .id(pro_eid(&self.id, format!("folded-line-{nid}")))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Unfold branch", "展开已折叠分支"))
-                    .when(full_width, |d| d.w_full())
-                    .when(!full_width, |d| d.w(px(220.)))
+                    .w_full()
                     .h(px(26.))
                     .px(px(9.))
-                    .rounded(px(6.))
-                    .bg(p.chip)
-                    .border_1()
-                    .border_color(p.line)
                     .flex()
                     .items_center()
                     .justify_between()
                     .gap(px(6.))
                     .text_size(px(11.))
                     .text_color(p.muted)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(hov_chip))
                     .child(div().truncate().child(if sub_wait > 0 {
                         format!(
                             "{desc_count} {} · {sub_wait} {}",
@@ -735,17 +767,24 @@ impl AgentTree {
                             tr(cx, "sub-agents folded", "个子智能体已折叠")
                         )
                     }))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(format!("${sub_cost:.2}")),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("folded-cost-{nid}")),
+                        sub_cost,
+                        2,
+                        "$",
+                        "",
+                        11.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )),
                 cx,
                 move |this, _, cx| {
                     this.toggle_branch(unfold_id.clone(), cx);
                 },
-            );
+            )
+            .when(full_width, |d| d.w_full())
+            .when(!full_width, |d| d.w(px(220.)))
+            .opacity(card_op);
             div()
                 .when(full_width, |d| d.w_full())
                 .when(!full_width, |d| d.w(px(220.)))
@@ -781,20 +820,12 @@ impl AgentTree {
             node.elapsed_secs
         };
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "close-tmodal"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close details", "关闭详情"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "close-tmodal"),
+            tr(cx, "Close details", "关闭详情"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.selected_id = None;
@@ -875,14 +906,32 @@ impl AgentTree {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(stat_col(
+                    .child(stat_col_el(
                         tr(cx, "Own cost", "自身花费"),
-                        format!("${:.2}", node.cost),
+                        pro_rolling_number(
+                            pro_eid(&self.id, format!("tmd-own-{nid}")),
+                            node.cost,
+                            2,
+                            "$",
+                            "",
+                            12.5,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        ),
                         p,
                     ))
-                    .child(stat_col(
+                    .child(stat_col_el(
                         tr(cx, "Branch total", "分支总计"),
-                        format!("${branch_total:.2}"),
+                        pro_rolling_number(
+                            pro_eid(&self.id, format!("tmd-br-{nid}")),
+                            branch_total,
+                            2,
+                            "$",
+                            "",
+                            12.5,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        ),
                         p,
                     ))
                     .child(stat_col(
@@ -1019,22 +1068,41 @@ impl AgentTree {
                 );
         }
 
-        div()
-            .id(pro_eid(&self.id, "tmodal-scrim"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.selected_id = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "tmodal-app-wrap"),
-                nid,
-                if p.dark { 0.48 } else { 0.22 },
-                dialog,
-            ))
-            .into_any_element()
+        let vtx = pro_view_transition(pro_eid(&self.id, "tmodal-vtx"), nid, dialog);
+        let dark = p.dark;
+        let scrim_id = pro_eid(&self.id, "tmodal-scrim");
+        let on_scrim = cx.listener(|this, _: &ClickEvent, w, cx| {
+            this.selected_id = None;
+            this.focus.focus(w, cx);
+            cx.notify();
+        });
+        pro_presence(
+            pro_eid(&self.id, "tmodal-pres"),
+            self.selected_id.is_some(),
+            0.20,
+            0.16,
+            move |amt| {
+                let scrim_a = (if dark { 0.48 } else { 0.22 }) * amt;
+                div()
+                    .id(scrim_id)
+                    .absolute()
+                    .inset_0()
+                    .bg(hsla(0., 0., 0., scrim_a))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p(px(16.))
+                    .on_click(on_scrim)
+                    .child(
+                        div()
+                            .relative()
+                            .top(px(8. * (1. - amt)))
+                            .opacity(amt)
+                            .child(vtx),
+                    )
+                    .into_any_element()
+            },
+        )
     }
 }
 
@@ -1159,26 +1227,26 @@ impl Render for AgentTree {
 
         let wait_btn = if !waiting_nodes.is_empty() {
             let active = self.header_pop == Some(HeaderFilterPopover::Waiting);
-            Some(activate(
+            let lbl = format!("{} {}", waiting_nodes.len(), tr(cx, "needs you", "待确认"));
+            Some(pro_tactile(
+                pro_eid(&self.id, "hdr-wait-btn"),
+                lbl.clone(),
+                5.,
+                p.amber_soft,
+                p.amber.opacity(0.24),
+                if active { p.amber } else { transparent_black() },
+                p.amber.opacity(0.55),
+                active,
                 div()
-                    .id(pro_eid(&self.id, "hdr-wait-btn"))
-                    .role(Role::Button)
                     .h(px(22.))
                     .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.amber_soft)
                     .text_color(p.amber_ink)
                     .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
                     .gap(px(3.))
-                    .cursor_pointer()
-                    .child(format!(
-                        "{} {}",
-                        waiting_nodes.len(),
-                        tr(cx, "needs you", "待确认")
-                    ))
+                    .child(lbl)
                     .child(pro_icon(
                         if active {
                             ProIcon::ChevronUp
@@ -1190,11 +1258,12 @@ impl Render for AgentTree {
                     )),
                 cx,
                 |this, _, cx| {
-                    this.header_pop = if this.header_pop == Some(HeaderFilterPopover::Waiting) {
-                        None
+                    if this.header_pop == Some(HeaderFilterPopover::Waiting) {
+                        this.header_pop = None;
                     } else {
-                        Some(HeaderFilterPopover::Waiting)
-                    };
+                        this.header_pop = Some(HeaderFilterPopover::Waiting);
+                        this.last_header_pop = Some(HeaderFilterPopover::Waiting);
+                    }
                     cx.notify();
                 },
             ))
@@ -1204,26 +1273,26 @@ impl Render for AgentTree {
 
         let fail_btn = if !failed_nodes.is_empty() {
             let active = self.header_pop == Some(HeaderFilterPopover::Failed);
-            Some(activate(
+            let lbl = format!("{} {}", failed_nodes.len(), tr(cx, "failed", "已失败"));
+            Some(pro_tactile(
+                pro_eid(&self.id, "hdr-fail-btn"),
+                lbl.clone(),
+                5.,
+                p.red_soft,
+                p.red.opacity(0.24),
+                if active { p.red } else { transparent_black() },
+                p.red.opacity(0.55),
+                active,
                 div()
-                    .id(pro_eid(&self.id, "hdr-fail-btn"))
-                    .role(Role::Button)
                     .h(px(22.))
                     .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.red_soft)
                     .text_color(p.red_ink)
                     .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
                     .gap(px(3.))
-                    .cursor_pointer()
-                    .child(format!(
-                        "{} {}",
-                        failed_nodes.len(),
-                        tr(cx, "failed", "已失败")
-                    ))
+                    .child(lbl)
                     .child(pro_icon(
                         if active {
                             ProIcon::ChevronUp
@@ -1235,11 +1304,12 @@ impl Render for AgentTree {
                     )),
                 cx,
                 |this, _, cx| {
-                    this.header_pop = if this.header_pop == Some(HeaderFilterPopover::Failed) {
-                        None
+                    if this.header_pop == Some(HeaderFilterPopover::Failed) {
+                        this.header_pop = None;
                     } else {
-                        Some(HeaderFilterPopover::Failed)
-                    };
+                        this.header_pop = Some(HeaderFilterPopover::Failed);
+                        this.last_header_pop = Some(HeaderFilterPopover::Failed);
+                    }
                     cx.notify();
                 },
             ))
@@ -1288,13 +1358,27 @@ impl Render for AgentTree {
                             this.add_step_spend(cx);
                         },
                     ))
-                    .child(format!("{total_agents} {}", tr(cx, "agents", "个智能体")))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "tree-tot-agents"),
+                        total_agents as f64,
+                        0,
+                        "",
+                        format!(" {}", tr(cx, "agents", "个智能体")),
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
                     .when(running_count > 0, |d| {
-                        d.child(
-                            div()
-                                .text_color(p.blue)
-                                .child(format!("{running_count} {}", tr(cx, "running", "运行中"))),
-                        )
+                        d.child(pro_rolling_number(
+                            pro_eid(&self.id, "tree-run-cnt"),
+                            running_count as f64,
+                            0,
+                            "",
+                            format!(" {}", tr(cx, "running", "运行中")),
+                            12.,
+                            FontWeight::NORMAL,
+                            p.blue,
+                        ))
                     })
                     .children(wait_btn)
                     .children(fail_btn)
@@ -1310,28 +1394,73 @@ impl Render for AgentTree {
                     )),
             );
 
+        // Connected-path spotlight (ancestors + descendants of hovered or selected node)
+        let focus_id = self.hovered_id.clone().or_else(|| self.selected_id.clone());
+        let connected_chain: Option<HashSet<SharedString>> = focus_id
+            .as_ref()
+            .map(|fid| collect_tree_chain(&root_node, fid));
+
         // Build card layout and connector sensors
         let mut sensors: HashMap<SharedString, Rc<Cell<Option<Bounds<Pixels>>>>> = HashMap::new();
-        let mut edges: Vec<(SharedString, SharedString, bool, bool)> = Vec::new();
+        let mut edges: Vec<(SharedString, SharedString, bool, bool, f32, f32)> = Vec::new();
 
         let root_sensor = Rc::new(Cell::new(None));
         sensors.insert(root_node.id.clone(), root_sensor.clone());
         let root_folded = self.collapsed.contains(&root_node.id);
+        let root_dimmed = connected_chain
+            .as_ref()
+            .is_some_and(|ch| !ch.contains(&root_node.id));
 
-        let root_card = self.render_node_card(&root_node, !wide, root_sensor, elapsed_secs, &p, cx);
+        let root_card = self.render_node_card(
+            &root_node,
+            !wide,
+            root_dimmed,
+            root_sensor,
+            elapsed_secs,
+            &p,
+            w,
+            cx,
+        );
 
         let mut l1_cols: Vec<AnyElement> = Vec::new();
         if !root_folded {
             for l1 in &root_node.children {
                 let s1 = Rc::new(Cell::new(None));
                 sensors.insert(l1.id.clone(), s1.clone());
+                let e1_in_chain = connected_chain
+                    .as_ref()
+                    .map(|ch| ch.contains(&root_node.id) && ch.contains(&l1.id))
+                    .unwrap_or(true);
+                let e1_spot = connected_chain.is_some() && e1_in_chain;
+                let e1_vis_v = pro_spring_f32(
+                    pro_eid(&self.id, format!("te-vis-{}-{}", root_node.id, l1.id)),
+                    if e1_in_chain { 1.0 } else { 0.22 },
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0.0, 1.0);
+                let e1_spt_v = pro_spring_f32(
+                    pro_eid(&self.id, format!("te-spt-{}-{}", root_node.id, l1.id)),
+                    if e1_spot { 1.0 } else { 0.0 },
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0.0, 1.0);
                 edges.push((
                     root_node.id.clone(),
                     l1.id.clone(),
                     wide,
                     l1.status.is_muted(),
+                    e1_vis_v,
+                    e1_spt_v,
                 ));
-                let l1_card = self.render_node_card(l1, !wide, s1, elapsed_secs, &p, cx);
+                let l1_dimmed = connected_chain
+                    .as_ref()
+                    .is_some_and(|ch| !ch.contains(&l1.id));
+                let l1_card =
+                    self.render_node_card(l1, !wide, l1_dimmed, s1, elapsed_secs, &p, w, cx);
                 let l1_folded = self.collapsed.contains(&l1.id);
 
                 let mut l2_elements: Vec<AnyElement> = Vec::new();
@@ -1339,13 +1468,46 @@ impl Render for AgentTree {
                     for l2 in &l1.children {
                         let s2 = Rc::new(Cell::new(None));
                         sensors.insert(l2.id.clone(), s2.clone());
-                        edges.push((l1.id.clone(), l2.id.clone(), false, l2.status.is_muted()));
+                        let e2_in_chain = connected_chain
+                            .as_ref()
+                            .map(|ch| ch.contains(&l1.id) && ch.contains(&l2.id))
+                            .unwrap_or(true);
+                        let e2_spot = connected_chain.is_some() && e2_in_chain;
+                        let e2_vis_v = pro_spring_f32(
+                            pro_eid(&self.id, format!("te-vis-{}-{}", l1.id, l2.id)),
+                            if e2_in_chain { 1.0 } else { 0.22 },
+                            0.22,
+                            w,
+                            cx,
+                        )
+                        .clamp(0.0, 1.0);
+                        let e2_spt_v = pro_spring_f32(
+                            pro_eid(&self.id, format!("te-spt-{}-{}", l1.id, l2.id)),
+                            if e2_spot { 1.0 } else { 0.0 },
+                            0.22,
+                            w,
+                            cx,
+                        )
+                        .clamp(0.0, 1.0);
+                        edges.push((
+                            l1.id.clone(),
+                            l2.id.clone(),
+                            false,
+                            l2.status.is_muted(),
+                            e2_vis_v,
+                            e2_spt_v,
+                        ));
+                        let l2_dimmed = connected_chain
+                            .as_ref()
+                            .is_some_and(|ch| !ch.contains(&l2.id));
                         l2_elements.push(self.render_node_card(
                             l2,
                             !wide,
+                            l2_dimmed,
                             s2,
                             elapsed_secs,
                             &p,
+                            w,
                             cx,
                         ));
                     }
@@ -1427,14 +1589,17 @@ impl Render for AgentTree {
             |_, _, _| (),
             move |_, _, window, _| {
                 let mut dots: Vec<Point<Pixels>> = Vec::new();
-                for (from_id, to_id, s_bend, muted) in &edges {
+                for (from_id, to_id, s_bend, muted, vis, spot) in &edges {
                     let (Some(b0), Some(b1)) = (
                         sensors.get(from_id).and_then(|c| c.get()),
                         sensors.get(to_id).and_then(|c| c.get()),
                     ) else {
                         continue;
                     };
-                    let col = if *muted { link_muted } else { link_blue };
+                    let base_c = if *muted { link_muted } else { link_blue };
+                    let col =
+                        pro_mix_color(base_c.opacity(*vis), pulse_blue.opacity(0.92), *spot * 0.55);
+                    let sw = 1.5 + 0.45 * *spot;
                     if *s_bend {
                         let p0 = point((b0.left() + b0.right()) * 0.5, b0.bottom());
                         let p1 = point((b1.left() + b1.right()) * 0.5, b1.top());
@@ -1445,8 +1610,8 @@ impl Render for AgentTree {
                             true,
                             col,
                             pulse_blue,
-                            if *muted { None } else { pulse_t },
-                            1.5,
+                            if *muted || *vis < 0.45 { None } else { pulse_t },
+                            sw,
                             window,
                         );
                         if !dots
@@ -1460,7 +1625,7 @@ impl Render for AgentTree {
                         let y0 = f32::from(b0.bottom());
                         let x1 = f32::from(b1.left());
                         let y1 = (f32::from(b1.top()) + f32::from(b1.bottom())) * 0.5;
-                        paint_tree_elbow(x0, y0, x1, y1, 5.5, col, 1.5, window);
+                        paint_tree_elbow(x0, y0, x1, y1, 5.5, col, sw, window);
                         let anchor = point(px(x0), px(y0));
                         if !dots.iter().any(|d| {
                             (d.x - anchor.x).abs() < px(1.) && (d.y - anchor.y).abs() < px(1.)
@@ -1477,19 +1642,20 @@ impl Render for AgentTree {
         .absolute()
         .inset_0();
 
-        // Optional top-right header resolution popover
-        let header_popover = self.header_pop.map(|kind| {
+        // Optional top-right header resolution popover with bidirectional spring presence
+        let active_pop_kind = self.header_pop.or(self.last_header_pop);
+        let header_popover = active_pop_kind.and_then(|kind| {
             let items = match kind {
                 HeaderFilterPopover::Waiting => &waiting_nodes,
                 HeaderFilterPopover::Failed => &failed_nodes,
             };
+            if items.is_empty() {
+                return None;
+            }
             let mut pop = div()
                 .id(pro_eid(&self.id, "hdr-pop"))
                 .role(Role::Dialog)
                 .on_click(|_, _, cx| cx.stop_propagation())
-                .absolute()
-                .top(px(42.))
-                .right(px(12.))
                 .w(px(308.))
                 .max_w(px((container_w - 24.).max(220.)))
                 .p(px(8.))
@@ -1594,13 +1760,28 @@ impl Render for AgentTree {
                         .child(actions),
                 );
             }
-            pop
+            let pop_open = self.header_pop.is_some();
+            Some(
+                div()
+                    .absolute()
+                    .top(px(42.))
+                    .right(px(12.))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, "hdr-pop-pres"),
+                        pop_open,
+                        move || pop.into_any_element(),
+                    )),
+            )
         });
 
-        let modal_el = self.selected_id.clone().and_then(|sid| {
-            let found = find_tree(&root_node, &sid)?;
-            Some(self.render_node_modal(found, elapsed_secs, &p, cx))
-        });
+        let modal_el = self
+            .selected_id
+            .clone()
+            .or_else(|| self.last_selected_id.clone())
+            .and_then(|sid| {
+                let found = find_tree(&root_node, &sid)?;
+                Some(self.render_node_modal(found, elapsed_secs, &p, cx))
+            });
 
         let sr_announce =
             format!("{total_agents} agents, {running_count} running, ${total_cost:.2}");
@@ -1668,7 +1849,13 @@ impl Render for AgentTree {
     }
 }
 
-fn render_tree_status(status: TreeStatus, p: &ProPalette, cx: &App) -> Div {
+fn render_tree_status(
+    base_id: &ElementId,
+    nid: &SharedString,
+    status: TreeStatus,
+    p: &ProPalette,
+    cx: &App,
+) -> Div {
     let (bg, fg) = match status {
         TreeStatus::Running => (p.accent_soft, p.blue),
         TreeStatus::Waiting => (p.amber_soft, p.amber_ink),
@@ -1682,9 +1869,6 @@ fn render_tree_status(status: TreeStatus, p: &ProPalette, cx: &App) -> Div {
         .flex_none()
         .rounded(px(4.))
         .bg(bg)
-        .text_color(fg)
-        .text_size(px(11.))
-        .font_weight(FontWeight::MEDIUM)
         .flex()
         .items_center()
         .gap(px(4.))
@@ -1692,7 +1876,13 @@ fn render_tree_status(status: TreeStatus, p: &ProPalette, cx: &App) -> Div {
             d.child(pro_svg("0 0 24 24", SPIN_ARC_SVG, 11.5, fg))
         })
         .when(status == TreeStatus::Done, |d| {
-            d.child(pro_icon(ProIcon::Check, 11., fg))
+            d.child(pro_check_draw(
+                pro_eid(base_id, format!("tchk-{nid}")),
+                true,
+                11.5,
+                false,
+                p.green,
+            ))
         })
         .when(status == TreeStatus::Waiting, |d| {
             d.child(pro_icon(ProIcon::Clock, 11., fg))
@@ -1700,7 +1890,60 @@ fn render_tree_status(status: TreeStatus, p: &ProPalette, cx: &App) -> Div {
         .when(status == TreeStatus::Failed, |d| {
             d.child(pro_icon(ProIcon::AlertTriangle, 11., fg))
         })
-        .child(status.label(cx))
+        .child(pro_swap_label(
+            pro_eid(base_id, format!("tst-{nid}")),
+            status.label(cx),
+            11.,
+            FontWeight::MEDIUM,
+            fg,
+        ))
+}
+
+fn stat_col_el(label: &str, value: AnyElement, p: &ProPalette) -> Div {
+    div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(p.muted)
+                .child(label.to_string()),
+        )
+        .child(value)
+}
+
+fn collect_subtree_ids(node: &TreeAgent, out: &mut HashSet<SharedString>) {
+    out.insert(node.id.clone());
+    for ch in &node.children {
+        collect_subtree_ids(ch, out);
+    }
+}
+
+fn find_and_mark_chain(
+    node: &TreeAgent,
+    target: &SharedString,
+    out: &mut HashSet<SharedString>,
+) -> bool {
+    if &node.id == target {
+        collect_subtree_ids(node, out);
+        return true;
+    }
+    for ch in &node.children {
+        if find_and_mark_chain(ch, target, out) {
+            out.insert(node.id.clone());
+            return true;
+        }
+    }
+    false
+}
+
+fn collect_tree_chain(root: &TreeAgent, target: &SharedString) -> HashSet<SharedString> {
+    let mut out = HashSet::new();
+    find_and_mark_chain(root, target, &mut out);
+    out
 }
 
 fn stat_col(label: &str, value: String, p: &ProPalette) -> Div {

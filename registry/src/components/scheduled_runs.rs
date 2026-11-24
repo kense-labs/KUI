@@ -7,9 +7,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_skeleton_bar, pro_spring_bar,
-        pro_toast_banner, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_icon_btn,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_tactile, pro_toast_banner, tr,
     },
+    foundation::Theme,
     primitives::{
         family::{PhaseClock, disabled_motion},
         pro_icons::{ProIcon, person_initials, pro_app_artwork, pro_icon},
@@ -436,6 +439,7 @@ pub struct ScheduledRuns {
     agent_filter: Option<SharedString>,
     held_task_id: Option<SharedString>,
     inspected_task_id: Option<SharedString>,
+    hovered_slot: Option<SessionSlot>,
     pack_clock: PhaseClock,
     toast: Option<(SharedString, Instant)>,
     next_seq: usize,
@@ -473,6 +477,7 @@ impl ScheduledRuns {
             agent_filter: None,
             held_task_id: None,
             inspected_task_id: None,
+            hovered_slot: None,
             pack_clock,
             toast: None,
             next_seq: 20,
@@ -767,7 +772,7 @@ fn agent_mark_tile(icon: &str, agent: &str, side: f32, p: &ProPalette, cx: &App)
 impl Render for ScheduledRuns {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed_s = self.started_at.elapsed().as_secs_f32();
         let card_bg: Hsla = if p.dark { rgb(0x1c1c1f).into() } else { p.card };
         let lane_bg: Hsla = if p.dark {
@@ -861,84 +866,99 @@ impl Render for ScheduledRuns {
             let is_on = self.agent_filter.as_ref() == Some(ag_name);
             let dimmed = self.agent_filter.is_some() && !is_on;
             let ag_click = ag_name.clone();
-            let hov_border = p.line_strong;
+            let dim_t = pro_spring_f32(
+                pro_eid(&self.id, format!("crew-dim-{ag_name}")),
+                if dimmed { 0.52 } else { 1.0 },
+                0.22,
+                window,
+                cx,
+            );
 
             crew_row = crew_row.child(
-                div()
-                    .id(pro_eid(&self.id, format!("crew-{ag_name}")))
-                    .role(Role::Button)
-                    .aria_label(ag_name.clone())
-                    .tab_index(0)
-                    .h(px(26.))
-                    .px(px(6.))
-                    .rounded(px(7.))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(if is_on { p.blue } else { p.line_strong })
-                    .opacity(if dimmed { 0.52 } else { 1.0 })
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_border))
-                    .focus_visible(move |s| s.border_2().border_color(p.focus))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.toggle_agent_filter(ag_click.as_ref(), cx);
-                    }))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .child(
-                        if let Some(art) = pro_app_artwork(ag_icon.as_ref(), 13.5, cx) {
-                            art
-                        } else {
-                            div().text_size(px(10.)).child("A").into_any_element()
+                div().opacity(dim_t).child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("crew-{ag_name}")),
+                        ag_name.clone(),
+                        7.0,
+                        if is_on { p.accent_soft } else { card_bg },
+                        p.chip_hover,
+                        if is_on { p.blue } else { p.line_strong },
+                        p.blue,
+                        is_on,
+                        div()
+                            .h(px(26.))
+                            .px(px(6.))
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .child(
+                                if let Some(art) = pro_app_artwork(ag_icon.as_ref(), 13.5, cx) {
+                                    art
+                                } else {
+                                    div().text_size(px(10.)).child("A").into_any_element()
+                                },
+                            )
+                            .when(is_on, |d| {
+                                d.child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(ag_name.clone()),
+                                )
+                            }),
+                        cx,
+                        move |this, _, cx| {
+                            this.toggle_agent_filter(ag_click.as_ref(), cx);
                         },
                     )
-                    .when(is_on, |d| {
-                        d.child(
-                            div()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(ag_name.clone()),
-                        )
-                    }),
+                    .w_auto(),
+                ),
             );
         }
 
-        let add_hover = p.chip_hover;
-        let rebal_hover = p.chip_hover;
-
-        // Auto / Manual segmented toggle
+        // Auto / Manual liquid segmented toggle
         let is_auto = self.mode == ScheduleMode::Auto;
+        let mode_sensor = pro_selection_sensor();
+        let mode_s_auto = mode_sensor.clone();
+        let mode_s_manual = mode_sensor.clone();
         let mode_switch = div()
             .id(pro_eid(&self.id, "modes"))
             .role(Role::TabList)
             .aria_label(tr(cx, "Scheduling mode", "排期模式"))
+            .relative()
             .p(px(2.))
             .rounded(px(8.))
             .bg(p.chip)
             .flex()
             .items_center()
             .gap(px(2.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "mode-ind"),
+                if is_auto { "auto" } else { "manual" },
+                mode_sensor,
+                6.0,
+                card_bg,
+                Some(p.line),
+                !p.dark,
+            ))
             .child(
                 div()
                     .id(pro_eid(&self.id, "mode-auto"))
                     .role(Role::Tab)
                     .aria_label(tr(cx, "Auto pack sessions", "自动装箱排期"))
+                    .aria_selected(is_auto)
                     .tab_index(0)
+                    .relative()
                     .h(px(24.))
                     .px(px(9.))
                     .rounded(px(6.))
-                    .bg(if is_auto {
-                        card_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .when(is_auto && !p.dark, |d| d.shadow_sm())
                     .cursor_pointer()
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                         this.set_mode(ScheduleMode::Auto, cx);
                     }))
+                    .when(is_auto, |d| d.child(pro_mark_selected(&mode_s_auto)))
                     .flex()
                     .items_center()
                     .gap(px(4.))
@@ -957,21 +977,18 @@ impl Render for ScheduledRuns {
                     .id(pro_eid(&self.id, "mode-manual"))
                     .role(Role::Tab)
                     .aria_label(tr(cx, "Manual session placement", "手动放入窗口"))
+                    .aria_selected(!is_auto)
                     .tab_index(0)
+                    .relative()
                     .h(px(24.))
                     .px(px(9.))
                     .rounded(px(6.))
-                    .bg(if !is_auto {
-                        card_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .when(!is_auto && !p.dark, |d| d.shadow_sm())
                     .cursor_pointer()
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                         this.set_mode(ScheduleMode::Manual, cx);
                     }))
+                    .when(!is_auto, |d| d.child(pro_mark_selected(&mode_s_manual)))
                     .flex()
                     .items_center()
                     .text_size(px(12.))
@@ -1015,69 +1032,71 @@ impl Render for ScheduledRuns {
                     .gap(px(8.))
                     .child(crew_row)
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "add-task"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Add task to week", "新增待排任务"))
-                            .tab_index(0)
-                            .h(px(26.))
-                            .px(px(8.))
-                            .rounded(px(7.))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(add_hover))
-                            .focus_visible(move |s| s.border_2().border_color(p.focus))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, "add-task"),
+                            tr(cx, "Add task to week", "新增待排任务"),
+                            7.0,
+                            card_bg,
+                            p.chip_hover,
+                            p.line_strong,
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(26.))
+                                .px(px(8.))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .text_size(px(11.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(pro_icon(ProIcon::Plus, 11.5, p.muted))
+                                .child(tr(cx, "Add task", "新增任务")),
+                            cx,
+                            |this, _, cx| {
                                 this.add_sample_task(cx);
-                            }))
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(pro_icon(ProIcon::Plus, 11.5, p.muted))
-                            .child(tr(cx, "Add task", "新增任务")),
+                            },
+                        )
+                        .w_auto(),
                     )
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "rebalance-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Rebalance weekly slots", "重新均衡排期"))
-                            .tab_index(0)
-                            .h(px(26.))
-                            .px(px(8.))
-                            .rounded(px(7.))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(rebal_hover))
-                            .focus_visible(move |s| s.border_2().border_color(p.focus))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, "rebalance-btn"),
+                            tr(cx, "Rebalance weekly slots", "重新均衡排期"),
+                            7.0,
+                            card_bg,
+                            p.chip_hover,
+                            p.line_strong,
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(26.))
+                                .px(px(8.))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .text_size(px(11.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.text)
+                                .child(pro_icon(ProIcon::Refresh, 11.5, p.muted))
+                                .child(tr(cx, "Rebalance", "重排均衡")),
+                            cx,
+                            |this, _, cx| {
                                 this.rebalance(cx);
-                            }))
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.text)
-                            .child(pro_icon(ProIcon::Refresh, 11.5, p.muted))
-                            .child(tr(cx, "Rebalance", "重排均衡")),
+                            },
+                        )
+                        .w_auto(),
                     )
-                    .child(
-                        div().text_size(px(12.)).text_color(p.muted).child(
-                            tr(
-                                cx,
-                                &format!("{} tasks", self.tasks.len()),
-                                &format!("{} 项任务", self.tasks.len()),
-                            )
-                            .to_string(),
-                        ),
-                    )
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "srn-tasks-cnt"),
+                        self.tasks.len() as f64,
+                        0,
+                        "",
+                        tr(cx, " tasks", " 项任务"),
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
                     .child(mode_switch),
             );
 
@@ -1106,7 +1125,13 @@ impl Render for ScheduledRuns {
                     .justify_center()
                     .gap(px(6.))
                     .text_center()
-                    .child(pro_icon(ProIcon::Check, 16., p.green_ink))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "all-sched-chk"),
+                        true,
+                        18.0,
+                        false,
+                        p.green,
+                    ))
                     .child(div().text_size(px(12.)).text_color(p.muted).child(tr(
                         cx,
                         "Everything's scheduled",
@@ -1150,98 +1175,101 @@ impl Render for ScheduledRuns {
                 };
 
                 let card = div()
-                    .id(pro_eid(&self.id, format!("stk-{}", task.id)))
-                    .role(Role::Button)
-                    .aria_label(format!("{} ({}%)", task.display_title(cx), task.usage))
-                    .tab_index(0)
                     .w_full()
-                    .h(px(CARD_H))
-                    .px(px(8.))
-                    .py(px(6.))
-                    .rounded(px(7.))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(if is_held {
-                        p.blue
-                    } else if no_room {
-                        p.amber.opacity(0.55)
-                    } else {
-                        p.line_strong
-                    })
                     .when(!p.dark, |d| d.shadow_sm())
                     .opacity(if dimmed { 0.35 } else { 1.0 })
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_2().border_color(p.focus))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.held_task_id = if this.held_task_id.as_ref() == Some(&tid_click) {
-                            None
+                    .child(pro_tactile(
+                        pro_eid(&self.id, format!("stk-{}", task.id)),
+                        format!("{} ({}%)", task.display_title(cx), task.usage),
+                        7.0,
+                        card_bg,
+                        p.chip_hover,
+                        if is_held {
+                            p.blue
+                        } else if no_room {
+                            p.amber.opacity(0.55)
                         } else {
-                            Some(tid_click.clone())
-                        };
-                        this.inspected_task_id = Some(tid_click.clone());
-                        cx.notify();
-                    }))
-                    .flex()
-                    .flex_col()
-                    .justify_between()
-                    .child(
+                            p.line_strong
+                        },
+                        p.blue,
+                        is_held,
                         div()
+                            .w_full()
+                            .h(px(CARD_H))
+                            .px(px(8.))
+                            .py(px(6.))
                             .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .child(agent_mark_tile(
-                                task.icon.as_ref(),
-                                task.agent.as_ref(),
-                                18.0,
-                                &p,
-                                cx,
-                            ))
+                            .flex_col()
+                            .justify_between()
                             .child(
                                 div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(task.display_title(cx).to_string()),
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(agent_mark_tile(
+                                        task.icon.as_ref(),
+                                        task.agent.as_ref(),
+                                        18.0,
+                                        &p,
+                                        cx,
+                                    ))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_size(px(11.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(task.display_title(cx).to_string()),
+                                    )
+                                    .child(
+                                        div()
+                                            .px(px(5.))
+                                            .h(px(15.))
+                                            .rounded(px(4.))
+                                            .bg(if task.usage > self.limit {
+                                                p.accent_soft
+                                            } else {
+                                                p.chip
+                                            })
+                                            .text_size(px(10.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(if task.usage > self.limit {
+                                                p.blue
+                                            } else {
+                                                p.text
+                                            })
+                                            .flex()
+                                            .items_center()
+                                            .child(format!("{}%", task.usage)),
+                                    ),
                             )
                             .child(
                                 div()
-                                    .px(px(5.))
-                                    .h(px(15.))
-                                    .rounded(px(4.))
-                                    .bg(if task.usage > self.limit {
-                                        p.accent_soft
-                                    } else {
-                                        p.chip
-                                    })
-                                    .text_size(px(10.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if task.usage > self.limit {
+                                    .pl(px(24.))
+                                    .truncate()
+                                    .text_size(px(10.5))
+                                    .text_color(if no_room {
+                                        p.amber_ink
+                                    } else if is_held {
                                         p.blue
                                     } else {
-                                        p.text
+                                        p.muted
                                     })
-                                    .flex()
-                                    .items_center()
-                                    .child(format!("{}%", task.usage)),
+                                    .child(sub_txt),
                             ),
-                    )
-                    .child(
-                        div()
-                            .pl(px(24.))
-                            .truncate()
-                            .text_size(px(10.5))
-                            .text_color(if no_room {
-                                p.amber_ink
-                            } else if is_held {
-                                p.blue
+                        cx,
+                        move |this, _, cx| {
+                            this.held_task_id = if this.held_task_id.as_ref() == Some(&tid_click) {
+                                None
                             } else {
-                                p.muted
-                            })
-                            .child(sub_txt),
-                    );
+                                Some(tid_click.clone())
+                            };
+                            this.inspected_task_id = Some(tid_click.clone());
+                            cx.notify();
+                        },
+                    ));
 
                 stack_cards = stack_cards.child(card);
             }
@@ -1380,16 +1408,32 @@ impl Render for ScheduledRuns {
                     && cell_parts.len() < MAX_CARDS_PER_SESSION
                     && rem_cap >= self.min_piece;
                 let holding_any = self.held_task_id.is_some();
+                let is_hovered_slot = self.hovered_slot == Some(slot);
+                let drop_glow = pro_spring_f32(
+                    pro_eid(&self.id, format!("dglow-{d_idx}-{s_idx}")),
+                    if holding_any && can_drop {
+                        if is_hovered_slot { 1.0 } else { 0.45 }
+                    } else {
+                        0.0
+                    },
+                    0.22,
+                    window,
+                    cx,
+                );
 
                 let cell_bg = if is_past {
                     transparent_black()
-                } else if holding_any && can_drop {
-                    p.blue.opacity(if p.dark { 0.10 } else { 0.065 })
+                } else if drop_glow > 0.01 {
+                    pro_mix_color(
+                        well_bg,
+                        p.blue.opacity(if p.dark { 0.18 } else { 0.12 }),
+                        drop_glow,
+                    )
                 } else {
                     well_bg
                 };
-                let cell_border = if holding_any && can_drop {
-                    p.blue.opacity(0.50)
+                let cell_border = if drop_glow > 0.01 {
+                    pro_mix_color(p.line, p.blue.opacity(0.75), drop_glow)
                 } else {
                     p.line
                 };
@@ -1462,121 +1506,123 @@ impl Render for ScheduledRuns {
                     let movable = !is_past;
 
                     let chip = div()
-                        .id(pro_eid(
-                            &self.id,
-                            format!("chip-{}-{d_idx}-{s_idx}-{}", pt.task_id, pt.part),
-                        ))
-                        .role(Role::Button)
-                        .aria_label(format!("{} ({}%)", task.display_title(cx), pt.usage))
-                        .tab_index(0)
                         .relative()
                         .left(px(dx))
                         .top(px(dy))
                         .w_full()
-                        .h(px(CARD_H))
-                        .px(px(7.))
-                        .py(px(6.))
-                        .rounded(px(7.))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(if is_held || is_inspected {
-                            p.blue
-                        } else {
-                            p.line_strong
-                        })
                         .when(!p.dark && !is_past, |d| d.shadow_sm())
                         .opacity((if dimmed { 0.44 } else { 1.0 }) * (0.2 + 0.8 * fly_t))
-                        .cursor_pointer()
-                        .focus_visible(move |s| s.border_2().border_color(p.focus))
-                        .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let _ = ev;
-                            cx.stop_propagation();
-                            this.inspected_task_id =
-                                if this.inspected_task_id.as_ref() == Some(&tid_click) {
-                                    None
-                                } else {
-                                    Some(tid_click.clone())
-                                };
-                            if movable {
-                                this.held_task_id =
-                                    if this.held_task_id.as_ref() == Some(&tid_click) {
+                        .child(pro_tactile(
+                            pro_eid(
+                                &self.id,
+                                format!("chip-{}-{d_idx}-{s_idx}-{}", pt.task_id, pt.part),
+                            ),
+                            format!("{} ({}%)", task.display_title(cx), pt.usage),
+                            7.0,
+                            card_bg,
+                            p.chip_hover,
+                            if is_held || is_inspected {
+                                p.blue
+                            } else {
+                                p.line_strong
+                            },
+                            p.blue,
+                            is_held || is_inspected,
+                            div()
+                                .w_full()
+                                .h(px(CARD_H))
+                                .px(px(7.))
+                                .py(px(6.))
+                                .flex()
+                                .flex_col()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .child(agent_mark_tile(
+                                            task.icon.as_ref(),
+                                            task.agent.as_ref(),
+                                            17.0,
+                                            &p,
+                                            cx,
+                                        ))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_size(px(11.5))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.ink)
+                                                .child(task.display_title(cx).to_string()),
+                                        )
+                                        .when(pt.parts > 1, |d| {
+                                            d.child(
+                                                div()
+                                                    .flex_none()
+                                                    .text_size(px(10.))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(p.blue)
+                                                    .child(format!("{}/{}", pt.part, pt.parts)),
+                                            )
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .pl(px(22.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_between()
+                                        .gap(px(4.))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_size(px(10.5))
+                                                .text_color(p.muted)
+                                                .child(
+                                                    task.display_detail(cx)
+                                                        .unwrap_or(task.agent.as_ref())
+                                                        .to_string(),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex_none()
+                                                .px(px(4.5))
+                                                .h(px(15.))
+                                                .rounded(px(4.))
+                                                .bg(p.chip)
+                                                .text_size(px(10.))
+                                                .text_color(p.text)
+                                                .flex()
+                                                .items_center()
+                                                .child(format!("{}%", pt.usage)),
+                                        ),
+                                ),
+                            cx,
+                            move |this, _, cx| {
+                                cx.stop_propagation();
+                                this.inspected_task_id =
+                                    if this.inspected_task_id.as_ref() == Some(&tid_click) {
                                         None
                                     } else {
                                         Some(tid_click.clone())
                                     };
-                            }
-                            cx.notify();
-                        }))
-                        .flex()
-                        .flex_col()
-                        .justify_between()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(5.))
-                                .child(agent_mark_tile(
-                                    task.icon.as_ref(),
-                                    task.agent.as_ref(),
-                                    17.0,
-                                    &p,
-                                    cx,
-                                ))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .child(task.display_title(cx).to_string()),
-                                )
-                                .when(pt.parts > 1, |d| {
-                                    d.child(
-                                        div()
-                                            .flex_none()
-                                            .text_size(px(10.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.blue)
-                                            .child(format!("{}/{}", pt.part, pt.parts)),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .pl(px(22.))
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap(px(4.))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(px(10.5))
-                                        .text_color(p.muted)
-                                        .child(
-                                            task.display_detail(cx)
-                                                .unwrap_or(task.agent.as_ref())
-                                                .to_string(),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex_none()
-                                        .px(px(4.5))
-                                        .h(px(15.))
-                                        .rounded(px(4.))
-                                        .bg(p.chip)
-                                        .text_size(px(10.))
-                                        .text_color(p.text)
-                                        .flex()
-                                        .items_center()
-                                        .child(format!("{}%", pt.usage)),
-                                ),
-                        );
+                                if movable {
+                                    this.held_task_id =
+                                        if this.held_task_id.as_ref() == Some(&tid_click) {
+                                            None
+                                        } else {
+                                            Some(tid_click.clone())
+                                        };
+                                }
+                                cx.notify();
+                            },
+                        ));
 
                     chips_col = chips_col.child(chip);
                 }
@@ -1648,11 +1694,25 @@ impl Render for ScheduledRuns {
                 if let Some(hid) = held_for_drop
                     && can_drop
                 {
-                    cell = cell.cursor_pointer().on_click(cx.listener(
-                        move |this, _: &ClickEvent, _, cx| {
+                    cell = cell
+                        .cursor_pointer()
+                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                            let next = if *inside {
+                                Some(slot)
+                            } else if this.hovered_slot == Some(slot) {
+                                None
+                            } else {
+                                this.hovered_slot
+                            };
+                            if this.hovered_slot != next {
+                                this.hovered_slot = next;
+                                cx.notify();
+                            }
+                        }))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.hovered_slot = None;
                             this.place_task_at(hid.as_ref(), slot, cx);
-                        },
-                    ));
+                        }));
                 }
 
                 s_row = s_row.child(cell);
@@ -1661,8 +1721,8 @@ impl Render for ScheduledRuns {
             week_col = week_col.child(s_row);
         }
 
-        // Bottom selected task inspector bar when a card is clicked
-        let inspector_bar = self.inspected_task_id.as_ref().and_then(|tid| {
+        // Bottom selected task inspector bar with smooth `pro_popover_presence` enter/exit
+        let insp_data = self.inspected_task_id.as_ref().and_then(|tid| {
             let task = self.tasks.iter().find(|t| &t.id == tid)?;
             let placed_slices: Vec<&ScheduledPart> =
                 plan.parts.iter().filter(|pt| &pt.task_id == tid).collect();
@@ -1685,9 +1745,49 @@ impl Render for ScheduledRuns {
                     .collect::<Vec<_>>()
                     .join(" + ")
             };
-            let clear_hover = p.chip_hover;
+            Some((
+                task.icon.to_string(),
+                task.agent.to_string(),
+                task.display_title(cx).to_string(),
+                task.usage,
+                where_str,
+            ))
+        });
 
-            Some(
+        let has_insp = insp_data.is_some();
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "close-insp"),
+            tr(cx, "Close task details", "关闭详情"),
+            ProIcon::Close,
+            22.0,
+            false,
+            cx,
+            |this, _, cx| {
+                this.inspected_task_id = None;
+                this.held_task_id = None;
+                cx.notify();
+            },
+        );
+        let hint_lbl = tr(
+            cx,
+            "Click any highlighted session to move this task",
+            "点击任意高亮会话格即可迁移此任务",
+        )
+        .to_string();
+        let inspector_bar = pro_popover_presence(pro_eid(&self.id, "insp-pop"), has_insp, {
+            let mut close_opt = Some(close_btn);
+            let mut data_opt = insp_data;
+            move || {
+                let (icon_k, agent_nm, title_s, usage_n, where_s) =
+                    data_opt.take().unwrap_or_else(|| {
+                        (
+                            "claude".into(),
+                            String::new(),
+                            String::new(),
+                            0,
+                            String::new(),
+                        )
+                    });
                 div()
                     .w_full()
                     .mt(px(10.))
@@ -1702,56 +1802,27 @@ impl Render for ScheduledRuns {
                     .items_center()
                     .gap(px(10.))
                     .text_size(px(12.))
-                    .child(agent_mark_tile(
-                        task.icon.as_ref(),
-                        task.agent.as_ref(),
-                        20.0,
-                        &p,
-                        cx,
-                    ))
                     .child(
                         div()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.strong)
-                            .child(task.display_title(cx).to_string()),
+                            .child(title_s),
                     )
                     .child(
                         div()
                             .text_color(p.muted)
-                            .child(format!("{} · {}% → {where_str}", task.agent, task.usage)),
+                            .child(format!("{agent_nm} ({icon_k}) · {usage_n}% → {where_s}")),
                     )
                     .child(
                         div()
                             .ml_auto()
                             .text_size(px(11.5))
                             .text_color(p.blue)
-                            .child(tr(
-                                cx,
-                                "Click any highlighted session to move this task",
-                                "点击任意高亮会话格即可迁移此任务",
-                            )),
+                            .child(hint_lbl.clone()),
                     )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "close-insp"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Close task details", "关闭详情"))
-                            .tab_index(0)
-                            .size(px(20.))
-                            .rounded(px(5.))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(clear_hover))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.inspected_task_id = None;
-                                this.held_task_id = None;
-                                cx.notify();
-                            }))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(pro_icon(ProIcon::Close, 11., p.muted)),
-                    ),
-            )
+                    .children(close_opt.take())
+                    .into_any_element()
+            }
         });
 
         let body = div()
@@ -1776,7 +1847,7 @@ impl Render for ScheduledRuns {
                     .flex_col()
                     .child(top_bar)
                     .child(body)
-                    .children(inspector_bar)
+                    .child(inspector_bar)
                     .child(pro_toast_banner(self.toast.clone())),
             )
             .into_any_element()

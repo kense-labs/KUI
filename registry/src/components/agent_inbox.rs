@@ -8,18 +8,23 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_mark_selected, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_switch,
+        pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
-        family::{PhaseClock, disabled_motion},
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, collections::HashMap, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 use web_time::Instant;
 
 const SPARK_SVG: &str = r#"<path d="M7 1.2c.4 2.9 1.9 4.4 4.8 4.8-2.9.4-4.4 1.9-4.8 4.8C6.6 7.9 5.1 6.4 2.2 6 5.1 5.6 6.6 4.1 7 1.2Z" fill="currentColor"></path><circle cx="11.6" cy="11.4" r="1.1" fill="currentColor" opacity="0.55"></circle>"#;
@@ -508,6 +513,14 @@ pub struct AgentInbox {
     filter: AgentInboxFilter,
     view: AgentInboxView,
     open_id: Option<SharedString>,
+    show_done: bool,
+    archived_ids: HashSet<SharedString>,
+    known_ids: HashSet<SharedString>,
+    entering_clocks: HashMap<SharedString, (Slide, PhaseClock)>,
+    done_clocks: HashMap<SharedString, PhaseClock>,
+    created_seq: usize,
+    filter_sensor: ProSelectionSensor,
+    view_sensor: ProSelectionSensor,
     loading: bool,
     empty: bool,
     started_at: Instant,
@@ -524,15 +537,25 @@ impl AgentInbox {
             .detach();
         cx.observe_global::<crate::primitives::control::UiLanguage>(|_, cx| cx.notify())
             .detach();
+        let initial_tasks = default_inbox_tasks(cx);
+        let known_ids = initial_tasks.iter().map(|t| t.id.clone()).collect();
         Self {
             id: id.into(),
             title: None,
             header_action_label: None,
-            tasks: default_inbox_tasks(cx),
+            tasks: initial_tasks,
             task_reset_at: HashMap::new(),
             filter: AgentInboxFilter::All,
             view: AgentInboxView::List,
             open_id: Some("migrate".into()),
+            show_done: true,
+            archived_ids: HashSet::new(),
+            known_ids,
+            entering_clocks: HashMap::new(),
+            done_clocks: HashMap::new(),
+            created_seq: 0,
+            filter_sensor: pro_selection_sensor(),
+            view_sensor: pro_selection_sensor(),
             loading: false,
             empty: false,
             started_at: Instant::now(),
@@ -551,6 +574,7 @@ impl AgentInbox {
 
     /// Supply custom background [`AgentTask`] items.
     pub fn with_tasks(mut self, tasks: Vec<AgentTask>) -> Self {
+        self.known_ids = tasks.iter().map(|t| t.id.clone()).collect();
         self.tasks = tasks;
         self
     }
@@ -669,6 +693,107 @@ impl AgentInbox {
         cx.notify();
     }
 
+    fn complete_task(&mut self, id: SharedString, cx: &mut Context<Self>) {
+        if let Some(t) = self.tasks.iter_mut().find(|t| t.id == id) {
+            t.status = AgentTaskStatus::Done;
+            t.steps.push(AgentTaskStep::new(
+                tr(
+                    cx,
+                    "Completed cleanly — checks passed",
+                    "执行完成 — 全部检查已通过",
+                ),
+                tr(cx, "just now", "刚刚"),
+            ));
+        }
+        let mut clock = PhaseClock::default();
+        clock.restart(cx);
+        self.done_clocks.insert(id, clock);
+        let msg: SharedString =
+            tr(cx, "Completed — moved to Done", "已完成并归入已完成分组").into();
+        self.toast = Some((msg, Instant::now()));
+        cx.notify();
+    }
+
+    fn archive_task(&mut self, id: SharedString, cx: &mut Context<Self>) {
+        if self.open_id.as_ref() == Some(&id) {
+            self.open_id = None;
+            cx.emit(AgentInboxEvent::ExpandedChanged(None));
+        }
+        self.archived_ids.insert(id);
+        let msg: SharedString = tr(cx, "Archived completed task", "已归档完成任务").into();
+        self.toast = Some((msg, Instant::now()));
+        cx.notify();
+    }
+
+    fn restore_archived(&mut self, cx: &mut Context<Self>) {
+        for id in self.archived_ids.drain() {
+            let mut slide = Slide::new(0.0);
+            slide.duration(1.0, 0.26, cx);
+            let mut clock = PhaseClock::default();
+            clock.restart(cx);
+            self.entering_clocks.insert(id, (slide, clock));
+        }
+        cx.notify();
+    }
+
+    fn spawn_queued_task(&mut self, cx: &mut Context<Self>) {
+        self.created_seq += 1;
+        let seq = self.created_seq;
+        let tid: SharedString = format!("queued-{seq}").into();
+        let presets: [(&str, &str, &str, &str, &str); 3] = [
+            (
+                "Audit dependency advisories",
+                "审计依赖安全通告",
+                "Scanning Cargo.lock against RustSec advisory database and preparing patch diff.",
+                "正在对照 RustSec 通告库扫描 Cargo.lock 并生成最小升级补丁。",
+                "Claude Sonnet 4.6",
+            ),
+            (
+                "Backfill search embeddings",
+                "回填知识库向量索引",
+                "Batching 2,400 updated docs through embedding worker with rate-limit guard.",
+                "正在按限流配额分批为 2,400 篇更新文档生成向量索引。",
+                "GPT-5",
+            ),
+            (
+                "Verify staging smoke suite",
+                "验证预发冒烟测试集",
+                "Running headless WASM & native parity checks before tagging release.",
+                "正在执行预发环境双端一致性回归检查。",
+                "Claude Opus 4.6",
+            ),
+        ];
+        let (en_t, zh_t, en_d, zh_d, agent) = presets[(seq - 1) % presets.len()];
+        let task = AgentTask::new(
+            tid.clone(),
+            tr(cx, en_t, zh_t),
+            agent,
+            AgentTaskStatus::Running,
+        )
+        .with_description(tr(cx, en_d, zh_d))
+        .with_elapsed_secs(1)
+        .with_counts(Some(3), Some(2))
+        .with_steps(vec![AgentTaskStep::new(
+            tr(
+                cx,
+                "Initialized sandbox & fetched context",
+                "已初始化沙箱并拉取上下文",
+            ),
+            tr(cx, "now", "当前"),
+        )]);
+        self.known_ids.insert(tid.clone());
+        self.task_reset_at.insert(tid.clone(), Instant::now());
+        let mut slide = Slide::new(0.0);
+        slide.duration(1.0, 0.26, cx);
+        let mut clock = PhaseClock::default();
+        clock.restart(cx);
+        self.entering_clocks.insert(tid, (slide, clock));
+        self.tasks.insert(0, task);
+        let msg: SharedString = tr(cx, "Queued background run", "已加入后台运行队列").into();
+        self.toast = Some((msg, Instant::now()));
+        cx.notify();
+    }
+
     fn open_task(&mut self, id: SharedString, cx: &mut Context<Self>) {
         if let Some(t) = self.tasks.iter().find(|t| t.id == id) {
             let msg: SharedString =
@@ -703,9 +828,12 @@ impl AgentInbox {
     }
 
     fn render_task_card(
-        &self,
+        &mut self,
         task: &AgentTask,
+        is_archived: bool,
+        hide_done_card: bool,
         reduced: bool,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let p = ProPalette::get(cx);
@@ -714,8 +842,42 @@ impl AgentInbox {
         } else {
             rgb(0xffffff).into()
         };
-        let is_open = self.open_id.as_ref() == Some(&task.id);
+        let row_hover_bg: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.035)
+        } else {
+            hsla(0., 0., 0., 0.025)
+        };
+        let is_open = !is_archived && !hide_done_card && self.open_id.as_ref() == Some(&task.id);
         let tid = task.id.clone();
+
+        if !self.known_ids.contains(&tid) {
+            self.known_ids.insert(tid.clone());
+            let mut slide = Slide::new(0.0);
+            slide.duration(1.0, 0.26, cx);
+            let mut clock = PhaseClock::default();
+            clock.restart(cx);
+            self.entering_clocks.insert(tid.clone(), (slide, clock));
+        }
+
+        let (enter_t, enter_open) = if let Some((slide, clock)) = self.entering_clocks.get_mut(&tid)
+        {
+            let s = slide.get(window, cx).clamp(0.0, 1.0);
+            let age = clock.time(0.30, window, cx);
+            (s, reduced || age > 0.012)
+        } else {
+            (1.0, true)
+        };
+        let life_open = !is_archived && !hide_done_card && enter_open;
+
+        let done_checked = if task.status == AgentTaskStatus::Done {
+            if let Some(clock) = self.done_clocks.get_mut(&tid) {
+                reduced || clock.time(0.28, window, cx) > 0.012
+            } else {
+                true
+            }
+        } else {
+            false
+        };
 
         let tone_c = match task.status {
             AgentTaskStatus::Running => p.blue,
@@ -732,7 +894,13 @@ impl AgentInbox {
                 .bg(p.amber)
                 .into_any_element(),
             AgentTaskStatus::Failed => pro_icon(ProIcon::AlertTriangle, 12.0, p.red),
-            AgentTaskStatus::Done => pro_icon(ProIcon::Check, 12.0, p.green),
+            AgentTaskStatus::Done => pro_check_draw(
+                pro_eid(&self.id, format!("idone-chk-{tid}")),
+                done_checked,
+                13.5,
+                false,
+                p.green,
+            ),
         };
 
         let live_secs = self.live_elapsed(task, reduced);
@@ -741,6 +909,30 @@ impl AgentInbox {
             task.status.word(cx),
             format_elapsed_clock(live_secs)
         );
+        let status_fg = if task.status == AgentTaskStatus::Failed {
+            p.red_ink
+        } else {
+            p.text
+        };
+        let time_el: AnyElement = if live_secs < 60 {
+            pro_rolling_number(
+                pro_eid(&self.id, format!("isec-{tid}")),
+                live_secs as f64,
+                0,
+                "",
+                "s",
+                12.5,
+                FontWeight::NORMAL,
+                p.muted,
+            )
+            .into_any_element()
+        } else {
+            div()
+                .text_size(px(12.5))
+                .text_color(p.muted)
+                .child(format_elapsed_clock(live_secs))
+                .into_any_element()
+        };
 
         let mut meta_counters = div()
             .flex_none()
@@ -756,7 +948,16 @@ impl AgentInbox {
                     .items_center()
                     .gap(px(4.5))
                     .child(pro_svg("0 0 12 12", SEARCH_TINY_SVG, 11.5, p.muted))
-                    .child(format!("{src}")),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("isrc-{tid}")),
+                        src as f64,
+                        0,
+                        "",
+                        "",
+                        12.0,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
         }
         if let Some(tls) = task.tools {
@@ -770,107 +971,122 @@ impl AgentInbox {
                     .items_center()
                     .gap(px(4.5))
                     .child(pro_svg("0 0 12 12", WRENCH_TINY_SVG, 11.5, p.muted))
-                    .child(format!("{tls}")),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("itls-{tid}")),
+                        tls as f64,
+                        0,
+                        "",
+                        "",
+                        12.0,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
         }
 
         let click_id = tid.clone();
-        let focus_c = p.focus;
-        let card_main = activate(
-            div()
-                .id(pro_eid(&self.id, format!("icard-btn-{tid}")))
-                .role(Role::Button)
-                .aria_label(format!("{}, {}", task.title, state_str))
-                .aria_expanded(is_open)
-                .tab_index(0)
-                .w_full()
-                .p(px(12.0))
-                .rounded(px(10.0))
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .cursor_pointer()
-                .focus_visible(move |s| s.border_1().border_color(focus_c))
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.0))
-                        .min_w_0()
-                        .child(
-                            div()
-                                .w(px(16.0))
-                                .h(px(20.0))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(pro_svg("0 0 14 14", SPARK_SVG, 14.0, tone_c)),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(14.0))
-                                .line_height(px(20.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .when(!is_open, |d| d.truncate())
-                                .child(task.title.clone()),
-                        )
-                        .child(pro_icon(
-                            if is_open {
-                                ProIcon::ChevronUp
-                            } else {
-                                ProIcon::ChevronDown
-                            },
-                            13.0,
-                            p.muted,
-                        )),
-                )
-                .when_some(task.description.clone(), |d, desc| {
-                    d.child(
+        let card_face = div()
+            .w_full()
+            .p(px(12.0))
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .min_w_0()
+                    .child(
                         div()
-                            .pl(px(26.0))
-                            .text_size(px(13.0))
-                            .line_height(px(19.0))
-                            .text_color(p.text)
-                            .when(!is_open, |t| t.line_clamp(2))
-                            .child(desc),
+                            .w(px(16.0))
+                            .h(px(20.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_svg("0 0 14 14", SPARK_SVG, 14.0, tone_c)),
                     )
-                })
-                .child(
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(14.0))
+                            .line_height(px(20.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .when(!is_open, |d| d.truncate())
+                            .child(task.title.clone()),
+                    )
+                    .child(pro_icon(
+                        if is_open {
+                            ProIcon::ChevronUp
+                        } else {
+                            ProIcon::ChevronDown
+                        },
+                        13.0,
+                        p.muted,
+                    )),
+            )
+            .when_some(task.description.clone(), |d, desc| {
+                d.child(
                     div()
-                        .w_full()
-                        .mt(px(2.0))
                         .pl(px(26.0))
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.0))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.0))
-                                .text_size(px(12.5))
-                                .text_color(if task.status == AgentTaskStatus::Failed {
-                                    p.red_ink
-                                } else {
-                                    p.text
-                                })
-                                .child(state_glyph)
-                                .child(state_str),
-                        )
-                        .child(meta_counters),
-                ),
+                        .text_size(px(13.0))
+                        .line_height(px(19.0))
+                        .text_color(p.text)
+                        .when(!is_open, |t| t.line_clamp(2))
+                        .child(desc),
+                )
+            })
+            .child(
+                div()
+                    .w_full()
+                    .mt(px(2.0))
+                    .pl(px(26.0))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .text_size(px(12.5))
+                            .text_color(status_fg)
+                            .child(state_glyph)
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("istatus-{tid}")),
+                                task.status.word(cx),
+                                12.5,
+                                FontWeight::MEDIUM,
+                                status_fg,
+                            ))
+                            .child(div().text_color(p.faint).child("·"))
+                            .child(time_el),
+                    )
+                    .child(meta_counters),
+            );
+
+        let card_main = pro_tactile(
+            pro_eid(&self.id, format!("icard-btn-{tid}")),
+            format!("{}, {}", task.title, state_str),
+            10.0,
+            transparent_black(),
+            row_hover_bg,
+            transparent_black(),
+            transparent_black(),
+            false,
+            card_face,
             cx,
             move |this, _, cx| this.toggle_card(click_id.clone(), cx),
-        );
+        )
+        .w_full();
 
-        // Unfolding step timeline + inline Approve / Reject / Retry / Open buttons (`pro_fold`).
+        // Unfolding step timeline + inline Approve / Reject / Retry / Complete / Archive / Open buttons (`pro_fold`).
         let agent_str = task.agent.clone();
         let steps_list = task.steps.clone();
         let status = task.status;
@@ -881,7 +1097,7 @@ impl AgentInbox {
         let muted_c = p.muted;
         let text_c = p.text;
         let ink_c = p.ink;
-        let faint_c = p.faint;
+        let green_c = p.green;
 
         let actions_row: AnyElement = match status {
             AgentTaskStatus::Waiting => {
@@ -940,12 +1156,51 @@ impl AgentInbox {
                     ))
                     .into_any_element()
             }
-            AgentTaskStatus::Running | AgentTaskStatus::Done => {
+            AgentTaskStatus::Running => {
+                let opn_id = act_tid.clone();
+                let dn_id = act_tid.clone();
+                div()
+                    .mt(px(10.0))
+                    .flex()
+                    .justify_end()
+                    .gap(px(6.0))
+                    .child(pro_btn(
+                        pro_eid(&base_id, format!("iopn-{opn_id}")),
+                        tr(cx, "Open", "打开详情"),
+                        Some(ProIcon::ExternalArrow),
+                        ProBtnStyle::Secondary,
+                        true,
+                        cx,
+                        move |this, _, cx| this.open_task(opn_id.clone(), cx),
+                    ))
+                    .child(pro_btn(
+                        pro_eid(&base_id, format!("idone-{dn_id}")),
+                        tr(cx, "Mark done", "标记完成"),
+                        Some(ProIcon::Check),
+                        ProBtnStyle::Primary,
+                        true,
+                        cx,
+                        move |this, _, cx| this.complete_task(dn_id.clone(), cx),
+                    ))
+                    .into_any_element()
+            }
+            AgentTaskStatus::Done => {
+                let arch_id = act_tid.clone();
                 let opn_id = act_tid.clone();
                 div()
                     .mt(px(10.0))
                     .flex()
                     .justify_end()
+                    .gap(px(6.0))
+                    .child(pro_btn(
+                        pro_eid(&base_id, format!("iarch-{arch_id}")),
+                        tr(cx, "Archive", "归档"),
+                        None,
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        move |this, _, cx| this.archive_task(arch_id.clone(), cx),
+                    ))
                     .child(pro_btn(
                         pro_eid(&base_id, format!("iopn-{opn_id}")),
                         tr(cx, "Open", "打开详情"),
@@ -959,10 +1214,12 @@ impl AgentInbox {
             }
         };
 
+        let fold_tid = tid.clone();
+        let fold_base_id = self.id.clone();
         let fold_section = pro_fold(
             pro_eid(&self.id, format!("ifold-{tid}")),
             is_open,
-            130.0,
+            136.0,
             0.0,
             move || {
                 let _ = &entity_weak;
@@ -970,32 +1227,48 @@ impl AgentInbox {
                 let mut timeline = div().mt(px(6.0)).flex().flex_col().gap(px(6.0));
                 for (i, st) in steps_list.into_iter().enumerate() {
                     let is_last = i + 1 == step_len;
+                    let step_done = status == AgentTaskStatus::Done || !is_last;
+                    let marker: AnyElement = if step_done {
+                        div()
+                            .absolute()
+                            .left(px(-2.0))
+                            .top(px(3.0))
+                            .child(pro_check_draw(
+                                pro_eid(&fold_base_id, format!("istp-chk-{fold_tid}-{i}")),
+                                true,
+                                12.0,
+                                false,
+                                green_c,
+                            ))
+                            .into_any_element()
+                    } else {
+                        div()
+                            .absolute()
+                            .left(px(1.5))
+                            .top(px(6.5))
+                            .size(px(5.0))
+                            .rounded_full()
+                            .bg(ink_c)
+                            .into_any_element()
+                    };
                     timeline = timeline.child(
                         div()
                             .relative()
-                            .pl(px(14.0))
+                            .pl(px(16.0))
                             .flex()
                             .items_start()
                             .justify_between()
                             .gap(px(10.0))
                             .text_size(px(12.5))
                             .line_height(px(18.0))
-                            .child(
-                                div()
-                                    .absolute()
-                                    .left(px(1.0))
-                                    .top(px(7.0))
-                                    .size(px(4.5))
-                                    .rounded_full()
-                                    .bg(if is_last { ink_c } else { faint_c }),
-                            )
+                            .child(marker)
                             .when(!is_last, |d| {
                                 d.child(
                                     div()
                                         .absolute()
-                                        .left(px(2.75))
-                                        .top(px(14.0))
-                                        .bottom(px(-6.0))
+                                        .left(px(3.5))
+                                        .top(px(15.0))
+                                        .bottom(px(-5.0))
                                         .w(px(1.0))
                                         .bg(line_c),
                                 )
@@ -1041,13 +1314,28 @@ impl AgentInbox {
             .child(fold_section)
             .into_any_element();
 
-        FlipTaskWrap {
+        let flipped = FlipTaskWrap {
             id: pro_eid(&self.id, format!("flip-card-{tid}")),
             group: task.status.group_index(),
             origin_cell: self.board_origin.clone(),
             child: card_el,
         }
-        .into_any_element()
+        .into_any_element();
+
+        pro_fold(
+            pro_eid(&self.id, format!("icard-life-{tid}")),
+            life_open,
+            108.0,
+            6.0,
+            move || {
+                div()
+                    .relative()
+                    .top(px(-5.0 * (1.0 - enter_t)))
+                    .w_full()
+                    .child(flipped)
+                    .into_any_element()
+            },
+        )
     }
 }
 
@@ -1146,9 +1434,17 @@ impl Render for AgentInbox {
             AgentInboxView::List
         };
 
-        // Top bar: Breadcrumb + Filter Tabs (`pro_pill_indicator` + `pro_rolling_number`) + View Switcher.
-        let filter_sensor = pro_selection_sensor();
+        // Top bar: Breadcrumb + Filter Tabs (`pro_pill_indicator` + `pro_rolling_number`) + `pro_switch` + View Switcher.
+        let filter_sensor = self.filter_sensor.clone();
         let cur_filter = self.filter;
+        let show_done_now = self.show_done;
+        let live_tasks: Vec<AgentTask> = self
+            .tasks
+            .iter()
+            .filter(|t| !self.archived_ids.contains(&t.id))
+            .cloned()
+            .collect();
+        let tab_hover_bg = p.hover;
         let filter_strip = div()
             .id(pro_eid(&self.id, "filter-tabs"))
             .role(Role::TabList)
@@ -1172,7 +1468,7 @@ impl Render for AgentInbox {
             ))
             .children(AgentInboxFilter::ALL.into_iter().map(|flt| {
                 let active = cur_filter == flt;
-                let cnt = count_inbox_tasks(&self.tasks, flt) as f64;
+                let cnt = count_inbox_tasks(&live_tasks, flt) as f64;
                 let focus_c = p.focus;
                 activate(
                     div()
@@ -1190,6 +1486,7 @@ impl Render for AgentInbox {
                         .text_size(px(12.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if active { p.ink } else { p.muted })
+                        .when(!active, |d| d.hover(move |s| s.bg(tab_hover_bg)))
                         .cursor_pointer()
                         .focus_visible(move |s| s.border_1().border_color(focus_c))
                         .when(active, |d| d.child(pro_mark_selected(&filter_sensor)))
@@ -1220,7 +1517,7 @@ impl Render for AgentInbox {
                 )
             }));
 
-        let view_sensor = pro_selection_sensor();
+        let view_sensor = self.view_sensor.clone();
         let cur_view = effective_view;
         let view_switch = can_board.then(|| {
             div()
@@ -1273,6 +1570,7 @@ impl Render for AgentInbox {
                                 .text_size(px(12.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(fg)
+                                .when(!active, |d| d.hover(move |s| s.bg(tab_hover_bg)))
                                 .cursor_pointer()
                                 .focus_visible(move |s| s.border_1().border_color(focus_c))
                                 .when(active, |d| d.child(pro_mark_selected(&view_sensor)))
@@ -1283,6 +1581,30 @@ impl Render for AgentInbox {
                         )
                     }),
                 )
+        });
+
+        let show_done_toggle = (cur_filter == AgentInboxFilter::All).then(|| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .when(width_px >= 500.0, |d| {
+                    d.child(div().text_size(px(12.0)).text_color(p.muted).child(tr(
+                        cx,
+                        "Show done",
+                        "显示已完成",
+                    )))
+                })
+                .child(pro_switch(
+                    pro_eid(&self.id, "show-done-sw"),
+                    tr(cx, "Show completed tasks", "显示已完成任务"),
+                    show_done_now,
+                    cx,
+                    move |this, _, cx| {
+                        this.show_done = !show_done_now;
+                        cx.notify();
+                    },
+                ))
         });
 
         let top_bar = div()
@@ -1315,7 +1637,19 @@ impl Render for AgentInbox {
                     .items_center()
                     .gap(px(8.0))
                     .child(filter_strip)
+                    .when_some(show_done_toggle, |d, sw| d.child(sw))
                     .when_some(view_switch, |d, vs| d.child(vs))
+                    .when(self.header_action_label.is_none(), |d| {
+                        d.child(pro_icon_btn(
+                            pro_eid(&self.id, "quick-new-task"),
+                            tr(cx, "Queue background task", "加入后台任务"),
+                            ProIcon::Plus,
+                            28.0,
+                            false,
+                            cx,
+                            |this, _, cx| this.spawn_queued_task(cx),
+                        ))
+                    })
                     .when_some(self.header_action_label.clone(), |d, lbl| {
                         d.child(pro_btn(
                             pro_eid(&self.id, "hdr-act"),
@@ -1406,7 +1740,15 @@ impl Render for AgentInbox {
                 .filter(|t| t.status.group_index() == g_idx)
                 .cloned()
                 .collect();
-            let count = group_tasks.len();
+            let live_count = group_tasks
+                .iter()
+                .filter(|t| !self.archived_ids.contains(&t.id))
+                .count();
+            let archived_in_lane = group_tasks.len().saturating_sub(live_count);
+            let hide_done_cards_in_board = g_idx == 2
+                && is_board_cols
+                && !show_done_now
+                && cur_filter == AgentInboxFilter::All;
 
             let cards_el = if group_tasks.is_empty() {
                 div()
@@ -1418,10 +1760,36 @@ impl Render for AgentInbox {
                     .child(tr(cx, "No tasks in this group", "该分组暂无任务"))
                     .into_any_element()
             } else {
-                let rendered: Vec<AnyElement> = group_tasks
+                let mut rendered: Vec<AnyElement> = group_tasks
                     .iter()
-                    .map(|t| self.render_task_card(t, reduced, cx))
+                    .map(|t| {
+                        let is_arch = self.archived_ids.contains(&t.id);
+                        self.render_task_card(
+                            t,
+                            is_arch,
+                            hide_done_cards_in_board,
+                            reduced,
+                            window,
+                            cx,
+                        )
+                    })
                     .collect();
+                if live_count == 0 || hide_done_cards_in_board {
+                    rendered.push(
+                        div()
+                            .w_full()
+                            .py(px(14.0))
+                            .text_size(px(12.5))
+                            .text_color(p.faint)
+                            .text_center()
+                            .child(if hide_done_cards_in_board {
+                                tr(cx, "Completed tasks hidden", "已隐藏完成任务")
+                            } else {
+                                tr(cx, "All completed tasks archived", "已完成任务已全部归档")
+                            })
+                            .into_any_element(),
+                    );
+                }
                 div()
                     .w_full()
                     .flex()
@@ -1431,14 +1799,25 @@ impl Render for AgentInbox {
                     .into_any_element()
             };
 
+            let restore_btn = (g_idx == 2 && archived_in_lane > 0).then(|| {
+                pro_btn(
+                    pro_eid(&self.id, "restore-archived-btn"),
+                    format!("{} ({archived_in_lane})", tr(cx, "Restore", "恢复归档")),
+                    Some(ProIcon::Undo),
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| this.restore_archived(cx),
+                )
+            });
+
             let lane_header = div()
                 .w_full()
                 .h(px(34.0))
                 .px(px(10.0))
                 .flex()
                 .items_center()
-                .when(is_board_cols, |d| d.justify_between())
-                .when(!is_board_cols, |d| d.gap(px(8.0)))
+                .gap(px(8.0))
                 .child(pro_svg("0 0 14 14", SPARK_SVG, 13.5, spark_c.opacity(0.8)))
                 .child(
                     div()
@@ -1459,7 +1838,7 @@ impl Render for AgentInbox {
                         .justify_center()
                         .child(pro_rolling_number(
                             pro_eid(&self.id, format!("lcnt-{g_idx}")),
-                            count as f64,
+                            live_count as f64,
                             0,
                             "",
                             "",
@@ -1467,23 +1846,34 @@ impl Render for AgentInbox {
                             FontWeight::MEDIUM,
                             p.text,
                         )),
-                );
+                )
+                .when_some(restore_btn, |d, btn| d.child(div().ml_auto().child(btn)));
 
-            lanes_container = lanes_container.child(
-                div()
-                    .id(pro_eid(&self.id, format!("lane-sec-{g_idx}")))
-                    .role(Role::Group)
-                    .aria_label(group_title)
-                    .when(is_board_cols, |d| d.flex_1().min_w_0())
-                    .when(!is_board_cols, |d| d.w_full())
-                    .p(px(4.0))
-                    .rounded(px(14.0))
-                    .bg(lane_bg)
-                    .flex()
-                    .flex_col()
-                    .child(lane_header)
-                    .child(cards_el),
-            );
+            let lane_box = div()
+                .id(pro_eid(&self.id, format!("lane-sec-{g_idx}")))
+                .role(Role::Group)
+                .aria_label(group_title)
+                .when(is_board_cols, |d| d.flex_1().min_w_0())
+                .when(!is_board_cols, |d| d.w_full())
+                .p(px(4.0))
+                .rounded(px(14.0))
+                .bg(lane_bg)
+                .flex()
+                .flex_col()
+                .child(lane_header)
+                .child(cards_el);
+
+            if g_idx == 2 && !is_board_cols && cur_filter == AgentInboxFilter::All {
+                lanes_container = lanes_container.child(pro_fold(
+                    pro_eid(&self.id, "done-lane-fold"),
+                    show_done_now,
+                    152.0,
+                    8.0,
+                    move || lane_box.into_any_element(),
+                ));
+            } else {
+                lanes_container = lanes_container.child(lane_box);
+            }
         }
 
         let measure_cell = self.measured_w.clone();

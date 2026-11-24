@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_pill_indicator, pro_presence, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_switch, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_switch,
+        pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -257,6 +258,7 @@ pub struct ModelRouter {
     draft_policy: RouterPolicy,
     hovered_model: Option<SharedString>,
     open_picker: Option<OpenPicker>,
+    last_picker: Option<OpenPicker>,
     boot_at: Instant,
     measured_width: Rc<Cell<f32>>,
     toast: Option<(SharedString, Instant)>,
@@ -286,6 +288,7 @@ impl ModelRouter {
             draft_policy: policy,
             hovered_model: None,
             open_picker: None,
+            last_picker: None,
             boot_at: Instant::now(),
             measured_width: Rc::new(Cell::new(460.0)),
             toast: None,
@@ -642,7 +645,11 @@ impl Render for ModelRouter {
         };
         let dirty = self.has_unsaved_changes();
 
-        // Sample spring-smoothed share values for ribbon thicknesses!
+        if let Some(pk) = self.open_picker {
+            self.last_picker = Some(pk);
+        }
+
+        // Sample spring-smoothed share values and per-model hover spotlight opacities!
         let spring_shares: Vec<f32> = shares
             .iter()
             .enumerate()
@@ -651,6 +658,36 @@ impl Render for ModelRouter {
                     pro_eid(&self.id, format!("band-sp-{i}")),
                     target,
                     0.38,
+                    w,
+                    cx,
+                )
+            })
+            .collect();
+
+        let model_fades: Vec<f32> = self
+            .models
+            .iter()
+            .map(|m| {
+                let dimmed = self.hovered_model.as_ref().is_some_and(|h| h != &m.id);
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("m-fade-{}", m.id)),
+                    if dimmed { 0.30 } else { 1.0 },
+                    0.22,
+                    w,
+                    cx,
+                )
+            })
+            .collect();
+
+        let model_hovs: Vec<f32> = self
+            .models
+            .iter()
+            .map(|m| {
+                let is_hov = self.hovered_model.as_ref() == Some(&m.id);
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("m-hov-{}", m.id)),
+                    if is_hov { 1.0 } else { 0.0 },
+                    0.18,
                     w,
                     cx,
                 )
@@ -704,23 +741,26 @@ impl Render for ModelRouter {
                 .into_any_element()
         } else {
             let cheaper = pct_delta < 0.0;
-            let sign = if pct_delta > 0.0 { "+" } else { "" };
-            let lbl = if UiLanguage::current(cx) == UiLanguage::Chinese {
-                format!("{sign}{:.0}% 对比线上", pct_delta)
-            } else {
-                format!("{sign}{:.0}% vs live", pct_delta)
-            };
+            let sign = if pct_delta > 0.0 { "+" } else { "-" };
+            let sfx = tr(cx, "% vs live", "% 对比线上");
+            let badge_fg = if cheaper { p.green_ink } else { p.red_ink };
             div()
                 .h(px(19.))
                 .px(px(6.))
                 .rounded(px(5.))
                 .bg(if cheaper { p.green_soft } else { p.red_soft })
-                .text_color(if cheaper { p.green_ink } else { p.red_ink })
-                .text_size(px(11.5))
-                .font_weight(FontWeight::MEDIUM)
                 .flex()
                 .items_center()
-                .child(lbl)
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, "cost-delta"),
+                    pct_delta.abs(),
+                    0,
+                    sign,
+                    sfx,
+                    11.5,
+                    FontWeight::MEDIUM,
+                    badge_fg,
+                ))
                 .into_any_element()
         };
 
@@ -761,6 +801,11 @@ impl Render for ModelRouter {
                     ))),
             );
 
+        let strat_pill_bg: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.11)
+        } else {
+            card_bg
+        };
         let strat_sensor = pro_selection_sensor();
         let mut strat_tabs = div()
             .id(pro_eid(&self.id, "strat-tabs"))
@@ -779,15 +824,16 @@ impl Render for ModelRouter {
                 self.draft_policy.strategy_id.clone(),
                 strat_sensor.clone(),
                 6.0,
-                sel_bg,
+                strat_pill_bg,
                 Some(p.line),
-                false,
+                !p.dark,
             ));
 
         for strat in &self.strategies {
             let sid = strat.id.clone();
             let active = sid == self.draft_policy.strategy_id;
             let sid_click = sid.clone();
+            let hov_ink = p.strong;
             strat_tabs = strat_tabs.child(activate(
                 div()
                     .id(pro_eid(&self.id, format!("stab-{sid}")))
@@ -798,6 +844,7 @@ impl Render for ModelRouter {
                     .h(px(26.))
                     .px(px(10.))
                     .rounded(px(6.))
+                    .when(!active, |d| d.hover(move |s| s.text_color(hov_ink)))
                     .focus_visible(move |s| s.border_2().border_color(focus_col))
                     .cursor_pointer()
                     .flex()
@@ -842,9 +889,9 @@ impl Render for ModelRouter {
             .enumerate()
             .map(|(i, m)| model_route_color(i, m.color, &p))
             .collect();
-        let model_ids: Vec<SharedString> = self.models.iter().map(|m| m.id.clone()).collect();
-        let hov_id = self.hovered_model.clone();
         let sp_shares_c = spring_shares.clone();
+        let fades_c = model_fades.clone();
+        let hovs_c = model_hovs.clone();
         let cols_c = route_colors.clone();
         let muted_port = p.muted;
 
@@ -867,11 +914,11 @@ impl Render for ModelRouter {
                     let y1 = top0 + i as f32 * row_pitch;
                     let share = sp_shares_c[i].max(0.0);
                     let col = cols_c[i];
-                    let dimmed = hov_id.as_ref().is_some_and(|h| h != &model_ids[i]);
-                    let fade = if dimmed { 0.28_f32 } else { 1.0_f32 };
+                    let fade = fades_c.get(i).copied().unwrap_or(1.0);
+                    let hov = hovs_c.get(i).copied().unwrap_or(0.0);
 
                     let pts = sample_route_curve(start_x, mid_y, elbow_x, join_x, end_x, y1);
-                    let band_w = (2.2_f32 + share * 0.22_f32).clamp(2.2, 16.0);
+                    let band_w = (2.2_f32 + share * 0.22_f32 + 1.2 * hov).clamp(2.2, 17.5);
 
                     // 1) Outer soft share-proportional ribbon band
                     let mut band = PathBuilder::stroke(px(band_w));
@@ -884,11 +931,11 @@ impl Render for ModelRouter {
                         }
                     }
                     if let Ok(path) = band.build() {
-                        window.paint_path(path, col.opacity(0.16 * fade));
+                        window.paint_path(path, col.opacity((0.16 + 0.08 * hov) * fade));
                     }
 
                     // 2) Crisp centerline
-                    let mut line = PathBuilder::stroke(px(1.25));
+                    let mut line = PathBuilder::stroke(px(1.25 + 0.55 * hov));
                     for (k, &(px_x, px_y)) in pts.iter().enumerate() {
                         let pt = point(px(ox + px_x), px(oy + px_y));
                         if k == 0 {
@@ -898,7 +945,7 @@ impl Render for ModelRouter {
                         }
                     }
                     if let Ok(path) = line.build() {
-                        window.paint_path(path, col.opacity(0.42 * fade));
+                        window.paint_path(path, col.opacity((0.42 + 0.28 * hov) * fade));
                     }
 
                     // 3) Traveling streaks of light scaled to share %
@@ -973,7 +1020,7 @@ impl Render for ModelRouter {
         for (i, m) in self.models.iter().enumerate() {
             let y1 = top0_labels + i as f32 * row_pitch;
             let mid = m.id.clone();
-            let dimmed = self.hovered_model.as_ref().is_some_and(|h| h != &mid);
+            let fade = model_fades.get(i).copied().unwrap_or(1.0);
             flow_stage = flow_stage.child(
                 div()
                     .id(pro_eid(&self.id, format!("flbl-{}", m.id)))
@@ -982,7 +1029,8 @@ impl Render for ModelRouter {
                     .top(px(y1 - 11.0))
                     .w(px(label_col_w))
                     .h(px(22.))
-                    .opacity(if dimmed { 0.35 } else { 1.0 })
+                    .cursor_pointer()
+                    .opacity(fade)
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         let next = (*inside).then(|| mid.clone());
                         if this.hovered_model != next {
@@ -1054,101 +1102,117 @@ impl Render for ModelRouter {
             let col = route_colors[i];
             let mid = m.id.clone();
             let is_hov = self.hovered_model.as_ref() == Some(&mid);
-            let dimmed = self.hovered_model.as_ref().is_some_and(|h| h != &mid);
+            let fade = model_fades.get(i).copied().unwrap_or(1.0);
+            let hov_amt = model_hovs.get(i).copied().unwrap_or(0.0);
 
-            routes_table = routes_table.child(
-                div()
-                    .id(pro_eid(&self.id, format!("rrow-{}", m.id)))
-                    .role(Role::Row)
-                    .h(px(32.))
-                    .px(px(4.))
-                    .mx(px(-4.))
-                    .rounded(px(6.))
-                    .bg(if is_hov { fill_bg } else { transparent_black() })
-                    .opacity(if dimmed { 0.38 } else { 1.0 })
-                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                        let next = (*inside).then(|| mid.clone());
-                        if this.hovered_model != next {
-                            this.hovered_model = next;
-                            cx.notify();
-                        }
-                    }))
-                    .flex()
-                    .items_center()
-                    .text_size(px(12.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap(px(7.))
-                            .child(div().size(px(7.)).rounded_full().bg(col))
-                            .child(
-                                pro_app_artwork(&m.brand, 14., cx)
-                                    .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, 13., p.ink)),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(13.))
-                                    .text_color(p.ink)
-                                    .child(m.name.clone()),
-                            )
-                            .when(is_hov && !compact, |d| {
-                                d.child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .text_color(p.muted)
-                                        .child(m.provider.clone()),
+            routes_table =
+                routes_table.child(
+                    div()
+                        .id(pro_eid(&self.id, format!("rrow-{}", m.id)))
+                        .role(Role::Row)
+                        .h(px(32.))
+                        .px(px(4.))
+                        .mx(px(-4.))
+                        .rounded(px(6.))
+                        .bg(fill_bg.opacity(fill_bg.a * hov_amt))
+                        .opacity(fade)
+                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                            let next = (*inside).then(|| mid.clone());
+                            if this.hovered_model != next {
+                                this.hovered_model = next;
+                                cx.notify();
+                            }
+                        }))
+                        .flex()
+                        .items_center()
+                        .text_size(px(12.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .items_center()
+                                .gap(px(7.))
+                                .child(div().size(px(7.)).rounded_full().bg(col))
+                                .child(
+                                    pro_app_artwork(&m.brand, 14., cx)
+                                        .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, 13., p.ink)),
                                 )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .w(px(80.))
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap(px(6.))
-                            .child(div().w(px(28.)).child(pro_spring_bar(
-                                pro_eid(&self.id, format!("sbar-{}", m.id)),
-                                pct / 100.0,
-                                4.0,
-                                2.0,
-                                track_bg,
-                                col,
-                            )))
-                            .child(div().w(px(32.)).flex().justify_end().child(
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(13.))
+                                        .text_color(p.ink)
+                                        .child(m.name.clone()),
+                                )
+                                .when(is_hov && !compact, |d| {
+                                    d.child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(p.muted)
+                                            .child(m.provider.clone()),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .w(px(80.))
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .gap(px(6.))
+                                .child(div().w(px(28.)).child(pro_spring_bar(
+                                    pro_eid(&self.id, format!("sbar-{}", m.id)),
+                                    pct / 100.0,
+                                    4.0,
+                                    2.0,
+                                    track_bg,
+                                    col,
+                                )))
+                                .child(div().w(px(32.)).flex().justify_end().child(
+                                    pro_rolling_number(
+                                        pro_eid(&self.id, format!("spct-{}", m.id)),
+                                        pct as f64,
+                                        0,
+                                        "",
+                                        "%",
+                                        12.,
+                                        FontWeight::NORMAL,
+                                        p.ink,
+                                    ),
+                                )),
+                        )
+                        .when(!compact, |d| {
+                            d.child(div().w(px(52.)).flex().justify_end().child(
                                 pro_rolling_number(
-                                    pro_eid(&self.id, format!("spct-{}", m.id)),
-                                    pct as f64,
-                                    0,
+                                    pro_eid(&self.id, format!("rp95-{}", m.id)),
+                                    m.p95_secs as f64,
+                                    2,
                                     "",
-                                    "%",
+                                    " s",
                                     12.,
                                     FontWeight::NORMAL,
                                     p.ink,
                                 ),
-                            )),
-                    )
-                    .when(!compact, |d| {
-                        d.child(
+                            ))
+                        })
+                        .child(
                             div()
-                                .w(px(52.))
-                                .text_right()
-                                .text_color(p.ink)
-                                .child(format!("{:.2} s", m.p95_secs)),
-                        )
-                    })
-                    .child(
-                        div()
-                            .w(px(66.))
-                            .text_right()
-                            .text_color(p.ink)
-                            .child(format!("${:.4}", m.cost_per_1k)),
-                    ),
-            );
+                                .w(px(66.))
+                                .flex()
+                                .justify_end()
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("rcost-{}", m.id)),
+                                    m.cost_per_1k,
+                                    4,
+                                    "$",
+                                    "",
+                                    12.,
+                                    FontWeight::NORMAL,
+                                    p.ink,
+                                )),
+                        ),
+                );
         }
 
         // 5. Fallback Rule Bar + Model Pickers (when >= 2 models)
@@ -1167,6 +1231,14 @@ impl Render for ModelRouter {
                 .unwrap_or(&self.models[1])
                 .clone();
 
+            let fb_controls_op = pro_spring_f32(
+                pro_eid(&self.id, "fb-on-op"),
+                if fb_on { 1.0 } else { 0.42 },
+                0.20,
+                w,
+                cx,
+            );
+
             let make_picker_btn = |which: OpenPicker,
                                    model: &RouterModel,
                                    aria_prefix: &str,
@@ -1176,23 +1248,18 @@ impl Render for ModelRouter {
                     OpenPicker::From => "pick-from",
                     OpenPicker::To => "pick-to",
                 };
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, suffix),
+                    format!("{aria_prefix}: {}", model.name),
+                    7.0,
+                    card_bg,
+                    sel_bg,
+                    if is_open { focus_col } else { p.line_strong },
+                    focus_col,
+                    is_open,
                     div()
-                        .id(pro_eid(&self.id, suffix))
-                        .role(Role::Button)
-                        .aria_label(format!("{aria_prefix}: {}", model.name))
-                        .aria_expanded(is_open)
-                        .tab_index(0)
                         .h(px(26.))
                         .px(px(7.))
-                        .rounded(px(7.))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(if is_open { focus_col } else { p.line_strong })
-                        .focus_visible(move |s| s.border_2().border_color(focus_col))
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_click(|_, _, cx| cx.stop_propagation())
-                        .cursor_pointer()
                         .flex()
                         .items_center()
                         .gap(px(5.))
@@ -1213,17 +1280,23 @@ impl Render for ModelRouter {
                         .child(pro_icon(ProIcon::ChevronDown, 11., p.muted)),
                     cx,
                     move |this, _, cx| {
-                        this.open_picker = if this.open_picker == Some(which) {
-                            None
+                        if this.open_picker == Some(which) {
+                            this.open_picker = None;
                         } else {
-                            Some(which)
-                        };
+                            this.last_picker = Some(which);
+                            this.open_picker = Some(which);
+                        }
                         cx.notify();
                     },
                 )
+                .aria_expanded(is_open)
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation())
             };
 
-            let picker_menu = if let Some(which) = self.open_picker {
+            let picker_which = self.open_picker.or(self.last_picker);
+            let picker_open = self.open_picker.is_some();
+            let picker_menu = picker_which.map(|which| {
                 let menu_bg: Hsla = if p.dark {
                     rgb(0x232326).into()
                 } else {
@@ -1253,67 +1326,72 @@ impl Render for ModelRouter {
                     let mid = m.id.clone();
                     let sel = mid == cur_id;
                     let mid_pick = mid.clone();
-                    list = list.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("fb-opt-{mid}")))
-                            .role(Role::ListBoxOption)
-                            .aria_selected(sel)
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(8.))
-                            .rounded(px(6.))
-                            .bg(if sel { sel_bg } else { transparent_black() })
-                            .hover(move |s| s.bg(sel_bg))
-                            .focus_visible(move |s| s.border_1().border_color(focus_col))
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .gap(px(7.))
-                            .child(
-                                pro_app_artwork(&m.brand, 13.5, cx)
-                                    .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, 12., p.ink)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(px(12.))
-                                    .text_color(p.ink)
-                                    .child(m.name.clone()),
-                            )
-                            .when(sel, |d| d.child(pro_icon(ProIcon::Check, 12., p.ink))),
-                        cx,
-                        move |this, _, cx| match which {
-                            OpenPicker::From => {
-                                this.set_fallback_models(Some(mid_pick.clone()), None, cx)
-                            }
-                            OpenPicker::To => {
-                                this.set_fallback_models(None, Some(mid_pick.clone()), cx)
-                            }
-                        },
-                    ));
+                    list = list.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("fb-opt-{mid}")),
+                            m.name.clone(),
+                            6.0,
+                            if sel { sel_bg } else { transparent_black() },
+                            sel_bg,
+                            transparent_black(),
+                            transparent_black(),
+                            sel,
+                            div()
+                                .w_full()
+                                .h(px(28.))
+                                .px(px(8.))
+                                .flex()
+                                .items_center()
+                                .gap(px(7.))
+                                .child(
+                                    pro_app_artwork(&m.brand, 13.5, cx)
+                                        .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, 12., p.ink)),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(12.))
+                                        .text_color(p.ink)
+                                        .child(m.name.clone()),
+                                )
+                                .when(sel, |d| {
+                                    d.child(pro_check_draw(
+                                        pro_eid(&self.id, format!("fb-chk-{mid}")),
+                                        true,
+                                        13.0,
+                                        false,
+                                        p.ink,
+                                    ))
+                                }),
+                            cx,
+                            move |this, _, cx| match which {
+                                OpenPicker::From => {
+                                    this.set_fallback_models(Some(mid_pick.clone()), None, cx)
+                                }
+                                OpenPicker::To => {
+                                    this.set_fallback_models(None, Some(mid_pick.clone()), cx)
+                                }
+                            },
+                        )
+                        .role(Role::ListBoxOption)
+                        .aria_selected(sel)
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                    );
                 }
 
-                Some(pro_presence(
-                    pro_eid(&self.id, "fb-menu-pres"),
-                    true,
-                    0.16,
-                    0.12,
-                    move |amt| {
-                        div()
-                            .absolute()
-                            .right_0()
-                            .bottom(relative(1.0))
-                            .pb(px(6.))
-                            .opacity(amt)
-                            .child(list)
-                            .into_any_element()
-                    },
-                ))
-            } else {
-                None
-            };
+                div()
+                    .absolute()
+                    .right_0()
+                    .bottom(relative(1.0))
+                    .pb(px(6.))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, "fb-menu-pres"),
+                        picker_open,
+                        move || list.into_any_element(),
+                    ))
+            });
 
             Some(
                 div()
@@ -1355,7 +1433,7 @@ impl Render for ModelRouter {
                     )
                     .child(
                         div()
-                            .opacity(if fb_on { 1.0 } else { 0.42 })
+                            .opacity(fb_controls_op)
                             .flex()
                             .items_center()
                             .gap(px(6.))

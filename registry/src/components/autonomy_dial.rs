@@ -6,14 +6,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color,
         pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
         pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
-        family::{PhaseClock, disabled_motion},
+        direct_touch::Contact,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
@@ -211,7 +212,11 @@ pub struct AutonomyDial {
     actions: Vec<AutonomyAction>,
     pinned: HashSet<SharedString>,
     hovered_row: Option<SharedString>,
-    row_moves: HashMap<SharedString, (f32, PhaseClock)>,
+    row_moves: HashMap<SharedString, Slide>,
+    seg_bounds: Rc<Cell<Bounds<Pixels>>>,
+    contact: Contact,
+    drag_start: Option<(f32, AutonomyLevel)>,
+    suppress_seg_click: bool,
     measured_width: Rc<Cell<f32>>,
     toast: Option<(SharedString, Instant)>,
     loading: bool,
@@ -236,6 +241,10 @@ impl AutonomyDial {
             pinned,
             hovered_row: None,
             row_moves: HashMap::new(),
+            seg_bounds: Rc::new(Cell::new(Bounds::default())),
+            contact: Contact::default(),
+            drag_start: None,
+            suppress_seg_click: false,
             measured_width: Rc::new(Cell::new(400.0)),
             toast: None,
             loading: false,
@@ -324,14 +333,63 @@ impl AutonomyDial {
             let was_ask = asks_first(act, prev, &self.pinned);
             let now_ask = asks_first(act, next, &self.pinned);
             if was_ask != now_ask {
-                let mut clock = PhaseClock::default();
-                clock.restart(cx);
-                let dir = if now_ask { -12.0 } else { 12.0 };
-                self.row_moves.insert(act.id.clone(), (dir, clock));
+                let start_dy = if now_ask { -14.0 } else { 14.0 };
+                let slide = self
+                    .row_moves
+                    .entry(act.id.clone())
+                    .or_insert_with(|| Slide::new(0.0));
+                slide.reset(start_dy);
+                slide.duration(0.0, 0.28, cx);
             }
         }
         cx.emit(AutonomyDialEvent::LevelChanged(next));
         cx.notify();
+    }
+
+    fn level_at_x(&self, x_px: f32) -> Option<AutonomyLevel> {
+        let b = self.seg_bounds.get();
+        let w_px = f32::from(b.size.width);
+        if w_px <= 4.0 {
+            return None;
+        }
+        let left_px = f32::from(b.left());
+        let frac = ((x_px - left_px) / w_px).clamp(0.0, 0.9999);
+        let idx = (frac * 3.0).floor() as usize;
+        Some(AutonomyLevel::ALL[idx.min(2)])
+    }
+
+    fn begin_scrub(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        self.suppress_seg_click = false;
+        let x_px = f32::from(x);
+        self.drag_start = Some((x_px, self.level));
+        if let Some(lv) = self.level_at_x(x_px) {
+            self.set_level(lv, cx);
+        }
+        cx.notify();
+    }
+
+    fn move_scrub(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let Some((start_x, _)) = self.drag_start else {
+            return;
+        };
+        let x_px = f32::from(x);
+        if (x_px - start_x).abs() > 3.5 {
+            self.suppress_seg_click = true;
+        }
+        if let Some(lv) = self.level_at_x(x_px) {
+            self.set_level(lv, cx);
+        }
+    }
+
+    fn end_scrub(&mut self, cancelled: bool, cx: &mut Context<Self>) {
+        let Some((_, initial)) = self.drag_start.take() else {
+            return;
+        };
+        if cancelled {
+            self.set_level(initial, cx);
+        } else {
+            cx.notify();
+        }
     }
 
     /// Toggle the padlock override on `action_id` (unless marked `red_line`).
@@ -363,10 +421,13 @@ impl AutonomyDial {
         if let Some(a) = act_ref {
             let now_ask = asks_first(a, self.level, &self.pinned);
             if was_ask != now_ask {
-                let mut clock = PhaseClock::default();
-                clock.restart(cx);
-                let dir = if now_ask { -12.0 } else { 12.0 };
-                self.row_moves.insert(id_ss.clone(), (dir, clock));
+                let start_dy = if now_ask { -14.0 } else { 14.0 };
+                let slide = self
+                    .row_moves
+                    .entry(id_ss.clone())
+                    .or_insert_with(|| Slide::new(0.0));
+                slide.reset(start_dy);
+                slide.duration(0.0, 0.28, cx);
             }
         }
         let mut sorted: Vec<SharedString> = self.pinned.iter().cloned().collect();
@@ -393,10 +454,8 @@ impl AutonomyDial {
 
         let dy_offset = if disabled_motion(cx) {
             0.0
-        } else if let Some((dir, clock)) = self.row_moves.get(&act.id) {
-            let age = clock.time(0.26, w, cx);
-            let t = pro_ease((age / 0.26).clamp(0.0, 1.0));
-            *dir * (1.0 - t)
+        } else if let Some(slide) = self.row_moves.get(&act.id) {
+            slide.get(w, cx)
         } else {
             0.0
         };
@@ -518,8 +577,29 @@ impl AutonomyDial {
             hsla(0.0, 0.0, 0.0, 0.03)
         };
 
+        let row_eid = pro_eid(&self.id, format!("row-{group_tag}-{}", act.id));
+        let row_hov_st = w.use_keyed_state(pro_eid(&row_eid, "rhov"), cx, |_, _| {
+            (
+                is_hovered,
+                Slide::snappy(f32::from(is_hovered)),
+                Slide::snappy(0.0),
+            )
+        });
+        let (hov_t, pin_down) = row_hov_st.update(cx, |s, cx| {
+            if s.0 != is_hovered {
+                s.0 = is_hovered;
+                s.1.set(f32::from(is_hovered), cx);
+            }
+            (
+                s.1.get(w, cx).clamp(0.0, 1.0),
+                s.2.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+        let row_bg = pro_mix_color(transparent_black(), wash_bg, hov_t);
+        let pin_alpha = if is_locked { 1.0 } else { hov_t };
+
         div()
-            .id(pro_eid(&self.id, format!("row-{group_tag}-{}", act.id)))
+            .id(row_eid)
             .relative()
             .top(px(dy_offset))
             .w_full()
@@ -527,11 +607,7 @@ impl AutonomyDial {
             .pl(px(6.0))
             .pr(px(4.0))
             .rounded(px(6.0))
-            .bg(if is_hovered {
-                wash_bg
-            } else {
-                transparent_black()
-            })
+            .bg(row_bg)
             .flex()
             .items_center()
             .gap(px(11.0))
@@ -587,26 +663,61 @@ impl AutonomyDial {
                     .size(px(28.0))
                     .flex_none()
                     .rounded(px(6.0))
-                    .opacity(if show_pin { 1.0 } else { 0.0 })
+                    .opacity(if show_pin {
+                        pin_alpha.max(0.18)
+                    } else {
+                        pin_alpha
+                    })
                     .flex()
                     .items_center()
                     .justify_center()
                     .cursor_pointer()
                     .hover(move |s| s.opacity(1.0).bg(p.chip))
                     .focus_visible(move |s| s.opacity(1.0).border_1().border_color(p.focus))
+                    .on_mouse_down(MouseButton::Left, {
+                        let row_hov_st = row_hov_st.clone();
+                        move |_, w, cx| {
+                            row_hov_st.update(cx, |s, cx| {
+                                s.2.set(1.0, cx);
+                                cx.notify();
+                            });
+                            w.refresh();
+                            cx.stop_propagation();
+                        }
+                    })
+                    .on_mouse_up(MouseButton::Left, {
+                        let row_hov_st = row_hov_st.clone();
+                        move |_, w, cx| {
+                            row_hov_st.update(cx, |s, cx| {
+                                s.2.set(0.0, cx);
+                                cx.notify();
+                            });
+                            w.refresh();
+                        }
+                    })
+                    .on_mouse_up_out(MouseButton::Left, {
+                        let row_hov_st = row_hov_st.clone();
+                        move |_, w, cx| {
+                            row_hov_st.update(cx, |s, cx| {
+                                s.2.set(0.0, cx);
+                                cx.notify();
+                            });
+                            w.refresh();
+                        }
+                    })
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.toggle_pin(act_id_pin.as_ref(), cx);
                     }))
-                    .child(pro_svg(
+                    .child(div().relative().top(px(0.5 * pin_down)).child(pro_svg(
                         "0 0 24 24",
                         if is_locked {
                             LOCK_CLOSED_SVG
                         } else {
                             LOCK_OPEN_SVG
                         },
-                        16.0,
+                        16.0 * (1.0 - 0.08 * pin_down),
                         pin_color,
-                    )),
+                    ))),
             )
             .into_any_element()
     }
@@ -675,11 +786,6 @@ impl Render for AutonomyDial {
         } else {
             hsla(0.0, 0.0, 0.0, 0.055)
         };
-        let seg_hover_bg: Hsla = if p.dark {
-            hsla(0.0, 0.0, 1.0, 0.11)
-        } else {
-            hsla(0.0, 0.0, 0.0, 0.08)
-        };
 
         let title_str: SharedString = if self.title.as_ref() == "Sales agent" {
             tr(cx, "Sales agent", "销售智能体").into()
@@ -698,15 +804,28 @@ impl Render for AutonomyDial {
             self.subtitle.clone()
         };
 
-        // Three-stop segmented selector with gliding raised pill (`pro_pill_indicator`)
+        // Three-stop segmented selector with direct pointer/touch drag-scrubbing + `pro_pill_indicator` liquid stretch
         let sensor = pro_selection_sensor();
         let cur_level = self.level;
+        let bounds_cell = self.seg_bounds.clone();
         let mut seg_strip = div()
+            .id(pro_eid(&self.id, "dial-scrub-bar"))
+            .role(Role::RadioGroup)
+            .aria_label(tr(cx, "Autonomy level", "自主等级"))
             .relative()
             .w_full()
+            .p(px(2.5))
+            .rounded(px(8.0))
+            .bg(seg_unselected_bg)
             .flex()
             .items_center()
-            .gap(px(if narrow { 4.0 } else { 8.0 }))
+            .gap(px(2.0))
+            .cursor_ew_resize()
+            .child(
+                canvas(move |b, _, _| bounds_cell.set(b), |_, _, _, _| ())
+                    .absolute()
+                    .inset(px(2.5)),
+            )
             .child(pro_pill_indicator(
                 pro_eid(&self.id, "dial-pill"),
                 cur_level.key(),
@@ -729,14 +848,9 @@ impl Render for AutonomyDial {
                     .tab_index(if selected { 0 } else { -1 })
                     .relative()
                     .flex_1()
-                    .h(px(27.0))
+                    .h(px(26.0))
                     .px(px(if narrow { 6.0 } else { 8.0 }))
                     .rounded(px(6.0))
-                    .bg(if selected {
-                        transparent_black()
-                    } else {
-                        seg_unselected_bg
-                    })
                     .flex()
                     .items_center()
                     .justify_center()
@@ -744,21 +858,74 @@ impl Render for AutonomyDial {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if selected { p.strong } else { p.text })
                     .cursor_pointer()
-                    .hover(move |s| {
-                        if selected {
-                            s
-                        } else {
-                            s.bg(seg_hover_bg).text_color(p.ink)
-                        }
-                    })
+                    .hover(move |s| if selected { s } else { s.text_color(p.ink) })
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        if this.suppress_seg_click {
+                            this.suppress_seg_click = false;
+                            return;
+                        }
                         this.set_level(lv, cx);
                     }))
                     .when(selected, |d| d.child(pro_mark_selected(&sensor)))
                     .child(div().relative().child(lbl)),
             );
         }
+
+        seg_strip = seg_strip
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                    this.begin_scrub(ev.position.x, cx);
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.end_scrub(false, cx);
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.end_scrub(false, cx);
+                }),
+            )
+            .when(self.drag_start.is_some(), |v| {
+                let moved = cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
+                    if ev.pressed_button == Some(MouseButton::Left) {
+                        this.move_scrub(ev.position.x, cx);
+                    }
+                });
+                let released = cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.end_scrub(false, cx);
+                });
+                v.child(
+                    canvas(
+                        |_, _, _| (),
+                        move |_, _, win, _| {
+                            win.on_mouse_event(move |ev: &MouseMoveEvent, phase, win, cx| {
+                                if phase.capture() {
+                                    moved(ev, win, cx);
+                                }
+                            });
+                            win.on_mouse_event(move |ev: &MouseUpEvent, phase, win, cx| {
+                                if phase.capture() && ev.button == MouseButton::Left {
+                                    released(ev, win, cx);
+                                }
+                            });
+                        },
+                    )
+                    .absolute()
+                    .size(px(0.0)),
+                )
+            })
+            .child(self.contact.listen(cx, |this, ev, _, cx| match ev.phase {
+                TouchPhase::Started => this.begin_scrub(ev.position.x, cx),
+                TouchPhase::Moved => this.move_scrub(ev.position.x, cx),
+                TouchPhase::Ended => this.end_scrub(false, cx),
+                TouchPhase::Cancelled => this.end_scrub(true, cx),
+            }));
 
         let (auto_count, ask_count) = self.partition_counts();
         let actions_snapshot = self.actions.clone();

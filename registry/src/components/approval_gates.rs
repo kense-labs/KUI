@@ -7,8 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mix_color,
-        pro_rolling_number, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_bar, pro_step_transition, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -19,12 +20,14 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, collections::HashSet, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 use web_time::Instant;
 
 const STACK_MARK_SVG: &str = r#"<rect x="3.4" y="1.6" width="9.2" height="3" rx="1.2" fill="currentColor" opacity="0.3"></rect><rect x="2.2" y="3.6" width="11.6" height="3.4" rx="1.3" fill="currentColor" opacity="0.55"></rect><rect x="1" y="6.2" width="14" height="8.2" rx="2" fill="currentColor"></rect>"#;
-const PENCIL_SVG: &str = r#"<path d="M14.2 3.8 20.2 9.8M4 20h4.6L19.4 9.2a1.8 1.8 0 0 0 0-2.5l-2.1-2.1a1.8 1.8 0 0 0-2.5 0L4 15.4V20Z" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const MINI_CHECK_SVG: &str = r#"<path d="M4.2 8.4 6.9 11.1 12.2 5.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const MINI_CROSS_SVG: &str = r#"<path d="M4.8 4.8 11.2 11.2M11.2 4.8 4.8 11.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>"#;
 
 /// Category of action gated by an [`ApprovalGate`].
@@ -343,12 +346,15 @@ pub struct ApprovalGates {
     gates: Vec<ApprovalGate>,
     initial_gates: Vec<ApprovalGate>,
     open_cursor: usize,
+    gate_step_serial: i32,
     context_open: bool,
     editing_gate: Option<SharedString>,
     payload_editor: Option<Entity<Editor>>,
     editor_seeded_for: Option<SharedString>,
     editor_focused: bool,
     expanded_decided: HashSet<SharedString>,
+    decided_clocks: HashMap<SharedString, PhaseClock>,
+    clear_clock: PhaseClock,
     deck_rise: Slide,
     reject_shake: PhaseClock,
     last_rejected: bool,
@@ -375,12 +381,15 @@ impl ApprovalGates {
             gates: initial.clone(),
             initial_gates: initial,
             open_cursor: 0,
+            gate_step_serial: 0,
             context_open: false,
             editing_gate: None,
             payload_editor: None,
             editor_seeded_for: None,
             editor_focused: false,
             expanded_decided: HashSet::new(),
+            decided_clocks: HashMap::new(),
+            clear_clock: PhaseClock::default(),
             deck_rise: Slide::new(1.0),
             reject_shake: PhaseClock::default(),
             last_rejected: false,
@@ -502,9 +511,16 @@ impl ApprovalGates {
         self.editing_gate = None;
         self.editor_seeded_for = None;
         self.context_open = false;
+        self.gate_step_serial += 1;
+
+        let mut dec_clk = PhaseClock::default();
+        dec_clk.restart(cx);
+        self.decided_clocks.insert(id.to_owned().into(), dec_clk);
 
         let new_open_len = self.open_count();
-        if new_open_len > 0 && self.open_cursor >= new_open_len {
+        if new_open_len == 0 {
+            self.clear_clock.restart(cx);
+        } else if self.open_cursor >= new_open_len {
             self.open_cursor = new_open_len - 1;
         }
 
@@ -546,10 +562,12 @@ impl ApprovalGates {
     pub fn reset(&mut self, cx: &mut Context<Self>) {
         self.gates = self.initial_gates.clone();
         self.open_cursor = 0;
+        self.gate_step_serial += 1;
         self.editing_gate = None;
         self.editor_seeded_for = None;
         self.context_open = false;
         self.expanded_decided.clear();
+        self.decided_clocks.clear();
         self.deck_rise.reset(0.0);
         self.deck_rise.duration(1.0, 0.28, cx);
         cx.emit(ApprovalGatesEvent::Reset);
@@ -565,6 +583,7 @@ impl ApprovalGates {
         let next = (cur + delta).rem_euclid(len as isize) as usize;
         if next != self.open_cursor {
             self.open_cursor = next;
+            self.gate_step_serial += if delta >= 0 { 1 } else { -1 };
             self.editing_gate = None;
             self.editor_seeded_for = None;
             self.context_open = false;
@@ -814,6 +833,15 @@ impl Render for ApprovalGates {
             .into()
         };
 
+        let prog_ratio = (decided_len as f32) / (total_len.max(1) as f32);
+        let prog_fill = if any_rejected {
+            p.red
+        } else if open_len == 0 {
+            p.green
+        } else {
+            p.blue
+        };
+
         let summary_card = div()
             .w_full()
             .rounded(px(12.0))
@@ -821,6 +849,7 @@ impl Render for ApprovalGates {
             .border_1()
             .border_color(p.line)
             .when(!p.dark, |d| d.shadow_xs())
+            .overflow_hidden()
             .flex()
             .flex_col()
             .child(
@@ -858,30 +887,17 @@ impl Render for ApprovalGates {
                     .child(div().flex_1())
                     .when(decided_len > 1, |d| {
                         let replay_lbl = tr(cx, "Replay", "重置");
-                        d.child(
-                            div()
-                                .id(pro_eid(&self.id, "top-reset"))
-                                .role(Role::Button)
-                                .aria_label(replay_lbl)
-                                .tab_index(0)
-                                .h(px(22.0))
-                                .px(px(7.0))
-                                .rounded(px(5.0))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.muted)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                    this.reset(cx);
-                                }))
-                                .child(pro_icon(ProIcon::Undo, 11.0, p.muted))
-                                .child(replay_lbl),
-                        )
+                        d.child(pro_btn(
+                            pro_eid(&self.id, "top-reset"),
+                            replay_lbl,
+                            Some(ProIcon::Undo),
+                            ProBtnStyle::Ghost,
+                            true,
+                            cx,
+                            |this, _, cx| {
+                                this.reset(cx);
+                            },
+                        ))
                     })
                     .child(
                         div()
@@ -904,7 +920,13 @@ impl Render for ApprovalGates {
                                         .bg(pill_fg.opacity(pulse_alpha)),
                                 )
                             })
-                            .child(pill_txt),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "sum-pill-lbl"),
+                                pill_txt,
+                                11.5,
+                                FontWeight::MEDIUM,
+                                pill_fg,
+                            )),
                     ),
             )
             .child(
@@ -957,13 +979,16 @@ impl Render for ApprovalGates {
                                     .text_color(p.muted)
                                     .child(tr(cx, "DECIDED", "已决定")),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{decided_len} / {total_len}")),
-                            ),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "decided-num"),
+                                decided_len as f64,
+                                0,
+                                "",
+                                format!(" / {total_len}"),
+                                13.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     )
                     .child(
                         div()
@@ -981,15 +1006,28 @@ impl Render for ApprovalGates {
                                     .text_color(p.muted)
                                     .child(tr(cx, "RUN", "运行状态")),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .truncate()
-                                    .child(run_summary),
-                            ),
+                            .child(div().w_full().overflow_hidden().child(pro_swap_label(
+                                pro_eid(&self.id, "run-sum-lbl"),
+                                run_summary,
+                                13.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))),
                     ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .px(px(12.0))
+                    .pb(px(9.0))
+                    .child(pro_spring_bar(
+                        pro_eid(&self.id, "gates-prog-bar"),
+                        prog_ratio,
+                        3.0,
+                        2.0,
+                        p.chip,
+                        prog_fill,
+                    )),
             );
 
         // Stacked Open Deck + Holds/Pager Footer
@@ -1029,6 +1067,7 @@ impl Render for ApprovalGates {
                         .hover(|s| s.opacity(1.0))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                             this.open_cursor = next_open_pos;
+                            this.gate_step_serial += 1;
                             this.editing_gate = None;
                             this.editor_seeded_for = None;
                             this.context_open = false;
@@ -1092,8 +1131,13 @@ impl Render for ApprovalGates {
                 _ => active.reason.clone(),
             };
 
-            let payload_el = if is_editing {
+            let edit_box = {
                 let ed_view = self.payload_editor.clone();
+                let edit_hint = tr(
+                    cx,
+                    "EDIT BEFORE APPROVING  ·  ⌘↵ TO APPROVE",
+                    "批准前修改参数或指令  ·  按 ⌘↵ 确认",
+                );
                 div()
                     .w_full()
                     .flex()
@@ -1104,11 +1148,7 @@ impl Render for ApprovalGates {
                             .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.blue)
-                            .child(tr(
-                                cx,
-                                "EDIT BEFORE APPROVING  ·  ⌘↵ TO APPROVE",
-                                "批准前修改参数或指令  ·  按 ⌘↵ 确认",
-                            )),
+                            .child(edit_hint),
                     )
                     .child(
                         div()
@@ -1122,7 +1162,9 @@ impl Render for ApprovalGates {
                             .when_some(ed_view, |d, ed| d.child(ed)),
                     )
                     .into_any_element()
-            } else if !active.diff.is_empty() {
+            };
+
+            let readonly_box = if !active.diff.is_empty() {
                 let mut diff_box = div()
                     .id(pro_eid(&self.id, "active-diff"))
                     .w_full()
@@ -1187,28 +1229,50 @@ impl Render for ApprovalGates {
                             .child(lines_col),
                     );
                 }
-                diff_box.into_any_element()
-            } else if let Some(inp) = &active.input {
-                div()
-                    .id(pro_eid(&self.id, "active-inp"))
-                    .w_full()
-                    .max_h(px(128.0))
-                    .overflow_y_scroll()
-                    .px(px(10.0))
-                    .py(px(8.0))
-                    .rounded(px(8.0))
-                    .bg(well_bg)
-                    .border_1()
-                    .border_color(p.line)
-                    .font_family("Menlo")
-                    .text_size(px(11.5))
-                    .line_height(px(18.0))
-                    .text_color(p.ink)
-                    .child(inp.clone())
-                    .into_any_element()
+                Some(diff_box.into_any_element())
             } else {
-                div().into_any_element()
+                active.input.as_ref().map(|inp| {
+                    div()
+                        .id(pro_eid(&self.id, "active-inp"))
+                        .w_full()
+                        .max_h(px(128.0))
+                        .overflow_y_scroll()
+                        .px(px(10.0))
+                        .py(px(8.0))
+                        .rounded(px(8.0))
+                        .bg(well_bg)
+                        .border_1()
+                        .border_color(p.line)
+                        .font_family("Menlo")
+                        .text_size(px(11.5))
+                        .line_height(px(18.0))
+                        .text_color(p.ink)
+                        .child(inp.clone())
+                        .into_any_element()
+                })
             };
+
+            let payload_el = div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .child(pro_fold(
+                    pro_eid(&self.id, "gate-edit-fold"),
+                    is_editing,
+                    104.0,
+                    0.0,
+                    move || edit_box,
+                ))
+                .when_some(readonly_box, |d, ro| {
+                    d.child(pro_fold(
+                        pro_eid(&self.id, "gate-ro-fold"),
+                        !is_editing,
+                        116.0,
+                        0.0,
+                        move || ro,
+                    ))
+                })
+                .into_any_element();
 
             // Full context fold
             let ctx_steps = active.context.clone();
@@ -1306,6 +1370,78 @@ impl Render for ApprovalGates {
             let dy_rise = -10.0 * (1.0 - pro_ease(rise_t));
             let alpha_rise = 0.65 + 0.35 * pro_ease(rise_t);
 
+            let stepped_body = pro_step_transition(
+                pro_eid(&self.id, "gate-step-tx"),
+                self.gate_step_serial,
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.0))
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(avatar_el)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .items_center()
+                                    .text_size(px(12.0))
+                                    .overflow_hidden()
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.text)
+                                            .child(active.agent.clone()),
+                                    )
+                                    .child(div().text_color(p.muted).truncate().child(who_suffix)),
+                            )
+                            .child(
+                                div()
+                                    .h(px(20.0))
+                                    .px(px(7.0))
+                                    .flex_none()
+                                    .rounded(px(5.0))
+                                    .bg(p.amber_soft)
+                                    .text_color(p.amber_ink)
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .flex()
+                                    .items_center()
+                                    .child(tr(cx, "Blocking", "阻塞中")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(3.0))
+                            .child(
+                                div()
+                                    .text_size(px(15.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .line_height(px(22.0))
+                                    .text_color(p.strong)
+                                    .child(action_localized),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.5))
+                                    .line_height(px(18.0))
+                                    .text_color(p.text)
+                                    .child(reason_localized),
+                            ),
+                    )
+                    .child(payload_el)
+                    .when_some(context_section, |d, cs| d.child(cs)),
+            );
+
             let front_card = div()
                 .relative()
                 .top(px(dy_rise))
@@ -1321,68 +1457,7 @@ impl Render for ApprovalGates {
                 .flex()
                 .flex_col()
                 .gap(px(10.0))
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .child(avatar_el)
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.0))
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.text)
-                                        .child(active.agent.clone()),
-                                )
-                                .child(div().text_color(p.muted).truncate().child(who_suffix)),
-                        )
-                        .child(
-                            div()
-                                .h(px(20.0))
-                                .px(px(7.0))
-                                .flex_none()
-                                .rounded(px(5.0))
-                                .bg(p.amber_soft)
-                                .text_color(p.amber_ink)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .child(tr(cx, "Blocking", "阻塞中")),
-                        ),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .flex_col()
-                        .gap(px(3.0))
-                        .child(
-                            div()
-                                .text_size(px(15.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .line_height(px(22.0))
-                                .text_color(p.strong)
-                                .child(action_localized),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.5))
-                                .line_height(px(18.0))
-                                .text_color(p.text)
-                                .child(reason_localized),
-                        ),
-                )
-                .child(payload_el)
-                .when_some(context_section, |d, cs| d.child(cs))
+                .child(stepped_body)
                 .child(div().flex_1())
                 .child(
                     div()
@@ -1392,118 +1467,66 @@ impl Render for ApprovalGates {
                         .flex_wrap()
                         .items_center()
                         .gap(px(6.0))
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, "edit-gate-btn"))
-                                .role(Role::Button)
-                                .aria_label(edit_lbl)
-                                .tab_index(0)
-                                .h(px(30.0))
-                                .px(px(9.0))
-                                .rounded(px(7.0))
-                                .flex()
-                                .items_center()
-                                .gap(px(5.0))
-                                .text_size(px(13.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.text)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, w, cx| {
-                                    if this.editing_gate.as_ref() == Some(&gid_edit) {
-                                        this.editing_gate = None;
-                                        this.editor_seeded_for = None;
-                                    } else {
-                                        this.editing_gate = Some(gid_edit.clone());
-                                        this.editor_seeded_for = None;
-                                    }
-                                    cx.notify();
-                                    w.refresh();
-                                }))
-                                .child(pro_svg("0 0 24 24", PENCIL_SVG, 13.0, p.muted))
-                                .child(edit_lbl),
-                        )
+                        .child(pro_btn(
+                            pro_eid(&self.id, "edit-gate-btn"),
+                            edit_lbl,
+                            Some(ProIcon::NewChat),
+                            ProBtnStyle::Ghost,
+                            true,
+                            cx,
+                            move |this, w, cx| {
+                                if this.editing_gate.as_ref() == Some(&gid_edit) {
+                                    this.editing_gate = None;
+                                    this.editor_seeded_for = None;
+                                } else {
+                                    this.editing_gate = Some(gid_edit.clone());
+                                    this.editor_seeded_for = None;
+                                }
+                                cx.notify();
+                                w.refresh();
+                            },
+                        ))
                         .child(div().flex_1())
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, "reject-gate-btn"))
-                                .role(Role::Button)
-                                .aria_label(reject_lbl)
-                                .tab_index(0)
-                                .h(px(30.0))
-                                .px(px(12.0))
-                                .rounded(px(7.0))
-                                .bg(card_bg)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_size(px(13.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .focus_visible(move |s| s.border_color(p.focus))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    let note = if this.editing_gate.as_ref() == Some(&gid_rej)
-                                        && let Some(ed) = &this.payload_editor
-                                    {
-                                        let v = ed.read(cx).value().trim().to_owned();
-                                        (!v.is_empty()).then(|| SharedString::from(v))
-                                    } else {
-                                        None
-                                    };
-                                    this.decide(gid_rej.as_ref(), GateDecision::Rejected, note, cx);
-                                }))
-                                .child(reject_lbl),
-                        )
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, "approve-gate-btn"))
-                                .role(Role::Button)
-                                .aria_label(approve_lbl)
-                                .tab_index(0)
-                                .h(px(30.0))
-                                .px(px(13.0))
-                                .rounded(px(7.0))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_size(px(13.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(pro_mix_color(p.primary, p.on_primary, 0.12)))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    if this.editing_gate.as_ref() == Some(&gid_app) {
-                                        let val = this
-                                            .payload_editor
-                                            .as_ref()
-                                            .map(|ed| ed.read(cx).value().trim().to_owned())
-                                            .unwrap_or_default();
-                                        let note =
-                                            (!val.is_empty()).then(|| SharedString::from(val));
-                                        this.decide(
-                                            gid_app.as_ref(),
-                                            GateDecision::Edited,
-                                            note,
-                                            cx,
-                                        );
-                                    } else {
-                                        this.decide(
-                                            gid_app.as_ref(),
-                                            GateDecision::Approved,
-                                            None,
-                                            cx,
-                                        );
-                                    }
-                                }))
-                                .child(approve_lbl),
-                        ),
+                        .child(pro_btn(
+                            pro_eid(&self.id, "reject-gate-btn"),
+                            reject_lbl,
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                let note = if this.editing_gate.as_ref() == Some(&gid_rej)
+                                    && let Some(ed) = &this.payload_editor
+                                {
+                                    let v = ed.read(cx).value().trim().to_owned();
+                                    (!v.is_empty()).then(|| SharedString::from(v))
+                                } else {
+                                    None
+                                };
+                                this.decide(gid_rej.as_ref(), GateDecision::Rejected, note, cx);
+                            },
+                        ))
+                        .child(pro_btn(
+                            pro_eid(&self.id, "approve-gate-btn"),
+                            approve_lbl,
+                            None,
+                            ProBtnStyle::Primary,
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                if this.editing_gate.as_ref() == Some(&gid_app) {
+                                    let val = this
+                                        .payload_editor
+                                        .as_ref()
+                                        .map(|ed| ed.read(cx).value().trim().to_owned())
+                                        .unwrap_or_default();
+                                    let note = (!val.is_empty()).then(|| SharedString::from(val));
+                                    this.decide(gid_app.as_ref(), GateDecision::Edited, note, cx);
+                                } else {
+                                    this.decide(gid_app.as_ref(), GateDecision::Approved, None, cx);
+                                }
+                            },
+                        )),
                 );
 
             pile = pile.child(front_card);
@@ -1551,79 +1574,81 @@ impl Render for ApprovalGates {
             let pager_el = (open_len > 1).then(|| {
                 let prev_lbl = tr(cx, "Previous request", "上一项请求");
                 let next_lbl = tr(cx, "Next request", "下一项请求");
-                let page_txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-                    format!("{} / {}", cur_pos + 1, open_len)
+                let page_txt: SharedString = if UiLanguage::current(cx) == UiLanguage::Chinese {
+                    format!("{} / {}", cur_pos + 1, open_len).into()
                 } else {
-                    format!("{} of {}", cur_pos + 1, open_len)
+                    format!("{} of {}", cur_pos + 1, open_len).into()
                 };
                 div()
                     .flex_none()
                     .flex()
                     .items_center()
                     .gap(px(2.0))
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "prev-gate"))
-                            .role(Role::Button)
-                            .aria_label(prev_lbl)
-                            .tab_index(0)
-                            .size(px(24.0))
-                            .rounded(px(6.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.step_open(-1, cx);
-                            }))
-                            .child(pro_icon(ProIcon::ChevronLeft, 13.0, p.muted)),
-                    )
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "prev-gate"),
+                        prev_lbl,
+                        ProIcon::ChevronLeft,
+                        24.0,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.step_open(-1, cx);
+                        },
+                    ))
                     .child(
                         div()
                             .min_w(px(44.0))
-                            .text_center()
-                            .text_size(px(12.0))
-                            .text_color(p.muted)
-                            .child(page_txt),
-                    )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "next-gate"))
-                            .role(Role::Button)
-                            .aria_label(next_lbl)
-                            .tab_index(0)
-                            .size(px(24.0))
-                            .rounded(px(6.0))
                             .flex()
-                            .items_center()
                             .justify_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.step_open(1, cx);
-                            }))
-                            .child(pro_icon(ProIcon::ChevronRight, 13.0, p.muted)),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "gate-page-lbl"),
+                                page_txt,
+                                12.0,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
                     )
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "next-gate"),
+                        next_lbl,
+                        ProIcon::ChevronRight,
+                        24.0,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.step_open(1, cx);
+                        },
+                    ))
             });
 
-            div().w_full().flex().flex_col().child(pile).child(
+            Some(
                 div()
                     .w_full()
-                    .min_h(px(34.0))
-                    .pt(px(10.0))
-                    .px(px(2.0))
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.0))
-                    .child(holds_el.unwrap_or_else(|| div().flex_1()))
-                    .when_some(pager_el, |d, pg| d.child(pg)),
+                    .flex_col()
+                    .child(pile)
+                    .child(
+                        div()
+                            .w_full()
+                            .min_h(px(34.0))
+                            .pt(px(10.0))
+                            .px(px(2.0))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.0))
+                            .child(holds_el.unwrap_or_else(|| div().flex_1()))
+                            .when_some(pager_el, |d, pg| d.child(pg)),
+                    )
+                    .into_any_element(),
             )
         } else {
-            // Empty open-stack card when every gate has been decided
+            None
+        };
+
+        let clear_age = self.clear_clock.time(0.28, w, cx);
+        let clear_chk_on = !any_rejected && (reduced || clear_age > 0.012);
+        let cleared_card = {
             let (mark_bg, mark_fg, head_txt, sub_txt) = if any_rejected {
                 (
                     p.red_soft,
@@ -1661,7 +1686,7 @@ impl Render for ApprovalGates {
                 .items_center()
                 .justify_center()
                 .gap(px(5.0))
-                .child(
+                .child(if any_rejected {
                     div()
                         .size(px(28.0))
                         .rounded_full()
@@ -1669,12 +1694,17 @@ impl Render for ApprovalGates {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(if any_rejected {
-                            pro_svg("0 0 16 16", MINI_CROSS_SVG, 12.0, mark_fg)
-                        } else {
-                            pro_svg("0 0 16 16", MINI_CHECK_SVG, 13.0, mark_fg)
-                        }),
-                )
+                        .child(pro_svg("0 0 16 16", MINI_CROSS_SVG, 12.0, mark_fg))
+                        .into_any_element()
+                } else {
+                    pro_check_draw(
+                        pro_eid(&self.id, "all-clear-chk"),
+                        clear_chk_on,
+                        28.0,
+                        false,
+                        p.green,
+                    )
+                })
                 .child(
                     div()
                         .text_size(px(13.5))
@@ -1689,53 +1719,56 @@ impl Render for ApprovalGates {
                         .text_center()
                         .child(sub_txt),
                 )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "empty-replay"))
-                        .role(Role::Button)
-                        .aria_label(reset_lbl)
-                        .tab_index(0)
-                        .mt(px(6.0))
-                        .h(px(28.0))
-                        .px(px(10.0))
-                        .rounded(px(7.0))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .flex()
-                        .items_center()
-                        .gap(px(5.0))
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .focus_visible(move |s| s.border_color(p.focus))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.reset(cx);
-                        }))
-                        .child(pro_icon(ProIcon::Refresh, 12.0, p.muted))
-                        .child(reset_lbl),
-                )
+                .child(div().mt(px(6.0)).child(pro_btn(
+                    pro_eid(&self.id, "empty-replay"),
+                    reset_lbl,
+                    Some(ProIcon::Refresh),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.reset(cx);
+                    },
+                )))
+                .into_any_element()
         };
 
-        // Decided List Below
-        let decided_gates: Vec<ApprovalGate> = self
-            .gates
-            .iter()
-            .filter(|g| g.status != GateStatus::Open)
-            .cloned()
-            .collect();
+        let stack_section = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .child(pro_fold(
+                pro_eid(&self.id, "open-deck-fold"),
+                open_len > 0,
+                310.0,
+                0.0,
+                move || stack_section.unwrap_or_else(|| div().into_any_element()),
+            ))
+            .child(pro_fold(
+                pro_eid(&self.id, "cleared-deck-fold"),
+                open_len == 0,
+                138.0,
+                0.0,
+                move || cleared_card,
+            ));
 
-        let decided_section = (!decided_gates.is_empty()).then(|| {
+        // Decided List Below (each row folds open smoothly and draws progressive `pro_check_draw`)
+        let all_gates = self.gates.clone();
+        let decided_section = (decided_len > 0).then(|| {
             let mut rows = div().w_full().flex().flex_col().gap(px(4.0));
-            for dg in decided_gates {
-                let row_open = self.expanded_decided.contains(&dg.id);
+            for dg in all_gates {
+                let is_decided = dg.status != GateStatus::Open;
+                let row_open = is_decided && self.expanded_decided.contains(&dg.id);
                 let is_rej = dg.status == GateStatus::Rejected;
-                let (mark_bg, mark_fg) = if is_rej {
-                    (p.red_soft, p.red_ink)
+                let dec_age = self
+                    .decided_clocks
+                    .get(&dg.id)
+                    .map_or(f32::INFINITY, |clk| clk.time(0.28, w, cx));
+                let chk_on = is_decided && !is_rej && (reduced || dec_age > 0.012);
+                let chk_color = if dg.status == GateStatus::Edited {
+                    p.blue
                 } else {
-                    (p.green_soft, p.green_ink)
+                    p.green
                 };
                 let outcome_el = match dg.status {
                     GateStatus::Approved => div()
@@ -1793,155 +1826,171 @@ impl Render for ApprovalGates {
                     _ => dg.action.clone(),
                 };
 
-                rows = rows.child(
-                    div()
-                        .w_full()
-                        .rounded(px(9.0))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.line)
-                        .flex()
-                        .flex_col()
-                        .child(
+                let row_header_content = div()
+                    .w_full()
+                    .h(px(34.0))
+                    .px(px(9.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(if is_rej {
+                        div()
+                            .size(px(16.0))
+                            .flex_none()
+                            .rounded_full()
+                            .bg(p.red_soft)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_svg("0 0 16 16", MINI_CROSS_SVG, 9.5, p.red_ink))
+                            .into_any_element()
+                    } else {
+                        pro_check_draw(
+                            pro_eid(&self.id, format!("dec-chk-{}", dg.id)),
+                            chk_on,
+                            16.0,
+                            false,
+                            chk_color,
+                        )
+                    })
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .truncate()
+                            .child(act_txt.clone()),
+                    )
+                    .when(!narrow, |d| {
+                        d.child(
                             div()
-                                .id(pro_eid(&self.id, format!("dec-row-{}", dg.id)))
-                                .role(Role::Button)
-                                .aria_label(act_txt.clone())
-                                .aria_expanded(row_open)
-                                .tab_index(0)
-                                .w_full()
-                                .h(px(34.0))
-                                .px(px(9.0))
-                                .rounded(px(9.0))
+                                .flex_none()
                                 .flex()
                                 .items_center()
-                                .gap(px(8.0))
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(well_bg))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    let now_open = if this.expanded_decided.contains(&dg_id) {
-                                        this.expanded_decided.remove(&dg_id);
-                                        false
-                                    } else {
-                                        this.expanded_decided.insert(dg_id.clone());
-                                        true
-                                    };
-                                    cx.emit(ApprovalGatesEvent::DecidedRowToggled {
-                                        id: dg_id.clone(),
-                                        open: now_open,
-                                    });
-                                    cx.notify();
-                                }))
+                                .gap(px(5.0))
+                                .child(pro_agent_avatar(
+                                    dg.agent.as_ref(),
+                                    agent_accent(dg.agent.as_ref(), &p),
+                                    15.0,
+                                    false,
+                                    0.0,
+                                    cx,
+                                ))
                                 .child(
                                     div()
-                                        .size(px(15.0))
-                                        .flex_none()
-                                        .rounded_full()
-                                        .bg(mark_bg)
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(if is_rej {
-                                            pro_svg("0 0 16 16", MINI_CROSS_SVG, 9.5, mark_fg)
-                                        } else {
-                                            pro_svg("0 0 16 16", MINI_CHECK_SVG, 10.0, mark_fg)
-                                        }),
-                                )
+                                        .text_size(px(11.5))
+                                        .text_color(p.muted)
+                                        .child(dg.agent.clone()),
+                                ),
+                        )
+                    })
+                    .child(outcome_el)
+                    .child(pro_icon(
+                        if row_open {
+                            ProIcon::ChevronUp
+                        } else {
+                            ProIcon::ChevronDown
+                        },
+                        12.0,
+                        p.faint,
+                    ));
+
+                let header_tactile = pro_tactile(
+                    pro_eid(&self.id, format!("dec-row-{}", dg.id)),
+                    act_txt,
+                    9.0,
+                    transparent_black(),
+                    well_bg,
+                    transparent_black(),
+                    transparent_black(),
+                    row_open,
+                    row_header_content,
+                    cx,
+                    move |this, _, cx| {
+                        let now_open = if this.expanded_decided.contains(&dg_id) {
+                            this.expanded_decided.remove(&dg_id);
+                            false
+                        } else {
+                            this.expanded_decided.insert(dg_id.clone());
+                            true
+                        };
+                        cx.emit(ApprovalGatesEvent::DecidedRowToggled {
+                            id: dg_id.clone(),
+                            open: now_open,
+                        });
+                        cx.notify();
+                    },
+                )
+                .w_full();
+
+                let card_item = div()
+                    .w_full()
+                    .rounded(px(9.0))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(p.line)
+                    .flex()
+                    .flex_col()
+                    .child(header_tactile)
+                    .child(pro_fold(
+                        pro_eid(&self.id, format!("dec-fold-{}", dg.id)),
+                        row_open,
+                        64.0,
+                        0.0,
+                        move || {
+                            div()
+                                .w_full()
+                                .pl(px(32.0))
+                                .pr(px(10.0))
+                                .pb(px(10.0))
+                                .flex()
+                                .flex_col()
+                                .gap(px(6.0))
                                 .child(
                                     div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .text_size(px(12.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .truncate()
-                                        .child(act_txt),
+                                        .text_size(px(12.0))
+                                        .text_color(p.text)
+                                        .child(dg_reason),
                                 )
-                                .when(!narrow, |d| {
+                                .when_some(dg_input, |d, inp| {
                                     d.child(
                                         div()
-                                            .flex_none()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(5.0))
-                                            .child(pro_agent_avatar(
-                                                dg.agent.as_ref(),
-                                                agent_accent(dg.agent.as_ref(), &p),
-                                                15.0,
-                                                false,
-                                                0.0,
-                                                cx,
-                                            ))
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.5))
-                                                    .text_color(p.muted)
-                                                    .child(dg.agent.clone()),
-                                            ),
+                                            .px(px(8.0))
+                                            .py(px(6.0))
+                                            .rounded(px(6.0))
+                                            .bg(well_bg)
+                                            .font_family("Menlo")
+                                            .text_size(px(11.0))
+                                            .text_color(p.muted)
+                                            .truncate()
+                                            .child(inp),
                                     )
                                 })
-                                .child(outcome_el)
-                                .child(pro_icon(
-                                    if row_open {
-                                        ProIcon::ChevronUp
-                                    } else {
-                                        ProIcon::ChevronDown
-                                    },
-                                    12.0,
-                                    p.faint,
-                                )),
-                        )
-                        .child(pro_fold(
-                            pro_eid(&self.id, format!("dec-fold-{}", dg.id)),
-                            row_open,
-                            64.0,
-                            0.0,
-                            move || {
-                                div()
-                                    .w_full()
-                                    .pl(px(32.0))
-                                    .pr(px(10.0))
-                                    .pb(px(10.0))
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(6.0))
-                                    .child(
+                                .when_some(dg_note, |d, note| {
+                                    d.child(
                                         div()
+                                            .px(px(8.0))
+                                            .py(px(6.0))
+                                            .rounded(px(6.0))
+                                            .bg(if is_rej { p.red_soft } else { p.accent_soft })
                                             .text_size(px(12.0))
-                                            .text_color(p.text)
-                                            .child(dg_reason),
+                                            .text_color(if is_rej { p.red_ink } else { p.blue })
+                                            .child(note),
                                     )
-                                    .when_some(dg_input, |d, inp| {
-                                        d.child(
-                                            div()
-                                                .px(px(8.0))
-                                                .py(px(6.0))
-                                                .rounded(px(6.0))
-                                                .bg(well_bg)
-                                                .font_family("Menlo")
-                                                .text_size(px(11.0))
-                                                .text_color(p.muted)
-                                                .truncate()
-                                                .child(inp),
-                                        )
-                                    })
-                                    .when_some(dg_note, |d, note| {
-                                        d.child(
-                                            div()
-                                                .px(px(8.0))
-                                                .py(px(6.0))
-                                                .rounded(px(6.0))
-                                                .bg(if is_rej { p.red_soft } else { p.accent_soft })
-                                                .text_size(px(12.0))
-                                                .text_color(if is_rej { p.red_ink } else { p.blue })
-                                                .child(note),
-                                        )
-                                    })
-                                    .into_any_element()
-                            },
-                        )),
-                );
+                                })
+                                .into_any_element()
+                        },
+                    ));
+
+                rows = rows.child(pro_fold(
+                    pro_eid(&self.id, format!("dec-entry-{}", dg.id)),
+                    is_decided,
+                    38.0,
+                    4.0,
+                    move || card_item.into_any_element(),
+                ));
             }
 
             div()

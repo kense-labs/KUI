@@ -1610,10 +1610,11 @@ pub fn pro_mark_selected(sensor: &ProSelectionSensor) -> AnyElement {
 
 struct ProIndicatorState {
     key: SharedString,
-    x: Slide,
-    y: Slide,
-    w: Slide,
-    h: Slide,
+    left: Slide,
+    top: Slide,
+    right: Slide,
+    bottom: Slide,
+    target_rect: (f32, f32, f32, f32),
     ready: bool,
 }
 
@@ -1621,10 +1622,11 @@ impl ProIndicatorState {
     fn new(key: SharedString) -> Self {
         Self {
             key,
-            x: Slide::snappy(0.),
-            y: Slide::snappy(0.),
-            w: Slide::snappy(0.),
-            h: Slide::snappy(0.),
+            left: Slide::snappy(0.),
+            top: Slide::snappy(0.),
+            right: Slide::snappy(0.),
+            bottom: Slide::snappy(0.),
+            target_rect: (0., 0., 0., 0.),
             ready: false,
         }
     }
@@ -1640,28 +1642,82 @@ impl ProIndicatorState {
     ) -> Bounds<Pixels> {
         let tx = f32::from(target.left() - surface.left());
         let ty = f32::from(target.top() - surface.top());
-        let tw = f32::from(target.size.width);
-        let th = f32::from(target.size.height);
-        if !self.ready || &self.key == next_key {
-            self.x.reset(tx);
-            self.y.reset(ty);
-            self.w.reset(tw);
-            self.h.reset(th);
-            self.ready = true;
-        } else {
+        let tw = f32::from(target.size.width).max(0.);
+        let th = f32::from(target.size.height).max(0.);
+        let tr_x = tx + tw;
+        let tb_y = ty + th;
+        let lead_s = (seconds * 0.82).max(0.08);
+        let trail_s = (seconds * 1.32).max(0.12);
+
+        if !self.ready {
             self.key = next_key.clone();
-            self.x.duration(tx, seconds, cx);
-            self.y.duration(ty, seconds, cx);
-            self.w.duration(tw, seconds, cx);
-            self.h.duration(th, seconds, cx);
+            self.target_rect = (tx, ty, tr_x, tb_y);
+            self.left.reset(tx);
+            self.top.reset(ty);
+            self.right.reset(tr_x);
+            self.bottom.reset(tb_y);
+            self.ready = true;
+        } else if &self.key != next_key {
+            let cur_l = self.left.value(cx);
+            let cur_t = self.top.value(cx);
+            let forward_x = tx >= cur_l - 0.5;
+            let forward_y = ty >= cur_t - 0.5;
+            self.key = next_key.clone();
+            self.target_rect = (tx, ty, tr_x, tb_y);
+            self.left
+                .duration(tx, if forward_x { trail_s } else { lead_s }, cx);
+            self.right
+                .duration(tr_x, if forward_x { lead_s } else { trail_s }, cx);
+            self.top
+                .duration(ty, if forward_y { trail_s } else { lead_s }, cx);
+            self.bottom
+                .duration(tb_y, if forward_y { lead_s } else { trail_s }, cx);
+        } else {
+            let in_motion = (self.left.value(cx) - self.target_rect.0).abs() > 0.35
+                || (self.top.value(cx) - self.target_rect.1).abs() > 0.35
+                || (self.right.value(cx) - self.target_rect.2).abs() > 0.35
+                || (self.bottom.value(cx) - self.target_rect.3).abs() > 0.35;
+            let target_shifted = (tx - self.target_rect.0).abs() > 0.5
+                || (ty - self.target_rect.1).abs() > 0.5
+                || (tr_x - self.target_rect.2).abs() > 0.5
+                || (tb_y - self.target_rect.3).abs() > 0.5;
+            if target_shifted {
+                self.target_rect = (tx, ty, tr_x, tb_y);
+                if in_motion {
+                    self.left.duration(tx, seconds, cx);
+                    self.right.duration(tr_x, seconds, cx);
+                    self.top.duration(ty, seconds, cx);
+                    self.bottom.duration(tb_y, seconds, cx);
+                } else {
+                    self.left.reset(tx);
+                    self.top.reset(ty);
+                    self.right.reset(tr_x);
+                    self.bottom.reset(tb_y);
+                }
+            }
         }
-        let cx_x = self.x.get(w, cx);
-        let cy_y = self.y.get(w, cx);
-        let cw_w = self.w.get(w, cx).max(0.);
-        let ch_h = self.h.get(w, cx).max(0.);
+
+        let cur_l = self.left.get(w, cx);
+        let cur_t = self.top.get(w, cx);
+        let cur_r = self.right.get(w, cx);
+        let cur_b = self.bottom.get(w, cx);
+        let cur_w = (cur_r - cur_l).max(0.);
+        let cur_h = (cur_b - cur_t).max(0.);
+
+        // Subtle conservation-of-area capsule squeeze during horizontal liquid stretch.
+        let stretch_x = if tw > 4. && (ty - cur_t).abs() < 2. {
+            ((cur_w - tw).max(0.) / tw.max(24.)).clamp(0., 0.45)
+        } else {
+            0.
+        };
+        let squeeze_y = (cur_h * 0.09 * stretch_x).min(1.6);
+
         Bounds::new(
-            point(surface.left() + px(cx_x), surface.top() + px(cy_y)),
-            size(px(cw_w), px(ch_h)),
+            point(
+                surface.left() + px(cur_l),
+                surface.top() + px(cur_t + squeeze_y),
+            ),
+            size(px(cur_w), px((cur_h - 2. * squeeze_y).max(0.))),
         )
     }
 }
@@ -2124,6 +2180,450 @@ pub fn pro_modal_appear(
     .into_any_element()
 }
 
+/// Bidirectional popover/inspector/card presence (`open` & `close` spring with `5px` vertical settle).
+pub fn pro_popover_presence(
+    id: impl Into<ElementId>,
+    open: bool,
+    render: impl FnOnce() -> AnyElement + 'static,
+) -> AnyElement {
+    pro_presence(id, open, 0.20, 0.15, move |amt| {
+        let dy = 5. * (1. - amt);
+        div()
+            .relative()
+            .top(px(dy))
+            .opacity(amt)
+            .child(render())
+            .into_any_element()
+    })
+}
+
+struct ProTactileAnim {
+    hover: Slide,
+    press: Slide,
+    selected_val: bool,
+    selected_slide: Slide,
+}
+
+#[derive(IntoElement)]
+struct ProTactileVisual {
+    state_id: ElementId,
+    aria: SharedString,
+    radius: f32,
+    rest_bg: Hsla,
+    hover_bg: Hsla,
+    rest_border: Hsla,
+    hover_border: Hsla,
+    selected: bool,
+    content: AnyElement,
+    on_click: ProClickFn,
+}
+
+impl RenderOnce for ProTactileVisual {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_sel = self.selected;
+        let st = w.use_keyed_state(self.state_id, cx, |_, _| ProTactileAnim {
+            hover: Slide::snappy(0.),
+            press: Slide::snappy(0.),
+            selected_val: init_sel,
+            selected_slide: Slide::snappy(f32::from(init_sel)),
+        });
+        let (hov, down, sel_t) = st.update(cx, |s, cx| {
+            if s.selected_val != self.selected {
+                s.selected_val = self.selected;
+                s.selected_slide
+                    .duration(f32::from(self.selected), 0.20, cx);
+            }
+            (
+                s.hover.get(w, cx).clamp(0., 1.),
+                s.press.get(w, cx).clamp(0., 1.),
+                s.selected_slide.get(w, cx).clamp(0., 1.),
+            )
+        });
+
+        let bg = pro_mix_color(self.rest_bg, self.hover_bg, hov.max(sel_t * 0.65));
+        let border = pro_mix_color(self.rest_border, self.hover_border, hov.max(sel_t));
+        let radius = self.radius;
+        let dark = p.dark;
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 1. || bh <= 1. {
+                    return;
+                }
+                let ix = (bw * 0.012 * down).clamp(0., 1.8);
+                let iy = (bh * 0.024 * down).clamp(0., 1.3);
+                let rect = Bounds::new(
+                    point(bounds.origin.x + px(ix), bounds.origin.y + px(iy)),
+                    size(px((bw - 2. * ix).max(1.)), px((bh - 2. * iy).max(1.))),
+                );
+                let r = px(radius)
+                    .min(rect.size.width / 2.)
+                    .min(rect.size.height / 2.);
+                if !dark && hov > 0.02 && down < 0.75 {
+                    let sh = 0.04 * hov * (1. - down);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(point(rect.origin.x, rect.origin.y + px(1.5)), rect.size),
+                            black().opacity(sh),
+                        )
+                        .corner_radii(r),
+                    );
+                }
+                if bg.a > 0.001 || border.a > 0.001 {
+                    window.paint_quad(quad(
+                        rect,
+                        Corners::all(r),
+                        bg,
+                        Edges::all(px(if border.a > 0.001 { 1. } else { 0. })),
+                        border,
+                        BorderStyle::Solid,
+                    ));
+                }
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        let on_click = self.on_click;
+        div()
+            .id("pro-tactile-hit")
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .aria_selected(self.selected)
+            .tab_index(0)
+            .w_full()
+            .relative()
+            .rounded(px(radius))
+            .cursor_pointer()
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.hover.set(if *inside { 1. } else { 0. }, cx);
+                        if !*inside {
+                            s.press.set(0., cx);
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(1., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up_out(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_key_down({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
+                        st.update(cx, |s, cx| {
+                            s.press.set(1., cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_key_up({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
+                        st.update(cx, |s, cx| {
+                            s.press.set(0., cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_click(move |ev, w, cx| (on_click)(ev, w, cx))
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(0.5 * down))
+                    .w_full()
+                    .child(self.content),
+            )
+    }
+}
+
+/// Interactive card, row, pill, or tile with KUI `Slide::snappy` hover blend and fixed-hitbox press physics.
+#[allow(clippy::too_many_arguments)]
+pub fn pro_tactile<V: 'static>(
+    id: impl Into<ElementId>,
+    aria: impl Into<SharedString>,
+    radius: f32,
+    rest_bg: Hsla,
+    hover_bg: Hsla,
+    rest_border: Hsla,
+    hover_border: Hsla,
+    selected: bool,
+    content: impl IntoElement,
+    cx: &Context<V>,
+    on_press: impl Fn(&mut V, &mut Window, &mut Context<V>) + Clone + 'static,
+) -> Stateful<Div> {
+    let id = id.into();
+    let aria = aria.into();
+    let state_id = pro_eid(&id, "tact-st");
+    let on_click: ProClickFn = Rc::new(cx.listener(move |v, _: &ClickEvent, w, cx| {
+        on_press(v, w, cx);
+    }));
+    div().id(id).rounded(px(radius)).child(ProTactileVisual {
+        state_id,
+        aria,
+        radius,
+        rest_bg,
+        hover_bg,
+        rest_border,
+        hover_border,
+        selected,
+        content: content.into_any_element(),
+        on_click,
+    })
+}
+
+#[derive(IntoElement)]
+struct ProCheckDraw {
+    id: ElementId,
+    checked: bool,
+    side: f32,
+    rounded_square: bool,
+    active_color: Hsla,
+}
+
+impl RenderOnce for ProCheckDraw {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_c = self.checked;
+        let st = w.use_keyed_state(pro_eid(&self.id, "chk-draw"), cx, |_, _| {
+            (init_c, Slide::new(f32::from(init_c)))
+        });
+        let frac = st.update(cx, |s, cx| {
+            if s.0 != self.checked {
+                s.0 = self.checked;
+                s.1.duration(f32::from(self.checked), 0.25, cx);
+            }
+            s.1.get(w, cx).clamp(0., 1.)
+        });
+        let side = self.side.max(12.);
+        let r = if self.rounded_square {
+            (side * 0.28).clamp(3.5, 6.)
+        } else {
+            side * 0.5
+        };
+        let active_c = self.active_color;
+        let border_c = pro_mix_color(p.line_strong, active_c, frac);
+        let fill_c = active_c.opacity(frac);
+        let tick_ink: Hsla = if p.dark {
+            rgb(0x111113).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 2. || bh <= 2. {
+                    return;
+                }
+                let scale = 1. - 0.10 * (frac * (1. - frac) * 4.);
+                let s_side = (bw.min(bh) * scale).max(2.);
+                let disc = Bounds::centered_at(bounds.center(), size(px(s_side), px(s_side)));
+                let rad = px(r * scale).min(disc.size.width / 2.);
+                window.paint_quad(quad(
+                    disc,
+                    Corners::all(rad),
+                    fill_c,
+                    Edges::all(px(if frac < 0.96 { 1.25 } else { 0. })),
+                    border_c,
+                    BorderStyle::Solid,
+                ));
+
+                let draw_t = ((frac - 0.14) / 0.86).clamp(0., 1.);
+                if draw_t <= 0.005 {
+                    return;
+                }
+                let c = bounds.center();
+                let u = side / 18.;
+                let p0 = c + point(px(-3.5 * u), px(0.3 * u));
+                let p1 = c + point(px(-u), px(2.6 * u));
+                let p2 = c + point(px(3.7 * u), px(-2.4 * u));
+                let l1 = ((2.5 * u).hypot(2.3 * u)).max(0.01);
+                let l2 = ((4.7 * u).hypot(5.0 * u)).max(0.01);
+                let total = l1 + l2;
+                let cur = total * draw_t;
+                let mut stroke = PathBuilder::stroke(px((1.65 * u).clamp(1.35, 2.2)));
+                stroke.move_to(p0);
+                if cur <= l1 {
+                    let k = (cur / l1).clamp(0., 1.);
+                    stroke.line_to(point(p0.x + (p1.x - p0.x) * k, p0.y + (p1.y - p0.y) * k));
+                } else {
+                    stroke.line_to(p1);
+                    let k = ((cur - l1) / l2).clamp(0., 1.);
+                    stroke.line_to(point(p1.x + (p2.x - p1.x) * k, p1.y + (p2.y - p1.y) * k));
+                }
+                if let Ok(path) = stroke.build() {
+                    window.paint_path(path, tick_ink.opacity((frac * 1.35).clamp(0., 1.)));
+                }
+            },
+        )
+        .size(px(side))
+        .flex_none()
+        .into_any_element()
+    }
+}
+
+/// Progressive KUI checkmark badge (`0.25s` spring fill + 2-segment stroke draw on state change).
+pub fn pro_check_draw(
+    id: impl Into<ElementId>,
+    checked: bool,
+    side: f32,
+    rounded_square: bool,
+    active_color: Hsla,
+) -> AnyElement {
+    ProCheckDraw {
+        id: id.into(),
+        checked,
+        side,
+        rounded_square,
+        active_color,
+    }
+    .into_any_element()
+}
+
+struct ProSwapLabelState {
+    current: SharedString,
+    prev: Option<SharedString>,
+    clock: PhaseClock,
+}
+
+#[derive(IntoElement)]
+struct ProSwapLabel {
+    id: ElementId,
+    text: SharedString,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+}
+
+impl RenderOnce for ProSwapLabel {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let init_txt = self.text.clone();
+        let st = w.use_keyed_state(pro_eid(&self.id, "swlbl"), cx, |_, _| ProSwapLabelState {
+            current: init_txt,
+            prev: None,
+            clock: PhaseClock::default(),
+        });
+        let (prev, t) = st.update(cx, |s, cx| {
+            if s.current != self.text {
+                let old = std::mem::replace(&mut s.current, self.text.clone());
+                s.prev = Some(old);
+                s.clock.restart(cx);
+            }
+            let age = s.clock.time(0.18, w, cx);
+            let u = (age / 0.18).clamp(0., 1.);
+            if u >= 1. {
+                s.prev = None;
+            }
+            (s.prev.clone(), u)
+        });
+        let enter_t = pro_ease(t);
+        if let Some(old) = prev {
+            let exit_t = (1. - t / 0.65).clamp(0., 1.);
+            div()
+                .relative()
+                .flex()
+                .items_center()
+                .text_size(px(self.font_size))
+                .font_weight(self.weight)
+                .text_color(self.color)
+                .whitespace_nowrap()
+                .child(
+                    div()
+                        .relative()
+                        .top(px(2.8 * (1. - enter_t)))
+                        .opacity(enter_t)
+                        .child(self.text),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top(px(-2.8 * (1. - exit_t)))
+                        .opacity(exit_t)
+                        .child(old),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .text_size(px(self.font_size))
+                .font_weight(self.weight)
+                .text_color(self.color)
+                .whitespace_nowrap()
+                .child(self.text)
+                .into_any_element()
+        }
+    }
+}
+
+/// Interruption-safe status/action label crossfade (`180ms` upward glide without layout jump).
+pub fn pro_swap_label(
+    id: impl Into<ElementId>,
+    text: impl Into<SharedString>,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+) -> AnyElement {
+    ProSwapLabel {
+        id: id.into(),
+        text: text.into(),
+        font_size,
+        weight,
+        color,
+    }
+    .into_any_element()
+}
+
+struct ProToastAnimState {
+    hovered: bool,
+    paused_accum_secs: f32,
+    pause_started: Option<Instant>,
+    last_origin: Option<Instant>,
+}
+
 #[derive(IntoElement)]
 struct ProToastBanner {
     toast: Option<(SharedString, Instant)>,
@@ -2134,26 +2634,63 @@ impl RenderOnce for ProToastBanner {
         let Some((msg, started)) = self.toast else {
             return div().into_any_element();
         };
-        let elapsed = started.elapsed().as_secs_f32();
-        let lifetime = 2.40;
-        if elapsed >= lifetime {
+        let st = w.use_state(cx, |_, _| ProToastAnimState {
+            hovered: false,
+            paused_accum_secs: 0.,
+            pause_started: None,
+            last_origin: Some(started),
+        });
+        let (effective_elapsed, hovered) = st.update(cx, |s, _| {
+            if s.last_origin != Some(started) {
+                s.last_origin = Some(started);
+                s.paused_accum_secs = 0.;
+                s.pause_started = s.hovered.then(Instant::now);
+            }
+            let live_pause = s
+                .pause_started
+                .map(|t0| t0.elapsed().as_secs_f32())
+                .unwrap_or(0.);
+            let raw = started.elapsed().as_secs_f32();
+            ((raw - s.paused_accum_secs - live_pause).max(0.), s.hovered)
+        });
+        let lifetime = 2.60;
+        if effective_elapsed >= lifetime {
             return div().into_any_element();
         }
         let reduced = disabled_motion(cx);
-        if !reduced {
+        if !reduced && !hovered {
             w.request_animation_frame();
         }
         let t = if reduced {
             1.0
-        } else if elapsed < 0.20 {
-            pro_ease(elapsed / 0.20)
-        } else if elapsed > lifetime - 0.26 {
-            1. - pro_ease((elapsed - (lifetime - 0.26)) / 0.26)
+        } else if effective_elapsed < 0.22 {
+            pro_ease(effective_elapsed / 0.22)
+        } else if effective_elapsed > lifetime - 0.28 {
+            1. - pro_ease((effective_elapsed - (lifetime - 0.28)) / 0.28)
         } else {
             1.0
         };
         let p = ProPalette::get(cx);
         div()
+            .id("pro-toast-banner-hit")
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        if *inside && !s.hovered {
+                            s.hovered = true;
+                            s.pause_started = Some(Instant::now());
+                        } else if !*inside && s.hovered {
+                            s.hovered = false;
+                            if let Some(t0) = s.pause_started.take() {
+                                s.paused_accum_secs += t0.elapsed().as_secs_f32();
+                            }
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
             .absolute()
             .bottom(px(16. - 8. * (1. - t)))
             .right(px(16.))
@@ -2175,8 +2712,14 @@ impl RenderOnce for ProToastBanner {
             .text_size(px(12.5))
             .font_weight(FontWeight::MEDIUM)
             .text_color(rgb(0xffffff))
-            .child(pro_icon(ProIcon::Check, 13., p.green))
-            .child(msg)
+            .child(pro_check_draw("pro-toast-chk", true, 15., false, p.green))
+            .child(pro_swap_label(
+                "pro-toast-lbl",
+                msg,
+                12.5,
+                FontWeight::MEDIUM,
+                rgb(0xffffff).into(),
+            ))
             .into_any_element()
     }
 }
@@ -2551,5 +3094,113 @@ mod tests {
         assert!((mid.r - full.r).abs() < 0.02);
         assert!((mid.g - full.g).abs() < 0.02);
         assert!((mid.b - full.b).abs() < 0.02);
+    }
+
+    #[gpui::test]
+    fn indicator_glides_across_frames_with_liquid_stretch_and_snaps_on_idle_resize(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use super::ProIndicatorState;
+        use gpui::{Bounds, SharedString, canvas, div, point, prelude::*, px, size};
+        use std::{cell::Cell, rc::Rc, time::Duration};
+
+        struct IndHarness {
+            key: SharedString,
+            target: Bounds<gpui::Pixels>,
+            ind: ProIndicatorState,
+            painted: Rc<Cell<Bounds<gpui::Pixels>>>,
+        }
+        impl gpui::Render for IndHarness {
+            fn render(
+                &mut self,
+                _: &mut gpui::Window,
+                cx: &mut gpui::Context<Self>,
+            ) -> impl gpui::IntoElement {
+                let ent = cx.entity();
+                let painted = self.painted.clone();
+                div().size_full().child(
+                    canvas(
+                        |_, _, _| (),
+                        move |surface, _, win, app| {
+                            let rect = ent.update(app, |h, app| {
+                                let k = h.key.clone();
+                                let t = h.target;
+                                h.ind.update_rect(&k, t, surface, 0.25, win, app)
+                            });
+                            painted.set(rect);
+                        },
+                    )
+                    .size_full(),
+                )
+            }
+        }
+
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let tab0 = Bounds::new(point(px(4.), px(6.)), size(px(80.), px(28.)));
+        let tab1 = Bounds::new(point(px(120.), px(6.)), size(px(90.), px(28.)));
+        let painted = Rc::new(Cell::new(Bounds::default()));
+        let painted_read = painted.clone();
+        let (ent, w) = cx.add_window_view(|_, _| IndHarness {
+            key: "tab-0".into(),
+            target: tab0,
+            ind: ProIndicatorState::new("tab-0".into()),
+            painted,
+        });
+        w.simulate_resize(size(px(400.), px(40.)));
+        w.run_until_parked();
+
+        // Frame 0: initial mount snaps cleanly to tab0.
+        let r0 = painted_read.get();
+        assert_eq!(r0.origin.x, px(4.));
+        assert_eq!(r0.size.width, px(80.));
+
+        // Selection changes to tab1 -> Frame 1 starts from tab0.
+        w.update(|_, app| {
+            ent.update(app, |h, cx| {
+                h.key = "tab-1".into();
+                h.target = tab1;
+                cx.notify();
+            });
+        });
+        w.run_until_parked();
+        assert_eq!(painted_read.get().origin.x, px(4.));
+
+        // Frame 2 (+70ms): MUST glide smoothly (never reset on Frame 2!) and exhibit liquid stretch.
+        exec.advance_clock(Duration::from_millis(70));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+        let r2 = painted_read.get();
+        let x2 = f32::from(r2.origin.x);
+        let w2 = f32::from(r2.size.width);
+        assert!(
+            x2 > 8. && x2 < 112.,
+            "expected in-flight X at +70ms, got {x2}"
+        );
+        assert!(
+            w2 > 92.,
+            "expected asymmetric leading-edge liquid stretch > 90px at +70ms, got {w2}"
+        );
+
+        // Settled (+600ms): reaches exact tab1 geometry.
+        exec.advance_clock(Duration::from_millis(600));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+        let r3 = painted_read.get();
+        assert!((f32::from(r3.origin.x) - 120.).abs() < 0.2);
+        assert!((f32::from(r3.size.width) - 90.).abs() < 0.2);
+
+        // Idle resize: snaps immediately without lag when key has not changed.
+        let tab1_resized = Bounds::new(point(px(140.), px(6.)), size(px(108.), px(28.)));
+        w.update(|_, app| {
+            ent.update(app, |h, cx| {
+                h.target = tab1_resized;
+                cx.notify();
+            });
+        });
+        w.run_until_parked();
+        let r4 = painted_read.get();
+        assert_eq!(r4.origin.x, px(140.));
+        assert_eq!(r4.size.width, px(108.));
     }
 }

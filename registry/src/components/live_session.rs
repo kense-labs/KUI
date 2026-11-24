@@ -6,16 +6,18 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_mark_selected, pro_modal_appear, pro_person_avatar, pro_pill_indicator,
-        pro_presence, pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_modal_appear, pro_person_avatar, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
@@ -23,7 +25,6 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
-const CHECK_CIRCLE_SVG: &str = r##"<circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="m5.4 8.2 1.8 1.8 3.4-3.7" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>"##;
 const ACTIVE_ARC_SVG: &str = r#"<circle cx="8" cy="8" r="5.8" fill="none" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.6"></circle><path d="M8 2.2a5.8 5.8 0 0 1 5.8 5.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>"#;
 const PENDING_RING_SVG: &str = r#"<circle cx="8" cy="8" r="5.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2.2"></circle>"#;
 const FILE_SHEET_SVG: &str = r#"<path d="M3.3 1h3.9L10 3.8v6.4c0 .72-.58 1.3-1.3 1.3H3.3c-.72 0-1.3-.58-1.3-1.3V2.3C2 1.58 2.58 1 3.3 1Z" fill="currentColor" opacity="0.45"></path><path d="M7.2 1v1.8c0 .55.45 1 1 1H10Z" fill="currentColor"></path>"#;
@@ -850,74 +851,92 @@ impl LiveSessionBlock {
 
         // "Everyone" tab
         let all_sel = self.focus_agent.is_none();
-        tabs = tabs.child(activate(
-            div()
-                .id(pro_eid(&self.id, "tab-everyone"))
-                .role(Role::Tab)
-                .aria_label(tr(cx, "Everyone", "全部成员"))
-                .tab_index(0)
-                .relative()
-                .h(px(28.))
-                .px(px(9.))
-                .rounded(px(7.))
-                .when(all_sel, |d| d.child(pro_mark_selected(&sensor)))
-                .when(!all_sel, |d| d.hover(move |s| s.bg(p.hover)))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .flex()
-                .items_center()
-                .text_size(px(12.5))
-                .font_weight(if all_sel {
-                    FontWeight::MEDIUM
+        tabs = tabs.child(
+            pro_tactile(
+                pro_eid(&self.id, "tab-everyone"),
+                tr(cx, "Everyone", "全部成员"),
+                7.,
+                transparent_black(),
+                if all_sel {
+                    transparent_black()
                 } else {
-                    FontWeight::NORMAL
-                })
-                .text_color(if all_sel { p.ink } else { p.muted })
-                .cursor_pointer()
-                .child(tr(cx, "Everyone", "全部")),
-            cx,
-            |this, _, cx| {
-                this.set_focus_agent(None, cx);
-            },
-        ));
+                    p.hover
+                },
+                transparent_black(),
+                transparent_black(),
+                all_sel,
+                div()
+                    .h(px(28.))
+                    .px(px(9.))
+                    .flex()
+                    .items_center()
+                    .whitespace_nowrap()
+                    .text_size(px(12.5))
+                    .font_weight(if all_sel {
+                        FontWeight::MEDIUM
+                    } else {
+                        FontWeight::NORMAL
+                    })
+                    .text_color(if all_sel { p.ink } else { p.muted })
+                    .child(tr(cx, "Everyone", "全部")),
+                cx,
+                |this, _, cx| {
+                    this.set_focus_agent(None, cx);
+                },
+            )
+            .role(Role::Tab)
+            .relative()
+            .flex_none()
+            .when(all_sel, |d| d.child(pro_mark_selected(&sensor))),
+        );
 
         // "You" tab
         let you_sel = self.focus_agent.as_deref() == Some("you");
-        tabs = tabs.child(activate(
-            div()
-                .id(pro_eid(&self.id, "tab-you"))
-                .role(Role::Tab)
-                .aria_label(tr(cx, "You", "你"))
-                .tab_index(0)
-                .relative()
-                .h(px(28.))
-                .px(px(8.))
-                .rounded(px(7.))
-                .when(you_sel, |d| d.child(pro_mark_selected(&sensor)))
-                .when(!you_sel, |d| d.hover(move |s| s.bg(p.hover)))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .text_size(px(12.5))
-                .font_weight(if you_sel {
-                    FontWeight::MEDIUM
+        tabs = tabs.child(
+            pro_tactile(
+                pro_eid(&self.id, "tab-you"),
+                tr(cx, "You", "你"),
+                7.,
+                transparent_black(),
+                if you_sel {
+                    transparent_black()
                 } else {
-                    FontWeight::NORMAL
-                })
-                .text_color(if you_sel { p.ink } else { p.muted })
-                .cursor_pointer()
-                .child(pro_person_avatar("You", 18., true, None, cx))
-                .child(tr(cx, "You", "你")),
-            cx,
-            |this, _, cx| {
-                let next = if this.focus_agent.as_deref() == Some("you") {
-                    None
-                } else {
-                    Some(SharedString::from("you"))
-                };
-                this.set_focus_agent(next, cx);
-            },
-        ));
+                    p.hover
+                },
+                transparent_black(),
+                transparent_black(),
+                you_sel,
+                div()
+                    .h(px(28.))
+                    .px(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .whitespace_nowrap()
+                    .text_size(px(12.5))
+                    .font_weight(if you_sel {
+                        FontWeight::MEDIUM
+                    } else {
+                        FontWeight::NORMAL
+                    })
+                    .text_color(if you_sel { p.ink } else { p.muted })
+                    .child(pro_person_avatar("You", 18., true, None, cx))
+                    .child(tr(cx, "You", "你")),
+                cx,
+                |this, _, cx| {
+                    let next = if this.focus_agent.as_deref() == Some("you") {
+                        None
+                    } else {
+                        Some(SharedString::from("you"))
+                    };
+                    this.set_focus_agent(next, cx);
+                },
+            )
+            .role(Role::Tab)
+            .relative()
+            .flex_none()
+            .when(you_sel, |d| d.child(pro_mark_selected(&sensor))),
+        );
 
         // Agent chips with twinkling 3x3 pixel avatars
         for agent in &self.agents {
@@ -925,42 +944,47 @@ impl LiveSessionBlock {
             let sel = self.focus_agent.as_ref() == Some(&aid);
             let col = agent_color(&aid, &p);
             let working = is_live_running && agent.busy;
-            tabs = tabs.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("tab-agent-{aid}")))
-                    .role(Role::Tab)
-                    .aria_label(agent.name.clone())
-                    .tab_index(0)
-                    .relative()
-                    .h(px(28.))
-                    .px(px(8.))
-                    .rounded(px(7.))
-                    .when(sel, |d| d.child(pro_mark_selected(&sensor)))
-                    .when(!sel, |d| d.hover(move |s| s.bg(p.hover)))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .text_size(px(12.5))
-                    .font_weight(if sel {
-                        FontWeight::MEDIUM
-                    } else {
-                        FontWeight::NORMAL
-                    })
-                    .text_color(if sel { p.ink } else { p.muted })
-                    .cursor_pointer()
-                    .child(pro_agent_avatar(&aid, col, 18., working, elapsed_ms, cx))
-                    .child(agent.name.clone()),
-                cx,
-                move |this, _, cx| {
-                    let next = if this.focus_agent.as_ref() == Some(&aid) {
-                        None
-                    } else {
-                        Some(aid.clone())
-                    };
-                    this.set_focus_agent(next, cx);
-                },
-            ));
+            tabs = tabs.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("tab-agent-{aid}")),
+                    agent.name.clone(),
+                    7.,
+                    transparent_black(),
+                    if sel { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    sel,
+                    div()
+                        .h(px(28.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .whitespace_nowrap()
+                        .text_size(px(12.5))
+                        .font_weight(if sel {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if sel { p.ink } else { p.muted })
+                        .child(pro_agent_avatar(&aid, col, 18., working, elapsed_ms, cx))
+                        .child(agent.name.clone()),
+                    cx,
+                    move |this, _, cx| {
+                        let next = if this.focus_agent.as_ref() == Some(&aid) {
+                            None
+                        } else {
+                            Some(aid.clone())
+                        };
+                        this.set_focus_agent(next, cx);
+                    },
+                )
+                .role(Role::Tab)
+                .relative()
+                .flex_none()
+                .when(sel, |d| d.child(pro_mark_selected(&sensor))),
+            );
         }
 
         let (dot_col, status_txt) = match self.status {
@@ -987,7 +1011,13 @@ impl LiveSessionBlock {
                     .text_size(px(12.))
                     .text_color(p.muted)
                     .child(div().size(px(6.)).rounded_full().bg(dot_col))
-                    .child(status_txt),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "live-status-lbl"),
+                        status_txt,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             )
     }
 
@@ -995,6 +1025,7 @@ impl LiveSessionBlock {
         &self,
         msg: &StreamMessage,
         elapsed_ms: f32,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let p = ProPalette::get(cx);
@@ -1002,7 +1033,13 @@ impl LiveSessionBlock {
             .focus_agent
             .as_ref()
             .is_none_or(|fid| msg.involves_agent(fid));
-        let row_opacity = if kept { 1.0 } else { 0.30 };
+        let row_opacity = pro_spring_f32(
+            pro_eid(&self.id, format!("msg-op-{}", msg.id)),
+            if kept { 1.0 } else { 0.30 },
+            0.22,
+            w,
+            cx,
+        );
 
         if msg.kind == StreamMessageKind::System {
             return div()
@@ -1028,19 +1065,25 @@ impl LiveSessionBlock {
         });
         let msg_id = msg.id.clone();
         let selected = self.selected_msg.as_ref() == Some(&msg_id);
+        let sel_mix = pro_spring_f32(
+            pro_eid(&self.id, format!("msg-sel-{}", msg.id)),
+            if selected { 1.0 } else { 0.0 },
+            0.20,
+            w,
+            cx,
+        );
 
         let reply_author = sender_name.clone();
         let reply_snip: SharedString = msg.text.chars().take(64).collect::<String>().into();
         let reply_mid = msg.id.clone();
 
         let bubble_bg: Hsla = if is_you { p.subtle } else { p.card };
-        let bubble_border: Hsla = if selected {
-            p.blue.opacity(0.55)
-        } else if msg.needs_you {
+        let base_border: Hsla = if msg.needs_you {
             p.amber.opacity(0.45)
         } else {
             p.line
         };
+        let bubble_border: Hsla = pro_mix_color(base_border, p.blue.opacity(0.58), sel_mix);
 
         let quote_el = msg.reply_to.as_ref().map(|(who, snippet)| {
             div()
@@ -1093,34 +1136,36 @@ impl LiveSessionBlock {
             }
             for att in &msg.attachments {
                 let att_clone = att.clone();
-                chips = chips.child(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("att-{}-{}", msg.id, att.id)))
-                        .role(Role::Button)
-                        .aria_label(att.name.clone())
-                        .tab_index(0)
-                        .h(px(24.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .bg(p.chip)
-                        .border_1()
-                        .border_color(p.line)
-                        .hover(move |s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .text_size(px(12.))
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .child(pro_svg("0 0 12 12", FILE_SHEET_SVG, 11., p.blue))
-                        .child(att.name.clone()),
-                    cx,
-                    move |this, _, cx| {
-                        cx.emit(LiveSessionEvent::FileOpened(att_clone.name.clone()));
-                        this.preview_file = Some(att_clone.clone());
-                        cx.notify();
-                    },
-                ));
+                chips = chips.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("att-{}-{}", msg.id, att.id)),
+                        att.name.clone(),
+                        6.,
+                        p.chip,
+                        p.chip_hover,
+                        p.line,
+                        p.line_strong,
+                        false,
+                        div()
+                            .h(px(24.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .whitespace_nowrap()
+                            .text_size(px(12.))
+                            .text_color(p.ink)
+                            .child(pro_svg("0 0 12 12", FILE_SHEET_SVG, 11., p.blue))
+                            .child(att.name.clone()),
+                        cx,
+                        move |this, _, cx| {
+                            cx.emit(LiveSessionEvent::FileOpened(att_clone.name.clone()));
+                            this.preview_file = Some(att_clone.clone());
+                            cx.notify();
+                        },
+                    )
+                    .flex_none(),
+                );
             }
             Some(chips)
         } else {
@@ -1206,21 +1251,23 @@ impl LiveSessionBlock {
                             .gap(px(6.))
                             .child({
                                 let msg_from = msg.from.clone();
-                                activate(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("reply-btn-{}", msg.id)),
+                                    tr(cx, "Reply", "回复"),
+                                    4.,
+                                    transparent_black(),
+                                    p.chip,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    false,
                                     div()
-                                        .id(pro_eid(&self.id, format!("reply-btn-{}", msg.id)))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Reply", "回复"))
-                                        .tab_index(0)
                                         .h(px(18.))
                                         .px(px(5.))
-                                        .rounded(px(4.))
-                                        .hover(move |s| s.bg(p.chip))
                                         .flex()
                                         .items_center()
+                                        .whitespace_nowrap()
                                         .text_size(px(11.))
                                         .text_color(p.muted)
-                                        .cursor_pointer()
                                         .child(tr(cx, "Reply", "回复")),
                                     cx,
                                     move |this, w, cx| {
@@ -1238,6 +1285,7 @@ impl LiveSessionBlock {
                                         cx.notify();
                                     },
                                 )
+                                .flex_none()
                             })
                             .child(
                                 div()
@@ -1257,13 +1305,23 @@ impl LiveSessionBlock {
             .when_some(apps_and_files, |d, af| d.child(af));
 
         if is_you {
-            div()
+            let is_dynamic_user = msg.id.as_ref().starts_with("user-");
+            let row = div()
                 .w_full()
                 .opacity(row_opacity)
                 .flex()
                 .justify_end()
                 .child(card)
+                .into_any_element();
+            if is_dynamic_user {
+                SessionMessageEntrance {
+                    id: pro_eid(&self.id, format!("msg-ent-{}", msg.id)),
+                    content: row,
+                }
                 .into_any_element()
+            } else {
+                row
+            }
         } else {
             let col = agent_color(&msg.from, &p);
             let working = self.live && self.status == LiveSessionStatus::Running;
@@ -1290,7 +1348,7 @@ impl LiveSessionBlock {
         }
     }
 
-    fn render_composer(&self, cx: &mut Context<Self>) -> Div {
+    fn render_composer(&self, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = ProPalette::get(cx);
         let draft_val = self
             .composer_editor
@@ -1298,97 +1356,152 @@ impl LiveSessionBlock {
             .map(|e| e.read(cx).value().trim().to_owned())
             .unwrap_or_default();
         let can_send = !draft_val.is_empty();
+        let send_t = pro_spring_f32(
+            pro_eid(&self.id, "ls-send-t"),
+            f32::from(can_send),
+            0.18,
+            w,
+            cx,
+        );
+        let send_bg = pro_mix_color(p.chip, p.primary, send_t);
+        let send_fg = pro_mix_color(p.faint, p.on_primary, send_t);
+
         let target_label = match &self.mention_target {
             Some(tid) => format!("{} @{}", tr(cx, "to", "发给"), self.agent_name(tid, cx)),
             None => tr(cx, "to everyone", "发给全部智能体").to_owned(),
         };
 
-        let mention_popup = pro_presence(
-            pro_eid(&self.id, "mention-pop"),
-            self.mention_menu_open,
-            0.16,
-            0.12,
-            {
-                let agents = self.agents.clone();
-                let current_target = self.mention_target.clone();
-                let base_id = self.id.clone();
-                let ent = cx.entity();
-                move |amt| {
-                    let pop_el = div()
-                        .absolute()
-                        .bottom(px(94.))
-                        .left(px(8.))
-                        .w(px(220.))
-                        .p(px(4.))
-                        .rounded(px(10.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_md()
-                        .opacity(amt)
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child({
-                            let ent_all = ent.clone();
-                            let sel = current_target.is_none();
-                            div()
-                                .id(pro_eid(&base_id, "at-opt-all"))
-                                .h(px(28.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .bg(if sel { p.chip } else { transparent_black() })
-                                .hover(move |s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .text_size(px(12.5))
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                    ent_all.update(cx, |this, cx| {
-                                        this.mention_target = None;
-                                        this.mention_menu_open = false;
-                                        cx.notify();
-                                    });
-                                })
-                                .child("Everyone")
-                        })
-                        .children(agents.into_iter().map(|ag| {
-                            let ent_ag = ent.clone();
-                            let aid = ag.id.clone();
-                            let sel = current_target.as_ref() == Some(&aid);
-                            div()
-                                .id(pro_eid(&base_id, format!("at-opt-{aid}")))
-                                .h(px(28.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .bg(if sel { p.chip } else { transparent_black() })
-                                .hover(move |s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .text_size(px(12.5))
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                    let pick = aid.clone();
-                                    ent_ag.update(cx, |this, cx| {
-                                        this.mention_target = Some(pick);
-                                        this.mention_menu_open = false;
-                                        cx.notify();
-                                    });
-                                })
-                                .child(format!("@{}", ag.name))
-                                .child(div().text_size(px(11.)).text_color(p.faint).child(ag.model))
-                        }));
-                    pop_el.into_any_element()
-                }
-            },
-        );
+        let agents = self.agents.clone();
+        let current_target = self.mention_target.clone();
+        let base_id = self.id.clone();
+        let ent = cx.entity();
+        let mention_popup =
+            div()
+                .absolute()
+                .bottom(px(94.))
+                .left(px(8.))
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "mention-pop"),
+                    self.mention_menu_open,
+                    move || {
+                        let sel_all = current_target.is_none();
+                        let ent_all = ent.clone();
+                        div()
+                            .w(px(224.))
+                            .p(px(4.))
+                            .rounded(px(10.))
+                            .bg(p.card)
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .shadow_md()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .id(pro_eid(&base_id, "at-opt-all"))
+                                    .h(px(28.))
+                                    .px(px(8.))
+                                    .rounded(px(6.))
+                                    .bg(if sel_all { p.chip } else { transparent_black() })
+                                    .hover(move |s| s.bg(p.hover))
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .text_size(px(12.5))
+                                    .text_color(p.ink)
+                                    .cursor_pointer()
+                                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                        ent_all.update(cx, |this, cx| {
+                                            this.mention_target = None;
+                                            this.mention_menu_open = false;
+                                            cx.notify();
+                                        });
+                                    })
+                                    .child("Everyone")
+                                    .when(sel_all, |d| {
+                                        d.child(pro_check_draw(
+                                            pro_eid(&base_id, "at-chk-all"),
+                                            true,
+                                            13.,
+                                            false,
+                                            p.blue,
+                                        ))
+                                    }),
+                            )
+                            .children(agents.into_iter().map(|ag| {
+                                let ent_ag = ent.clone();
+                                let aid = ag.id.clone();
+                                let sel = current_target.as_ref() == Some(&aid);
+                                div()
+                                    .id(pro_eid(&base_id, format!("at-opt-{aid}")))
+                                    .h(px(28.))
+                                    .px(px(8.))
+                                    .rounded(px(6.))
+                                    .bg(if sel { p.chip } else { transparent_black() })
+                                    .hover(move |s| s.bg(p.hover))
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(6.))
+                                    .text_size(px(12.5))
+                                    .text_color(p.ink)
+                                    .cursor_pointer()
+                                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                        let pick = aid.clone();
+                                        ent_ag.update(cx, |this, cx| {
+                                            this.mention_target = Some(pick);
+                                            this.mention_menu_open = false;
+                                            cx.notify();
+                                        });
+                                    })
+                                    .child(format!("@{}", ag.name))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(5.))
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.))
+                                                    .text_color(p.faint)
+                                                    .child(ag.model),
+                                            )
+                                            .when(sel, |d| {
+                                                d.child(pro_check_draw(
+                                                    pro_eid(&base_id, format!("at-chk-{}", ag.id)),
+                                                    true,
+                                                    13.,
+                                                    false,
+                                                    p.blue,
+                                                ))
+                                            }),
+                                    )
+                            }))
+                            .into_any_element()
+                    },
+                ));
 
         let ed_focus_click = self.composer_editor.clone();
         let ed_submit = self.composer_editor.clone();
+        let has_reply = self.reply_target.is_some();
+        let (reply_who, reply_snip) = self
+            .reply_target
+            .as_ref()
+            .map(|(_, w_s, s_s)| (w_s.clone(), s_s.clone()))
+            .unwrap_or_default();
+        let clear_reply_btn = pro_icon_btn(
+            pro_eid(&self.id, "clear-reply"),
+            tr(cx, "Clear reply", "取消回复"),
+            ProIcon::Close,
+            20.,
+            false,
+            cx,
+            |this, _, cx| {
+                this.reply_target = None;
+                cx.notify();
+            },
+        );
 
         div()
             .relative()
@@ -1411,8 +1524,12 @@ impl LiveSessionBlock {
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .when_some(self.reply_target.clone(), |d, (_, who, snip)| {
-                        d.child(
+                    .child(pro_fold(
+                        pro_eid(&self.id, "ls-reply-fold"),
+                        has_reply,
+                        28.,
+                        8.,
+                        move || {
                             div()
                                 .w_full()
                                 .px(px(8.))
@@ -1434,35 +1551,20 @@ impl LiveSessionBlock {
                                             div()
                                                 .font_weight(FontWeight::MEDIUM)
                                                 .text_color(p.ink)
-                                                .child(who),
+                                                .child(reply_who),
                                         )
                                         .child(
                                             div()
                                                 .min_w_0()
                                                 .text_color(p.muted)
                                                 .truncate()
-                                                .child(snip),
+                                                .child(reply_snip),
                                         ),
                                 )
-                                .child(activate(
-                                    div()
-                                        .id(pro_eid(&self.id, "clear-reply"))
-                                        .size(px(18.))
-                                        .rounded(px(4.))
-                                        .hover(move |s| s.bg(p.hover))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .child(pro_icon(ProIcon::Close, 11., p.muted)),
-                                    cx,
-                                    |this, _, cx| {
-                                        this.reply_target = None;
-                                        cx.notify();
-                                    },
-                                )),
-                        )
-                    })
+                                .child(clear_reply_btn)
+                                .into_any_element()
+                        },
+                    ))
                     .child(
                         div()
                             .id(pro_eid(&self.id, "composer-input-hit"))
@@ -1495,98 +1597,108 @@ impl LiveSessionBlock {
                                     .items_center()
                                     .gap(px(6.))
                                     .min_w_0()
-                                    .child(activate(
-                                        div()
-                                            .id(pro_eid(&self.id, "at-mention-btn"))
-                                            .role(Role::Button)
-                                            .aria_label(tr(cx, "Mention an agent", "指定智能体"))
-                                            .tab_index(0)
-                                            .size(px(26.))
-                                            .rounded_full()
-                                            .bg(if self.mention_menu_open {
+                                    .child(
+                                        pro_tactile(
+                                            pro_eid(&self.id, "at-mention-btn"),
+                                            tr(cx, "Mention an agent", "指定智能体"),
+                                            999.,
+                                            if self.mention_menu_open {
                                                 p.chip_hover
                                             } else {
                                                 p.chip
-                                            })
-                                            .hover(move |s| s.bg(p.chip_hover))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .text_size(px(13.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .cursor_pointer()
-                                            .child("@"),
-                                        cx,
-                                        |this, _, cx| {
-                                            this.mention_menu_open = !this.mention_menu_open;
-                                            cx.notify();
-                                        },
-                                    ))
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .text_color(p.muted)
-                                            .truncate()
-                                            .child(target_label),
-                                    )
-                                    .when(self.mention_target.is_some(), |d| {
-                                        d.child(activate(
+                                            },
+                                            p.chip_hover,
+                                            transparent_black(),
+                                            transparent_black(),
+                                            self.mention_menu_open,
                                             div()
-                                                .id(pro_eid(&self.id, "clear-mention"))
-                                                .h(px(18.))
-                                                .px(px(5.))
-                                                .rounded(px(4.))
-                                                .hover(move |s| s.bg(p.hover))
+                                                .size(px(26.))
                                                 .flex()
                                                 .items_center()
-                                                .text_size(px(11.))
-                                                .text_color(p.faint)
-                                                .cursor_pointer()
-                                                .child(tr(cx, "Reset", "清除")),
+                                                .justify_center()
+                                                .text_size(px(13.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.ink)
+                                                .child("@"),
                                             cx,
                                             |this, _, cx| {
-                                                this.mention_target = None;
+                                                this.mention_menu_open = !this.mention_menu_open;
                                                 cx.notify();
                                             },
-                                        ))
+                                        )
+                                        .flex_none(),
+                                    )
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "ls-mention-lbl"),
+                                        target_label,
+                                        12.,
+                                        FontWeight::NORMAL,
+                                        p.muted,
+                                    ))
+                                    .when(self.mention_target.is_some(), |d| {
+                                        d.child(
+                                            pro_tactile(
+                                                pro_eid(&self.id, "clear-mention"),
+                                                tr(cx, "Reset", "清除"),
+                                                4.,
+                                                transparent_black(),
+                                                p.hover,
+                                                transparent_black(),
+                                                transparent_black(),
+                                                false,
+                                                div()
+                                                    .h(px(18.))
+                                                    .px(px(5.))
+                                                    .flex()
+                                                    .items_center()
+                                                    .whitespace_nowrap()
+                                                    .text_size(px(11.))
+                                                    .text_color(p.faint)
+                                                    .child(tr(cx, "Reset", "清除")),
+                                                cx,
+                                                |this, _, cx| {
+                                                    this.mention_target = None;
+                                                    cx.notify();
+                                                },
+                                            )
+                                            .flex_none(),
+                                        )
                                     }),
                             )
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, "composer-send"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Send message", "发送"))
-                                    .tab_index(0)
-                                    .size(px(28.))
-                                    .rounded_full()
-                                    .bg(if can_send { p.primary } else { p.chip })
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .child(pro_icon(
-                                        ProIcon::ArrowUp,
-                                        14.,
-                                        if can_send { p.on_primary } else { p.faint },
-                                    )),
-                                cx,
-                                move |this, w, cx| {
-                                    if let Some(ed) = &ed_submit {
-                                        let val = ed.read(cx).value().trim().to_owned();
-                                        if !val.is_empty() {
-                                            this.send_steer_message(val, cx);
-                                            ed.update(cx, |e, cx| e.set_value("", w, cx));
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, "composer-send"),
+                                    tr(cx, "Send message", "发送"),
+                                    999.,
+                                    send_bg,
+                                    pro_mix_color(send_bg, p.hover, 0.25),
+                                    transparent_black(),
+                                    transparent_black(),
+                                    can_send,
+                                    div()
+                                        .size(px(28.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_icon(ProIcon::ArrowUp, 14., send_fg)),
+                                    cx,
+                                    move |this, w, cx| {
+                                        if let Some(ed) = &ed_submit {
+                                            let val = ed.read(cx).value().trim().to_owned();
+                                            if !val.is_empty() {
+                                                this.send_steer_message(val, cx);
+                                                ed.update(cx, |e, cx| e.set_value("", w, cx));
+                                            }
                                         }
-                                    }
-                                },
-                            )),
+                                    },
+                                )
+                                .flex_none(),
+                            ),
                     ),
             )
     }
 
-    fn render_plan_card(&self, cx: &mut Context<Self>) -> Div {
+    fn render_plan_card(&self, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = ProPalette::get(cx);
         let done_count = self
             .steps
@@ -1595,6 +1707,7 @@ impl LiveSessionBlock {
             .count();
         let total_steps = self.steps.len().max(1);
         let current_step_num = (done_count + 1).min(total_steps);
+        let plan_ratio = (done_count as f32 / total_steps as f32).clamp(0.0, 1.0);
 
         let spark_col = match self.status {
             LiveSessionStatus::Running => p.blue,
@@ -1629,13 +1742,31 @@ impl LiveSessionBlock {
                 .as_ref()
                 .is_some_and(|fid| &step.agent != fid);
             let sid = step.id.clone();
+            let step_opacity = pro_spring_f32(
+                pro_eid(&self.id, format!("step-op-{sid}")),
+                if faded { 0.36 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
             let agent_lbl = self.agent_name(&step.agent, cx);
             let is_you_step = step.agent.as_ref() == "you";
+            let is_done = step.status == SessionStepStatus::Done;
 
-            let status_glyph = match step.status {
-                SessionStepStatus::Done => pro_svg("0 0 16 16", CHECK_CIRCLE_SVG, 15., p.blue),
-                SessionStepStatus::Active => pro_svg("0 0 16 16", ACTIVE_ARC_SVG, 15., p.blue),
-                SessionStepStatus::Pending => pro_svg("0 0 16 16", PENDING_RING_SVG, 15., p.faint),
+            let status_glyph: AnyElement = match step.status {
+                SessionStepStatus::Done => pro_check_draw(
+                    pro_eid(&self.id, format!("step-chk-{sid}")),
+                    true,
+                    15.,
+                    false,
+                    p.blue,
+                ),
+                SessionStepStatus::Active => {
+                    pro_svg("0 0 16 16", ACTIVE_ARC_SVG, 15., p.blue).into_any_element()
+                }
+                SessionStepStatus::Pending => {
+                    pro_svg("0 0 16 16", PENDING_RING_SVG, 15., p.faint).into_any_element()
+                }
             };
 
             let title_el: AnyElement = if step.status == SessionStepStatus::Active
@@ -1668,90 +1799,105 @@ impl LiveSessionBlock {
                     .into_any_element()
             };
 
+            let has_note = step.note.is_some();
+            let note_txt = step.note.clone().unwrap_or_default();
+            let sid_click = sid.clone();
+
             steps_col = steps_col.child(
                 div()
                     .relative()
                     .w_full()
-                    .py(px(5.))
-                    .opacity(if faded { 0.36 } else { 1.0 })
+                    .py(px(3.))
+                    .opacity(step_opacity)
                     .when(!is_last, |d| {
                         d.child(
                             div()
                                 .absolute()
-                                .left(px(7.))
+                                .left(px(11.5))
                                 .top(px(23.))
                                 .bottom(px(-4.))
                                 .w(px(1.))
                                 .bg(p.line_strong),
                         )
                     })
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("plan-step-{sid}")))
-                            .role(Role::Button)
-                            .aria_label(step.title.clone())
-                            .tab_index(0)
-                            .w_full()
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .cursor_pointer()
-                            .child(div().size(px(15.)).flex_none().child(status_glyph))
-                            .child(div().flex_1().min_w_0().overflow_hidden().child(title_el))
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .h(px(18.))
-                                    .px(px(5.))
-                                    .rounded(px(4.))
-                                    .bg(if is_you_step { p.amber_soft } else { p.chip })
-                                    .flex()
-                                    .items_center()
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if is_you_step { p.amber_ink } else { p.muted })
-                                    .child(agent_lbl),
-                            )
-                            .when_some(step.duration_label.clone(), |d, dur| {
-                                d.child(
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("plan-step-{sid}")),
+                            step.title.clone(),
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            is_done,
+                            div()
+                                .w_full()
+                                .px(px(4.))
+                                .py(px(2.))
+                                .flex()
+                                .items_center()
+                                .gap(px(9.))
+                                .child(div().size(px(15.)).flex_none().child(status_glyph))
+                                .child(div().flex_1().min_w_0().overflow_hidden().child(title_el))
+                                .child(
                                     div()
                                         .flex_none()
-                                        .text_size(px(11.5))
-                                        .text_color(p.faint)
-                                        .child(dur),
+                                        .h(px(18.))
+                                        .px(px(5.))
+                                        .rounded(px(4.))
+                                        .bg(if is_you_step { p.amber_soft } else { p.chip })
+                                        .flex()
+                                        .items_center()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(if is_you_step { p.amber_ink } else { p.muted })
+                                        .child(agent_lbl),
                                 )
-                            }),
-                        cx,
-                        move |this, _, cx| {
-                            if let Some(st) = this.steps.iter_mut().find(|s| s.id == sid) {
-                                st.status = match st.status {
-                                    SessionStepStatus::Done => SessionStepStatus::Pending,
-                                    _ => SessionStepStatus::Done,
-                                };
-                                let now_done = st.status == SessionStepStatus::Done;
-                                if this
-                                    .steps
-                                    .iter()
-                                    .all(|s| s.status == SessionStepStatus::Done)
+                                .when_some(step.duration_label.clone(), |d, dur| {
+                                    d.child(
+                                        div()
+                                            .flex_none()
+                                            .text_size(px(11.5))
+                                            .text_color(p.faint)
+                                            .child(dur),
+                                    )
+                                }),
+                            cx,
+                            move |this, _, cx| {
+                                if let Some(st) = this.steps.iter_mut().find(|s| s.id == sid_click)
                                 {
-                                    this.status = LiveSessionStatus::Done;
-                                } else if this.status == LiveSessionStatus::Done {
-                                    this.status = LiveSessionStatus::Running;
+                                    st.status = match st.status {
+                                        SessionStepStatus::Done => SessionStepStatus::Pending,
+                                        _ => SessionStepStatus::Done,
+                                    };
+                                    let now_done = st.status == SessionStepStatus::Done;
+                                    if this
+                                        .steps
+                                        .iter()
+                                        .all(|s| s.status == SessionStepStatus::Done)
+                                    {
+                                        this.status = LiveSessionStatus::Done;
+                                    } else if this.status == LiveSessionStatus::Done {
+                                        this.status = LiveSessionStatus::Running;
+                                    }
+                                    cx.emit(LiveSessionEvent::StepToggled {
+                                        step_id: sid_click.clone(),
+                                        done: now_done,
+                                    });
+                                    cx.notify();
                                 }
-                                cx.emit(LiveSessionEvent::StepToggled {
-                                    step_id: sid.clone(),
-                                    done: now_done,
-                                });
-                                cx.notify();
-                            }
-                        },
-                    ))
-                    .when_some(step.note.clone(), |d, note| {
-                        d.child(
+                            },
+                        )
+                        .w_full(),
+                    )
+                    .child(pro_fold(
+                        pro_eid(&self.id, format!("step-note-fold-{sid}")),
+                        has_note,
+                        28.,
+                        0.,
+                        move || {
                             div()
-                                .ml(px(24.))
+                                .ml(px(28.))
                                 .mt(px(4.))
                                 .px(px(8.))
                                 .py(px(4.))
@@ -1761,11 +1907,17 @@ impl LiveSessionBlock {
                                 .border_color(p.line)
                                 .text_size(px(11.5))
                                 .text_color(p.ink)
-                                .child(format!("↳ {note}")),
-                        )
-                    }),
+                                .child(format!("↳ {note_txt}"))
+                                .into_any_element()
+                        },
+                    )),
             );
         }
+
+        let sub_summary = format!(
+            "{} {current_step_num}/{total_steps} · {state_label}",
+            tr(cx, "Step", "步骤")
+        );
 
         div()
             .w_full()
@@ -1778,59 +1930,76 @@ impl LiveSessionBlock {
             .child(
                 div()
                     .px(px(14.))
-                    .py(px(12.))
+                    .pt(px(12.))
+                    .pb(px(10.))
                     .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .child(pro_icon(ProIcon::Sparkles, 15., spark_col))
+                    .flex_col()
+                    .gap(px(8.))
                     .child(
                         div()
-                            .flex_1()
-                            .min_w_0()
                             .flex()
-                            .flex_col()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(pro_icon(ProIcon::Sparkles, 15., spark_col))
                             .child(
                                 div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .truncate()
-                                    .child(self.task.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(p.muted)
-                                    .truncate()
-                                    .child(format!(
-                                        "{} {current_step_num}/{total_steps} · {state_label}",
-                                        tr(cx, "Step", "步骤")
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .text_size(px(13.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.strong)
+                                            .truncate()
+                                            .child(self.task.clone()),
+                                    )
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "plan-sub-lbl"),
+                                        sub_summary,
+                                        11.5,
+                                        FontWeight::NORMAL,
+                                        p.muted,
                                     )),
-                            ),
+                            )
+                            .child(pro_icon_btn(
+                                pro_eid(&self.id, "plan-pause-btn"),
+                                tr(cx, "Pause or resume plan", "暂停或恢复计划"),
+                                toggle_icon,
+                                28.,
+                                self.status == LiveSessionStatus::Paused,
+                                cx,
+                                |this, _, cx| {
+                                    this.status = match this.status {
+                                        LiveSessionStatus::Running => LiveSessionStatus::Paused,
+                                        LiveSessionStatus::Paused | LiveSessionStatus::Done => {
+                                            LiveSessionStatus::Running
+                                        }
+                                    };
+                                    cx.emit(LiveSessionEvent::StatusChanged(this.status));
+                                    cx.notify();
+                                },
+                            )),
                     )
-                    .child(pro_icon_btn(
-                        pro_eid(&self.id, "plan-pause-btn"),
-                        tr(cx, "Pause or resume plan", "暂停或恢复计划"),
-                        toggle_icon,
-                        28.,
-                        self.status == LiveSessionStatus::Paused,
-                        cx,
-                        |this, _, cx| {
-                            this.status = match this.status {
-                                LiveSessionStatus::Running => LiveSessionStatus::Paused,
-                                LiveSessionStatus::Paused | LiveSessionStatus::Done => {
-                                    LiveSessionStatus::Running
-                                }
-                            };
-                            cx.emit(LiveSessionEvent::StatusChanged(this.status));
-                            cx.notify();
-                        },
+                    .child(pro_spring_bar(
+                        pro_eid(&self.id, "plan-prog-bar"),
+                        plan_ratio,
+                        4.,
+                        2.,
+                        p.chip,
+                        spark_col,
                     )),
             )
             .child(steps_col)
     }
 
-    fn render_context_card(&self, spec: &SessionContextSpec, cx: &mut Context<Self>) -> Div {
+    fn render_context_card(
+        &self,
+        spec: &SessionContextSpec,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let p = ProPalette::get(cx);
         let used = spec.used_tokens();
         let limit = spec.limit.max(1);
@@ -1855,27 +2024,30 @@ impl LiveSessionBlock {
             cell_owners.push(None);
         }
 
-        // 3 rows x 20 cols proportional context waffle grid
+        // 3 rows x 20 cols spring-animated context waffle grid
         let mut waffle = div().mt(px(8.)).flex().flex_col().gap(px(2.5));
         for r in 0..3usize {
             let mut row_el = div().w_full().flex().gap(px(2.5));
             for c in 0..20usize {
                 let idx = r * 20 + c;
                 let entry = &cell_owners[idx];
-                let (bg, alpha) = match entry {
+                let (target_fill, base_col) = match entry {
                     Some((pid, col)) => {
                         let dim = self.hovered_ctx_part.as_ref().is_some_and(|hid| hid != pid);
-                        (*col, if dim { 0.25 } else { 1.0 })
+                        (if dim { 0.25 } else { 1.0 }, *col)
                     }
-                    None => (p.chip, 1.0),
+                    None => (0.0, p.blue),
                 };
-                row_el = row_el.child(
-                    div()
-                        .flex_1()
-                        .h(px(8.))
-                        .rounded(px(2.))
-                        .bg(bg.opacity(alpha)),
-                );
+                let fill_amt = pro_spring_f32(
+                    pro_eid(&self.id, format!("ctx-cell-{idx}")),
+                    target_fill,
+                    0.24,
+                    w,
+                    cx,
+                )
+                .clamp(0.0, 1.0);
+                let cell_bg = pro_mix_color(p.chip, base_col, fill_amt);
+                row_el = row_el.child(div().flex_1().h(px(8.)).rounded(px(2.)).bg(cell_bg));
             }
             waffle = waffle.child(row_el);
         }
@@ -1895,66 +2067,89 @@ impl LiveSessionBlock {
             let pid_hover = pid.clone();
             let has_files = !part.files.is_empty();
             let files_open = has_files && self.files_expanded;
+            let part_ratio = (part.tokens as f32 / limit as f32).clamp(0.0, 1.0);
 
             parts_list = parts_list.child(
                 div()
                     .w_full()
                     .flex()
                     .flex_col()
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("ctx-part-{pid}")))
-                            .h(px(28.))
-                            .px(px(6.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .cursor_pointer()
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("ctx-part-{pid}")),
+                            part.label.clone(),
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            files_open,
+                            div()
+                                .w_full()
+                                .h(px(28.))
+                                .px(px(6.))
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(div().size(px(8.)).rounded(px(2.)).bg(col))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_size(px(12.5))
+                                        .text_color(p.ink)
+                                        .truncate()
+                                        .child(part.label.clone()),
+                                )
+                                .child(div().w(px(38.)).flex_none().child(pro_spring_bar(
+                                    pro_eid(&self.id, format!("ctx-pbar-{pid}")),
+                                    part_ratio,
+                                    4.,
+                                    2.,
+                                    p.chip,
+                                    col,
+                                )))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("ctx-ptok-{pid}")),
+                                    part.tokens as f64 / 1000.0,
+                                    1,
+                                    "",
+                                    "k",
+                                    12.,
+                                    FontWeight::NORMAL,
+                                    p.muted,
+                                ))
+                                .when(has_files, |d| {
+                                    d.child(pro_icon(
+                                        if files_open {
+                                            ProIcon::ChevronUp
+                                        } else {
+                                            ProIcon::ChevronDown
+                                        },
+                                        12.,
+                                        p.muted,
+                                    ))
+                                }),
+                            cx,
+                            move |this, _, cx| {
+                                if has_files {
+                                    this.files_expanded = !this.files_expanded;
+                                    cx.notify();
+                                }
+                            },
+                        )
+                        .w_full()
+                        .on_hover(cx.listener(
+                            move |this, inside: &bool, _, cx| {
                                 if *inside {
                                     this.hovered_ctx_part = Some(pid_hover.clone());
                                 } else if this.hovered_ctx_part.as_ref() == Some(&pid_hover) {
                                     this.hovered_ctx_part = None;
                                 }
                                 cx.notify();
-                            }))
-                            .child(div().size(px(8.)).rounded(px(2.)).bg(col))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .text_size(px(12.5))
-                                    .text_color(p.ink)
-                                    .truncate()
-                                    .child(part.label.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(p.muted)
-                                    .child(format!("{:.1}k", part.tokens as f64 / 1000.0)),
-                            )
-                            .when(has_files, |d| {
-                                d.child(pro_icon(
-                                    if files_open {
-                                        ProIcon::ChevronUp
-                                    } else {
-                                        ProIcon::ChevronDown
-                                    },
-                                    12.,
-                                    p.muted,
-                                ))
-                            }),
-                        cx,
-                        move |this, _, cx| {
-                            if has_files {
-                                this.files_expanded = !this.files_expanded;
-                                cx.notify();
-                            }
-                        },
-                    ))
+                            },
+                        )),
+                    )
                     .when(has_files, |d| {
                         let files_snapshot = part.files.clone();
                         let base_id = self.id.clone();
@@ -2125,10 +2320,16 @@ impl LiveSessionBlock {
                                     .bg(pill_bg)
                                     .flex()
                                     .items_center()
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(pill_fg)
-                                    .child(format!("{pct}%")),
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "ctx-pct-num"),
+                                        pct as f64,
+                                        0,
+                                        "",
+                                        "%",
+                                        11.5,
+                                        FontWeight::MEDIUM,
+                                        pill_fg,
+                                    )),
                             ),
                     )
                     .child(waffle)
@@ -2144,33 +2345,22 @@ impl LiveSessionBlock {
                     .items_center()
                     .justify_between()
                     .gap(px(8.))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(format!("{free_k:.1}k {}", tr(cx, "free", "剩余可用"))),
-                    )
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "ctx-compact-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Compact context", "压缩上下文"))
-                            .tab_index(0)
-                            .h(px(26.))
-                            .px(px(9.))
-                            .rounded(px(6.))
-                            .bg(p.card)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .cursor_pointer()
-                            .child(tr(cx, "Compact", "压缩")),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "ctx-free-num"),
+                        free_k,
+                        1,
+                        "",
+                        format!("k {}", tr(cx, "free", "剩余可用")),
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
+                    .child(pro_btn(
+                        pro_eid(&self.id, "ctx-compact-btn"),
+                        tr(cx, "Compact", "压缩"),
+                        None,
+                        ProBtnStyle::Secondary,
+                        true,
                         cx,
                         |this, _, cx| {
                             if let Some(ctx) = &mut this.context
@@ -2193,6 +2383,33 @@ impl LiveSessionBlock {
                         },
                     )),
             )
+    }
+}
+
+#[derive(IntoElement)]
+struct SessionMessageEntrance {
+    id: ElementId,
+    content: AnyElement,
+}
+
+impl RenderOnce for SessionMessageEntrance {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(self.id, cx, |_, inner_cx| {
+            let mut s = Slide::new(0.);
+            s.duration(1., 0.24, inner_cx);
+            s
+        });
+        let amt = if disabled_motion(cx) {
+            1.0
+        } else {
+            st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.))
+        };
+        div()
+            .w_full()
+            .relative()
+            .top(px(6. * (1. - amt)))
+            .opacity(amt)
+            .child(self.content)
     }
 }
 
@@ -2284,12 +2501,12 @@ impl Render for LiveSessionBlock {
         }
 
         let top_tabs = self.render_top_tabs(elapsed_ms, cx);
-        let msg_rows: Vec<AnyElement> = self
-            .messages
+        let snapshot_msgs = self.messages.clone();
+        let msg_rows: Vec<AnyElement> = snapshot_msgs
             .iter()
-            .map(|m| self.render_message_row(m, elapsed_ms, cx))
+            .map(|m| self.render_message_row(m, elapsed_ms, w, cx))
             .collect();
-        let composer = self.render_composer(cx);
+        let composer = self.render_composer(w, cx);
 
         let stream_h = if stacked {
             self.max_height.min(360.)
@@ -2317,11 +2534,11 @@ impl Render for LiveSessionBlock {
             )
             .child(composer);
 
-        let plan_card = self.render_plan_card(cx);
+        let plan_card = self.render_plan_card(w, cx);
         let ctx_card = self
             .context
-            .as_ref()
-            .map(|spec| self.render_context_card(spec, cx));
+            .clone()
+            .map(|spec| self.render_context_card(&spec, w, cx));
 
         let right_rail = div()
             .when(!stacked, |d| d.w(px(308.)).flex_none())

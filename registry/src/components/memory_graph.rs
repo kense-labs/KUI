@@ -7,18 +7,23 @@
 use crate::{
     components::pro_chrome::{
         ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_connector_pulse,
-        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence, pro_shimmer_text,
-        pro_skeleton_bar, pro_switch, pro_toast_banner, tr,
+        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
+        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_switch,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         family::disabled_motion,
         pro_icons::{ProIcon, person_initials, pro_app_artwork, pro_icon, pro_raw_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 use web_time::Instant;
 
 const CHAT_BUBBLE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32"><path d="M9 3.5h9A3 3 0 0 1 21 6.5v6a3 3 0 0 1-3 3h-.5V18l-3-2.5H9a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3Z" fill="#00A1FF"/><path d="M3 9.5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v5.5a3 3 0 0 1-3 3H9.2L5.5 21v-3H6a3 3 0 0 1-3-3z" fill="#3CC7FF"/></svg>"##;
@@ -597,6 +602,7 @@ pub struct MemoryGraph {
     overlay: Option<MemoryGraphOverlay>,
     last_overlay: Option<MemoryGraphOverlay>,
     hovered_memory: Option<SharedString>,
+    hovered_tool: Option<SharedString>,
     mem_page: usize,
     live: bool,
     cycle_step: usize,
@@ -632,6 +638,7 @@ impl MemoryGraph {
             overlay: None,
             last_overlay: None,
             hovered_memory: None,
+            hovered_tool: None,
             mem_page: 0,
             live: true,
             cycle_step: 0,
@@ -984,26 +991,28 @@ impl MemoryGraph {
             hsla(209. / 360., 1.0, 0.44, 0.09)
         };
 
+        let ov_key: SharedString = match ov {
+            MemoryGraphOverlay::AddMenu => "add".into(),
+            MemoryGraphOverlay::Memory(mid) => format!("mem:{mid}").into(),
+            MemoryGraphOverlay::Tool(tid) => format!("tool:{tid}").into(),
+        };
+
         let body = match ov {
             MemoryGraphOverlay::AddMenu => {
                 let hover_bg = p.hover;
-                let focus_col = p.focus;
                 let drop_zone =
-                    activate(
+                    pro_tactile(
+                        pro_eid(&self.id, "add-drop-file"),
+                        tr(cx, "Drop a file or browse", "拖入文件或浏览上传"),
+                        8.0,
+                        p.chip,
+                        hover_bg,
+                        p.line_strong,
+                        p.line_strong,
+                        false,
                         div()
-                            .id(pro_eid(&self.id, "add-drop-file"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Drop a file or browse", "拖入文件或浏览上传"))
-                            .tab_index(0)
                             .w_full()
                             .p(px(10.))
-                            .rounded(px(8.))
-                            .bg(p.chip)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .hover(move |s| s.bg(hover_bg))
-                            .focus_visible(move |s| s.border_2().border_color(focus_col))
-                            .cursor_pointer()
                             .flex()
                             .items_center()
                             .gap(px(9.))
@@ -1058,19 +1067,19 @@ impl MemoryGraph {
                 } else {
                     for item in &self.catalog {
                         let cid = item.id.clone();
-                        let row = activate(
+                        let row = pro_tactile(
+                            pro_eid(&self.id, format!("cat-{cid}")),
+                            format!("{} · {}", item.name, item.scope),
+                            7.0,
+                            transparent_black(),
+                            hover_bg,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
                             div()
-                                .id(pro_eid(&self.id, format!("cat-{cid}")))
-                                .role(Role::Button)
-                                .aria_label(format!("{} · {}", item.name, item.scope))
-                                .tab_index(0)
                                 .w_full()
                                 .px(px(6.))
                                 .py(px(5.))
-                                .rounded(px(7.))
-                                .hover(move |s| s.bg(hover_bg))
-                                .focus_visible(move |s| s.border_1().border_color(focus_col))
-                                .cursor_pointer()
                                 .flex()
                                 .items_center()
                                 .gap(px(9.))
@@ -1475,7 +1484,11 @@ impl MemoryGraph {
             .border_1()
             .border_color(p.line_strong)
             .shadow_lg()
-            .child(body)
+            .child(pro_view_transition(
+                pro_eid(&self.id, "mg-ov-vtx"),
+                ov_key,
+                body,
+            ))
             .into_any_element()
     }
 }
@@ -1633,23 +1646,22 @@ impl Render for MemoryGraph {
         };
         let hot_bg = pro_mix_color(card_bg, light_blue, if p.dark { 0.09 } else { 0.065 });
         let hot_border = light_blue.opacity(0.52);
-        let focus_col = p.focus;
         let hover_border = p.line_strong;
 
-        // Header bar
-        let mem_sum = if UiLanguage::current(cx) == UiLanguage::Chinese {
-            format!("{} 条记忆", self.memories.len())
+        // Header bar with rolling memory/tool counts
+        let mem_sfx = if UiLanguage::current(cx) == UiLanguage::Chinese {
+            " 条记忆"
         } else if self.memories.len() == 1 {
-            "1 memory".to_owned()
+            " memory"
         } else {
-            format!("{} memories", self.memories.len())
+            " memories"
         };
-        let tool_sum = if UiLanguage::current(cx) == UiLanguage::Chinese {
-            format!("{} 个工具", self.tools.len())
+        let tool_sfx = if UiLanguage::current(cx) == UiLanguage::Chinese {
+            " 个工具"
         } else if self.tools.len() == 1 {
-            "1 tool".to_owned()
+            " tool"
         } else {
-            format!("{} tools", self.tools.len())
+            " tools"
         };
 
         let top_bar = div()
@@ -1671,10 +1683,26 @@ impl Render for MemoryGraph {
                     .flex()
                     .items_center()
                     .gap(px(10.))
-                    .text_size(px(12.))
-                    .text_color(p.muted)
-                    .child(mem_sum)
-                    .child(tool_sum),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "mg-mem-cnt"),
+                        self.memories.len() as f64,
+                        0,
+                        "",
+                        mem_sfx,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "mg-tool-cnt"),
+                        self.tools.len() as f64,
+                        0,
+                        "",
+                        tool_sfx,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
 
         // Build Agent card element (shared by ring & stacked modes)
@@ -1739,29 +1767,23 @@ impl Render for MemoryGraph {
         )
         .into();
 
-        let agent_btn = activate(
+        let agent_btn = pro_tactile(
+            pro_eid(&self.id, "mg-agent"),
+            agent_aria,
+            8.0,
+            card_bg,
+            pro_mix_color(card_bg, light_blue, if p.dark { 0.05 } else { 0.03 }),
+            if agent_is_open {
+                hot_border
+            } else {
+                p.line_strong
+            },
+            hover_border,
+            agent_is_open,
             div()
-                .id(pro_eid(&self.id, "mg-agent"))
-                .role(Role::Button)
-                .aria_label(agent_aria)
-                .aria_expanded(agent_is_open)
-                .tab_index(0)
                 .w(px(agent_w))
                 .h(px(agent_h))
                 .p(px(15.))
-                .rounded(px(8.))
-                .bg(card_bg)
-                .border_1()
-                .border_color(if agent_is_open {
-                    hot_border
-                } else {
-                    p.line_strong
-                })
-                .shadow_sm()
-                .hover(move |s| s.border_color(hover_border))
-                .focus_visible(move |s| s.border_2().border_color(focus_col))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .cursor_pointer()
                 .flex()
                 .flex_col()
                 .justify_between()
@@ -1820,7 +1842,12 @@ impl Render for MemoryGraph {
             |this, _, cx| {
                 this.set_overlay(Some(MemoryGraphOverlay::AddMenu), cx);
             },
-        );
+        )
+        .w(px(agent_w))
+        .h(px(agent_h))
+        .aria_expanded(agent_is_open)
+        .shadow_sm()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
 
         // Determine visible memory slice (up to 6 slots; if > 6, 5 cards + "+N more" cycler)
         let mem_overflow = self.memories.len() > 6;
@@ -1855,6 +1882,92 @@ impl Render for MemoryGraph {
         let card_h = 74.0_f32;
         let stage_h = 564.0_f32;
 
+        // Precompute connected-path spotlight across memories, tools, and radial wires!
+        let focus_mem_id = self.hovered_memory.clone().or_else(|| match &self.overlay {
+            Some(MemoryGraphOverlay::Memory(mid)) => Some(mid.clone()),
+            _ => None,
+        });
+        let focus_tool_id = self.hovered_tool.clone().or_else(|| match &self.overlay {
+            Some(MemoryGraphOverlay::Tool(tid)) => Some(tid.clone()),
+            _ => None,
+        });
+        let has_spotlight = focus_mem_id.is_some() || focus_tool_id.is_some();
+        let mut lit_mems: HashSet<SharedString> = HashSet::new();
+        let mut lit_tools: HashSet<SharedString> = HashSet::new();
+        if let Some(fmid) = &focus_mem_id {
+            lit_mems.insert(fmid.clone());
+            if let Some(hm) = self.memories.iter().find(|m| &m.id == fmid) {
+                for r in &hm.related {
+                    lit_mems.insert(r.clone());
+                }
+                if let Some(rep) = &hm.replaces {
+                    lit_mems.insert(rep.clone());
+                }
+                if let Some(via_t) = &hm.via {
+                    lit_tools.insert(via_t.clone());
+                }
+            }
+            for m in &self.memories {
+                if m.replaces.as_ref() == Some(fmid) || m.related.contains(fmid) {
+                    lit_mems.insert(m.id.clone());
+                }
+            }
+        }
+        if let Some(ftid) = &focus_tool_id {
+            lit_tools.insert(ftid.clone());
+            for m in &self.memories {
+                if m.via.as_ref() == Some(ftid) {
+                    lit_mems.insert(m.id.clone());
+                }
+            }
+        }
+
+        let mut mem_opacities: HashMap<SharedString, f32> = HashMap::new();
+        for m in &shown_memories {
+            let target_op = if m.disabled {
+                0.38_f32
+            } else if has_spotlight {
+                if lit_mems.contains(&m.id) {
+                    1.0_f32
+                } else {
+                    0.30_f32
+                }
+            } else {
+                1.0_f32
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("mem-op-{}", m.id)),
+                target_op,
+                0.22,
+                w,
+                cx,
+            );
+            mem_opacities.insert(m.id.clone(), op);
+        }
+
+        let mut tool_opacities: HashMap<SharedString, f32> = HashMap::new();
+        for t in &shown_tools {
+            let target_op = if t.disabled {
+                0.38_f32
+            } else if has_spotlight {
+                if lit_tools.contains(&t.id) {
+                    1.0_f32
+                } else {
+                    0.30_f32
+                }
+            } else {
+                1.0_f32
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("mtool-op-{}", t.id)),
+                target_op,
+                0.22,
+                w,
+                cx,
+            );
+            tool_opacities.insert(t.id.clone(), op);
+        }
+
         // Wash intensity helper (`Gradient Floor` rising from bottom edge when card is learned/used)
         let card_wash_alpha = |cid: &SharedString| -> f32 {
             if reduced {
@@ -1880,16 +1993,7 @@ impl Render for MemoryGraph {
             let mid = mem.id.clone();
             let hot = recalling.contains(&mid) && !mem.disabled;
             let open = self.overlay == Some(MemoryGraphOverlay::Memory(mid.clone()));
-            let linked = self.hovered_memory.as_ref().is_some_and(|hid| {
-                self.memories
-                    .iter()
-                    .find(|m| &m.id == hid)
-                    .is_some_and(|hm| {
-                        hm.related.contains(&mid)
-                            || hm.replaces.as_ref() == Some(&mid)
-                            || mem.replaces.as_ref() == Some(hid)
-                    })
-            });
+            let linked = has_spotlight && lit_mems.contains(&mid);
             let wash = card_wash_alpha(&mid);
             let bg = if hot { hot_bg } else { card_bg };
             let bdr = if hot || open {
@@ -1899,7 +2003,7 @@ impl Render for MemoryGraph {
             } else {
                 p.line
             };
-            let op = if mem.disabled { 0.38_f32 } else { 1.0_f32 };
+            let op = mem_opacities.get(&mid).copied().unwrap_or(1.0);
             let aria: SharedString = format!(
                 "{}, from {}",
                 self.localize_text(&mem.text, cx),
@@ -1909,35 +2013,21 @@ impl Render for MemoryGraph {
             let mid_click = mid.clone();
             let mid_hov = mid.clone();
 
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, format!("mem-{mid}")),
+                aria,
+                8.0,
+                bg,
+                pro_mix_color(bg, light_blue, if p.dark { 0.06 } else { 0.035 }),
+                bdr,
+                hover_border,
+                open,
                 div()
-                    .id(pro_eid(&self.id, format!("mem-{mid}")))
-                    .role(Role::Button)
-                    .aria_label(aria)
-                    .aria_expanded(open)
-                    .tab_index(0)
                     .w(px(card_w))
                     .h(px(card_h))
                     .px(px(11.))
                     .relative()
                     .overflow_hidden()
-                    .rounded(px(8.))
-                    .bg(bg)
-                    .border_1()
-                    .border_color(bdr)
-                    .opacity(op)
-                    .when(!p.dark && !mem.outdated, |d| d.shadow_xs())
-                    .hover(move |s| s.border_color(hover_border).opacity(op.max(0.62)))
-                    .focus_visible(move |s| s.border_2().border_color(focus_col))
-                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                        let next = (*inside).then(|| mid_hov.clone());
-                        if this.hovered_memory != next {
-                            this.hovered_memory = next;
-                            cx.notify();
-                        }
-                    }))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .cursor_pointer()
                     .flex()
                     .flex_col()
                     .justify_center()
@@ -1998,16 +2088,36 @@ impl Render for MemoryGraph {
                     this.set_overlay(Some(MemoryGraphOverlay::Memory(mid_click.clone())), cx);
                 },
             )
+            .w(px(card_w))
+            .h(px(card_h))
+            .aria_expanded(open)
+            .opacity(op)
+            .when(!p.dark && !mem.outdated, |d| d.shadow_xs())
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = (*inside).then(|| mid_hov.clone());
+                if this.hovered_memory != next {
+                    this.hovered_memory = next;
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         };
 
         let render_tool_card = |tool: &MemoryTool, cx: &mut Context<Self>| -> Stateful<Div> {
             let tid = tool.id.clone();
             let hot = using.contains(&tid) && !tool.disabled;
             let open = self.overlay == Some(MemoryGraphOverlay::Tool(tid.clone()));
+            let linked = has_spotlight && lit_tools.contains(&tid);
             let wash = card_wash_alpha(&tid);
             let bg = if hot { hot_bg } else { card_bg };
-            let bdr = if hot || open { hot_border } else { p.line };
-            let op = if tool.disabled { 0.38_f32 } else { 1.0_f32 };
+            let bdr = if hot || open {
+                hot_border
+            } else if linked {
+                light_blue.opacity(0.45)
+            } else {
+                p.line
+            };
+            let op = tool_opacities.get(&tid).copied().unwrap_or(1.0);
             let when_label = if tool.disabled {
                 tr(cx, "Off", "已停用").to_owned()
             } else if hot {
@@ -2018,29 +2128,23 @@ impl Render for MemoryGraph {
             let aria: SharedString =
                 format!("{}, {}, {}", tool.name, tool.access, tool.scope).into();
             let tid_click = tid.clone();
+            let tid_hov = tid.clone();
 
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, format!("mtool-{tid}")),
+                aria,
+                8.0,
+                bg,
+                pro_mix_color(bg, light_blue, if p.dark { 0.06 } else { 0.035 }),
+                bdr,
+                hover_border,
+                open,
                 div()
-                    .id(pro_eid(&self.id, format!("mtool-{tid}")))
-                    .role(Role::Button)
-                    .aria_label(aria)
-                    .aria_expanded(open)
-                    .tab_index(0)
                     .w(px(card_w))
                     .h(px(card_h))
                     .px(px(11.))
                     .relative()
                     .overflow_hidden()
-                    .rounded(px(8.))
-                    .bg(bg)
-                    .border_1()
-                    .border_color(bdr)
-                    .opacity(op)
-                    .when(!p.dark, |d| d.shadow_xs())
-                    .hover(move |s| s.border_color(hover_border).opacity(op.max(0.62)))
-                    .focus_visible(move |s| s.border_2().border_color(focus_col))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .cursor_pointer()
                     .flex()
                     .flex_col()
                     .justify_center()
@@ -2117,6 +2221,19 @@ impl Render for MemoryGraph {
                     this.set_overlay(Some(MemoryGraphOverlay::Tool(tid_click.clone())), cx);
                 },
             )
+            .w(px(card_w))
+            .h(px(card_h))
+            .aria_expanded(open)
+            .opacity(op)
+            .when(!p.dark, |d| d.shadow_xs())
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = (*inside).then(|| tid_hov.clone());
+                if this.hovered_tool != next {
+                    this.hovered_tool = next;
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         };
 
         // Popover layer rendered via pro_presence so opening and closing both animate cleanly
@@ -2130,11 +2247,20 @@ impl Render for MemoryGraph {
                 .flex_col()
                 .gap(px(12.))
                 .child(agent_btn);
-            if let Some(ov) = &active_or_closing_ov
-                && is_ov_open
-            {
+            if let Some(ov) = &active_or_closing_ov {
                 let pop = self.render_overlay_card(ov, &using, &recalling, &p, cx);
-                col = col.child(div().w_full().flex().justify_center().child(pop));
+                col = col.child(pro_popover_presence(
+                    pro_eid(&self.id, "mg-stack-pop"),
+                    is_ov_open,
+                    move || {
+                        div()
+                            .w_full()
+                            .flex()
+                            .justify_center()
+                            .child(pop)
+                            .into_any_element()
+                    },
+                ));
             }
             col = col.child(
                 div()
@@ -2163,30 +2289,36 @@ impl Render for MemoryGraph {
             let agent_y = (stage_h - agent_h) * 0.5_f32;
 
             // Precompute slot coordinates for wires, ports, and cards
-            let mem_slots: Vec<(f32, f32, SharedString, bool, bool, bool)> = shown_memories
+            let mem_slots: Vec<(f32, f32, SharedString, bool, bool, bool, f32)> = shown_memories
                 .iter()
                 .enumerate()
                 .map(|(slot, m)| {
                     let (sx, sy) = ring_slot_pos(false, slot, stage_w, stage_h, card_w, card_h);
-                    let hot = recalling.contains(&m.id) && !m.disabled;
-                    (sx, sy, m.id.clone(), hot, m.disabled, m.outdated)
+                    let hot = (recalling.contains(&m.id)
+                        || (has_spotlight && lit_mems.contains(&m.id)))
+                        && !m.disabled;
+                    let op = mem_opacities.get(&m.id).copied().unwrap_or(1.0);
+                    (sx, sy, m.id.clone(), hot, m.disabled, m.outdated, op)
                 })
                 .collect();
 
-            let tool_slots: Vec<(f32, f32, SharedString, bool, bool)> = shown_tools
+            let tool_slots: Vec<(f32, f32, SharedString, bool, bool, f32)> = shown_tools
                 .iter()
                 .enumerate()
                 .map(|(slot, t)| {
                     let (sx, sy) = ring_slot_pos(true, slot, stage_w, stage_h, card_w, card_h);
-                    let hot = using.contains(&t.id) && !t.disabled;
-                    (sx, sy, t.id.clone(), hot, t.disabled)
+                    let hot = (using.contains(&t.id)
+                        || (has_spotlight && lit_tools.contains(&t.id)))
+                        && !t.disabled;
+                    let op = tool_opacities.get(&t.id).copied().unwrap_or(1.0);
+                    (sx, sy, t.id.clone(), hot, t.disabled, op)
                 })
                 .collect();
 
-            // Related/superseded links on hover
+            // Related/superseded links on hover or active memory overlay
             #[allow(clippy::type_complexity)]
             let mut hover_links: Vec<((f32, f32), (f32, f32), bool)> = Vec::new();
-            if let Some(hid) = &self.hovered_memory
+            if let Some(hid) = &focus_mem_id
                 && let Some(h_idx) = shown_memories.iter().position(|m| &m.id == hid)
             {
                 let p_from = (mem_slots[h_idx].0, mem_slots[h_idx].1 + card_h * 0.5_f32);
@@ -2218,7 +2350,8 @@ impl Render for MemoryGraph {
                     );
 
                     // Left memory connectors (agent -> memory card right edge)
-                    for (slot, (sx, sy, _, hot, disabled, outdated)) in m_slots_w.iter().enumerate()
+                    for (slot, (sx, sy, _, hot, disabled, outdated, op)) in
+                        m_slots_w.iter().enumerate()
                     {
                         let (port_pt, vert_first) = agent_port_point(false, slot, agent_rect);
                         let card_pt = point(px(ox + *sx + card_w), px(oy + *sy + card_h * 0.5));
@@ -2232,11 +2365,11 @@ impl Render for MemoryGraph {
                             );
                         } else {
                             let base_c = if *hot {
-                                light_blue.opacity(0.85)
+                                light_blue.opacity(0.85 * op)
                             } else if *outdated {
-                                wire_col.opacity(0.45)
+                                wire_col.opacity(0.45 * op)
                             } else {
-                                wire_col
+                                wire_col.opacity(wire_col.a * op)
                             };
                             pro_connector_pulse(
                                 port_pt,
@@ -2244,22 +2377,26 @@ impl Render for MemoryGraph {
                                 8.0,
                                 vert_first,
                                 base_c,
-                                light_blue,
+                                light_blue.opacity(*op),
                                 if *hot { pulse_t } else { None },
-                                1.5,
+                                if *hot { 1.75 } else { 1.5 },
                                 window,
                             );
                         }
                         paint_ring_port(
                             port_pt,
-                            if *hot { light_blue } else { wire_col },
+                            if *hot {
+                                light_blue.opacity(*op)
+                            } else {
+                                wire_col.opacity(wire_col.a * op)
+                            },
                             card_bg,
                             window,
                         );
                     }
 
                     // Right tool connectors (agent -> tool card left edge)
-                    for (slot, (sx, sy, _, hot, disabled)) in t_slots_w.iter().enumerate() {
+                    for (slot, (sx, sy, _, hot, disabled, op)) in t_slots_w.iter().enumerate() {
                         let (port_pt, vert_first) = agent_port_point(true, slot, agent_rect);
                         let card_pt = point(px(ox + *sx), px(oy + *sy + card_h * 0.5));
                         if *disabled {
@@ -2277,19 +2414,23 @@ impl Render for MemoryGraph {
                                 8.0,
                                 vert_first,
                                 if *hot {
-                                    light_blue.opacity(0.85)
+                                    light_blue.opacity(0.85 * op)
                                 } else {
-                                    wire_col
+                                    wire_col.opacity(wire_col.a * op)
                                 },
-                                light_blue,
+                                light_blue.opacity(*op),
                                 if *hot { pulse_t } else { None },
-                                1.5,
+                                if *hot { 1.75 } else { 1.5 },
                                 window,
                             );
                         }
                         paint_ring_port(
                             port_pt,
-                            if *hot { light_blue } else { wire_col },
+                            if *hot {
+                                light_blue.opacity(*op)
+                            } else {
+                                wire_col.opacity(wire_col.a * op)
+                            },
                             card_bg,
                             window,
                         );
@@ -2330,7 +2471,7 @@ impl Render for MemoryGraph {
                 );
 
             for (slot, mem) in shown_memories.iter().enumerate() {
-                let (sx, sy, _, _, _, _) = mem_slots[slot];
+                let (sx, sy, _, _, _, _, _) = mem_slots[slot];
                 canvas_stage = canvas_stage.child(
                     div()
                         .absolute()
@@ -2348,23 +2489,19 @@ impl Render for MemoryGraph {
                 } else {
                     format!("+{extra} more · click to cycle")
                 };
-                let more_btn = activate(
+                let more_btn = pro_tactile(
+                    pro_eid(&self.id, "mem-more"),
+                    more_lbl.clone(),
+                    8.0,
+                    card_bg,
+                    p.hover,
+                    p.line,
+                    hover_border,
+                    false,
                     div()
-                        .id(pro_eid(&self.id, "mem-more"))
-                        .role(Role::Button)
-                        .aria_label(more_lbl.clone())
-                        .tab_index(0)
                         .w(px(card_w))
                         .h(px(card_h))
                         .px(px(12.))
-                        .rounded(px(8.))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.line)
-                        .hover(move |s| s.border_color(hover_border))
-                        .focus_visible(move |s| s.border_2().border_color(focus_col))
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .cursor_pointer()
                         .flex()
                         .items_center()
                         .justify_center()
@@ -2377,13 +2514,16 @@ impl Render for MemoryGraph {
                         this.mem_page = this.mem_page.wrapping_add(1);
                         cx.notify();
                     },
-                );
+                )
+                .w(px(card_w))
+                .h(px(card_h))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
                 canvas_stage =
                     canvas_stage.child(div().absolute().left(px(sx)).top(px(sy)).child(more_btn));
             }
 
             for (slot, tool) in shown_tools.iter().enumerate() {
-                let (sx, sy, _, _, _) = tool_slots[slot];
+                let (sx, sy, _, _, _, _) = tool_slots[slot];
                 canvas_stage = canvas_stage.child(
                     div()
                         .absolute()
@@ -2402,8 +2542,8 @@ impl Render for MemoryGraph {
                         (agent_y + agent_h + 10.0).min(stage_h - 260.0),
                     ),
                     MemoryGraphOverlay::Memory(mid) => {
-                        if let Some((sx, sy, _, _, _, _)) =
-                            mem_slots.iter().find(|(_, _, id, _, _, _)| id == mid)
+                        if let Some((sx, sy, _, _, _, _, _)) =
+                            mem_slots.iter().find(|(_, _, id, _, _, _, _)| id == mid)
                         {
                             let px_x = (*sx + card_w + 10.0).min(stage_w - 280.0);
                             let px_y = sy.clamp(8.0, stage_h - 248.0);
@@ -2413,8 +2553,8 @@ impl Render for MemoryGraph {
                         }
                     }
                     MemoryGraphOverlay::Tool(tid) => {
-                        if let Some((sx, sy, _, _, _)) =
-                            tool_slots.iter().find(|(_, _, id, _, _)| id == tid)
+                        if let Some((sx, sy, _, _, _, _)) =
+                            tool_slots.iter().find(|(_, _, id, _, _, _)| id == tid)
                         {
                             let px_x = (*sx - 282.0).max(8.0);
                             let px_y = sy.clamp(8.0, stage_h - 230.0);

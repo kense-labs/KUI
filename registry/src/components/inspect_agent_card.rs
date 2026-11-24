@@ -7,12 +7,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_skeleton_bar, tr,
+        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_skeleton_bar, pro_swap_label, tr,
     },
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
-        family::Slide,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_raw_svg, pro_svg},
     },
 };
@@ -64,11 +64,7 @@ impl InspectAgentRow {
     const ALL: [Self; 3] = [Self::Header, Self::Task, Self::Meta];
 
     fn from_index(idx: usize) -> Self {
-        match idx % 3 {
-            0 => Self::Header,
-            1 => Self::Task,
-            _ => Self::Meta,
-        }
+        Self::ALL[idx % Self::ALL.len()]
     }
 
     fn index(self) -> usize {
@@ -237,6 +233,118 @@ fn row_metrics(row: InspectAgentRow) -> RowMetrics {
     }
 }
 
+#[derive(Clone, Copy)]
+struct AgentTargetBox {
+    fx: f32,
+    fy: f32,
+    fw: f32,
+    fh: f32,
+    pad: f32,
+    gx: f32,
+    gy0: f32,
+    gy1: f32,
+    gap_label: &'static str,
+    dim_prefix: &'static str,
+    dim_w: f32,
+    sub_tag: Option<(&'static str, &'static str)>,
+    row: InspectAgentRow,
+}
+
+impl AgentTargetBox {
+    fn tag_label(self, cx: &App) -> &'static str {
+        if let Some((en, zh)) = self.sub_tag {
+            tr(cx, en, zh)
+        } else {
+            self.row.label(cx)
+        }
+    }
+}
+
+fn agent_target_box(target_idx: usize, mirror: bool) -> AgentTargetBox {
+    let gx_edge = if mirror { CARD_W - 14.0 } else { 14.0 };
+    match target_idx {
+        0..=2 => {
+            let row = InspectAgentRow::from_index(target_idx);
+            let m = row_metrics(row);
+            AgentTargetBox {
+                fx: 0.0,
+                fy: m.frame_top,
+                fw: CARD_W,
+                fh: m.frame_h,
+                pad: 10.0,
+                gx: gx_edge,
+                gy0: m.guide_y0,
+                gy1: m.guide_y1,
+                gap_label: m.gap_label,
+                dim_prefix: "W Fill",
+                dim_w: m.content_w,
+                sub_tag: None,
+                row,
+            }
+        }
+        3 => AgentTargetBox {
+            fx: 6.0,
+            fy: 6.0,
+            fw: 158.0,
+            fh: 34.0,
+            pad: 4.0,
+            gx: 42.0,
+            gy0: 0.0,
+            gy1: 6.0,
+            gap_label: "8px",
+            dim_prefix: "W Hug",
+            dim_w: 150.0,
+            sub_tag: Some(("Agent · Model", "智能体模型")),
+            row: InspectAgentRow::Header,
+        },
+        4 => AgentTargetBox {
+            fx: 184.0,
+            fy: 6.0,
+            fw: 68.0,
+            fh: 26.0,
+            pad: 4.0,
+            gx: 218.0,
+            gy0: 0.0,
+            gy1: 6.0,
+            gap_label: "6px",
+            dim_prefix: "W Hug",
+            dim_w: 60.0,
+            sub_tag: Some(("Status Pill", "状态胶囊")),
+            row: InspectAgentRow::Header,
+        },
+        5 => AgentTargetBox {
+            fx: 6.0,
+            fy: 49.0,
+            fw: 42.0,
+            fh: 24.0,
+            pad: 4.0,
+            gx: 27.0,
+            gy0: 40.0,
+            gy1: 49.0,
+            gap_label: "6px",
+            dim_prefix: "W Hug",
+            dim_w: 34.0,
+            sub_tag: Some(("Tool Chips", "工具图标")),
+            row: InspectAgentRow::Task,
+        },
+        _ => AgentTargetBox {
+            fx: 6.0,
+            fy: 93.0,
+            fw: 104.0,
+            fh: 28.0,
+            pad: 4.0,
+            gx: 56.0,
+            gy0: 84.0,
+            gy1: 93.0,
+            gap_label: "8px",
+            dim_prefix: "W Hug",
+            dim_w: 96.0,
+            sub_tag: Some(("Cost · Time", "耗时与费用")),
+            row: InspectAgentRow::Meta,
+        },
+    }
+}
+
 /// Perspective homography matching `perspective(1100px) rotateX(30deg) rotateY(+-14deg) rotateZ(+-7deg)`.
 #[derive(Clone, Copy)]
 struct TiltTransform {
@@ -364,8 +472,12 @@ struct InspectPlateKey {
     has_above: bool,
     mirror: bool,
     flat: bool,
+    fx_q: i32,
     ft_q: i32,
+    fw_q: i32,
     fh_q: i32,
+    pad_q: i32,
+    gx_q: i32,
     gy0_q: i32,
     gy1_q: i32,
     reveal_q: u16,
@@ -401,8 +513,12 @@ impl InspectPlateCache {
 
 fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
     let tf = TiltTransform::new(key.flat, key.mirror);
+    let fx = key.fx_q as f32 / 10.0;
     let ft = key.ft_q as f32 / 10.0;
-    let fh = (key.fh_q as f32 / 10.0).max(20.0);
+    let fw = (key.fw_q as f32 / 10.0).max(20.0);
+    let fh = (key.fh_q as f32 / 10.0).max(16.0);
+    let pad = (key.pad_q as f32 / 10.0).max(3.0);
+    let gx = key.gx_q as f32 / 10.0;
     let gy0 = key.gy0_q as f32 / 10.0;
     let gy1 = key.gy1_q as f32 / 10.0;
     let rev = (f32::from(key.reveal_q) / 1000.0).clamp(0., 1.);
@@ -486,13 +602,14 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
                 }
             }
 
-            // Figma-style `#0190fe` selection frame, 10px diagonal padding hatch, and inner dashed box
+            // Figma-style `#0190fe` selection frame, diagonal padding hatch, and inner dashed box
             if box_alpha > 0.005 {
+                let fr = fx + fw;
                 let fb = ft + fh;
-                if (-3.0..=CARD_W + 3.0).contains(&u) && (ft - 3.0..=fb + 3.0).contains(&v) {
-                    let in_outer = (0.0..=CARD_W).contains(&u) && (ft..=fb).contains(&v);
+                if (fx - 3.0..=fr + 3.0).contains(&u) && (ft - 3.0..=fb + 3.0).contains(&v) {
+                    let in_outer = (fx..=fr).contains(&u) && (ft..=fb).contains(&v);
                     let in_inner =
-                        (10.0..=CARD_W - 10.0).contains(&u) && (ft + 10.0..=fb - 10.0).contains(&v);
+                        (fx + pad..=fr - pad).contains(&u) && (ft + pad..=fb - pad).contains(&v);
 
                     if in_outer && !in_inner {
                         let stripe = ((u + v) * 0.85).rem_euclid(3.8);
@@ -501,8 +618,7 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
                         }
                     }
 
-                    // Inner dashed content box (`inset: 10px`)
-                    let d_in = sd_round_rect(u, v, 10.0, ft + 10.0, CARD_W - 10.0, fb - 10.0, 3.0);
+                    let d_in = sd_round_rect(u, v, fx + pad, ft + pad, fr - pad, fb - pad, 3.0);
                     if d_in.abs() < 0.75 {
                         let along = (u + v).rem_euclid(5.0);
                         if along < 2.8 {
@@ -514,8 +630,7 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
                         }
                     }
 
-                    // Crisp 1px outer blue selection rectangle
-                    let d_out = sd_round_rect(u, v, 0.0, ft, CARD_W, fb, 0.5);
+                    let d_out = sd_round_rect(u, v, fx, ft, fr, fb, 0.5);
                     if d_out.abs() < 0.95 {
                         c = blend_over(c, blue_rgb, (1. - d_out.abs() / 0.95) * box_alpha);
                     }
@@ -524,8 +639,9 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
 
             // 4 corner resize handles (`5x5` squares on TL, TR, BR, BL)
             if handle_alpha > 0.005 {
+                let fr = fx + fw;
                 let fb = ft + fh;
-                for (hx, hy) in [(0.0, ft), (CARD_W, ft), (CARD_W, fb), (0.0, fb)] {
+                for (hx, hy) in [(fx, ft), (fr, ft), (fr, fb), (fx, fb)] {
                     let dx = (u - hx).abs();
                     let dy = (v - hy).abs();
                     if dx <= 2.7 && dy <= 2.7 {
@@ -539,7 +655,6 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
 
             // Red vertical spacing guide (`#ff3b30` dashed line + 7px top & bottom T-bars)
             if guide_alpha > 0.005 && gy1 > gy0 {
-                let gx = if key.mirror { CARD_W - 14.0 } else { 14.0 };
                 let g_end = gy0 + (gy1 - gy0) * guide_alpha;
                 if (v >= gy0 - 0.8 && v <= g_end + 0.8) && (u - gx).abs() <= 4.0 {
                     if (u - gx).abs() <= 0.85 && (v - gy0).rem_euclid(5.0) < 3.0 {
@@ -935,10 +1050,18 @@ pub struct InspectAgentCard {
     delay_ms: u64,
     mirror: bool,
     flat: bool,
-    hovered_row: Option<InspectAgentRow>,
+    manual_target: Option<usize>,
+    pinned_target: Option<usize>,
     pinned_row: Option<InspectAgentRow>,
+    fx_slide: Slide,
     ft_slide: Slide,
+    fw_slide: Slide,
     fh_slide: Slide,
+    pad_slide: Slide,
+    gx_slide: Slide,
+    gy0_slide: Slide,
+    gy1_slide: Slide,
+    press_slide: Slide,
     loading: bool,
     empty: bool,
     clock: Instant,
@@ -952,7 +1075,7 @@ impl InspectAgentCard {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
-        let m0 = row_metrics(InspectAgentRow::Header);
+        let t0 = agent_target_box(0, false);
         Self {
             id: id.into(),
             focus: cx.focus_handle().tab_stop(true),
@@ -963,13 +1086,21 @@ impl InspectAgentCard {
             delay_ms: 600,
             mirror: false,
             flat: false,
-            hovered_row: None,
+            manual_target: None,
+            pinned_target: None,
             pinned_row: None,
-            ft_slide: Slide::new(m0.frame_top),
-            fh_slide: Slide::new(m0.frame_h),
+            fx_slide: Slide::new(t0.fx),
+            ft_slide: Slide::new(t0.fy),
+            fw_slide: Slide::new(t0.fw),
+            fh_slide: Slide::new(t0.fh),
+            pad_slide: Slide::new(t0.pad),
+            gx_slide: Slide::new(t0.gx),
+            gy0_slide: Slide::new(t0.gy0),
+            gy1_slide: Slide::new(t0.gy1),
+            press_slide: Slide::snappy(0.),
             loading: false,
             empty: false,
-            clock: Instant::now(),
+            clock: cx.background_executor().now(),
             stage_bounds: Rc::new(Cell::new(Bounds::default())),
             plate_cache: Rc::new(RefCell::new(InspectPlateCache::new())),
         }
@@ -1038,7 +1169,7 @@ impl InspectAgentCard {
     pub fn set_playing(&mut self, playing: bool, cx: &mut Context<Self>) {
         if self.playing != playing {
             self.playing = playing;
-            self.clock = Instant::now();
+            self.clock = cx.background_executor().now();
             cx.emit(InspectAgentCardEvent::PlayingChanged(playing));
             cx.notify();
         }
@@ -1051,8 +1182,9 @@ impl InspectAgentCard {
 
     /// Pin or unpin inspection on a specific row at runtime.
     pub fn set_pinned_row(&mut self, row: Option<InspectAgentRow>, cx: &mut Context<Self>) {
-        if self.pinned_row != row {
+        if self.pinned_row != row || self.pinned_target != row.map(InspectAgentRow::index) {
             self.pinned_row = row;
+            self.pinned_target = row.map(InspectAgentRow::index);
             cx.emit(InspectAgentCardEvent::PinRow(row));
             cx.notify();
         }
@@ -1094,7 +1226,31 @@ impl InspectAgentCard {
         }
     }
 
-    fn hit_row(&self, pos: Point<Pixels>) -> Option<InspectAgentRow> {
+    fn hit_target_uv(&self, u: f32, v: f32) -> Option<usize> {
+        if !(0.0..=CARD_W).contains(&u) || !(0.0..=MAIN_H).contains(&v) {
+            return None;
+        }
+        if (184.0..=252.0).contains(&u) && (4.0..=34.0).contains(&v) {
+            Some(4)
+        } else if (6.0..=168.0).contains(&u) && (4.0..=40.0).contains(&v) {
+            Some(3)
+        } else if !self.agent.tools.is_empty()
+            && (6.0..=50.0).contains(&u)
+            && (48.0..=76.0).contains(&v)
+        {
+            Some(5)
+        } else if (6.0..=114.0).contains(&u) && (92.0..=124.0).contains(&v) {
+            Some(6)
+        } else if v < 46.0 {
+            Some(0)
+        } else if v < 92.0 {
+            Some(1)
+        } else {
+            Some(2)
+        }
+    }
+
+    fn hit_target(&self, pos: Point<Pixels>) -> Option<usize> {
         let b = self.stage_bounds.get();
         if b.size.width <= px(2.) {
             return None;
@@ -1103,16 +1259,7 @@ impl InspectAgentCard {
         let sy = f32::from(pos.y - b.origin.y);
         let tf = TiltTransform::new(self.flat, self.mirror);
         let (u, v) = tf.unproject(sx, sy);
-        if !(0.0..=CARD_W).contains(&u) || !(0.0..=MAIN_H).contains(&v) {
-            return None;
-        }
-        if v < 46.0 {
-            Some(InspectAgentRow::Header)
-        } else if v < 92.0 {
-            Some(InspectAgentRow::Task)
-        } else {
-            Some(InspectAgentRow::Meta)
-        }
+        self.hit_target_uv(u, v)
     }
 }
 
@@ -1120,14 +1267,16 @@ impl Render for InspectAgentCard {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let elapsed = now.saturating_duration_since(self.clock);
 
         if self.loading {
             let phase = if reduced {
                 0.0
             } else {
                 w.request_animation_frame();
-                (self.clock.elapsed().as_secs_f32() / 1.4).fract()
+                (elapsed.as_secs_f32() / 1.4).fract()
             };
             return div()
                 .id(pro_eid(&self.id, "loading"))
@@ -1172,32 +1321,57 @@ impl Render for InspectAgentCard {
                 .into_any_element();
         }
 
-        let elapsed_ms = self.clock.elapsed().as_millis() as u64;
+        let elapsed_ms = elapsed.as_millis() as u64;
         let spin_turn = if reduced {
             0.0
         } else {
             ((elapsed_ms % 900) as f32) / 900.0
         };
 
-        let interactive_override = self.hovered_row.or(self.pinned_row);
-        let auto_animate =
-            !reduced && (self.playing || self.agent.status == InspectAgentStatus::Running);
-        let (active_row, reveal) = if let Some(pinned) = interactive_override {
-            (pinned, 1.0)
+        let interactive_override = self
+            .manual_target
+            .or(self.pinned_target)
+            .or_else(|| self.pinned_row.map(InspectAgentRow::index));
+        let auto_animate = !reduced
+            && ((self.playing && interactive_override.is_none())
+                || self.agent.status == InspectAgentStatus::Running);
+        let (active_target_idx, reveal) = if let Some(target_idx) = interactive_override {
+            (target_idx, 1.0)
         } else if reduced || !self.playing {
-            (InspectAgentRow::Header, 1.0)
+            (0, 1.0)
         } else {
-            step_timeline(self.playing, self.hold_ms, self.delay_ms, elapsed_ms)
+            let (row, rev) = step_timeline(self.playing, self.hold_ms, self.delay_ms, elapsed_ms);
+            (row.index(), rev)
         };
 
-        let metrics = row_metrics(active_row);
-        self.ft_slide.duration(metrics.frame_top, 0.28, cx);
-        self.fh_slide.duration(metrics.frame_h, 0.28, cx);
-        let (cur_ft, cur_fh) = if reduced {
-            (metrics.frame_top, metrics.frame_h)
-        } else {
-            (self.ft_slide.get(w, cx), self.fh_slide.get(w, cx))
-        };
+        let tb = agent_target_box(active_target_idx, self.mirror);
+        self.fx_slide.duration(tb.fx, 0.24, cx);
+        self.ft_slide.duration(tb.fy, 0.24, cx);
+        self.fw_slide.duration(tb.fw, 0.24, cx);
+        self.fh_slide.duration(tb.fh, 0.24, cx);
+        self.pad_slide.duration(tb.pad, 0.22, cx);
+        self.gx_slide.duration(tb.gx, 0.24, cx);
+        self.gy0_slide.duration(tb.gy0, 0.24, cx);
+        self.gy1_slide.duration(tb.gy1, 0.24, cx);
+
+        let (cur_fx, cur_ft, cur_fw, cur_fh, cur_pad, cur_gx, cur_gy0, cur_gy1, press_t) =
+            if reduced {
+                (
+                    tb.fx, tb.fy, tb.fw, tb.fh, tb.pad, tb.gx, tb.gy0, tb.gy1, 0.0,
+                )
+            } else {
+                (
+                    self.fx_slide.get(w, cx),
+                    self.ft_slide.get(w, cx),
+                    self.fw_slide.get(w, cx),
+                    self.fh_slide.get(w, cx),
+                    self.pad_slide.get(w, cx),
+                    self.gx_slide.get(w, cx),
+                    self.gy0_slide.get(w, cx),
+                    self.gy1_slide.get(w, cx),
+                    self.press_slide.get(w, cx),
+                )
+            };
 
         let tf = TiltTransform::new(self.flat, self.mirror);
         let plate_key = InspectPlateKey {
@@ -1205,10 +1379,14 @@ impl Render for InspectAgentCard {
             has_above: self.above.is_some(),
             mirror: self.mirror,
             flat: self.flat,
+            fx_q: (cur_fx * 10.).round() as i32,
             ft_q: (cur_ft * 10.).round() as i32,
+            fw_q: (cur_fw * 10.).round() as i32,
             fh_q: (cur_fh * 10.).round() as i32,
-            gy0_q: (metrics.guide_y0 * 10.).round() as i32,
-            gy1_q: (metrics.guide_y1 * 10.).round() as i32,
+            pad_q: (cur_pad * 10.).round() as i32,
+            gx_q: (cur_gx * 10.).round() as i32,
+            gy0_q: (cur_gy0 * 10.).round() as i32,
+            gy1_q: (cur_gy1 * 10.).round() as i32,
             reveal_q: (reveal * 1000.).round() as u16,
         };
 
@@ -1222,25 +1400,58 @@ impl Render for InspectAgentCard {
             .h(px(STAGE_H as f32))
             .flex_none()
             .overflow_hidden()
+            .cursor_pointer()
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
-                let hit = this.hit_row(e.position);
-                if this.hovered_row != hit {
-                    this.hovered_row = hit;
+                let hit = this.hit_target(e.position);
+                if this.manual_target != hit {
+                    let was_some = this.manual_target.is_some();
+                    this.manual_target = hit;
+                    if hit.is_none()
+                        && was_some
+                        && this.pinned_target.is_none()
+                        && this.pinned_row.is_none()
+                    {
+                        this.clock = cx.background_executor().now();
+                    }
                     cx.notify();
                 }
             }))
             .on_hover(cx.listener(|this, over: &bool, _, cx| {
-                if !*over && this.hovered_row.take().is_some() {
+                if !*over && this.manual_target.take().is_some() {
+                    this.press_slide.duration(0., 0.12, cx);
+                    if this.pinned_target.is_none() && this.pinned_row.is_none() {
+                        this.clock = cx.background_executor().now();
+                    }
                     cx.notify();
                 }
             }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, _, cx| {
-                    let hit = this.hit_row(e.position);
-                    let next = if this.pinned_row == hit { None } else { hit };
-                    this.pinned_row = next;
-                    cx.emit(InspectAgentCardEvent::PinRow(next));
+                    this.press_slide.duration(1., 0.08, cx);
+                    let hit = this.hit_target(e.position);
+                    let next_target = if this.pinned_target == hit { None } else { hit };
+                    let next_row = next_target.map(|idx| agent_target_box(idx, this.mirror).row);
+                    this.pinned_target = next_target;
+                    this.pinned_row = next_row;
+                    if next_target.is_none() && this.manual_target.is_none() {
+                        this.clock = cx.background_executor().now();
+                    }
+                    cx.emit(InspectAgentCardEvent::PinRow(next_row));
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.press_slide.duration(0., 0.14, cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.press_slide.duration(0., 0.14, cx);
                     cx.notify();
                 }),
             )
@@ -1291,7 +1502,7 @@ impl Render for InspectAgentCard {
             scene = scene.child(el);
         }
 
-        // Figma inspection pills: layer tag, top & side `10` blue padding badges, red spacing pill, `W Fill 236 px`, and hand cursor
+        // Figma inspection pills: layer tag, top & side blue padding badges, red spacing pill, dimension callout, and hand cursor
         let blue_pill: Hsla = if dark {
             rgb(0x3b82f6).into()
         } else {
@@ -1305,9 +1516,19 @@ impl Render for InspectAgentCard {
         let dim_a = pro_ease(((reveal - 0.48) / 0.45).clamp(0., 1.));
         let cur_a = pro_ease((reveal / 0.38).clamp(0., 1.));
 
-        // Layer tag pill (`Header` / `Task` / `Meta`) just above the selection frame
-        let tag_u = if self.mirror { CARD_W - 58.0 } else { 0.0 };
-        let (tag_x, tag_y) = tf.project(tag_u, cur_ft - 17.0);
+        // Layer tag pill (`Header` / `Agent · Model` / `Status Pill` / `Tool Chips` / etc.)
+        let tag_u = if self.mirror {
+            (cur_fx + cur_fw - 68.0).max(cur_fx)
+        } else {
+            cur_fx
+        };
+        let (tag_x, tag_y) = tf.project(tag_u, cur_ft - 17.0 + press_t * 1.0);
+        let is_pinned = self.pinned_target.is_some() || self.pinned_row.is_some();
+        let tag_text = if is_pinned {
+            format!("{} •", tb.tag_label(cx))
+        } else {
+            tb.tag_label(cx).to_string()
+        };
         scene = scene.child(
             div()
                 .absolute()
@@ -1322,18 +1543,18 @@ impl Render for InspectAgentCard {
                 .gap(px(3.))
                 .opacity(tag_a * stage_mask_alpha(tag_x + 20., tag_y + 7., self.mirror))
                 .child(pro_svg("0 0 12 12", LAYER_TAG_SVG, 9., white_ink))
-                .child(
-                    div()
-                        .text_size(px(9.))
-                        .line_height(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(white_ink)
-                        .child(active_row.label(cx)),
-                ),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "layer-tag"),
+                    tag_text,
+                    9.,
+                    FontWeight::MEDIUM,
+                    white_ink,
+                )),
         );
 
-        // Top `10` blue padding badge
-        let pad_top_u = if self.mirror { 94.0 } else { 196.0 };
+        // Top blue padding badge (`10` or `4`)
+        let pad_label = format!("{:.0}", cur_pad.round());
+        let pad_top_u = cur_fx + cur_fw * 0.62;
         let (pt_x, pt_y) = tf.project(pad_top_u, cur_ft - 2.0);
         scene = scene.child(
             div()
@@ -1352,11 +1573,15 @@ impl Render for InspectAgentCard {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(white_ink)
                 .opacity(pad_a * stage_mask_alpha(pt_x, pt_y, self.mirror))
-                .child("10"),
+                .child(pad_label.clone()),
         );
 
-        // Side `10` blue padding badge
-        let pad_side_u = if self.mirror { CARD_W - 14.0 } else { -2.0 };
+        // Side blue padding badge
+        let pad_side_u = if self.mirror {
+            cur_fx + cur_fw - 14.0
+        } else {
+            cur_fx - 2.0
+        };
         let (ps_x, ps_y) = tf.project(pad_side_u, cur_ft + cur_fh * 0.5 - 6.5);
         scene = scene.child(
             div()
@@ -1375,12 +1600,16 @@ impl Render for InspectAgentCard {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(white_ink)
                 .opacity(pad_a * stage_mask_alpha(ps_x, ps_y, self.mirror))
-                .child("10"),
+                .child(pad_label),
         );
 
-        // Red spacing guide badge (`16px` / `12px` / `8px`) beside the red dashed guide
-        let red_u = if self.mirror { CARD_W - 42.0 } else { 20.0 };
-        let red_v = (metrics.guide_y0 + metrics.guide_y1) * 0.5 - 6.5;
+        // Red spacing guide badge (`16px` / `12px` / `8px` / `6px`) beside the red dashed guide
+        let red_u = if self.mirror {
+            (cur_gx - 32.0).max(12.0)
+        } else {
+            cur_gx + 6.0
+        };
+        let red_v = (cur_gy0 + cur_gy1) * 0.5 - 6.5;
         let (rx, ry) = tf.project(red_u, red_v);
         scene = scene.child(
             div()
@@ -1394,17 +1623,30 @@ impl Render for InspectAgentCard {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_size(px(8.5))
-                .line_height(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(white_ink)
                 .opacity(dim_a * stage_mask_alpha(rx, ry, self.mirror))
-                .child(metrics.gap_label),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "gap-tag"),
+                    tb.gap_label,
+                    8.5,
+                    FontWeight::MEDIUM,
+                    white_ink,
+                )),
         );
 
-        // `W Fill 236 px` dimension pill below the frame
-        let size_u = if self.mirror { 74.0 } else { 176.0 };
+        // Dimension callout (`W Fill 236 px` / `W Hug 60 px`) below the frame
+        let size_u = if self.mirror {
+            (cur_fx + cur_fw - 88.0).max(cur_fx)
+        } else {
+            cur_fx + (cur_fw - 88.0).max(0.0)
+        };
         let (sz_x, sz_y) = tf.project(size_u, cur_ft + cur_fh + 7.0);
+        let dim_px_text = format!(
+            "{:.0} × {:.0} px",
+            (cur_fw - cur_pad * 2.0)
+                .max(16.0)
+                .min(tb.dim_w.max(cur_fw - cur_pad * 2.0)),
+            cur_fh.round()
+        );
         scene = scene.child(
             div()
                 .absolute()
@@ -1423,21 +1665,20 @@ impl Render for InspectAgentCard {
                         .text_size(px(9.))
                         .line_height(px(14.))
                         .text_color(white_ink.opacity(0.76))
-                        .child("W Fill"),
+                        .child(tb.dim_prefix),
                 )
-                .child(
-                    div()
-                        .text_size(px(9.))
-                        .line_height(px(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(white_ink)
-                        .child(format!("{:.0} px", metrics.content_w)),
-                ),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "dim-px"),
+                    dim_px_text,
+                    9.,
+                    FontWeight::MEDIUM,
+                    white_ink,
+                )),
         );
 
-        // Crisp white/black hand pointer hovering over the selected row
-        let cur_u = if self.mirror { 96.0 } else { 200.0 };
-        let (cx_p, cy_p) = tf.project(cur_u, cur_ft + cur_fh - 18.0);
+        // Crisp white/black hand pointer hovering over the selected region
+        let cur_u = cur_fx + cur_fw * 0.68;
+        let (cx_p, cy_p) = tf.project(cur_u, cur_ft + cur_fh - 16.0 + press_t * 1.5);
         let cur_slide = (1. - cur_a) * 6.0;
         scene = scene.child(
             div()
@@ -1472,30 +1713,43 @@ impl Render for InspectAgentCard {
             .on_key_down(cx.listener(
                 |this, e: &KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
                     "down" | "right" | "j" => {
-                        let cur = this.pinned_row.map_or(0, InspectAgentRow::index);
-                        let next = Some(InspectAgentRow::ALL[(cur + 1) % 3]);
-                        this.pinned_row = next;
-                        cx.emit(InspectAgentCardEvent::PinRow(next));
+                        let cur = this
+                            .pinned_target
+                            .or_else(|| this.pinned_row.map(InspectAgentRow::index))
+                            .unwrap_or(0);
+                        let next_idx = (cur + 1) % 7;
+                        let next_row = agent_target_box(next_idx, this.mirror).row;
+                        this.pinned_target = Some(next_idx);
+                        this.pinned_row = Some(next_row);
+                        cx.emit(InspectAgentCardEvent::PinRow(Some(next_row)));
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "up" | "left" | "k" => {
-                        let cur = this.pinned_row.map_or(0, InspectAgentRow::index);
-                        let next = Some(InspectAgentRow::ALL[(cur + 2) % 3]);
-                        this.pinned_row = next;
-                        cx.emit(InspectAgentCardEvent::PinRow(next));
+                        let cur = this
+                            .pinned_target
+                            .or_else(|| this.pinned_row.map(InspectAgentRow::index))
+                            .unwrap_or(0);
+                        let next_idx = (cur + 6) % 7;
+                        let next_row = agent_target_box(next_idx, this.mirror).row;
+                        this.pinned_target = Some(next_idx);
+                        this.pinned_row = Some(next_row);
+                        cx.emit(InspectAgentCardEvent::PinRow(Some(next_row)));
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "escape" => {
+                        this.pinned_target = None;
                         this.pinned_row = None;
+                        this.manual_target = None;
+                        this.clock = cx.background_executor().now();
                         cx.emit(InspectAgentCardEvent::PinRow(None));
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "enter" | "space" | " " => {
                         this.playing = !this.playing;
-                        this.clock = Instant::now();
+                        this.clock = cx.background_executor().now();
                         cx.emit(InspectAgentCardEvent::PlayingChanged(this.playing));
                         cx.stop_propagation();
                         cx.notify();
@@ -1511,9 +1765,12 @@ impl Render for InspectAgentCard {
 #[cfg(test)]
 mod tests {
     use super::{
-        InspectAgentRow, InspectPlateKey, STAGE_H, STAGE_W, TiltTransform, default_above_agent,
-        default_main_agent, rasterize_inspect_plate, row_metrics, step_timeline,
+        CARD_W, InspectAgentCard, InspectAgentRow, InspectPlateKey, STAGE_H, STAGE_W,
+        TiltTransform, agent_target_box, default_above_agent, default_main_agent,
+        rasterize_inspect_plate, row_metrics, step_timeline,
     };
+    use gpui::{MouseButton, MouseDownEvent, MouseMoveEvent, TestAppContext, point, px, size};
+    use std::time::Duration;
 
     #[test]
     fn perspective_homography_roundtrips_and_mirrors_cleanly() {
@@ -1548,16 +1805,20 @@ mod tests {
         assert_eq!(r2, InspectAgentRow::Meta);
         assert_eq!(row_metrics(r2).gap_label, "8px");
 
-        let m = row_metrics(InspectAgentRow::Header);
+        let tb = agent_target_box(0, false);
         let img = rasterize_inspect_plate(InspectPlateKey {
             dark: false,
             has_above: true,
             mirror: false,
             flat: true,
-            ft_q: (m.frame_top * 10.) as i32,
-            fh_q: (m.frame_h * 10.) as i32,
-            gy0_q: (m.guide_y0 * 10.) as i32,
-            gy1_q: (m.guide_y1 * 10.) as i32,
+            fx_q: (tb.fx * 10.) as i32,
+            ft_q: (tb.fy * 10.) as i32,
+            fw_q: (tb.fw * 10.) as i32,
+            fh_q: (tb.fh * 10.) as i32,
+            pad_q: (tb.pad * 10.) as i32,
+            gx_q: (tb.gx * 10.) as i32,
+            gy0_q: (tb.gy0 * 10.) as i32,
+            gy1_q: (tb.gy1 * 10.) as i32,
             reveal_q: 1000,
         });
         let bytes = img.as_bytes(0).expect("BGRA plate");
@@ -1572,5 +1833,96 @@ mod tests {
             bytes[idx],
             bytes[idx + 2]
         );
+    }
+
+    #[gpui::test]
+    fn hovering_subregions_glides_devmode_box_and_resumes_tour_on_leave(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            InspectAgentCard::new("test-inspect-agent", cx)
+                .with_flat(true)
+                .with_delay(300)
+                .with_hold(500)
+        });
+        vcx.simulate_resize(size(px(600.), px(460.)));
+        vcx.run_until_parked();
+
+        // Project Status Pill center `(u = 210, v = 16)` in flat coordinates
+        let (stage_origin, pill_pt, chip_pt, out_pt) = vcx.update(|_, app| {
+            let this = view.read(app);
+            let b = this.stage_bounds.get();
+            let tf = TiltTransform::new(true, false);
+            let (px_u, py_v) = tf.project(210.0, 16.0);
+            let (cx_u, cy_v) = tf.project(24.0, 60.0);
+            (
+                b.origin,
+                point(b.origin.x + px(px_u), b.origin.y + px(py_v)),
+                point(b.origin.x + px(cx_u), b.origin.y + px(cy_v)),
+                point(b.origin.x + px(4.0), b.origin.y + px(4.0)),
+            )
+        });
+        assert!(stage_origin.x >= px(0.));
+
+        vcx.simulate_event(MouseMoveEvent {
+            position: pill_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.run_until_parked();
+        exec.advance_clock(Duration::from_millis(320));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let this = view.read(app);
+            assert_eq!(this.manual_target, Some(4));
+            assert!((this.fx_slide.value(app) - 184.0).abs() < 4.0);
+            assert!((this.fw_slide.value(app) - 68.0).abs() < 4.0);
+        });
+
+        // Hover over Tool Chips (`u = 24, v = 60` -> target 5) and click to pin
+        vcx.simulate_event(MouseMoveEvent {
+            position: chip_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.simulate_event(MouseDownEvent {
+            position: chip_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.run_until_parked();
+        vcx.update(|_, app| {
+            let this = view.read(app);
+            assert_eq!(this.pinned_target, Some(5));
+            assert_eq!(this.pinned_row(), Some(InspectAgentRow::Task));
+        });
+
+        // Click again to unpin, then move pointer off card -> resumes auto tour cleanly
+        vcx.simulate_event(MouseDownEvent {
+            position: chip_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseMoveEvent {
+            position: out_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.run_until_parked();
+        exec.advance_clock(Duration::from_millis(600));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+        vcx.update(|_, app| {
+            let this = view.read(app);
+            assert_eq!(this.manual_target, None);
+            assert_eq!(this.pinned_target, None);
+            assert!((this.fw_slide.value(app) - CARD_W).abs() < 4.0);
+        });
     }
 }

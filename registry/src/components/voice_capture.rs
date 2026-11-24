@@ -6,15 +6,23 @@
 //! controls, and a drifting blue-purple-pink glow underneath.
 
 use crate::{
-    components::pro_chrome::{ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, tr},
+    components::pro_chrome::{
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mix_color, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, tr,
+    },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
-use std::sync::{Arc, OnceLock};
+use std::{
+    cell::Cell,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 use web_time::Instant;
 
 /// Default 68-bar speech rhythm profile (`<= 3` represents quiet breath pauses).
@@ -221,6 +229,14 @@ fn render_kbd_cap(label: impl Into<SharedString>, bg: Hsla, fg: Hsla) -> Div {
 /// let _capture = cx.new(|cx| VoiceCapture::new("hero-dictation", cx).with_start_seconds(14));
 /// # }
 /// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VoicePhase {
+    Recording,
+    Paused,
+    Transcribing,
+    Done,
+}
+
 pub struct VoiceCapture {
     id: ElementId,
     focus: FocusHandle,
@@ -230,14 +246,17 @@ pub struct VoiceCapture {
     loudness: f32,
     bars: Vec<u8>,
     rec_hovered: bool,
-    done_hovered: bool,
-    cancel_hovered: bool,
     confirmed_flash: Option<Instant>,
+    amp_slide: Slide,
+    boost_slide: Slide,
+    boost_seq: usize,
+    state_slide: Slide,
     loading: bool,
     empty: bool,
     started_at: Instant,
     accumulated_ms: u64,
     segment_started_at: Instant,
+    last_now: Cell<Instant>,
 }
 
 impl VoiceCapture {
@@ -246,7 +265,7 @@ impl VoiceCapture {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         Self {
             id: id.into(),
             focus: cx.focus_handle().tab_stop(true),
@@ -256,14 +275,17 @@ impl VoiceCapture {
             loudness: 1.0,
             bars: DEFAULT_VOICE_PROFILE.to_vec(),
             rec_hovered: false,
-            done_hovered: false,
-            cancel_hovered: false,
             confirmed_flash: None,
+            amp_slide: Slide::new(1.0),
+            boost_slide: Slide::snappy(0.),
+            boost_seq: 0,
+            state_slide: Slide::snappy(0.),
             loading: false,
             empty: false,
             started_at: now,
             accumulated_ms: 0,
             segment_started_at: now,
+            last_now: Cell::new(now),
         }
     }
 
@@ -287,7 +309,9 @@ impl VoiceCapture {
     /// Scale the simulated or host-supplied voice loudness (`1.0` default, `0.0..=2.0`).
     pub fn with_loudness(mut self, loudness: f32) -> Self {
         if loudness.is_finite() {
-            self.loudness = loudness.clamp(0.0, 2.0);
+            let clamped = loudness.clamp(0.0, 2.0);
+            self.loudness = clamped;
+            self.amp_slide.reset(clamped);
         }
         self
     }
@@ -317,10 +341,14 @@ impl VoiceCapture {
         if !self.playing || reduced_motion {
             return self.start_seconds + (self.accumulated_ms / 1000) as u32;
         }
+        let now = self.last_now.get();
         let extra_ms = if self.paused {
             self.accumulated_ms
         } else {
-            self.accumulated_ms + self.segment_started_at.elapsed().as_millis() as u64
+            self.accumulated_ms
+                + now
+                    .saturating_duration_since(self.segment_started_at)
+                    .as_millis() as u64
         };
         self.start_seconds + (extra_ms / 1000) as u32
     }
@@ -330,14 +358,51 @@ impl VoiceCapture {
         self.paused
     }
 
+    fn pulse_waveform(&mut self, cx: &mut Context<Self>) {
+        self.last_now.set(cx.background_executor().now());
+        if self.paused {
+            self.segment_started_at = cx.background_executor().now();
+            self.paused = false;
+            cx.emit(VoiceCaptureEvent::Paused(false));
+        }
+        self.boost_seq = self.boost_seq.wrapping_add(1);
+        let seq = self.boost_seq;
+        self.boost_slide.duration(1.0, 0.09, cx);
+        cx.notify();
+
+        if disabled_motion(cx) {
+            self.boost_slide.reset(0.);
+            return;
+        }
+        cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(180))
+                .await;
+            let _ = entity.update(cx, |this, cx| {
+                if this.boost_seq == seq {
+                    this.boost_slide.duration(0.0, 0.38, cx);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
     /// Toggle pause/resume on the dictation session.
     pub fn toggle_pause(&mut self, cx: &mut Context<Self>) {
+        let now = cx.background_executor().now();
+        self.last_now.set(now);
+        self.confirmed_flash = None;
         if !self.paused {
-            self.accumulated_ms += self.segment_started_at.elapsed().as_millis() as u64;
+            self.accumulated_ms += now
+                .saturating_duration_since(self.segment_started_at)
+                .as_millis() as u64;
             self.paused = true;
         } else {
-            self.segment_started_at = Instant::now();
+            self.segment_started_at = now;
             self.paused = false;
+            self.pulse_waveform(cx);
+            return;
         }
         cx.emit(VoiceCaptureEvent::Paused(self.paused));
         cx.notify();
@@ -345,9 +410,11 @@ impl VoiceCapture {
 
     /// Confirm the dictation capture (`Done`), emitting [`VoiceCaptureEvent::Confirm`].
     pub fn confirm(&mut self, cx: &mut Context<Self>) {
-        let reduced = Theme::global(cx).reduced_motion;
+        let now = cx.background_executor().now();
+        self.last_now.set(now);
+        let reduced = disabled_motion(cx);
         let secs = self.current_seconds(reduced);
-        self.confirmed_flash = Some(Instant::now());
+        self.confirmed_flash = Some(now);
         cx.emit(VoiceCaptureEvent::Confirm {
             elapsed_seconds: secs,
         });
@@ -356,10 +423,13 @@ impl VoiceCapture {
 
     /// Cancel/reset the dictation capture (`Cancel`), resetting the timer to `start_seconds`.
     pub fn cancel(&mut self, cx: &mut Context<Self>) {
+        let now = cx.background_executor().now();
+        self.last_now.set(now);
         self.accumulated_ms = 0;
-        self.segment_started_at = Instant::now();
+        self.segment_started_at = now;
         self.paused = false;
         self.confirmed_flash = None;
+        self.boost_slide.duration(0., 0.16, cx);
         cx.emit(VoiceCaptureEvent::Cancel);
         cx.notify();
     }
@@ -407,8 +477,10 @@ impl VoiceCapture {
 impl Render for VoiceCapture {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = Theme::global(cx).reduced_motion;
-        let total_elapsed_s = self.started_at.elapsed().as_secs_f32();
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        self.last_now.set(now);
+        let total_elapsed_s = now.saturating_duration_since(self.started_at).as_secs_f32();
 
         if self.loading {
             let phase = (total_elapsed_s / 1.4).fract();
@@ -444,23 +516,68 @@ impl Render for VoiceCapture {
                 .into_any_element();
         }
 
-        let moving = self.playing && !self.paused && !reduced;
-        let flash_active = self
-            .confirmed_flash
-            .is_some_and(|t| t.elapsed().as_secs_f32() < 1.1);
-        if !flash_active {
-            self.confirmed_flash = None;
+        // Smoothly sequence `Recording` / `Paused` / `Transcribing` (`0..0.38s`) / `Done` (`0.38..1.55s`)
+        let mut voice_phase = if self.paused {
+            VoicePhase::Paused
+        } else {
+            VoicePhase::Recording
+        };
+        if let Some(t0) = self.confirmed_flash {
+            let age = now.saturating_duration_since(t0).as_secs_f32();
+            if reduced {
+                if age < 1.0 {
+                    voice_phase = VoicePhase::Done;
+                } else {
+                    self.confirmed_flash = None;
+                }
+            } else if age < 0.38 {
+                voice_phase = VoicePhase::Transcribing;
+            } else if age < 1.55 {
+                voice_phase = VoicePhase::Done;
+            } else {
+                self.confirmed_flash = None;
+            }
         }
-        if moving || flash_active {
+
+        let moving = self.playing
+            && !reduced
+            && matches!(
+                voice_phase,
+                VoicePhase::Recording | VoicePhase::Transcribing
+            );
+        if moving || self.confirmed_flash.is_some() {
             w.request_animation_frame();
         }
+
+        let target_amp = match voice_phase {
+            VoicePhase::Recording => self.loudness,
+            VoicePhase::Paused => 0.22,
+            VoicePhase::Transcribing => 0.44,
+            VoicePhase::Done => 0.10,
+        };
+        let target_state_val = match voice_phase {
+            VoicePhase::Recording => 0.0,
+            VoicePhase::Paused => 0.33,
+            VoicePhase::Transcribing => 0.66,
+            VoicePhase::Done => 1.0,
+        };
+        self.amp_slide.duration(target_amp, 0.24, cx);
+        self.state_slide.duration(target_state_val, 0.24, cx);
+        let sprung_amp = self.amp_slide.get(w, cx);
+        let boost_t = self.boost_slide.get(w, cx).clamp(0., 1.);
+        let state_t = self.state_slide.get(w, cx).clamp(0., 1.);
+        let eff_loudness = (sprung_amp + 0.68 * boost_t).clamp(0.0, 2.0);
 
         let active_ms = if !self.playing || reduced {
             0.0
         } else if self.paused {
             self.accumulated_ms as f32
         } else {
-            (self.accumulated_ms as f32) + self.segment_started_at.elapsed().as_secs_f32() * 1000.0
+            (self.accumulated_ms as f32)
+                + now
+                    .saturating_duration_since(self.segment_started_at)
+                    .as_secs_f32()
+                    * 1000.0
         };
         let shown_secs = self.current_seconds(reduced);
         let timer_text = format_voice_timer(shown_secs);
@@ -513,9 +630,15 @@ impl Render for VoiceCapture {
         };
         let rec_red: Hsla = rgb(0xe5484d).into();
 
-        // Recessed quiet well + 68 pixel-snapped vertical waveform bars (fading cleanly on the right)
+        let bar_tint = match voice_phase {
+            VoicePhase::Transcribing => pro_mix_color(bar_col, rgb(0x8b5cf6).into(), 0.48),
+            VoicePhase::Done => pro_mix_color(bar_col, p.green, 0.55),
+            _ => pro_mix_color(bar_col, rgb(0xa855f7).into(), boost_t * 0.28),
+        };
+
+        // Recessed quiet well + 68 pixel-snapped vertical waveform bars (clickable to pulse amplitude!)
         let bars_snapshot = self.bars.clone();
-        let loudness = if self.paused { 0.22 } else { self.loudness };
+        let loudness = eff_loudness;
         let well_canvas = canvas(
             |_, _, _| (),
             move |bounds, _, window, _| {
@@ -584,7 +707,7 @@ impl Render for VoiceCapture {
                     window.paint_quad(
                         fill(
                             Bounds::new(point(px(x0 + bx), px(y0 + by)), size(px(bar_w), px(h))),
-                            bar_col.opacity(bar_col.a * right_fade),
+                            bar_tint.opacity(bar_tint.a * right_fade),
                         )
                         .corner_radii(px(1.0)),
                     );
@@ -594,155 +717,174 @@ impl Render for VoiceCapture {
         .w_full()
         .h(px(80.0));
 
-        // Breathing red recording dot (`1.6s` cycle: opacity 1.0 <-> 0.35)
-        let dot_alpha = if self.paused {
-            0.85
-        } else if moving {
-            let phase = (total_elapsed_s / 1.6) * std::f32::consts::TAU;
-            0.675 + 0.325 * phase.cos()
-        } else {
-            1.0
+        // Breathing / morphing indicator across Recording / Paused / Transcribing / Done
+        let dot_alpha = match voice_phase {
+            VoicePhase::Paused => 0.88,
+            VoicePhase::Transcribing => {
+                let phase = (total_elapsed_s / 0.55) * std::f32::consts::TAU;
+                0.65 + 0.35 * phase.cos()
+            }
+            VoicePhase::Done => 1.0,
+            VoicePhase::Recording if moving => {
+                let phase = (total_elapsed_s / 1.6) * std::f32::consts::TAU;
+                0.675 + 0.325 * phase.cos()
+            }
+            VoicePhase::Recording => 1.0,
         };
-        let dot_color = if self.paused { p.amber } else { rec_red };
+        let dot_color = match voice_phase {
+            VoicePhase::Paused => p.amber,
+            VoicePhase::Transcribing => rgb(0x8b5cf6).into(),
+            VoicePhase::Done => p.green,
+            VoicePhase::Recording => rec_red,
+        };
 
-        let rec_indicator = if self.paused {
-            pro_icon(ProIcon::Play, 10.0, dot_color)
-        } else if self.rec_hovered {
-            pro_icon(ProIcon::Pause, 10.0, rec_red)
-        } else {
-            div()
+        let rec_indicator = match voice_phase {
+            VoicePhase::Done => {
+                pro_check_draw(pro_eid(&self.id, "done-chk"), true, 12.0, false, p.green)
+            }
+            VoicePhase::Paused => pro_icon(ProIcon::Play, 10.0, dot_color),
+            VoicePhase::Transcribing => div()
+                .size(px(6.5))
+                .rounded_full()
+                .bg(dot_color.opacity(dot_alpha))
+                .into_any_element(),
+            VoicePhase::Recording if self.rec_hovered => pro_icon(ProIcon::Pause, 10.0, rec_red),
+            VoicePhase::Recording => div()
                 .size(px(6.0))
                 .rounded_full()
                 .bg(dot_color.opacity(dot_alpha))
-                .into_any_element()
+                .into_any_element(),
         };
 
+        let rec_aria = if self.paused {
+            tr(cx, "Resume dictation", "继续听写")
+        } else {
+            tr(cx, "Pause dictation", "暂停听写")
+        };
         let rec_btn = div()
-            .id(pro_eid(&self.id, "rec-toggle"))
-            .role(Role::Button)
-            .aria_label(if self.paused {
-                tr(cx, "Resume dictation", "继续听写")
-            } else {
-                tr(cx, "Pause dictation", "暂停听写")
-            })
-            .min_w(px(44.0))
-            .h(px(22.0))
-            .px(px(4.0))
+            .id(pro_eid(&self.id, "rec-wrap"))
             .ml(px(-4.0))
-            .rounded(px(6.0))
-            .when(self.rec_hovered, |d| d.bg(p.hover))
-            .flex()
-            .items_center()
-            .gap(px(6.0))
-            .cursor_pointer()
+            .flex_none()
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if this.rec_hovered != *inside {
                     this.rec_hovered = *inside;
                     cx.notify();
                 }
             }))
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.toggle_pause(cx);
-            }))
-            .child(
+            .child(pro_tactile(
+                pro_eid(&self.id, "rec-toggle"),
+                rec_aria,
+                6.0,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                self.paused,
                 div()
-                    .w(px(8.0))
+                    .min_w(px(46.0))
+                    .h(px(24.0))
+                    .px(px(5.0))
                     .flex()
                     .items_center()
-                    .justify_center()
-                    .child(rec_indicator),
-            )
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .line_height(px(16.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(ink_col)
-                    .child(timer_text),
-            );
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .w(px(12.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(rec_indicator),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .line_height(px(16.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(ink_col)
+                            .child(timer_text),
+                    ),
+                cx,
+                |this, _, cx| {
+                    this.toggle_pause(cx);
+                },
+            ));
 
-        let done_label = if flash_active {
-            tr(cx, "Saved", "已保存")
-        } else {
-            tr(cx, "Done", "完成")
+        let (done_label, done_color) = match voice_phase {
+            VoicePhase::Transcribing => (
+                tr(cx, "Transcribing…", "转写中…"),
+                Hsla::from(rgb(0x8b5cf6)),
+            ),
+            VoicePhase::Done => (tr(cx, "Saved", "已保存"), p.green),
+            _ => (tr(cx, "Done", "完成"), ink_col),
         };
 
-        let done_btn = div()
-            .id(pro_eid(&self.id, "done-btn"))
-            .role(Role::Button)
-            .aria_label(tr(cx, "Done", "完成"))
-            .h(px(24.0))
-            .px(px(5.0))
-            .mx(px(-5.0))
-            .rounded(px(6.0))
-            .when(self.done_hovered, |d| d.bg(p.hover))
-            .flex()
-            .items_center()
-            .gap(px(4.0))
-            .cursor_pointer()
-            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                if this.done_hovered != *inside {
-                    this.done_hovered = *inside;
-                    cx.notify();
-                }
-            }))
-            .on_click(cx.listener(|this, _, _, cx| {
+        let done_btn = div().mx(px(-5.0)).flex_none().child(pro_tactile(
+            pro_eid(&self.id, "done-btn"),
+            tr(cx, "Done", "完成"),
+            6.0,
+            transparent_black(),
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            voice_phase == VoicePhase::Done,
+            div()
+                .h(px(24.0))
+                .px(px(5.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "done-lbl"),
+                    done_label,
+                    12.0,
+                    FontWeight::MEDIUM,
+                    done_color,
+                ))
+                .child(
+                    div()
+                        .ml(px(2.0))
+                        .child(render_kbd_cap("⌥", key_bg, muted_col)),
+                )
+                .child(render_kbd_cap("Space", key_bg, muted_col)),
+            cx,
+            |this, _, cx| {
                 this.confirm(cx);
-            }))
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .line_height(px(16.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if flash_active { p.green } else { ink_col })
-                    .child(done_label),
-            )
-            .child(
-                div()
-                    .ml(px(2.0))
-                    .child(render_kbd_cap("⌥", key_bg, muted_col)),
-            )
-            .child(render_kbd_cap("Space", key_bg, muted_col));
+            },
+        ));
 
-        let cancel_btn = div()
-            .id(pro_eid(&self.id, "cancel-btn"))
-            .role(Role::Button)
-            .aria_label(tr(cx, "Cancel", "取消"))
-            .h(px(24.0))
-            .px(px(5.0))
-            .mx(px(-5.0))
-            .rounded(px(6.0))
-            .when(self.cancel_hovered, |d| d.bg(p.hover))
-            .flex()
-            .items_center()
-            .gap(px(4.0))
-            .cursor_pointer()
-            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                if this.cancel_hovered != *inside {
-                    this.cancel_hovered = *inside;
-                    cx.notify();
-                }
-            }))
-            .on_click(cx.listener(|this, _, _, cx| {
+        let cancel_btn = div().mx(px(-5.0)).flex_none().child(pro_tactile(
+            pro_eid(&self.id, "cancel-btn"),
+            tr(cx, "Cancel", "取消"),
+            6.0,
+            transparent_black(),
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            false,
+            div()
+                .h(px(24.0))
+                .px(px(5.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .line_height(px(16.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(muted_col)
+                        .child(tr(cx, "Cancel", "取消")),
+                )
+                .child(
+                    div()
+                        .ml(px(2.0))
+                        .child(render_kbd_cap("Esc", key_bg, muted_col)),
+                ),
+            cx,
+            |this, _, cx| {
                 this.cancel(cx);
-            }))
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .line_height(px(16.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if self.cancel_hovered {
-                        ink_col
-                    } else {
-                        muted_col
-                    })
-                    .child(tr(cx, "Cancel", "取消")),
-            )
-            .child(
-                div()
-                    .ml(px(2.0))
-                    .child(render_kbd_cap("Esc", key_bg, muted_col)),
-            );
+            },
+        ));
 
         let footer = div()
             .relative()
@@ -757,6 +899,16 @@ impl Render for VoiceCapture {
             .child(done_btn)
             .child(cancel_btn);
 
+        let well_interactive = div()
+            .id(pro_eid(&self.id, "well-pulse"))
+            .relative()
+            .w_full()
+            .cursor_pointer()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.pulse_waveform(cx);
+            }))
+            .child(well_canvas);
+
         let panel = div()
             .relative()
             .w(px(468.0))
@@ -768,7 +920,7 @@ impl Render for VoiceCapture {
             .flex_col()
             .gap(px(2.0))
             .child(paint_fading_panel(panel_bg, border_col, shadow_col))
-            .child(div().relative().w_full().child(well_canvas))
+            .child(well_interactive)
             .child(footer);
 
         let drift_x = if moving {
@@ -777,9 +929,9 @@ impl Render for VoiceCapture {
             0.0
         };
         let glow_img = voice_under_glow_svg(dark);
-        let glow_opacity: f32 = (if dark { 0.50_f32 } else { 0.68_f32 }
-            * if self.paused { 0.55_f32 } else { 1.0_f32 })
-        .clamp(0.15, 0.85);
+        let base_glow = if dark { 0.50_f32 } else { 0.68_f32 };
+        let glow_opacity: f32 =
+            (base_glow * (1.0 - 0.35 * state_t) + 0.18 * boost_t).clamp(0.15, 0.88);
 
         let stack = div()
             .relative()
@@ -801,12 +953,32 @@ impl Render for VoiceCapture {
         div()
             .id(self.id.clone())
             .track_focus(&self.focus)
+            .tab_index(0)
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |s| s.rounded(px(14.)).border_color(p.focus))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
                 match ev.keystroke.key.as_str() {
-                    "escape" => this.cancel(cx),
-                    "space" if ev.keystroke.modifiers.alt => this.confirm(cx),
-                    "enter" => this.confirm(cx),
-                    "space" => this.toggle_pause(cx),
+                    "escape" => {
+                        this.cancel(cx);
+                        cx.stop_propagation();
+                    }
+                    "space" | " " if ev.keystroke.modifiers.alt => {
+                        this.confirm(cx);
+                        cx.stop_propagation();
+                    }
+                    "enter" => {
+                        this.confirm(cx);
+                        cx.stop_propagation();
+                    }
+                    "space" | " " => {
+                        this.toggle_pause(cx);
+                        cx.stop_propagation();
+                    }
+                    "up" | "b" => {
+                        this.pulse_waveform(cx);
+                        cx.stop_propagation();
+                    }
                     _ => {}
                 }
             }))
@@ -823,7 +995,12 @@ impl Render for VoiceCapture {
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_VOICE_PROFILE, bar_harmonic, bar_height_px, format_voice_timer};
+    use super::{
+        DEFAULT_VOICE_PROFILE, VoiceCapture, VoiceCaptureEvent, bar_harmonic, bar_height_px,
+        format_voice_timer,
+    };
+    use gpui::{MouseButton, MouseDownEvent, MouseUpEvent, TestAppContext, point, px, size};
+    use std::{cell::RefCell, rc::Rc, time::Duration};
 
     #[test]
     fn voice_timer_and_pause_dots_match_dictation_spec() {
@@ -853,5 +1030,71 @@ mod tests {
         assert!((0.30..=1.10).contains(&a));
         assert!((0.30..=1.10).contains(&b));
         assert!((a - b).abs() > 1e-3);
+    }
+
+    #[gpui::test]
+    fn waveform_pulse_boosts_amplitude_and_confirm_morphs_transcribing_to_done(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let events: Rc<RefCell<Vec<VoiceCaptureEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let ev_sink = events.clone();
+
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            let vc = VoiceCapture::new("vc-test", cx);
+            cx.subscribe_self(move |_, ev: &VoiceCaptureEvent, _| {
+                ev_sink.borrow_mut().push(ev.clone());
+            })
+            .detach();
+            vc
+        });
+        vcx.simulate_resize(size(px(560.), px(240.)));
+        vcx.run_until_parked();
+
+        // Click waveform well (`(240, 88)`) -> triggers reactive amplitude boost!
+        let well_pt = point(px(240.), px(88.));
+        vcx.simulate_event(MouseDownEvent {
+            position: well_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: well_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        exec.advance_clock(Duration::from_millis(80));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        assert!(vcx.update(|_, app| view.read(app).boost_slide.value(app) > 0.6));
+
+        // Pause -> morphs amp_slide smoothly toward 0.22; Confirm -> morphs Transcribing -> Done
+        vcx.update(|_, app| {
+            view.update(app, |vc, cx| {
+                vc.toggle_pause(cx);
+                vc.confirm(cx);
+            });
+        });
+        exec.advance_clock(Duration::from_millis(200));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let vc = view.read(app);
+            assert!(vc.is_paused());
+            assert!(vc.confirmed_flash.is_some());
+            assert!(vc.state_slide.value(app) > 0.3);
+        });
+        assert!(
+            events
+                .borrow()
+                .iter()
+                .any(|e| matches!(e, VoiceCaptureEvent::Confirm { .. }))
+        );
     }
 }

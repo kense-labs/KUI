@@ -7,8 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -403,6 +405,7 @@ pub struct AgentMonitor {
     base_cost: f64,
     base_elapsed_secs: u64,
     folded: bool,
+    log_open: bool,
     open_step_id: Option<SharedString>,
     hovered_step_id: Option<SharedString>,
     hovered_folded_tool: Option<usize>,
@@ -448,6 +451,7 @@ impl AgentMonitor {
             base_cost: 0.042,
             base_elapsed_secs: 8,
             folded: false,
+            log_open: false,
             open_step_id: None,
             hovered_step_id: None,
             hovered_folded_tool: None,
@@ -797,10 +801,11 @@ impl Render for AgentMonitor {
             ),
         };
 
-        // Mode switcher pills above the card so users can also preview Running / Needs you / Finished / Folded effortlessly
-        let quick_bar = self.render_scenario_bar(&p, cx);
+        // Mode switcher pills above the card so users can also preview Needs you / Running / Done / Folded effortlessly
+        let quick_bar = self.render_scenario_bar(&p, w, cx);
 
         if self.folded {
+            let folded_el = self.render_folded_bar(elapsed_s, live_cost, card_bg, w, &p, cx);
             return div()
                 .id(self.id.clone())
                 .w_full()
@@ -809,7 +814,11 @@ impl Render for AgentMonitor {
                 .items_center()
                 .gap(px(10.0))
                 .child(quick_bar)
-                .child(self.render_folded_bar(elapsed_s, live_cost, card_bg, &p, cx))
+                .child(pro_view_transition(
+                    pro_eid(&self.id, "fold-shell-tx"),
+                    "folded",
+                    div().w_full().flex().justify_center().child(folded_el),
+                ))
                 .into_any_element();
         }
 
@@ -821,6 +830,29 @@ impl Render for AgentMonitor {
         } else {
             1.0
         };
+
+        let fold_away_btn = pro_tactile(
+            pro_eid(&self.id, "fold-away-btn"),
+            tr(cx, "Fold away", "折叠为精简状态栏"),
+            6.0,
+            transparent_black(),
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            false,
+            div()
+                .size(px(24.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_svg("0 0 16 16", FOLD_IN_SVG, 12.0, p.muted)),
+            cx,
+            |this, _, cx| {
+                this.set_folded(true, cx);
+            },
+        )
+        .size(px(24.0))
+        .flex_none();
 
         let top_row = div()
             .flex()
@@ -872,57 +904,74 @@ impl Render for AgentMonitor {
                     .flex()
                     .items_center()
                     .gap(px(5.0))
-                    .child(
+                    .child(if self.state == MonitorState::Finished {
+                        pro_check_draw(
+                            pro_eid(&self.id, "hdr-done-chk"),
+                            true,
+                            12.0,
+                            false,
+                            p.green,
+                        )
+                    } else {
                         div()
                             .size(px(6.0))
                             .rounded(px(2.0))
-                            .bg(pill_fg.opacity(breathe_alpha)),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(pill_fg)
-                            .child(pill_lbl),
-                    ),
+                            .bg(pill_fg.opacity(breathe_alpha))
+                            .into_any_element()
+                    })
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "hdr-state-lbl"),
+                        pill_lbl,
+                        11.0,
+                        FontWeight::MEDIUM,
+                        pill_fg,
+                    )),
             )
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "fold-away-btn"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Fold away", "折叠为精简状态栏"))
-                    .tab_index(0)
-                    .size(px(24.0))
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.set_folded(true, cx);
-                    }))
-                    .child(pro_svg("0 0 16 16", FOLD_IN_SVG, 12.0, p.muted)),
-            );
+            .child(fold_away_btn);
 
         // Current Step Well + Optional Exact Approval Command Box
         let clock_str = format_live_clock(elapsed_s as u64);
-        let well_section = self.render_well_and_approval(&clock_str, lane_bg, &p, cx);
+        let well_raw = self.render_well_and_approval(&clock_str, lane_bg, &p, cx);
+        let well_section = pro_view_transition(
+            pro_eid(&self.id, "well-tx"),
+            format!("{:?}", self.state),
+            well_raw,
+        );
 
-        // Segmented Time Strip (`height: 6px`)
+        // Segmented Time Strip (`height: 6px`) + Overall Progress Spring Bar
         let strip_section = self.render_time_strip(&p, cx);
+        let done_ratio = (self
+            .steps
+            .iter()
+            .filter(|s| s.state == MonitorStepState::Done)
+            .count() as f32)
+            / (self.steps.len().max(1) as f32);
+        let prog_bar = pro_spring_bar(
+            pro_eid(&self.id, "overall-prog"),
+            done_ratio,
+            3.0,
+            1.5,
+            p.chip,
+            if self.state == MonitorState::Finished {
+                p.green
+            } else if self.state == MonitorState::Waiting {
+                p.amber
+            } else {
+                p.blue
+            },
+        );
 
         // Completed Step Rows + Expandable Input/Output Details (`pro_fold`)
         let steps_section = self.render_completed_steps(lane_bg, &p, cx);
 
-        // Footer Controls
+        // Footer Controls + Expandable Trace Log (`pro_fold`)
         let footer_section = self.render_footer(lane_bg, &p, cx);
+        let log_drawer = self.render_log_drawer(lane_bg, &p);
 
         let expanded_body = pro_fold(
             pro_eid(&self.id, "card-body-fold"),
             !self.folded,
-            240.0,
+            260.0,
             0.0,
             move || {
                 div()
@@ -932,9 +981,18 @@ impl Render for AgentMonitor {
                     .flex_col()
                     .gap(px(10.0))
                     .child(well_section)
-                    .child(strip_section)
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(5.0))
+                            .child(strip_section)
+                            .child(prog_bar),
+                    )
                     .child(steps_section)
                     .child(footer_section)
+                    .child(log_drawer)
                     .into_any_element()
             },
         );
@@ -966,92 +1024,142 @@ impl Render for AgentMonitor {
                 }
             }))
             .child(quick_bar)
-            .child(
-                div()
-                    .w_full()
-                    .max_w(px(388.0))
-                    .p(px(14.0))
-                    .rounded(px(14.0))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_md())
-                    .flex()
-                    .flex_col()
-                    .child(top_row)
-                    .child(expanded_body),
-            )
+            .child(pro_view_transition(
+                pro_eid(&self.id, "fold-shell-tx"),
+                "open",
+                div().w_full().flex().justify_center().child(
+                    div()
+                        .w_full()
+                        .max_w(px(388.0))
+                        .p(px(14.0))
+                        .rounded(px(14.0))
+                        .bg(card_bg)
+                        .border_1()
+                        .border_color(p.line)
+                        .when(!p.dark, |d| d.shadow_md())
+                        .flex()
+                        .flex_col()
+                        .child(top_row)
+                        .child(expanded_body),
+                ),
+            ))
             .into_any_element()
     }
 }
 
 impl AgentMonitor {
-    fn render_scenario_bar(&self, p: &ProPalette, cx: &mut Context<Self>) -> Div {
-        let items: [(MonitorState, &str, &str); 3] = [
-            (MonitorState::Waiting, "Awaiting approval", "待审批命令"),
-            (MonitorState::Running, "Running", "运行中"),
-            (MonitorState::Finished, "Finished", "已完成"),
+    fn render_scenario_bar(
+        &self,
+        p: &ProPalette,
+        _w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let items: [(Option<MonitorState>, &str, &str, &str); 4] = [
+            (
+                Some(MonitorState::Waiting),
+                "waiting",
+                "Needs you",
+                "待审批",
+            ),
+            (Some(MonitorState::Running), "running", "Running", "运行中"),
+            (Some(MonitorState::Finished), "done", "Done", "已完成"),
+            (None, "folded", "Folded", "精简栏"),
         ];
-        let mut bar = div().flex().items_center().gap(px(6.0));
-        for (st, en, zh) in items {
-            let active = !self.folded && self.state == st;
-            let hover_bg = p.chip_hover;
+        let active_key: SharedString = if self.folded {
+            "folded".into()
+        } else {
+            match self.state {
+                MonitorState::Running | MonitorState::Paused | MonitorState::Idle => {
+                    "running".into()
+                }
+                MonitorState::Finished => "done".into(),
+                _ => "waiting".into(),
+            }
+        };
+        let sensor = pro_selection_sensor();
+        let mut bar = div()
+            .id(pro_eid(&self.id, "scenario-tabs"))
+            .role(Role::TabList)
+            .aria_label(tr(cx, "Monitor state", "运行状态"))
+            .h(px(30.0))
+            .p(px(2.0))
+            .rounded(px(8.0))
+            .bg(p.chip)
+            .border_1()
+            .border_color(p.line_soft)
+            .relative()
+            .flex()
+            .items_center()
+            .gap(px(2.0))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "scenario-pill"),
+                active_key.clone(),
+                sensor.clone(),
+                6.0,
+                p.card,
+                Some(p.line_strong),
+                !p.dark,
+            ));
+
+        for (st_opt, key, en, zh) in items {
+            let active = active_key.as_ref() == key;
             bar = bar.child(
                 div()
-                    .id(pro_eid(&self.id, format!("mode-{en}")))
-                    .role(Role::Button)
+                    .id(pro_eid(&self.id, format!("mode-{key}")))
+                    .role(Role::Tab)
                     .aria_label(tr(cx, en, zh))
-                    .aria_toggled(active.into())
-                    .tab_index(0)
+                    .aria_selected(active)
+                    .tab_index(if active { 0 } else { -1 })
+                    .relative()
                     .h(px(26.0))
-                    .px(px(9.0))
+                    .px(px(10.0))
                     .rounded(px(6.0))
-                    .bg(if active { p.card } else { p.chip })
-                    .border_1()
-                    .border_color(if active {
-                        p.line_strong
-                    } else {
-                        transparent_black()
-                    })
-                    .hover(move |s| s.bg(hover_bg))
                     .cursor_pointer()
                     .flex()
                     .items_center()
                     .text_size(px(12.0))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if active { p.ink } else { p.muted })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.folded = false;
-                        this.open_step_id = None;
-                        this.started_at = Instant::now();
-                        match st {
-                            MonitorState::Waiting => {
-                                this.steps = default_steps();
-                                this.state = MonitorState::Waiting;
-                            }
-                            MonitorState::Running => {
-                                let mut s = default_steps();
-                                if let Some(q) =
-                                    s.iter_mut().find(|x| x.state == MonitorStepState::Queued)
-                                {
-                                    q.state = MonitorStepState::Running;
-                                }
-                                this.steps = s;
-                                this.state = MonitorState::Running;
-                            }
-                            MonitorState::Finished => {
-                                let mut s = default_steps();
-                                for x in &mut s {
-                                    x.state = MonitorStepState::Done;
-                                }
-                                this.steps = s;
-                                this.state = MonitorState::Finished;
-                            }
-                            _ => {}
+                    .hover(move |s| s.text_color(p.ink))
+                    .focus_visible(move |s| s.border_1().border_color(p.focus))
+                    .on_click(cx.listener(move |this, _, _, cx| match st_opt {
+                        None => {
+                            this.set_folded(true, cx);
                         }
-                        cx.notify();
+                        Some(st) => {
+                            this.folded = false;
+                            this.open_step_id = None;
+                            this.started_at = Instant::now();
+                            match st {
+                                MonitorState::Waiting => {
+                                    this.steps = default_steps();
+                                    this.state = MonitorState::Waiting;
+                                }
+                                MonitorState::Running => {
+                                    let mut s = default_steps();
+                                    if let Some(q) =
+                                        s.iter_mut().find(|x| x.state == MonitorStepState::Queued)
+                                    {
+                                        q.state = MonitorStepState::Running;
+                                    }
+                                    this.steps = s;
+                                    this.state = MonitorState::Running;
+                                }
+                                MonitorState::Finished => {
+                                    let mut s = default_steps();
+                                    for x in &mut s {
+                                        x.state = MonitorStepState::Done;
+                                    }
+                                    this.steps = s;
+                                    this.state = MonitorState::Finished;
+                                }
+                                _ => {}
+                            }
+                            cx.notify();
+                        }
                     }))
-                    .child(tr(cx, en, zh)),
+                    .when(active, |d| d.child(pro_mark_selected(&sensor)))
+                    .child(div().relative().child(tr(cx, en, zh))),
             );
         }
         bar
@@ -1062,6 +1170,7 @@ impl AgentMonitor {
         elapsed_s: f32,
         live_cost: f64,
         card_bg: Hsla,
+        w: &mut Window,
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -1098,16 +1207,61 @@ impl AgentMonitor {
         for (idx, st) in used_steps.into_iter().enumerate() {
             let is_last = idx + 1 == total_tools;
             let hovered = self.hovered_folded_tool == Some(idx);
+            let lift = pro_spring_f32(
+                pro_eid(&self.id, format!("ftool-lift-{idx}")),
+                if hovered { -3.0 } else { 0.0 },
+                0.18,
+                w,
+                cx,
+            );
             let step_lbl = st.display_label(cx).to_string();
             let took_str = format_step_duration(st.took_ms);
             let mark = self.render_step_mark(&st, 22.0, p, cx);
+            let p_tip = *p;
+            let tip_pop =
+                div()
+                    .absolute()
+                    .bottom(px(30.0))
+                    .left(px(-40.0))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, format!("ftool-tip-{idx}")),
+                        hovered,
+                        move || {
+                            div()
+                                .px(px(8.5))
+                                .py(px(5.0))
+                                .rounded(px(7.0))
+                                .bg(p_tip.card)
+                                .border_1()
+                                .border_color(p_tip.line_strong)
+                                .shadow_md()
+                                .whitespace_nowrap()
+                                .flex()
+                                .flex_col()
+                                .gap(px(1.0))
+                                .child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p_tip.strong)
+                                        .child(step_lbl),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.5))
+                                        .text_color(p_tip.muted)
+                                        .child(took_str),
+                                )
+                                .into_any_element()
+                        },
+                    ));
 
             tools_stack = tools_stack.child(
                 div()
                     .id(pro_eid(&self.id, format!("ftool-{idx}")))
                     .relative()
                     .when(idx > 0, |d| d.ml(px(-5.0)))
-                    .top(px(if hovered { -3.0 } else { 0.0 }))
+                    .top(px(lift))
                     .opacity(
                         if is_last || hovered || self.state == MonitorState::Finished {
                             1.0
@@ -1124,78 +1278,27 @@ impl AgentMonitor {
                         cx.notify();
                     }))
                     .child(mark)
-                    .when(hovered, |d| {
-                        d.child(
-                            div()
-                                .absolute()
-                                .bottom(px(30.0))
-                                .left(px(-40.0))
-                                .px(px(8.5))
-                                .py(px(5.0))
-                                .rounded(px(7.0))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .shadow_md()
-                                .whitespace_nowrap()
-                                .flex()
-                                .flex_col()
-                                .gap(px(1.0))
-                                .child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.strong)
-                                        .child(step_lbl),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(10.5))
-                                        .text_color(p.muted)
-                                        .child(took_str),
-                                ),
-                        )
-                    }),
+                    .child(tip_pop),
             );
         }
 
         let (pill_bg, pill_fg) = self.state.pill_colors(p);
         let pill_lbl = self.state.pill_label(cx);
         let clock_str = format_live_clock(elapsed_s as u64);
+        let aria_fold = format!(
+            "{} – {} ({})",
+            self.agent.name,
+            pill_lbl,
+            tr(cx, "Click to expand", "点击展开监督卡片")
+        );
 
-        div()
-            .id(pro_eid(&self.id, "folded-bar"))
-            .role(Role::Button)
-            .aria_label(format!(
-                "{} – {} ({})",
-                self.agent.name,
-                pill_lbl,
-                tr(cx, "Click to expand", "点击展开监督卡片")
-            ))
-            .aria_expanded(false)
-            .tab_index(0)
+        let bar_body = div()
             .h(px(44.0))
             .pl(px(10.0))
             .pr(px(12.0))
-            .rounded(px(13.0))
-            .bg(card_bg)
-            .border_1()
-            .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_md())
-            .cursor_pointer()
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
             .flex()
             .items_center()
             .gap(px(10.0))
-            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
-                if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                    this.set_folded(false, cx);
-                    cx.stop_propagation();
-                }
-            }))
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.set_folded(false, cx);
-            }))
             .child(lead_mark)
             .child(
                 div()
@@ -1209,10 +1312,23 @@ impl AgentMonitor {
             .child(tools_stack)
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
                     .text_size(px(12.0))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.muted)
-                    .child(format!("{clock_str} · ${live_cost:.2}")),
+                    .child(format!("{clock_str} ·"))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "fold-cost"),
+                        live_cost,
+                        2,
+                        "$",
+                        "",
+                        12.0,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )),
             )
             .child(
                 div()
@@ -1222,13 +1338,34 @@ impl AgentMonitor {
                     .bg(pill_bg)
                     .flex()
                     .items_center()
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(pill_fg)
-                    .child(pill_lbl),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "fold-pill-lbl"),
+                        pill_lbl,
+                        11.5,
+                        FontWeight::MEDIUM,
+                        pill_fg,
+                    )),
             )
-            .child(pro_svg("0 0 16 16", FOLD_OUT_SVG, 12.0, p.muted))
-            .into_any_element()
+            .child(pro_svg("0 0 16 16", FOLD_OUT_SVG, 12.0, p.muted));
+
+        pro_tactile(
+            pro_eid(&self.id, "folded-bar"),
+            aria_fold,
+            13.0,
+            card_bg,
+            p.subtle,
+            p.line,
+            p.line_strong,
+            false,
+            bar_body,
+            cx,
+            |this, _, cx| {
+                this.set_folded(false, cx);
+            },
+        )
+        .w_auto()
+        .when(!p.dark, |d| d.shadow_md())
+        .into_any_element()
     }
 
     fn render_well_and_approval(
@@ -1321,7 +1458,13 @@ impl AgentMonitor {
                     .flex()
                     .items_center()
                     .gap(px(7.0))
-                    .child(pro_icon(ProIcon::Check, 14.0, p.green_ink))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "well-done-chk"),
+                        true,
+                        15.0,
+                        false,
+                        p.green,
+                    ))
                     .child(
                         div()
                             .flex_1()
@@ -1339,10 +1482,26 @@ impl AgentMonitor {
                                 .flex()
                                 .items_center()
                                 .gap(px(4.0))
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(div().text_color(p.green_ink).child(format!("+{add}")))
-                                .child(div().text_color(p.red_ink).child(format!("-{rem}"))),
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "well-add"),
+                                    add as f64,
+                                    0,
+                                    "+",
+                                    "",
+                                    11.5,
+                                    FontWeight::MEDIUM,
+                                    p.green_ink,
+                                ))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "well-rem"),
+                                    rem as f64,
+                                    0,
+                                    "-",
+                                    "",
+                                    11.5,
+                                    FontWeight::MEDIUM,
+                                    p.red_ink,
+                                )),
                         )
                     })
                     .child(div().text_size(px(11.5)).text_color(p.muted).child("19s"))
@@ -1553,77 +1712,73 @@ impl AgentMonitor {
             let dur = format_step_duration(st.took_ms);
             let failed = st.state == MonitorStepState::Failed;
 
-            let row = div()
-                .id(pro_eid(&self.id, format!("step-row-{sid}")))
-                .role(Role::Button)
-                .aria_label(format!("{lbl} – {dur}"))
-                .aria_expanded(is_open)
-                .tab_index(0)
-                .h(px(28.0))
-                .px(px(8.0))
-                .rounded(px(7.0))
-                .when(is_hot, |d| d.bg(lane_bg))
-                .opacity(if any_hover && !is_hot { 0.44 } else { 1.0 })
-                .cursor_pointer()
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .on_hover(cx.listener({
-                    let sid = sid.clone();
-                    move |this, inside: &bool, _, cx| {
-                        if *inside {
-                            this.hovered_step_id = Some(sid.clone());
-                        } else if this.hovered_step_id.as_ref() == Some(&sid) {
-                            this.hovered_step_id = None;
-                        }
-                        cx.notify();
+            let sid_click = sid.clone();
+            let sid_hover = sid.clone();
+            let row = pro_tactile(
+                pro_eid(&self.id, format!("step-row-{sid}")),
+                format!("{lbl} – {dur}"),
+                7.0,
+                if is_open {
+                    lane_bg
+                } else {
+                    transparent_black()
+                },
+                lane_bg,
+                transparent_black(),
+                if is_open { p.line } else { transparent_black() },
+                is_open,
+                div()
+                    .h(px(28.0))
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(icon)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(12.0))
+                            .text_color(p.text)
+                            .child(lbl.clone()),
+                    )
+                    .when(!failed, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, format!("st-chk-{sid}")),
+                            true,
+                            12.0,
+                            false,
+                            p.green,
+                        ))
+                    })
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_size(px(12.0))
+                            .text_color(if failed { p.red_ink } else { p.faint })
+                            .child(dur.clone()),
+                    ),
+                cx,
+                move |this, _, cx| {
+                    if this.open_step_id.as_ref() == Some(&sid_click) {
+                        this.open_step_id = None;
+                    } else {
+                        this.open_step_id = Some(sid_click.clone());
                     }
-                }))
-                .on_key_down(cx.listener({
-                    let sid = sid.clone();
-                    move |this, ev: &KeyDownEvent, _, cx| {
-                        if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                            if this.open_step_id.as_ref() == Some(&sid) {
-                                this.open_step_id = None;
-                            } else {
-                                this.open_step_id = Some(sid.clone());
-                            }
-                            cx.emit(AgentMonitorEvent::StepInspected(this.open_step_id.clone()));
-                            cx.stop_propagation();
-                            cx.notify();
-                        }
-                    }
-                }))
-                .on_click(cx.listener({
-                    let sid = sid.clone();
-                    move |this, _, _, cx| {
-                        if this.open_step_id.as_ref() == Some(&sid) {
-                            this.open_step_id = None;
-                        } else {
-                            this.open_step_id = Some(sid.clone());
-                        }
-                        cx.emit(AgentMonitorEvent::StepInspected(this.open_step_id.clone()));
-                        cx.notify();
-                    }
-                }))
-                .child(icon)
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(px(12.0))
-                        .text_color(p.text)
-                        .child(lbl.clone()),
-                )
-                .child(
-                    div()
-                        .flex_none()
-                        .text_size(px(12.0))
-                        .text_color(if failed { p.red_ink } else { p.faint })
-                        .child(dur.clone()),
-                );
+                    cx.emit(AgentMonitorEvent::StepInspected(this.open_step_id.clone()));
+                    cx.notify();
+                },
+            )
+            .opacity(if any_hover && !is_hot { 0.44 } else { 1.0 })
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_step_id = Some(sid_hover.clone());
+                } else if this.hovered_step_id.as_ref() == Some(&sid_hover) {
+                    this.hovered_step_id = None;
+                }
+                cx.notify();
+            }));
 
             let tool_str = st
                 .tool_name
@@ -1716,7 +1871,7 @@ impl AgentMonitor {
         list
     }
 
-    fn render_footer(&self, lane_bg: Hsla, p: &ProPalette, cx: &mut Context<Self>) -> Div {
+    fn render_footer(&self, _lane_bg: Hsla, p: &ProPalette, cx: &mut Context<Self>) -> Div {
         let done_n = self
             .steps
             .iter()
@@ -1756,54 +1911,28 @@ impl AgentMonitor {
                 .flex()
                 .items_center()
                 .gap(px(5.0))
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "pause-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Pause", "暂停"))
-                        .tab_index(0)
-                        .h(px(26.0))
-                        .px(px(9.0))
-                        .rounded(px(7.0))
-                        .bg(lane_bg)
-                        .hover(move |s| s.bg(p.chip_hover))
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.5))
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.pause(cx);
-                        }))
-                        .child(pro_icon(ProIcon::Pause, 11.5, p.muted))
-                        .child(tr(cx, "Pause", "暂停")),
-                )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "cancel-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Cancel", "取消"))
-                        .tab_index(0)
-                        .h(px(26.0))
-                        .px(px(9.0))
-                        .rounded(px(7.0))
-                        .bg(lane_bg)
-                        .hover(move |s| s.bg(p.chip_hover))
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.5))
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.text)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.cancel(cx);
-                        }))
-                        .child(pro_icon(ProIcon::Close, 11.5, p.muted))
-                        .child(tr(cx, "Cancel", "取消")),
-                )
+                .child(pro_btn(
+                    pro_eid(&self.id, "pause-btn"),
+                    tr(cx, "Pause", "暂停"),
+                    Some(ProIcon::Pause),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.pause(cx);
+                    },
+                ))
+                .child(pro_btn(
+                    pro_eid(&self.id, "cancel-btn"),
+                    tr(cx, "Cancel", "取消"),
+                    Some(ProIcon::Close),
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.cancel(cx);
+                    },
+                ))
                 .into_any_element(),
             MonitorState::Paused => div()
                 .flex()
@@ -1849,6 +1978,45 @@ impl AgentMonitor {
             .into_any_element(),
         };
 
+        let log_active = self.log_open;
+        let log_btn = pro_tactile(
+            pro_eid(&self.id, "open-log-btn"),
+            tr(cx, "Open full trace log", "打开完整追踪日志"),
+            7.0,
+            if log_active {
+                p.chip
+            } else {
+                transparent_black()
+            },
+            p.hover,
+            transparent_black(),
+            if log_active {
+                p.line
+            } else {
+                transparent_black()
+            },
+            log_active,
+            div()
+                .h(px(26.0))
+                .px(px(8.0))
+                .flex()
+                .items_center()
+                .gap(px(3.5))
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(if log_active { p.ink } else { p.muted })
+                .child(tr(cx, "Log", "日志"))
+                .child(pro_svg("0 0 16 16", EXT_LOG_SVG, 11.0, p.muted)),
+            cx,
+            |this, _, cx| {
+                this.log_open = !this.log_open;
+                cx.emit(AgentMonitorEvent::OpenLog);
+                cx.notify();
+            },
+        )
+        .w_auto()
+        .flex_none();
+
         div()
             .pt(px(2.0))
             .flex()
@@ -1858,34 +2026,85 @@ impl AgentMonitor {
             .child(
                 div()
                     .flex_1()
-                    .text_size(px(11.0))
-                    .text_color(p.faint)
-                    .text_right()
-                    .child(format!("{done_n}/{total_n}")),
-            )
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "open-log-btn"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Open full trace log", "打开完整追踪日志"))
-                    .tab_index(0)
-                    .h(px(26.0))
-                    .px(px(8.0))
-                    .rounded(px(7.0))
-                    .hover(move |s| s.bg(p.hover))
-                    .cursor_pointer()
                     .flex()
-                    .items_center()
-                    .gap(px(3.5))
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.muted)
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        cx.emit(AgentMonitorEvent::OpenLog);
-                    }))
-                    .child(tr(cx, "Log", "日志"))
-                    .child(pro_svg("0 0 16 16", EXT_LOG_SVG, 11.0, p.muted)),
+                    .justify_end()
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "done-step-cnt"),
+                        done_n as f64,
+                        0,
+                        "",
+                        format!("/{total_n}"),
+                        11.0,
+                        FontWeight::NORMAL,
+                        p.faint,
+                    )),
             )
+            .child(log_btn)
+    }
+
+    fn render_log_drawer(&self, lane_bg: Hsla, p: &ProPalette) -> AnyElement {
+        let lines: Vec<(String, String, bool)> = self
+            .steps
+            .iter()
+            .filter(|s| s.state != MonitorStepState::Queued)
+            .map(|s| {
+                let cmd = s
+                    .output
+                    .as_ref()
+                    .map(|o| o.to_string())
+                    .unwrap_or_else(|| s.label.to_string());
+                (
+                    format_step_duration(s.took_ms),
+                    cmd,
+                    s.state == MonitorStepState::Failed,
+                )
+            })
+            .collect();
+        let p_copy = *p;
+        pro_fold(
+            pro_eid(&self.id, "trace-log-fold"),
+            self.log_open,
+            104.0,
+            4.0,
+            move || {
+                let mut col = div()
+                    .w_full()
+                    .p(px(9.0))
+                    .rounded(px(8.0))
+                    .bg(lane_bg)
+                    .border_1()
+                    .border_color(p_copy.line)
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.5));
+                for (dur, line, failed) in lines {
+                    col = col.child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap(px(7.0))
+                            .text_size(px(11.0))
+                            .child(
+                                div()
+                                    .w(px(34.0))
+                                    .flex_none()
+                                    .text_color(if failed { p_copy.red_ink } else { p_copy.muted })
+                                    .child(dur),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_color(p_copy.ink)
+                                    .child(line),
+                            ),
+                    );
+                }
+                col.into_any_element()
+            },
+        )
     }
 }
 

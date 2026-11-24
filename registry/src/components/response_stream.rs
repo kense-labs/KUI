@@ -6,19 +6,21 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, ProSelectionSensor, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         clipboard,
         control::UiLanguage,
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 const STOP_ROUND_RECT_SVG: &str = r#"<path d="M5 9.5c0-2.12 0-3.18.66-3.84C6.32 5 7.38 5 9.5 5h5c2.12 0 3.18 0 3.84.66.66.66.66 1.72.66 3.84v5c0 2.12 0 3.18-.66 3.84-.66.66-1.72.66-3.84.66h-5c-2.12 0-3.18 0-3.84-.66C5 17.68 5 16.62 5 14.5v-5Z" fill="currentColor"></path>"#;
@@ -271,6 +273,9 @@ pub struct ResponseStream {
     started_at: Instant,
     last_frame: Option<Instant>,
     copied_at: Option<Instant>,
+    copy_clock: PhaseClock,
+    chip_entrances: HashMap<SharedString, (Slide, PhaseClock)>,
+    bend_entrances: HashMap<usize, (Slide, PhaseClock)>,
     dismissed: bool,
     next_seq: usize,
     state_sensor: ProSelectionSensor,
@@ -311,6 +316,9 @@ impl ResponseStream {
             started_at: now,
             last_frame: None,
             copied_at: None,
+            copy_clock: PhaseClock::default(),
+            chip_entrances: HashMap::new(),
+            bend_entrances: HashMap::new(),
             dismissed: false,
             next_seq: 3,
             state_sensor: pro_selection_sensor(),
@@ -514,12 +522,24 @@ impl ResponseStream {
             "Keep rollback command to a single CLI line".into()
         };
         let id = SharedString::from(format!("chip-{idx}"));
+        let mut chip_slide = Slide::new(8.0);
+        chip_slide.duration(0.0, 0.24, cx);
+        let mut chip_clk = PhaseClock::default();
+        chip_clk.restart(cx);
+        self.chip_entrances
+            .insert(id.clone(), (chip_slide, chip_clk));
         self.chips.push(ResponseSteerChip::new(
             id,
             note.clone(),
             ResponseChipKind::Steer,
         ));
         let bend_pos = self.word_cursor.clamp(1, self.segments.len());
+        let bend_idx = self.bends.len();
+        let mut bend_slide = Slide::new(6.0);
+        bend_slide.duration(0.0, 0.22, cx);
+        let mut bend_clk = PhaseClock::default();
+        bend_clk.restart(cx);
+        self.bend_entrances.insert(bend_idx, (bend_slide, bend_clk));
         self.bends.push(ResponseBend::new(bend_pos, note));
         cx.notify();
     }
@@ -528,6 +548,7 @@ impl ResponseStream {
     pub fn remove_chip(&mut self, id: &SharedString, cx: &mut Context<Self>) {
         let before = self.chips.len();
         self.chips.retain(|c| &c.id != id);
+        self.chip_entrances.remove(id);
         if self.chips.len() != before {
             cx.emit(ResponseStreamEvent::ChipRemoved(id.clone()));
             cx.notify();
@@ -539,6 +560,7 @@ impl ResponseStream {
         let plain = self.raw_text.to_string();
         clipboard::write(&plain, cx).detach();
         self.copied_at = Some(Instant::now());
+        self.copy_clock.restart(cx);
         self.toast = Some((
             tr(cx, "Copied answer to clipboard", "已复制回答至剪贴板").into(),
             Instant::now(),
@@ -728,6 +750,7 @@ impl Render for ResponseStream {
                         .text_size(px(12.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if selected { p.ink } else { p.muted })
+                        .hover(move |s| if selected { s } else { s.text_color(p.ink) })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.dismissed = false;
                             match st {
@@ -764,29 +787,15 @@ impl Render for ResponseStream {
                 .justify_between()
                 .gap(px(8.))
                 .child(seg_strip)
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "add-steer-demo-btn"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(27.))
-                        .px(px(9.))
-                        .rounded(px(7.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .hover(|s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .cursor_pointer()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .on_click(cx.listener(|this, _, _, cx| this.add_sample_steer(cx)))
-                        .child(pro_icon(ProIcon::Plus, 12., p.blue))
-                        .child(tr(cx, "Inject steer", "插入引导胶囊")),
-                )
+                .child(pro_btn(
+                    pro_eid(&self.id, "add-steer-demo-btn"),
+                    tr(cx, "Inject steer", "插入引导胶囊"),
+                    Some(ProIcon::Plus),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    |this, _, cx| this.add_sample_steer(cx),
+                ))
         });
 
         // Prompt bubble
@@ -841,45 +850,42 @@ impl Render for ResponseStream {
                                     "Partial response dismissed.",
                                     "已移除未完成的流式回答。",
                                 )))
-                                .child(
-                                    div()
-                                        .id(pro_eid(&self.id, "restore-dismissed"))
-                                        .role(Role::Button)
-                                        .tab_index(0)
-                                        .h(px(26.))
-                                        .px(px(9.))
-                                        .rounded(px(6.))
-                                        .bg(p.subtle)
-                                        .border_1()
-                                        .border_color(p.line_strong)
-                                        .hover(|s| s.bg(p.chip_hover))
-                                        .flex()
-                                        .items_center()
-                                        .cursor_pointer()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.regenerate(cx);
-                                        }))
-                                        .child(tr(cx, "Stream again", "重新流式生成")),
-                                ),
+                                .child(pro_btn(
+                                    pro_eid(&self.id, "restore-dismissed"),
+                                    tr(cx, "Stream again", "重新流式生成"),
+                                    Some(ProIcon::Refresh),
+                                    ProBtnStyle::Secondary,
+                                    true,
+                                    cx,
+                                    |this, _, cx| this.regenerate(cx),
+                                )),
                         ),
                 );
         }
 
-        // Steer & Queued message chips above the answer
-        let chips_block = (!self.chips.is_empty()).then(|| {
+        // Steer & Queued message chips above the answer with smooth Slide entrance & pro_fold
+        let has_chips = !self.chips.is_empty();
+        let chips_rendered: Vec<AnyElement> = {
             let max_vis = if self.expand_chips || self.chips.len() <= 3 {
                 self.chips.len()
             } else {
                 3
             };
             let hidden_n = self.chips.len().saturating_sub(max_vis);
-            let mut list = div().w_full().mb(px(12.)).flex().flex_col().gap(px(4.));
+            let mut els: Vec<AnyElement> = Vec::with_capacity(max_vis + 1);
             let mut seen_queued = false;
             for ch in self.chips.iter().take(max_vis) {
                 let cid = ch.id.clone();
+                let (dy, alpha) = if reduced {
+                    (0.0, 1.0)
+                } else if let Some((sl, clk)) = self.chip_entrances.get(&cid) {
+                    let y = sl.get(w, cx);
+                    let age = clk.time(0.22, w, cx);
+                    let a = 0.25 + 0.75 * pro_ease((age / 0.22).clamp(0.0, 1.0));
+                    (y, a)
+                } else {
+                    (0.0, 1.0)
+                };
                 let (badge_txt, badge_bg, badge_fg) = match ch.kind {
                     ResponseChipKind::Steer => (tr(cx, "Steer", "实时引导"), p.accent_soft, p.blue),
                     ResponseChipKind::Queued => {
@@ -892,9 +898,13 @@ impl Render for ResponseStream {
                         (lbl, p.chip, p.text)
                     }
                 };
-                list = list.child(
+                let rm_aria = SharedString::from(format!("Remove {}", ch.text));
+                els.push(
                     div()
                         .w_full()
+                        .relative()
+                        .top(px(dy))
+                        .opacity(alpha)
                         .h(px(28.))
                         .pl(px(6.))
                         .pr(px(4.))
@@ -928,57 +938,61 @@ impl Render for ResponseStream {
                                 .truncate()
                                 .child(ch.text.clone()),
                         )
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, format!("rm-chip-{}", ch.id)))
-                                .role(Role::Button)
-                                .tab_index(0)
-                                .size(px(22.))
-                                .rounded(px(5.))
-                                .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.remove_chip(&cid, cx);
-                                }))
-                                .child(pro_icon(ProIcon::Close, 11., p.muted)),
-                        ),
+                        .child(pro_icon_btn(
+                            pro_eid(&self.id, format!("rm-chip-{}", ch.id)),
+                            rm_aria,
+                            ProIcon::Close,
+                            22.,
+                            false,
+                            cx,
+                            move |this, _, cx| this.remove_chip(&cid, cx),
+                        ))
+                        .into_any_element(),
                 );
             }
             if hidden_n > 0 {
-                list = list.child(
-                    div()
-                        .id(pro_eid(&self.id, "expand-more-chips"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(24.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .hover(|s| s.bg(p.hover).text_color(p.ink))
-                        .flex()
-                        .items_center()
-                        .self_start()
-                        .cursor_pointer()
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .on_click(cx.listener(|this, _, _, cx| {
+                els.push(
+                    pro_btn(
+                        pro_eid(&self.id, "expand-more-chips"),
+                        format!("+ {hidden_n} {}", tr(cx, "more", "条更多")),
+                        None,
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        |this, _, cx| {
                             this.expand_chips = true;
                             cx.notify();
-                        }))
-                        .child(format!("+ {hidden_n} {}", tr(cx, "more", "条更多"))),
+                        },
+                    )
+                    .self_start()
+                    .into_any_element(),
                 );
             }
-            list
-        });
+            els
+        };
+        let chips_block = pro_fold(
+            pro_eid(&self.id, "chips-fold"),
+            has_chips,
+            72.,
+            0.,
+            move || {
+                div()
+                    .w_full()
+                    .mb(px(12.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .children(chips_rendered)
+                    .into_any_element()
+            },
+        );
 
-        // Header line (pixel mark + Atlas + state label)
-        let state_caption = match self.status {
-            ResponseStreamStatus::Streaming => Some((tr(cx, "Writing", "正在输出"), p.muted)),
-            ResponseStreamStatus::Stopped => Some((tr(cx, "Stopped", "已暂停"), p.muted)),
-            ResponseStreamStatus::Failed => Some((tr(cx, "Failed", "输出中断"), p.red_ink)),
-            ResponseStreamStatus::Done => None,
+        // Header line (pixel mark + Atlas + animated state swap label)
+        let (state_lbl, state_col) = match self.status {
+            ResponseStreamStatus::Streaming => (tr(cx, "Writing", "正在输出"), p.muted),
+            ResponseStreamStatus::Stopped => (tr(cx, "Stopped", "已暂停"), p.muted),
+            ResponseStreamStatus::Failed => (tr(cx, "Failed", "输出中断"), p.red_ink),
+            ResponseStreamStatus::Done => ("", p.muted),
         };
         let head = div()
             .h(px(20.))
@@ -993,8 +1007,14 @@ impl Render for ResponseStream {
                     .text_color(p.strong)
                     .child(self.agent.name.clone()),
             )
-            .when_some(state_caption, |d, (lbl, col)| {
-                d.child(div().text_size(px(12.)).text_color(col).child(lbl))
+            .when(!state_lbl.is_empty(), |d| {
+                d.child(pro_swap_label(
+                    pro_eid(&self.id, "rstr-head-state-swap"),
+                    state_lbl,
+                    12.,
+                    FontWeight::NORMAL,
+                    state_col,
+                ))
             });
 
         // Streamed segments body
@@ -1029,8 +1049,13 @@ impl Render for ResponseStream {
         let mut cur_para_has_items = false;
 
         for idx in 0..limit {
-            // Render any steer bend divider anchored at `idx`
-            for bend in self.bends.iter().filter(|b| b.word_index == idx) {
+            // Render any steer bend divider anchored at `idx` with smooth Slide entrance
+            for (b_idx, bend) in self
+                .bends
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| b.word_index == idx)
+            {
                 if cur_para_has_items {
                     body_col = body_col.child(cur_para);
                     cur_para = div()
@@ -1044,9 +1069,22 @@ impl Render for ResponseStream {
                         .text_color(p.ink);
                     cur_para_has_items = false;
                 }
+                let (b_dy, b_alpha) = if reduced {
+                    (0.0, 1.0)
+                } else if let Some((sl, clk)) = self.bend_entrances.get(&b_idx) {
+                    let y = sl.get(w, cx);
+                    let age = clk.time(0.20, w, cx);
+                    let a = 0.25 + 0.75 * pro_ease((age / 0.20).clamp(0.0, 1.0));
+                    (y, a)
+                } else {
+                    (0.0, 1.0)
+                };
                 body_col = body_col.child(
                     div()
                         .w_full()
+                        .relative()
+                        .top(px(b_dy))
+                        .opacity(b_alpha)
                         .h(px(18.))
                         .flex()
                         .items_center()
@@ -1194,217 +1232,203 @@ impl Render for ResponseStream {
                 );
         }
 
-        // Stable 28px action footer
+        // Stable 28px action footer with tactile KUI buttons & smooth view transition
         let btn_surface = if p.dark { rgb(0x2c2c2f).into() } else { p.card };
-        let footer = match self.status {
-            ResponseStreamStatus::Streaming => div()
-                .pl(px(indent_px))
-                .mt(px(10.))
-                .min_h(px(28.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-stop-btn"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .pl(px(8.))
-                        .pr(px(8.))
-                        .rounded(px(6.))
-                        .bg(btn_surface)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_xs()
-                        .hover(|s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .cursor_pointer()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .on_click(cx.listener(|this, _, _, cx| this.stop_stream(cx)))
-                        .child(pro_svg("0 0 24 24", STOP_ROUND_RECT_SVG, 13., p.strong))
-                        .child(tr(cx, "Stop", "停止"))
-                        .child(
-                            div()
-                                .h(px(18.))
-                                .px(px(5.))
-                                .rounded(px(4.))
-                                .bg(p.subtle)
-                                .border_1()
-                                .border_color(p.line)
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.))
-                                .font_weight(FontWeight::NORMAL)
-                                .text_color(p.muted)
-                                .child("Esc"),
-                        ),
-                ),
-            ResponseStreamStatus::Stopped => div()
-                .pl(px(indent_px))
-                .mt(px(10.))
-                .min_h(px(28.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-continue-btn"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .bg(btn_surface)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_xs()
-                        .hover(|s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .cursor_pointer()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .on_click(cx.listener(|this, _, _, cx| this.continue_stream(cx)))
-                        .child(pro_icon(ProIcon::Play, 13., p.strong))
-                        .child(tr(cx, "Continue", "从断点继续")),
-                )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-dismiss-stop"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .hover(|s| s.bg(p.hover).text_color(p.ink))
-                        .flex()
-                        .items_center()
-                        .cursor_pointer()
-                        .text_size(px(13.))
-                        .text_color(p.muted)
-                        .on_click(cx.listener(|this, _, _, cx| this.dismiss(cx)))
-                        .child(tr(cx, "Dismiss", "移除")),
-                ),
-            ResponseStreamStatus::Failed => div()
-                .pl(px(indent_px))
-                .mt(px(10.))
-                .min_h(px(28.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-retry-btn"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .bg(btn_surface)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_xs()
-                        .hover(|s| s.bg(p.chip_hover))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .cursor_pointer()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .on_click(cx.listener(|this, _, _, cx| this.retry_from_failure(cx)))
-                        .child(pro_icon(ProIcon::Refresh, 13., p.strong))
-                        .child(tr(cx, "Retry", "从断点重试")),
-                )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-dismiss-fail"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(10.))
-                        .rounded(px(6.))
-                        .hover(|s| s.bg(p.hover).text_color(p.ink))
-                        .flex()
-                        .items_center()
-                        .cursor_pointer()
-                        .text_size(px(13.))
-                        .text_color(p.muted)
-                        .on_click(cx.listener(|this, _, _, cx| this.dismiss(cx)))
-                        .child(tr(cx, "Dismiss", "移除")),
-                ),
-            ResponseStreamStatus::Done => div()
-                .pl(px(indent_px))
-                .mt(px(10.))
-                .min_h(px(28.))
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(4.))
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-copy-btn"))
-                        .role(Role::Button)
-                        .aria_label(SharedString::from(tr(cx, "Copy answer", "复制回答")))
-                        .tab_index(0)
-                        .size(px(28.))
-                        .rounded(px(6.))
-                        .hover(|s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .on_click(cx.listener(|this, _, _, cx| this.copy_answer(cx)))
-                        .child(pro_icon(
-                            if copy_fresh {
-                                ProIcon::Check
-                            } else {
-                                ProIcon::Copy
-                            },
-                            14.,
-                            if copy_fresh { p.green_ink } else { p.muted },
-                        )),
-                )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "rstr-regen-btn"))
-                        .role(Role::Button)
-                        .aria_label(SharedString::from(tr(
+        let copy_drawn = reduced || self.copy_clock.time(0.26, w, cx) > 0.012;
+        let footer_row = match self.status {
+            ResponseStreamStatus::Streaming => {
+                let stop_lbl = tr(cx, "Stop", "停止").to_owned();
+                let stop_inner = div()
+                    .h(px(28.))
+                    .px(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .child(pro_svg("0 0 24 24", STOP_ROUND_RECT_SVG, 13., p.strong))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "rstr-stop-swap"),
+                        stop_lbl.clone(),
+                        13.,
+                        FontWeight::MEDIUM,
+                        p.strong,
+                    ))
+                    .child(
+                        div()
+                            .h(px(18.))
+                            .px(px(5.))
+                            .rounded(px(4.))
+                            .bg(p.subtle)
+                            .border_1()
+                            .border_color(p.line)
+                            .flex()
+                            .items_center()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::NORMAL)
+                            .text_color(p.muted)
+                            .child("Esc"),
+                    );
+                div()
+                    .min_h(px(28.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, "rstr-stop-btn"),
+                            stop_lbl,
+                            6.,
+                            btn_surface,
+                            p.chip_hover,
+                            p.line_strong,
+                            p.line_strong,
+                            false,
+                            stop_inner,
                             cx,
-                            "Regenerate answer",
-                            "重新生成回答",
-                        )))
-                        .tab_index(0)
-                        .size(px(28.))
-                        .rounded(px(6.))
-                        .hover(|s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .on_click(cx.listener(|this, _, _, cx| this.regenerate(cx)))
-                        .child(pro_icon(ProIcon::Refresh, 14., p.muted)),
-                )
-                .child(
-                    div()
-                        .ml(px(6.))
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .child(format!(
-                            "{:.1}s · {} {}",
-                            self.meta.duration_ms as f64 / 1000.0,
-                            self.meta.tokens,
-                            tr(cx, "tokens", "Tokens")
-                        )),
-                ),
+                            |this, _, cx| this.stop_stream(cx),
+                        )
+                        .flex_none()
+                        .shadow_xs(),
+                    )
+            }
+            ResponseStreamStatus::Stopped => div()
+                .min_h(px(28.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(pro_btn(
+                    pro_eid(&self.id, "rstr-continue-btn"),
+                    tr(cx, "Continue", "从断点继续"),
+                    Some(ProIcon::Play),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    |this, _, cx| this.continue_stream(cx),
+                ))
+                .child(pro_btn(
+                    pro_eid(&self.id, "rstr-dismiss-stop"),
+                    tr(cx, "Dismiss", "移除"),
+                    None,
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| this.dismiss(cx),
+                )),
+            ResponseStreamStatus::Failed => div()
+                .min_h(px(28.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(pro_btn(
+                    pro_eid(&self.id, "rstr-retry-btn"),
+                    tr(cx, "Retry", "从断点重试"),
+                    Some(ProIcon::Refresh),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    |this, _, cx| this.retry_from_failure(cx),
+                ))
+                .child(pro_btn(
+                    pro_eid(&self.id, "rstr-dismiss-fail"),
+                    tr(cx, "Dismiss", "移除"),
+                    None,
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| this.dismiss(cx),
+                )),
+            ResponseStreamStatus::Done => {
+                let copy_inner = div()
+                    .size(px(28.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(if copy_fresh {
+                        pro_check_draw(
+                            pro_eid(&self.id, "rstr-copy-chk"),
+                            copy_drawn,
+                            14.,
+                            false,
+                            p.green_ink,
+                        )
+                    } else {
+                        pro_icon(ProIcon::Copy, 14., p.muted)
+                    });
+                div()
+                    .min_h(px(28.))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(4.))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, "rstr-copy-btn"),
+                            SharedString::from(tr(cx, "Copy answer", "复制回答")),
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            copy_fresh,
+                            copy_inner,
+                            cx,
+                            |this, _, cx| this.copy_answer(cx),
+                        )
+                        .flex_none(),
+                    )
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "rstr-regen-btn"),
+                        SharedString::from(tr(cx, "Regenerate answer", "重新生成回答")),
+                        ProIcon::Refresh,
+                        28.,
+                        false,
+                        cx,
+                        |this, _, cx| this.regenerate(cx),
+                    ))
+                    .child(
+                        div()
+                            .ml(px(6.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rstr-dur-s"),
+                                self.meta.duration_ms as f64 / 1000.0,
+                                1,
+                                "",
+                                "s",
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child("·")
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rstr-tok-n"),
+                                self.meta.tokens as f64,
+                                0,
+                                "",
+                                "",
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child(tr(cx, "tokens", "Tokens")),
+                    )
+            }
         };
+        let footer = div()
+            .pl(px(indent_px))
+            .mt(px(10.))
+            .min_h(px(28.))
+            .child(pro_view_transition(
+                pro_eid(&self.id, "rstr-foot-tx"),
+                self.status.key(),
+                footer_row,
+            ));
 
         let answer_card = div()
             .w_full()
@@ -1416,7 +1440,7 @@ impl Render for ResponseStream {
             .shadow_xs()
             .flex()
             .flex_col()
-            .when_some(chips_block, |d, cb| d.child(cb))
+            .child(chips_block)
             .child(head)
             .child(body_col)
             .child(footer);

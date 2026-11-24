@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
-        pro_mark_selected, pro_person_avatar, pro_pill_indicator, pro_presence,
-        pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar, pro_toast_banner,
-        pro_view_transition, tr,
+        ProPalette, pro_agent_avatar, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mark_selected, pro_person_avatar, pro_pill_indicator,
+        pro_popover_presence, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -25,7 +25,6 @@ use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
 const SVG_SORT_LINES: &str = r#"<path d="M2.5 4.5h11M4.5 8h7M6.5 11.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path>"#;
-const SVG_CHECK_CIRCLE: &str = r#"<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.25"></circle><path d="M5.4 8.2l1.7 1.7 3.4-3.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const SVG_SPIN_ARC: &str = r#"<circle cx="8" cy="8" r="5.8" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.5"></circle><path d="M8 2.2A5.8 5.8 0 0 1 13.8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>"#;
 
 /// Active status filter tab in [`CommentsPanel`].
@@ -372,6 +371,8 @@ pub struct CommentsPanel {
     title: SharedString,
     current_user: SharedString,
     comments: Vec<PanelComment>,
+    entering_ids: Vec<(SharedString, bool)>,
+    folding_out_ids: Vec<(SharedString, Instant)>,
     filter: CommentFilter,
     sort: CommentSort,
     sort_menu_open: bool,
@@ -403,6 +404,8 @@ impl CommentsPanel {
             title: "Comments".into(),
             current_user: "Lena Hart".into(),
             comments: default_comments(),
+            entering_ids: Vec::new(),
+            folding_out_ids: Vec::new(),
             filter: CommentFilter::Open,
             sort: CommentSort::Newest,
             sort_menu_open: false,
@@ -480,6 +483,7 @@ impl CommentsPanel {
     pub fn set_filter(&mut self, filter: CommentFilter, cx: &mut Context<Self>) {
         if self.filter != filter {
             self.filter = filter;
+            self.folding_out_ids.clear();
             cx.emit(CommentsPanelEvent::FilterChanged(filter));
             cx.notify();
         }
@@ -491,6 +495,12 @@ impl CommentsPanel {
             item.resolved = !item.resolved;
             let resolved = item.resolved;
             let cid = item.id.clone();
+            let leaves_filter = (resolved && self.filter == CommentFilter::Open)
+                || (!resolved && self.filter == CommentFilter::Resolved);
+            self.folding_out_ids.retain(|(fid, _)| fid != &cid);
+            if leaves_filter && !disabled_motion(cx) {
+                self.folding_out_ids.push((cid.clone(), Instant::now()));
+            }
             self.toast = Some((
                 if resolved {
                     tr(cx, "Marked thread resolved", "已标记为已解决").into()
@@ -649,6 +659,10 @@ impl CommentsPanel {
         {
             let rid = SharedString::from(format!("r{}", self.next_seq));
             self.next_seq += 1;
+            if !disabled_motion(cx) {
+                self.entering_ids
+                    .push((format!("rep-{target_cid}-{rid}").into(), false));
+            }
             parent.replies.push(CommentReply::new(
                 rid.clone(),
                 self.current_user.clone(),
@@ -669,6 +683,9 @@ impl CommentsPanel {
 
         let cid = SharedString::from(format!("c{}", self.next_seq));
         self.next_seq += 1;
+        if !disabled_motion(cx) {
+            self.entering_ids.push((cid.clone(), false));
+        }
         let new_comment = PanelComment::new(
             cid.clone(),
             self.current_user.clone(),
@@ -678,6 +695,7 @@ impl CommentsPanel {
         self.comments.insert(0, new_comment);
         if self.filter == CommentFilter::Resolved {
             self.filter = CommentFilter::Open;
+            self.folding_out_ids.clear();
         }
         cx.emit(CommentsPanelEvent::CommentAdded { id: cid, text });
         cx.notify();
@@ -798,61 +816,75 @@ impl CommentsPanel {
                         .text_size(px(12.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.green_ink)
-                        .child(pro_icon(ProIcon::Check, 13., p.green_ink))
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("edit-chk-{key_suffix}")),
+                            true,
+                            13.,
+                            false,
+                            p.green,
+                        ))
                         .child(tr(cx, "Edit applied", "已应用修改")),
                 )
                 .child(
-                    div()
-                        .id(pro_eid(&self.id, format!("undo-edit-{key_suffix}")))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Undo edit", "撤销修改"))
-                        .tab_index(0)
-                        .h(px(24.))
-                        .px(px(6.))
-                        .rounded(px(5.))
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                        .on_click(cx.listener(move |this, _, _, cx| {
+                    pro_tactile(
+                        pro_eid(&self.id, format!("undo-edit-{key_suffix}")),
+                        tr(cx, "Undo edit", "撤销修改"),
+                        5.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        false,
+                        div()
+                            .h(px(24.))
+                            .px(px(6.))
+                            .flex()
+                            .items_center()
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .whitespace_nowrap()
+                            .child(tr(cx, "Undo", "撤销")),
+                        cx,
+                        move |this, _, cx| {
                             this.undo_slash_edit(cid.clone(), rid.clone(), cx);
-                        }))
-                        .child(tr(cx, "Undo", "撤销")),
+                        },
+                    )
+                    .flex_none(),
                 );
         } else {
             let cid = comment_id.clone();
             let rid = reply_id.cloned();
             let instr: SharedString = instruction.to_owned().into();
             row = row.child(
-                div()
-                    .id(pro_eid(&self.id, format!("run-edit-{key_suffix}")))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Run edit", "执行修改"))
-                    .tab_index(0)
-                    .h(px(27.))
-                    .pl(px(8.))
-                    .pr(px(10.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .shadow_xs()
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                pro_tactile(
+                    pro_eid(&self.id, format!("run-edit-{key_suffix}")),
+                    tr(cx, "Run edit", "执行修改"),
+                    6.,
+                    p.card,
+                    p.hover,
+                    p.line_strong,
+                    p.line_strong,
+                    false,
+                    div()
+                        .h(px(27.))
+                        .pl(px(8.))
+                        .pr(px(10.))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.strong)
+                        .whitespace_nowrap()
+                        .child(pro_icon(ProIcon::Play, 12., p.blue))
+                        .child(tr(cx, "Run edit", "执行 /edit")),
+                    cx,
+                    move |this, _, cx| {
                         this.run_slash_edit(cid.clone(), rid.clone(), instr.clone(), cx);
-                    }))
-                    .child(pro_icon(ProIcon::Play, 12., p.blue))
-                    .child(tr(cx, "Run edit", "执行 /edit")),
+                    },
+                )
+                .flex_none()
+                .shadow_xs(),
             );
         }
         row
@@ -997,6 +1029,8 @@ impl Render for CommentsPanel {
                     .px(px(9.))
                     .rounded(px(6.))
                     .cursor_pointer()
+                    .active(|s| s.top(px(0.75)))
+                    .when(!selected, move |d| d.hover(move |s| s.text_color(p.ink)))
                     .flex()
                     .items_center()
                     .gap(px(5.))
@@ -1023,19 +1057,19 @@ impl Render for CommentsPanel {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(10.5))
-                            .text_color(if selected { p.ink } else { p.faint })
-                            .child(format!("{cnt}")),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("tab-cnt-{}", flt.key())),
+                                format!("{cnt}"),
+                                10.5,
+                                FontWeight::MEDIUM,
+                                if selected { p.ink } else { p.faint },
+                            )),
                     ),
             );
         }
 
-        let sort_popover = pro_presence(
-            pro_eid(&self.id, "sort-pop"),
-            self.sort_menu_open,
-            0.16,
-            0.12,
-            {
+        let sort_popover =
+            pro_popover_presence(pro_eid(&self.id, "sort-pop"), self.sort_menu_open, {
                 let cur_sort = self.sort;
                 let base_id = self.id.clone();
                 let entity = cx.entity().clone();
@@ -1045,7 +1079,7 @@ impl Render for CommentsPanel {
                     CommentSort::EditsFirst,
                 ]
                 .map(|o| (o, o.label(cx)));
-                move |amt| {
+                move || {
                     let mut menu = div()
                         .mx(px(14.))
                         .mb(px(6.))
@@ -1055,7 +1089,6 @@ impl Render for CommentsPanel {
                         .border_1()
                         .border_color(p.line_strong)
                         .shadow_md()
-                        .opacity(amt)
                         .flex()
                         .flex_col()
                         .gap(px(2.));
@@ -1088,22 +1121,43 @@ impl Render for CommentsPanel {
                                     });
                                 })
                                 .child(opt_lbl)
-                                .when(active, |d| d.child(pro_icon(ProIcon::Check, 13., p.blue))),
+                                .child(pro_check_draw(
+                                    pro_eid(&base_id, format!("sort-chk-{si}")),
+                                    active,
+                                    13.,
+                                    false,
+                                    p.blue,
+                                )),
                         );
                     }
                     menu.into_any_element()
                 }
-            },
-        );
+            });
 
-        // Filter and sort visible comments.
+        if reduced {
+            self.entering_ids.clear();
+            self.folding_out_ids.clear();
+        } else {
+            self.folding_out_ids
+                .retain(|(_, t)| t.elapsed().as_secs_f32() < 0.28);
+            if !self.folding_out_ids.is_empty()
+                || self.entering_ids.iter().any(|(_, ready)| !*ready)
+            {
+                w.request_animation_frame();
+            }
+        }
+
+        // Filter and sort visible comments (keeping recently resolved/reopened threads during `pro_fold` collapse).
         let mut visible: Vec<PanelComment> = self
             .comments
             .iter()
-            .filter(|c| match self.filter {
-                CommentFilter::Open => !c.resolved,
-                CommentFilter::Resolved => c.resolved,
-                CommentFilter::All => true,
+            .filter(|c| {
+                let in_filter = match self.filter {
+                    CommentFilter::Open => !c.resolved,
+                    CommentFilter::Resolved => c.resolved,
+                    CommentFilter::All => true,
+                };
+                in_filter || self.folding_out_ids.iter().any(|(fid, _)| fid == &c.id)
             })
             .cloned()
             .collect();
@@ -1197,37 +1251,41 @@ impl Render for CommentsPanel {
                                     .child(item.created_at.clone()),
                             )
                             .child(
-                                div()
-                                    .id(pro_eid(&self.id, format!("res-btn-{cid}")))
-                                    .role(Role::Button)
-                                    .aria_label(if item.resolved {
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("res-btn-{cid}")),
+                                    if item.resolved {
                                         tr(cx, "Reopen comment", "重新打开评论")
                                     } else {
                                         tr(cx, "Resolve comment", "标记评论为已解决")
-                                    })
-                                    .tab_index(0)
-                                    .size(px(24.))
-                                    .rounded(px(6.))
-                                    .bg(if item.resolved {
+                                    },
+                                    6.,
+                                    if item.resolved {
                                         p.green_soft
                                     } else {
                                         transparent_black()
-                                    })
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .hover(move |s| s.bg(p.hover))
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                    },
+                                    p.hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    item.resolved,
+                                    div()
+                                        .size(px(24.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_check_draw(
+                                            pro_eid(&self.id, format!("res-chk-{cid}")),
+                                            item.resolved,
+                                            15.,
+                                            false,
+                                            p.green,
+                                        )),
+                                    cx,
+                                    move |this, _, cx| {
                                         this.toggle_resolve(&cid_res, cx);
-                                    }))
-                                    .child(pro_svg(
-                                        "0 0 16 16",
-                                        SVG_CHECK_CIRCLE,
-                                        14.,
-                                        if item.resolved { p.green_ink } else { p.muted },
-                                    )),
+                                    },
+                                )
+                                .flex_none(),
                             ),
                     )
                     .child(
@@ -1248,31 +1306,37 @@ impl Render for CommentsPanel {
                             })
                             .child(
                                 div().mt(px(5.)).flex().items_center().gap(px(8.)).child(
-                                    div()
-                                        .id(pro_eid(&self.id, format!("reply-btn-{cid}")))
-                                        .role(Role::Button)
-                                        .aria_label(tr(cx, "Reply", "回复"))
-                                        .tab_index(0)
-                                        .h(px(20.))
-                                        .px(px(4.))
-                                        .mx(px(-4.))
-                                        .rounded(px(4.))
-                                        .cursor_pointer()
-                                        .flex()
-                                        .items_center()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.muted)
-                                        .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                        .on_click(cx.listener(move |this, _, w, cx| {
+                                    pro_tactile(
+                                        pro_eid(&self.id, format!("reply-btn-{cid}")),
+                                        tr(cx, "Reply", "回复"),
+                                        4.,
+                                        transparent_black(),
+                                        p.hover,
+                                        transparent_black(),
+                                        transparent_black(),
+                                        false,
+                                        div()
+                                            .h(px(20.))
+                                            .px(px(5.))
+                                            .flex()
+                                            .items_center()
+                                            .text_size(px(11.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.muted)
+                                            .whitespace_nowrap()
+                                            .child(tr(cx, "Reply", "回复")),
+                                        cx,
+                                        move |this, w, cx| {
                                             this.replying_to =
                                                 Some((cid_rep.clone(), author_rep.clone()));
                                             if let Some(ed) = &this.editor {
                                                 ed.update(cx, |e, cx| e.focus(w, cx));
                                             }
                                             cx.notify();
-                                        }))
-                                        .child(tr(cx, "Reply", "回复")),
+                                        },
+                                    )
+                                    .flex_none()
+                                    .mx(px(-5.)),
                                 ),
                             ),
                     );
@@ -1294,55 +1358,96 @@ impl Render for CommentsPanel {
                         } else {
                             pro_person_avatar(&rep.author, 18., false, None, cx)
                         };
-                        replies_col = replies_col.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(6.))
-                                        .child(rep_av)
-                                        .child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(p.strong)
-                                                .child(rep.author.clone()),
-                                        )
-                                        .child(
-                                            div()
-                                                .ml_auto()
-                                                .text_size(px(11.))
-                                                .text_color(p.faint)
-                                                .child(rep.created_at.clone()),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .pl(px(24.))
-                                        .mt(px(3.))
-                                        .flex()
-                                        .flex_col()
-                                        .child(self.render_rich_body(&rep.text, item.resolved, cx))
-                                        .when_some(extract_slash_edit(&rep.text), |d, instr| {
-                                            d.child(self.render_slash_action_row(
-                                                &cid,
-                                                Some(&rep.id),
-                                                &instr,
-                                                rep.applied,
-                                                cx,
-                                            ))
-                                        }),
-                                ),
-                        );
+                        let rep_key: SharedString = format!("rep-{cid}-{}", rep.id).into();
+                        let rep_open = if let Some(entry) =
+                            self.entering_ids.iter_mut().find(|(id, _)| *id == rep_key)
+                        {
+                            if entry.1 {
+                                true
+                            } else {
+                                entry.1 = true;
+                                false
+                            }
+                        } else {
+                            true
+                        };
+                        let rep_node = div()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(rep_av)
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(p.strong)
+                                            .child(rep.author.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .ml_auto()
+                                            .text_size(px(11.))
+                                            .text_color(p.faint)
+                                            .child(rep.created_at.clone()),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .pl(px(24.))
+                                    .mt(px(3.))
+                                    .flex()
+                                    .flex_col()
+                                    .child(self.render_rich_body(&rep.text, item.resolved, cx))
+                                    .when_some(extract_slash_edit(&rep.text), |d, instr| {
+                                        d.child(self.render_slash_action_row(
+                                            &cid,
+                                            Some(&rep.id),
+                                            &instr,
+                                            rep.applied,
+                                            cx,
+                                        ))
+                                    }),
+                            )
+                            .into_any_element();
+                        replies_col = replies_col.child(pro_fold(
+                            pro_eid(&self.id, format!("rep-fold-{cid}-{}", rep.id)),
+                            rep_open,
+                            64.,
+                            9.,
+                            move || rep_node,
+                        ));
                     }
                     thread_card = thread_card.child(replies_col);
                 }
 
-                feed_list = feed_list.child(thread_card);
+                let is_folding_out = self.folding_out_ids.iter().any(|(fid, _)| fid == &cid);
+                let cmt_open = if is_folding_out {
+                    false
+                } else if let Some(entry) = self.entering_ids.iter_mut().find(|(id, _)| *id == cid)
+                {
+                    if entry.1 {
+                        true
+                    } else {
+                        entry.1 = true;
+                        false
+                    }
+                } else {
+                    true
+                };
+                let thread_el = thread_card.into_any_element();
+                feed_list = feed_list.child(pro_fold(
+                    pro_eid(&self.id, format!("cmt-fold-{cid}")),
+                    cmt_open,
+                    108.,
+                    0.,
+                    move || thread_el,
+                ));
             }
+            self.entering_ids.retain(|(_, ready)| !*ready);
         }
 
         // Composer: optional `"Replying to ..."` banner + `@mention` / `/edit` helpers + `Editor` + Send.
@@ -1398,15 +1503,13 @@ impl Render for CommentsPanel {
             },
         );
 
-        let mention_pop = pro_presence(
+        let mention_pop = pro_popover_presence(
             pro_eid(&self.id, "mention-pop"),
             self.mention_picker_open,
-            0.15,
-            0.11,
             {
                 let base_id = self.id.clone();
                 let entity = cx.entity().clone();
-                move |amt| {
+                move || {
                     let handles = ["@Mara", "@Jonas", "@Lena", "@KenseAI"];
                     let mut row = div()
                         .px(px(12.))
@@ -1414,7 +1517,6 @@ impl Render for CommentsPanel {
                         .bg(p.subtle)
                         .border_t_1()
                         .border_color(p.line)
-                        .opacity(amt)
                         .flex()
                         .flex_wrap()
                         .items_center()
@@ -1432,6 +1534,8 @@ impl Render for CommentsPanel {
                                 .rounded(px(5.))
                                 .bg(p.accent_soft)
                                 .cursor_pointer()
+                                .active(|s| s.top(px(0.75)))
+                                .hover(move |s| s.bg(p.blue.opacity(0.20)))
                                 .flex()
                                 .items_center()
                                 .text_size(px(11.5))
@@ -1455,6 +1559,48 @@ impl Render for CommentsPanel {
             .as_ref()
             .is_some_and(|e| !e.read(cx).value().trim().is_empty());
         let ed_click = self.editor.clone();
+
+        let send_btn = if can_send {
+            pro_tactile(
+                pro_eid(&self.id, "send-comment-btn"),
+                tr(cx, "Send comment", "发送评论"),
+                6.,
+                p.primary,
+                if p.dark {
+                    hsla(0., 0., 1., 0.88)
+                } else {
+                    hsla(0., 0., 0., 0.84)
+                },
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .size(px(28.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_icon(ProIcon::ArrowUp, 14., p.on_primary)),
+                cx,
+                |this, w, cx| this.submit_composer(w, cx),
+            )
+            .flex_none()
+            .into_any_element()
+        } else {
+            div()
+                .id(pro_eid(&self.id, "send-comment-btn"))
+                .role(Role::Button)
+                .aria_label(tr(cx, "Send comment", "发送评论"))
+                .tab_index(-1)
+                .size(px(28.))
+                .flex_none()
+                .rounded(px(6.))
+                .bg(p.chip)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_icon(ProIcon::ArrowUp, 14., p.faint))
+                .into_any_element()
+        };
 
         let composer_row = div()
             .px(px(12.))
@@ -1491,28 +1637,7 @@ impl Render for CommentsPanel {
                                 d.child(div().flex_1().min_w_0().h(px(22.)).child(ed))
                             }),
                     )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "send-comment-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Send comment", "发送评论"))
-                            .tab_index(0)
-                            .size(px(28.))
-                            .flex_none()
-                            .rounded(px(6.))
-                            .bg(if can_send { p.primary } else { p.chip })
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .when(can_send, |d| d.cursor_pointer())
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_click(cx.listener(|this, _, w, cx| this.submit_composer(w, cx)))
-                            .child(pro_icon(
-                                ProIcon::ArrowUp,
-                                14.,
-                                if can_send { p.on_primary } else { p.faint },
-                            )),
-                    ),
+                    .child(send_btn),
             )
             .child(
                 div()
@@ -1521,57 +1646,67 @@ impl Render for CommentsPanel {
                     .items_center()
                     .gap(px(6.))
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "quick-at-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Insert @mention", "插入 @提及"))
-                            .tab_index(0)
-                            .h(px(21.))
-                            .px(px(6.5))
-                            .rounded(px(5.))
-                            .bg(if self.mention_picker_open {
+                        pro_tactile(
+                            pro_eid(&self.id, "quick-at-btn"),
+                            tr(cx, "Insert @mention", "插入 @提及"),
+                            5.,
+                            if self.mention_picker_open {
                                 p.accent_soft
                             } else {
                                 p.chip
-                            })
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if self.mention_picker_open {
-                                p.blue
-                            } else {
-                                p.text
-                            })
-                            .hover(move |s| s.bg(p.chip_hover))
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            },
+                            p.chip_hover,
+                            transparent_black(),
+                            p.line_strong,
+                            self.mention_picker_open,
+                            div()
+                                .h(px(21.))
+                                .px(px(6.5))
+                                .flex()
+                                .items_center()
+                                .text_size(px(11.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if self.mention_picker_open {
+                                    p.blue
+                                } else {
+                                    p.text
+                                })
+                                .whitespace_nowrap()
+                                .child("@mention"),
+                            cx,
+                            |this, _, cx| {
                                 this.mention_picker_open = !this.mention_picker_open;
                                 cx.notify();
-                            }))
-                            .child("@mention"),
+                            },
+                        )
+                        .flex_none(),
                     )
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "quick-slash-edit"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Insert /edit command", "插入 /edit 指令"))
-                            .tab_index(0)
-                            .h(px(21.))
-                            .px(px(6.5))
-                            .rounded(px(5.))
-                            .bg(p.chip)
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.purple)
-                            .hover(move |s| s.bg(p.chip_hover))
-                            .on_click(cx.listener(|this, _, w, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, "quick-slash-edit"),
+                            tr(cx, "Insert /edit command", "插入 /edit 指令"),
+                            5.,
+                            p.chip,
+                            p.chip_hover,
+                            transparent_black(),
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(21.))
+                                .px(px(6.5))
+                                .flex()
+                                .items_center()
+                                .text_size(px(11.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.purple)
+                                .whitespace_nowrap()
+                                .child("/edit"),
+                            cx,
+                            |this, w, cx| {
                                 this.insert_composer_prefix("/edit", w, cx);
-                            }))
-                            .child("/edit"),
+                            },
+                        )
+                        .flex_none(),
                     )
                     .child(
                         div()
@@ -1582,12 +1717,8 @@ impl Render for CommentsPanel {
                     ),
             );
 
-        let feed_state_key = SharedString::from(format!(
-            "feed-{}-{:?}-{}",
-            self.filter.key(),
-            self.sort,
-            self.comments.len()
-        ));
+        let feed_state_key =
+            SharedString::from(format!("feed-{}-{:?}", self.filter.key(), self.sort));
 
         div()
             .id(self.id.clone())
@@ -1675,30 +1806,32 @@ impl Render for CommentsPanel {
                             .gap(px(8.))
                             .child(tab_strip)
                             .child(
-                                div()
-                                    .id(pro_eid(&self.id, "sort-comments-btn"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Sort comments", "评论排序"))
-                                    .aria_expanded(self.sort_menu_open)
-                                    .tab_index(0)
-                                    .size(px(28.))
-                                    .rounded(px(6.))
-                                    .bg(if self.sort_menu_open {
+                                pro_tactile(
+                                    pro_eid(&self.id, "sort-comments-btn"),
+                                    tr(cx, "Sort comments", "评论排序"),
+                                    6.,
+                                    if self.sort_menu_open {
                                         p.hover
                                     } else {
                                         transparent_black()
-                                    })
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .hover(move |s| s.bg(p.hover))
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                    },
+                                    p.hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    self.sort_menu_open,
+                                    div()
+                                        .size(px(28.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_svg("0 0 16 16", SVG_SORT_LINES, 15., p.muted)),
+                                    cx,
+                                    |this, _, cx| {
                                         this.sort_menu_open = !this.sort_menu_open;
                                         cx.notify();
-                                    }))
-                                    .child(pro_svg("0 0 16 16", SVG_SORT_LINES, 15., p.muted)),
+                                    },
+                                )
+                                .flex_none(),
                             ),
                     )
                     .child(sort_popover)

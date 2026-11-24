@@ -6,16 +6,17 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
-        pro_person_avatar, pro_pill_indicator, pro_presence, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_switch, pro_toast_banner, pro_view_transition,
-        tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_person_avatar, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::{UiLanguage, activate},
         editor::{EditEvent, Editor, EditorShortcutEvent, InputMode},
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -752,6 +753,102 @@ fn sample_attachment_pool() -> [ContextFile; 4] {
     ]
 }
 
+#[derive(IntoElement)]
+struct TimelineEntryEntrance {
+    id: ElementId,
+    animate_in: bool,
+    parent_gap: f32,
+    content: AnyElement,
+}
+
+impl RenderOnce for TimelineEntryEntrance {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        if !self.animate_in {
+            return div()
+                .id(self.id)
+                .w_full()
+                .child(self.content)
+                .into_any_element();
+        }
+        let st = w.use_keyed_state(pro_eid(&self.id, "tl-enter"), cx, |_, inner_cx| {
+            let mut slide = Slide::new(0.);
+            slide.duration(1., 0.26, inner_cx);
+            (slide, Rc::new(Cell::new(px(56.))))
+        });
+        let (amt, h_cell) = st.update(cx, |s, cx| (s.0.get(w, cx).clamp(0., 1.), s.1.clone()));
+        let h = h_cell.get();
+        div()
+            .id(self.id)
+            .mt(px(-self.parent_gap * (1. - amt)))
+            .w_full()
+            .flex_none()
+            .when(amt < 0.998, |v| v.h(h * amt).overflow_hidden())
+            .opacity(amt)
+            .child(
+                div()
+                    .relative()
+                    .top(px(7. * (1. - amt)))
+                    .w_full()
+                    .flex_none()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(b) = bounds.first()
+                            && b.size.height > px(0.)
+                        {
+                            h_cell.set(b.size.height);
+                        }
+                    })
+                    .child(self.content),
+            )
+            .into_any_element()
+    }
+}
+
+#[derive(IntoElement)]
+struct SyncSpinIcon {
+    angle_rad: f32,
+    side: f32,
+    color: Hsla,
+}
+
+impl RenderOnce for SyncSpinIcon {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        if self.angle_rad.abs() <= 0.005 {
+            return pro_icon(ProIcon::Refresh, self.side, self.color);
+        }
+        let ang = self.angle_rad;
+        let color = self.color;
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let c = bounds.center();
+                let r = (f32::from(bounds.size.width).min(f32::from(bounds.size.height)) * 0.37)
+                    .max(2.);
+                for base_a in [0.25_f32, std::f32::consts::PI + 0.25] {
+                    let a0 = base_a + ang;
+                    let span = std::f32::consts::PI * 0.68;
+                    let steps = 12usize;
+                    let mut arc = PathBuilder::stroke(px(1.35));
+                    for i in 0..=steps {
+                        let a = a0 + span * (i as f32 / steps as f32);
+                        let pt = c + point(px(r * a.cos()), px(r * a.sin()));
+                        if i == 0 {
+                            arc.move_to(pt);
+                        } else {
+                            arc.line_to(pt);
+                        }
+                    }
+                    if let Ok(path) = arc.build() {
+                        window.paint_path(path, color);
+                    }
+                }
+            },
+        )
+        .size(px(self.side))
+        .flex_none()
+        .into_any_element()
+    }
+}
+
 /// Client context workspace block with switcher, live rolling KPIs, search, type filter pills, and timeline composer.
 pub struct ClientContextBlock {
     id: ElementId,
@@ -768,6 +865,8 @@ pub struct ClientContextBlock {
     staged_files: Vec<ContextFile>,
     next_sample_file_idx: usize,
     entry_seq: usize,
+    added_entry_ids: Vec<SharedString>,
+    sync_clock: PhaseClock,
     hovered_entry_id: Option<SharedString>,
     auto_sync_emails: bool,
     auto_sync_meetings: bool,
@@ -811,6 +910,8 @@ impl ClientContextBlock {
             staged_files: Vec::new(),
             next_sample_file_idx: 0,
             entry_seq: 100,
+            added_entry_ids: Vec::new(),
+            sync_clock: PhaseClock::default(),
             hovered_entry_id: None,
             auto_sync_emails: true,
             auto_sync_meetings: true,
@@ -935,8 +1036,14 @@ impl ClientContextBlock {
             "added a note".into()
         };
 
-        let mut entry = ContextEntry::new(entry_id, kind, self.me_name.clone(), action, "Just now")
-            .with_files(files.clone());
+        let mut entry = ContextEntry::new(
+            entry_id.clone(),
+            kind,
+            self.me_name.clone(),
+            action,
+            "Just now",
+        )
+        .with_files(files.clone());
         if !text.trim().is_empty() {
             entry = entry.with_body(text.clone());
         }
@@ -945,6 +1052,7 @@ impl ClientContextBlock {
         }
 
         if let Some(client) = self.clients.iter_mut().find(|c| c.id == cid) {
+            self.added_entry_ids.push(entry_id);
             client.context.insert(0, entry);
             cx.emit(ClientContextEvent::ContextAdded {
                 client_id: cid,
@@ -1330,63 +1438,70 @@ impl ClientContextBlock {
                 .map(|c| c.to_uppercase().collect::<String>())
                 .unwrap_or_else(|| "C".to_owned());
 
-            menu = menu.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("sw-client-{cid}")))
-                    .role(Role::ListBoxOption)
-                    .aria_selected(active)
-                    .tab_index(0)
-                    .h(px(32.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(if active { p.hover } else { transparent_black() })
-                    .hover(move |s| s.bg(p.hover))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .cursor_pointer()
-                    .child(
-                        div()
-                            .size(px(18.))
-                            .rounded(px(5.))
-                            .bg(client.mark_color)
-                            .text_color(rgb(0xffffff))
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(initial),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_size(px(13.))
-                            .font_weight(if active {
-                                FontWeight::MEDIUM
-                            } else {
-                                FontWeight::NORMAL
-                            })
-                            .text_color(p.ink)
-                            .truncate()
-                            .child(client.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(p.muted)
-                            .child(format!("{count}")),
-                    )
-                    .when(active, |d| {
-                        d.child(pro_icon(ProIcon::Check, 13., p.accent_info))
-                    }),
-                cx,
-                move |this, _, cx| {
-                    this.switch_client(cid.clone(), cx);
-                },
-            ));
+            menu = menu.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("sw-client-{cid}")),
+                    client.name.clone(),
+                    6.,
+                    if active { p.hover } else { transparent_black() },
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    div()
+                        .h(px(32.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .size(px(18.))
+                                .rounded(px(5.))
+                                .bg(client.mark_color)
+                                .text_color(rgb(0xffffff))
+                                .text_size(px(10.5))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(initial),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(13.))
+                                .font_weight(if active {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .text_color(p.ink)
+                                .truncate()
+                                .child(client.name.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(p.muted)
+                                .child(format!("{count}")),
+                        )
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("sw-client-chk-{cid}")),
+                            active,
+                            14.,
+                            false,
+                            p.accent_info,
+                        )),
+                    cx,
+                    move |this, _, cx| {
+                        this.switch_client(cid.clone(), cx);
+                    },
+                )
+                .w_full(),
+            );
         }
 
         menu.child(div().my(px(4.)).h(px(1.)).bg(p.line)).child(
@@ -1428,26 +1543,12 @@ impl ClientContextBlock {
                             )
                         }),
                 )
-                .child(activate(
-                    div()
-                        .id(pro_eid(&self.id, "create-client-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Create client", "新建客户"))
-                        .tab_index(0)
-                        .h(px(28.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .bg(p.primary)
-                        .text_color(p.on_primary)
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(3.))
-                        .cursor_pointer()
-                        .child(pro_icon(ProIcon::Plus, 12., p.on_primary))
-                        .child(tr(cx, "Add", "新建")),
+                .child(pro_btn(
+                    pro_eid(&self.id, "create-client-btn"),
+                    tr(cx, "Add", "新建"),
+                    Some(ProIcon::Plus),
+                    ProBtnStyle::Primary,
+                    true,
                     cx,
                     |this, w, cx| {
                         this.create_client_from_editor(w, cx);
@@ -1483,6 +1584,7 @@ impl ClientContextBlock {
             .flex_wrap()
             .items_center()
             .gap(px(2.))
+            .self_start()
             .child(pro_pill_indicator(
                 pro_eid(&self.id, "ctx-type-pill"),
                 self.type_filter.key(),
@@ -1495,33 +1597,40 @@ impl ClientContextBlock {
 
         for tf in ContextTypeFilter::ALL {
             let active = self.type_filter == tf;
-            filter_pills = filter_pills.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("ctx-filter-{}", tf.key())))
-                    .role(Role::Tab)
-                    .aria_selected(active)
-                    .tab_index(0)
-                    .relative()
-                    .h(px(24.))
-                    .px(px(9.))
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if active { p.strong } else { p.text })
-                    .cursor_pointer()
-                    .when(active, |d| d.child(pro_mark_selected(&filter_sensor)))
-                    .child(tf.label(cx)),
-                cx,
-                move |this, _, cx| {
-                    if this.type_filter != tf {
-                        this.type_filter = tf;
-                        cx.emit(ClientContextEvent::FilterChanged(tf));
-                        cx.notify();
-                    }
-                },
-            ));
+            let tf_lbl = tf.label(cx);
+            filter_pills = filter_pills.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("ctx-filter-{}", tf.key())),
+                    tf_lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    div()
+                        .h(px(24.))
+                        .px(px(9.))
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if active { p.strong } else { p.text })
+                        .child(tf_lbl),
+                    cx,
+                    move |this, _, cx| {
+                        if this.type_filter != tf {
+                            this.type_filter = tf;
+                            cx.emit(ClientContextEvent::FilterChanged(tf));
+                            cx.notify();
+                        }
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(active, |d| d.child(pro_mark_selected(&filter_sensor))),
+            );
         }
 
         // Composer card
@@ -1550,20 +1659,12 @@ impl ClientContextBlock {
                             .truncate()
                             .child(f.name.clone()),
                     )
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("rm-staged-{f_idx}")))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Remove attachment", "移除附件"))
-                            .tab_index(0)
-                            .size(px(18.))
-                            .rounded(px(4.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .child(pro_icon(ProIcon::Close, 10.5, p.muted)),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, format!("rm-staged-{f_idx}")),
+                        tr(cx, "Remove attachment", "移除附件"),
+                        ProIcon::Close,
+                        18.,
+                        false,
                         cx,
                         move |this, _, cx| {
                             if f_idx < this.staged_files.len() {
@@ -1594,32 +1695,38 @@ impl ClientContextBlock {
             );
         for rep in &client.reports {
             let r_title = rep.title.clone();
-            mention_box = mention_box.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("mention-opt-{}", rep.id)))
-                    .role(Role::Button)
-                    .aria_label(format!("Insert @{}", rep.title))
-                    .tab_index(0)
-                    .h(px(22.))
-                    .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.accent_soft)
-                    .text_color(p.accent_info)
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .cursor_pointer()
-                    .child(pro_icon(ProIcon::UsageChart, 11., p.accent_info))
-                    .child(format!("@{}", rep.title)),
-                cx,
-                move |this, w, cx| {
-                    this.insert_report_mention(&r_title, w, cx);
-                },
-            ));
+            mention_box = mention_box.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("mention-opt-{}", rep.id)),
+                    format!("Insert @{}", rep.title),
+                    5.,
+                    p.accent_soft,
+                    p.accent_info.opacity(0.22),
+                    transparent_black(),
+                    p.accent_info.opacity(0.32),
+                    false,
+                    div()
+                        .h(px(22.))
+                        .px(px(7.))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .whitespace_nowrap()
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.accent_info)
+                        .child(pro_icon(ProIcon::UsageChart, 11., p.accent_info))
+                        .child(format!("@{}", rep.title)),
+                    cx,
+                    move |this, w, cx| {
+                        this.insert_report_mention(&r_title, w, cx);
+                    },
+                )
+                .flex_none(),
+            );
         }
 
+        let mention_open = self.mention_menu_open && !client.reports.is_empty();
         let composer_card = div()
             .flex_1()
             .min_w_0()
@@ -1658,9 +1765,19 @@ impl ClientContextBlock {
             .when(!self.staged_files.is_empty(), |d| {
                 d.child(div().px(px(12.)).pt(px(4.)).child(attached_strip))
             })
-            .when(self.mention_menu_open && !client.reports.is_empty(), |d| {
-                d.child(div().px(px(10.)).pt(px(6.)).child(mention_box))
-            })
+            .child(pro_fold(
+                pro_eid(&self.id, "mention-menu-fold"),
+                mention_open,
+                40.,
+                0.,
+                move || {
+                    div()
+                        .px(px(10.))
+                        .pt(px(6.))
+                        .child(mention_box)
+                        .into_any_element()
+                },
+            ))
             .child(
                 div()
                     .px(px(8.))
@@ -1668,20 +1785,12 @@ impl ClientContextBlock {
                     .flex()
                     .items_center()
                     .gap(px(4.))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "attach-file-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Attach file", "添加附件文件"))
-                            .tab_index(0)
-                            .size(px(28.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .child(pro_icon(ProIcon::Paperclip, 14., p.muted)),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "attach-file-btn"),
+                        tr(cx, "Attach file", "添加附件文件"),
+                        ProIcon::Paperclip,
+                        28.,
+                        false,
                         cx,
                         |this, _, cx| {
                             let pool = sample_attachment_pool();
@@ -1693,40 +1802,44 @@ impl ClientContextBlock {
                             cx.notify();
                         },
                     ))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "mention-report-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Mention client report", "引用客户报告"))
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(7.))
-                            .rounded(px(6.))
-                            .bg(if self.mention_menu_open {
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, "mention-report-btn"),
+                            tr(cx, "Mention client report", "引用客户报告"),
+                            6.,
+                            if self.mention_menu_open {
                                 p.accent_soft
                             } else {
                                 transparent_black()
-                            })
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if self.mention_menu_open {
-                                p.accent_info
-                            } else {
-                                p.muted
-                            })
-                            .cursor_pointer()
-                            .child("@")
-                            .child(tr(cx, "Report", "报告")),
-                        cx,
-                        |this, _, cx| {
-                            this.mention_menu_open = !this.mention_menu_open;
-                            cx.notify();
-                        },
-                    ))
+                            },
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            self.mention_menu_open,
+                            div()
+                                .h(px(28.))
+                                .px(px(7.))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .whitespace_nowrap()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if self.mention_menu_open {
+                                    p.accent_info
+                                } else {
+                                    p.muted
+                                })
+                                .child("@")
+                                .child(tr(cx, "Report", "报告")),
+                            cx,
+                            |this, _, cx| {
+                                this.mention_menu_open = !this.mention_menu_open;
+                                cx.notify();
+                            },
+                        )
+                        .flex_none(),
+                    )
                     .child(div().flex_1())
                     .when(!compact, |d| {
                         d.child(
@@ -1761,24 +1874,12 @@ impl ClientContextBlock {
                                 ),
                         )
                     })
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "submit-ctx-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Add context", "添加上下文"))
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .bg(p.primary)
-                            .text_color(p.on_primary)
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .child(tr(cx, "Add context", "添加上下文")),
+                    .child(pro_btn(
+                        pro_eid(&self.id, "submit-ctx-btn"),
+                        tr(cx, "Add context", "添加上下文"),
+                        Some(ProIcon::Plus),
+                        ProBtnStyle::Primary,
+                        true,
                         cx,
                         |this, w, cx| {
                             this.submit_composer(w, cx);
@@ -1825,16 +1926,12 @@ impl ClientContextBlock {
                     "No context entries match the current filter.",
                     "当前筛选条件下暂无匹配的上下文记录。",
                 ))
-                .child(activate(
-                    div()
-                        .id(pro_eid(&self.id, "clear-ctx-filter"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.accent_info)
-                        .cursor_pointer()
-                        .child(tr(cx, "Show all entries", "查看全部记录")),
+                .child(pro_btn(
+                    pro_eid(&self.id, "clear-ctx-filter"),
+                    tr(cx, "Show all entries", "查看全部记录"),
+                    None,
+                    ProBtnStyle::Secondary,
+                    true,
                     cx,
                     |this, w, cx| {
                         this.type_filter = ContextTypeFilter::All;
@@ -1856,6 +1953,7 @@ impl ClientContextBlock {
                     .hovered_entry_id
                     .as_ref()
                     .is_some_and(|h| h == &entry.id);
+                let is_new_entry = self.added_entry_ids.contains(&entry.id);
 
                 let node = if let Some(app_name) = &entry.app {
                     pro_app_tile(app_name, 28., cx)
@@ -1908,159 +2006,150 @@ impl ClientContextBlock {
                     );
                 }
 
-                list = list.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("tline-{eid}")))
-                        .flex()
-                        .items_start()
-                        .gap(px(12.))
-                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                            if *inside {
-                                this.hovered_entry_id = Some(hover_id.clone());
-                            } else if this
-                                .hovered_entry_id
-                                .as_ref()
-                                .is_some_and(|h| h == &hover_id)
-                            {
-                                this.hovered_entry_id = None;
-                            }
-                            cx.notify();
-                        }))
-                        .child(node)
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .pt(px(2.))
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap(px(8.))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .flex()
-                                                .flex_wrap()
-                                                .items_center()
-                                                .gap_x(px(5.))
-                                                .text_size(px(13.))
-                                                .line_height(px(20.))
-                                                .child(
-                                                    div()
-                                                        .font_weight(FontWeight::MEDIUM)
-                                                        .text_color(p.strong)
-                                                        .child(entry.author.clone()),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_color(p.text)
-                                                        .child(entry.action.clone()),
-                                                )
-                                                .when_some(entry.mention.clone(), |d, m_title| {
-                                                    d.child(activate(
-                                                        div()
-                                                            .id(pro_eid(
-                                                                &self.id,
-                                                                format!("Jump-{eid}"),
-                                                            ))
-                                                            .role(Role::Button)
-                                                            .tab_index(0)
-                                                            .h(px(20.))
-                                                            .px(px(6.))
-                                                            .rounded(px(5.))
-                                                            .bg(p.accent_soft)
-                                                            .text_color(p.accent_info)
-                                                            .text_size(px(11.5))
-                                                            .font_weight(FontWeight::MEDIUM)
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap(px(3.))
-                                                            .cursor_pointer()
-                                                            .child(pro_icon(
-                                                                ProIcon::UsageChart,
-                                                                11.,
-                                                                p.accent_info,
-                                                            ))
-                                                            .child(format!("@{m_title}")),
-                                                        cx,
-                                                        |this, _, cx| {
-                                                            this.section_tab =
-                                                                ClientSectionTab::Reports;
-                                                            cx.emit(
-                                                                ClientContextEvent::TabChanged(
-                                                                    ClientSectionTab::Reports,
-                                                                ),
-                                                            );
-                                                            cx.notify();
-                                                        },
-                                                    ))
-                                                })
-                                                .child(
-                                                    div()
-                                                        .text_size(px(12.))
-                                                        .text_color(p.muted)
-                                                        .child(format!("· {}", entry.when)),
-                                                ),
-                                        )
-                                        .child(activate(
-                                            div()
-                                                .id(pro_eid(&self.id, format!("rm-entry-{eid}")))
-                                                .role(Role::Button)
-                                                .aria_label(tr(
-                                                    cx,
-                                                    "Remove context entry",
-                                                    "移除此条记录",
-                                                ))
-                                                .tab_index(0)
-                                                .size(px(22.))
-                                                .rounded(px(5.))
-                                                .opacity(if is_hovered || compact {
-                                                    1.
-                                                } else {
-                                                    0.
-                                                })
-                                                .hover(move |s| s.bg(p.hover))
-                                                .flex_none()
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .child(pro_icon(ProIcon::Close, 12., p.muted)),
-                                            cx,
-                                            move |this, _, cx| {
-                                                if let Some(cl) = this
-                                                    .clients
-                                                    .iter_mut()
-                                                    .find(|c| c.id == client_id)
-                                                {
-                                                    cl.context.retain(|e| e.id != rm_id);
-                                                    cx.emit(ClientContextEvent::ContextRemoved {
-                                                        client_id: client_id.clone(),
-                                                        entry_id: rm_id.clone(),
-                                                    });
-                                                    cx.notify();
-                                                }
-                                            },
-                                        )),
-                                )
-                                .when_some(entry.body.clone(), |d, body| {
-                                    d.child(
+                let row_inner = div()
+                    .id(pro_eid(&self.id, format!("tline-hit-{eid}")))
+                    .flex()
+                    .items_start()
+                    .gap(px(12.))
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        if *inside {
+                            this.hovered_entry_id = Some(hover_id.clone());
+                        } else if this
+                            .hovered_entry_id
+                            .as_ref()
+                            .is_some_and(|h| h == &hover_id)
+                        {
+                            this.hovered_entry_id = None;
+                        }
+                        cx.notify();
+                    }))
+                    .child(node)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .pt(px(2.))
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(8.))
+                                    .child(
                                         div()
-                                            .mt(px(4.))
+                                            .flex_1()
+                                            .min_w_0()
+                                            .flex()
+                                            .flex_wrap()
+                                            .items_center()
+                                            .gap_x(px(5.))
                                             .text_size(px(13.))
                                             .line_height(px(20.))
-                                            .text_color(p.ink)
-                                            .child(body),
+                                            .child(
+                                                div()
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(p.strong)
+                                                    .child(entry.author.clone()),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_color(p.text)
+                                                    .child(entry.action.clone()),
+                                            )
+                                            .when_some(entry.mention.clone(), |d, m_title| {
+                                                d.child(activate(
+                                                    div()
+                                                        .id(pro_eid(
+                                                            &self.id,
+                                                            format!("Jump-{eid}"),
+                                                        ))
+                                                        .role(Role::Button)
+                                                        .tab_index(0)
+                                                        .h(px(20.))
+                                                        .px(px(6.))
+                                                        .rounded(px(5.))
+                                                        .bg(p.accent_soft)
+                                                        .text_color(p.accent_info)
+                                                        .text_size(px(11.5))
+                                                        .font_weight(FontWeight::MEDIUM)
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap(px(3.))
+                                                        .cursor_pointer()
+                                                        .child(pro_icon(
+                                                            ProIcon::UsageChart,
+                                                            11.,
+                                                            p.accent_info,
+                                                        ))
+                                                        .child(format!("@{m_title}")),
+                                                    cx,
+                                                    |this, _, cx| {
+                                                        this.section_tab =
+                                                            ClientSectionTab::Reports;
+                                                        cx.emit(ClientContextEvent::TabChanged(
+                                                            ClientSectionTab::Reports,
+                                                        ));
+                                                        cx.notify();
+                                                    },
+                                                ))
+                                            })
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.))
+                                                    .text_color(p.muted)
+                                                    .child(format!("· {}", entry.when)),
+                                            ),
                                     )
-                                })
-                                .when(!entry.files.is_empty(), |d| d.child(files_row)),
-                        ),
-                );
+                                    .child(
+                                        div()
+                                            .opacity(if is_hovered || compact { 1. } else { 0. })
+                                            .child(pro_icon_btn(
+                                                pro_eid(&self.id, format!("rm-entry-{eid}")),
+                                                tr(cx, "Remove context entry", "移除此条记录"),
+                                                ProIcon::Close,
+                                                22.,
+                                                false,
+                                                cx,
+                                                move |this, _, cx| {
+                                                    if let Some(cl) = this
+                                                        .clients
+                                                        .iter_mut()
+                                                        .find(|c| c.id == client_id)
+                                                    {
+                                                        cl.context.retain(|e| e.id != rm_id);
+                                                        cx.emit(
+                                                            ClientContextEvent::ContextRemoved {
+                                                                client_id: client_id.clone(),
+                                                                entry_id: rm_id.clone(),
+                                                            },
+                                                        );
+                                                        cx.notify();
+                                                    }
+                                                },
+                                            )),
+                                    ),
+                            )
+                            .when_some(entry.body.clone(), |d, body| {
+                                d.child(
+                                    div()
+                                        .mt(px(4.))
+                                        .text_size(px(13.))
+                                        .line_height(px(20.))
+                                        .text_color(p.ink)
+                                        .child(body),
+                                )
+                            })
+                            .when(!entry.files.is_empty(), |d| d.child(files_row)),
+                    );
+
+                list = list.child(TimelineEntryEntrance {
+                    id: pro_eid(&self.id, format!("tline-{eid}")),
+                    animate_in: is_new_entry,
+                    parent_gap: 18.,
+                    content: row_inner.into_any_element(),
+                });
             }
             list.into_any_element()
         };
@@ -2114,32 +2203,18 @@ impl ClientContextBlock {
                         .text_color(p.text)
                         .child(summary),
                 )
-                .child(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("rep-cite-{rid}")))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .self_start()
-                        .h(px(26.))
-                        .px(px(9.))
-                        .rounded(px(6.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .child(tr(cx, "Cite in note", "在笔记中引用")),
+                .child(div().self_start().child(pro_btn(
+                    pro_eid(&self.id, format!("rep-cite-{rid}")),
+                    tr(cx, "Cite in note", "在笔记中引用"),
+                    None,
+                    ProBtnStyle::Secondary,
+                    true,
                     cx,
                     move |this, w, cx| {
                         this.section_tab = ClientSectionTab::Context;
                         this.insert_report_mention(&r_title_mention, w, cx);
                     },
-                ))
+                )))
                 .into_any_element();
 
             list = list.child(
@@ -2154,75 +2229,79 @@ impl ClientContextBlock {
                     .border_color(if is_open { p.line } else { transparent_black() })
                     .flex()
                     .flex_col()
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("rep-head-{}", rep.id)))
-                            .role(Role::Button)
-                            .aria_expanded(is_open)
-                            .tab_index(0)
-                            .min_h(px(52.))
-                            .px(px(10.))
-                            .py(px(8.))
-                            .rounded(px(9.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(12.))
-                            .cursor_pointer()
-                            .child(
-                                div()
-                                    .size(px(32.))
-                                    .rounded(px(8.))
-                                    .bg(p.card)
-                                    .border_1()
-                                    .border_color(p.line)
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(pro_icon(ProIcon::UsageChart, 15., p.accent_info)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .text_size(px(13.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .truncate()
-                                            .child(rep.title.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .text_color(p.muted)
-                                            .truncate()
-                                            .child(rep.updated.clone()),
-                                    ),
-                            )
-                            .child(pro_icon(
-                                if is_open {
-                                    ProIcon::ChevronUp
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("rep-head-{}", rep.id)),
+                            rep.title.clone(),
+                            9.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            is_open,
+                            div()
+                                .min_h(px(52.))
+                                .px(px(10.))
+                                .py(px(8.))
+                                .flex()
+                                .items_center()
+                                .gap(px(12.))
+                                .child(
+                                    div()
+                                        .size(px(32.))
+                                        .rounded(px(8.))
+                                        .bg(p.card)
+                                        .border_1()
+                                        .border_color(p.line)
+                                        .flex_none()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_icon(ProIcon::UsageChart, 15., p.accent_info)),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .child(
+                                            div()
+                                                .text_size(px(13.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.strong)
+                                                .truncate()
+                                                .child(rep.title.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(12.))
+                                                .text_color(p.muted)
+                                                .truncate()
+                                                .child(rep.updated.clone()),
+                                        ),
+                                )
+                                .child(pro_icon(
+                                    if is_open {
+                                        ProIcon::ChevronUp
+                                    } else {
+                                        ProIcon::ChevronDown
+                                    },
+                                    14.,
+                                    p.muted,
+                                )),
+                            cx,
+                            move |this, _, cx| {
+                                if this.open_report_id.as_ref() == Some(&rid) {
+                                    this.open_report_id = None;
                                 } else {
-                                    ProIcon::ChevronDown
-                                },
-                                14.,
-                                p.muted,
-                            )),
-                        cx,
-                        move |this, _, cx| {
-                            if this.open_report_id.as_ref() == Some(&rid) {
-                                this.open_report_id = None;
-                            } else {
-                                this.open_report_id = Some(rid.clone());
-                            }
-                            cx.notify();
-                        },
-                    ))
+                                    this.open_report_id = Some(rid.clone());
+                                }
+                                cx.notify();
+                            },
+                        )
+                        .w_full(),
+                    )
                     .child(pro_fold(
                         pro_eid(&self.id, format!("rep-fold-{}", rep.id)),
                         is_open,
@@ -2250,89 +2329,92 @@ impl ClientContextBlock {
             } else {
                 (p.red_soft, p.red_ink)
             };
-            rows = rows.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("fin-row-{}", kpi.id)))
-                    .role(Role::Button)
-                    .aria_toggled(active.into())
-                    .tab_index(0)
-                    .min_h(px(54.))
-                    .px(px(10.))
-                    .py(px(8.))
-                    .rounded(px(9.))
-                    .bg(if active {
+            rows = rows.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("fin-row-{}", kpi.id)),
+                    kpi.label.clone(),
+                    9.,
+                    if active {
                         p.select
                     } else {
                         transparent_black()
-                    })
-                    .hover(move |s| s.bg(p.hover))
-                    .flex()
-                    .items_center()
-                    .gap(px(16.))
-                    .cursor_pointer()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .child(kpi.label.clone()),
-                            )
-                            .child(div().text_size(px(12.)).text_color(p.muted).child(tr(
-                                cx,
-                                "Trailing 10-period ledger",
-                                "近 10 期账本序列",
-                            ))),
-                    )
-                    .when(!compact, |d| {
-                        d.child(Self::render_kpi_spark(&kpi.spark, p.accent_info, p.card))
-                    })
-                    .child(
-                        div()
-                            .flex_none()
-                            .flex()
-                            .flex_col()
-                            .items_end()
-                            .gap(px(2.))
-                            .child(pro_rolling_number(
-                                pro_eid(&self.id, format!("fin-num-{}", kpi.id)),
-                                kpi.value,
-                                kpi.decimals,
-                                kpi.prefix.clone(),
-                                kpi.suffix.clone(),
-                                13.5,
-                                FontWeight::MEDIUM,
-                                p.strong,
-                            ))
-                            .child(
-                                div()
-                                    .h(px(19.))
-                                    .px(px(6.))
-                                    .rounded(px(5.))
-                                    .bg(badge_bg)
-                                    .text_color(badge_fg)
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .flex()
-                                    .items_center()
-                                    .child(kpi.delta.clone()),
-                            ),
-                    ),
-                cx,
-                move |this, _, cx| {
-                    this.selected_kpi = if this.selected_kpi == Some(idx) {
-                        None
-                    } else {
-                        Some(idx)
-                    };
-                    cx.notify();
-                },
-            ));
+                    },
+                    p.hover,
+                    if active { p.line } else { transparent_black() },
+                    p.line,
+                    active,
+                    div()
+                        .min_h(px(54.))
+                        .px(px(10.))
+                        .py(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(16.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_size(px(13.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.strong)
+                                        .child(kpi.label.clone()),
+                                )
+                                .child(div().text_size(px(12.)).text_color(p.muted).child(tr(
+                                    cx,
+                                    "Trailing 10-period ledger",
+                                    "近 10 期账本序列",
+                                ))),
+                        )
+                        .when(!compact, |d| {
+                            d.child(Self::render_kpi_spark(&kpi.spark, p.accent_info, p.card))
+                        })
+                        .child(
+                            div()
+                                .flex_none()
+                                .flex()
+                                .flex_col()
+                                .items_end()
+                                .gap(px(2.))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("fin-num-{}", kpi.id)),
+                                    kpi.value,
+                                    kpi.decimals,
+                                    kpi.prefix.clone(),
+                                    kpi.suffix.clone(),
+                                    13.5,
+                                    FontWeight::MEDIUM,
+                                    p.strong,
+                                ))
+                                .child(
+                                    div()
+                                        .h(px(19.))
+                                        .px(px(6.))
+                                        .rounded(px(5.))
+                                        .bg(badge_bg)
+                                        .text_color(badge_fg)
+                                        .text_size(px(11.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .flex()
+                                        .items_center()
+                                        .child(kpi.delta.clone()),
+                                ),
+                        ),
+                    cx,
+                    move |this, _, cx| {
+                        this.selected_kpi = if this.selected_kpi == Some(idx) {
+                            None
+                        } else {
+                            Some(idx)
+                        };
+                        cx.notify();
+                    },
+                )
+                .w_full(),
+            );
         }
         rows.into_any_element()
     }
@@ -2646,34 +2728,48 @@ impl Render for ClientContextBlock {
             } else {
                 client.synced_label.clone()
             };
-        let sync_btn = activate(
+        let sync_age = self.sync_clock.time(0.48, w, cx);
+        let spin_angle = if sync_age < 0.48 && !disabled_motion(cx) {
+            pro_ease((sync_age / 0.48).clamp(0., 1.)) * std::f32::consts::TAU
+        } else {
+            0.
+        };
+
+        let sync_btn = pro_tactile(
+            pro_eid(&self.id, "sync-now-btn"),
+            tr(cx, "Sync now", "立即同步"),
+            6.,
+            p.card,
+            p.chip_hover,
+            p.line_strong,
+            p.line_strong,
+            false,
             div()
-                .id(pro_eid(&self.id, "sync-now-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Sync now", "立即同步"))
-                .tab_index(0)
                 .h(px(28.))
                 .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .hover(move |s| s.bg(p.chip_hover))
                 .flex()
                 .items_center()
                 .gap(px(7.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.text)
-                .cursor_pointer()
+                .whitespace_nowrap()
                 .child(div().size(px(6.)).rounded_full().bg(p.green))
-                .child(synced_text)
-                .child(pro_icon(ProIcon::Refresh, 13., p.muted)),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "sync-now-lbl"),
+                    synced_text,
+                    12.5,
+                    FontWeight::MEDIUM,
+                    p.text,
+                ))
+                .child(SyncSpinIcon {
+                    angle_rad: spin_angle,
+                    side: 13.,
+                    color: p.muted,
+                }),
             cx,
             move |this, _, cx| {
                 if let Some(cl) = this.clients.iter_mut().find(|c| c.id == sync_cid) {
                     cl.synced_label = tr(cx, "Synced just now", "刚刚同步").into();
                 }
+                this.sync_clock.restart(cx);
                 this.toast = Some((
                     tr(cx, "Refreshed live client metrics", "已刷新客户实时指标").into(),
                     Instant::now(),
@@ -2681,73 +2777,67 @@ impl Render for ClientContextBlock {
                 cx.emit(ClientContextEvent::Synced(sync_cid.clone()));
                 cx.notify();
             },
-        );
+        )
+        .flex_none();
 
         let sw_open = self.switcher_open;
-        let switcher_btn = activate(
+        let switcher_btn = pro_tactile(
+            pro_eid(&self.id, "switch-client-btn"),
+            tr(cx, "Switch client", "切换客户"),
+            6.,
+            if sw_open { p.accent_soft } else { p.card },
+            if sw_open {
+                p.accent_info.opacity(0.20)
+            } else {
+                p.chip_hover
+            },
+            if sw_open {
+                p.accent_info.opacity(0.30)
+            } else {
+                p.line_strong
+            },
+            if sw_open {
+                p.accent_info.opacity(0.38)
+            } else {
+                p.line_strong
+            },
+            sw_open,
             div()
-                .id(pro_eid(&self.id, "switch-client-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Switch client", "切换客户"))
-                .aria_expanded(sw_open)
-                .tab_index(0)
                 .h(px(28.))
                 .pl(px(10.))
                 .pr(px(8.))
-                .rounded(px(6.))
-                .bg(if sw_open { p.accent_soft } else { p.card })
-                .border_1()
-                .border_color(if sw_open {
-                    p.accent_info.opacity(0.30)
-                } else {
-                    p.line_strong
-                })
-                .hover(move |s| if sw_open { s } else { s.bg(p.chip_hover) })
                 .flex()
                 .items_center()
                 .gap(px(6.))
+                .whitespace_nowrap()
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(if self.switcher_open {
-                    p.accent_info
-                } else {
-                    p.strong
-                })
-                .cursor_pointer()
+                .text_color(if sw_open { p.accent_info } else { p.strong })
                 .child(tr(cx, "Switch client", "切换客户"))
                 .child(pro_svg(
                     "0 0 24 24",
                     CHEVRON_SWITCH_SVG,
                     12.5,
-                    if self.switcher_open {
-                        p.accent_info
-                    } else {
-                        p.muted
-                    },
+                    if sw_open { p.accent_info } else { p.muted },
                 )),
             cx,
             |this, _, cx| {
                 this.switcher_open = !this.switcher_open;
                 cx.notify();
             },
-        );
+        )
+        .flex_none();
 
         let switcher_menu = self.render_switcher_menu(cx);
-        let switcher_pop = pro_presence(
-            pro_eid(&self.id, "switcher-pres"),
-            self.switcher_open,
-            0.18,
-            0.14,
-            move |amt| {
-                div()
-                    .absolute()
-                    .top(px(34. - 4. * (1. - amt)))
-                    .right_0()
-                    .opacity(amt)
-                    .child(switcher_menu)
-                    .into_any_element()
-            },
-        );
+        let switcher_pop = div()
+            .absolute()
+            .top(px(34.))
+            .right_0()
+            .child(pro_popover_presence(
+                pro_eid(&self.id, "switcher-pres"),
+                self.switcher_open,
+                move || switcher_menu.into_any_element(),
+            ));
 
         let header = div()
             .pb(px(18.))
@@ -2774,46 +2864,55 @@ impl Render for ClientContextBlock {
         for (idx, kpi) in client.kpis.iter().enumerate() {
             let picked = self.selected_kpi == Some(idx);
             let dim = has_picked_kpi && !picked;
+            let card_alpha = pro_spring_f32(
+                pro_eid(&self.id, format!("kpi-dim-{}", kpi.id)),
+                if dim { 0.56 } else { 1.0 },
+                0.20,
+                w,
+                cx,
+            )
+            .clamp(0.3, 1.0);
+            let kpi_lbl = if zh_locale {
+                match kpi.label.as_ref() {
+                    "MRR" => SharedString::from("月经常性收入 MRR"),
+                    "Cash" => SharedString::from("现金储备"),
+                    "Gross margin" => SharedString::from("毛利率"),
+                    "Net burn" => SharedString::from("月净消耗"),
+                    _ => kpi.label.clone(),
+                }
+            } else {
+                kpi.label.clone()
+            };
+
             kpi_cards.push(
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("kpi-card-{}", kpi.id)),
+                    kpi_lbl.clone(),
+                    10.,
+                    p.card,
+                    pro_mix_color(p.card, p.ink, 0.022),
+                    if picked {
+                        p.accent_info.opacity(0.45)
+                    } else {
+                        p.line
+                    },
+                    if picked {
+                        p.accent_info.opacity(0.62)
+                    } else {
+                        p.line_strong
+                    },
+                    picked,
                     div()
-                        .id(pro_eid(&self.id, format!("kpi-card-{}", kpi.id)))
-                        .role(Role::Button)
-                        .aria_toggled(picked.into())
-                        .tab_index(0)
-                        .flex_1()
-                        .min_w_0()
-                        .rounded(px(10.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(if picked {
-                            p.accent_info.opacity(0.45)
-                        } else {
-                            p.line
-                        })
                         .p(px(14.))
-                        .opacity(if dim { 0.52 } else { 1.0 })
-                        .hover(move |s| s.border_color(p.line_strong).opacity(1.0))
                         .flex()
                         .flex_col()
                         .gap(px(8.))
-                        .cursor_pointer()
                         .child(
                             div()
                                 .text_size(px(12.5))
                                 .text_color(p.text)
                                 .truncate()
-                                .child(if zh_locale {
-                                    match kpi.label.as_ref() {
-                                        "MRR" => SharedString::from("月经常性收入 MRR"),
-                                        "Cash" => SharedString::from("现金储备"),
-                                        "Gross margin" => SharedString::from("毛利率"),
-                                        "Net burn" => SharedString::from("月净消耗"),
-                                        _ => kpi.label.clone(),
-                                    }
-                                } else {
-                                    kpi.label.clone()
-                                }),
+                                .child(kpi_lbl),
                         )
                         .child(
                             div()
@@ -2843,6 +2942,9 @@ impl Render for ClientContextBlock {
                         cx.notify();
                     },
                 )
+                .flex_1()
+                .min_w_0()
+                .opacity(card_alpha)
                 .into_any_element(),
             );
         }
@@ -2905,35 +3007,42 @@ impl Render for ClientContextBlock {
 
         for st in ClientSectionTab::ALL {
             let active = self.section_tab == st;
-            section_seg = section_seg.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("sec-tab-{}", st.key())))
-                    .role(Role::Tab)
-                    .aria_selected(active)
-                    .tab_index(0)
-                    .when(compact, |d| d.flex_1())
-                    .when(!compact, |d| d.px(px(13.)))
-                    .h(px(25.))
-                    .relative()
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if active { p.strong } else { p.text })
-                    .cursor_pointer()
-                    .when(active, |d| d.child(pro_mark_selected(&tab_sensor)))
-                    .child(st.label(cx)),
-                cx,
-                move |this, _, cx| {
-                    if this.section_tab != st {
-                        this.section_tab = st;
-                        cx.emit(ClientContextEvent::TabChanged(st));
-                        cx.notify();
-                    }
-                },
-            ));
+            let st_lbl = st.label(cx);
+            section_seg = section_seg.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("sec-tab-{}", st.key())),
+                    st_lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    div()
+                        .when(!compact, |d| d.px(px(13.)))
+                        .h(px(25.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .whitespace_nowrap()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if active { p.strong } else { p.text })
+                        .child(st_lbl),
+                    cx,
+                    move |this, _, cx| {
+                        if this.section_tab != st {
+                            this.section_tab = st;
+                            cx.emit(ClientContextEvent::TabChanged(st));
+                            cx.notify();
+                        }
+                    },
+                )
+                .relative()
+                .when(compact, |d| d.flex_1())
+                .when(!compact, |d| d.flex_none())
+                .when(active, |d| d.child(pro_mark_selected(&tab_sensor))),
+            );
         }
 
         let search_click = self.search_editor.clone();
@@ -2976,20 +3085,12 @@ impl Render for ClientContextBlock {
                 )
             })
             .when(has_q, |d| {
-                d.child(activate(
-                    div()
-                        .id(pro_eid(&self.id, "ctx-search-clear"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Clear search", "清空搜索"))
-                        .tab_index(0)
-                        .size(px(18.))
-                        .rounded(px(4.))
-                        .hover(move |s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .child(pro_icon(ProIcon::Close, 10.5, p.muted)),
+                d.child(pro_icon_btn(
+                    pro_eid(&self.id, "ctx-search-clear"),
+                    tr(cx, "Clear search", "清空搜索"),
+                    ProIcon::Close,
+                    18.,
+                    false,
                     cx,
                     move |_, w, cx| {
                         if let Some(ed) = &search_clear {

@@ -6,14 +6,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_connector_pulse, pro_eid, pro_empty_state,
-        pro_fold, pro_mark_selected, pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
-        family::disabled_motion,
+        control::UiLanguage,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -21,7 +23,6 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
-const RECAP_DONE_SVG: &str = r#"<circle cx="8" cy="8" r="5.75" stroke="currentColor" stroke-width="1.4"></circle><path d="m5.6 8.2 1.6 1.6 3.2-3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const RECAP_NEEDS_SVG: &str = r#"<circle cx="8" cy="5.25" r="2.5" stroke="currentColor" stroke-width="1.4"></circle><path d="M3.25 13.25c.6-2.35 2.45-3.75 4.75-3.75s4.15 1.4 4.75 3.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
 const RECAP_FAIL_SVG: &str = r#"<path d="M7.13 2.75a1 1 0 0 1 1.74 0l5.2 9.25a1 1 0 0 1-.87 1.5H2.8a1 1 0 0 1-.87-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M8 6.5v2.75M8 11.25v.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
 
@@ -249,6 +250,377 @@ fn eval_timeline_curve(u: f32, peaks: &[(f32, f32)]) -> f32 {
         sum += w * (-d * d).exp();
     }
     sum.clamp(0.0, 0.92)
+}
+
+struct TimelineRecapAnim {
+    weights: Vec<(f32, Slide)>,
+    hot_slides: Vec<(bool, Slide)>,
+    cursor_x: Slide,
+    cursor_alpha: Slide,
+    has_cursor: bool,
+}
+
+#[derive(IntoElement)]
+struct TimelineRecapCanvas {
+    state_id: ElementId,
+    events: Vec<(f32, f32, TimelineEventKind, bool, bool)>,
+    hovered_pos: Option<f32>,
+}
+
+impl RenderOnce for TimelineRecapCanvas {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_events = self.events.clone();
+        let init_pos = self.hovered_pos.unwrap_or(0.5);
+        let st = w.use_keyed_state(self.state_id, cx, |_, _| TimelineRecapAnim {
+            weights: init_events
+                .iter()
+                .map(|&(_, wt, _, vis, _)| {
+                    let v = if vis { wt } else { 0.0 };
+                    (v, Slide::new(v))
+                })
+                .collect(),
+            hot_slides: init_events
+                .iter()
+                .map(|&(_, _, _, _, hot)| (hot, Slide::snappy(f32::from(hot))))
+                .collect(),
+            cursor_x: Slide::snappy(init_pos),
+            cursor_alpha: Slide::snappy(if self.hovered_pos.is_some() { 1. } else { 0. }),
+            has_cursor: self.hovered_pos.is_some(),
+        });
+
+        let (peaks, dots_meta, cur_x, cur_alpha) = st.update(cx, |s, cx| {
+            if s.weights.len() != self.events.len() {
+                s.weights = self
+                    .events
+                    .iter()
+                    .map(|&(_, wt, _, vis, _)| {
+                        let v = if vis { wt } else { 0.0 };
+                        (v, Slide::new(v))
+                    })
+                    .collect();
+                s.hot_slides = self
+                    .events
+                    .iter()
+                    .map(|&(_, _, _, _, hot)| (hot, Slide::snappy(f32::from(hot))))
+                    .collect();
+            }
+
+            let mut cur_peaks = Vec::with_capacity(self.events.len());
+            let mut cur_dots = Vec::with_capacity(self.events.len());
+            for (i, &(pos, wt, kind, vis, hot)) in self.events.iter().enumerate() {
+                let target_w = if vis { wt } else { 0.0 };
+                if (s.weights[i].0 - target_w).abs() > 0.001 {
+                    s.weights[i].0 = target_w;
+                    s.weights[i].1.duration(target_w, 0.26, cx);
+                }
+                let w_val = s.weights[i].1.get(w, cx).max(0.0);
+                if w_val > 0.003 {
+                    cur_peaks.push((pos, w_val));
+                }
+
+                let target_hot = vis && hot;
+                if s.hot_slides[i].0 != target_hot {
+                    s.hot_slides[i].0 = target_hot;
+                    s.hot_slides[i].1.set(f32::from(target_hot), cx);
+                }
+                let hot_amt = s.hot_slides[i].1.get(w, cx).clamp(0.0, 1.0);
+                if vis || w_val > 0.02 {
+                    let vis_alpha = if wt > 0.01 {
+                        (w_val / wt).clamp(0.0, 1.0)
+                    } else {
+                        f32::from(vis)
+                    };
+                    cur_dots.push((pos, kind, hot_amt, vis_alpha));
+                }
+            }
+
+            if let Some(hp) = self.hovered_pos {
+                if !s.has_cursor {
+                    s.cursor_x.reset(hp);
+                    s.has_cursor = true;
+                } else {
+                    s.cursor_x.set(hp, cx);
+                }
+                s.cursor_alpha.set(1.0, cx);
+            } else {
+                s.cursor_alpha.set(0.0, cx);
+                if s.cursor_alpha.value(cx) < 0.02 {
+                    s.has_cursor = false;
+                }
+            }
+
+            (
+                cur_peaks,
+                cur_dots,
+                s.cursor_x.get(w, cx).clamp(0.0, 1.0),
+                s.cursor_alpha.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+
+        let stroke_col = p.ink.opacity(0.46);
+        let fill_col = p.ink.opacity(0.08);
+        let grid_col = p.line_soft;
+        let card_bg = p.card;
+        let done_dot = p.green;
+        let needs_dot = p.orange;
+        let fail_dot = p.red;
+        let cursor_col = p.line_strong;
+
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 8. || bh <= 8. {
+                    return;
+                }
+                let top_pad = 8.0_f32;
+                let base_y = bh - 4.0_f32;
+                let usable_h = (base_y - top_pad).max(12.0);
+
+                for r in 0..=2usize {
+                    let gy = bounds.top() + px((r as f32 / 2.0) * bh);
+                    let mut gp = PathBuilder::stroke(px(1.));
+                    gp.move_to(point(bounds.left(), gy));
+                    gp.line_to(point(bounds.right(), gy));
+                    if let Ok(path) = gp.build() {
+                        window.paint_path(path, grid_col);
+                    }
+                }
+                for c in 1..8usize {
+                    let gx = bounds.left() + px((c as f32 / 8.0) * bw);
+                    let mut vp = PathBuilder::stroke(px(1.));
+                    vp.move_to(point(gx, bounds.top()));
+                    vp.line_to(point(gx, bounds.bottom()));
+                    if let Ok(path) = vp.build() {
+                        window.paint_path(path, grid_col.opacity(grid_col.a * 0.65));
+                    }
+                }
+
+                let samples = 112usize;
+                let pt_at = |u: f32| -> Point<Pixels> {
+                    let y_norm = eval_timeline_curve(u, &peaks);
+                    point(
+                        bounds.left() + px(u * bw),
+                        bounds.top() + px(base_y - y_norm * usable_h),
+                    )
+                };
+
+                if !peaks.is_empty() {
+                    let mut area = PathBuilder::fill();
+                    let floor = bounds.top() + px(base_y);
+                    area.move_to(point(bounds.left(), floor));
+                    for i in 0..=samples {
+                        area.line_to(pt_at(i as f32 / samples as f32));
+                    }
+                    area.line_to(point(bounds.right(), floor));
+                    area.close();
+                    if let Ok(path) = area.build() {
+                        window.paint_path(
+                            path,
+                            linear_gradient(
+                                180.,
+                                linear_color_stop(fill_col, 0.),
+                                linear_color_stop(fill_col.opacity(0.0), 1.),
+                            ),
+                        );
+                    }
+                }
+
+                let mut stroke = PathBuilder::stroke(px(1.5));
+                for i in 0..=samples {
+                    let pt = pt_at(i as f32 / samples as f32);
+                    if i == 0 {
+                        stroke.move_to(pt);
+                    } else {
+                        stroke.line_to(pt);
+                    }
+                }
+                if let Ok(path) = stroke.build() {
+                    window.paint_path(path, stroke_col);
+                }
+
+                if cur_alpha > 0.01 {
+                    let cx_pt = bounds.left() + px(cur_x * bw);
+                    let mut cur = PathBuilder::stroke(px(1.));
+                    cur.move_to(point(cx_pt, bounds.top()));
+                    cur.line_to(point(cx_pt, bounds.bottom()));
+                    if let Ok(path) = cur.build() {
+                        window.paint_path(path, cursor_col.opacity(cursor_col.a * cur_alpha));
+                    }
+                }
+
+                for &(pos, kind, hot_amt, vis_alpha) in &dots_meta {
+                    let pt = pt_at(pos);
+                    let dot_c = match kind {
+                        TimelineEventKind::Done => done_dot,
+                        TimelineEventKind::NeedsYou => needs_dot,
+                        TimelineEventKind::Failed => fail_dot,
+                    };
+                    let ri = px((2.8 + 1.6 * hot_amt) * vis_alpha.max(0.35));
+                    let ro = ri + px(1.6);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(pt - point(ro, ro), size(ro * 2., ro * 2.)),
+                            card_bg.opacity(vis_alpha),
+                        )
+                        .corner_radii(ro),
+                    );
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(pt - point(ri, ri), size(ri * 2., ri * 2.)),
+                            dot_c.opacity(dot_c.a * vis_alpha),
+                        )
+                        .corner_radii(ri),
+                    );
+                }
+            },
+        )
+        .w_full()
+        .h(px(76.))
+    }
+}
+
+struct TimelineTooltipState {
+    x_frac: Slide,
+    alpha: Slide,
+    was_open: bool,
+    last: Option<(SharedString, SharedString, SharedString, TimelineEventKind)>,
+    width_cell: Rc<Cell<f32>>,
+}
+
+#[derive(IntoElement)]
+struct TimelineRecapTooltip {
+    state_id: ElementId,
+    active: Option<(
+        f32,
+        SharedString,
+        SharedString,
+        SharedString,
+        TimelineEventKind,
+    )>,
+}
+
+impl RenderOnce for TimelineRecapTooltip {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_pos = self.active.as_ref().map(|a| a.0).unwrap_or(0.5);
+        let init_open = self.active.is_some();
+        let init_last = self
+            .active
+            .as_ref()
+            .map(|(_, id, at, title, kind)| (id.clone(), at.clone(), title.clone(), *kind));
+        let st = w.use_keyed_state(self.state_id.clone(), cx, |_, _| TimelineTooltipState {
+            x_frac: Slide::snappy(init_pos),
+            alpha: Slide::snappy(if init_open { 1. } else { 0. }),
+            was_open: init_open,
+            last: init_last,
+            width_cell: Rc::new(Cell::new(560.)),
+        });
+
+        let (x_frac, alpha, shown, width_cell) = st.update(cx, |s, cx| {
+            if let Some((pos, id, at, title, kind)) = &self.active {
+                if !s.was_open {
+                    s.x_frac.reset(*pos);
+                    s.was_open = true;
+                } else {
+                    s.x_frac.set(*pos, cx);
+                }
+                s.alpha.set(1.0, cx);
+                s.last = Some((id.clone(), at.clone(), title.clone(), *kind));
+            } else {
+                s.alpha.set(0.0, cx);
+                if s.alpha.value(cx) < 0.02 {
+                    s.was_open = false;
+                }
+            }
+            (
+                s.x_frac.get(w, cx).clamp(0.0, 1.0),
+                s.alpha.get(w, cx).clamp(0.0, 1.0),
+                s.last.clone(),
+                s.width_cell.clone(),
+            )
+        });
+
+        if alpha <= 0.01 {
+            return div().into_any_element();
+        }
+        let Some((ev_id, at_label, title, kind)) = shown else {
+            return div().into_any_element();
+        };
+
+        let bw = width_cell.get().max(260.);
+        let pill_w = 264.0_f32.min(bw - 16.);
+        let left_px = (x_frac * bw - pill_w * 0.5).clamp(8.0, (bw - pill_w - 8.0).max(8.0));
+
+        let tip_bg: Hsla = if p.dark {
+            rgb(0xf4f4f5).into()
+        } else {
+            rgb(0x18181b).into()
+        };
+        let tip_fg: Hsla = if p.dark {
+            rgb(0x111113).into()
+        } else {
+            rgb(0xfafafa).into()
+        };
+
+        div()
+            .absolute()
+            .inset_0()
+            .child(
+                canvas(
+                    move |b, _, _| {
+                        let nw = f32::from(b.size.width);
+                        if nw > 20. {
+                            width_cell.set(nw);
+                        }
+                    },
+                    |_, _, _, _| (),
+                )
+                .w_full()
+                .h(px(0.)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(4. + 3. * (1. - alpha)))
+                    .left(px(left_px))
+                    .max_w(px(pill_w))
+                    .px(px(8.))
+                    .py(px(3.5))
+                    .rounded(px(6.))
+                    .bg(tip_bg)
+                    .opacity(alpha)
+                    .text_color(tip_fg)
+                    .text_size(px(11.5))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(if kind == TimelineEventKind::Done {
+                        pro_check_draw(
+                            pro_eid(&self.state_id, format!("tip-chk-{ev_id}")),
+                            true,
+                            12.,
+                            false,
+                            p.green,
+                        )
+                    } else {
+                        div()
+                            .size(px(6.))
+                            .rounded_full()
+                            .bg(if kind == TimelineEventKind::Failed {
+                                p.red
+                            } else {
+                                p.orange
+                            })
+                            .into_any_element()
+                    })
+                    .child(div().opacity(0.68).child(at_label))
+                    .child(div().min_w_0().truncate().child(title)),
+            )
+            .into_any_element()
+    }
 }
 
 fn default_lanes() -> Vec<TimelineAgentLane> {
@@ -837,6 +1209,53 @@ impl MissionTimelineBlock {
         }
     }
 
+    fn toggle_recap_milestone(&mut self, event_id: &str, cx: &mut Context<Self>) {
+        let Some(idx) = self.events.iter().position(|e| e.id.as_ref() == event_id) else {
+            return;
+        };
+        let agent_id = self.events[idx].agent_id.clone();
+        match self.events[idx].kind {
+            TimelineEventKind::NeedsYou => {
+                let first_choice = self
+                    .lanes
+                    .iter()
+                    .find(|l| l.id == agent_id)
+                    .and_then(|l| l.ask_choices.first().cloned());
+                self.resolve_approve(&agent_id, first_choice, cx);
+            }
+            TimelineEventKind::Failed => {
+                self.resolve_retry(&agent_id, cx);
+            }
+            TimelineEventKind::Done => {
+                self.events[idx].kind = TimelineEventKind::NeedsYou;
+                if let Some(lane) = self.lanes.iter().find(|l| l.id == agent_id)
+                    && let Some(task) = lane.tasks.last()
+                {
+                    let tid = task.id.clone();
+                    self.selected_task = Some((agent_id.clone(), tid.clone()));
+                    cx.emit(MissionTimelineEvent::TaskSelected {
+                        agent_id,
+                        task_id: tid,
+                    });
+                }
+                cx.notify();
+            }
+        }
+    }
+
+    fn toggle_task_done(&mut self, agent_id: &str, task_id: &str, cx: &mut Context<Self>) {
+        if let Some(lane) = self.lanes.iter_mut().find(|l| l.id.as_ref() == agent_id)
+            && let Some(task) = lane.tasks.iter_mut().find(|t| t.id.as_ref() == task_id)
+        {
+            task.status = if task.status == TimelineAgentStatus::Done {
+                TimelineAgentStatus::Running
+            } else {
+                TimelineAgentStatus::Done
+            };
+            cx.notify();
+        }
+    }
+
     fn render_recap_section(&self, cx: &mut Context<Self>) -> Div {
         let p = ProPalette::get(cx);
         let vis = self.visible_events();
@@ -853,12 +1272,13 @@ impl MissionTimelineBlock {
             .filter(|e| e.kind == TimelineEventKind::Failed)
             .count();
 
-        let peaks: Vec<(f32, f32)> = vis.iter().map(|e| (e.position, e.weight)).collect();
-        let dots_meta: Vec<(f32, TimelineEventKind, bool)> = vis
+        let all_events_meta: Vec<(f32, f32, TimelineEventKind, bool, bool)> = self
+            .events
             .iter()
-            .map(|e| {
-                let hot = self.hovered_event.as_ref() == Some(&e.id);
-                (e.position, e.kind, hot)
+            .map(|ev| {
+                let is_vis = vis.iter().any(|v| v.id == ev.id);
+                let hot = is_vis && self.hovered_event.as_ref() == Some(&ev.id);
+                (ev.position, ev.weight, ev.kind, is_vis, hot)
             })
             .collect();
         let hovered_info = self
@@ -866,133 +1286,23 @@ impl MissionTimelineBlock {
             .as_ref()
             .and_then(|hid| vis.iter().copied().find(|e| &e.id == hid));
 
-        let stroke_col = p.ink.opacity(0.46);
-        let fill_col = p.ink.opacity(0.08);
-        let grid_col = p.line_soft;
-        let card_bg = p.card;
-        let done_dot = p.ink.opacity(0.62);
-        let needs_dot = p.orange;
-        let fail_dot = p.red;
-        let cursor_col = p.line_strong;
-
-        let curve_canvas = canvas(
-            |_, _, _| (),
-            move |bounds, _, window, _| {
-                let bw = f32::from(bounds.size.width);
-                let bh = f32::from(bounds.size.height);
-                if bw <= 8. || bh <= 8. {
-                    return;
-                }
-                let top_pad = 8.0_f32;
-                let base_y = bh - 4.0_f32;
-                let usable_h = (base_y - top_pad).max(12.0);
-
-                for r in 0..=2usize {
-                    let gy = bounds.top() + px((r as f32 / 2.0) * bh);
-                    let mut gp = PathBuilder::stroke(px(1.));
-                    gp.move_to(point(bounds.left(), gy));
-                    gp.line_to(point(bounds.right(), gy));
-                    if let Ok(path) = gp.build() {
-                        window.paint_path(path, grid_col);
-                    }
-                }
-                for c in 1..8usize {
-                    let gx = bounds.left() + px((c as f32 / 8.0) * bw);
-                    let mut vp = PathBuilder::stroke(px(1.));
-                    vp.move_to(point(gx, bounds.top()));
-                    vp.line_to(point(gx, bounds.bottom()));
-                    if let Ok(path) = vp.build() {
-                        window.paint_path(path, grid_col.opacity(grid_col.a * 0.65));
-                    }
-                }
-
-                let samples = 112usize;
-                let pt_at = |u: f32| -> Point<Pixels> {
-                    let y_norm = eval_timeline_curve(u, &peaks);
-                    point(
-                        bounds.left() + px(u * bw),
-                        bounds.top() + px(base_y - y_norm * usable_h),
-                    )
-                };
-
-                if !peaks.is_empty() {
-                    let mut area = PathBuilder::fill();
-                    let floor = bounds.top() + px(base_y);
-                    area.move_to(point(bounds.left(), floor));
-                    for i in 0..=samples {
-                        area.line_to(pt_at(i as f32 / samples as f32));
-                    }
-                    area.line_to(point(bounds.right(), floor));
-                    area.close();
-                    if let Ok(path) = area.build() {
-                        window.paint_path(
-                            path,
-                            linear_gradient(
-                                180.,
-                                linear_color_stop(fill_col, 0.),
-                                linear_color_stop(fill_col.opacity(0.0), 1.),
-                            ),
-                        );
-                    }
-                }
-
-                let mut stroke = PathBuilder::stroke(px(1.5));
-                for i in 0..=samples {
-                    let pt = pt_at(i as f32 / samples as f32);
-                    if i == 0 {
-                        stroke.move_to(pt);
-                    } else {
-                        stroke.line_to(pt);
-                    }
-                }
-                if let Ok(path) = stroke.build() {
-                    window.paint_path(path, stroke_col);
-                }
-
-                for (pos, kind, hot) in &dots_meta {
-                    let pt = pt_at(*pos);
-                    if *hot {
-                        let mut cur = PathBuilder::stroke(px(1.));
-                        cur.move_to(point(pt.x, bounds.top()));
-                        cur.line_to(point(pt.x, bounds.bottom()));
-                        if let Ok(path) = cur.build() {
-                            window.paint_path(path, cursor_col);
-                        }
-                    }
-                    let dot_c = match kind {
-                        TimelineEventKind::Done => done_dot,
-                        TimelineEventKind::NeedsYou => needs_dot,
-                        TimelineEventKind::Failed => fail_dot,
-                    };
-                    let ri = px(if *hot { 4.2 } else { 2.8 });
-                    let ro = ri + px(1.6);
-                    window.paint_quad(
-                        fill(
-                            Bounds::new(pt - point(ro, ro), size(ro * 2., ro * 2.)),
-                            card_bg,
-                        )
-                        .corner_radii(ro),
-                    );
-                    window.paint_quad(
-                        fill(
-                            Bounds::new(pt - point(ri, ri), size(ri * 2., ri * 2.)),
-                            dot_c,
-                        )
-                        .corner_radii(ri),
-                    );
-                }
-            },
-        )
-        .w_full()
-        .h(px(76.));
+        let curve_canvas = TimelineRecapCanvas {
+            state_id: pro_eid(&self.id, "mt-rcp-canvas"),
+            events: all_events_meta,
+            hovered_pos: hovered_info.map(|e| e.position),
+        };
 
         let mut hit_layer = div().absolute().inset_0();
         for ev in &vis {
             let eid = ev.id.clone();
+            let eid_click = ev.id.clone();
             let left_frac = (ev.position - 0.045).clamp(0.0, 0.91);
             hit_layer = hit_layer.child(
                 div()
                     .id(pro_eid(&self.id, format!("mt-rcp-hit-{eid}")))
+                    .role(Role::Button)
+                    .aria_label(format!("{} {}", ev.at_label, ev.title))
+                    .tab_index(0)
                     .absolute()
                     .top_0()
                     .bottom_0()
@@ -1008,44 +1318,25 @@ impl MissionTimelineBlock {
                             cx.emit(MissionTimelineEvent::EventHovered(None));
                         }
                         cx.notify();
+                    }))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.toggle_recap_milestone(&eid_click, cx);
                     })),
             );
         }
 
-        let tip_el = hovered_info.map(|ev| {
-            let tip_bg: Hsla = if p.dark {
-                rgb(0xf4f4f5).into()
-            } else {
-                rgb(0x18181b).into()
-            };
-            let tip_fg: Hsla = if p.dark {
-                rgb(0x111113).into()
-            } else {
-                rgb(0xfafafa).into()
-            };
-            let on_right = ev.position > 0.55;
-            let mut tip = div()
-                .absolute()
-                .top(px(4.))
-                .max_w(px(300.))
-                .px(px(8.))
-                .py(px(3.))
-                .rounded(px(6.))
-                .bg(tip_bg)
-                .text_color(tip_fg)
-                .text_size(px(11.5))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(div().opacity(0.68).child(ev.at_label.clone()))
-                .child(div().min_w_0().truncate().child(ev.title.clone()));
-            if on_right {
-                tip = tip.left(px(8.));
-            } else {
-                tip = tip.right(px(8.));
-            }
-            tip
-        });
+        let tip_overlay = TimelineRecapTooltip {
+            state_id: pro_eid(&self.id, "mt-rcp-tip"),
+            active: hovered_info.map(|ev| {
+                (
+                    ev.position,
+                    ev.id.clone(),
+                    ev.at_label.clone(),
+                    ev.title.clone(),
+                    ev.kind,
+                )
+            }),
+        };
 
         div()
             .w_full()
@@ -1120,13 +1411,23 @@ impl MissionTimelineBlock {
                                     .flex()
                                     .items_center()
                                     .gap(px(5.))
-                                    .child(pro_svg("0 0 16 16", RECAP_DONE_SVG, 13., p.muted))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(done_n.to_string()),
-                                    )
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, "mt-rcp-done-chk"),
+                                        done_n > 0,
+                                        14.,
+                                        false,
+                                        p.green,
+                                    ))
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "mt-rcp-done-num"),
+                                        done_n as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
                                     .child(tr(cx, "done", "已完成")),
                             )
                             .child(
@@ -1135,12 +1436,16 @@ impl MissionTimelineBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(pro_svg("0 0 16 16", RECAP_NEEDS_SVG, 13., p.orange))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(needs_n.to_string()),
-                                    )
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "mt-rcp-needs-num"),
+                                        needs_n as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
                                     .child(tr(cx, "need you", "待你确认")),
                             )
                             .child(
@@ -1149,12 +1454,16 @@ impl MissionTimelineBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(pro_svg("0 0 16 16", RECAP_FAIL_SVG, 13., p.red))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(fail_n.to_string()),
-                                    )
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "mt-rcp-fail-num"),
+                                        fail_n as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
                                     .child(tr(cx, "failed", "失败")),
                             ),
                     ),
@@ -1165,7 +1474,7 @@ impl MissionTimelineBlock {
                     .w_full()
                     .h(px(76.))
                     .child(curve_canvas)
-                    .when_some(tip_el, |d, t| d.child(t))
+                    .child(tip_overlay)
                     .child(hit_layer),
             )
             .child(
@@ -1187,6 +1496,7 @@ impl MissionTimelineBlock {
         elapsed_ms: f32,
         pulse_t: f32,
         now_grow: f32,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let p = ProPalette::get(cx);
@@ -1194,6 +1504,19 @@ impl MissionTimelineBlock {
         let highlighted = self.highlighted_agent().cloned();
         let running_n = count_timeline_lanes(&self.lanes, TimelineFilter::Running);
         let needs_n = count_timeline_lanes(&self.lanes, TimelineFilter::NeedsYou);
+
+        let total_tasks: usize = self.lanes.iter().map(|l| l.tasks.len()).sum();
+        let completed_tasks: usize = self
+            .lanes
+            .iter()
+            .flat_map(|l| &l.tasks)
+            .filter(|t| t.status == TimelineAgentStatus::Done)
+            .count();
+        let done_ratio = if total_tasks > 0 {
+            completed_tasks as f32 / total_tasks as f32
+        } else {
+            0.0
+        };
 
         let visible_lanes: Vec<(usize, &TimelineAgentLane)> = self
             .lanes
@@ -1283,6 +1606,13 @@ impl MissionTimelineBlock {
             let mut left_col = div().w(px(name_col_w)).flex_none().flex().flex_col();
             for (_, lane) in &visible_lanes {
                 let faded = highlighted.as_ref().is_some_and(|hid| hid != &lane.id);
+                let lane_op = pro_spring_f32(
+                    pro_eid(&self.id, format!("mt-lcol-op-{}", lane.id)),
+                    if faded { 0.38 } else { 1.0 },
+                    0.20,
+                    w,
+                    cx,
+                );
                 let col = lane_color(&lane.id, &p);
                 let show_ask_pill = lane.status == TimelineAgentStatus::Waiting && !avatar_only;
                 let show_fail_pill = lane.status == TimelineAgentStatus::Failed && !avatar_only;
@@ -1294,7 +1624,7 @@ impl MissionTimelineBlock {
                         .pr(px(8.))
                         .border_t_1()
                         .border_color(p.line_soft)
-                        .opacity(if faded { 0.38 } else { 1.0 })
+                        .opacity(lane_op)
                         .flex()
                         .items_center()
                         .gap(px(8.))
@@ -1451,23 +1781,34 @@ impl MissionTimelineBlock {
                 .flex_col();
             for (_, lane) in &visible_lanes {
                 let faded = highlighted.as_ref().is_some_and(|hid| hid != &lane.id);
-                let mut lane_row =
-                    div()
-                        .relative()
-                        .w_full()
-                        .h(px(row_h))
-                        .opacity(if faded { 0.38 } else { 1.0 });
+                let row_op = pro_spring_f32(
+                    pro_eid(&self.id, format!("mt-trow-op-{}", lane.id)),
+                    if faded { 0.38 } else { 1.0 },
+                    0.20,
+                    w,
+                    cx,
+                );
+                let mut lane_row = div().relative().w_full().h(px(row_h)).opacity(row_op);
 
                 for task in &lane.tasks {
+                    let lid = lane.id.clone();
+                    let tid = task.id.clone();
                     let s_frac = task.start_frac.clamp(0.0, 0.96);
                     let grows_to_now = matches!(
                         task.status,
                         TimelineAgentStatus::Running | TimelineAgentStatus::Waiting
                     ) && task.end_frac >= 0.98;
+                    let spring_end = pro_spring_f32(
+                        pro_eid(&self.id, format!("mt-bar-end-{lid}-{tid}")),
+                        task.end_frac.clamp(s_frac + 0.04, 1.0),
+                        0.32,
+                        w,
+                        cx,
+                    );
                     let e_frac = if grows_to_now && !reduced {
-                        (0.955 + 0.045 * now_grow).clamp(s_frac + 0.04, 1.0)
+                        (spring_end - 0.045 * (1.0 - now_grow)).clamp(s_frac + 0.04, 1.0)
                     } else {
-                        task.end_frac.clamp(s_frac + 0.04, 1.0)
+                        spring_end.clamp(s_frac + 0.04, 1.0)
                     };
                     let width_frac = (e_frac - s_frac).clamp(0.04, 1.0 - s_frac);
 
@@ -1478,17 +1819,50 @@ impl MissionTimelineBlock {
                         TimelineAgentStatus::Failed => (p.red_soft, p.red_ink, Some(p.red)),
                     };
 
-                    let lid = lane.id.clone();
-                    let tid = task.id.clone();
                     let is_sel = self
                         .selected_task
                         .as_ref()
                         .is_some_and(|(a, t)| a == &lid && t == &tid);
+                    let is_done = task.status == TimelineAgentStatus::Done;
 
                     let mut tools_row = div().flex_none().flex().items_center().gap(px(3.));
                     for tool in task.tools.iter().take(2) {
                         tools_row = tools_row.child(pro_app_tile(tool, 14., cx));
                     }
+
+                    let bar_content = div()
+                        .relative()
+                        .h(px(28.))
+                        .px(px(7.))
+                        .overflow_hidden()
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(bar_fg)
+                        .when(is_done, |d| {
+                            d.child(pro_check_draw(
+                                pro_eid(&self.id, format!("mt-task-chk-{lid}-{tid}")),
+                                true,
+                                12.5,
+                                false,
+                                p.green,
+                            ))
+                        })
+                        .when(!task.tools.is_empty(), |d| d.child(tools_row))
+                        .child(div().min_w_0().truncate().child(task.title.clone()))
+                        .when_some(right_edge, |d, ec| {
+                            d.child(
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .bottom_0()
+                                    .right_0()
+                                    .w(px(2.5))
+                                    .bg(ec),
+                            )
+                        });
 
                     lane_row = lane_row.child(
                         div()
@@ -1497,57 +1871,42 @@ impl MissionTimelineBlock {
                             .bottom(px(8.))
                             .left(relative(s_frac))
                             .w(relative(width_frac))
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("mt-bar-{lid}-{tid}")))
-                                    .role(Role::Button)
-                                    .aria_label(format!(
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("mt-bar-{lid}-{tid}")),
+                                    format!(
                                         "{}: {} ({})",
                                         lane.name, task.title, task.duration_label
-                                    ))
-                                    .tab_index(0)
-                                    .relative()
-                                    .size_full()
-                                    .px(px(7.))
-                                    .rounded(px(6.))
-                                    .bg(bar_bg)
-                                    .when(is_sel, |d| d.border_1().border_color(p.focus))
-                                    .overflow_hidden()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(bar_fg)
-                                    .cursor_pointer()
-                                    .when(!task.tools.is_empty(), |d| d.child(tools_row))
-                                    .child(div().min_w_0().truncate().child(task.title.clone()))
-                                    .when_some(right_edge, |d, ec| {
-                                        d.child(
-                                            div()
-                                                .absolute()
-                                                .top_0()
-                                                .bottom_0()
-                                                .right_0()
-                                                .w(px(2.5))
-                                                .bg(ec),
-                                        )
-                                    }),
-                                cx,
-                                move |this, _, cx| {
-                                    let pair = (lid.clone(), tid.clone());
-                                    if this.selected_task.as_ref() == Some(&pair) {
-                                        this.selected_task = None;
+                                    ),
+                                    6.,
+                                    bar_bg,
+                                    pro_mix_color(bar_bg, bar_fg, 0.14),
+                                    if is_sel { p.focus } else { transparent_black() },
+                                    if is_sel {
+                                        p.focus
                                     } else {
-                                        this.selected_task = Some(pair);
-                                        cx.emit(MissionTimelineEvent::TaskSelected {
-                                            agent_id: lid.clone(),
-                                            task_id: tid.clone(),
-                                        });
-                                    }
-                                    cx.notify();
-                                },
-                            )),
+                                        bar_fg.opacity(0.32)
+                                    },
+                                    is_sel,
+                                    bar_content,
+                                    cx,
+                                    move |this, _, cx| {
+                                        let pair = (lid.clone(), tid.clone());
+                                        if this.selected_task.as_ref() == Some(&pair) {
+                                            this.selected_task = None;
+                                        } else {
+                                            this.selected_task = Some(pair);
+                                            cx.emit(MissionTimelineEvent::TaskSelected {
+                                                agent_id: lid.clone(),
+                                                task_id: tid.clone(),
+                                            });
+                                        }
+                                        cx.notify();
+                                    },
+                                )
+                                .size_full()
+                                .overflow_hidden(),
+                            ),
                     );
                 }
                 track_rows = track_rows.child(lane_row);
@@ -1571,92 +1930,144 @@ impl MissionTimelineBlock {
                 )
         };
 
-        // Selected Gantt task disclosure strip
+        // Selected Gantt task disclosure strip (retaining last selection during fold exit)
         let selected_detail = self.selected_task.as_ref().and_then(|(aid, tid)| {
             let lane = self.lanes.iter().find(|l| &l.id == aid)?;
             let task = lane.tasks.iter().find(|t| &t.id == tid)?;
             Some((lane.clone(), task.clone()))
         });
         let detail_open = selected_detail.is_some();
-        let ent = cx.entity();
-        let base_id = self.id.clone();
+        let cached_detail = w.use_keyed_state(pro_eid(&self.id, "mt-detail-cache"), cx, |_, _| {
+            selected_detail.clone()
+        });
+        let detail_for_render = cached_detail.update(cx, |slot, _| {
+            if selected_detail.is_some() {
+                *slot = selected_detail.clone();
+            }
+            slot.clone()
+        });
+
+        let detail_row_el: Option<AnyElement> = detail_for_render.map(|(lane, task)| {
+            let aid = lane.id.clone();
+            let tid = task.id.clone();
+            let is_done = task.status == TimelineAgentStatus::Done;
+            let can_approve = lane.status == TimelineAgentStatus::Waiting;
+            let can_retry = lane.status == TimelineAgentStatus::Failed;
+            let first_choice = lane.ask_choices.first().cloned();
+
+            let aid_tog = aid.clone();
+            let tid_tog = tid.clone();
+            let step_toggle = pro_tactile(
+                pro_eid(&self.id, format!("mt-det-tog-{aid}-{tid}")),
+                format!("Toggle {}", task.title),
+                6.,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .px(px(6.))
+                    .py(px(3.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .whitespace_nowrap()
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("mt-det-chk-{aid}-{tid}")),
+                        is_done,
+                        14.,
+                        false,
+                        p.green,
+                    ))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(lane.name),
+                    )
+                    .child(div().text_color(p.muted).child("·"))
+                    .child(div().text_color(p.ink).child(task.title))
+                    .child(
+                        div()
+                            .text_color(p.faint)
+                            .child(format!("({})", task.duration_label)),
+                    ),
+                cx,
+                move |this, _, cx| {
+                    this.toggle_task_done(&aid_tog, &tid_tog, cx);
+                },
+            )
+            .flex_none();
+
+            let quick_btn = (can_approve || can_retry).then(|| {
+                let target = aid.clone();
+                let ch = first_choice.clone();
+                pro_btn(
+                    pro_eid(&self.id, "mt-detail-quick-btn"),
+                    if can_retry {
+                        tr(cx, "Retry", "重试")
+                    } else {
+                        tr(cx, "Resolve", "处理")
+                    },
+                    None,
+                    ProBtnStyle::Primary,
+                    true,
+                    cx,
+                    move |this, _, cx| {
+                        if can_retry {
+                            this.resolve_retry(&target, cx);
+                        } else {
+                            this.resolve_approve(&target, ch.clone(), cx);
+                        }
+                    },
+                )
+            });
+
+            let close_btn = pro_icon_btn(
+                pro_eid(&self.id, "mt-detail-close-btn"),
+                tr(cx, "Close detail", "关闭详情"),
+                ProIcon::Close,
+                24.,
+                false,
+                cx,
+                |this, _, cx| {
+                    this.selected_task = None;
+                    cx.notify();
+                },
+            );
+
+            div()
+                .w_full()
+                .px(px(10.))
+                .py(px(7.))
+                .border_t_1()
+                .border_color(p.line)
+                .bg(p.subtle)
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(8.))
+                .text_size(px(12.))
+                .child(step_toggle)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .when_some(quick_btn, |d, b| d.child(b))
+                        .child(close_btn),
+                )
+                .into_any_element()
+        });
+
         let detail_fold = pro_fold(
             pro_eid(&self.id, "mt-task-detail-fold"),
             detail_open,
             46.,
             0.,
-            move || {
-                let Some((lane, task)) = selected_detail else {
-                    return div().into_any_element();
-                };
-                let aid = lane.id.clone();
-                let ent_act = ent.clone();
-                let can_approve = lane.status == TimelineAgentStatus::Waiting;
-                let can_retry = lane.status == TimelineAgentStatus::Failed;
-                let first_choice = lane.ask_choices.first().cloned();
-                div()
-                    .w_full()
-                    .px(px(14.))
-                    .py(px(9.))
-                    .border_t_1()
-                    .border_color(p.line)
-                    .bg(p.subtle)
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.))
-                    .text_size(px(12.))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .child(lane.name),
-                            )
-                            .child(div().text_color(p.muted).child("·"))
-                            .child(div().text_color(p.ink).truncate().child(task.title))
-                            .child(
-                                div()
-                                    .text_color(p.faint)
-                                    .child(format!("({})", task.duration_label)),
-                            ),
-                    )
-                    .when(can_approve || can_retry, |d| {
-                        d.child(
-                            div()
-                                .id(pro_eid(&base_id, "mt-detail-quick-btn"))
-                                .h(px(24.))
-                                .px(px(9.))
-                                .rounded(px(5.))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                    let target = aid.clone();
-                                    let ch = first_choice.clone();
-                                    ent_act.update(cx, |this, cx| {
-                                        if can_retry {
-                                            this.resolve_retry(&target, cx);
-                                        } else {
-                                            this.resolve_approve(&target, ch, cx);
-                                        }
-                                    });
-                                })
-                                .child(if can_retry { "Retry" } else { "Resolve" }),
-                        )
-                    })
-                    .into_any_element()
-            },
+            move || detail_row_el.unwrap_or_else(|| div().into_any_element()),
         );
 
         div()
@@ -1705,9 +2116,15 @@ impl MissionTimelineBlock {
                                             .items_center()
                                             .gap(px(5.))
                                             .child(div().size(px(6.)).rounded_full().bg(p.blue))
-                                            .child(format!(
-                                                "{running_n} {}",
-                                                tr(cx, "running", "运行中")
+                                            .child(pro_swap_label(
+                                                pro_eid(&self.id, "mt-hdr-running"),
+                                                format!(
+                                                    "{running_n} {}",
+                                                    tr(cx, "running", "运行中")
+                                                ),
+                                                12.,
+                                                FontWeight::NORMAL,
+                                                p.muted,
                                             )),
                                     )
                                     .when(needs_n > 0, |d| {
@@ -1720,9 +2137,15 @@ impl MissionTimelineBlock {
                                                 .child(
                                                     div().size(px(6.)).rounded_full().bg(p.amber),
                                                 )
-                                                .child(format!(
-                                                    "{needs_n} {}",
-                                                    tr(cx, "need you", "待处理")
+                                                .child(pro_swap_label(
+                                                    pro_eid(&self.id, "mt-hdr-needs"),
+                                                    format!(
+                                                        "{needs_n} {}",
+                                                        tr(cx, "need you", "待处理")
+                                                    ),
+                                                    12.,
+                                                    FontWeight::NORMAL,
+                                                    p.amber_ink,
                                                 )),
                                         )
                                     }),
@@ -1730,16 +2153,34 @@ impl MissionTimelineBlock {
                     )
                     .child(
                         div()
-                            .h(px(22.))
-                            .px(px(8.))
-                            .rounded(px(6.))
-                            .bg(p.chip)
                             .flex()
                             .items_center()
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.text)
-                            .child(format!("{} {}m", tr(cx, "Last", "最近"), self.span_minutes)),
+                            .gap(px(10.))
+                            .child(div().w(px(56.)).child(pro_spring_bar(
+                                pro_eid(&self.id, "mt-lanes-prog"),
+                                done_ratio,
+                                4.,
+                                2.,
+                                p.chip,
+                                p.green,
+                            )))
+                            .child(
+                                div()
+                                    .h(px(22.))
+                                    .px(px(8.))
+                                    .rounded(px(6.))
+                                    .bg(p.chip)
+                                    .flex()
+                                    .items_center()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.text)
+                                    .child(format!(
+                                        "{} {}m",
+                                        tr(cx, "Last", "最近"),
+                                        self.span_minutes
+                                    )),
+                            ),
                     ),
             )
             .child(axis_header)
@@ -1747,7 +2188,7 @@ impl MissionTimelineBlock {
             .child(detail_fold)
     }
 
-    fn render_inbox_queue(&self, cx: &mut Context<Self>) -> Div {
+    fn render_inbox_queue(&self, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = ProPalette::get(cx);
         let highlighted = self.highlighted_agent().cloned();
 
@@ -1775,15 +2216,34 @@ impl MissionTimelineBlock {
                     .w_full()
                     .py(px(36.))
                     .px(px(12.))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(8.))
                     .text_center()
                     .text_size(px(12.5))
                     .text_color(p.muted)
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "mt-inb-all-clear"),
+                        true,
+                        20.,
+                        false,
+                        p.green,
+                    ))
                     .child(tr(cx, "Nothing waiting on you", "暂无待你处理的请求")),
             );
         } else {
             for lane in &actionable {
                 let aid = lane.id.clone();
                 let faded = highlighted.as_ref().is_some_and(|hid| hid != &aid);
+                let card_op = pro_spring_f32(
+                    pro_eid(&self.id, format!("mt-inb-op-{aid}")),
+                    if faded { 0.40 } else { 1.0 },
+                    0.20,
+                    w,
+                    cx,
+                );
                 let is_failed = lane.status == TimelineAgentStatus::Failed;
 
                 let (headline, desc, desc_col) = if is_failed {
@@ -1817,48 +2277,23 @@ impl MissionTimelineBlock {
                         .items_center()
                         .justify_end()
                         .gap(px(6.))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("mt-inb-dis-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Dismiss", "忽略"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(9.))
-                                .rounded(px(6.))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .hover(move |s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .child(tr(cx, "Dismiss", "忽略")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("mt-inb-dis-{aid}")),
+                            tr(cx, "Dismiss", "忽略"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_reject(&aid_dis, cx);
                             },
                         ))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("mt-inb-ret-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Retry", "重试"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(10.))
-                                .rounded(px(6.))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .child(tr(cx, "Retry", "重试")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("mt-inb-ret-{aid}")),
+                            tr(cx, "Retry", "重试"),
+                            None,
+                            ProBtnStyle::Primary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_retry(&aid_ret, cx);
@@ -1875,28 +2310,16 @@ impl MissionTimelineBlock {
                         let aid_ch = aid.clone();
                         let ch_val = ch.clone();
                         let is_primary = ci + 1 == lane.ask_choices.len();
-                        row = row.child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("mt-inb-ch-{aid}-{ci}")))
-                                .role(Role::Button)
-                                .aria_label(ch_val.clone())
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(9.))
-                                .rounded(px(6.))
-                                .bg(if is_primary { p.primary } else { p.card })
-                                .when(!is_primary, |d| {
-                                    d.border_1()
-                                        .border_color(p.line_strong)
-                                        .hover(move |s| s.bg(p.hover))
-                                })
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(if is_primary { p.on_primary } else { p.ink })
-                                .cursor_pointer()
-                                .child(ch_val.clone()),
+                        row = row.child(pro_btn(
+                            pro_eid(&self.id, format!("mt-inb-ch-{aid}-{ci}")),
+                            ch_val.clone(),
+                            None,
+                            if is_primary {
+                                ProBtnStyle::Primary
+                            } else {
+                                ProBtnStyle::Secondary
+                            },
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_approve(&aid_ch, Some(ch_val.clone()), cx);
@@ -1912,48 +2335,23 @@ impl MissionTimelineBlock {
                         .items_center()
                         .justify_end()
                         .gap(px(6.))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("mt-inb-rej-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Reject", "拒绝"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(9.))
-                                .rounded(px(6.))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .hover(move |s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .child(tr(cx, "Reject", "拒绝")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("mt-inb-rej-{aid}")),
+                            tr(cx, "Reject", "拒绝"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_reject(&aid_rej, cx);
                             },
                         ))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("mt-inb-app-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Approve", "批准"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(10.))
-                                .rounded(px(6.))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .child(tr(cx, "Approve", "批准")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("mt-inb-app-{aid}")),
+                            tr(cx, "Approve", "批准"),
+                            None,
+                            ProBtnStyle::Primary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_approve(&aid_app, None, cx);
@@ -1969,7 +2367,7 @@ impl MissionTimelineBlock {
                         .border_1()
                         .border_color(p.line)
                         .p(px(11.))
-                        .opacity(if faded { 0.40 } else { 1.0 })
+                        .opacity(card_op)
                         .flex()
                         .flex_col()
                         .gap(px(6.))
@@ -2075,10 +2473,13 @@ impl MissionTimelineBlock {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(actionable.len().to_string()),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "mt-inb-count"),
+                                actionable.len().to_string(),
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     ),
             )
             .child(cards_col)
@@ -2139,32 +2540,44 @@ impl Render for MissionTimelineBlock {
         for f in TimelineFilter::ALL {
             let sel = self.filter == f;
             let count = count_timeline_lanes(&self.lanes, f);
-            filter_bar = filter_bar.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("mt-filter-{}", f.slug())))
-                    .role(Role::RadioButton)
-                    .aria_label(format!("{} {count}", f.label(cx)))
-                    .tab_index(0)
-                    .relative()
-                    .h(px(26.))
-                    .px(px(9.))
-                    .rounded(px(7.))
-                    .when(sel, |d| d.child(pro_mark_selected(&filter_sensor)))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if sel { p.strong } else { p.text })
-                    .cursor_pointer()
-                    .child(f.label(cx))
-                    .child(div().text_color(p.muted).child(count.to_string())),
-                cx,
-                move |this, _, cx| {
-                    this.set_filter(f, cx);
-                },
-            ));
+            let pill_content = div()
+                .h(px(26.))
+                .px(px(9.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .whitespace_nowrap()
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(if sel { p.strong } else { p.text })
+                .child(f.label(cx))
+                .child(pro_swap_label(
+                    pro_eid(&self.id, format!("mt-fcount-{}", f.slug())),
+                    count.to_string(),
+                    12.,
+                    FontWeight::MEDIUM,
+                    p.muted,
+                ));
+            filter_bar = filter_bar.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("mt-filter-{}", f.slug())),
+                    format!("{} {count}", f.label(cx)),
+                    7.,
+                    transparent_black(),
+                    if sel { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    pill_content,
+                    cx,
+                    move |this, _, cx| {
+                        this.set_filter(f, cx);
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(sel, |d| d.child(pro_mark_selected(&filter_sensor))),
+            );
         }
 
         let top_bar = div()
@@ -2250,8 +2663,9 @@ impl Render for MissionTimelineBlock {
         }
 
         let recap_card = self.render_recap_section(cx);
-        let lanes_card = self.render_lanes_card(avatar_only_col, elapsed_ms, pulse_t, now_grow, cx);
-        let inbox_queue = self.render_inbox_queue(cx);
+        let lanes_card =
+            self.render_lanes_card(avatar_only_col, elapsed_ms, pulse_t, now_grow, w, cx);
+        let inbox_queue = self.render_inbox_queue(w, cx);
 
         let lower_grid = div()
             .w_full()

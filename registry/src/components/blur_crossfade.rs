@@ -6,6 +6,7 @@
 //! [`Theme::reduced_motion`](crate::foundation::Theme::reduced_motion) is enabled.
 
 use crate::{
+    components::pro_chrome::{ProBtnStyle, ProPalette, pro_btn, pro_tactile},
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
@@ -83,6 +84,7 @@ struct BxState {
     outgoing_fn: Option<LayerBuilder>,
     w_slide: Slide,
     h_slide: Slide,
+    drift_slide: Slide,
     clock: PhaseClock,
     swapping: bool,
 }
@@ -99,6 +101,7 @@ impl BxState {
             outgoing_fn: None,
             w_slide: Slide::new(0.),
             h_slide: Slide::new(0.),
+            drift_slide: Slide::new(0.),
             clock: PhaseClock::default(),
             swapping: false,
         }
@@ -124,6 +127,7 @@ pub struct BlurCrossfade {
     source: ContentSource,
     duration_ms: f32,
     blur_px: f32,
+    direction: f32,
     morph: BlurMorph,
     inline: bool,
 }
@@ -141,6 +145,7 @@ impl BlurCrossfade {
             source: ContentSource::Once(child.into_any_element()),
             duration_ms: 420.,
             blur_px: 10.,
+            direction: 0.,
             morph: BlurMorph::Height,
             inline: false,
         }
@@ -159,6 +164,7 @@ impl BlurCrossfade {
             source: ContentSource::Repeatable(Rc::new(render)),
             duration_ms: 420.,
             blur_px: 10.,
+            direction: 0.,
             morph: BlurMorph::Height,
             inline: false,
         }
@@ -225,6 +231,14 @@ impl BlurCrossfade {
         self.with_inline(true)
     }
 
+    /// Set directional horizontal drift bias (`-1.0` backward .. `+1.0` forward; `0.0` default).
+    pub fn with_direction(mut self, direction: f32) -> Self {
+        if direction.is_finite() {
+            self.direction = direction.clamp(-1., 1.);
+        }
+        self
+    }
+
     /// Configured swap duration in milliseconds.
     pub fn duration_ms(&self) -> f32 {
         self.duration_ms
@@ -233,6 +247,11 @@ impl BlurCrossfade {
     /// Configured peak blur radius in pixels.
     pub fn blur_px(&self) -> f32 {
         self.blur_px
+    }
+
+    /// Configured directional drift bias (`-1.0..=1.0`).
+    pub fn direction(&self) -> f32 {
+        self.direction
     }
 
     /// Configured size morph mode.
@@ -247,6 +266,7 @@ struct BlurPass {
     opacity: f32,
     blur_radius: f32,
     scale_delta: f32,
+    drift_x: f32,
     center_both: bool,
 }
 
@@ -260,7 +280,7 @@ fn render_blurred_layer(
     if opacity <= 0.004 {
         return div().into_any_element();
     }
-    if pass.blur_radius <= 0.25 && pass.scale_delta.abs() < 0.001 {
+    if pass.blur_radius <= 0.25 && pass.scale_delta.abs() < 0.001 && pass.drift_x.abs() < 0.15 {
         let base = div()
             .id((pass.scope_id, pass.tag))
             .opacity(opacity)
@@ -274,13 +294,22 @@ fn render_blurred_layer(
 
     let r = pass.blur_radius * 0.36;
     let radial_push = pass.scale_delta * 75.0;
+    let shift_x = pass.drift_x;
     let shift_y = -pass.scale_delta * 45.0;
     let taps: [(f32, f32, f32); 5] = [
-        (0., shift_y, 0.34),
-        (-r - radial_push * 0.4, -r * 0.72 + shift_y, 0.165),
-        (r + radial_push * 0.4, -r * 0.72 + shift_y, 0.165),
-        (-r * 0.85 - radial_push * 0.3, r * 0.72 + shift_y, 0.165),
-        (r * 0.85 + radial_push * 0.3, r * 0.72 + shift_y, 0.165),
+        (shift_x, shift_y, 0.34),
+        (shift_x - r - radial_push * 0.4, -r * 0.72 + shift_y, 0.165),
+        (shift_x + r + radial_push * 0.4, -r * 0.72 + shift_y, 0.165),
+        (
+            shift_x - r * 0.85 - radial_push * 0.3,
+            r * 0.72 + shift_y,
+            0.165,
+        ),
+        (
+            shift_x + r * 0.85 + radial_push * 0.3,
+            r * 0.72 + shift_y,
+            0.165,
+        ),
     ];
 
     let mut stack = div().id((pass.scope_id.clone(), pass.tag)).relative();
@@ -344,7 +373,8 @@ impl RenderOnce for BlurCrossfade {
         let state_id: ElementId = (self.id.clone(), "bx-state").into();
         let st = w.use_keyed_state(state_id, cx, |_, _| BxState::new(init_key, init_fn));
 
-        let (age, swapping, anim_w, anim_h, outgoing_fn, outgoing_size, measured_cell) =
+        let dir_bias = self.direction;
+        let (age, swapping, anim_w, anim_h, drift_x, outgoing_fn, outgoing_size, measured_cell) =
             st.update(cx, |s, cx| {
                 let (mw, mh) = s.measured.get();
                 if s.target_w <= 0. && mw > 0. {
@@ -369,7 +399,13 @@ impl RenderOnce for BlurCrossfade {
                     if reduced {
                         s.swapping = false;
                         s.outgoing_fn = None;
+                        s.drift_slide.reset(0.);
                     } else {
+                        // Preserve horizontal velocity across rapid directional clicks!
+                        let cur_drift = s.drift_slide.value(cx);
+                        let impulse = (cur_drift * 0.55 + dir_bias * 11.0).clamp(-18.0, 18.0);
+                        s.drift_slide.reset(impulse);
+                        s.drift_slide.duration(0., dur_secs, cx);
                         s.swapping = true;
                         s.clock.restart(cx);
                     }
@@ -384,8 +420,10 @@ impl RenderOnce for BlurCrossfade {
                 };
                 let w_val = s.w_slide.get(w, cx);
                 let h_val = s.h_slide.get(w, cx);
-                let slides_settling =
-                    (w_val - s.target_w).abs() > 0.4 || (h_val - s.target_h).abs() > 0.4;
+                let d_val = s.drift_slide.get(w, cx);
+                let slides_settling = (w_val - s.target_w).abs() > 0.4
+                    || (h_val - s.target_h).abs() > 0.4
+                    || d_val.abs() > 0.25;
                 if s.swapping && age >= dur_secs && !slides_settling {
                     s.swapping = false;
                     s.outgoing_fn = None;
@@ -395,6 +433,7 @@ impl RenderOnce for BlurCrossfade {
                     s.swapping && !reduced,
                     w_val,
                     h_val,
+                    if reduced { 0. } else { d_val },
                     s.outgoing_fn.clone(),
                     s.outgoing_size,
                     s.measured.clone(),
@@ -414,12 +453,12 @@ impl RenderOnce for BlurCrossfade {
         };
 
         let in_blur = if swapping {
-            self.blur_px * (1. - t_in)
+            (self.blur_px + drift_x.abs() * 0.22) * (1. - t_in)
         } else {
             0.
         };
         let in_scale_delta = if swapping { -0.02 * (1. - t_in) } else { 0. };
-        let out_blur = self.blur_px * t_out;
+        let out_blur = (self.blur_px + drift_x.abs() * 0.22) * t_out;
         let out_scale_delta = 0.02 * t_out;
 
         let incoming_el = match self.source {
@@ -430,6 +469,7 @@ impl RenderOnce for BlurCrossfade {
                     opacity: t_in,
                     blur_radius: in_blur,
                     scale_delta: in_scale_delta,
+                    drift_x,
                     center_both,
                 },
                 &builder,
@@ -438,6 +478,7 @@ impl RenderOnce for BlurCrossfade {
             ),
             ContentSource::Once(el) => div()
                 .relative()
+                .left(px(if swapping { drift_x } else { 0. }))
                 .top(px(if swapping { 1.5 * (1. - t_in) } else { 0. }))
                 .opacity(t_in)
                 .when(center_both, |d| d.flex_none().whitespace_nowrap())
@@ -541,6 +582,7 @@ impl RenderOnce for BlurCrossfade {
                         opacity: 1. - t_out,
                         blur_radius: out_blur,
                         scale_delta: out_scale_delta,
+                        drift_x: -dir_bias * 9.0 * t_out,
                         center_both,
                     },
                     &out_builder,
@@ -636,10 +678,14 @@ const RELEASE_NOTES: [ReleaseNote; 3] = [
 /// inline stateful button (`BlurMorph::Both`) and variable-height cards (`BlurMorph::Height`).
 pub struct BlurCrossfadeShowcase {
     id: ElementId,
+    focus: FocusHandle,
     step: usize,
+    last_dir: f32,
     publish_state: PublishState,
     publish_seq: usize,
     dots: [Slide; 3],
+    pill_left: Slide,
+    pill_right: Slide,
 }
 
 impl BlurCrossfadeShowcase {
@@ -650,25 +696,54 @@ impl BlurCrossfadeShowcase {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         Self {
             id: id.into(),
+            focus: cx.focus_handle().tab_stop(true),
             step: 0,
+            last_dir: 1.0,
             publish_state: PublishState::Idle,
             publish_seq: 0,
-            dots: [Slide::snappy(16.), Slide::snappy(6.), Slide::snappy(6.)],
+            dots: [Slide::snappy(18.), Slide::snappy(6.), Slide::snappy(6.)],
+            pill_left: Slide::snappy(0.),
+            pill_right: Slide::snappy(18.),
         }
     }
 
     /// Advance to the next changelog note.
     pub fn next_step(&mut self, cx: &mut Context<Self>) {
-        self.set_step((self.step + 1) % RELEASE_NOTES.len(), cx);
+        self.step_with_dir((self.step + 1) % RELEASE_NOTES.len(), 1.0, cx);
+    }
+
+    /// Step backward to the previous changelog note.
+    pub fn prev_step(&mut self, cx: &mut Context<Self>) {
+        let prev = (self.step + RELEASE_NOTES.len() - 1) % RELEASE_NOTES.len();
+        self.step_with_dir(prev, -1.0, cx);
     }
 
     /// Jump directly to a changelog note index (`0..3`).
     pub fn set_step(&mut self, index: usize, cx: &mut Context<Self>) {
         let clamped = index % RELEASE_NOTES.len();
+        let dir = if clamped >= self.step { 1.0 } else { -1.0 };
+        self.step_with_dir(clamped, dir, cx);
+    }
+
+    fn step_with_dir(&mut self, index: usize, dir: f32, cx: &mut Context<Self>) {
+        let clamped = index % RELEASE_NOTES.len();
         if self.step != clamped {
+            let prev = self.step;
             self.step = clamped;
+            self.last_dir = dir;
             for (i, slide) in self.dots.iter_mut().enumerate() {
-                slide.duration(if i == clamped { 16. } else { 6. }, 0.26, cx);
+                slide.duration(if i == clamped { 18. } else { 6. }, 0.24, cx);
+            }
+            // Asymmetric 4-edge liquid pill stretch across `[0..18]`, `[23..41]`, `[46..64]`
+            let target_left = (clamped as f32) * 11.0;
+            let target_right = target_left + 18.0;
+            let moving_right = clamped > prev;
+            if moving_right {
+                self.pill_right.duration(target_right, 0.17, cx);
+                self.pill_left.duration(target_left, 0.28, cx);
+            } else {
+                self.pill_left.duration(target_left, 0.17, cx);
+                self.pill_right.duration(target_right, 0.28, cx);
             }
             cx.notify();
         }
@@ -833,6 +908,7 @@ impl Render for BlurCrossfadeShowcase {
         let tag_text = SharedString::from(lang.text(note.tag_en, note.tag_zh));
         let body_text = SharedString::from(lang.text(note.body_en, note.body_zh));
 
+        let p = ProPalette::get(cx);
         let focus_ring = theme.tokens.colors.focus_outline;
         let pub_btn_id: ElementId = (self.id.clone(), "publish-btn").into();
         let next_btn_id: ElementId = (self.id.clone(), "next-btn").into();
@@ -845,26 +921,98 @@ impl Render for BlurCrossfadeShowcase {
             self.dots[1].get(w, cx),
             self.dots[2].get(w, cx),
         ];
-        let mut dots_row = div().flex().items_center().gap(px(5.));
+        let p_left = self.pill_left.get(w, cx);
+        let p_right = self.pill_right.get(w, cx);
+        let stretch_w = (p_right - p_left).max(6.);
+
+        let mut dots_hit_row = div().relative().flex().items_center().gap(px(5.));
         for (idx, width_px) in dot_widths.into_iter().enumerate() {
             let is_active = idx == self.step;
             let dot_id: ElementId =
                 (self.id.clone(), SharedString::from(format!("dot-{idx}"))).into();
-            dots_row = dots_row.child(
-                div()
-                    .id(dot_id)
-                    .role(Role::Button)
-                    .aria_label(format!("Step {}", idx + 1))
-                    .cursor_pointer()
-                    .h(px(6.))
-                    .w(px(width_px.max(6.)))
-                    .rounded(px(999.))
-                    .bg(if is_active { dot_active } else { dot_idle })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.set_step(idx, cx);
-                    })),
-            );
+            let w_dot = width_px.max(6.);
+            dots_hit_row =
+                dots_hit_row.child(div().w(px(w_dot)).h(px(14.)).flex().items_center().child(
+                    pro_tactile(
+                        dot_id,
+                        format!("Step {}", idx + 1),
+                        999.,
+                        if is_active {
+                            transparent_black()
+                        } else {
+                            dot_idle
+                        },
+                        dot_active.opacity(0.45),
+                        transparent_black(),
+                        transparent_black(),
+                        is_active,
+                        div().w_full().h(px(6.)),
+                        cx,
+                        move |this, _, cx| {
+                            this.set_step(idx, cx);
+                        },
+                    ),
+                ));
         }
+        let dots_row = div()
+            .relative()
+            .h(px(14.))
+            .flex()
+            .items_center()
+            .child(dots_hit_row)
+            .child(
+                div()
+                    .absolute()
+                    .left(px(p_left))
+                    .top(px(4.))
+                    .w(px(stretch_w))
+                    .h(px(6.))
+                    .rounded(px(999.))
+                    .bg(dot_active),
+            );
+
+        let primary_hover = if dark {
+            rgb(0xffffff).into()
+        } else {
+            rgb(0x171717).into()
+        };
+        let publish_btn = div().flex_none().child(pro_tactile(
+            pub_btn_id,
+            pub_label,
+            9.,
+            primary_bg,
+            primary_hover,
+            transparent_black(),
+            p.line_strong,
+            self.publish_state == PublishState::Published,
+            div()
+                .h(px(30.))
+                .px(px(12.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(primary_fg)
+                .text_size(px(12.5))
+                .line_height(px(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .child(BlurCrossfade::label(pub_bx_id, pub_key, pub_label)),
+            cx,
+            |this, _, cx| {
+                this.trigger_publish(cx);
+            },
+        ));
+        let next_btn = pro_btn(
+            next_btn_id,
+            lang.text("Next", "下一条"),
+            None,
+            ProBtnStyle::Secondary,
+            true,
+            cx,
+            |this, _, cx| {
+                this.next_step(cx);
+            },
+        );
+        let _ = (chip_bg, chip_border, chip_fg);
 
         let card_shadows = if dark {
             vec![
@@ -902,13 +1050,36 @@ impl Render for BlurCrossfadeShowcase {
             ]
         };
 
+        let dir_bias = self.last_dir;
         div()
             .id(self.id.clone())
+            .track_focus(&self.focus)
+            .tab_index(0)
             .w_full()
             .flex()
             .items_center()
             .justify_center()
             .p(px(24.))
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |s| s.rounded(px(18.)).border_color(focus_ring))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                match ev.keystroke.key.as_str() {
+                    "right" | "down" | "j" => {
+                        this.next_step(cx);
+                        cx.stop_propagation();
+                    }
+                    "left" | "up" | "k" => {
+                        this.prev_step(cx);
+                        cx.stop_propagation();
+                    }
+                    "enter" => {
+                        this.trigger_publish(cx);
+                        cx.stop_propagation();
+                    }
+                    _ => {}
+                }
+            }))
             .child(
                 div()
                     .w(px(360.))
@@ -954,31 +1125,7 @@ impl Render for BlurCrossfadeShowcase {
                                             ),
                                     ),
                             )
-                            .child(
-                                div()
-                                    .id(pub_btn_id)
-                                    .role(Role::Button)
-                                    .aria_label(pub_label)
-                                    .tab_index(0)
-                                    .h(px(30.))
-                                    .px(px(12.))
-                                    .rounded(px(9.))
-                                    .bg(primary_bg)
-                                    .text_color(primary_fg)
-                                    .text_size(px(12.5))
-                                    .line_height(px(18.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(|s| s.opacity(0.9))
-                                    .focus_visible(move |s| s.border_1().border_color(focus_ring))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.trigger_publish(cx);
-                                    }))
-                                    .child(BlurCrossfade::label(pub_bx_id, pub_key, pub_label)),
-                            ),
+                            .child(publish_btn),
                     )
                     .child(
                         div()
@@ -1019,6 +1166,7 @@ impl Render for BlurCrossfadeShowcase {
                                         .into_any_element()
                                 })
                                 .with_morph(BlurMorph::Height)
+                                .with_direction(dir_bias)
                                 .with_duration_ms(420.)
                                 .with_blur_px(10.),
                             ),
@@ -1032,33 +1180,7 @@ impl Render for BlurCrossfadeShowcase {
                             .items_center()
                             .justify_between()
                             .child(dots_row)
-                            .child(
-                                div()
-                                    .id(next_btn_id)
-                                    .role(Role::Button)
-                                    .aria_label(lang.text("Next", "下一条"))
-                                    .tab_index(0)
-                                    .h(px(30.))
-                                    .px(px(12.))
-                                    .rounded(px(9.))
-                                    .bg(chip_bg)
-                                    .border_1()
-                                    .border_color(chip_border)
-                                    .text_color(chip_fg)
-                                    .text_size(px(12.5))
-                                    .line_height(px(18.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(|s| s.opacity(0.85))
-                                    .focus_visible(move |s| s.border_color(focus_ring))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.next_step(cx);
-                                    }))
-                                    .child(lang.text("Next", "下一条")),
-                            ),
+                            .child(next_btn),
                     ),
             )
     }
@@ -1069,7 +1191,8 @@ mod tests {
     use super::{
         BlurCrossfade, BlurCrossfadeShowcase, BlurMorph, PublishState, bx_ease_in, bx_ease_out,
     };
-    use gpui::{TestAppContext, div, prelude::*};
+    use gpui::{TestAppContext, div, prelude::*, px, size};
+    use std::time::Duration;
 
     #[test]
     fn easing_curves_preserve_endpoints_and_monotonic_progress() {
@@ -1087,9 +1210,11 @@ mod tests {
         let bx = BlurCrossfade::new("demo", "k1", div().child("Hello"))
             .with_duration_ms(10.)
             .with_blur_px(99.)
+            .with_direction(4.0)
             .with_morph(BlurMorph::Both);
         assert_eq!(bx.duration_ms(), 60.);
         assert_eq!(bx.blur_px(), 40.);
+        assert_eq!(bx.direction(), 1.0);
         assert_eq!(bx.morph(), BlurMorph::Both);
     }
 
@@ -1113,5 +1238,54 @@ mod tests {
             window.update(|_, cx| view.read(cx).publish_state),
             PublishState::Publishing
         );
+    }
+
+    #[gpui::test]
+    fn rapid_step_navigation_stretches_liquid_pill_and_preserves_direction(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, vcx) = cx.add_window_view(|_, cx| BlurCrossfadeShowcase::new("bx-rapid", cx));
+        vcx.simulate_resize(size(px(520.), px(360.)));
+        vcx.run_until_parked();
+
+        // Rapidly step forward twice -> pill_right leads ahead of pill_left (`stretch > 18px`)
+        vcx.update(|_, app| {
+            view.update(app, |s, cx| {
+                s.next_step(cx);
+                s.next_step(cx);
+            });
+        });
+        exec.advance_clock(Duration::from_millis(80));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let s = view.read(app);
+            assert_eq!(s.step, 2);
+            assert_eq!(s.last_dir, 1.0);
+            let span = s.pill_right.value(app) - s.pill_left.value(app);
+            assert!(
+                span > 19.0,
+                "expected asymmetric liquid stretch > 19px mid-flight, got {span}"
+            );
+        });
+
+        // Step backward -> flips direction to `-1.0` and settles cleanly to step 1 `[11..29]`
+        vcx.update(|_, app| {
+            view.update(app, |s, cx| s.prev_step(cx));
+        });
+        exec.advance_clock(Duration::from_millis(380));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let s = view.read(app);
+            assert_eq!(s.step, 1);
+            assert_eq!(s.last_dir, -1.0);
+            assert!((s.pill_left.value(app) - 11.0).abs() < 0.5);
+            assert!((s.pill_right.value(app) - 29.0).abs() < 0.5);
+        });
     }
 }

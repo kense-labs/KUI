@@ -1,13 +1,14 @@
 //! Verify KUI Pro spring motion primitives preserve hit-box stability, exit presence, and reduced-motion collapse.
 
 use gpui::{
-    Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext,
-    Window, div, prelude::*, px, rgb, size,
+    Context, FontWeight, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    TestAppContext, Window, div, prelude::*, px, rgb, size,
 };
 use kui::{
     components::pro_chrome::{
-        ProBtnStyle, pro_btn, pro_fold, pro_mark_selected, pro_pill_indicator, pro_presence,
-        pro_selection_sensor, pro_spring_bar, pro_switch, pro_view_transition,
+        ProBtnStyle, pro_btn, pro_check_draw, pro_fold, pro_mark_selected, pro_pill_indicator,
+        pro_popover_presence, pro_presence, pro_selection_sensor, pro_spring_bar, pro_swap_label,
+        pro_switch, pro_tactile, pro_view_transition,
     },
     foundation::Theme,
 };
@@ -141,6 +142,57 @@ impl Render for MotionHarness {
                 format!("view-{sel}"),
                 div().h(px(24.)).child(format!("Pane {sel}")),
             ))
+            .child(
+                div()
+                    .debug_selector(|| "tactile-wrap".into())
+                    .w(px(180.))
+                    .child(pro_tactile(
+                        "demo-card",
+                        "Interactive card",
+                        8.,
+                        rgb(0xffffff).into(),
+                        rgb(0xf4f4f5).into(),
+                        rgb(0xe5e5e5).into(),
+                        rgb(0xa3a3a3).into(),
+                        self.switch_on,
+                        div()
+                            .p(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(pro_check_draw(
+                                "demo-chk",
+                                self.switch_on,
+                                16.,
+                                false,
+                                rgb(0x16a34a).into(),
+                            ))
+                            .child(pro_swap_label(
+                                "demo-swap",
+                                if self.switch_on { "Enabled" } else { "Enable" },
+                                13.,
+                                FontWeight::MEDIUM,
+                                rgb(0x111111).into(),
+                            )),
+                        cx,
+                        |this, _, cx| {
+                            this.switch_on = !this.switch_on;
+                            cx.notify();
+                        },
+                    )),
+            )
+            .child(pro_popover_presence(
+                "demo-pop-card",
+                self.popover_open,
+                || {
+                    div()
+                        .debug_selector(|| "pop-card-body".into())
+                        .w(px(100.))
+                        .h(px(24.))
+                        .child("Inspector")
+                        .into_any_element()
+                },
+            ))
     }
 }
 
@@ -198,6 +250,34 @@ fn pro_motion_controls_preserve_hitbox_and_honor_exit_and_reduced_motion() {
     });
     w.run_until_parked();
     assert_eq!(w.update(|_, cx| entity.read(cx).clicks), 1);
+
+    // 1b. Tactile card press preserves outer hit-box bounds and toggles state on click.
+    let card_rest = w
+        .debug_bounds("tactile-wrap")
+        .expect("tactile-wrap mounted");
+    let card_center = card_rest.center();
+    w.simulate_event(MouseDownEvent {
+        position: card_center,
+        button: MouseButton::Left,
+        modifiers: Modifiers::default(),
+        click_count: 1,
+        first_mouse: false,
+    });
+    w.update(|win, cx| win.simulate_next_frame(cx));
+    w.run_until_parked();
+    assert_eq!(
+        card_rest,
+        w.debug_bounds("tactile-wrap")
+            .expect("tactile-wrap while pressed")
+    );
+    w.simulate_event(MouseUpEvent {
+        position: card_center,
+        button: MouseButton::Left,
+        modifiers: Modifiers::default(),
+        click_count: 1,
+    });
+    w.run_until_parked();
+    assert!(w.update(|_, cx| entity.read(cx).switch_on));
 
     // 2. With normal motion enabled, closing `pro_fold` and `pro_presence` keeps exit frames mounted.
     assert!(w.debug_bounds("fold-body").is_some());

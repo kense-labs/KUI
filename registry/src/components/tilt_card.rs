@@ -5,10 +5,11 @@
 //! back with a gentle overshoot on leave.
 
 use crate::{
+    components::pro_chrome::{ProPalette, pro_eid, pro_swap_label, pro_tactile},
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
-        family::{Slide, disabled_motion},
+        family::{PhaseClock, Slide, disabled_motion},
     },
 };
 use gpui::{prelude::*, *};
@@ -25,6 +26,53 @@ const DEFAULT_MAX_TILT: f32 = 10.;
 const DEFAULT_SCALE: f32 = 1.02;
 const DEFAULT_PERSPECTIVE: f32 = 900.;
 const DEFAULT_RADIUS: f32 = 20.;
+
+struct CardFinish {
+    c0: u32,
+    c1: u32,
+    tier: &'static str,
+    name_en: &'static str,
+    name_zh: &'static str,
+}
+
+const CARD_FINISHES: [CardFinish; 4] = [
+    CardFinish {
+        c0: 0x2d6bff,
+        c1: 0x794cff,
+        tier: "Pro",
+        name_en: "Indigo",
+        name_zh: "靛蓝",
+    },
+    CardFinish {
+        c0: 0x18181b,
+        c1: 0x3f3f46,
+        tier: "Black",
+        name_en: "Carbon",
+        name_zh: "黑曜",
+    },
+    CardFinish {
+        c0: 0x059669,
+        c1: 0x0284c7,
+        tier: "Mint",
+        name_en: "Emerald",
+        name_zh: "翡翠",
+    },
+    CardFinish {
+        c0: 0xe11d48,
+        c1: 0x9333ea,
+        tier: "Studio",
+        name_en: "Quartz",
+        name_zh: "玫紫",
+    },
+];
+
+fn hex_to_rgb01(hex: u32) -> [f32; 3] {
+    [
+        ((hex >> 16) & 0xff) as f32 / 255.,
+        ((hex >> 8) & 0xff) as f32 / 255.,
+        (hex & 0xff) as f32 / 255.,
+    ]
+}
 
 type ContentBuilder = Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>;
 
@@ -260,11 +308,24 @@ struct TiltLiveState {
     gx: Slide,
     gy: Slide,
     glare_alpha: Slide,
+    press_slide: Slide,
+    pulse_clock: PhaseClock,
+    accent_idx: usize,
+    c0_r: Slide,
+    c0_g: Slide,
+    c0_b: Slide,
+    c1_r: Slide,
+    c1_g: Slide,
+    c1_b: Slide,
+    locked_angle: Option<(f32, f32)>,
+    last_uv: (f32, f32),
     hovered: bool,
 }
 
 impl TiltLiveState {
     fn new() -> Self {
+        let f0 = hex_to_rgb01(CARD_FINISHES[0].c0);
+        let f1 = hex_to_rgb01(CARD_FINISHES[0].c1);
         Self {
             bounds: Rc::new(Cell::new(Bounds::default())),
             nx: TiltSpring::new(0.),
@@ -273,7 +334,87 @@ impl TiltLiveState {
             gx: Slide::snappy(0.5),
             gy: Slide::snappy(0.5),
             glare_alpha: Slide::new(0.),
+            press_slide: Slide::snappy(0.),
+            pulse_clock: PhaseClock::default(),
+            accent_idx: 0,
+            c0_r: Slide::new(f0[0]),
+            c0_g: Slide::new(f0[1]),
+            c0_b: Slide::new(f0[2]),
+            c1_r: Slide::new(f1[0]),
+            c1_g: Slide::new(f1[1]),
+            c1_b: Slide::new(f1[2]),
+            locked_angle: None,
+            last_uv: (0.68, 0.34),
             hovered: false,
+        }
+    }
+
+    fn set_accent(&mut self, idx: usize, reduced: bool, cx: &App) {
+        let clamped = idx % CARD_FINISHES.len();
+        self.accent_idx = clamped;
+        let f0 = hex_to_rgb01(CARD_FINISHES[clamped].c0);
+        let f1 = hex_to_rgb01(CARD_FINISHES[clamped].c1);
+        if reduced {
+            self.c0_r.reset(f0[0]);
+            self.c0_g.reset(f0[1]);
+            self.c0_b.reset(f0[2]);
+            self.c1_r.reset(f1[0]);
+            self.c1_g.reset(f1[1]);
+            self.c1_b.reset(f1[2]);
+        } else {
+            self.c0_r.duration(f0[0], 0.34, cx);
+            self.c0_g.duration(f0[1], 0.34, cx);
+            self.c0_b.duration(f0[2], 0.34, cx);
+            self.c1_r.duration(f1[0], 0.34, cx);
+            self.c1_g.duration(f1[1], 0.34, cx);
+            self.c1_b.duration(f1[2], 0.34, cx);
+            self.pulse_clock.restart(cx);
+            self.gx.reset(0.16);
+            self.gy.reset(0.24);
+            self.gx.duration(0.84, 0.38, cx);
+            self.gy.duration(0.68, 0.38, cx);
+            self.glare_alpha.duration(1.0, 0.22, cx);
+        }
+    }
+
+    fn toggle_lock(&mut self, reduced: bool, cx: &App) {
+        let now = cx.background_executor().now();
+        if self.locked_angle.take().is_some() {
+            if !self.hovered {
+                if reduced {
+                    self.nx.reset(0.);
+                    self.ny.reset(0.);
+                    self.active.reset(0.);
+                    self.glare_alpha.reset(0.);
+                } else {
+                    self.nx.retarget(0., 11.2, 0.56, now);
+                    self.ny.retarget(0., 11.2, 0.56, now);
+                    self.active.retarget(0., 11.2, 0.58, now);
+                    self.gx.duration(0.5, 0.50, cx);
+                    self.gy.duration(0.5, 0.50, cx);
+                    self.glare_alpha.duration(0., 0.40, cx);
+                }
+            }
+        } else {
+            let (u, v) = self.last_uv;
+            let mut lnx = (u - 0.5) * 2.;
+            let mut lny = (v - 0.5) * 2.;
+            if lnx.abs() < 0.08 && lny.abs() < 0.08 {
+                lnx = 0.48;
+                lny = -0.34;
+            }
+            self.locked_angle = Some((lnx, lny));
+            if !reduced {
+                self.nx.retarget(lnx, 22.0, 0.78, now);
+                self.ny.retarget(lny, 22.0, 0.78, now);
+                self.active.retarget(1., 20.0, 0.76, now);
+                self.gx
+                    .duration((0.5 + lnx * 0.36).clamp(0.08, 0.92), 0.24, cx);
+                self.gy
+                    .duration((0.5 + lny * 0.36).clamp(0.08, 0.92), 0.24, cx);
+                self.glare_alpha.duration(0.88, 0.26, cx);
+                self.pulse_clock.restart(cx);
+            }
         }
     }
 
@@ -286,6 +427,7 @@ impl TiltLiveState {
         }
         let u = ((f32::from(pos.x - b.left())) / w).clamp(0., 1.);
         let v = ((f32::from(pos.y - b.top())) / h).clamp(0., 1.);
+        self.last_uv = (u, v);
         let nx = (u - 0.5) * 2.;
         let ny = (v - 0.5) * 2.;
         self.hovered = true;
@@ -298,10 +440,15 @@ impl TiltLiveState {
             return true;
         }
 
-        let now = Instant::now();
-        // Snappy 140ms hover tracking while pointer is over the card.
-        self.nx.retarget(nx, 24.0, 0.90, now);
-        self.ny.retarget(ny, 24.0, 0.90, now);
+        let now = cx.background_executor().now();
+        // Snappy 140ms hover tracking while pointer is over the card (blended smoothly if angle-locked).
+        let (target_nx, target_ny) = if let Some((lnx, lny)) = self.locked_angle {
+            (lnx * 0.65 + nx * 0.35, lny * 0.65 + ny * 0.35)
+        } else {
+            (nx, ny)
+        };
+        self.nx.retarget(target_nx, 24.0, 0.90, now);
+        self.ny.retarget(target_ny, 24.0, 0.90, now);
         self.active.retarget(1., 22.0, 0.88, now);
         self.gx.duration(u, 0.16, cx);
         self.gy.duration(v, 0.16, cx);
@@ -311,6 +458,7 @@ impl TiltLiveState {
 
     fn pointer_leave(&mut self, reduced: bool, cx: &App) {
         self.hovered = false;
+        self.press_slide.duration(0., 0.14, cx);
         if reduced {
             self.nx.reset(0.);
             self.ny.reset(0.);
@@ -318,14 +466,25 @@ impl TiltLiveState {
             self.glare_alpha.reset(0.);
             return;
         }
-        let now = Instant::now();
-        // 700ms underdamped spring back with soft overshoot on pointer leave.
-        self.nx.retarget(0., 11.2, 0.56, now);
-        self.ny.retarget(0., 11.2, 0.56, now);
-        self.active.retarget(0., 11.2, 0.58, now);
-        self.gx.duration(0.5, 0.50, cx);
-        self.gy.duration(0.5, 0.50, cx);
-        self.glare_alpha.duration(0., 0.40, cx);
+        let now = cx.background_executor().now();
+        if let Some((lnx, lny)) = self.locked_angle {
+            self.nx.retarget(lnx, 14.0, 0.72, now);
+            self.ny.retarget(lny, 14.0, 0.72, now);
+            self.active.retarget(0.92, 14.0, 0.74, now);
+            self.gx
+                .duration((0.5 + lnx * 0.36).clamp(0.08, 0.92), 0.36, cx);
+            self.gy
+                .duration((0.5 + lny * 0.36).clamp(0.08, 0.92), 0.36, cx);
+            self.glare_alpha.duration(0.72, 0.36, cx);
+        } else {
+            // 700ms underdamped spring back with soft overshoot on pointer leave.
+            self.nx.retarget(0., 11.2, 0.56, now);
+            self.ny.retarget(0., 11.2, 0.56, now);
+            self.active.retarget(0., 11.2, 0.58, now);
+            self.gx.duration(0.5, 0.50, cx);
+            self.gy.duration(0.5, 0.50, cx);
+            self.glare_alpha.duration(0., 0.40, cx);
+        }
     }
 }
 
@@ -421,19 +580,23 @@ fn paint_projected_label(
     }
 }
 
-fn paint_default_membership_card(surface: TiltSurface, lang: UiLanguage, w: &mut Window) {
+fn paint_default_membership_card(
+    surface: TiltSurface,
+    c0: Hsla,
+    c1: Hsla,
+    tier_label: &'static str,
+    locked: bool,
+    lang: UiLanguage,
+    w: &mut Window,
+) {
     let cw = f32::from(surface.bounds.size.width).max(1.);
     let ch = f32::from(surface.bounds.size.height).max(1.);
     let sx = (cw / DEFAULT_WIDTH).clamp(0.65, 1.5);
 
-    // Royal blue -> indigo -> violet gradient (`#2563eb` -> `#4f46e5` -> `#7c3aed`).
+    // Smoothly morphed finish gradient (`Indigo` / `Carbon` / `Emerald` / `Quartz`).
     surface.fill_polygon(
         surface.outline_uv(),
-        linear_gradient(
-            135.,
-            linear_color_stop(rgb(0x2d6bff), 0.),
-            linear_color_stop(rgb(0x794cff), 1.),
-        ),
+        linear_gradient(135., linear_color_stop(c0, 0.), linear_color_stop(c1, 1.)),
         w,
     );
     // Top-left luminous sheen matching the reference card highlight.
@@ -441,14 +604,22 @@ fn paint_default_membership_card(surface: TiltSurface, lang: UiLanguage, w: &mut
         surface.outline_uv(),
         linear_gradient(
             155.,
-            linear_color_stop(hsla(216. / 360., 1., 0.66, 0.16), 0.),
+            linear_color_stop(
+                hsla(216. / 360., 1., 0.66, if locked { 0.24 } else { 0.16 }),
+                0.,
+            ),
             linear_color_stop(transparent_black(), 1.),
         ),
         w,
     );
-    surface.stroke_polygon(surface.outline_uv(), 1.0, hsla(0., 0., 1., 0.18), w);
+    surface.stroke_polygon(
+        surface.outline_uv(),
+        if locked { 1.35 } else { 1.0 },
+        hsla(0., 0., 1., if locked { 0.34 } else { 0.18 }),
+        w,
+    );
 
-    // Brand lockup ("KUI Pro") on top-left.
+    // Brand lockup ("KUI Pro" / "KUI Black" / etc.) on top-left.
     let pad_u = 24. / DEFAULT_WIDTH;
     let top_v = 22. / DEFAULT_HEIGHT;
     let brand_main: SharedString = "KUI".into();
@@ -472,7 +643,7 @@ fn paint_default_membership_card(surface: TiltSurface, lang: UiLanguage, w: &mut
     paint_projected_label(
         surface,
         (pad_u + (kui_w + 5. * sx) / cw, top_v),
-        "Pro".into(),
+        tier_label.into(),
         brand_font,
         FontWeight::MEDIUM,
         hsla(0., 0., 1., 0.78),
@@ -642,6 +813,10 @@ pub struct TiltCard {
     focus: FocusHandle,
     once_child: RefCell<Option<AnyElement>>,
     content_builder: Option<ContentBuilder>,
+    pending_accent: Cell<Option<usize>>,
+    pending_toggle_lock: Cell<bool>,
+    observed_accent: Rc<Cell<usize>>,
+    observed_locked: Rc<Cell<bool>>,
 }
 
 impl TiltCard {
@@ -657,9 +832,13 @@ impl TiltCard {
             radius: px(DEFAULT_RADIUS),
             width: px(DEFAULT_WIDTH),
             height: px(DEFAULT_HEIGHT),
-            focus: cx.focus_handle().tab_stop(false),
+            focus: cx.focus_handle().tab_stop(true),
             once_child: RefCell::new(None),
             content_builder: None,
+            pending_accent: Cell::new(None),
+            pending_toggle_lock: Cell::new(false),
+            observed_accent: Rc::new(Cell::new(0)),
+            observed_locked: Rc::new(Cell::new(false)),
         }
     }
 
@@ -777,31 +956,95 @@ impl TiltCard {
     ) -> Stateful<Div> {
         let theme = Theme::global(cx);
         let dark = theme.mode == ThemeMode::Dark;
+        let focus_ring = theme.tokens.colors.focus_outline;
         let reduced = disabled_motion(cx);
         let lang = UiLanguage::current(cx);
-        let now = Instant::now();
+        let now = cx.background_executor().now();
 
+        let pending_acc = self.pending_accent.take();
+        let pending_lock = self.pending_toggle_lock.take();
         let has_focus = self.focus.contains_focused(w, cx);
-        let (nx, ny, active_t, gx, gy, glare_a, hovered, bounds_cell, animating) = live_entity
-            .update(cx, |s, cx| {
-                let (nx_v, _, nx_mov) = s.nx.sample(now);
-                let (ny_v, _, ny_mov) = s.ny.sample(now);
-                let (act_v, _, act_mov) = s.active.sample(now);
-                let gx_v = s.gx.get(w, cx);
-                let gy_v = s.gy.get(w, cx);
-                let gl_v = s.glare_alpha.get(w, cx);
-                (
-                    if reduced { 0. } else { nx_v },
-                    if reduced { 0. } else { ny_v },
-                    act_v.clamp(0., 1.3),
-                    gx_v.clamp(0., 1.),
-                    gy_v.clamp(0., 1.),
-                    if reduced { 0. } else { gl_v.clamp(0., 1.) },
-                    s.hovered,
-                    s.bounds.clone(),
-                    !reduced && (nx_mov || ny_mov || act_mov),
-                )
-            });
+        let (
+            nx,
+            ny,
+            active_t,
+            gx,
+            gy,
+            glare_a,
+            press_t,
+            pulse_boost,
+            c0,
+            c1,
+            tier_label,
+            locked,
+            accent_idx,
+            hovered,
+            bounds_cell,
+            animating,
+        ) = live_entity.update(cx, |s, cx| {
+            if let Some(acc) = pending_acc {
+                s.set_accent(acc, reduced, cx);
+            }
+            if pending_lock {
+                s.toggle_lock(reduced, cx);
+            }
+
+            let (nx_v, _, nx_mov) = s.nx.sample(now);
+            let (ny_v, _, ny_mov) = s.ny.sample(now);
+            let (act_v, _, act_mov) = s.active.sample(now);
+            let gx_v = s.gx.get(w, cx);
+            let gy_v = s.gy.get(w, cx);
+            let gl_v = s.glare_alpha.get(w, cx);
+            let pr_v = s.press_slide.get(w, cx);
+            let pulse_age = s.pulse_clock.time(0.45, w, cx);
+            let pulse_u = (pulse_age / 0.45).clamp(0., 1.);
+            let pulse_b = if pulse_u < 1.0 && !reduced {
+                (pulse_u * PI).sin() * 0.45
+            } else {
+                0.0
+            };
+
+            let c0_hsla: Hsla = Rgba {
+                r: s.c0_r.get(w, cx).clamp(0., 1.),
+                g: s.c0_g.get(w, cx).clamp(0., 1.),
+                b: s.c0_b.get(w, cx).clamp(0., 1.),
+                a: 1.0,
+            }
+            .into();
+            let c1_hsla: Hsla = Rgba {
+                r: s.c1_r.get(w, cx).clamp(0., 1.),
+                g: s.c1_g.get(w, cx).clamp(0., 1.),
+                b: s.c1_b.get(w, cx).clamp(0., 1.),
+                a: 1.0,
+            }
+            .into();
+
+            (
+                if reduced { 0. } else { nx_v },
+                if reduced { 0. } else { ny_v },
+                act_v.clamp(0., 1.3),
+                gx_v.clamp(0., 1.),
+                gy_v.clamp(0., 1.),
+                if reduced {
+                    0.
+                } else {
+                    (gl_v + pulse_b).clamp(0., 1.)
+                },
+                if reduced { 0. } else { pr_v.clamp(0., 1.) },
+                pulse_b,
+                c0_hsla,
+                c1_hsla,
+                CARD_FINISHES[s.accent_idx].tier,
+                s.locked_angle.is_some(),
+                s.accent_idx,
+                s.hovered,
+                s.bounds.clone(),
+                !reduced && (nx_mov || ny_mov || act_mov),
+            )
+        });
+
+        self.observed_accent.set(accent_idx);
+        self.observed_locked.set(locked);
 
         if animating {
             w.request_animation_frame();
@@ -820,19 +1063,19 @@ impl TiltCard {
         let cur_scale = if reduced {
             1.0
         } else {
-            1.0 + (self.scale - 1.0) * active_t
+            1.0 + (self.scale - 1.0) * active_t - 0.018 * press_t + 0.012 * pulse_boost
         };
         let lift_px = if reduced {
             0.0
         } else if has_focus {
-            4.0
+            4.0 - 1.5 * press_t
         } else {
-            2.0 * active_t
+            2.0 * active_t - 1.6 * press_t
         };
         let shadow_t = if has_focus || (reduced && hovered) {
             1.0
         } else {
-            active_t.clamp(0., 1.)
+            (active_t - 0.25 * press_t).clamp(0., 1.)
         };
 
         let radius = self.radius;
@@ -860,7 +1103,9 @@ impl TiltCard {
                 let surface = make_surface(b);
                 paint_card_shadows(surface, nx, ny, shadow_t, dark, window);
                 if is_default_card {
-                    paint_default_membership_card(surface, lang, window);
+                    paint_default_membership_card(
+                        surface, c0, c1, tier_label, locked, lang, window,
+                    );
                 } else {
                     surface.fill_polygon(surface.outline_uv(), panel_bg, window);
                 }
@@ -870,16 +1115,29 @@ impl TiltCard {
         .inset_0();
 
         let move_entity = live_entity.clone();
-        let hover_entity = live_entity;
+        let hover_entity = live_entity.clone();
+        let down_entity = live_entity.clone();
+        let up_entity = live_entity.clone();
+        let up_out_entity = live_entity.clone();
+        let key_entity = live_entity;
+        let obs_acc = self.observed_accent.clone();
+        let obs_lck = self.observed_locked.clone();
+        let obs_acc_k = self.observed_accent.clone();
+        let obs_lck_k = self.observed_locked.clone();
 
         let mut root = div()
             .id(self.id.clone())
             .track_focus(&self.focus)
+            .tab_index(0)
             .relative()
             .w(self.width)
             .max_w_full()
             .h(self.height)
             .flex_none()
+            .cursor_pointer()
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |s| s.rounded(radius).border_color(focus_ring))
             .on_mouse_move(move |ev: &MouseMoveEvent, window, cx| {
                 if window.last_input_was_touch() {
                     return;
@@ -895,6 +1153,85 @@ impl TiltCard {
                 if !*over {
                     let reduced = disabled_motion(cx);
                     hover_entity.update(cx, |s, cx| s.pointer_leave(reduced, cx));
+                    window.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, move |ev: &MouseDownEvent, window, cx| {
+                let reduced = disabled_motion(cx);
+                down_entity.update(cx, |s, cx| {
+                    s.press_slide.duration(1., 0.08, cx);
+                    let b = s.bounds.get();
+                    let w_px = f32::from(b.size.width).max(1.);
+                    let h_px = f32::from(b.size.height).max(1.);
+                    let u = ((f32::from(ev.position.x - b.left())) / w_px).clamp(0., 1.);
+                    let v = ((f32::from(ev.position.y - b.top())) / h_px).clamp(0., 1.);
+                    s.last_uv = (u, v);
+                    // Clicking the metallic EMV chip cycles card finish; clicking card face locks/unlocks angle!
+                    if is_default_card && (0.04..=0.23).contains(&u) && (0.32..=0.55).contains(&v) {
+                        let next = (s.accent_idx + 1) % CARD_FINISHES.len();
+                        s.set_accent(next, reduced, cx);
+                    } else {
+                        s.toggle_lock(reduced, cx);
+                    }
+                    obs_acc.set(s.accent_idx);
+                    obs_lck.set(s.locked_angle.is_some());
+                });
+                window.refresh();
+            })
+            .on_mouse_up(MouseButton::Left, move |_: &MouseUpEvent, window, cx| {
+                up_entity.update(cx, |s, cx| {
+                    s.press_slide.duration(0., 0.14, cx);
+                });
+                window.refresh();
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_: &MouseUpEvent, window, cx| {
+                up_out_entity.update(cx, |s, cx| {
+                    s.press_slide.duration(0., 0.14, cx);
+                });
+                window.refresh();
+            })
+            .on_key_down(move |ev: &KeyDownEvent, window, cx| {
+                let reduced = disabled_motion(cx);
+                let handled = key_entity.update(cx, |s, cx| {
+                    let now = cx.background_executor().now();
+                    match ev.keystroke.key.as_str() {
+                        "left" | "right" | "up" | "down" => {
+                            let (mut lnx, mut lny) = s.locked_angle.unwrap_or((0., 0.));
+                            match ev.keystroke.key.as_str() {
+                                "left" => lnx = (lnx - 0.35).clamp(-1., 1.),
+                                "right" => lnx = (lnx + 0.35).clamp(-1., 1.),
+                                "up" => lny = (lny - 0.35).clamp(-1., 1.),
+                                _ => lny = (lny + 0.35).clamp(-1., 1.),
+                            }
+                            s.locked_angle = Some((lnx, lny));
+                            if !reduced {
+                                s.nx.retarget(lnx, 20.0, 0.78, now);
+                                s.ny.retarget(lny, 20.0, 0.78, now);
+                                s.active.retarget(1., 18.0, 0.76, now);
+                                s.gx.duration((0.5 + lnx * 0.36).clamp(0.08, 0.92), 0.22, cx);
+                                s.gy.duration((0.5 + lny * 0.36).clamp(0.08, 0.92), 0.22, cx);
+                                s.glare_alpha.duration(0.86, 0.24, cx);
+                            }
+                            true
+                        }
+                        "enter" | "space" | " " | "t" => {
+                            let next = (s.accent_idx + 1) % CARD_FINISHES.len();
+                            s.set_accent(next, reduced, cx);
+                            true
+                        }
+                        "escape" if s.locked_angle.is_some() => {
+                            s.toggle_lock(reduced, cx);
+                            true
+                        }
+                        _ => false,
+                    }
+                });
+                if handled {
+                    let (acc, lck) =
+                        key_entity.read_with(cx, |s, _| (s.accent_idx, s.locked_angle.is_some()));
+                    obs_acc_k.set(acc);
+                    obs_lck_k.set(lck);
+                    cx.stop_propagation();
                     window.refresh();
                 }
             })
@@ -996,8 +1333,116 @@ impl TiltCardShowcase {
 
 impl Render for TiltCardShowcase {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = ProPalette::get(cx);
         let lang = UiLanguage::current(cx);
         let caption_fg: Hsla = rgb(0x8f8f8f).into();
+        let (cur_accent, cur_locked) = self.card.read_with(cx, |c, _| {
+            (c.observed_accent.get(), c.observed_locked.get())
+        });
+
+        let mut finish_strip = div().mt(px(22.)).flex().items_center().gap(px(6.));
+        for (idx, finish) in CARD_FINISHES.iter().enumerate() {
+            let selected = idx == cur_accent;
+            let swatch: Hsla = rgb(finish.c0).into();
+            let chip_label = lang.text(finish.name_en, finish.name_zh);
+            let chip_content = div()
+                .h(px(24.))
+                .px(px(9.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .child(div().size(px(7.)).rounded_full().bg(swatch))
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .font_weight(if selected {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if selected { p.ink } else { p.muted })
+                        .child(chip_label),
+                );
+            finish_strip = finish_strip.child(div().flex_none().child(pro_tactile(
+                pro_eid(&self.id, format!("finish-{idx}")),
+                chip_label,
+                9999.,
+                if selected {
+                    p.chip
+                } else {
+                    transparent_black()
+                },
+                p.hover,
+                if selected { p.line_strong } else { p.line },
+                p.line_strong,
+                selected,
+                chip_content,
+                cx,
+                move |this, _, cx| {
+                    this.card.update(cx, |c, cx| {
+                        c.pending_accent.set(Some(idx));
+                        c.observed_accent.set(idx);
+                        cx.notify();
+                    });
+                    cx.notify();
+                },
+            )));
+        }
+
+        let lock_label = if cur_locked {
+            lang.text("Angle locked", "角度已锁定")
+        } else {
+            lang.text("Lock angle", "锁定角度")
+        };
+        finish_strip = finish_strip.child(
+            div().flex_none().child(pro_tactile(
+                pro_eid(&self.id, "lock-angle"),
+                lock_label,
+                9999.,
+                if cur_locked {
+                    p.chip
+                } else {
+                    transparent_black()
+                },
+                p.hover,
+                if cur_locked { p.line_strong } else { p.line },
+                p.line_strong,
+                cur_locked,
+                div()
+                    .h(px(24.))
+                    .px(px(10.))
+                    .flex()
+                    .items_center()
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "lock-lbl"),
+                        lock_label,
+                        11.5,
+                        FontWeight::MEDIUM,
+                        if cur_locked { p.ink } else { p.muted },
+                    )),
+                cx,
+                |this, _, cx| {
+                    this.card.update(cx, |c, cx| {
+                        c.pending_toggle_lock.set(true);
+                        c.observed_locked.set(!c.observed_locked.get());
+                        cx.notify();
+                    });
+                    cx.notify();
+                },
+            )),
+        );
+
+        let hint_text = if cur_locked {
+            lang.text(
+                "Angle locked · click card or press Esc to spring back",
+                "角度已锁定 · 点击卡片或按 Esc 弹性复位",
+            )
+        } else {
+            lang.text(
+                "Move pointer to tilt · click card to lock · tap chip to switch finish",
+                "移动指针体验 3D 倾斜 · 点击卡片锁定角度 · 点击芯片切换材质",
+            )
+        };
 
         div()
             .id(self.id.clone())
@@ -1009,15 +1454,19 @@ impl Render for TiltCardShowcase {
             .px(px(24.))
             .py(px(32.))
             .child(self.card.clone())
+            .child(finish_strip)
             .child(
                 div()
-                    .mt(px(28.))
-                    .text_size(px(13.))
-                    .line_height(px(18.))
-                    .text_color(caption_fg)
-                    .child(lang.text(
-                        "Move your pointer over the card",
-                        "将指针移到卡片上方体验 3D 倾斜",
+                    .mt(px(12.))
+                    .h(px(18.))
+                    .flex()
+                    .items_center()
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "caption-swap"),
+                        hint_text,
+                        12.5,
+                        FontWeight::NORMAL,
+                        caption_fg,
                     )),
             )
     }
@@ -1026,7 +1475,10 @@ impl Render for TiltCardShowcase {
 #[cfg(test)]
 mod tests {
     use super::{TiltCard, TiltCardShowcase, TiltSpring, TiltSurface};
-    use gpui::{Bounds, TestAppContext, point, px, size};
+    use gpui::{
+        Bounds, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point,
+        px, size,
+    };
     use std::time::Duration;
     use web_time::Instant;
 
@@ -1098,6 +1550,58 @@ mod tests {
         assert_eq!(
             window.update(|_, cx| view.read(cx).card().read(cx).max_tilt()),
             10.0
+        );
+    }
+
+    #[gpui::test]
+    fn click_locks_angle_and_emv_chip_cycles_finish_with_spring_recovery(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, vcx) = cx.add_window_view(|_, cx| TiltCardShowcase::new("tc-lock-test", cx));
+        vcx.simulate_resize(size(px(640.), px(460.)));
+        vcx.run_until_parked();
+
+        // Click on the right half of the card (`320, 160`) to lock tilt angle
+        let face_pt = point(px(380.), px(160.));
+        vcx.simulate_event(MouseMoveEvent {
+            position: face_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        vcx.simulate_event(MouseDownEvent {
+            position: face_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: face_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        exec.advance_clock(Duration::from_millis(120));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        assert!(vcx.update(|_, app| view.read(app).card().read(app).observed_locked.get()));
+
+        // Cycle finish via pending_accent (same path as tactile finish chips / EMV chip)
+        vcx.update(|_, app| {
+            let card = view.read(app).card().clone();
+            card.update(app, |c, cx| {
+                c.pending_accent.set(Some(2));
+                cx.notify();
+            });
+        });
+        exec.advance_clock(Duration::from_millis(260));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        assert_eq!(
+            vcx.update(|_, app| view.read(app).card().read(app).observed_accent.get()),
+            2
         );
     }
 }

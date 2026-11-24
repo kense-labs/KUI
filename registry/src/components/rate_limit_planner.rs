@@ -6,11 +6,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_eid, pro_empty_state, pro_mix_color, pro_skeleton_bar,
-        pro_spring_f32, pro_toast_banner, tr,
+        ProPalette, pro_agent_avatar, pro_check_draw, pro_eid, pro_empty_state, pro_icon_btn,
+        pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
+    foundation::Theme,
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -265,6 +267,7 @@ pub struct RateLimitPlanner {
     selected_id: Option<SharedString>,
     hovered_id: Option<SharedString>,
     hover_chart_frac: Option<f32>,
+    scrub_slide: Slide,
     drag: Option<DragSession>,
     slot_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     toast: Option<(SharedString, Instant)>,
@@ -292,6 +295,7 @@ impl RateLimitPlanner {
             selected_id: None,
             hovered_id: None,
             hover_chart_frac: None,
+            scrub_slide: Slide::snappy(0.5),
             drag: None,
             slot_bounds: Rc::new(Cell::new(None)),
             toast: None,
@@ -521,7 +525,7 @@ impl RateLimitPlanner {
 impl Render for RateLimitPlanner {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed_ms = self.started_at.elapsed().as_secs_f32() * 1_000.0;
         let card_bg: Hsla = if p.dark {
             rgb(0x1c1c1e).into()
@@ -606,6 +610,7 @@ impl Render for RateLimitPlanner {
 
         // Smoothly glide bars & curve whenever Spread out / keyboard shift updates start_min
         let mut animated_runs = self.runs.clone();
+        let mut smooth_offs = Vec::with_capacity(animated_runs.len());
         for (idx, r) in animated_runs.iter_mut().enumerate() {
             let target_off = (r.start_min - base_min).rem_euclid(1_440) as f32;
             let secs = if is_dragging && self.drag.is_some_and(|d| d.run_idx == idx) {
@@ -620,6 +625,7 @@ impl Render for RateLimitPlanner {
                 window,
                 cx,
             );
+            smooth_offs.push(smooth_off);
             r.start_min = (base_min + smooth_off.round() as i32).rem_euclid(1_440);
         }
 
@@ -628,87 +634,51 @@ impl Render for RateLimitPlanner {
         let peak_pct = ((summary.peak_tpm / self.limit) * 100.0).round() as u32;
         let total_m = summary.total_tokens as f64 / 1_000_000.0;
 
-        let (badge_bg, badge_fg, badge_text) = match summary.health {
+        let (badge_bg, badge_fg, badge_status) = match summary.health {
             LimitHealth::Under => (
                 p.green_soft,
                 p.green_ink,
-                tr(
-                    cx,
-                    &format!("Under limit · peak {peak_pct}%"),
-                    &format!("低于限额 · 峰值 {peak_pct}%"),
-                )
-                .to_string(),
+                tr(cx, "Under limit", "低于限额").to_string(),
             ),
             LimitHealth::Close => (
                 p.amber_soft,
                 p.amber_ink,
-                tr(
-                    cx,
-                    &format!("Close to limit · peak {peak_pct}%"),
-                    &format!("接近限额 · 峰值 {peak_pct}%"),
-                )
-                .to_string(),
+                tr(cx, "Close to limit", "接近限额").to_string(),
             ),
             LimitHealth::Over => (
                 p.red_soft,
                 p.red_ink,
-                tr(
-                    cx,
-                    &format!("Over limit · peak {peak_pct}%"),
-                    &format!("超出限额 · 峰值 {peak_pct}%"),
-                )
-                .to_string(),
+                tr(cx, "Over limit", "超出限额").to_string(),
             ),
         };
 
-        let sub_text = tr(
+        let spread_btn = pro_tactile(
+            pro_eid(&self.id, "spread-btn"),
+            tr(cx, "Spread out overlapping runs", "一键错峰排布重叠任务"),
+            7.0,
+            card_bg,
+            p.chip_hover,
+            p.line_strong,
+            p.line_strong,
+            false,
+            div()
+                .h(px(28.))
+                .pl(px(8.))
+                .pr(px(10.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.ink)
+                .child(pro_svg("0 0 16 16", SPREAD_ICON_SVG, 15., p.muted))
+                .child(tr(cx, "Spread out", "一键错峰")),
             cx,
-            &format!(
-                "{} runs · {:.0}M tokens · {} / min",
-                self.runs.len(),
-                total_m.max(1.0),
-                format_k(self.limit)
-            ),
-            &format!(
-                "{} 个任务 · {:.0}M Tokens · {} / 分钟上限",
-                self.runs.len(),
-                total_m.max(1.0),
-                format_k(self.limit)
-            ),
-        )
-        .to_string();
-
-        let btn_hover = p.chip_hover;
-        let spread_btn = div()
-            .id(pro_eid(&self.id, "spread-btn"))
-            .role(Role::Button)
-            .aria_label(tr(
-                cx,
-                "Spread out overlapping runs",
-                "一键错峰排布重叠任务",
-            ))
-            .tab_index(0)
-            .h(px(28.))
-            .pl(px(8.))
-            .pr(px(10.))
-            .rounded(px(7.))
-            .bg(card_bg)
-            .border_1()
-            .border_color(p.line_strong)
-            .cursor_pointer()
-            .hover(move |s| s.bg(btn_hover))
-            .focus_visible(move |s| s.border_2().border_color(p.focus))
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            |this, _, cx| {
                 this.spread_out(cx);
-            }))
-            .flex()
-            .items_center()
-            .gap(px(6.))
-            .text_size(px(12.5))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(p.ink)
-            .child(pro_svg("0 0 16 16", SPREAD_ICON_SVG, 15., p.muted))
-            .child(tr(cx, "Spread out", "一键错峰"));
+            },
+        )
+        .w_auto();
 
         let header = div()
             .px(px(16.))
@@ -731,7 +701,51 @@ impl Render for RateLimitPlanner {
                             .text_color(p.strong)
                             .child(tr(cx, self.title.as_ref(), self.title_zh.as_ref()).to_string()),
                     )
-                    .child(div().text_size(px(12.)).text_color(p.muted).child(sub_text)),
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rlp-runs-cnt"),
+                                self.runs.len() as f64,
+                                0,
+                                "",
+                                tr(cx, " runs", " 个任务"),
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child("·")
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rlp-tot-m"),
+                                total_m.max(1.0),
+                                0,
+                                "",
+                                tr(cx, "M tokens", "M Tokens"),
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child("·")
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rlp-peak-k"),
+                                (summary.peak_tpm / 1_000.0) as f64,
+                                0,
+                                tr(cx, "peak ", "峰值 "),
+                                "k/min",
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
+                            .child(format!(
+                                " ({} {})",
+                                format_k(self.limit),
+                                tr(cx, "cap", "上限")
+                            )),
+                    ),
             )
             .child(
                 div()
@@ -749,7 +763,34 @@ impl Render for RateLimitPlanner {
                             .text_color(badge_fg)
                             .flex()
                             .items_center()
-                            .child(badge_text),
+                            .gap(px(5.))
+                            .when(summary.health == LimitHealth::Under, |d| {
+                                d.child(pro_check_draw(
+                                    pro_eid(&self.id, "rlp-ok-chk"),
+                                    true,
+                                    12.5,
+                                    false,
+                                    p.green,
+                                ))
+                            })
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "rlp-health-lbl"),
+                                badge_status,
+                                12.,
+                                FontWeight::MEDIUM,
+                                badge_fg,
+                            ))
+                            .child("·")
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rlp-peak-pct"),
+                                f64::from(peak_pct),
+                                0,
+                                "",
+                                "%",
+                                12.,
+                                FontWeight::MEDIUM,
+                                badge_fg,
+                            )),
                     )
                     .child(spread_btn),
             );
@@ -778,7 +819,25 @@ impl Render for RateLimitPlanner {
 
         let samples_for_paint = summary.samples.clone();
         let limit_val = self.limit;
-        let hover_frac = self.hover_chart_frac;
+        let scrub_x = self.scrub_slide.get(window, cx).clamp(0.0, 1.0);
+        let scrub_alpha = pro_spring_f32(
+            pro_eid(&self.id, "rlp-scrub-a"),
+            if self.hover_chart_frac.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            0.16,
+            window,
+            cx,
+        );
+        let sel_curve_alpha = pro_spring_f32(
+            pro_eid(&self.id, "rlp-sel-curve"),
+            if selected_curve.is_some() { 0.88 } else { 0.0 },
+            0.20,
+            window,
+            cx,
+        );
         let dark = p.dark;
         let chart_bounds_cell: Rc<Cell<Option<Bounds<Pixels>>>> = Rc::new(Cell::new(None));
         let chart_bounds_pre = chart_bounds_cell.clone();
@@ -936,8 +995,10 @@ impl Render for RateLimitPlanner {
                 }
 
                 // 6. Selected single-run curve overlay
-                if let Some((scol, svals)) = &selected_curve {
-                    let mut sl = PathBuilder::stroke(px(1.6));
+                if let Some((scol, svals)) = &selected_curve
+                    && sel_curve_alpha > 0.01
+                {
+                    let mut sl = PathBuilder::stroke(px(1.65));
                     for (i, &v) in svals.iter().enumerate() {
                         let pt = point(px(x_of(i)), px(y_of(v)));
                         if i == 0 {
@@ -947,7 +1008,7 @@ impl Render for RateLimitPlanner {
                         }
                     }
                     if let Ok(path) = sl.build() {
-                        window.paint_path(path, scol.opacity(0.85));
+                        window.paint_path(path, scol.opacity(sel_curve_alpha));
                     }
                 }
 
@@ -990,21 +1051,21 @@ impl Render for RateLimitPlanner {
                     );
                 }
 
-                // 9. Hover crosshair
-                if let Some(hf) = hover_frac {
-                    let hx = f32::from(bounds.left()) + hf.clamp(0.0, 1.0) * w;
+                // 9. Smooth Slide::snappy hover crosshair
+                if scrub_alpha > 0.01 {
+                    let hx = f32::from(bounds.left()) + scrub_x * w;
                     let hv = interp_val(hx);
                     let hy = y_of(hv);
-                    let mut ch = PathBuilder::stroke(px(1.0));
+                    let mut ch = PathBuilder::stroke(px(1.1));
                     ch.move_to(point(px(hx), bounds.top()));
                     ch.line_to(point(px(hx), bounds.bottom()));
                     if let Ok(path) = ch.build() {
-                        window.paint_path(path, p.line_strong);
+                        window.paint_path(path, p.line_strong.opacity(scrub_alpha));
                     }
                     window.paint_quad(
                         fill(
                             Bounds::new(point(px(hx - 3.), px(hy - 3.)), size(px(6.), px(6.))),
-                            p.ink,
+                            p.ink.opacity(scrub_alpha),
                         )
                         .corner_radii(px(99.)),
                     );
@@ -1013,27 +1074,34 @@ impl Render for RateLimitPlanner {
         )
         .size_full();
 
-        let hover_tooltip = self.hover_chart_frac.map(|hf| {
-            let idx_f = hf.clamp(0.0, 1.0) * (SAMPLE_COUNT - 1) as f32;
-            let idx = (idx_f.round() as usize).min(SAMPLE_COUNT - 1);
-            let m = (base_min + idx as i32 * 10).rem_euclid(1_440);
-            let val = summary.samples[idx];
-            let label = format!("{} · {} / min", format_clock_hhmm(m), format_k(val));
-            div()
-                .absolute()
-                .top(px(4.))
-                .right(px(8.))
-                .h(px(20.))
-                .px(px(7.))
-                .rounded(px(5.))
-                .bg(if p.dark { rgb(0x26262a) } else { rgb(0x18181b) })
-                .text_size(px(11.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(0xffffff))
-                .flex()
-                .items_center()
-                .child(label)
-        });
+        let idx_f = scrub_x * (SAMPLE_COUNT - 1) as f32;
+        let tip_idx = (idx_f.round() as usize).min(SAMPLE_COUNT - 1);
+        let tip_m = (base_min + tip_idx as i32 * 10).rem_euclid(1_440);
+        let tip_val = summary.samples[tip_idx];
+        let tip_label = format!("{} · {} / min", format_clock_hhmm(tip_m), format_k(tip_val));
+        let tip_bg = if p.dark { rgb(0x26262a) } else { rgb(0x18181b) };
+        let hover_tooltip = div()
+            .absolute()
+            .top(px(4.))
+            .right(px(8.))
+            .child(pro_popover_presence(
+                pro_eid(&self.id, "rlp-hov-tip"),
+                self.hover_chart_frac.is_some(),
+                move || {
+                    div()
+                        .h(px(20.))
+                        .px(px(7.))
+                        .rounded(px(5.))
+                        .bg(tip_bg)
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(0xffffff))
+                        .flex()
+                        .items_center()
+                        .child(tip_label)
+                        .into_any_element()
+                },
+            ));
 
         let chart_bounds_move = chart_bounds_cell;
         let chart_row = div()
@@ -1103,12 +1171,17 @@ impl Render for RateLimitPlanner {
                         if let Some(b) = chart_bounds_move.get() {
                             let w = f32::from(b.size.width).max(1.0);
                             let f = (f32::from(ev.position.x - b.left()) / w).clamp(0.0, 1.0);
+                            if this.hover_chart_frac.is_none() {
+                                this.scrub_slide = Slide::snappy(f);
+                            } else {
+                                this.scrub_slide.set(f, cx);
+                            }
                             this.hover_chart_frac = Some(f);
                             cx.notify();
                         }
                     }))
                     .child(chart_canvas)
-                    .children(hover_tooltip),
+                    .child(hover_tooltip),
             );
 
         // 24h axis ticks
@@ -1197,17 +1270,43 @@ impl Render for RateLimitPlanner {
             )
             .child(slot_sensor);
 
+        let any_lane_spot = pro_spring_f32(
+            pro_eid(&self.id, "rlp-any-spot"),
+            if active_run_id.is_some() { 1.0 } else { 0.0 },
+            0.20,
+            window,
+            cx,
+        );
+
         for (idx, run) in animated_runs.iter().enumerate() {
             let real_start = self.runs.get(idx).map_or(run.start_min, |r| r.start_min);
             let r_col = run_color(run.color_idx, &p);
             let is_on = self.selected_id.as_ref() == Some(&run.id)
                 || self.hovered_id.as_ref() == Some(&run.id)
                 || self.drag.is_some_and(|d| d.run_idx == idx);
+            let lane_spot = pro_spring_f32(
+                pro_eid(&self.id, format!("rlp-spot-{}", run.id)),
+                if is_on { 1.0 } else { 0.0 },
+                0.20,
+                window,
+                cx,
+            );
+            let lane_opacity = 1.0 - any_lane_spot * (1.0 - lane_spot) * 0.42;
 
-            let off_min = (run.start_min - base_min).rem_euclid(1_440) as f32;
+            let off_min = smooth_offs
+                .get(idx)
+                .copied()
+                .unwrap_or_else(|| (run.start_min - base_min).rem_euclid(1_440) as f32);
             let span_min = run.visual_span_min();
             let left_frac = (off_min / 1_440.0).clamp(0.0, 0.94);
-            let width_frac = (span_min / 1_440.0).clamp(0.05, (1.0 - left_frac).max(0.05));
+            let target_w_frac = (span_min / 1_440.0).clamp(0.05, (1.0 - left_frac).max(0.05));
+            let width_frac = pro_spring_f32(
+                pro_eid(&self.id, format!("rlp-bw-{}", run.id)),
+                target_w_frac,
+                0.28,
+                window,
+                cx,
+            );
 
             // Check whether this run contributes during an overflow window
             let sample_start = ((off_min / 10.0).floor() as usize).min(SAMPLE_COUNT - 1);
@@ -1219,12 +1318,12 @@ impl Render for RateLimitPlanner {
             let bar_bg = if contributes_to_over {
                 pro_mix_color(r_col.opacity(0.14), p.red.opacity(0.20), 0.55)
             } else {
-                r_col.opacity(if is_on { 0.20 } else { 0.11 })
+                r_col.opacity(0.11 + 0.11 * lane_spot)
             };
             let bar_border = if contributes_to_over {
                 p.red.opacity(0.60)
             } else {
-                r_col.opacity(if is_on { 0.58 } else { 0.36 })
+                r_col.opacity(0.36 + 0.28 * lane_spot)
             };
             let bar_fg = if contributes_to_over {
                 p.red_ink
@@ -1239,18 +1338,74 @@ impl Render for RateLimitPlanner {
             };
 
             let id_hover = run.id.clone();
+            let id_who_sel = run.id.clone();
             let id_sel = run.id.clone();
             let id_key = run.id.clone();
             let id_rm = run.id.clone();
             let pinned = run.pinned_running;
             let init_off = (real_start - base_min).rem_euclid(1_440) as f32;
-            let rm_hover = p.chip_hover;
+            let is_selected_row = self.selected_id.as_ref() == Some(&run.id);
+
+            let who_pill = pro_tactile(
+                pro_eid(&self.id, format!("who-btn-{}", run.id)),
+                run.display_name(cx).to_string(),
+                6.0,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                p.line,
+                is_selected_row,
+                div()
+                    .w_full()
+                    .h(px(28.))
+                    .pl(px(8.))
+                    .pr(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(pro_agent_avatar(
+                        run.id.as_ref(),
+                        r_col,
+                        16.0,
+                        run.pinned_running,
+                        elapsed_ms,
+                        cx,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(13.))
+                            .text_color(if run.pinned_running { p.muted } else { p.ink })
+                            .child(run.display_name(cx).to_string()),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_size(px(12.))
+                            .text_color(if is_on { r_col } else { p.muted })
+                            .child(time_str.clone()),
+                    ),
+                cx,
+                move |this, _, cx| {
+                    let next = if this.selected_id.as_ref() == Some(&id_who_sel) {
+                        None
+                    } else {
+                        Some(id_who_sel.clone())
+                    };
+                    this.selected_id = next.clone();
+                    cx.emit(RateLimitPlannerEvent::SelectedChanged(next));
+                    cx.notify();
+                },
+            );
 
             let lane = div()
                 .id(pro_eid(&self.id, format!("lane-{}", run.id)))
                 .w_full()
                 .h(px(LANE_H))
                 .pr(px(16.))
+                .opacity(lane_opacity)
                 .flex()
                 .items_center()
                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
@@ -1265,35 +1420,9 @@ impl Render for RateLimitPlanner {
                     div()
                         .w(px(WHO_COL_W))
                         .flex_none()
-                        .pl(px(16.))
-                        .pr(px(10.))
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(pro_agent_avatar(
-                            run.id.as_ref(),
-                            r_col,
-                            16.0,
-                            run.pinned_running,
-                            elapsed_ms,
-                            cx,
-                        ))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .text_size(px(13.))
-                                .text_color(if run.pinned_running { p.muted } else { p.ink })
-                                .child(run.display_name(cx).to_string()),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_size(px(12.))
-                                .text_color(if is_on { r_col } else { p.muted })
-                                .child(time_str.clone()),
-                        ),
+                        .pl(px(8.))
+                        .pr(px(2.))
+                        .child(who_pill),
                 )
                 .child(
                     div()
@@ -1372,25 +1501,20 @@ impl Render for RateLimitPlanner {
                         .when(is_on && !pinned, |d| {
                             d.child(
                                 div()
-                                    .id(pro_eid(&self.id, format!("rm-{}", run.id)))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Remove scheduled run", "移除计划任务"))
-                                    .tab_index(0)
                                     .absolute()
                                     .right(px(0.))
                                     .top(px(7.))
-                                    .size(px(20.))
-                                    .rounded(px(5.))
-                                    .bg(p.chip)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(rm_hover))
-                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        this.remove_run(id_rm.as_ref(), cx);
-                                    }))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(pro_icon(ProIcon::Close, 11., p.muted)),
+                                    .child(pro_icon_btn(
+                                        pro_eid(&self.id, format!("rm-{}", run.id)),
+                                        tr(cx, "Remove scheduled run", "移除计划任务"),
+                                        ProIcon::Close,
+                                        20.0,
+                                        false,
+                                        cx,
+                                        move |this, _, cx| {
+                                            this.remove_run(id_rm.as_ref(), cx);
+                                        },
+                                    )),
                             )
                         }),
                 );
@@ -1399,7 +1523,6 @@ impl Render for RateLimitPlanner {
         }
 
         // "+ Add run" row
-        let add_hover = p.chip_hover;
         let add_row = div()
             .w_full()
             .h(px(32.))
@@ -1407,27 +1530,31 @@ impl Render for RateLimitPlanner {
             .flex()
             .items_center()
             .child(
-                div()
-                    .id(pro_eid(&self.id, "add-run"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Add scheduled run", "添加定时任务"))
-                    .tab_index(0)
-                    .h(px(24.))
-                    .px(px(6.))
-                    .rounded(px(5.))
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(add_hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                pro_tactile(
+                    pro_eid(&self.id, "add-run"),
+                    tr(cx, "Add scheduled run", "添加定时任务"),
+                    5.0,
+                    transparent_black(),
+                    p.chip_hover,
+                    transparent_black(),
+                    p.line,
+                    false,
+                    div()
+                        .h(px(24.))
+                        .px(px(6.))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .text_size(px(12.5))
+                        .text_color(p.muted)
+                        .child(pro_icon(ProIcon::Plus, 12.5, p.muted))
+                        .child(tr(cx, "Add run", "添加任务")),
+                    cx,
+                    |this, _, cx| {
                         this.add_run(cx);
-                    }))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.5))
-                    .text_color(p.muted)
-                    .child(pro_icon(ProIcon::Plus, 12.5, p.muted))
-                    .child(tr(cx, "Add run", "添加任务")),
+                    },
+                )
+                .w_auto(),
             );
 
         // Footer verdict sentence

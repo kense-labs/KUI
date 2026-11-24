@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_connector_pulse, pro_eid,
-        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_presence,
-        pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar, pro_toast_banner,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_connector_pulse,
+        pro_eid, pro_empty_state, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_presence, pro_rolling_number, pro_selection_sensor,
+        pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner,
         pro_view_transition, tr,
     },
     foundation::Theme,
@@ -21,7 +22,7 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 const HUB_MARK_SVG: &str = r#"<path d="M8.4 12H4.2M15.6 12h4.2M12 8.4V4.5M12 15.6v3.9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" opacity="0.5"/><rect x="7.8" y="7.8" width="8.4" height="8.4" rx="2.2" fill="currentColor"/><circle cx="3.2" cy="12" r="2" fill="currentColor"/><circle cx="20.8" cy="12" r="2" fill="currentColor"/>"#;
@@ -586,6 +587,8 @@ pub struct ToolAccessMap {
     tools: Vec<AccessTool>,
     agents: Vec<MapAgent>,
     active_agent_id: SharedString,
+    hovered_tool_id: Option<SharedString>,
+    hovered_agent_hub: bool,
     open_tool_id: Option<SharedString>,
     last_open_tool_id: Option<SharedString>,
     selected_call_id: Option<SharedString>,
@@ -614,6 +617,8 @@ impl ToolAccessMap {
             tools: default_tools(),
             agents: default_agents(),
             active_agent_id: "coder".into(),
+            hovered_tool_id: None,
+            hovered_agent_hub: false,
             open_tool_id: None,
             last_open_tool_id: None,
             selected_call_id: None,
@@ -1044,18 +1049,18 @@ impl Render for ToolAccessMap {
         let focus_col = p.focus;
         let hover_border = p.line_strong;
 
-        // 1. Header Bar
-        let tools_sum_txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-            format!("{accessible_count} / {total_tools} 个工具")
+        // 1. Header Bar with rolling tool & call counts
+        let tools_sfx = if UiLanguage::current(cx) == UiLanguage::Chinese {
+            format!(" / {total_tools} 个工具")
         } else {
-            format!("{accessible_count} / {total_tools} tools")
+            format!(" / {total_tools} tools")
         };
-        let calls_sum_txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-            format!("{total_calls} 次调用")
+        let calls_sfx = if UiLanguage::current(cx) == UiLanguage::Chinese {
+            " 次调用"
         } else if total_calls == 1 {
-            "1 call".to_owned()
+            " call"
         } else {
-            format!("{total_calls} calls")
+            " calls"
         };
 
         let head_bar = div()
@@ -1110,10 +1115,28 @@ impl Render for ToolAccessMap {
                             .text_size(px(12.))
                             .text_color(p.muted)
                             .when(!narrow, |d| {
-                                d.child(tools_sum_txt)
-                                    .child(div().text_color(p.faint).child("·"))
+                                d.child(pro_rolling_number(
+                                    pro_eid(&self.id, "tam-acc-cnt"),
+                                    accessible_count as f64,
+                                    0,
+                                    "",
+                                    &tools_sfx,
+                                    12.,
+                                    FontWeight::NORMAL,
+                                    p.muted,
+                                ))
+                                .child(div().text_color(p.faint).child("·"))
                             })
-                            .child(calls_sum_txt),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "tam-call-cnt"),
+                                total_calls as f64,
+                                0,
+                                "",
+                                calls_sfx,
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
                     ),
             );
 
@@ -1273,6 +1296,15 @@ impl Render for ToolAccessMap {
                                 .when(st_spin, |d| {
                                     d.child(spinning_ring(9.5, 1.5, st_fg, elapsed_s, !reduced))
                                 })
+                                .when(agent.status == AccessRunStatus::Done, |d| {
+                                    d.child(pro_check_draw(
+                                        pro_eid(&self.id, format!("hub-done-{}", agent.id)),
+                                        true,
+                                        12.0,
+                                        false,
+                                        st_fg,
+                                    ))
+                                })
                                 .child(st_label),
                         ),
                 )
@@ -1288,14 +1320,70 @@ impl Render for ToolAccessMap {
 
         let agent_w = if narrow { stage_w } else { 206.0_f32 };
         let agent_hub_card = div()
+            .id(pro_eid(&self.id, "hub-agent-card"))
             .w(px(agent_w))
             .p(px(10.))
             .rounded(px(10.))
             .bg(card_bg)
             .border_1()
-            .border_color(p.line)
+            .border_color(if self.hovered_agent_hub {
+                brand_fg.opacity(0.55)
+            } else {
+                p.line
+            })
             .when(!p.dark, |d| d.shadow_xs())
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if this.hovered_agent_hub != *inside {
+                    this.hovered_agent_hub = *inside;
+                    cx.notify();
+                }
+            }))
             .child(agent_card_inner);
+
+        // Pre-sample per-tool spotlight & wire illumination springs!
+        let focus_tid = self
+            .hovered_tool_id
+            .clone()
+            .or_else(|| self.open_tool_id.clone());
+        let mut tool_springs: HashMap<SharedString, (f32, f32)> =
+            HashMap::with_capacity(self.tools.len());
+        for tool in &self.tools {
+            let allowed = agent.tools.iter().any(|g| g.tool_id == tool.id);
+            let (target_vis, target_spt) = if let Some(ftid) = &focus_tid {
+                if ftid == &tool.id {
+                    (1.0_f32, 1.0_f32)
+                } else if allowed {
+                    (0.30_f32, 0.0_f32)
+                } else {
+                    (0.22_f32, 0.0_f32)
+                }
+            } else if self.hovered_agent_hub {
+                if allowed {
+                    (1.0_f32, 0.85_f32)
+                } else {
+                    (0.22_f32, 0.0_f32)
+                }
+            } else if allowed {
+                (1.0_f32, 0.0_f32)
+            } else {
+                (0.45_f32, 0.0_f32)
+            };
+            let vis = pro_spring_f32(
+                pro_eid(&self.id, format!("tmap-vis-{}", tool.id)),
+                target_vis,
+                0.22,
+                w,
+                cx,
+            );
+            let spt = pro_spring_f32(
+                pro_eid(&self.id, format!("tmap-spt-{}", tool.id)),
+                target_spt,
+                0.20,
+                w,
+                cx,
+            );
+            tool_springs.insert(tool.id.clone(), (vis, spt));
+        }
 
         // Classify each global tool for the active agent
         #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1389,24 +1477,13 @@ impl Render for ToolAccessMap {
                     ToolStand::Failed => p.red.opacity(0.45),
                     _ => p.line,
                 };
-
-                let base = div()
-                    .id(pro_eid(&self.id, format!("tmap-{}", tool.id)))
+                let (t_vis, t_spt) = tool_springs.get(&tool.id).copied().unwrap_or((1.0, 0.0));
+                let inner_content = div()
                     .when_some(card_width, |d, w| d.w(px(w)))
                     .when(card_width.is_none(), |d| d.w_full())
                     .h(px(46.))
                     .pl(px(8.))
                     .pr(px(10.))
-                    .rounded(px(9.))
-                    .bg(if blocked {
-                        transparent_black()
-                    } else {
-                        card_bg
-                    })
-                    .border_1()
-                    .border_color(bdr_col)
-                    .when(!blocked && !p.dark, |d| d.shadow_xs())
-                    .opacity(if blocked { 0.45 } else { 1.0 })
                     .flex()
                     .flex_col()
                     .justify_center()
@@ -1462,26 +1539,53 @@ impl Render for ToolAccessMap {
                     );
 
                 let el = if blocked {
-                    base.role(Role::Status)
+                    div()
+                        .id(pro_eid(&self.id, format!("tmap-{}", tool.id)))
+                        .role(Role::Status)
                         .aria_label(format!("{tname}, {}", tr(cx, "no access", "无访问权限")))
+                        .when_some(card_width, |d, w| d.w(px(w)))
+                        .when(card_width.is_none(), |d| d.w_full())
+                        .h(px(46.))
+                        .rounded(px(9.))
+                        .border_1()
+                        .border_color(bdr_col)
+                        .opacity(t_vis)
+                        .child(inner_content)
                         .into_any_element()
                 } else {
                     let tid_open = tool.id.clone();
-                    activate(
-                        base.role(Role::Button)
-                            .aria_label(format!("{tname}, {call_n} calls"))
-                            .tab_index(0)
-                            .cursor_pointer()
-                            .hover(move |s| s.border_color(hover_border))
-                            .focus_visible(move |s| s.border_2().border_color(focus_col)),
+                    let tid_hov = tool.id.clone();
+                    let is_tool_sel = self.open_tool_id.as_ref() == Some(&tool.id);
+                    pro_tactile(
+                        pro_eid(&self.id, format!("tmap-{}", tool.id)),
+                        format!("{tname}, {call_n} calls"),
+                        9.0,
+                        card_bg,
+                        pro_mix_color(card_bg, brand_fg, if p.dark { 0.06 } else { 0.03 }),
+                        bdr_col,
+                        hover_border,
+                        is_tool_sel,
+                        inner_content,
                         cx,
                         move |this, _, cx| {
                             this.open_tool(Some(tid_open.clone()), cx);
                         },
                     )
+                    .when_some(card_width, |d, w| d.w(px(w)))
+                    .when(card_width.is_none(), |d| d.w_full())
+                    .h(px(46.))
+                    .when(!p.dark, |d| d.shadow_xs())
+                    .opacity(t_vis)
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        let next = (*inside).then(|| tid_hov.clone());
+                        if this.hovered_tool_id != next {
+                            this.hovered_tool_id = next;
+                            cx.notify();
+                        }
+                    }))
                     .into_any_element()
                 };
-                (el, stand)
+                (el, stand, t_vis, t_spt)
             };
 
         let left_n = self.tools.len().div_ceil(2);
@@ -1493,7 +1597,7 @@ impl Render for ToolAccessMap {
         let map_layer = if narrow {
             let mut grid = div().w_full().flex().flex_col().gap(px(8.));
             for tool in &self.tools {
-                let (btn, _) = build_tool_btn(tool, None, cx);
+                let (btn, _, _, _) = build_tool_btn(tool, None, cx);
                 grid = grid.child(btn);
             }
             div()
@@ -1511,8 +1615,8 @@ impl Render for ToolAccessMap {
             let agent_y = (map_h - 86.0) * 0.5_f32;
             let cy_mid = map_h * 0.5_f32;
 
-            let mut left_specs: Vec<(f32, f32, ToolStand)> = Vec::with_capacity(left_n);
-            let mut right_specs: Vec<(f32, f32, ToolStand)> = Vec::with_capacity(right_n);
+            let mut left_specs: Vec<(f32, f32, ToolStand, f32, f32)> = Vec::with_capacity(left_n);
+            let mut right_specs: Vec<(f32, f32, ToolStand, f32, f32)> = Vec::with_capacity(right_n);
             let mut left_els: Vec<(f32, f32, AnyElement)> = Vec::with_capacity(left_n);
             let mut right_els: Vec<(f32, f32, AnyElement)> = Vec::with_capacity(right_n);
 
@@ -1520,8 +1624,8 @@ impl Render for ToolAccessMap {
             let left_top0 = cy_mid - left_span * 0.5_f32 - 23.0;
             for (i, tool) in self.tools.iter().take(left_n).enumerate() {
                 let ty = left_top0 + i as f32 * row_pitch;
-                let (el, stand) = build_tool_btn(tool, Some(tool_w), cx);
-                left_specs.push((0.0, ty, stand));
+                let (el, stand, vis, spt) = build_tool_btn(tool, Some(tool_w), cx);
+                left_specs.push((0.0, ty, stand, vis, spt));
                 left_els.push((0.0, ty, el));
             }
 
@@ -1530,8 +1634,8 @@ impl Render for ToolAccessMap {
             for (i, tool) in self.tools.iter().skip(left_n).enumerate() {
                 let tx = eff_w - tool_w;
                 let ty = right_top0 + i as f32 * row_pitch;
-                let (el, stand) = build_tool_btn(tool, Some(tool_w), cx);
-                right_specs.push((tx, ty, stand));
+                let (el, stand, vis, spt) = build_tool_btn(tool, Some(tool_w), cx);
+                right_specs.push((tx, ty, stand, vis, spt));
                 right_els.push((tx, ty, el));
             }
 
@@ -1545,11 +1649,17 @@ impl Render for ToolAccessMap {
                     let port_right = point(px(ox + agent_x + agent_w), px(oy + cy_mid));
 
                     let mut any_left_on = false;
-                    for (tx, ty, stand) in &left_specs {
+                    for (tx, ty, stand, vis, spt) in &left_specs {
                         let p_tool = point(px(ox + *tx + tool_w), px(oy + *ty + 23.0));
                         match stand {
                             ToolStand::NoAccess => {
-                                paint_dashed_elbow(port_left, p_tool, wire_off, 1.5, window);
+                                paint_dashed_elbow(
+                                    port_left,
+                                    p_tool,
+                                    wire_off.opacity(*vis),
+                                    1.5,
+                                    window,
+                                );
                             }
                             ToolStand::Failed => {
                                 any_left_on = true;
@@ -1558,36 +1668,56 @@ impl Render for ToolAccessMap {
                                     p_tool,
                                     8.0,
                                     false,
-                                    red_wire.opacity(0.68),
-                                    red_wire,
-                                    None,
-                                    1.5,
+                                    red_wire.opacity((0.68 + 0.25 * spt) * vis),
+                                    red_wire.opacity(*vis),
+                                    (*spt > 0.5).then_some(pulse_t).flatten(),
+                                    1.5 + 0.35 * spt,
                                     window,
                                 );
                             }
                             ToolStand::ActiveNow => {
                                 any_left_on = true;
                                 pro_connector_pulse(
-                                    port_left, p_tool, 8.0, false, wire_used, wire_glint, pulse_t,
-                                    1.6, window,
+                                    port_left,
+                                    p_tool,
+                                    8.0,
+                                    false,
+                                    wire_used.opacity(*vis),
+                                    wire_glint.opacity(*vis),
+                                    pulse_t,
+                                    1.6 + 0.35 * spt,
+                                    window,
                                 );
                             }
                             ToolStand::Used | ToolStand::Idle => {
                                 any_left_on = true;
                                 pro_connector_pulse(
-                                    port_left, p_tool, 8.0, false, wire_used, wire_glint, None,
-                                    1.5, window,
+                                    port_left,
+                                    p_tool,
+                                    8.0,
+                                    false,
+                                    wire_used.opacity(*vis),
+                                    wire_glint.opacity(*vis),
+                                    (*spt > 0.5).then_some(pulse_t).flatten(),
+                                    1.5 + 0.35 * spt,
+                                    window,
                                 );
                             }
                         }
                     }
 
                     let mut any_right_on = false;
-                    for (tx, ty, stand) in &right_specs {
+                    for (tx, ty, stand, vis, spt) in &right_specs {
                         let p_tool = point(px(ox + *tx), px(oy + *ty + 23.0));
                         match stand {
                             ToolStand::NoAccess => {
-                                paint_dashed_elbow(port_right, p_tool, wire_off, 1.5, window);
+                                paint_dashed_elbow(
+                                    port_right,
+                                    p_tool,
+                                    wire_off.opacity(*vis),
+                                    1.5,
+                                    window,
+                                );
                             }
                             ToolStand::Failed => {
                                 any_right_on = true;
@@ -1596,25 +1726,39 @@ impl Render for ToolAccessMap {
                                     p_tool,
                                     8.0,
                                     false,
-                                    red_wire.opacity(0.68),
-                                    red_wire,
-                                    None,
-                                    1.5,
+                                    red_wire.opacity((0.68 + 0.25 * spt) * vis),
+                                    red_wire.opacity(*vis),
+                                    (*spt > 0.5).then_some(pulse_t).flatten(),
+                                    1.5 + 0.35 * spt,
                                     window,
                                 );
                             }
                             ToolStand::ActiveNow => {
                                 any_right_on = true;
                                 pro_connector_pulse(
-                                    port_right, p_tool, 8.0, false, wire_used, wire_glint, pulse_t,
-                                    1.6, window,
+                                    port_right,
+                                    p_tool,
+                                    8.0,
+                                    false,
+                                    wire_used.opacity(*vis),
+                                    wire_glint.opacity(*vis),
+                                    pulse_t,
+                                    1.6 + 0.35 * spt,
+                                    window,
                                 );
                             }
                             ToolStand::Used | ToolStand::Idle => {
                                 any_right_on = true;
                                 pro_connector_pulse(
-                                    port_right, p_tool, 8.0, false, wire_used, wire_glint, None,
-                                    1.5, window,
+                                    port_right,
+                                    p_tool,
+                                    8.0,
+                                    false,
+                                    wire_used.opacity(*vis),
+                                    wire_glint.opacity(*vis),
+                                    (*spt > 0.5).then_some(pulse_t).flatten(),
+                                    1.5 + 0.35 * spt,
+                                    window,
                                 );
                             }
                         }
@@ -1730,7 +1874,13 @@ impl Render for ToolAccessMap {
                             spinning_ring(11., 1.5, brand_fg, elapsed_s, !reduced)
                         }
                         AccessRunStatus::Failed => pro_icon(ProIcon::AlertTriangle, 13., p.red_ink),
-                        _ => pro_icon(ProIcon::Check, 13., p.green_ink),
+                        _ => pro_check_draw(
+                            pro_eid(&self.id, format!("crow-chk-{cid}")),
+                            true,
+                            13.0,
+                            false,
+                            p.green_ink,
+                        ),
                     };
                     let compact_in = call
                         .input
@@ -1743,61 +1893,65 @@ impl Render for ToolAccessMap {
                         .map(format_duration)
                         .unwrap_or_else(|| call.at.to_string());
 
-                    call_list = call_list.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("crow-{cid}")))
-                            .role(Role::ListBoxOption)
-                            .aria_selected(active)
-                            .tab_index(if active { 0 } else { -1 })
-                            .h(px(30.))
-                            .pl(px(6.))
-                            .pr(px(8.))
-                            .rounded(px(7.))
-                            .bg(if active { fill_bg } else { transparent_black() })
-                            .hover(move |s| s.bg(if active { fill_bg } else { well_bg }))
-                            .focus_visible(move |s| s.border_1().border_color(focus_col))
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .gap(px(7.))
-                            .child(status_ic)
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .font_family("Menlo")
-                                    .text_size(px(11.5))
-                                    .text_color(p.ink)
-                                    .child(compact_in),
-                            )
-                            .when(call.replay, |d| {
-                                d.child(
+                    call_list = call_list.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("crow-{cid}")),
+                            compact_in.clone(),
+                            7.0,
+                            if active { fill_bg } else { transparent_black() },
+                            if active { fill_bg } else { well_bg },
+                            transparent_black(),
+                            transparent_black(),
+                            active,
+                            div()
+                                .w_full()
+                                .h(px(30.))
+                                .pl(px(6.))
+                                .pr(px(8.))
+                                .flex()
+                                .items_center()
+                                .gap(px(7.))
+                                .child(status_ic)
+                                .child(
                                     div()
-                                        .h(px(16.))
-                                        .px(px(5.))
-                                        .rounded(px(4.))
-                                        .bg(brand_bg)
-                                        .text_color(brand_fg)
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .flex()
-                                        .items_center()
-                                        .child(tr(cx, "Replay", "重放")),
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .font_family("Menlo")
+                                        .text_size(px(11.5))
+                                        .text_color(p.ink)
+                                        .child(compact_in),
                                 )
-                            })
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_size(px(11.))
-                                    .text_color(p.muted)
-                                    .child(time_lbl),
-                            ),
-                        cx,
-                        move |this, _, cx| {
-                            this.select_call(cid_click.clone(), cx);
-                        },
-                    ));
+                                .when(call.replay, |d| {
+                                    d.child(
+                                        div()
+                                            .h(px(16.))
+                                            .px(px(5.))
+                                            .rounded(px(4.))
+                                            .bg(brand_bg)
+                                            .text_color(brand_fg)
+                                            .text_size(px(10.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .flex()
+                                            .items_center()
+                                            .child(tr(cx, "Replay", "重放")),
+                                    )
+                                })
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(11.))
+                                        .text_color(p.muted)
+                                        .child(time_lbl),
+                                ),
+                            cx,
+                            move |this, _, cx| {
+                                this.select_call(cid_click.clone(), cx);
+                            },
+                        )
+                        .role(Role::ListBoxOption)
+                        .aria_selected(active),
+                    );
                 }
             }
 
@@ -1915,7 +2069,15 @@ impl Render for ToolAccessMap {
                         .text_color(p.muted)
                         .child(out_header),
                 )
-                .child(out_box)
+                .child(pro_view_transition(
+                    pro_eid(&self.id, "out-box-vtx"),
+                    format!(
+                        "{}:{:?}",
+                        seed_key,
+                        selected_call.as_ref().map(|c| c.status)
+                    ),
+                    out_box,
+                ))
                 .child(
                     div()
                         .pt(px(2.))
@@ -2010,13 +2172,16 @@ impl Render for ToolAccessMap {
                                     .child(tool_def.description.clone()),
                             )
                         })
-                        .child(
-                            div()
-                                .ml_auto()
-                                .text_size(px(12.))
-                                .text_color(p.muted)
-                                .child(format!("{} ×", grant.calls.len())),
-                        ),
+                        .child(div().ml_auto().child(pro_rolling_number(
+                            pro_eid(&self.id, "drawer-call-cnt"),
+                            grant.calls.len() as f64,
+                            0,
+                            "",
+                            " ×",
+                            12.,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        ))),
                 )
                 .child(if narrow {
                     div()

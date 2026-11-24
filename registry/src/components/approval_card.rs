@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_person_avatar,
-        pro_skeleton_bar, pro_toast_banner, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mix_color,
+        pro_person_avatar, pro_skeleton_bar, pro_swap_label, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -24,8 +24,6 @@ use web_time::Instant;
 
 const SPARK_BOT_SVG: &str = r#"<path d="M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7-5.6-1.9L10.1 9 12 3.5Z" fill="currentColor"></path>"#;
 const MAIL_STROKE_SVG: &str = r#"<path d="M4 6.5h16v11H4z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const BOX_CHECK_SVG: &str = r#"<path d="M3.5 8.3 6.6 11.2 12.5 4.8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const RESOLVED_CHECK_SVG: &str = r#"<path d="M4 8.3 6.8 11 12 5.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const RESOLVED_CROSS_SVG: &str = r#"<path d="M4.8 4.8 11.2 11.2M11.2 4.8 4.8 11.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>"#;
 
 /// Risk tier displayed in the top-right badge of [`ApprovalCard`].
@@ -215,6 +213,193 @@ impl RenderOnce for CountdownRing {
     }
 }
 
+#[derive(IntoElement)]
+struct ApcTactileBtn {
+    id: ElementId,
+    aria: SharedString,
+    height: f32,
+    pad_l: f32,
+    pad_r: f32,
+    radius: f32,
+    rest_bg: Hsla,
+    hover_bg: Hsla,
+    rest_fg: Hsla,
+    hover_fg: Hsla,
+    border: Hsla,
+    elevated: bool,
+    flex_fill: bool,
+    gap: f32,
+    font_size: f32,
+    content: AnyElement,
+    #[allow(clippy::type_complexity)]
+    on_click: Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
+}
+
+impl RenderOnce for ApcTactileBtn {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let state_id = pro_eid(&self.id, "apc-tact");
+        let st = w.use_keyed_state(state_id, cx, |_, _| {
+            (Slide::snappy(0.0), Slide::snappy(0.0))
+        });
+        let (hov, down) = st.update(cx, |s, cx| {
+            (
+                s.0.get(w, cx).clamp(0.0, 1.0),
+                s.1.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
+        let face_bg = pro_mix_color(self.rest_bg, self.hover_bg, hov);
+        let fg = pro_mix_color(self.rest_fg, self.hover_fg, hov);
+        let border = self.border;
+        let radius = self.radius;
+        let dark = p.dark;
+        let elevated = self.elevated;
+
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 1.0 || bh <= 1.0 {
+                    return;
+                }
+                let ix = (bw * 0.022 * down).clamp(0.0, 2.0);
+                let iy = (bh * 0.042 * down).clamp(0.0, 1.4);
+                let rect = Bounds::new(
+                    point(bounds.origin.x + px(ix), bounds.origin.y + px(iy)),
+                    size(px((bw - 2.0 * ix).max(1.0)), px((bh - 2.0 * iy).max(1.0))),
+                );
+                let r = px(radius)
+                    .min(rect.size.width / 2.0)
+                    .min(rect.size.height / 2.0);
+                if !dark && elevated && hov > 0.02 && down < 0.7 {
+                    let sh = 0.045 * hov * (1.0 - down);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(point(rect.origin.x, rect.origin.y + px(1.0)), rect.size),
+                            black().opacity(sh),
+                        )
+                        .corner_radii(r),
+                    );
+                }
+                if face_bg.a > 0.001 || border.a > 0.001 {
+                    window.paint_quad(quad(
+                        rect,
+                        Corners::all(r),
+                        face_bg,
+                        Edges::all(px(if border.a > 0.001 { 1.0 } else { 0.0 })),
+                        border,
+                        BorderStyle::Solid,
+                    ));
+                }
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        let on_click = self.on_click;
+        div()
+            .id(self.id)
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .tab_index(0)
+            .when(self.flex_fill, |d| d.flex_1())
+            .h(px(self.height))
+            .pl(px(self.pad_l))
+            .pr(px(self.pad_r))
+            .relative()
+            .rounded(px(radius))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(self.font_size))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(fg)
+            .whitespace_nowrap()
+            .cursor_pointer()
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.0.set(if *inside { 1.0 } else { 0.0 }, cx);
+                        if !*inside {
+                            s.1.set(0.0, cx);
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(1.0, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(0.0, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up_out(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.1.set(0.0, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_key_down({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | " " | "space") {
+                        st.update(cx, |s, cx| {
+                            s.1.set(1.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_key_up({
+                let st = st.clone();
+                move |ev, w, cx| {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | " " | "space") {
+                        st.update(cx, |s, cx| {
+                            s.1.set(0.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_click(move |ev, w, cx| (on_click)(ev, w, cx))
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(0.5 * down))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(self.gap))
+                    .child(self.content),
+            )
+    }
+}
+
 /// Human-in-the-loop agent action approval card with pausing countdown and resolved row morph.
 pub struct ApprovalCard {
     id: ElementId,
@@ -230,7 +415,7 @@ pub struct ApprovalCard {
     details: Vec<ApprovalDetail>,
     allow_always: bool,
     always_checked: bool,
-    always_slide: Slide,
+    always_hover: Slide,
     shortcuts: bool,
     editable: bool,
     editing: bool,
@@ -244,8 +429,6 @@ pub struct ApprovalCard {
     accumulated_secs: f32,
     last_tick: Option<Instant>,
     card_hovered: bool,
-    approve_hovered: bool,
-    deny_hovered: bool,
     resolved_clock: PhaseClock,
     measured_width: Rc<Cell<f32>>,
     toast: Option<(SharedString, Instant)>,
@@ -273,7 +456,7 @@ impl ApprovalCard {
             details: default_details(),
             allow_always: true,
             always_checked: false,
-            always_slide: Slide::snappy(0.0),
+            always_hover: Slide::snappy(0.0),
             shortcuts: true,
             editable: false,
             editing: false,
@@ -287,8 +470,6 @@ impl ApprovalCard {
             accumulated_secs: 0.0,
             last_tick: None,
             card_hovered: false,
-            approve_hovered: false,
-            deny_hovered: false,
             resolved_clock: PhaseClock::default(),
             measured_width: Rc::new(Cell::new(420.0)),
             toast: None,
@@ -485,8 +666,6 @@ impl ApprovalCard {
             return;
         }
         self.always_checked = !self.always_checked;
-        self.always_slide
-            .duration(f32::from(self.always_checked), 0.18, cx);
         cx.emit(ApprovalCardEvent::AlwaysAllowChanged(self.always_checked));
         cx.notify();
     }
@@ -629,7 +808,7 @@ impl Render for ApprovalCard {
         let card_focused = self.focus.is_focused(w) || self.editor_focused;
         let paused = self.card_hovered || card_focused;
         let countdown = self.tick_countdown(paused, w, cx);
-        let check_anim = self.always_slide.get(w, cx).clamp(0.0, 1.0);
+        let always_hov = self.always_hover.get(w, cx).clamp(0.0, 1.0);
         let cw = self.measured_width.get();
         let compact_buttons = cw < 400.0;
         let ultra_narrow = cw < 340.0;
@@ -929,12 +1108,11 @@ impl Render for ApprovalCard {
             );
         }
 
-        // Always allow checkbox row
+        // Always allow checkbox row (`pro_check_draw` + `Slide::snappy` hover tint)
         let checkbox_el = self.allow_always.then(|| {
             let checked = self.always_checked;
-            let box_bg = pro_mix_color(card_bg, p.primary, check_anim);
-            let box_bdr = pro_mix_color(p.line_strong, p.primary, check_anim);
             let always_lbl = tr(cx, "Always allow this action", "始终允许执行此操作");
+            let label_ink = pro_mix_color(p.text, p.ink, always_hov);
             div()
                 .id(pro_eid(&self.id, "always-chk"))
                 .role(Role::CheckBox)
@@ -951,6 +1129,10 @@ impl Render for ApprovalCard {
                 .gap(px(8.0))
                 .cursor_pointer()
                 .focus_visible(move |s| s.rounded(px(5.0)).border_1().border_color(p.focus))
+                .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                    this.always_hover.set(if *inside { 1.0 } else { 0.0 }, cx);
+                    cx.notify();
+                }))
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.toggle_always(cx);
                 }))
@@ -960,31 +1142,18 @@ impl Render for ApprovalCard {
                         cx.stop_propagation();
                     }
                 }))
-                .child(
-                    div()
-                        .size(px(16.0))
-                        .flex_none()
-                        .rounded(px(5.0))
-                        .bg(box_bg)
-                        .border_1()
-                        .border_color(box_bdr)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(check_anim > 0.05, |d| {
-                            d.child(div().opacity(check_anim).child(pro_svg(
-                                "0 0 16 16",
-                                BOX_CHECK_SVG,
-                                11.0,
-                                p.on_primary,
-                            )))
-                        }),
-                )
+                .child(pro_check_draw(
+                    pro_eid(&self.id, "always-chk-draw"),
+                    checked,
+                    16.0,
+                    true,
+                    p.primary,
+                ))
                 .child(
                     div()
                         .text_size(px(13.0))
                         .line_height(px(18.0))
-                        .text_color(p.text)
+                        .text_color(label_ink)
                         .child(always_lbl),
                 )
         });
@@ -1042,24 +1211,30 @@ impl Render for ApprovalCard {
             } else {
                 tr(cx, "Edit", "编辑")
             };
-            div()
-                .id(pro_eid(&self.id, "edit-btn"))
-                .role(Role::Button)
-                .aria_label(edit_lbl)
-                .tab_index(0)
-                .h(px(34.0))
-                .px(px(11.0))
-                .rounded(px(10.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.text)
-                .cursor_pointer()
-                .hover(move |s| s.bg(quiet_hover).text_color(p.ink))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .on_click(cx.listener(|this, _: &ClickEvent, w, cx| {
+            ApcTactileBtn {
+                id: pro_eid(&self.id, "edit-btn"),
+                aria: edit_lbl.into(),
+                height: 34.0,
+                pad_l: 11.0,
+                pad_r: 11.0,
+                radius: 10.0,
+                rest_bg: transparent_black(),
+                hover_bg: quiet_hover,
+                rest_fg: p.text,
+                hover_fg: p.ink,
+                border: transparent_black(),
+                elevated: false,
+                flex_fill: false,
+                gap: 5.0,
+                font_size: 13.0,
+                content: pro_swap_label(
+                    pro_eid(&self.id, "edit-swap-lbl"),
+                    edit_lbl,
+                    13.0,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ),
+                on_click: Rc::new(cx.listener(|this, _: &ClickEvent, w, cx| {
                     this.editing = !this.editing;
                     if this.editing {
                         this.ensure_editor(w, cx);
@@ -1070,43 +1245,15 @@ impl Render for ApprovalCard {
                     }
                     cx.emit(ApprovalCardEvent::EditToggled(this.editing));
                     cx.notify();
-                }))
-                .child(edit_lbl)
+                })),
+            }
         });
 
         let deny_lbl = tr(cx, "Deny", "拒绝");
-        let deny_bg = if self.deny_hovered {
-            quiet_hover
-        } else {
-            transparent_black()
-        };
-        let deny_btn = div()
-            .id(pro_eid(&self.id, "deny-btn"))
-            .role(Role::Button)
-            .aria_label(deny_lbl)
-            .tab_index(0)
-            .when(compact_buttons, |d| d.flex_1())
-            .h(px(34.0))
-            .pl(px(12.0))
-            .pr(px(if show_kbd { 8.0 } else { 12.0 }))
-            .rounded(px(10.0))
-            .bg(deny_bg)
+        let deny_inner = div()
             .flex()
             .items_center()
-            .justify_center()
             .gap(px(7.0))
-            .text_size(px(13.0))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(p.ink)
-            .cursor_pointer()
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
-            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                this.deny_hovered = *inside;
-                cx.notify();
-            }))
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.deny(ApprovalDenyReason::User, cx);
-            }))
             .child(deny_lbl)
             .when(show_kbd, |d| {
                 d.child(
@@ -1124,44 +1271,33 @@ impl Render for ApprovalCard {
                         .child("Esc"),
                 )
             });
+        let deny_btn = ApcTactileBtn {
+            id: pro_eid(&self.id, "deny-btn"),
+            aria: deny_lbl.into(),
+            height: 34.0,
+            pad_l: 12.0,
+            pad_r: if show_kbd { 8.0 } else { 12.0 },
+            radius: 10.0,
+            rest_bg: transparent_black(),
+            hover_bg: quiet_hover,
+            rest_fg: p.ink,
+            hover_fg: p.strong,
+            border: transparent_black(),
+            elevated: false,
+            flex_fill: compact_buttons,
+            gap: 7.0,
+            font_size: 13.0,
+            content: deny_inner.into_any_element(),
+            on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.deny(ApprovalDenyReason::User, cx);
+            })),
+        };
 
         let approve_lbl = tr(cx, "Approve", "批准");
-        let approve_bg = if self.approve_hovered {
-            pro_mix_color(p.primary, p.on_primary, 0.12)
-        } else {
-            p.primary
-        };
-        let approve_btn = div()
-            .id(pro_eid(&self.id, "approve-btn"))
-            .role(Role::Button)
-            .aria_label(approve_lbl)
-            .tab_index(0)
-            .when(compact_buttons, |d| d.flex_1())
-            .h(px(34.0))
-            .pl(px(12.0))
-            .pr(px(if show_kbd || countdown.is_some() {
-                9.0
-            } else {
-                13.0
-            }))
-            .rounded(px(10.0))
-            .bg(approve_bg)
+        let approve_inner = div()
             .flex()
             .items_center()
-            .justify_center()
             .gap(px(7.0))
-            .text_size(px(13.0))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(p.on_primary)
-            .cursor_pointer()
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
-            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                this.approve_hovered = *inside;
-                cx.notify();
-            }))
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.approve(cx);
-            }))
             .when_some(countdown, |d, (rem, ratio)| {
                 let ring_fg = if rem <= 10 {
                     p.amber
@@ -1194,6 +1330,31 @@ impl Render for ApprovalCard {
                         .child("⌘↵"),
                 )
             });
+        let approve_btn = ApcTactileBtn {
+            id: pro_eid(&self.id, "approve-btn"),
+            aria: approve_lbl.into(),
+            height: 34.0,
+            pad_l: 12.0,
+            pad_r: if show_kbd || countdown.is_some() {
+                9.0
+            } else {
+                13.0
+            },
+            radius: 10.0,
+            rest_bg: p.primary,
+            hover_bg: pro_mix_color(p.primary, p.on_primary, 0.12),
+            rest_fg: p.on_primary,
+            hover_fg: p.on_primary,
+            border: transparent_black(),
+            elevated: true,
+            flex_fill: compact_buttons,
+            gap: 7.0,
+            font_size: 13.0,
+            content: approve_inner.into_any_element(),
+            on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.approve(cx);
+            })),
+        };
 
         let actions_row = div()
             .when(compact_buttons, |d| d.w_full())
@@ -1360,6 +1521,8 @@ impl Render for ApprovalCard {
         };
         let is_approved = self.status == ApprovalStatus::Approved;
         let is_timeout = self.deny_reason == Some(ApprovalDenyReason::Timeout);
+        let resolved_chk_on =
+            is_approved && (disabled_motion(cx) || self.resolved_clock.age(cx) > 0.012);
         let (mark_bg, mark_fg): (Hsla, Hsla) = if is_approved {
             (p.green_soft, p.green_ink)
         } else if is_timeout {
@@ -1379,6 +1542,12 @@ impl Render for ApprovalCard {
             tr(cx, "Denied", "已拒绝").into()
         };
         let undo_lbl = tr(cx, "Undo", "撤销");
+        let undo_inner = div()
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .child(pro_icon(ProIcon::Undo, 12.0, p.muted))
+            .child(undo_lbl);
         let resolved_row = div()
             .w_full()
             .min_h(px(48.0))
@@ -1387,7 +1556,15 @@ impl Render for ApprovalCard {
             .flex()
             .items_center()
             .gap(px(10.0))
-            .child(
+            .child(if is_approved {
+                pro_check_draw(
+                    pro_eid(&self.id, "resolved-chk"),
+                    resolved_chk_on,
+                    22.0,
+                    false,
+                    p.green,
+                )
+            } else {
                 div()
                     .size(px(22.0))
                     .flex_none()
@@ -1397,14 +1574,13 @@ impl Render for ApprovalCard {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(if is_approved {
-                        pro_svg("0 0 16 16", RESOLVED_CHECK_SVG, 13.0, mark_fg)
-                    } else if is_timeout {
+                    .child(if is_timeout {
                         pro_icon(ProIcon::Clock, 13.0, mark_fg)
                     } else {
                         pro_svg("0 0 16 16", RESOLVED_CROSS_SVG, 12.0, mark_fg)
-                    }),
-            )
+                    })
+                    .into_any_element()
+            })
             .child(
                 div()
                     .flex_1()
@@ -1415,38 +1591,34 @@ impl Render for ApprovalCard {
                     .truncate()
                     .child(title_str),
             )
-            .child(
-                div()
-                    .flex_none()
-                    .text_size(px(12.5))
-                    .text_color(p.muted)
-                    .whitespace_nowrap()
-                    .child(status_word),
-            )
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "reset-btn"))
-                    .role(Role::Button)
-                    .aria_label(undo_lbl)
-                    .tab_index(0)
-                    .h(px(26.0))
-                    .px(px(8.0))
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(4.0))
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.text)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(quiet_hover).text_color(p.ink))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.reset(cx);
-                    }))
-                    .child(pro_icon(ProIcon::Undo, 12.0, p.muted))
-                    .child(undo_lbl),
-            );
+            .child(div().flex_none().child(pro_swap_label(
+                pro_eid(&self.id, "res-status-lbl"),
+                status_word,
+                12.5,
+                FontWeight::NORMAL,
+                p.muted,
+            )))
+            .child(ApcTactileBtn {
+                id: pro_eid(&self.id, "reset-btn"),
+                aria: undo_lbl.into(),
+                height: 26.0,
+                pad_l: 8.0,
+                pad_r: 8.0,
+                radius: 6.0,
+                rest_bg: transparent_black(),
+                hover_bg: quiet_hover,
+                rest_fg: p.text,
+                hover_fg: p.ink,
+                border: transparent_black(),
+                elevated: false,
+                flex_fill: false,
+                gap: 4.0,
+                font_size: 12.0,
+                content: undo_inner.into_any_element(),
+                on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.reset(cx);
+                })),
+            });
 
         let outer_shell = if self.placement == ApprovalActionsPlacement::Tray {
             div()

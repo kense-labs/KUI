@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_toast_banner,
-        pro_view_transition, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     primitives::{
         control::activate,
@@ -496,6 +496,29 @@ impl PromptLibrary {
         true
     }
 
+    fn focus_or_fill_variable(&mut self, var_name: &str, w: &mut Window, cx: &mut Context<Self>) {
+        let Some(tpl) = self.active_template().cloned() else {
+            return;
+        };
+        let tid = tpl.id.clone();
+        let cur_empty = self.variable_value(&tid, var_name).trim().is_empty();
+        if cur_empty {
+            let sample = tpl
+                .variables
+                .get(var_name)
+                .and_then(|s| s.default_value.as_ref().map(SharedString::to_string))
+                .unwrap_or_else(|| sample_for_variable(var_name).to_string());
+            self.set_variable(&tid, var_name, sample, Some(w), cx);
+        }
+        if let Some(entry) = self
+            .var_editors
+            .iter()
+            .find(|e| e.template_id == tid && e.var_name.as_ref() == var_name && e.occurrence == 0)
+        {
+            entry.editor.clone().update(cx, |e, cx| e.focus(w, cx));
+        }
+    }
+
     fn focus_next_unfilled_or_use(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         let Some(tpl) = self.active_template() else {
             return;
@@ -773,7 +796,10 @@ impl Render for PromptLibrary {
                         .justify_between()
                         .gap(px(6.))
                         .cursor_pointer()
-                        .when(!selected, move |d| d.hover(move |s| s.bg(p.hover)))
+                        .when(!selected, move |d| {
+                            d.hover(move |s| s.bg(p.hover.opacity(0.45)))
+                        })
+                        .active(|s| s.top(px(1.)))
                         .focus_visible(move |s| s.border_1().border_color(p.focus))
                         .when(selected, |d| d.child(pro_mark_selected(&list_sensor)))
                         .child(
@@ -896,6 +922,61 @@ impl Render for PromptLibrary {
             )
             .to_string();
 
+            let mut var_pills_row = div()
+                .mt(px(8.))
+                .w_full()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(5.));
+            for v in &unique_vars {
+                let v_str = v.clone();
+                let v_click = v.to_string();
+                let is_on = !self.variable_value(&tid, v.as_ref()).trim().is_empty();
+                var_pills_row = var_pills_row.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("var-pill-{tid}-{v_str}")),
+                        format!("[{v_str}]"),
+                        5.,
+                        if is_on { p.accent_soft } else { p.chip },
+                        if is_on {
+                            p.blue.opacity(0.18)
+                        } else {
+                            p.chip_hover
+                        },
+                        if is_on { p.blue.opacity(0.34) } else { p.line },
+                        p.line_strong,
+                        is_on,
+                        div()
+                            .h(px(22.))
+                            .px(px(6.5))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .whitespace_nowrap()
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("var-chk-{tid}-{v_str}")),
+                                is_on,
+                                12.,
+                                false,
+                                p.blue,
+                            ))
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(if is_on { p.blue } else { p.text })
+                                    .child(format!("[{v_str}]")),
+                            ),
+                        cx,
+                        move |this, w, cx| {
+                            this.focus_or_fill_variable(&v_click, w, cx);
+                        },
+                    )
+                    .flex_none(),
+                );
+            }
+
             let panel_head = div()
                 .w_full()
                 .flex()
@@ -928,9 +1009,13 @@ impl Render for PromptLibrary {
                         .flex()
                         .items_center()
                         .gap(px(7.))
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .child(count_text)
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "fill-cnt-lbl"),
+                            count_text,
+                            12.,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        ))
                         .child(mini_bars),
                 );
 
@@ -1067,6 +1152,7 @@ impl Render for PromptLibrary {
                 .flex()
                 .flex_col()
                 .child(panel_head)
+                .when(!unique_vars.is_empty(), |d| d.child(var_pills_row))
                 .child(sentence_flow)
                 .child(
                     div()
@@ -1105,107 +1191,169 @@ impl Render for PromptLibrary {
         let (filled_cnt, total_cnt) = self.active_fill_progress();
         let missing = total_cnt.saturating_sub(filled_cnt);
         let ready = missing == 0;
-        let est_tokens = self.estimated_tokens() as f64;
+        let est_tokens = self.estimated_tokens();
+        let tok_text = format!("~ {est_tokens} tokens");
 
-        let status_note = if ready {
-            div()
-                .text_size(px(12.))
-                .text_color(p.green_ink)
-                .child(tr(cx, "All variables filled", "变量已全部填妥"))
-                .into_any_element()
+        let status_str = if ready {
+            tr(cx, "All variables filled", "变量已全部填妥").to_string()
         } else {
-            div()
-                .text_size(px(12.))
-                .text_color(p.muted)
-                .child(
-                    tr(
-                        cx,
-                        &format!(
-                            "{missing} variable{} missing",
-                            if missing == 1 { "" } else { "s" }
-                        ),
-                        &format!("还差 {missing} 个变量待填写"),
-                    )
-                    .to_string(),
-                )
-                .into_any_element()
+            tr(
+                cx,
+                &format!(
+                    "{missing} variable{} missing",
+                    if missing == 1 { "" } else { "s" }
+                ),
+                &format!("还差 {missing} 个变量待填写"),
+            )
+            .to_string()
         };
+        let status_note = pro_swap_label(
+            pro_eid(&self.id, "foot-status-lbl"),
+            status_str,
+            12.,
+            FontWeight::NORMAL,
+            if ready { p.green_ink } else { p.muted },
+        );
 
-        let copy_btn = activate(
+        let copy_lbl = tr(
+            cx,
+            if recently_copied { "Copied" } else { "Copy" },
+            if recently_copied {
+                "已复制"
+            } else {
+                "复制"
+            },
+        );
+        let copy_icon_slot = div()
+            .relative()
+            .size(px(14.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .opacity(if recently_copied { 0.0 } else { 1.0 })
+                    .child(pro_icon(ProIcon::Copy, 13.5, p.muted)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .opacity(if recently_copied { 1.0 } else { 0.0 })
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "foot-copy-chk"),
+                        recently_copied,
+                        14.,
+                        false,
+                        p.green,
+                    )),
+            );
+
+        let copy_btn = pro_tactile(
+            pro_eid(&self.id, "foot-copy"),
+            tr(cx, "Copy prompt", "复制提示词"),
+            6.,
+            if recently_copied {
+                p.green_soft
+            } else {
+                p.card
+            },
+            p.hover,
+            if recently_copied {
+                p.green.opacity(0.38)
+            } else {
+                p.line
+            },
+            p.line_strong,
+            recently_copied,
             div()
-                .id(pro_eid(&self.id, "foot-copy"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Copy prompt", "复制提示词"))
-                .tab_index(0)
                 .h(px(28.))
                 .pl(px(8.))
                 .pr(px(10.))
-                .flex_none()
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line)
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.strong)
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover).border_color(p.line_strong))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .child(if recently_copied {
-                    pro_icon(ProIcon::Check, 13.5, p.green)
-                } else {
-                    pro_icon(ProIcon::Copy, 13.5, p.muted)
-                })
-                .child(tr(
-                    cx,
-                    if recently_copied { "Copied" } else { "Copy" },
+                .whitespace_nowrap()
+                .child(copy_icon_slot)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "foot-copy-lbl"),
+                    copy_lbl,
+                    12.5,
+                    FontWeight::MEDIUM,
                     if recently_copied {
-                        "已复制"
+                        p.green_ink
                     } else {
-                        "复制"
+                        p.strong
                     },
                 )),
             cx,
             |this, _, cx| {
                 this.copy_prompt(cx);
             },
-        );
+        )
+        .flex_none();
 
         let use_text = tr(cx, self.use_label.as_ref(), self.use_label_zh.as_ref()).to_string();
-        let use_btn = activate(
+        let use_btn = if ready {
+            pro_tactile(
+                pro_eid(&self.id, "foot-use"),
+                use_text.clone(),
+                6.,
+                p.primary,
+                if p.dark {
+                    hsla(0., 0., 1., 0.88)
+                } else {
+                    hsla(0., 0., 0., 0.84)
+                },
+                transparent_black(),
+                transparent_black(),
+                false,
+                div()
+                    .h(px(28.))
+                    .pl(px(10.))
+                    .pr(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.on_primary)
+                    .whitespace_nowrap()
+                    .child(use_text)
+                    .child(pro_icon(ProIcon::ArrowRight, 13.5, p.on_primary)),
+                cx,
+                |this, _, cx| {
+                    this.use_prompt(cx);
+                },
+            )
+            .flex_none()
+            .into_any_element()
+        } else {
             div()
                 .id(pro_eid(&self.id, "foot-use"))
                 .role(Role::Button)
                 .aria_label(use_text.clone())
-                .tab_index(0)
+                .tab_index(-1)
                 .h(px(28.))
                 .pl(px(10.))
                 .pr(px(8.))
                 .flex_none()
                 .rounded(px(6.))
-                .bg(if ready { p.primary } else { p.chip })
+                .bg(p.chip)
                 .flex()
                 .items_center()
                 .gap(px(5.))
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(if ready { p.on_primary } else { p.muted })
-                .when(ready, |d| d.cursor_pointer().hover(|s| s.opacity(0.90)))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
+                .text_color(p.muted)
                 .child(use_text)
-                .child(pro_icon(
-                    ProIcon::ArrowRight,
-                    13.5,
-                    if ready { p.on_primary } else { p.muted },
-                )),
-            cx,
-            |this, _, cx| {
-                this.use_prompt(cx);
-            },
-        );
+                .child(pro_icon(ProIcon::ArrowRight, 13.5, p.muted))
+                .into_any_element()
+        };
 
         let footer = div()
             .w_full()
@@ -1224,12 +1372,9 @@ impl Render for PromptLibrary {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(pro_rolling_number(
-                        pro_eid(&self.id, "tok-roll"),
-                        est_tokens,
-                        0,
-                        "~ ",
-                        " tokens",
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "tok-swap"),
+                        tok_text,
                         12.,
                         FontWeight::NORMAL,
                         p.muted,
@@ -1280,6 +1425,23 @@ impl Render for PromptLibrary {
             )
             .child(pro_toast_banner(self.toast.clone()))
             .into_any_element()
+    }
+}
+
+fn sample_for_variable(name: &str) -> &'static str {
+    match name {
+        "product" => "KUI",
+        "version" => "v2.4",
+        "audience" => "design engineers",
+        "tone" => "clear and concise",
+        "length" => "150 words",
+        "team" => "platform team",
+        "language" => "Rust",
+        "error" => "borrowed value does not live long enough",
+        "recipient_role" => "VP of Engineering",
+        "company" => "Lumen Studio",
+        "problem" => "manual release handoffs",
+        _ => "example",
     }
 }
 

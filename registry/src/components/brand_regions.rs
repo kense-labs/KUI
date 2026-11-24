@@ -9,16 +9,14 @@ use crate::{
     components::{
         app_shell::{AppShell, AppShellEvent, AppShellLayout, ShellNavGroup, ShellNavItem},
         pro_chrome::{
-            ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
-            pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_toast_banner,
-            pro_underline_indicator, pro_view_transition, tr,
+            ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_icon_btn, pro_mark_selected,
+            pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+            pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+            pro_tactile, pro_toast_banner, pro_underline_indicator, pro_view_transition, tr,
         },
     },
     foundation::Theme,
-    primitives::{
-        control::activate,
-        pro_icons::{ProIcon, pro_icon, pro_raw_svg, pro_svg},
-    },
+    primitives::pro_icons::{ProIcon, pro_icon, pro_raw_svg, pro_svg},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc, sync::OnceLock};
@@ -675,7 +673,7 @@ fn paint_country_rings(
 fn paint_world_map_canvas(
     bounds: Bounds<Pixels>,
     dark: bool,
-    zoom: BrandMapZoom,
+    view_box: [f32; 4],
     shading: bool,
     skeleton: bool,
     empty: bool,
@@ -685,7 +683,7 @@ fn paint_world_map_canvas(
     alpha_mul: f32,
     window: &mut Window,
 ) {
-    let [vx, vy, vw, vh] = zoom.view_box();
+    let [vx, vy, vw, vh] = view_box;
     let bw = f32::from(bounds.size.width);
     let bh = f32::from(bounds.size.height);
     if bw <= 4.0 || bh <= 4.0 || vw <= 1.0 || vh <= 1.0 {
@@ -848,6 +846,7 @@ pub struct BrandRegionsScreen {
     selected_topics: Vec<SharedString>,
     selected_platforms: Vec<SharedString>,
     open_popover: Option<OpenPopover>,
+    last_popover: Option<OpenPopover>,
     loading: bool,
     empty: bool,
     toast: Option<(SharedString, Instant)>,
@@ -937,6 +936,7 @@ impl BrandRegionsScreen {
             selected_topics: Vec::new(),
             selected_platforms: Vec::new(),
             open_popover: None,
+            last_popover: None,
             loading: false,
             empty: false,
             toast: None,
@@ -1260,72 +1260,86 @@ impl BrandRegionsScreen {
         } else {
             p.line
         };
-        activate(
-            div()
-                .id(pro_eid(&self.id, format!("flt-{id_suffix}")))
-                .role(Role::Button)
-                .aria_label(label)
-                .aria_expanded(is_open)
-                .tab_index(0)
-                .relative()
-                .h(px(28.))
-                .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(border)
-                .hover(move |s| s.border_color(p.line_strong).bg(p.hover))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.ink)
-                .whitespace_nowrap()
-                .cursor_pointer()
-                .child(
-                    canvas(
-                        move |bounds, _, _| anchor_cell.set(Some(bounds)),
-                        |_, _, _, _| (),
-                    )
-                    .absolute()
-                    .inset_0(),
+        let inner = div()
+            .h(px(28.))
+            .px(px(10.))
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .text_size(px(13.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(p.ink)
+            .whitespace_nowrap()
+            .child(pro_svg("0 0 24 24", icon_svg, 14., p.muted))
+            .child(label)
+            .when(count > 0, |d| {
+                d.child(
+                    div()
+                        .min_w(px(16.))
+                        .h(px(16.))
+                        .px(px(4.))
+                        .rounded(px(4.))
+                        .bg(br_blue.opacity(0.12))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, format!("flt-cnt-{id_suffix}")),
+                            format!("{count}"),
+                            11.,
+                            FontWeight::MEDIUM,
+                            br_blue,
+                        )),
                 )
-                .child(pro_svg("0 0 24 24", icon_svg, 14., p.muted))
-                .child(label)
-                .when(count > 0, |d| {
-                    d.child(
-                        div()
-                            .min_w(px(16.))
-                            .h(px(16.))
-                            .px(px(4.))
-                            .rounded(px(4.))
-                            .bg(br_blue.opacity(0.12))
-                            .text_size(px(11.))
-                            .text_color(br_blue)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(format!("{count}")),
-                    )
-                })
-                .child(pro_icon(ProIcon::ChevronDown, 12., p.muted)),
+            })
+            .child(pro_icon(ProIcon::ChevronDown, 12., p.muted));
+
+        pro_tactile(
+            pro_eid(&self.id, format!("flt-{id_suffix}")),
+            label,
+            6.,
+            p.card,
+            p.hover,
+            border,
+            p.line_strong,
+            is_open || count > 0,
+            inner,
             cx,
             move |this, _, cx| {
-                this.open_popover = if this.open_popover == Some(pop) {
-                    None
+                if this.open_popover == Some(pop) {
+                    this.open_popover = None;
                 } else {
-                    Some(pop)
-                };
+                    this.open_popover = Some(pop);
+                    this.last_popover = Some(pop);
+                }
                 cx.notify();
             },
         )
+        .relative()
+        .flex_none()
+        .child(
+            canvas(
+                move |bounds, _, _| anchor_cell.set(Some(bounds)),
+                |_, _, _, _| (),
+            )
+            .absolute()
+            .inset_0(),
+        )
     }
 
-    fn render_popover_overlay(&self, pop: OpenPopover, cx: &Context<Self>) -> Option<AnyElement> {
+    fn render_popover_overlay(
+        &self,
+        pop: OpenPopover,
+        is_open: bool,
+        cx: &Context<Self>,
+    ) -> Option<AnyElement> {
         let pb = self.page_bounds.get()?;
         let p = ProPalette::get(cx);
+        let br_blue: Hsla = if p.dark {
+            rgb(0x4d8dff).into()
+        } else {
+            rgb(0x0060e2).into()
+        };
         let page_w = f32::from(pb.size.width);
 
         let (anchor, align_end, min_w) = match pop {
@@ -1348,9 +1362,6 @@ impl BrandRegionsScreen {
             .id(pro_eid(&self.id, "active-popover"))
             .role(Role::Menu)
             .occlude()
-            .absolute()
-            .left(px(left_px))
-            .top(px(top_px))
             .w(px(min_w))
             .p(px(4.))
             .rounded(px(10.))
@@ -1381,59 +1392,67 @@ impl BrandRegionsScreen {
                     if sep {
                         panel = panel.child(div().my(px(3.)).mx(px(6.)).h(px(1.)).bg(p.line));
                     }
-                    panel = panel.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("more-item-{ai}")))
-                            .role(Role::MenuItem)
-                            .tab_index(0)
-                            .h(px(32.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .text_size(px(13.))
-                            .text_color(p.text)
-                            .cursor_pointer()
-                            .child(pro_icon(ic, 14., p.muted))
-                            .child(lbl),
-                        cx,
-                        move |this, _, cx| {
-                            this.open_popover = None;
-                            let msg = match ai {
-                                0 => {
-                                    cx.emit(BrandRegionsEvent::ExportCsv);
-                                    tr(cx, "regions.csv downloaded", "已下载 regions.csv")
-                                }
-                                1 => tr(cx, "Link copied", "已复制链接"),
-                                _ => tr(cx, "Report settings open here", "报表设置将在此打开"),
-                            };
-                            this.toast = Some((msg.into(), Instant::now()));
-                            cx.notify();
-                        },
-                    ));
+                    panel = panel.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("more-item-{ai}")),
+                            lbl,
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            false,
+                            div()
+                                .h(px(32.))
+                                .px(px(10.))
+                                .flex()
+                                .items_center()
+                                .gap(px(9.))
+                                .text_size(px(13.))
+                                .text_color(p.text)
+                                .child(pro_icon(ic, 14., p.muted))
+                                .child(lbl),
+                            cx,
+                            move |this, _, cx| {
+                                this.open_popover = None;
+                                let msg = match ai {
+                                    0 => {
+                                        cx.emit(BrandRegionsEvent::ExportCsv);
+                                        tr(cx, "regions.csv downloaded", "已下载 regions.csv")
+                                    }
+                                    1 => tr(cx, "Link copied", "已复制链接"),
+                                    _ => tr(cx, "Report settings open here", "报表设置将在此打开"),
+                                };
+                                this.toast = Some((msg.into(), Instant::now()));
+                                cx.notify();
+                            },
+                        )
+                        .w_full(),
+                    );
                 }
             }
             OpenPopover::Tags | OpenPopover::Topics | OpenPopover::Platforms => {
-                let (heading, icon_svg, options, selected) = match pop {
+                let (heading, icon_svg, options, selected, pop_slug) = match pop {
                     OpenPopover::Tags => (
                         tr(cx, "Tags", "标签"),
                         TAG_ICON_SVG,
                         vec!["Branded", "Competitors", "Pricing"],
                         &self.selected_tags,
+                        "tags",
                     ),
                     OpenPopover::Topics => (
                         tr(cx, "Topics", "主题"),
                         HASH_ICON_SVG,
                         vec!["AI visibility", "SEO tools", "Content"],
                         &self.selected_topics,
+                        "topics",
                     ),
                     _ => (
                         tr(cx, "Platforms", "平台"),
                         AI_BUBBLE_SVG,
                         vec!["ChatGPT", "Perplexity", "Gemini", "Claude"],
                         &self.selected_platforms,
+                        "platforms",
                     ),
                 };
                 panel = panel.child(
@@ -1449,77 +1468,92 @@ impl BrandRegionsScreen {
                 for (oi, opt) in options.into_iter().enumerate() {
                     let opt_sh: SharedString = opt.into();
                     let checked = selected.contains(&opt_sh);
-                    panel = panel.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("flt-opt-{oi}")))
-                            .role(Role::MenuItemCheckBox)
-                            .aria_toggled(checked.into())
-                            .tab_index(0)
-                            .h(px(32.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .text_size(px(13.))
-                            .text_color(if checked { p.ink } else { p.text })
-                            .when(checked, |d| d.font_weight(FontWeight::MEDIUM))
-                            .cursor_pointer()
-                            .child(pro_svg("0 0 24 24", icon_svg, 14., p.muted))
-                            .child(div().flex_1().child(opt_sh.clone()))
-                            .when(checked, |d| d.child(pro_icon(ProIcon::Check, 14., p.ink))),
-                        cx,
-                        move |this, _, cx| {
-                            match pop {
-                                OpenPopover::Tags => Self::toggle_filter_value(
-                                    &mut this.selected_tags,
-                                    opt_sh.clone(),
-                                ),
-                                OpenPopover::Topics => Self::toggle_filter_value(
-                                    &mut this.selected_topics,
-                                    opt_sh.clone(),
-                                ),
-                                _ => Self::toggle_filter_value(
-                                    &mut this.selected_platforms,
-                                    opt_sh.clone(),
-                                ),
-                            }
-                            this.emit_filters_changed(cx);
-                        },
-                    ));
-                }
-                if !selected.is_empty() {
-                    panel = panel
-                        .child(div().my(px(3.)).mx(px(6.)).h(px(1.)).bg(p.line))
-                        .child(activate(
+                    panel = panel.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("flt-opt-{pop_slug}-{oi}")),
+                            opt_sh.clone(),
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            checked,
                             div()
-                                .id(pro_eid(&self.id, "flt-clear"))
-                                .role(Role::MenuItem)
-                                .tab_index(0)
                                 .h(px(32.))
                                 .px(px(10.))
-                                .rounded(px(6.))
-                                .hover(move |s| s.bg(p.hover))
                                 .flex()
                                 .items_center()
                                 .gap(px(9.))
                                 .text_size(px(13.))
-                                .text_color(p.text)
-                                .cursor_pointer()
-                                .child(pro_icon(ProIcon::Close, 13., p.muted))
-                                .child(tr(cx, "Clear", "清除筛选")),
+                                .text_color(if checked { p.ink } else { p.text })
+                                .when(checked, |d| d.font_weight(FontWeight::MEDIUM))
+                                .child(pro_svg("0 0 24 24", icon_svg, 14., p.muted))
+                                .child(div().flex_1().child(opt_sh.clone()))
+                                .child(pro_check_draw(
+                                    pro_eid(&self.id, format!("flt-chk-{pop_slug}-{oi}")),
+                                    checked,
+                                    14.,
+                                    true,
+                                    br_blue,
+                                )),
                             cx,
                             move |this, _, cx| {
                                 match pop {
-                                    OpenPopover::Tags => this.selected_tags.clear(),
-                                    OpenPopover::Topics => this.selected_topics.clear(),
-                                    _ => this.selected_platforms.clear(),
+                                    OpenPopover::Tags => Self::toggle_filter_value(
+                                        &mut this.selected_tags,
+                                        opt_sh.clone(),
+                                    ),
+                                    OpenPopover::Topics => Self::toggle_filter_value(
+                                        &mut this.selected_topics,
+                                        opt_sh.clone(),
+                                    ),
+                                    _ => Self::toggle_filter_value(
+                                        &mut this.selected_platforms,
+                                        opt_sh.clone(),
+                                    ),
                                 }
-                                this.open_popover = None;
                                 this.emit_filters_changed(cx);
                             },
-                        ));
+                        )
+                        .w_full(),
+                    );
+                }
+                if !selected.is_empty() {
+                    panel = panel
+                        .child(div().my(px(3.)).mx(px(6.)).h(px(1.)).bg(p.line))
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, "flt-clear"),
+                                tr(cx, "Clear", "清除筛选"),
+                                6.,
+                                transparent_black(),
+                                p.hover,
+                                transparent_black(),
+                                transparent_black(),
+                                false,
+                                div()
+                                    .h(px(32.))
+                                    .px(px(10.))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(9.))
+                                    .text_size(px(13.))
+                                    .text_color(p.text)
+                                    .child(pro_icon(ProIcon::Close, 13., p.muted))
+                                    .child(tr(cx, "Clear", "清除筛选")),
+                                cx,
+                                move |this, _, cx| {
+                                    match pop {
+                                        OpenPopover::Tags => this.selected_tags.clear(),
+                                        OpenPopover::Topics => this.selected_topics.clear(),
+                                        _ => this.selected_platforms.clear(),
+                                    }
+                                    this.open_popover = None;
+                                    this.emit_filters_changed(cx);
+                                },
+                            )
+                            .w_full(),
+                        );
                 }
             }
             OpenPopover::ChartConfig => {
@@ -1540,29 +1574,39 @@ impl BrandRegionsScreen {
                     } else {
                         pro_svg("0 0 24 24", LOCATION_PIN_SVG, 14., p.muted)
                     };
-                    panel = panel.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("cfg-zoom-{}", zoom_opt.slug())))
-                            .role(Role::MenuItemRadio)
-                            .aria_toggled(checked.into())
-                            .tab_index(0)
-                            .h(px(32.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .text_size(px(13.))
-                            .text_color(if checked { p.ink } else { p.text })
-                            .when(checked, |d| d.font_weight(FontWeight::MEDIUM))
-                            .cursor_pointer()
-                            .child(lead)
-                            .child(div().flex_1().child(zoom_opt.label(cx)))
-                            .when(checked, |d| d.child(pro_icon(ProIcon::Check, 14., p.ink))),
-                        cx,
-                        move |this, _, cx| this.set_zoom(zoom_opt, cx),
-                    ));
+                    panel = panel.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("cfg-zoom-{}", zoom_opt.slug())),
+                            zoom_opt.label(cx),
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            checked,
+                            div()
+                                .h(px(32.))
+                                .px(px(10.))
+                                .flex()
+                                .items_center()
+                                .gap(px(9.))
+                                .text_size(px(13.))
+                                .text_color(if checked { p.ink } else { p.text })
+                                .when(checked, |d| d.font_weight(FontWeight::MEDIUM))
+                                .child(lead)
+                                .child(div().flex_1().child(zoom_opt.label(cx)))
+                                .child(pro_check_draw(
+                                    pro_eid(&self.id, format!("cfg-zchk-{}", zoom_opt.slug())),
+                                    checked,
+                                    14.,
+                                    false,
+                                    br_blue,
+                                )),
+                            cx,
+                            move |this, _, cx| this.set_zoom(zoom_opt, cx),
+                        )
+                        .w_full(),
+                    );
                 }
                 let shade_on = self.shading;
                 let shade_lbl = if shade_on {
@@ -1581,66 +1625,95 @@ impl BrandRegionsScreen {
                 };
                 panel = panel
                     .child(div().my(px(3.)).mx(px(6.)).h(px(1.)).bg(p.line))
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, "cfg-shading"))
-                            .role(Role::MenuItemCheckBox)
-                            .aria_toggled(shade_on.into())
-                            .tab_index(0)
-                            .py(px(6.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .hover(move |s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .cursor_pointer()
-                            .child(pro_svg("0 0 24 24", LAYERS_ICON_SVG, 14., p.muted))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(1.))
-                                    .child(
-                                        div()
-                                            .text_size(px(13.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(shade_lbl),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(p.faint)
-                                            .truncate()
-                                            .child(shade_desc),
-                                    ),
-                            )
-                            .when(shade_on, |d| d.child(pro_icon(ProIcon::Check, 14., p.ink))),
-                        cx,
-                        move |this, _, cx| this.set_shading(!shade_on, cx),
-                    ));
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, "cfg-shading"),
+                            shade_lbl,
+                            6.,
+                            transparent_black(),
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            shade_on,
+                            div()
+                                .py(px(6.))
+                                .px(px(10.))
+                                .flex()
+                                .items_center()
+                                .gap(px(9.))
+                                .child(pro_svg("0 0 24 24", LAYERS_ICON_SVG, 14., p.muted))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(1.))
+                                        .child(
+                                            div()
+                                                .text_size(px(13.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.ink)
+                                                .child(shade_lbl),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(11.5))
+                                                .text_color(p.faint)
+                                                .truncate()
+                                                .child(shade_desc),
+                                        ),
+                                )
+                                .child(pro_check_draw(
+                                    pro_eid(&self.id, "cfg-schk"),
+                                    shade_on,
+                                    14.,
+                                    true,
+                                    br_blue,
+                                )),
+                            cx,
+                            move |this, _, cx| this.set_shading(!shade_on, cx),
+                        )
+                        .w_full(),
+                    );
             }
         }
 
-        let scrim = div()
-            .id(pro_eid(&self.id, "popover-scrim"))
-            .absolute()
-            .inset_0()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    this.open_popover = None;
-                    cx.notify();
-                }),
-            );
+        let scrim = is_open.then(|| {
+            div()
+                .id(pro_eid(&self.id, "popover-scrim"))
+                .absolute()
+                .inset_0()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        this.open_popover = None;
+                        cx.notify();
+                    }),
+                )
+        });
+
+        let pop_presence =
+            pro_popover_presence(pro_eid(&self.id, "br-pop-pres"), is_open, move || {
+                panel.into_any_element()
+            });
 
         Some(
-            deferred(div().absolute().inset_0().child(scrim).child(panel))
-                .with_priority(8)
-                .into_any_element(),
+            deferred(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .when_some(scrim, |d, s| d.child(s))
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(left_px))
+                            .top(px(top_px))
+                            .child(pop_presence),
+                    ),
+            )
+            .with_priority(8)
+            .into_any_element(),
         )
     }
 
@@ -1651,6 +1724,10 @@ impl BrandRegionsScreen {
         let stack_layout = width < 620.0;
         let compact_split = width < 760.0;
         let mobile = width < 560.0;
+
+        if let Some(cur_pop) = self.open_popover {
+            self.last_popover = Some(cur_pop);
+        }
 
         let elapsed = self.boot_at.elapsed().as_secs_f32();
         let skel_phase = if reduced {
@@ -1706,7 +1783,7 @@ impl BrandRegionsScreen {
             .overflow_x_hidden()
             .flex()
             .items_center()
-            .gap(px(20.))
+            .gap(px(12.))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
                 let all = BrandRegionsTab::all();
                 let pos = all.iter().position(|&t| t == this.active_tab).unwrap_or(4);
@@ -1733,103 +1810,98 @@ impl BrandRegionsScreen {
             ))
             .children(BrandRegionsTab::all().into_iter().map(|tab| {
                 let selected = self.active_tab == tab;
-                activate(
+                let lbl = tab.label(cx);
+                pro_tactile(
+                    pro_eid(&self.id, format!("tab-{}", tab.slug())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("tab-{}", tab.slug())))
-                        .role(Role::Tab)
-                        .aria_selected(selected)
-                        .tab_index(if selected { 0 } else { -1 })
-                        .relative()
                         .h(px(40.))
-                        .flex_none()
+                        .px(px(6.))
                         .flex()
                         .items_center()
+                        .whitespace_nowrap()
                         .text_size(px(13.))
                         .text_color(if selected { p.strong } else { p.muted })
-                        .when(selected, |d| {
-                            d.font_weight(FontWeight::MEDIUM)
-                                .child(pro_mark_selected(&tab_sensor))
-                        })
-                        .when(!selected, |d| d.hover(move |s| s.text_color(p.ink)))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .cursor_pointer()
-                        .child(tab.label(cx)),
+                        .when(selected, |d| d.font_weight(FontWeight::MEDIUM))
+                        .child(lbl),
                     cx,
                     move |this, _, cx| this.select_tab(tab, cx),
                 )
+                .relative()
+                .flex_none()
+                .when(selected, |d| d.child(pro_mark_selected(&tab_sensor)))
             }));
 
         let anchor_more = self.anchor_more.clone();
         let more_open = self.open_popover == Some(OpenPopover::More);
-        let more_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "more-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "More", "更多操作"))
-                .aria_expanded(more_open)
-                .tab_index(0)
-                .relative()
-                .size(px(28.))
-                .rounded(px(6.))
-                .when(more_open, |d| d.bg(p.hover))
-                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .child(
-                    canvas(
-                        move |bounds, _, _| anchor_more.set(Some(bounds)),
-                        |_, _, _, _| (),
-                    )
-                    .absolute()
-                    .inset_0(),
+        let more_btn = div()
+            .relative()
+            .flex_none()
+            .child(
+                canvas(
+                    move |bounds, _, _| anchor_more.set(Some(bounds)),
+                    |_, _, _, _| (),
                 )
-                .child(pro_icon(ProIcon::MoreHorizontal, 16., p.muted)),
-            cx,
-            |this, _, cx| {
-                this.open_popover = if this.open_popover == Some(OpenPopover::More) {
-                    None
-                } else {
-                    Some(OpenPopover::More)
-                };
-                cx.notify();
-            },
-        );
+                .absolute()
+                .inset_0(),
+            )
+            .child(pro_icon_btn(
+                pro_eid(&self.id, "more-btn"),
+                tr(cx, "More", "更多操作"),
+                ProIcon::MoreHorizontal,
+                28.,
+                more_open,
+                cx,
+                |this, _, cx| {
+                    if this.open_popover == Some(OpenPopover::More) {
+                        this.open_popover = None;
+                    } else {
+                        this.open_popover = Some(OpenPopover::More);
+                        this.last_popover = Some(OpenPopover::More);
+                    }
+                    cx.notify();
+                },
+            ));
 
-        let answers_txt = if self.loading {
-            format!("– {}", tr(cx, "answers", "条回答"))
+        let answers_txt: SharedString = if self.loading {
+            format!("– {}", tr(cx, "answers", "条回答")).into()
         } else {
             format!(
                 "{} {}",
                 format_answers_count(self.answers),
                 tr(cx, "answers", "条回答")
             )
+            .into()
         };
-        let answers_btn = activate(
+        let answers_btn = pro_tactile(
+            pro_eid(&self.id, "answers-btn"),
+            answers_txt.clone(),
+            6.,
+            p.card,
+            p.hover,
+            p.line,
+            p.line_strong,
+            false,
             div()
-                .id(pro_eid(&self.id, "answers-btn"))
-                .role(Role::Button)
-                .aria_label(answers_txt.clone())
-                .tab_index(0)
                 .h(px(28.))
                 .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line)
-                .hover(move |s| s.border_color(p.line_strong).bg(p.hover))
-                .focus_visible(move |s| s.border_color(p.focus))
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.ink)
                 .whitespace_nowrap()
-                .cursor_pointer()
-                .child(answers_txt)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "answers-lbl"),
+                    answers_txt,
+                    13.,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ))
                 .child(pro_icon(ProIcon::ExternalArrow, 13.5, p.muted)),
             cx,
             |this, _, cx| {
@@ -1840,7 +1912,8 @@ impl BrandRegionsScreen {
                 ));
                 cx.notify();
             },
-        );
+        )
+        .flex_none();
 
         let header_block = div()
             .w_full()
@@ -1880,11 +1953,19 @@ impl BrandRegionsScreen {
 
         // Period segmented bar + Filter triggers
         let period_sensor = pro_selection_sensor();
+        let thumb_bg: Hsla = if p.dark {
+            rgb(0x2a2a2e).into()
+        } else {
+            rgb(0xffffff).into()
+        };
         let period_seg = div()
             .id(pro_eid(&self.id, "period-seg"))
             .role(Role::RadioGroup)
             .aria_label(tr(cx, "Period", "统计周期"))
             .relative()
+            .p(px(2.))
+            .rounded(px(8.))
+            .bg(p.chip)
             .flex()
             .items_center()
             .gap(px(2.))
@@ -1910,37 +1991,38 @@ impl BrandRegionsScreen {
                 self.period.slug(),
                 period_sensor.clone(),
                 6.0,
-                p.chip,
-                None,
-                false,
+                thumb_bg,
+                Some(p.line),
+                true,
             ))
             .children(BrandRegionsPeriod::all().into_iter().map(|per| {
                 let active = self.period == per;
-                activate(
+                let lbl = per.label(cx);
+                pro_tactile(
+                    pro_eid(&self.id, format!("per-{}", per.slug())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("per-{}", per.slug())))
-                        .role(Role::RadioButton)
-                        .aria_toggled(active.into())
-                        .tab_index(if active { 0 } else { -1 })
-                        .relative()
-                        .h(px(28.))
+                        .h(px(26.))
                         .px(px(10.))
-                        .rounded(px(6.))
                         .flex()
                         .items_center()
+                        .whitespace_nowrap()
                         .text_size(px(13.))
-                        .text_color(if active { p.ink } else { p.muted })
-                        .when(active, |d| {
-                            d.font_weight(FontWeight::MEDIUM)
-                                .child(pro_mark_selected(&period_sensor))
-                        })
-                        .when(!active, |d| d.hover(move |s| s.text_color(p.ink)))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .cursor_pointer()
-                        .child(per.label(cx)),
+                        .text_color(if active { p.strong } else { p.muted })
+                        .when(active, |d| d.font_weight(FontWeight::MEDIUM))
+                        .child(lbl),
                     cx,
                     move |this, _, cx| this.set_period(per, cx),
                 )
+                .relative()
+                .flex_none()
+                .when(active, |d| d.child(pro_mark_selected(&period_sensor)))
             }));
 
         let filters_row = div()
@@ -1993,51 +2075,63 @@ impl BrandRegionsScreen {
         // Left Map Stage
         let anchor_cfg = self.anchor_config.clone();
         let cfg_open = self.open_popover == Some(OpenPopover::ChartConfig);
-        let chart_cfg_btn = activate(
+        let chart_cfg_btn = pro_tactile(
+            pro_eid(&self.id, "chart-config-btn"),
+            tr(cx, "Chart config", "地图配置"),
+            6.,
+            p.card,
+            p.hover,
+            if cfg_open { p.line_strong } else { p.line },
+            p.line_strong,
+            cfg_open,
             div()
-                .id(pro_eid(&self.id, "chart-config-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Chart config", "地图配置"))
-                .aria_expanded(cfg_open)
-                .tab_index(0)
-                .relative()
                 .h(px(28.))
                 .px(px(10.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(if cfg_open { p.line_strong } else { p.line })
-                .hover(move |s| s.border_color(p.line_strong).bg(p.hover))
-                .focus_visible(move |s| s.border_color(p.focus))
                 .flex()
                 .items_center()
                 .gap(px(6.))
+                .whitespace_nowrap()
                 .text_size(px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.ink)
-                .cursor_pointer()
-                .child(
-                    canvas(
-                        move |bounds, _, _| anchor_cfg.set(Some(bounds)),
-                        |_, _, _, _| (),
-                    )
-                    .absolute()
-                    .inset_0(),
-                )
                 .child(tr(cx, "Chart config", "地图配置"))
+                .child(div().text_color(p.faint).child("·"))
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "cfg-zoom-lbl"),
+                    self.zoom.label(cx),
+                    12.,
+                    FontWeight::MEDIUM,
+                    br_blue,
+                ))
                 .child(pro_icon(ProIcon::ChevronDown, 12., p.muted)),
             cx,
             |this, _, cx| {
-                this.open_popover = if this.open_popover == Some(OpenPopover::ChartConfig) {
-                    None
+                if this.open_popover == Some(OpenPopover::ChartConfig) {
+                    this.open_popover = None;
                 } else {
-                    Some(OpenPopover::ChartConfig)
-                };
+                    this.open_popover = Some(OpenPopover::ChartConfig);
+                    this.last_popover = Some(OpenPopover::ChartConfig);
+                }
                 cx.notify();
             },
+        )
+        .relative()
+        .flex_none()
+        .child(
+            canvas(
+                move |bounds, _, _| anchor_cfg.set(Some(bounds)),
+                |_, _, _, _| (),
+            )
+            .absolute()
+            .inset_0(),
         );
 
-        let [vx, vy, vw, vh] = self.zoom.view_box();
+        let [tvx, tvy, tvw, tvh] = self.zoom.view_box();
+        let vx = pro_spring_f32(pro_eid(&self.id, "br-zoom-vx"), tvx, 0.34, w, cx);
+        let vy = pro_spring_f32(pro_eid(&self.id, "br-zoom-vy"), tvy, 0.34, w, cx);
+        let vw = pro_spring_f32(pro_eid(&self.id, "br-zoom-vw"), tvw, 0.34, w, cx).max(10.0);
+        let vh = pro_spring_f32(pro_eid(&self.id, "br-zoom-vh"), tvh, 0.34, w, cx).max(10.0);
+
         let sb_opt = self.stage_bounds.get();
         let (stage_w, stage_h) = sb_opt
             .map(|b| {
@@ -2057,8 +2151,10 @@ impl BrandRegionsScreen {
         let map_left = (stage_w - drawn_w) * 0.5;
         let map_top = pad_top + (avail_h - drawn_h) * 0.5;
 
-        // Country hover tooltip card inside map stage
-        let tooltip_el = if !self.loading
+        // Country hover tooltip card inside map stage (cached for exit presence + spring glide)
+        let tip_w = if mobile { 196.0 } else { 236.0 };
+        let tip_h = 128.0;
+        let active_tip_data: Option<(BrandRegionRow, f32, f32)> = if !self.loading
             && !self.empty
             && let Some(hid) = &self.hovered_id
             && let Some(region) = scaled_rows.iter().find(|r| &r.id == hid)
@@ -2071,8 +2167,6 @@ impl BrandRegionsScreen {
             if fx >= vx && fx <= vx + vw && fy >= vy && fy <= vy + vh {
                 let anchor_x = map_left + (fx - vx) * fit_scale;
                 let anchor_y = map_top + (fy - vy) * fit_scale;
-                let tip_w = if mobile { 196.0 } else { 232.0 };
-                let tip_h = 118.0;
                 let place_left = (fx - vx) / vw > 0.55;
                 let tx = if place_left {
                     anchor_x - tip_w - 16.0
@@ -2081,78 +2175,128 @@ impl BrandRegionsScreen {
                 }
                 .clamp(8.0, (stage_w - tip_w - 8.0).max(8.0));
                 let ty = (anchor_y - tip_h * 0.5).clamp(4.0, (stage_h - tip_h - 4.0).max(4.0));
-
-                Some(
-                    div()
-                        .id(pro_eid(&self.id, "map-tooltip"))
-                        .role(Role::Status)
-                        .absolute()
-                        .left(px(tx))
-                        .top(px(ty))
-                        .w(px(tip_w))
-                        .pt(px(10.))
-                        .px(px(12.))
-                        .pb(px(8.))
-                        .rounded(px(10.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .pb(px(8.))
-                                .border_b_1()
-                                .border_color(p.line)
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(render_country_flag(&region.flag, p))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(px(13.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.strong)
-                                        .child(region.name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(p.muted)
-                                        .child(self.date_label.clone()),
-                                ),
-                        )
-                        .child(div().mt(px(6.)).flex().flex_col().children(
-                            BrandRegionsMeasure::all().into_iter().map(|m| {
-                                let on = self.measure == m;
-                                div()
-                                    .h(px(24.))
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(12.))
-                                    .text_size(px(12.))
-                                    .text_color(if on { p.ink } else { p.muted })
-                                    .child(m.long_label(cx))
-                                    .child(
-                                        div()
-                                            .text_color(if on { p.strong } else { p.ink })
-                                            .when(on, |d| d.font_weight(FontWeight::MEDIUM))
-                                            .child(format_pct(region.metric(m))),
-                                    )
-                            }),
-                        )),
-                )
+                Some((region.clone(), tx, ty))
             } else {
                 None
             }
         } else {
             None
         };
+
+        let tip_open = active_tip_data.is_some();
+        let tip_cache = w.use_keyed_state(pro_eid(&self.id, "br-tip-cache"), cx, |_, _| {
+            active_tip_data.clone()
+        });
+        let shown_tip = tip_cache.update(cx, |slot, _| {
+            if active_tip_data.is_some() {
+                *slot = active_tip_data.clone();
+            }
+            slot.clone()
+        });
+
+        let tooltip_el = shown_tip.map(|(region, target_tx, target_ty)| {
+            let glide_tx = pro_spring_f32(pro_eid(&self.id, "br-tip-tx"), target_tx, 0.18, w, cx);
+            let glide_ty = pro_spring_f32(pro_eid(&self.id, "br-tip-ty"), target_ty, 0.18, w, cx);
+            let date_lbl = self.date_label.clone();
+            let active_measure = self.measure;
+            let base_id = self.id.clone();
+
+            let measure_rows: Vec<AnyElement> =
+                BrandRegionsMeasure::all()
+                    .into_iter()
+                    .map(|m| {
+                        let on = active_measure == m;
+                        let m_val = region.metric(m).clamp(0.0, 100.0);
+                        let m_lbl = m.long_label(cx);
+                        div()
+                            .h(px(26.))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(8.))
+                            .text_size(px(12.))
+                            .text_color(if on { p.ink } else { p.muted })
+                            .child(div().flex_1().min_w_0().truncate().child(m_lbl))
+                            .child(div().w(px(36.)).flex_none().child(pro_spring_bar(
+                                pro_eid(&base_id, format!("br-tip-bar-{}", m.slug())),
+                                m_val / 100.0,
+                                3.5,
+                                2.,
+                                p.chip,
+                                if on { br_blue } else { p.muted.opacity(0.55) },
+                            )))
+                            .child(div().min_w(px(40.)).flex().justify_end().child(
+                                pro_rolling_number(
+                                    pro_eid(&base_id, format!("br-tip-num-{}", m.slug())),
+                                    m_val as f64,
+                                    1,
+                                    "",
+                                    "%",
+                                    12.,
+                                    if on {
+                                        FontWeight::MEDIUM
+                                    } else {
+                                        FontWeight::NORMAL
+                                    },
+                                    if on { p.strong } else { p.ink },
+                                ),
+                            ))
+                            .into_any_element()
+                    })
+                    .collect();
+
+            div()
+                .absolute()
+                .left(px(glide_tx))
+                .top(px(glide_ty))
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "map-tooltip-pres"),
+                    tip_open,
+                    move || {
+                        div()
+                            .id(pro_eid(&base_id, "map-tooltip"))
+                            .role(Role::Status)
+                            .w(px(tip_w))
+                            .pt(px(10.))
+                            .px(px(12.))
+                            .pb(px(8.))
+                            .rounded(px(10.))
+                            .bg(p.card)
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .shadow_lg()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .pb(px(8.))
+                                    .border_b_1()
+                                    .border_color(p.line)
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(render_country_flag(&region.flag, p))
+                                    .child(div().flex_1().min_w_0().truncate().child(
+                                        pro_swap_label(
+                                            pro_eid(&base_id, "br-tip-country"),
+                                            region.name.clone(),
+                                            13.,
+                                            FontWeight::MEDIUM,
+                                            p.strong,
+                                        ),
+                                    ))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .text_color(p.muted)
+                                            .child(date_lbl),
+                                    ),
+                            )
+                            .child(div().mt(px(6.)).flex().flex_col().children(measure_rows))
+                            .into_any_element()
+                    },
+                ))
+        });
 
         let stage_bounds_cell = self.stage_bounds.clone();
         let hit_rows = scaled_rows.clone();
@@ -2223,7 +2367,7 @@ impl BrandRegionsScreen {
             .child({
                 let paint_rows = scaled_rows.clone();
                 let paint_dark = p.dark;
-                let paint_zoom = self.zoom;
+                let paint_vbox = [vx, vy, vw, vh];
                 let paint_shading = self.shading;
                 let paint_loading = self.loading;
                 let paint_empty = self.empty;
@@ -2242,7 +2386,7 @@ impl BrandRegionsScreen {
                                 paint_world_map_canvas(
                                     bounds,
                                     paint_dark,
-                                    paint_zoom,
+                                    paint_vbox,
                                     paint_shading,
                                     paint_loading,
                                     paint_empty,
@@ -2326,7 +2470,16 @@ impl BrandRegionsScreen {
                         .text_color(p.muted)
                         .child(tr(cx, "Low", "低"))
                         .child(legend_bar)
-                        .child(format_pct(max_val)),
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, "br-legend-max"),
+                            max_val as f64,
+                            1,
+                            "",
+                            "%",
+                            11.,
+                            FontWeight::MEDIUM,
+                            p.muted,
+                        )),
                 )
             });
 
@@ -2338,6 +2491,9 @@ impl BrandRegionsScreen {
             .aria_label(tr(cx, "Measure", "统计指标"))
             .relative()
             .w_full()
+            .p(px(2.))
+            .rounded(px(8.))
+            .bg(p.chip)
             .flex()
             .items_center()
             .gap(px(2.))
@@ -2363,40 +2519,40 @@ impl BrandRegionsScreen {
                 self.measure.slug(),
                 measure_sensor.clone(),
                 6.0,
-                p.chip,
-                None,
-                false,
+                thumb_bg,
+                Some(p.line),
+                true,
             ))
             .children(BrandRegionsMeasure::all().into_iter().map(|m| {
                 let active = self.measure == m;
-                activate(
+                let lbl = m.short_label(cx);
+                pro_tactile(
+                    pro_eid(&self.id, format!("meas-{}", m.slug())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    if active { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("meas-{}", m.slug())))
-                        .role(Role::RadioButton)
-                        .aria_toggled(active.into())
-                        .tab_index(if active { 0 } else { -1 })
-                        .relative()
-                        .flex_1()
-                        .h(px(28.))
+                        .h(px(26.))
                         .px(px(6.))
-                        .rounded(px(6.))
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(13.))
-                        .text_color(if active { p.ink } else { p.muted })
                         .whitespace_nowrap()
-                        .when(active, |d| {
-                            d.font_weight(FontWeight::MEDIUM)
-                                .child(pro_mark_selected(&measure_sensor))
-                        })
-                        .when(!active, |d| d.hover(move |s| s.text_color(p.ink)))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .cursor_pointer()
-                        .child(m.short_label(cx)),
+                        .text_size(px(12.5))
+                        .text_color(if active { p.strong } else { p.muted })
+                        .when(active, |d| d.font_weight(FontWeight::MEDIUM))
+                        .child(lbl),
                     cx,
                     move |this, _, cx| this.set_measure(m, cx),
                 )
+                .relative()
+                .flex_1()
+                .min_w_0()
+                .when(active, |d| d.child(pro_mark_selected(&measure_sensor)))
             }));
 
         let col_head = div()
@@ -2410,7 +2566,13 @@ impl BrandRegionsScreen {
             .font_weight(FontWeight::MEDIUM)
             .text_color(p.muted)
             .child(tr(cx, "REGION", "国家 / 地区"))
-            .child(self.measure.long_label(cx).to_uppercase());
+            .child(pro_swap_label(
+                pro_eid(&self.id, "br-col-head-lbl"),
+                self.measure.long_label(cx).to_uppercase(),
+                10.,
+                FontWeight::MEDIUM,
+                p.muted,
+            ));
 
         let list_body: AnyElement = if self.loading {
             let widths = [120., 96., 84., 110., 72., 90., 104., 80., 98., 88.];
@@ -2452,6 +2614,7 @@ impl BrandRegionsScreen {
             .into_any_element()
         } else {
             let mut rows_col = div().flex().flex_col();
+            let safe_max = max_val.max(1.0);
             for (ri, row) in scaled_rows.iter().enumerate() {
                 let val = row.metric(self.measure);
                 let delta = row.change.get(self.measure);
@@ -2464,6 +2627,7 @@ impl BrandRegionsScreen {
                 };
                 let is_on = self.hovered_id.as_ref() == Some(&row.id);
                 let row_id = row.id.clone();
+                let row_id_hover = row.id.clone();
                 let aria = format!(
                     "{}: {} {}, {} on the period before",
                     row.name,
@@ -2471,74 +2635,105 @@ impl BrandRegionsScreen {
                     format_pct(val),
                     format_delta_pct(delta),
                 );
-                let btn = activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("region-row-{}", row.id)))
-                        .role(Role::Button)
-                        .aria_label(aria)
-                        .tab_index(-1)
-                        .h(px(40.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .when(is_on, |d| d.bg(p.hover))
-                        .hover(move |s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(13.))
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .on_hover(cx.listener({
-                            let row_id = row_id.clone();
-                            move |this, inside: &bool, _, cx| {
-                                if *inside {
-                                    this.hovered_id = Some(row_id.clone());
-                                    this.focused_row_idx = ri;
-                                } else if this.hovered_id.as_ref() == Some(&row_id) {
-                                    this.hovered_id = None;
-                                }
-                                cx.notify();
-                            }
-                        }))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex_1()
-                                .flex()
-                                .items_center()
-                                .gap(px(10.))
-                                .child(render_country_flag(&row.flag, p))
-                                .child(div().min_w_0().truncate().child(row.name.clone())),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .gap(px(12.))
-                                .child(
-                                    div()
-                                        .min_w(px(44.))
-                                        .text_right()
-                                        .text_color(p.strong)
-                                        .child(format_pct(val)),
-                                )
-                                .child(
-                                    div()
-                                        .min_w(px(48.))
-                                        .text_right()
-                                        .text_color(delta_color)
-                                        .child(format_delta_pct(delta)),
+                let bar_ratio = (val / safe_max).clamp(0.0, 1.0);
+                let row_content = div()
+                    .h(px(40.))
+                    .px(px(8.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(10.))
+                    .text_size(px(13.))
+                    .text_color(p.ink)
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(render_country_flag(&row.flag, p))
+                                    .child(div().min_w_0().truncate().child(row.name.clone())),
+                            )
+                            .child(pro_spring_bar(
+                                pro_eid(&self.id, format!("br-rbar-{}", row.id)),
+                                bar_ratio,
+                                3.0,
+                                1.5,
+                                p.chip,
+                                if is_on {
+                                    br_blue
+                                } else {
+                                    br_blue.opacity(0.65)
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(div().min_w(px(44.)).flex().justify_end().child(
+                                pro_rolling_number(
+                                    pro_eid(&self.id, format!("br-rval-{}", row.id)),
+                                    val as f64,
+                                    1,
+                                    "",
+                                    "%",
+                                    13.,
+                                    FontWeight::MEDIUM,
+                                    p.strong,
                                 ),
-                        ),
+                            ))
+                            .child(div().min_w(px(46.)).flex().justify_end().child(
+                                pro_swap_label(
+                                    pro_eid(&self.id, format!("br-rdel-{}", row.id)),
+                                    format_delta_pct(delta),
+                                    12.5,
+                                    FontWeight::NORMAL,
+                                    delta_color,
+                                ),
+                            )),
+                    );
+
+                let btn = pro_tactile(
+                    pro_eid(&self.id, format!("region-row-{}", row.id)),
+                    aria,
+                    6.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    if is_on {
+                        br_blue.opacity(0.28)
+                    } else {
+                        transparent_black()
+                    },
+                    is_on,
+                    row_content,
                     cx,
                     move |this, _, cx| {
                         this.focused_row_idx = ri;
                         this.hovered_id = Some(row_id.clone());
                         this.toggle_country_zoom(&row_id, cx);
                     },
-                );
+                )
+                .w_full()
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_id = Some(row_id_hover.clone());
+                        this.focused_row_idx = ri;
+                    } else if this.hovered_id.as_ref() == Some(&row_id_hover) {
+                        this.hovered_id = None;
+                    }
+                    cx.notify();
+                }));
+
                 rows_col = rows_col.child(
                     div()
                         .when(ri > 0 && !is_on, |d| d.border_t_1().border_color(p.line))
@@ -2695,8 +2890,8 @@ impl BrandRegionsScreen {
             }))
             .child(scroll);
 
-        if let Some(pop) = self.open_popover
-            && let Some(overlay) = self.render_popover_overlay(pop, cx)
+        if let Some(pop) = self.open_popover.or(self.last_popover)
+            && let Some(overlay) = self.render_popover_overlay(pop, self.open_popover.is_some(), cx)
         {
             page = page.child(overlay);
         }

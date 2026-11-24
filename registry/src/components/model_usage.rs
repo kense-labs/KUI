@@ -1,22 +1,21 @@
 //! AI provider usage breakdown with stacked model segments, metric switching, and task filtering.
 //!
-//! Displays the period total and percentage change on top with a `Tokens` / `Cost` / `Requests` pill switcher,
-//! one stacked bar per AI company shaded from darkest (top model) to lighter tints, a side tooltip per provider,
-//! and a dynamic 2x2 task-category breakdown (`Search`, `Analyze`, `Code`, `Test`) below.
+//! Displays a rolling period/provider total and percentage change on top with a liquid `Tokens` / `Cost` / `Requests`
+//! pill switcher, `Slide`-morphing stacked provider bars with rolling column tops, `Slide::snappy` spotlight, and 2x2 task shares.
 
 use crate::{
     components::pro_chrome::{
         ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
         pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
-        pro_spring_f32, tr,
+        pro_spring_f32, pro_swap_label, tr,
     },
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::collections::BTreeMap;
+use std::{cell::Cell, collections::BTreeMap, rc::Rc};
 use web_time::Instant;
 
 const TASK_SEARCH_SVG: &str = r#"<path d="M17 17l4 4M19 11a8 8 0 1 0-16 0 8 8 0 0 0 16 0Z" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path>"#;
@@ -370,6 +369,13 @@ pub struct ModelUsage {
     companies: Vec<UsageCompany>,
     task_kinds: Vec<UsageTaskKind>,
     hovered_company: Option<usize>,
+    col_height_slides: Vec<Slide>,
+    col_spotlights: Vec<Slide>,
+    cols_seeded: bool,
+    tooltip_x: Slide,
+    tooltip_presence: Slide,
+    tooltip_ready: bool,
+    plot_width: Rc<Cell<f32>>,
     loading: bool,
     empty: bool,
     focus: FocusHandle,
@@ -499,6 +505,7 @@ impl ModelUsage {
             UsageTaskKind::new("test", "Test", rgb(0x0190fe).into()),
         ];
 
+        let n_comp = companies.len();
         Self {
             id: id.into(),
             title: "This week".into(),
@@ -513,6 +520,13 @@ impl ModelUsage {
             companies,
             task_kinds,
             hovered_company: None,
+            col_height_slides: (0..n_comp).map(|_| Slide::new(0.0)).collect(),
+            col_spotlights: (0..n_comp).map(|_| Slide::snappy(1.0)).collect(),
+            cols_seeded: false,
+            tooltip_x: Slide::snappy(0.0),
+            tooltip_presence: Slide::snappy(0.0),
+            tooltip_ready: false,
+            plot_width: Rc::new(Cell::new(460.)),
             loading: false,
             empty: false,
             focus: cx.focus_handle().tab_stop(true),
@@ -540,6 +554,10 @@ impl ModelUsage {
 
     /// Replace the AI provider columns and their model lists.
     pub fn with_companies(mut self, companies: Vec<UsageCompany>) -> Self {
+        let n = companies.len();
+        self.col_height_slides = (0..n).map(|_| Slide::new(0.0)).collect();
+        self.col_spotlights = (0..n).map(|_| Slide::snappy(1.0)).collect();
+        self.cols_seeded = false;
         self.companies = companies;
         self.hovered_company = None;
         self
@@ -829,27 +847,29 @@ impl Render for ModelUsage {
 
         let metric = self.active_metric;
         let grand_total = self.period_total(metric);
-        let (roll_val, roll_dec, roll_pre, roll_suf) = scaled_rolling_spec(grand_total, metric);
 
-        let change_pill: Option<AnyElement> = self.previous.and_then(|prev| {
-            let prev_v = prev.get(metric);
-            if prev_v <= 1e-9 {
-                return None;
-            }
-            let pct = ((grand_total - prev_v) / prev_v) * 100.0;
-            let up = pct >= 0.0;
-            let (cbg, cfg): (Hsla, Hsla) = if up {
-                if dark {
-                    (hsla(145. / 360., 0.48, 0.58, 0.14), rgb(0x5fd08f).into())
-                } else {
-                    (hsla(144. / 360., 0.69, 0.39, 0.10), rgb(0x1a7f45).into())
-                }
-            } else if dark {
-                (hsla(4. / 360., 0.86, 0.58, 0.16), rgb(0xff7a6b).into())
+        // Dynamic rolling headline: shows hovered provider's total on spotlight, returning to period total on leave!
+        let (shown_headline_raw, shown_heading): (f64, SharedString) = if let Some(ci) =
+            self.hovered_company
+            && let Some(comp) = self.companies.get(ci)
+        {
+            (comp.total(metric), comp.name.clone())
+        } else {
+            (grand_total, self.title.clone())
+        };
+        let (roll_val, roll_dec, roll_pre, roll_suf) =
+            scaled_rolling_spec(shown_headline_raw, metric);
+
+        let change_pill: Option<AnyElement> = if let Some(ci) = self.hovered_company
+            && let Some(comp) = self.companies.get(ci)
+            && grand_total > 1e-9
+        {
+            let share_pct = (comp.total(metric) / grand_total) * 100.0;
+            let (cbg, cfg): (Hsla, Hsla) = if dark {
+                (hsla(218. / 360., 1.0, 0.65, 0.14), rgb(0x90cdfe).into())
             } else {
-                (hsla(4. / 360., 0.86, 0.58, 0.10), rgb(0xc2341f).into())
+                (hsla(215. / 360., 1.0, 0.44, 0.08), rgb(0x0070d6).into())
             };
-            let sign = if up { "+" } else { "\u{2212}" };
             Some(
                 div()
                     .h(px(22.))
@@ -863,41 +883,101 @@ impl Render for ModelUsage {
                     .gap(px(4.))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "chg-pct"),
-                        pct.abs(),
+                        share_pct,
                         0,
-                        sign,
+                        "",
                         "%",
                         12.5,
                         FontWeight::MEDIUM,
                         cfg,
                     ))
-                    .child(self.since.clone())
+                    .child(tr(cx, "of total", "占比"))
                     .into_any_element(),
             )
-        });
+        } else {
+            self.previous.and_then(|prev| {
+                let prev_v = prev.get(metric);
+                if prev_v <= 1e-9 {
+                    return None;
+                }
+                let pct = ((grand_total - prev_v) / prev_v) * 100.0;
+                let up = pct >= 0.0;
+                let (cbg, cfg): (Hsla, Hsla) = if up {
+                    if dark {
+                        (hsla(145. / 360., 0.48, 0.58, 0.14), rgb(0x5fd08f).into())
+                    } else {
+                        (hsla(144. / 360., 0.69, 0.39, 0.10), rgb(0x1a7f45).into())
+                    }
+                } else if dark {
+                    (hsla(4. / 360., 0.86, 0.58, 0.16), rgb(0xff7a6b).into())
+                } else {
+                    (hsla(4. / 360., 0.86, 0.58, 0.10), rgb(0xc2341f).into())
+                };
+                let sign = if up { "+" } else { "\u{2212}" };
+                Some(
+                    div()
+                        .h(px(22.))
+                        .px(px(7.))
+                        .rounded(px(6.))
+                        .bg(cbg)
+                        .text_color(cfg)
+                        .text_size(px(12.5))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, "chg-pct"),
+                            pct.abs(),
+                            0,
+                            sign,
+                            "%",
+                            12.5,
+                            FontWeight::MEDIUM,
+                            cfg,
+                        ))
+                        .child(self.since.clone())
+                        .into_any_element(),
+                )
+            })
+        };
 
+        // Liquid `pro_pill_indicator` on `Tokens / Cost / Requests` switcher
         let metric_tabs: Option<AnyElement> = (self.metrics.len() > 1).then(|| {
             let sensor = pro_selection_sensor();
-            let sel_fill: Hsla = if dark {
-                hsla(0., 0., 1., 0.10)
+            let track_bg: Hsla = if dark {
+                hsla(0., 0., 1., 0.045)
             } else {
-                hsla(0., 0., 0., 0.06)
+                hsla(0., 0., 0., 0.035)
             };
-            let mut row =
-                div()
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(2.))
-                    .child(pro_pill_indicator(
-                        pro_eid(&self.id, "mtabs"),
-                        metric.key(),
-                        sensor.clone(),
-                        6.,
-                        sel_fill,
-                        None,
-                        false,
-                    ));
+            let sel_fill: Hsla = if dark {
+                rgb(0x28282c).into()
+            } else {
+                rgb(0xffffff).into()
+            };
+            let sel_border: Hsla = if dark {
+                hsla(0., 0., 1., 0.11)
+            } else {
+                hsla(0., 0., 0., 0.08)
+            };
+            let mut row = div()
+                .p(px(2.))
+                .rounded(px(8.))
+                .bg(track_bg)
+                .border_1()
+                .border_color(line)
+                .relative()
+                .flex()
+                .items_center()
+                .gap(px(2.))
+                .child(pro_pill_indicator(
+                    pro_eid(&self.id, "mtabs"),
+                    metric.key(),
+                    sensor.clone(),
+                    6.,
+                    sel_fill,
+                    Some(sel_border),
+                    !dark,
+                ));
             for &m in &self.metrics {
                 let selected = m == metric;
                 row = row.child(
@@ -906,7 +986,7 @@ impl Render for ModelUsage {
                         .role(Role::Button)
                         .aria_label(m.label(cx))
                         .tab_index(0)
-                        .h(px(26.))
+                        .h(px(25.))
                         .px(px(10.))
                         .relative()
                         .rounded(px(6.))
@@ -939,6 +1019,27 @@ impl Render for ModelUsage {
         let ceil = nice_company_ceiling(max_comp);
         let chart_h = 200.0f32;
 
+        let n_comp = self.companies.len();
+        if self.col_height_slides.len() < n_comp {
+            self.col_height_slides
+                .resize_with(n_comp, || Slide::new(0.0));
+        } else if self.col_height_slides.len() > n_comp {
+            self.col_height_slides.truncate(n_comp);
+        }
+        if self.col_spotlights.len() < n_comp {
+            self.col_spotlights
+                .resize_with(n_comp, || Slide::snappy(1.0));
+        } else if self.col_spotlights.len() > n_comp {
+            self.col_spotlights.truncate(n_comp);
+        }
+
+        let mut col_alphas = Vec::with_capacity(n_comp);
+        for ci in 0..n_comp {
+            let is_dim = self.hovered_company.is_some_and(|hi| hi != ci);
+            self.col_spotlights[ci].set(if is_dim { 0.34 } else { 1.0 }, cx);
+            col_alphas.push(self.col_spotlights[ci].get(w, cx).clamp(0.25, 1.0));
+        }
+
         let mut cols_row = div()
             .relative()
             .size_full()
@@ -947,6 +1048,7 @@ impl Render for ModelUsage {
             .items_end()
             .gap(px(12.));
 
+        let first_seed = !self.cols_seeded;
         for (ci, comp) in self.companies.iter().enumerate() {
             let comp_total = comp.total(metric);
             let target_h = if has_usage {
@@ -955,8 +1057,12 @@ impl Render for ModelUsage {
             } else {
                 0.0
             };
-            let spring_h =
-                pro_spring_f32(pro_eid(&self.id, format!("ch-{ci}")), target_h, 0.42, w, cx);
+            if first_seed {
+                self.col_height_slides[ci].reset(target_h);
+            } else {
+                self.col_height_slides[ci].duration(target_h, 0.38, cx);
+            }
+            let spring_h = self.col_height_slides[ci].get(w, cx);
             let rise = if reduced {
                 1.0
             } else {
@@ -970,7 +1076,7 @@ impl Render for ModelUsage {
                 .unwrap_or_else(|| default_company_color(&comp.id, ci));
             let ordered = self.ordered_models(comp);
             let is_on = self.hovered_company == Some(ci);
-            let is_dim = self.hovered_company.is_some_and(|hi| hi != ci);
+            let col_alpha = col_alphas[ci];
 
             // Build segments top-to-bottom visually (lightest smallest on top, darkest largest at bottom).
             let mut stack_col = div()
@@ -1024,6 +1130,7 @@ impl Render for ModelUsage {
             }
 
             let val_str = format_compact_clean(comp_total, metric);
+            let (col_val, col_dec, col_pre, col_suf) = scaled_rolling_spec(comp_total, metric);
             cols_row = cols_row.child(
                 div()
                     .id(pro_eid(&self.id, format!("col-{}", comp.id)))
@@ -1038,7 +1145,7 @@ impl Render for ModelUsage {
                     .flex_col()
                     .items_center()
                     .justify_end()
-                    .opacity(if is_dim { 0.36 } else { 1.0 })
+                    .opacity(col_alpha)
                     .cursor_pointer()
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
@@ -1055,22 +1162,52 @@ impl Render for ModelUsage {
                         };
                         this.set_hovered_company(next, cx);
                     }))
-                    .child(
-                        div()
-                            .mb(px(6.))
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .font_weight(if is_on {
-                                FontWeight::MEDIUM
-                            } else {
-                                FontWeight::NORMAL
-                            })
-                            .text_color(if is_on { p.strong } else { p.muted })
-                            .child(val_str),
-                    )
+                    .child(div().mb(px(6.)).child(pro_rolling_number(
+                        pro_eid(&self.id, format!("ctop-{}", comp.id)),
+                        col_val,
+                        col_dec,
+                        col_pre,
+                        col_suf,
+                        12.,
+                        if is_on {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        },
+                        if is_on { p.strong } else { p.muted },
+                    )))
                     .child(stack_col),
             );
         }
+        self.cols_seeded = true;
+
+        // Gliding tooltip position via `Slide::snappy`
+        let plot_w = self.plot_width.get().max(260.);
+        if let Some(ci) = self.hovered_company {
+            let n_cols = n_comp.max(1);
+            let col_cx = ((ci as f32 + 0.5) / n_cols as f32) * plot_w;
+            let on_right_half = ci * 2 >= n_cols;
+            let card_w = 238.0f32;
+            let target_left = if on_right_half {
+                (col_cx - card_w - 18.0).max(4.0)
+            } else {
+                (col_cx + 18.0).min((plot_w - card_w - 4.0).max(4.0))
+            };
+            if !self.tooltip_ready {
+                self.tooltip_x.reset(target_left);
+                self.tooltip_ready = true;
+            } else {
+                self.tooltip_x.set(target_left, cx);
+            }
+            self.tooltip_presence.set(1.0, cx);
+        } else {
+            self.tooltip_presence.set(0.0, cx);
+            if self.tooltip_presence.value(cx) < 0.04 {
+                self.tooltip_ready = false;
+            }
+        }
+        let tip_left_px = self.tooltip_x.get(w, cx);
+        let tip_alpha = self.tooltip_presence.get(w, cx).clamp(0.0, 1.0);
 
         let tip_overlay: Option<AnyElement> = self.hovered_company.and_then(|ci| {
             let comp = self.companies.get(ci)?;
@@ -1142,8 +1279,7 @@ impl Render for ModelUsage {
                 );
             }
 
-            let n_cols = self.companies.len().max(1);
-            let on_right_half = ci * 2 >= n_cols;
+            let (tot_val, tot_dec, tot_pre, tot_suf) = scaled_rolling_spec(comp_total, metric);
             let tip_card = div()
                 .w(px(238.))
                 .px(px(12.))
@@ -1159,11 +1295,14 @@ impl Render for ModelUsage {
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
                         .when_some(logo_el, |d, lg| d.child(lg))
-                        .child(comp.name.clone()),
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "tip-comp"),
+                            comp.name.clone(),
+                            12.5,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        )),
                 )
                 .child(model_rows)
                 .child(
@@ -1177,34 +1316,27 @@ impl Render for ModelUsage {
                         .justify_between()
                         .text_size(px(12.))
                         .child(div().text_color(p.muted).child(tr(cx, "Total", "小计")))
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .child(format_compact_clean(comp_total, metric)),
-                        ),
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, "tip-tot"),
+                            tot_val,
+                            tot_dec,
+                            tot_pre,
+                            tot_suf,
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.strong,
+                        )),
                 );
 
-            let frac = (ci as f32 + 0.5) / n_cols as f32;
-            if on_right_half {
-                Some(
-                    div()
-                        .absolute()
-                        .top(px(24.))
-                        .left(relative((frac - 0.54).clamp(0.02, 0.48)))
-                        .child(tip_card)
-                        .into_any_element(),
-                )
-            } else {
-                Some(
-                    div()
-                        .absolute()
-                        .top(px(24.))
-                        .left(relative((frac + 0.08).clamp(0.22, 0.50)))
-                        .child(tip_card)
-                        .into_any_element(),
-                )
-            }
+            Some(
+                div()
+                    .absolute()
+                    .top(px(24. + 3. * (1. - tip_alpha)))
+                    .left(px(tip_left_px))
+                    .opacity(tip_alpha)
+                    .child(tip_card)
+                    .into_any_element(),
+            )
         });
 
         let mut axis_row = div()
@@ -1216,7 +1348,7 @@ impl Render for ModelUsage {
             .gap(px(12.));
         for (ci, comp) in self.companies.iter().enumerate() {
             let is_on = self.hovered_company == Some(ci);
-            let is_dim = self.hovered_company.is_some_and(|hi| hi != ci);
+            let label_alpha = (0.35 + 0.65 * col_alphas[ci]).clamp(0.45, 1.0);
             let brand_key = comp.brand.as_ref().unwrap_or(&comp.id);
             let logo = pro_app_artwork(brand_key, 13., cx);
             axis_row = axis_row.child(
@@ -1227,7 +1359,7 @@ impl Render for ModelUsage {
                     .items_center()
                     .justify_center()
                     .gap(px(5.))
-                    .opacity(if is_dim { 0.48 } else { 1.0 })
+                    .opacity(label_alpha)
                     .when_some(logo, |d, lg| d.child(lg))
                     .child(
                         div()
@@ -1251,28 +1383,34 @@ impl Render for ModelUsage {
         {
             let brand_key = comp.brand.as_ref().unwrap_or(&comp.id);
             let logo = pro_app_artwork(brand_key, 12., cx);
+            let h_lbl: SharedString =
+                format!("{} {}", tr(cx, "Tasks for", "任务分布 ·"), comp.name).into();
             div()
                 .px(px(8.))
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .text_size(px(12.))
-                .text_color(p.muted)
-                .child(tr(cx, "Tasks for", "任务分布 ·"))
                 .when_some(logo, |d, lg| d.child(lg))
-                .child(
-                    div()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .child(comp.name.clone()),
-                )
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "tasks-head"),
+                    h_lbl,
+                    12.,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ))
                 .into_any_element()
         } else {
             div()
                 .px(px(8.))
-                .text_size(px(12.))
-                .text_color(p.muted)
-                .child(tr(cx, "Tasks across all models", "全部模型任务分布"))
+                .flex()
+                .items_center()
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "tasks-head"),
+                    tr(cx, "Tasks across all models", "全部模型任务分布"),
+                    12.,
+                    FontWeight::NORMAL,
+                    p.muted,
+                ))
                 .into_any_element()
         };
 
@@ -1369,6 +1507,7 @@ impl Render for ModelUsage {
         } else {
             "0"
         };
+        let plot_w_sink = self.plot_width.clone();
 
         div()
             .id(self.id.clone())
@@ -1403,12 +1542,21 @@ impl Render for ModelUsage {
                             .items_center()
                             .gap(px(8.))
                             .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .text_color(p.text)
-                                    .child(self.title.clone()),
-                            )
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "head-title"),
+                                shown_heading,
+                                13.,
+                                if self.hovered_company.is_some() {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                },
+                                if self.hovered_company.is_some() {
+                                    p.ink
+                                } else {
+                                    p.text
+                                },
+                            ))
                             .child(pro_rolling_number(
                                 pro_eid(&self.id, "grand-tot"),
                                 roll_val,
@@ -1426,6 +1574,7 @@ impl Render for ModelUsage {
             .child(
                 div()
                     .w_full()
+                    .flex_none()
                     .h(px(chart_h))
                     .flex()
                     .items_stretch()
@@ -1452,6 +1601,19 @@ impl Render for ModelUsage {
                             .min_w_0()
                             .h_full()
                             .relative()
+                            .child(
+                                canvas(
+                                    move |bounds, _, _| {
+                                        let bw = f32::from(bounds.size.width);
+                                        if bw > 20. {
+                                            plot_w_sink.set(bw);
+                                        }
+                                    },
+                                    |_, _, _, _| (),
+                                )
+                                .absolute()
+                                .inset_0(),
+                            )
                             .child(
                                 div()
                                     .absolute()
@@ -1512,7 +1674,8 @@ impl Render for ModelUsage {
 #[cfg(test)]
 mod tests {
     use super::{ModelUsage, UsageMetric, format_usage_short};
-    use gpui::{AppContext, TestAppContext};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[test]
     fn short_formatter_handles_tokens_cost_and_requests() {
@@ -1541,6 +1704,40 @@ mod tests {
             mu.set_metric(UsageMetric::Cost, cx);
             assert_eq!(mu.active_metric(), UsageMetric::Cost);
             assert!(mu.period_total(UsageMetric::Cost) > 50.0);
+        });
+    }
+
+    #[gpui::test]
+    fn provider_columns_morph_heights_and_spotlight_smoothly(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (view, w) = cx.add_window_view(|_, cx| ModelUsage::new("mu-morph", cx));
+        w.simulate_resize(size(px(580.), px(460.)));
+        w.run_until_parked();
+
+        let h0 = w.update(|_, app| view.read(app).col_height_slides[0].value(app));
+        w.update(|_, app| {
+            view.update(app, |mu, cx| {
+                mu.set_metric(UsageMetric::Cost, cx);
+                mu.set_hovered_company(Some(0), cx);
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(75));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let mu = view.read(app);
+            let h_mid = mu.col_height_slides[0].value(app);
+            assert!(
+                (h_mid - h0).abs() > 0.1,
+                "expected column Slide height to morph, got {h0} -> {h_mid}"
+            );
+            let spot_on = mu.col_spotlights[0].value(app);
+            let spot_dim = mu.col_spotlights[1].value(app);
+            assert!(spot_on > spot_dim && spot_dim < 0.95);
         });
     }
 }

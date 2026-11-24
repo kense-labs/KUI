@@ -7,13 +7,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_eid, pro_empty_state, pro_fold,
-        pro_mark_selected, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
+        family::Slide,
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -24,7 +26,6 @@ use web_time::Instant;
 const SVG_EYE_LIMIT: &str = r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"></circle>"#;
 const SVG_USERS_LIMIT: &str = r#"<circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"></circle><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.9 2.6 2.6 3 5.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const SVG_FOLDER_LIMIT: &str = r#"<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const SVG_CHECK_SM: &str = r#"<path d="m3.5 8.5 3 3 6-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const SVG_DASH_SM: &str =
     r#"<path d="M3.5 8h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>"#;
 
@@ -345,6 +346,94 @@ fn default_comparison_rows() -> Vec<PricingComparisonRow> {
     ]
 }
 
+#[derive(IntoElement)]
+struct PricingCardSurface {
+    id: ElementId,
+    border_col: Hsla,
+    hover_border: Hsla,
+    featured: bool,
+    content: AnyElement,
+}
+
+impl RenderOnce for PricingCardSurface {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let st = w.use_keyed_state(pro_eid(&self.id, "pcard-hov"), cx, |_, _| Slide::snappy(0.));
+        let hov = st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.));
+        let border = pro_mix_color(self.border_col, self.hover_border, hov);
+        let bg = pro_mix_color(p.card, pro_mix_color(p.card, p.ink, 0.014), hov);
+        let dark = p.dark;
+        let featured = self.featured;
+
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                if bounds.size.width <= px(2.) || bounds.size.height <= px(2.) {
+                    return;
+                }
+                let r = px(12.);
+                let base_sh = if featured { 0.04 } else { 0.015 };
+                let sh = if dark {
+                    0.22 * hov
+                } else {
+                    base_sh + 0.045 * hov
+                };
+                if sh > 0.005 {
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(
+                                point(bounds.origin.x, bounds.origin.y + px(1. + 1.5 * hov)),
+                                bounds.size,
+                            ),
+                            black().opacity(sh),
+                        )
+                        .corner_radii(r),
+                    );
+                }
+                window.paint_quad(quad(
+                    bounds,
+                    Corners::all(r),
+                    bg,
+                    Edges::all(px(1.)),
+                    border,
+                    BorderStyle::Solid,
+                ));
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        div()
+            .id(self.id)
+            .relative()
+            .p(px(20.))
+            .rounded(px(12.))
+            .flex()
+            .flex_col()
+            .min_w_0()
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.set(if *inside { 1. } else { 0. }, cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(-0.6 * hov))
+                    .flex()
+                    .flex_col()
+                    .min_w_0()
+                    .child(self.content),
+            )
+    }
+}
+
 /// Standalone three-tier pricing block with a capsule billing switcher, rolling numbers, and foldable comparison matrix.
 ///
 /// # Examples
@@ -543,10 +632,29 @@ impl PricingPlansBlock {
         pro_svg("0 0 24 24", svg, 13.5, color)
     }
 
-    fn render_billing_capsule(&self, p: &ProPalette, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn render_billing_capsule(
+        &self,
+        p: &ProPalette,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let sensor = pro_selection_sensor();
         let bill_key: SharedString = self.billing.as_str().into();
         let pill_fill: Hsla = if p.dark { rgb(0x2c2c30).into() } else { p.card };
+        let yearly_t = pro_spring_f32(
+            pro_eid(&self.id, "billing-yearly-sp"),
+            if self.billing == PricingBillingPeriod::Yearly {
+                1.
+            } else {
+                0.
+            },
+            0.24,
+            w,
+            cx,
+        )
+        .clamp(0., 1.);
+        let badge_bg = pro_mix_color(p.chip_hover, p.accent_soft, yearly_t);
+        let badge_fg = pro_mix_color(p.muted, p.blue, yearly_t);
 
         div()
             .id(pro_eid(&self.id, "billing-group"))
@@ -578,28 +686,27 @@ impl PricingPlansBlock {
                         let on = self.billing == period;
                         let s_ref = sensor.clone();
                         let label = period.label(cx);
-                        activate(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("bill-opt-{}", period.as_str())),
+                            label,
+                            999.,
+                            transparent_black(),
+                            if on { transparent_black() } else { p.hover },
+                            transparent_black(),
+                            transparent_black(),
+                            on,
                             div()
-                                .id(pro_eid(&self.id, format!("bill-opt-{}", period.as_str())))
-                                .role(Role::RadioButton)
-                                .aria_label(label)
-                                .aria_toggled(on.into())
-                                .tab_index(0)
-                                .relative()
                                 .h(px(28.))
                                 .px(px(13.))
                                 .rounded_full()
-                                .when(!on, |d| d.hover(move |s| s.text_color(p.ink)))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
                                 .flex()
                                 .items_center()
                                 .justify_center()
                                 .gap(px(6.))
+                                .whitespace_nowrap()
                                 .text_size(px(13.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(if on { p.ink } else { p.text })
-                                .cursor_pointer()
-                                .when(on, |d| d.child(pro_mark_selected(&s_ref)))
                                 .child(label)
                                 .when(period == PricingBillingPeriod::Yearly, |d| {
                                     d.child(
@@ -607,12 +714,12 @@ impl PricingPlansBlock {
                                             .h(px(18.))
                                             .px(px(6.))
                                             .rounded_full()
-                                            .bg(p.accent_soft)
+                                            .bg(badge_bg)
                                             .flex()
                                             .items_center()
                                             .text_size(px(11.))
                                             .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.blue)
+                                            .text_color(badge_fg)
                                             .child("-20%"),
                                     )
                                 }),
@@ -621,6 +728,10 @@ impl PricingPlansBlock {
                                 this.set_billing(period, cx);
                             },
                         )
+                        .relative()
+                        .flex_none()
+                        .rounded_full()
+                        .when(on, |d| d.child(pro_mark_selected(&s_ref)))
                     }),
             )
     }
@@ -631,7 +742,7 @@ impl PricingPlansBlock {
         currency_prefix: &SharedString,
         p: &ProPalette,
         cx: &mut Context<Self>,
-    ) -> Div {
+    ) -> AnyElement {
         let is_featured = plan.highlighted;
         let is_selected = self.selected_plan_id.as_ref() == Some(&plan.id);
         let border_col = if is_selected {
@@ -640,6 +751,11 @@ impl PricingPlansBlock {
             p.blue.opacity(if p.dark { 0.45 } else { 0.34 })
         } else {
             p.line
+        };
+        let hover_border = if is_selected || is_featured {
+            p.blue.opacity(if p.dark { 0.72 } else { 0.60 })
+        } else {
+            p.line_strong
         };
 
         let price_opt = plan.price_for(self.billing);
@@ -733,29 +849,30 @@ impl PricingPlansBlock {
         } else {
             tr(cx, "Show details", "展开详情")
         };
-        let toggle_btn = activate(
+        let toggle_btn = pro_tactile(
+            pro_eid(&self.id, format!("toggle-det-{}", plan.id)),
+            toggle_lbl,
+            6.,
+            transparent_black(),
+            p.hover,
+            transparent_black(),
+            transparent_black(),
+            details_open,
             div()
-                .id(pro_eid(&self.id, format!("toggle-det-{}", plan.id)))
-                .role(Role::Button)
-                .aria_label(toggle_lbl)
-                .aria_expanded(details_open)
-                .tab_index(0)
-                .mt(px(12.))
-                .mx_auto()
                 .h(px(24.))
                 .px(px(8.))
-                .rounded(px(6.))
-                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
                 .flex()
                 .items_center()
                 .justify_center()
                 .gap(px(4.))
-                .text_size(px(12.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.muted)
-                .cursor_pointer()
-                .child(toggle_lbl)
+                .whitespace_nowrap()
+                .child(pro_swap_label(
+                    pro_eid(&self.id, format!("toggle-det-lbl-{}", plan.id)),
+                    toggle_lbl,
+                    12.,
+                    FontWeight::MEDIUM,
+                    p.muted,
+                ))
                 .child(pro_icon(
                     if details_open {
                         ProIcon::ChevronUp
@@ -769,7 +886,10 @@ impl PricingPlansBlock {
             |this, _, cx| {
                 this.toggle_details(cx);
             },
-        );
+        )
+        .mt(px(12.))
+        .mx_auto()
+        .flex_none();
 
         let sync_label = plan.sync_label.clone();
         let sync_apps = plan.sync_apps.clone();
@@ -782,6 +902,8 @@ impl PricingPlansBlock {
             .collect();
         let eyebrow_txt: SharedString = tr(cx, "INTEGRATIONS", "应用连接").into();
         let syncs_txt: SharedString = tr(cx, "Syncs with", "支持同步").into();
+        let plan_id_fold = plan.id.clone();
+        let base_id_fold = self.id.clone();
 
         let fold_el = pro_fold(
             pro_eid(&self.id, format!("card-fold-{}", plan.id)),
@@ -844,8 +966,19 @@ impl PricingPlansBlock {
                         )
                     })
                     .child(div().mt(px(16.)).flex().flex_col().gap(px(8.)).children(
-                        features.into_iter().map(|feat| {
+                        features.into_iter().enumerate().map(|(fi, feat)| {
                             let inc = feat.included;
+                            let lead = if inc {
+                                pro_check_draw(
+                                    pro_eid(&base_id_fold, format!("feat-chk-{plan_id_fold}-{fi}")),
+                                    true,
+                                    13.,
+                                    false,
+                                    p_copy.blue,
+                                )
+                            } else {
+                                pro_svg("0 0 16 16", SVG_DASH_SM, 12., p_copy.faint)
+                            };
                             div()
                                 .flex()
                                 .items_start()
@@ -853,12 +986,7 @@ impl PricingPlansBlock {
                                 .text_size(px(12.5))
                                 .line_height(px(18.))
                                 .text_color(if inc { p_copy.ink } else { p_copy.muted })
-                                .child(div().mt(px(3.)).flex_none().child(pro_svg(
-                                    "0 0 16 16",
-                                    if inc { SVG_CHECK_SM } else { SVG_DASH_SM },
-                                    12.,
-                                    if inc { p_copy.text } else { p_copy.faint },
-                                )))
+                                .child(div().mt(px(2.5)).flex_none().child(lead))
                                 .child(div().flex_1().min_w_0().child(feat.label))
                         }),
                     ))
@@ -866,13 +994,7 @@ impl PricingPlansBlock {
             },
         );
 
-        div()
-            .p(px(20.))
-            .rounded(px(12.))
-            .bg(p.card)
-            .border_1()
-            .border_color(border_col)
-            .when(!p.dark, |d| d.shadow_xs())
+        let body = div()
             .flex()
             .flex_col()
             .min_w_0()
@@ -909,13 +1031,13 @@ impl PricingPlansBlock {
                     }),
             )
             .child(price_row)
-            .child(
-                div()
-                    .mt(px(2.))
-                    .text_size(px(12.))
-                    .text_color(p.muted)
-                    .child(billed_caption),
-            )
+            .child(div().mt(px(2.)).child(pro_swap_label(
+                pro_eid(&self.id, format!("billed-note-{}", plan.id)),
+                billed_caption,
+                12.,
+                FontWeight::NORMAL,
+                p.muted,
+            )))
             .child(
                 div().mt(px(16.)).w_full().flex().child(
                     pro_btn(
@@ -938,7 +1060,16 @@ impl PricingPlansBlock {
             )
             .child(limits_list)
             .child(toggle_btn)
-            .child(fold_el)
+            .child(fold_el);
+
+        PricingCardSurface {
+            id: pro_eid(&self.id, format!("plan-card-{}", plan.id)),
+            border_col,
+            hover_border,
+            featured: is_featured,
+            content: body.into_any_element(),
+        }
+        .into_any_element()
     }
 
     fn render_comparison_section(
@@ -954,30 +1085,30 @@ impl PricingPlansBlock {
             tr(cx, "Compare all features", "展开完整功能对比表")
         };
 
-        let trigger = activate(
+        let trigger = pro_tactile(
+            pro_eid(&self.id, "compare-matrix-toggle"),
+            btn_lbl,
+            999.,
+            p.card,
+            p.chip_hover,
+            p.line_strong,
+            p.line_strong,
+            open,
             div()
-                .id(pro_eid(&self.id, "compare-matrix-toggle"))
-                .role(Role::Button)
-                .aria_label(btn_lbl)
-                .aria_expanded(open)
-                .tab_index(0)
-                .mx_auto()
                 .h(px(32.))
                 .px(px(14.))
                 .rounded_full()
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .hover(move |s| s.bg(p.chip_hover).text_color(p.strong))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.ink)
-                .cursor_pointer()
-                .child(btn_lbl)
+                .whitespace_nowrap()
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "compare-toggle-lbl"),
+                    btn_lbl,
+                    12.5,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ))
                 .child(pro_icon(
                     if open {
                         ProIcon::ChevronUp
@@ -991,7 +1122,10 @@ impl PricingPlansBlock {
             |this, _, cx| {
                 this.toggle_comparison(cx);
             },
-        );
+        )
+        .mx_auto()
+        .flex_none()
+        .rounded_full();
 
         let plan_headers: Vec<(SharedString, bool)> = self
             .plans
@@ -1072,6 +1206,7 @@ impl PricingPlansBlock {
                                 .child(row.category),
                         );
                     }
+                    let base_row_id = base_id.clone();
                     let line = div()
                         .id(pro_eid(&base_id, format!("compare-row-{ri}")))
                         .role(Role::Row)
@@ -1096,7 +1231,13 @@ impl PricingPlansBlock {
                                 "yes" => div()
                                     .flex()
                                     .justify_center()
-                                    .child(pro_svg("0 0 16 16", SVG_CHECK_SM, 13., p_copy.blue))
+                                    .child(pro_check_draw(
+                                        pro_eid(&base_row_id, format!("cmp-chk-{ri}-{ci}")),
+                                        true,
+                                        14.,
+                                        false,
+                                        p_copy.blue,
+                                    ))
                                     .into_any_element(),
                                 "no" => div()
                                     .flex()
@@ -1341,7 +1482,7 @@ impl Render for PricingPlansBlock {
                                 .child(sub),
                         ),
                 )
-                .child(self.render_billing_capsule(&p, cx))
+                .child(self.render_billing_capsule(&p, w, cx))
                 .child(grid)
                 .child(cmp_section)
                 .into_any_element()

@@ -6,11 +6,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_ease, pro_eid, pro_empty_state, pro_presence,
-        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, tr,
+        ProPalette, pro_agent_avatar, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile,
+        tr,
     },
+    foundation::Theme,
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon},
     },
 };
@@ -301,6 +303,8 @@ pub struct DiffTimeline {
     max_rows: usize,
     inspected_edit: Option<usize>,
     hovered_file: Option<SharedString>,
+    scrub_slide: Slide,
+    scrub_hover_x: Option<f32>,
     chart_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     started_at: Instant,
     replay_from_zero: bool,
@@ -326,6 +330,8 @@ impl DiffTimeline {
             max_rows: 7,
             inspected_edit: None,
             hovered_file: None,
+            scrub_slide: Slide::snappy(0.0),
+            scrub_hover_x: None,
             chart_bounds: Rc::new(Cell::new(None)),
             started_at: Instant::now(),
             replay_from_zero: false,
@@ -409,6 +415,14 @@ impl DiffTimeline {
     pub fn set_inspected_edit(&mut self, edit_idx: Option<usize>, cx: &mut Context<Self>) {
         if self.inspected_edit != edit_idx {
             self.inspected_edit = edit_idx;
+            if let Some(idx) = edit_idx
+                && let Some(ed) = self.edits.get(idx)
+                && self.scrub_hover_x.is_none()
+            {
+                let target_x =
+                    (ed.at_secs as f32 / (self.duration_secs.max(1) as f32)).clamp(0., 1.);
+                self.scrub_slide.set(target_x, cx);
+            }
             cx.emit(DiffTimelineEvent::InspectEdit(edit_idx));
             cx.notify();
         }
@@ -419,6 +433,7 @@ impl DiffTimeline {
         self.replay_from_zero = true;
         self.live = true;
         self.inspected_edit = None;
+        self.scrub_hover_x = None;
         self.started_at = Instant::now();
         cx.emit(DiffTimelineEvent::ReplayStarted);
         cx.notify();
@@ -466,7 +481,7 @@ fn build_cumulative_series(
 impl Render for DiffTimeline {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let dur_f = (self.duration_secs.max(1)) as f32;
         let elapsed_s = self.current_elapsed_secs(reduced);
         let still_animating =
@@ -556,9 +571,19 @@ impl Render for DiffTimeline {
                     .map(|&i| self.edits[i].at_secs)
                     .unwrap_or(0);
                 div()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
                     .text_size(px(12.))
                     .line_height(px(16.))
                     .text_color(p.muted)
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "dt-done-chk"),
+                        true,
+                        12.5,
+                        false,
+                        p.green,
+                    ))
                     .child(format!(
                         "{} {}",
                         tr(cx, "Completed at", "完成于"),
@@ -790,6 +815,19 @@ impl Render for DiffTimeline {
             .filter(|e| (e.at_secs as f32) <= elapsed_s + 0.001)
             .map(|e| (e.at_secs as f32 / dur_f).clamp(0., 1.));
 
+        let scrub_x_frac = self.scrub_slide.get(window, cx).clamp(0., 1.);
+        let scrub_alpha = pro_spring_f32(
+            pro_eid(&self.id, "dt-scrub-a"),
+            if inspected_x_frac.is_some() || self.scrub_hover_x.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            0.16,
+            window,
+            cx,
+        );
+
         let bounds_cell = self.chart_bounds.clone();
         let grid_c = p.line;
         let base_c = p.line_strong;
@@ -927,13 +965,24 @@ impl Render for DiffTimeline {
                 }
 
                 // Vertical inspection hairline when hovering/scrubbing an edit
-                if let Some(ix) = inspected_x_frac {
-                    let gx = ox + ix * cw;
-                    let mut gline = PathBuilder::stroke(px(1.0));
+                if scrub_alpha > 0.01 {
+                    let gx = ox + scrub_x_frac * cw;
+                    let mut gline = PathBuilder::stroke(px(1.15));
                     gline.move_to(point(px(gx), px(oy)));
                     gline.line_to(point(px(gx), px(oy + ch)));
                     if let Ok(path) = gline.build() {
-                        win.paint_path(path, base_c);
+                        win.paint_path(path, base_c.opacity(scrub_alpha));
+                    }
+                    if let Some(ix) = inspected_x_frac {
+                        let ex = ox + ix * cw;
+                        paint_tip_dot(
+                            point(px(ex), px(oy + ch)),
+                            3.2,
+                            p.ink.opacity(scrub_alpha),
+                            card_bg.opacity(scrub_alpha),
+                            1.5,
+                            win,
+                        );
                     }
                 }
 
@@ -984,10 +1033,11 @@ impl Render for DiffTimeline {
         .w_full()
         .h(px(CHART_H));
 
-        // X-axis (`0:00`, `1:00`, `2:00`, `3:00`, `4:00`)
+        // X-axis (`0:00`, `1:00`, `2:00`, `3:00`, `4:00`) + floating scrubber time pill
         let mut x_axis = div()
             .w_full()
             .h(px(24.))
+            .relative()
             .flex()
             .items_center()
             .justify_between();
@@ -1001,26 +1051,47 @@ impl Render for DiffTimeline {
                     .child(format_mm_ss(secs)),
             );
         }
+        if scrub_alpha > 0.02 {
+            let scrub_secs = ((scrub_x_frac * dur_f).round() as u32).min(self.duration_secs);
+            x_axis = x_axis.child(
+                div()
+                    .absolute()
+                    .left(relative(scrub_x_frac.clamp(0.05, 0.95)))
+                    .top(px(3.))
+                    .ml(px(-18.))
+                    .h(px(17.))
+                    .px(px(5.5))
+                    .rounded(px(4.))
+                    .bg(p.chip)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .opacity(scrub_alpha)
+                    .flex()
+                    .items_center()
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.ink)
+                    .child(format_mm_ss(scrub_secs)),
+            );
+        }
 
-        // Floating edit diff preview popover (`pro_presence`)
+        // Floating edit diff preview popover (`pro_popover_presence`)
         let active_edit_opt = self
             .inspected_edit
             .and_then(|i| self.edits.get(i).cloned().map(|ed| (i, ed)));
+        let align_right = active_edit_opt
+            .as_ref()
+            .is_some_and(|(_, ed)| (ed.at_secs as f32 / dur_f) > 0.56);
         let is_zh = tr(cx, "en", "zh") == "zh";
         let added_lbl = tr(cx, "Added", "新增").to_string();
         let removed_lbl = tr(cx, "Removed", "删除").to_string();
-        let tip_layer = pro_presence(
+        let tip_inner = pro_popover_presence(
             pro_eid(&self.id, "diff-tip"),
             active_edit_opt.is_some(),
-            0.16,
-            0.12,
-            move |amt| {
+            move || {
                 let Some((_, ed)) = active_edit_opt.as_ref() else {
                     return div().into_any_element();
                 };
-                let u_x = (ed.at_secs as f32 / dur_f).clamp(0., 1.);
-                // Position tooltip cleanly inside chart width without overflowing right edge
-                let align_right = u_x > 0.56;
                 let (dir_p, file_p) = split_dir_and_file(ed.file.as_ref());
                 let note_txt = match (&ed.note, &ed.note_zh) {
                     (Some(en), Some(zh)) => Some(if is_zh { zh.clone() } else { en.clone() }),
@@ -1074,7 +1145,6 @@ impl Render for DiffTimeline {
                     .border_1()
                     .border_color(p.line_strong)
                     .shadow_md()
-                    .opacity(amt)
                     .flex()
                     .flex_col()
                     .child(
@@ -1158,15 +1228,24 @@ impl Render for DiffTimeline {
                 if !ed.diff.is_empty() {
                     card = card.child(diff_box);
                 }
-
-                let wrapper = div().absolute().top(px(-8. + 4. * (1. - amt)));
-                if align_right {
-                    wrapper.right(px(6.)).child(card).into_any_element()
-                } else {
-                    wrapper.left(px(6.)).child(card).into_any_element()
-                }
+                card.into_any_element()
             },
         );
+        let tip_layer = if align_right {
+            div()
+                .absolute()
+                .top(px(-8.))
+                .right(px(6.))
+                .child(tip_inner)
+                .into_any_element()
+        } else {
+            div()
+                .absolute()
+                .top(px(-8.))
+                .left(px(6.))
+                .child(tip_inner)
+                .into_any_element()
+        };
 
         let bounds_for_move = self.chart_bounds.clone();
         let vis_for_move = visible_edit_indices.clone();
@@ -1196,6 +1275,8 @@ impl Render for DiffTimeline {
                 }
                 let bw = f32::from(b.size.width).max(1.);
                 let rel_x = (f32::from(ev.position.x - b.left()) / bw).clamp(0., 1.);
+                this.scrub_hover_x = Some(rel_x);
+                this.scrub_slide.set(rel_x, cx);
                 let hover_sec = rel_x * (this.duration_secs as f32);
                 let nearest = vis_for_move.iter().copied().min_by(|&a, &b_idx| {
                     let da = (this.edits[a].at_secs as f32 - hover_sec).abs();
@@ -1203,10 +1284,16 @@ impl Render for DiffTimeline {
                     da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
                 });
                 this.set_inspected_edit(nearest, cx);
+                cx.notify();
             }))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                if !*inside && this.inspected_edit.is_some() {
-                    this.set_inspected_edit(None, cx);
+                if !*inside {
+                    this.scrub_hover_x = None;
+                    if this.inspected_edit.is_some() {
+                        this.set_inspected_edit(None, cx);
+                    } else {
+                        cx.notify();
+                    }
                 }
             }))
             .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
@@ -1304,7 +1391,17 @@ impl Render for DiffTimeline {
             cx,
         );
 
-        let any_file_hovered = self.hovered_file.is_some();
+        let any_file_hovered = pro_spring_f32(
+            pro_eid(&self.id, "fany-hov"),
+            if self.hovered_file.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            0.20,
+            window,
+            cx,
+        );
         let mut files_list =
             div()
                 .w_full()
@@ -1329,11 +1426,14 @@ impl Render for DiffTimeline {
             let (glyph_icon, glyph_color) = file_icon_and_color(fname.as_ref(), &p);
             let (dir_str, base_str) = split_dir_and_file(fname.as_ref());
             let is_this_on = active_file_name.as_ref() == Some(&fname);
-            let row_opacity = if any_file_hovered && !is_this_on {
-                0.42
-            } else {
-                1.0
-            };
+            let row_spot = pro_spring_f32(
+                pro_eid(&self.id, format!("fspot-{fname}")),
+                if is_this_on { 1.0 } else { 0.0 },
+                0.20,
+                window,
+                cx,
+            );
+            let row_opacity = 1.0 - any_file_hovered * (1.0 - row_spot) * 0.56;
 
             let file_churn = (frow.added + frow.removed).max(1);
             let target_bar_ratio = (file_churn as f32 / max_file_churn as f32).clamp(0.06, 1.0);
@@ -1407,87 +1507,106 @@ impl Render for DiffTimeline {
 
             let hov_fname = fname.clone();
             let first_edit_for_file = frow.edit_indices.last().copied();
+            let row_inner = div()
+                .w_full()
+                .h(px(FILE_ROW_H))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(pro_icon(glyph_icon, 14., glyph_color))
+                .child(
+                    div()
+                        .w(px(196.))
+                        .flex_none()
+                        .min_w_0()
+                        .truncate()
+                        .flex()
+                        .items_center()
+                        .text_size(px(12.5))
+                        .line_height(px(18.))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_color(p.faint)
+                                .child(dir_str.to_string()),
+                        )
+                        .child(
+                            div()
+                                .flex_none()
+                                .text_color(p.ink)
+                                .child(base_str.to_string()),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .child(seg_bar),
+                )
+                .child(
+                    div()
+                        .w(px(76.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .gap(px(6.))
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, format!("fadd-{fname}")),
+                            f64::from(frow.added),
+                            0,
+                            "+",
+                            "",
+                            12.,
+                            FontWeight::MEDIUM,
+                            if frow.added == 0 { p.faint } else { add_ink },
+                        ))
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, format!("fdel-{fname}")),
+                            f64::from(frow.removed),
+                            0,
+                            "−",
+                            "",
+                            12.,
+                            FontWeight::MEDIUM,
+                            if frow.removed == 0 { p.faint } else { del_ink },
+                        )),
+                );
+
             files_list = files_list.child(
-                div()
-                    .id(pro_eid(&self.id, format!("frow-{fname}")))
-                    .role(Role::ListItem)
-                    .w_full()
-                    .h(px(FILE_ROW_H))
-                    .px(px(8.))
-                    .rounded(px(7.))
-                    .relative()
-                    .opacity(row_opacity)
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .cursor_pointer()
-                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                        let next = if *inside {
-                            Some(hov_fname.clone())
-                        } else {
-                            None
-                        };
-                        if this.hovered_file != next {
-                            this.hovered_file = next;
-                            cx.notify();
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                pro_tactile(
+                    pro_eid(&self.id, format!("frow-{fname}")),
+                    fname.clone(),
+                    7.0,
+                    transparent_black(),
+                    p.hover.opacity(0.65),
+                    transparent_black(),
+                    p.line.opacity(0.6),
+                    is_this_on,
+                    row_inner,
+                    cx,
+                    move |this, _, cx| {
                         this.set_inspected_edit(first_edit_for_file, cx);
-                    }))
-                    .child(pro_icon(glyph_icon, 14., glyph_color))
-                    .child(
-                        div()
-                            .w(px(196.))
-                            .flex_none()
-                            .min_w_0()
-                            .truncate()
-                            .flex()
-                            .items_center()
-                            .text_size(px(12.5))
-                            .line_height(px(18.))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_color(p.faint)
-                                    .child(dir_str.to_string()),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_color(p.ink)
-                                    .child(base_str.to_string()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .child(seg_bar),
-                    )
-                    .child(
-                        div()
-                            .w(px(76.))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap(px(6.))
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(
-                                div()
-                                    .text_color(if frow.added == 0 { p.faint } else { add_ink })
-                                    .child(format!("+{}", frow.added)),
-                            )
-                            .child(
-                                div()
-                                    .text_color(if frow.removed == 0 { p.faint } else { del_ink })
-                                    .child(format!("−{}", frow.removed)),
-                            ),
-                    ),
+                    },
+                )
+                .h(px(FILE_ROW_H))
+                .opacity(row_opacity)
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    let next = if *inside {
+                        Some(hov_fname.clone())
+                    } else {
+                        None
+                    };
+                    if this.hovered_file != next {
+                        this.hovered_file = next;
+                        cx.notify();
+                    }
+                })),
             );
         }
 
@@ -1502,12 +1621,6 @@ impl Render for DiffTimeline {
             .max_h(px((self.max_rows as f32) * FILE_ROW_H))
             .when(file_rows.len() > self.max_rows, |d| d.overflow_y_scroll())
             .child(files_list);
-
-        let net_str = if net_delta >= 0 {
-            format!("+{net_delta}")
-        } else {
-            format!("−{}", net_delta.unsigned_abs())
-        };
 
         let footer = div()
             .px(px(16.))
@@ -1542,34 +1655,45 @@ impl Render for DiffTimeline {
                     .gap(px(6.))
                     .child(div().w(px(12.)).h(px(1.)).border_t_1().border_color(net_c))
                     .child(tr(cx, "Net", "净增"))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(net_str),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "tot-net"),
+                        net_delta.unsigned_abs() as f64,
+                        0,
+                        if net_delta >= 0 { "+" } else { "−" },
+                        "",
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    )),
             )
             .child(
-                div()
-                    .id(pro_eid(&self.id, "replay-btn"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Replay edit timeline", "重播修改时间线"))
-                    .ml_auto()
-                    .h(px(22.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .cursor_pointer()
-                    .text_size(px(11.5))
-                    .text_color(p.muted)
-                    .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.replay(cx);
-                    }))
-                    .child(pro_icon(ProIcon::Refresh, 11.5, p.muted))
-                    .child(tr(cx, "Replay", "重放")),
+                div().ml_auto().child(
+                    pro_tactile(
+                        pro_eid(&self.id, "replay-btn"),
+                        tr(cx, "Replay edit timeline", "重播修改时间线"),
+                        6.0,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        p.line,
+                        false,
+                        div()
+                            .h(px(22.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .text_size(px(11.5))
+                            .text_color(p.muted)
+                            .child(pro_icon(ProIcon::Refresh, 11.5, p.muted))
+                            .child(tr(cx, "Replay", "重放")),
+                        cx,
+                        |this, _, cx| {
+                            this.replay(cx);
+                        },
+                    )
+                    .w_auto(),
+                ),
             );
 
         div()

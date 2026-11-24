@@ -5,14 +5,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_modal_appear,
-        pro_rolling_number, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_icon_btn, pro_mix_color, pro_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::{
-        control::activate,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
-    },
+    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, rc::Rc};
@@ -275,6 +273,7 @@ pub struct AgentGraph {
     calls: Vec<GraphCall>,
     custom_data: bool,
     selected_id: Option<SharedString>,
+    last_selected_id: Option<SharedString>,
     hovered_id: Option<SharedString>,
     pulses: Vec<LivePulse>,
     ripples: Vec<NodeRipple>,
@@ -336,6 +335,7 @@ impl AgentGraph {
             calls,
             custom_data: false,
             selected_id: None,
+            last_selected_id: None,
             hovered_id: None,
             pulses,
             ripples: Vec::new(),
@@ -434,6 +434,9 @@ impl AgentGraph {
     /// Select a node (or pass `None` to close the node inspector).
     pub fn select_node(&mut self, node_id: Option<SharedString>, cx: &mut Context<Self>) {
         let valid = node_id.filter(|id| self.nodes.iter().any(|n| &n.id == id));
+        if let Some(ref vid) = valid {
+            self.last_selected_id = Some(vid.clone());
+        }
         if self.selected_id != valid {
             self.selected_id = valid.clone();
             cx.emit(AgentGraphEvent::NodeSelected { node_id: valid });
@@ -726,20 +729,12 @@ impl AgentGraph {
             .take(4)
             .collect();
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "gclose-dlg"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close inspector", "关闭节点详情"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "gclose-dlg"),
+            tr(cx, "Close inspector", "关闭节点详情"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.select_node(None, cx);
@@ -803,6 +798,7 @@ impl AgentGraph {
                             }),
                     )
                     .when(node.kind == GraphNodeKind::Agent, |d| {
+                        let status_chk = node.status == GraphNodeStatus::Done;
                         d.child(
                             div()
                                 .h(px(19.))
@@ -814,7 +810,23 @@ impl AgentGraph {
                                 .font_weight(FontWeight::MEDIUM)
                                 .flex()
                                 .items_center()
-                                .child(node.status.label(cx)),
+                                .gap(px(4.))
+                                .when(status_chk, |el| {
+                                    el.child(pro_check_draw(
+                                        pro_eid(&self.id, format!("gdlg-chk-{nid}")),
+                                        true,
+                                        12.,
+                                        false,
+                                        p.green,
+                                    ))
+                                })
+                                .child(pro_swap_label(
+                                    pro_eid(&self.id, format!("gdlg-st-{nid}")),
+                                    node.status.label(cx),
+                                    11.,
+                                    FontWeight::MEDIUM,
+                                    pill_fg,
+                                )),
                         )
                     })
                     .child(close_btn),
@@ -958,35 +970,64 @@ impl AgentGraph {
                 .justify_between()
                 .text_size(px(11.5))
                 .text_color(p.muted)
-                .child(format!(
-                    "{call_cnt} {}",
-                    tr(cx, "recent calls", "次近期调用")
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, format!("gdlg-calls-{nid}")),
+                    call_cnt as f64,
+                    0,
+                    "",
+                    format!(" {}", tr(cx, "recent calls", "次近期调用")),
+                    11.5,
+                    FontWeight::NORMAL,
+                    p.muted,
                 ))
                 .when(node.cost > 0.0, |d| {
-                    d.child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(format!("${:.2}", node.cost)),
-                    )
+                    d.child(pro_rolling_number(
+                        pro_eid(&self.id, format!("gdlg-cost-{nid}")),
+                        node.cost,
+                        2,
+                        "$",
+                        "",
+                        11.5,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))
                 }),
         );
 
-        div()
-            .id(pro_eid(&self.id, "gmodal-scrim"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.select_node(None, cx);
-                this.focus.focus(w, cx);
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "gmodal-wrap"),
-                nid,
-                if p.dark { 0.45 } else { 0.20 },
-                card,
-            ))
-            .into_any_element()
+        let dialog_body = pro_view_transition(pro_eid(&self.id, "gmodal-vtx"), nid, card);
+        let dark = p.dark;
+        let scrim_id = pro_eid(&self.id, "gmodal-scrim");
+        let on_scrim = cx.listener(|this, _: &ClickEvent, w, cx| {
+            this.select_node(None, cx);
+            this.focus.focus(w, cx);
+        });
+        pro_presence(
+            pro_eid(&self.id, "gmodal-pres"),
+            self.selected_id.is_some(),
+            0.20,
+            0.16,
+            move |amt| {
+                let scrim_a = (if dark { 0.45 } else { 0.20 }) * amt;
+                div()
+                    .id(scrim_id)
+                    .absolute()
+                    .inset_0()
+                    .bg(hsla(0., 0., 0., scrim_a))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p(px(16.))
+                    .on_click(on_scrim)
+                    .child(
+                        div()
+                            .relative()
+                            .top(px(8. * (1. - amt)))
+                            .opacity(amt)
+                            .child(dialog_body),
+                    )
+                    .into_any_element()
+            },
+        )
     }
 }
 
@@ -1100,23 +1141,27 @@ impl Render for AgentGraph {
 
         let wait_chip = waiting_nodes.first().cloned().map(|wid| {
             let cnt = waiting_nodes.len();
-            activate(
+            let lbl = format!("{cnt} {}", tr(cx, "needs you", "待确认"));
+            pro_tactile(
+                pro_eid(&self.id, "g-wait-chip"),
+                lbl.clone(),
+                5.,
+                p.amber_soft,
+                p.amber.opacity(0.24),
+                transparent_black(),
+                p.amber.opacity(0.45),
+                false,
                 div()
-                    .id(pro_eid(&self.id, "g-wait-chip"))
-                    .role(Role::Button)
                     .h(px(22.))
                     .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.amber_soft)
                     .text_color(p.amber_ink)
                     .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
                     .gap(px(4.))
-                    .cursor_pointer()
                     .child(pro_icon(ProIcon::Clock, 12., p.amber_ink))
-                    .child(format!("{cnt} {}", tr(cx, "needs you", "待确认"))),
+                    .child(lbl),
                 cx,
                 move |this, _, cx| {
                     this.select_node(Some(wid.clone()), cx);
@@ -1126,23 +1171,27 @@ impl Render for AgentGraph {
 
         let err_chip = error_nodes.first().cloned().map(|eid| {
             let cnt = error_nodes.len();
-            activate(
+            let lbl = format!("{cnt} {}", tr(cx, "failed", "失败"));
+            pro_tactile(
+                pro_eid(&self.id, "g-err-chip"),
+                lbl.clone(),
+                5.,
+                p.red_soft,
+                p.red.opacity(0.24),
+                transparent_black(),
+                p.red.opacity(0.45),
+                false,
                 div()
-                    .id(pro_eid(&self.id, "g-err-chip"))
-                    .role(Role::Button)
                     .h(px(22.))
                     .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.red_soft)
                     .text_color(p.red_ink)
                     .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
                     .gap(px(4.))
-                    .cursor_pointer()
                     .child(pro_icon(ProIcon::AlertTriangle, 12., p.red_ink))
-                    .child(format!("{cnt} {}", tr(cx, "failed", "失败"))),
+                    .child(lbl),
                 cx,
                 move |this, _, cx| {
                     this.select_node(Some(eid.clone()), cx);
@@ -1195,7 +1244,16 @@ impl Render for AgentGraph {
                     ))
                     .child(format!("{agent_cnt} {}", tr(cx, "agents", "个智能体")))
                     .child(format!("{tool_cnt} {}", tr(cx, "tools", "个工具")))
-                    .child(format!("{cpm} {}", tr(cx, "calls/min", "次调用/分")))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "g-cpm"),
+                        cpm as f64,
+                        0,
+                        "",
+                        format!(" {}", tr(cx, "calls/min", "次调用/分")),
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "g-total-cost"),
                         total_cost,
@@ -1225,6 +1283,40 @@ impl Render for AgentGraph {
             }
         }
 
+        // Pre-sample smooth spring focus weights per edge for connected-path spotlight
+        let mut edge_focus_weights: HashMap<(SharedString, SharedString), (f32, f32)> =
+            HashMap::with_capacity(self.edges.len());
+        for (a, b) in &self.edges {
+            let key = canonical_edge_key(a, b);
+            let near = match &focus_node {
+                Some(fid) => a == fid || b == fid,
+                None => true,
+            };
+            let target_vis = if near { 1.0 } else { 0.22 };
+            let target_spot = if focus_node.is_some() && near {
+                1.0
+            } else {
+                0.0
+            };
+            let vis = pro_spring_f32(
+                pro_eid(&self.id, format!("ge-vis-{}-{}", key.0, key.1)),
+                target_vis,
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            let spot = pro_spring_f32(
+                pro_eid(&self.id, format!("ge-spt-{}-{}", key.0, key.1)),
+                target_spot,
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            edge_focus_weights.insert(key, (vis, spot));
+        }
+
         let edges_paint = self.edges.clone();
         let coords_paint = coords.clone();
         let heat_paint = self.edge_heat.clone();
@@ -1235,7 +1327,6 @@ impl Render for AgentGraph {
             .iter()
             .map(|n| (n.id.clone(), n.status))
             .collect();
-        let focus_paint = focus_node.clone();
         let p_canvas = p;
         let elapsed_s = self.boot.elapsed().as_secs_f32();
 
@@ -1266,7 +1357,7 @@ impl Render for AgentGraph {
                     );
                 }
 
-                // Paint rounded circuit edges with dynamic heat stroke-width
+                // Paint rounded circuit edges with dynamic heat stroke-width & smooth spotlight
                 for (a, b) in &edges_paint {
                     let (Some(&pa), Some(&pb_norm)) = (coords_paint.get(a), coords_paint.get(b))
                     else {
@@ -1277,7 +1368,8 @@ impl Render for AgentGraph {
                     let pts = build_circuit_polyline(p0, p1, 8.0);
                     let key = canonical_edge_key(a, b);
                     let heat = heat_paint.get(&key).map(|(h, _)| *h).unwrap_or(0.0);
-                    let stroke_w = (1.35 + heat * 0.62).clamp(1.35, 3.8);
+                    let (vis, spot) = edge_focus_weights.get(&key).copied().unwrap_or((1.0, 0.0));
+                    let stroke_w = (1.35 + heat * 0.62 + 0.50 * spot).clamp(1.35, 4.1);
 
                     let a_st = nodes_status.get(a).copied().unwrap_or_default();
                     let b_st = nodes_status.get(b).copied().unwrap_or_default();
@@ -1285,25 +1377,25 @@ impl Render for AgentGraph {
                         a_st == GraphNodeStatus::Waiting || b_st == GraphNodeStatus::Waiting;
                     let is_err = a_st == GraphNodeStatus::Error || b_st == GraphNodeStatus::Error;
 
-                    let near_focus = match &focus_paint {
-                        Some(fid) => a == fid || b == fid,
-                        None => true,
-                    };
-                    let edge_col = if is_err {
-                        p_canvas.red.opacity(if near_focus { 0.80 } else { 0.16 })
+                    let rest_col = if is_err {
+                        p_canvas.red.opacity(0.80 * vis)
                     } else if is_ask {
-                        p_canvas.amber.opacity(if near_focus { 0.72 } else { 0.16 })
+                        p_canvas.amber.opacity(0.72 * vis)
                     } else if heat > 0.3 {
-                        p_canvas.blue.opacity(if near_focus {
-                            (0.24 + heat * 0.12).clamp(0.24, 0.68)
-                        } else {
-                            0.10
-                        })
-                    } else {
                         p_canvas
-                            .line_strong
-                            .opacity(if near_focus { 0.95 } else { 0.18 })
+                            .blue
+                            .opacity(((0.24 + heat * 0.12).clamp(0.24, 0.68)) * vis)
+                    } else {
+                        p_canvas.line_strong.opacity(0.95 * vis)
                     };
+                    let spot_col = if is_err {
+                        p_canvas.red.opacity(0.92)
+                    } else if is_ask {
+                        p_canvas.amber.opacity(0.88)
+                    } else {
+                        p_canvas.blue.opacity(0.82)
+                    };
+                    let edge_col = pro_mix_color(rest_col, spot_col, spot * 0.65);
 
                     let mut path_b = PathBuilder::stroke(px(stroke_w));
                     for (i, &(x, y)) in pts.iter().enumerate() {
@@ -1417,7 +1509,7 @@ impl Render for AgentGraph {
             let Some(&(nx, ny)) = coords.get(&node.id) else {
                 continue;
             };
-            let side = if node.lead {
+            let side: f32 = if node.lead {
                 if narrow { 42.0 } else { 48.0 }
             } else if node.kind == GraphNodeKind::Agent {
                 if narrow { 34.0 } else { 38.0 }
@@ -1428,6 +1520,14 @@ impl Render for AgentGraph {
             };
 
             let dimmed = focus_node.is_some() && !neighbors.contains(&node.id);
+            let node_op = pro_spring_f32(
+                pro_eid(&self.id, format!("gn-op-{}", node.id)),
+                if dimmed { 0.32 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
             let disp_name: SharedString = if narrow && let Some(sh) = &node.short {
                 sh.clone()
             } else if self.custom_data {
@@ -1471,7 +1571,8 @@ impl Render for AgentGraph {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_icon(ProIcon::Clock, 9.5, rgb(0x111113).into())),
+                        .child(pro_icon(ProIcon::Clock, 9.5, rgb(0x111113).into()))
+                        .into_any_element(),
                 ),
                 GraphNodeStatus::Error => Some(
                     div()
@@ -1486,7 +1587,22 @@ impl Render for AgentGraph {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_icon(ProIcon::AlertTriangle, 9.5, rgb(0xffffff).into())),
+                        .child(pro_icon(ProIcon::AlertTriangle, 9.5, rgb(0xffffff).into()))
+                        .into_any_element(),
+                ),
+                GraphNodeStatus::Done => Some(
+                    div()
+                        .absolute()
+                        .top(px(-4.))
+                        .right(px(-4.))
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("gn-chk-{}", node.id)),
+                            true,
+                            14.,
+                            false,
+                            p.green,
+                        ))
+                        .into_any_element(),
                 ),
                 _ => None,
             };
@@ -1505,52 +1621,52 @@ impl Render for AgentGraph {
 
             let nid_click = node.id.clone();
             let nid_hov = node.id.clone();
-            let focus_c = p.focus;
             let hov_border = if node.status == GraphNodeStatus::Waiting {
                 p.amber
             } else {
                 p.blue
             };
+            let disc_hov_bg = pro_mix_color(disc_bg, p.chip_hover, 0.45);
+            let is_sel = self.selected_id.as_ref() == Some(&node.id);
 
-            let disc_btn = activate(
+            let disc_btn = pro_tactile(
+                pro_eid(&self.id, format!("gnode-{}", node.id)),
+                format!("{disp_name}, {}", node.status.label(cx)),
+                (side * 0.34).round(),
+                disc_bg,
+                disc_hov_bg,
+                disc_border,
+                hov_border,
+                is_sel,
                 div()
-                    .id(pro_eid(&self.id, format!("gnode-{}", node.id)))
-                    .role(Role::Button)
-                    .aria_label(format!("{disp_name}, {}", node.status.label(cx)))
-                    .tab_index(0)
-                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                        let next = if *hovered {
-                            Some(nid_hov.clone())
-                        } else if this.hovered_id.as_ref() == Some(&nid_hov) {
-                            None
-                        } else {
-                            this.hovered_id.clone()
-                        };
-                        if this.hovered_id != next {
-                            this.hovered_id = next;
-                            cx.notify();
-                        }
-                    }))
                     .size(px(side))
                     .relative()
-                    .rounded(px((side * 0.34).round()))
-                    .bg(disc_bg)
-                    .border_1()
-                    .border_color(disc_border)
-                    .shadow_sm()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_border))
-                    .focus_visible(move |s| s.border_color(focus_c))
                     .child(render_node_glyph(node, (side * 0.46).round(), &p, cx))
                     .children(badge),
                 cx,
                 move |this, _, cx| {
                     this.select_node(Some(nid_click.clone()), cx);
                 },
-            );
+            )
+            .w(px(side))
+            .h(px(side))
+            .shadow_sm()
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                let next = if *hovered {
+                    Some(nid_hov.clone())
+                } else if this.hovered_id.as_ref() == Some(&nid_hov) {
+                    None
+                } else {
+                    this.hovered_id.clone()
+                };
+                if this.hovered_id != next {
+                    this.hovered_id = next;
+                    cx.notify();
+                }
+            }));
 
             let label_above = ny < 0.23;
             let label_box = div()
@@ -1608,7 +1724,7 @@ impl Render for AgentGraph {
                     .left(px(left_pos))
                     .top(px(top_pos))
                     .w(px(box_w))
-                    .opacity(if dimmed { 0.30 } else { 1.0 })
+                    .opacity(node_op)
                     .flex()
                     .flex_col()
                     .items_center()
@@ -1640,10 +1756,14 @@ impl Render for AgentGraph {
             .child(legend_streak_item(tr(cx, "Needs you", "待你确认"), p.amber))
             .child(legend_streak_item(tr(cx, "Failed", "调用失败"), p.red));
 
-        let open_dialog = self.selected_id.clone().and_then(|sid| {
-            let n = self.nodes.iter().find(|n| n.id == sid)?;
-            Some(self.render_node_dialog(n, &p, cx))
-        });
+        let open_dialog = self
+            .selected_id
+            .clone()
+            .or_else(|| self.last_selected_id.clone())
+            .and_then(|sid| {
+                let n = self.nodes.iter().find(|n| n.id == sid)?;
+                Some(self.render_node_dialog(n, &p, cx))
+            });
 
         div()
             .id(self.id.clone())

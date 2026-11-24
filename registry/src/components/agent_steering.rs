@@ -6,23 +6,24 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_shimmer_text,
-        pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 const SPARK_FOUR_SVG: &str = r#"<path d="M7 1.2c.4 2.9 1.9 4.4 4.8 4.8-2.9.4-4.4 1.9-4.8 4.8C6.6 7.9 5.1 6.4 2.2 6 5.1 5.6 6.6 4.1 7 1.2Z" fill="currentColor"></path><circle cx="11.6" cy="11.4" r="1.1" fill="currentColor" opacity="0.55"></circle>"#;
-const CHECK_POP_SVG: &str = r##"<circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="m5.4 8.2 1.8 1.8 3.4-3.7" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>"##;
 const PENDING_DASH_SVG: &str = r#"<circle cx="8" cy="8" r="5.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2.2"></circle>"#;
 const BOLT_MINI_SVG: &str =
     r#"<path d="M6.9 1 2.6 6.6h3l-.5 4.4 4.3-5.6h-3L6.9 1Z" fill="currentColor"></path>"#;
@@ -196,6 +197,11 @@ pub struct AgentSteering {
     steps: Vec<SteerStep>,
     queue: Vec<SteerQueuedNote>,
     status: SteerRunStatus,
+    act_mode: bool,
+    policy_idx: usize,
+    policy_open: bool,
+    step_done_clocks: HashMap<SharedString, PhaseClock>,
+    queue_slides: HashMap<SharedString, Slide>,
     base_run_secs: f32,
     step_budget_secs: f32,
     auto_tick: bool,
@@ -226,6 +232,11 @@ impl AgentSteering {
             steps: default_steer_steps(),
             queue: default_steer_queue(),
             status: SteerRunStatus::Running,
+            act_mode: true,
+            policy_idx: 0,
+            policy_open: false,
+            step_done_clocks: HashMap::new(),
+            queue_slides: HashMap::new(),
             base_run_secs: 128.0,
             step_budget_secs: 7.5,
             auto_tick: true,
@@ -368,6 +379,9 @@ impl AgentSteering {
         let id = SharedString::from(format!("steer-{}", self.next_seq));
         self.next_seq += 1;
         let text = SharedString::from(trimmed);
+        let mut slide = Slide::new(10.0);
+        slide.duration(0.0, 0.24, cx);
+        self.queue_slides.insert(id.clone(), slide);
         self.queue.push(SteerQueuedNote {
             id: id.clone(),
             text: text.clone(),
@@ -467,6 +481,10 @@ impl AgentSteering {
         let total_step_secs = self.steps[cur_idx].duration_secs + self.active_step_accum;
         self.steps[cur_idx].duration_secs = total_step_secs.max(1.2);
         self.steps[cur_idx].status = SteerStepStatus::Done;
+        let mut done_clk = PhaseClock::default();
+        done_clk.restart(cx);
+        self.step_done_clocks
+            .insert(self.steps[cur_idx].id.clone(), done_clk);
         self.active_step_accum = 0.0;
 
         if let Some(next_idx) = self
@@ -517,6 +535,8 @@ impl AgentSteering {
             SteerRunStatus::Done => {
                 self.steps = default_steer_steps();
                 self.queue = default_steer_queue();
+                self.step_done_clocks.clear();
+                self.queue_slides.clear();
                 self.active_step_accum = 0.0;
                 self.run_accum = 0.0;
                 self.status = SteerRunStatus::Running;
@@ -749,10 +769,16 @@ impl Render for AgentSteering {
                             .text_color(p.muted)
                             .child(self.agent.clone())
                             .child(div().text_color(p.faint).child("·"))
-                            .child(format!(
-                                "{} {current_step_num} {} {total_steps}",
-                                tr(cx, "Step", "第"),
-                                tr(cx, "of", "/")
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "steer-step-cnt"),
+                                format!(
+                                    "{} {current_step_num} {} {total_steps}",
+                                    tr(cx, "Step", "第"),
+                                    tr(cx, "of", "/")
+                                ),
+                                12.0,
+                                FontWeight::NORMAL,
+                                p.muted,
                             )),
                     ),
             )
@@ -784,28 +810,17 @@ impl Render for AgentSteering {
                     )
                     .child(state_label),
             )
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "pause-resume-btn"))
-                    .role(Role::Button)
-                    .aria_label(SharedString::from(ctrl_aria))
-                    .tab_index(0)
-                    .size(px(28.))
-                    .flex_none()
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .hover(|s| s.bg(p.hover))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_pause_or_replay(cx)))
-                    .child(pro_icon(ctrl_icon, 13., p.muted)),
-            );
+            .child(pro_icon_btn(
+                pro_eid(&self.id, "pause-resume-btn"),
+                ctrl_aria,
+                ctrl_icon,
+                28.0,
+                self.status == SteerRunStatus::Paused,
+                cx,
+                |this, _, cx| this.toggle_pause_or_replay(cx),
+            ));
 
-        // Ordered plan list with vertical rail, spinning active arc, and landed notes
+        // Ordered plan list with vertical rail, progressive `pro_check_draw`, spinning active arc, and landed notes
         let spin_angle = if self.status == SteerRunStatus::Running && !reduced {
             (self.run_accum * 4.2) % std::f32::consts::TAU
         } else {
@@ -825,7 +840,20 @@ impl Render for AgentSteering {
         for (idx, step) in self.steps.iter().enumerate() {
             let is_last = idx + 1 == step_len;
             let step_icon: AnyElement = match step.status {
-                SteerStepStatus::Done => pro_svg("0 0 16 16", CHECK_POP_SVG, 15., p.blue),
+                SteerStepStatus::Done => {
+                    let done_age = self
+                        .step_done_clocks
+                        .get(&step.id)
+                        .map_or(f32::INFINITY, |clk| clk.time(0.28, w, cx));
+                    let chk_on = reduced || done_age > 0.012;
+                    pro_check_draw(
+                        pro_eid(&self.id, format!("step-chk-{}", step.id)),
+                        chk_on,
+                        15.0,
+                        false,
+                        p.blue,
+                    )
+                }
                 SteerStepStatus::Pending => pro_svg("0 0 16 16", PENDING_DASH_SVG, 15., p.faint),
                 SteerStepStatus::Active => {
                     let ring_col = if self.status == SteerRunStatus::Paused {
@@ -1026,111 +1054,115 @@ impl Render for AgentSteering {
             );
         }
 
-        // Queued for the next step section (smooth height fold)
+        // Queued for the next step section (smooth height fold + per-note `Slide` settle + tactile controls)
         let queue_snapshot = self.queue.clone();
         let queue_open = !queue_snapshot.is_empty();
+        let chips: Vec<AnyElement> = queue_snapshot
+            .iter()
+            .map(|q| {
+                let q_id_now = q.id.clone();
+                let q_id_rm = q.id.clone();
+                let now_lbl = tr(cx, "Now", "立即");
+                let dy = if reduced {
+                    0.0
+                } else {
+                    self.queue_slides.get(&q.id).map_or(0.0, |sl| sl.get(w, cx))
+                };
+                div()
+                    .relative()
+                    .top(px(dy))
+                    .min_h(px(34.))
+                    .pl(px(12.))
+                    .pr(px(4.))
+                    .py(px(4.))
+                    .rounded(px(8.))
+                    .bg(p.card)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(0.))
+                            .top(px(7.))
+                            .bottom(px(7.))
+                            .w(px(2.5))
+                            .rounded(px(2.))
+                            .bg(p.blue),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.5))
+                            .line_height(px(18.))
+                            .text_color(p.ink)
+                            .child(q.text.clone()),
+                    )
+                    .child(pro_btn(
+                        pro_eid(&self.id, format!("q-now-{}", q.id)),
+                        now_lbl,
+                        Some(ProIcon::Bolt),
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        move |this, _, cx| {
+                            this.interrupt_from_queue(&q_id_now, cx);
+                        },
+                    ))
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, format!("q-rm-{}", q.id)),
+                        tr(cx, "Remove queued note", "移除排队指令"),
+                        ProIcon::Close,
+                        24.0,
+                        false,
+                        cx,
+                        move |this, _, cx| {
+                            this.remove_queued(&q_id_rm, cx);
+                        },
+                    ))
+                    .into_any_element()
+            })
+            .collect();
+
+        let q_count = queue_snapshot.len();
+        let q_count_badge = div()
+            .min_w(px(16.))
+            .h(px(16.))
+            .px(px(4.))
+            .rounded(px(4.))
+            .bg(p.chip)
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(pro_rolling_number(
+                pro_eid(&self.id, "steer-q-cnt"),
+                q_count as f64,
+                0,
+                "",
+                "",
+                10.0,
+                FontWeight::MEDIUM,
+                p.text,
+            ));
+
         let queue_fold = pro_fold(pro_eid(&self.id, "queue-fold"), queue_open, 76., 0., {
             let base_id = self.id.clone();
-            let q_count = queue_snapshot.len();
             let header_lbl = tr(cx, "QUEUED FOR THE NEXT STEP", "等待下一步采纳").to_owned();
-            let now_lbl = tr(cx, "Now", "立即").to_owned();
-            let finish_lbl = tr(cx, "Finish step ▸", "完成当前步 ▸").to_owned();
+            let finish_lbl = tr(cx, "Finish step ▸", "完成当前步 ▸");
             let can_advance = self.status != SteerRunStatus::Done;
-            let chips: Vec<AnyElement> = queue_snapshot
-                .into_iter()
-                .map(|q| {
-                    let q_id_now = q.id.clone();
-                    let q_id_rm = q.id.clone();
-                    div()
-                        .relative()
-                        .min_h(px(34.))
-                        .pl(px(12.))
-                        .pr(px(4.))
-                        .py(px(4.))
-                        .rounded(px(8.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(
-                            div()
-                                .absolute()
-                                .left(px(0.))
-                                .top(px(7.))
-                                .bottom(px(7.))
-                                .w(px(2.5))
-                                .rounded(px(2.))
-                                .bg(p.blue),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(12.5))
-                                .line_height(px(18.))
-                                .text_color(p.ink)
-                                .child(q.text.clone()),
-                        )
-                        .child(
-                            div()
-                                .id(pro_eid(&base_id, format!("q-now-{}", q.id)))
-                                .role(Role::Button)
-                                .tab_index(0)
-                                .h(px(24.))
-                                .px(px(7.))
-                                .rounded(px(6.))
-                                .hover(|s| s.bg(p.accent_soft).text_color(p.blue))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.))
-                                .cursor_pointer()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.text)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.interrupt_from_queue(&q_id_now, cx);
-                                }))
-                                .child(pro_svg("0 0 12 12", BOLT_MINI_SVG, 12., p.blue))
-                                .child(now_lbl.clone()),
-                        )
-                        .child(
-                            div()
-                                .id(pro_eid(&base_id, format!("q-rm-{}", q.id)))
-                                .role(Role::Button)
-                                .tab_index(0)
-                                .size(px(24.))
-                                .rounded(px(6.))
-                                .hover(|s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.remove_queued(&q_id_rm, cx);
-                                }))
-                                .child(pro_icon(ProIcon::Close, 12., p.faint)),
-                        )
-                        .into_any_element()
-                })
-                .collect();
-
             let adv_pill = can_advance.then(|| {
-                div()
-                    .id(pro_eid(&base_id, "adv-step-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
-                    .ml_auto()
-                    .px(px(6.))
-                    .py(px(1.))
-                    .rounded(px(4.))
-                    .hover(|s| s.bg(p.hover).text_color(p.ink))
-                    .cursor_pointer()
-                    .text_size(px(11.))
-                    .text_color(p.muted)
-                    .on_click(cx.listener(|this, _, _, cx| this.advance_step(cx)))
-                    .child(finish_lbl)
+                div().ml_auto().child(pro_btn(
+                    pro_eid(&base_id, "adv-step-btn"),
+                    finish_lbl,
+                    None,
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| this.advance_step(cx),
+                ))
             });
 
             move || {
@@ -1156,21 +1188,7 @@ impl Render for AgentSteering {
                                     .text_color(p.muted)
                                     .child(header_lbl),
                             )
-                            .child(
-                                div()
-                                    .min_w(px(16.))
-                                    .h(px(16.))
-                                    .px(px(4.))
-                                    .rounded(px(4.))
-                                    .bg(p.chip)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_size(px(10.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.text)
-                                    .child(format!("{q_count}")),
-                            )
+                            .child(q_count_badge)
                             .when_some(adv_pill, |d, btn| d.child(btn)),
                     )
                     .children(chips)
@@ -1178,43 +1196,215 @@ impl Render for AgentSteering {
             }
         });
 
-        // Steering Composer (folds closed when status == Done)
+        // Steering Composer (folds closed when status == Done) with Chat/Act `pro_pill_indicator` + policy `pro_popover_presence`
         let has_draft = self
             .editor
             .as_ref()
             .map(|e| !e.read(cx).value().trim().is_empty())
             .unwrap_or(false);
         let composer_open = self.status != SteerRunStatus::Done;
-        let composer_fold = pro_fold(pro_eid(&self.id, "compose-fold"), composer_open, 84., 0., {
+        let mode_sensor = pro_selection_sensor();
+        let act_mode = self.act_mode;
+        let mode_key = if act_mode { "act" } else { "chat" };
+        let mode_toggle = div()
+            .relative()
+            .p(px(2.0))
+            .rounded(px(6.0))
+            .bg(p.subtle)
+            .border_1()
+            .border_color(p.line)
+            .flex()
+            .items_center()
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "steer-mode-pill"),
+                mode_key,
+                mode_sensor.clone(),
+                4.5,
+                p.card,
+                Some(p.line),
+                true,
+            ))
+            .children(
+                [
+                    (false, "chat", tr(cx, "Chat", "对话")),
+                    (true, "act", tr(cx, "Act", "执行")),
+                ]
+                .into_iter()
+                .map(|(is_act, key, lbl)| {
+                    let sel = act_mode == is_act;
+                    div()
+                        .id(pro_eid(&self.id, format!("steer-mode-{key}")))
+                        .role(Role::RadioButton)
+                        .aria_toggled(sel.into())
+                        .tab_index(if sel { 0 } else { -1 })
+                        .relative()
+                        .h(px(20.0))
+                        .px(px(7.0))
+                        .rounded(px(4.5))
+                        .flex()
+                        .items_center()
+                        .cursor_pointer()
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.ink } else { p.muted })
+                        .hover(move |s| if sel { s } else { s.text_color(p.ink) })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.act_mode = is_act;
+                            if !is_act {
+                                this.policy_open = false;
+                            }
+                            cx.notify();
+                        }))
+                        .when(sel, |d| d.child(pro_mark_selected(&mode_sensor)))
+                        .child(lbl)
+                }),
+            );
+
+        let policies: [(&'static str, ProIcon); 3] = [
+            (tr(cx, "Ask on risk", "风险询问"), ProIcon::Shield),
+            (tr(cx, "Auto-edit", "自动编辑"), ProIcon::Sparkles),
+            (tr(cx, "Full auto", "全自动"), ProIcon::Bolt),
+        ];
+        let pol_idx = self.policy_idx.min(2);
+        let (pol_lbl, pol_icon) = policies[pol_idx];
+        let pol_open = self.policy_open && act_mode;
+        let mut pol_menu = div()
+            .w(px(168.0))
+            .p(px(4.0))
+            .rounded(px(9.0))
+            .bg(p.card)
+            .border_1()
+            .border_color(p.line_strong)
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .gap(px(2.0));
+        for (pi, (plbl, pic)) in policies.into_iter().enumerate() {
+            let sel = pi == pol_idx;
+            let row_in = div()
+                .w_full()
+                .h(px(26.0))
+                .px(px(7.0))
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .child(pro_icon(pic, 12.5, if sel { p.ink } else { p.muted }))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_size(px(11.5))
+                        .font_weight(if sel {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if sel { p.strong } else { p.text })
+                        .truncate()
+                        .child(plbl),
+                )
+                .child(pro_check_draw(
+                    pro_eid(&self.id, format!("steer-pol-chk-{pi}")),
+                    sel,
+                    13.5,
+                    false,
+                    p.primary,
+                ));
+            pol_menu = pol_menu.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("steer-pol-opt-{pi}")),
+                    plbl,
+                    5.5,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    sel,
+                    row_in,
+                    cx,
+                    move |this, _, cx| {
+                        this.policy_idx = pi;
+                        this.policy_open = false;
+                        cx.notify();
+                    },
+                )
+                .w_full(),
+            );
+        }
+
+        let policy_ctl = div()
+            .relative()
+            .child(
+                div()
+                    .id(pro_eid(&self.id, "steer-policy-btn"))
+                    .role(Role::Button)
+                    .aria_expanded(pol_open)
+                    .tab_index(0)
+                    .h(px(24.0))
+                    .px(px(6.0))
+                    .rounded(px(5.5))
+                    .opacity(if act_mode { 1.0 } else { 0.42 })
+                    .when(act_mode, |d| {
+                        d.cursor_pointer()
+                            .hover(|s| s.bg(p.hover).text_color(p.ink))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.policy_open = !this.policy_open;
+                                cx.notify();
+                            }))
+                    })
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .text_color(p.muted)
+                    .child(pro_icon(pol_icon, 12.5, p.muted))
+                    .when(!narrow, |d| {
+                        d.child(pro_swap_label(
+                            pro_eid(&self.id, "steer-pol-lbl"),
+                            pol_lbl,
+                            11.5,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        ))
+                    })
+                    .child(pro_icon(ProIcon::ChevronDown, 10.5, p.muted)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .bottom(px(28.0))
+                    .right_0()
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, "steer-policy-pop"),
+                        pol_open,
+                        move || pol_menu.into_any_element(),
+                    )),
+            );
+
+        let composer_fold = pro_fold(pro_eid(&self.id, "compose-fold"), composer_open, 88., 0., {
             let ed_opt = self.editor.clone();
             let focused = self.editor_focused;
             let base_id = self.id.clone();
             let next_hint = tr(cx, "next step", "下一步采纳").to_owned();
             let now_hint = tr(cx, "interrupt now", "立即中断执行").to_owned();
-            let now_btn_lbl = tr(cx, "Interrupt now", "立即中断").to_owned();
+            let now_btn_lbl = if narrow {
+                "⚡"
+            } else {
+                tr(cx, "Interrupt now", "立即中断")
+            };
             let kbd_enter = self.render_kbd("↵", &p);
             let kbd_cmd = self.render_kbd("⌘", &p);
             let kbd_enter2 = self.render_kbd("↵", &p);
 
             let interrupt_inline_btn = has_draft.then(|| {
                 let ed_for_now = ed_opt.clone();
-                div()
-                    .id(pro_eid(&base_id, "compose-now-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
-                    .h(px(28.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(p.accent_soft)
-                    .hover(|s| s.bg(p.blue.opacity(0.22)))
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .cursor_pointer()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.blue)
-                    .on_click(cx.listener(move |this, _, w, cx| {
+                pro_btn(
+                    pro_eid(&base_id, "compose-now-btn"),
+                    now_btn_lbl,
+                    Some(ProIcon::Bolt),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    move |this, w, cx| {
                         if let Some(ed) = &ed_for_now {
                             let v = ed.read(cx).value().trim().to_owned();
                             if !v.is_empty() {
@@ -1222,43 +1412,30 @@ impl Render for AgentSteering {
                                 ed.update(cx, |e, cx| e.set_value("", w, cx));
                             }
                         }
-                    }))
-                    .child(pro_svg("0 0 12 12", BOLT_MINI_SVG, 12., p.blue))
-                    .child(if narrow { "".to_owned() } else { now_btn_lbl })
+                    },
+                )
             });
 
             let ed_for_send = ed_opt.clone();
             let send_btn = div()
-                .id(pro_eid(&base_id, "compose-send-btn"))
-                .role(Role::Button)
-                .aria_label(SharedString::from(tr(
+                .opacity(if has_draft { 1.0 } else { 0.35 })
+                .child(pro_icon_btn(
+                    pro_eid(&base_id, "compose-send-btn"),
+                    tr(cx, "Queue for the next step", "加入下一步队列"),
+                    ProIcon::ArrowUp,
+                    28.0,
+                    has_draft,
                     cx,
-                    "Queue for the next step",
-                    "加入下一步队列",
-                )))
-                .tab_index(0)
-                .size(px(28.))
-                .flex_none()
-                .rounded(px(6.))
-                .bg(p.primary)
-                .opacity(if has_draft { 1.0 } else { 0.22 })
-                .when(has_draft, |d| {
-                    d.cursor_pointer()
-                        .hover(|s| s.opacity(0.9))
-                        .on_click(cx.listener(move |this, _, w, cx| {
-                            if let Some(ed) = &ed_for_send {
-                                let v = ed.read(cx).value().trim().to_owned();
-                                if !v.is_empty() {
-                                    this.queue_note(v, cx);
-                                    ed.update(cx, |e, cx| e.set_value("", w, cx));
-                                }
+                    move |this, w, cx| {
+                        if let Some(ed) = &ed_for_send {
+                            let v = ed.read(cx).value().trim().to_owned();
+                            if !v.is_empty() {
+                                this.queue_note(v, cx);
+                                ed.update(cx, |e, cx| e.set_value("", w, cx));
                             }
-                        }))
-                })
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(pro_icon(ProIcon::ArrowUp, 14., p.on_primary));
+                        }
+                    },
+                ));
 
             move || {
                 div()
@@ -1292,29 +1469,47 @@ impl Render for AgentSteering {
                     )
                     .child(
                         div()
+                            .w_full()
                             .flex()
                             .flex_wrap()
                             .items_center()
-                            .gap_x(px(14.))
+                            .justify_between()
+                            .gap_x(px(10.))
                             .gap_y(px(4.))
                             .text_size(px(12.))
                             .text_color(p.muted)
                             .child(
                                 div()
                                     .flex()
+                                    .flex_wrap()
                                     .items_center()
-                                    .gap(px(4.))
-                                    .child(kbd_enter)
-                                    .child(next_hint),
+                                    .gap_x(px(12.))
+                                    .gap_y(px(4.))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(4.))
+                                            .child(kbd_enter)
+                                            .child(next_hint),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(3.))
+                                            .child(kbd_cmd)
+                                            .child(kbd_enter2)
+                                            .child(div().ml(px(1.)).child(now_hint)),
+                                    ),
                             )
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap(px(3.))
-                                    .child(kbd_cmd)
-                                    .child(kbd_enter2)
-                                    .child(div().ml(px(1.)).child(now_hint)),
+                                    .gap(px(5.))
+                                    .child(mode_toggle)
+                                    .child(policy_ctl),
                             ),
                     )
                     .into_any_element()
@@ -1329,7 +1524,6 @@ impl Render for AgentSteering {
             .border_1()
             .border_color(p.line)
             .shadow_sm()
-            .overflow_hidden()
             .flex()
             .flex_col()
             .child(header)
@@ -1342,6 +1536,12 @@ impl Render for AgentSteering {
             .role(Role::Region)
             .aria_label(self.title.clone())
             .track_focus(&self.focus)
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                if this.policy_open {
+                    this.policy_open = false;
+                    cx.notify();
+                }
+            }))
             .on_key_down(cx.listener(Self::handle_key_down))
             .relative()
             .w_full()

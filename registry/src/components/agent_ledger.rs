@@ -7,11 +7,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_skeleton_bar, pro_spring_f32,
-        pro_toast_banner, tr,
+        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_mix_color, pro_presence,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, tr,
     },
+    foundation::Theme,
     primitives::{
-        control::activate,
         family::disabled_motion,
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
@@ -439,7 +439,7 @@ impl AgentLedger {
 impl Render for AgentLedger {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed = self.started_at.elapsed().as_secs_f32();
         let panel_bg: Hsla = if p.dark {
             rgb(0x1c1c1f).into()
@@ -577,29 +577,48 @@ impl Render for AgentLedger {
                             .flex()
                             .items_center()
                             .gap(px(4.0))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("{total_count}")),
-                            )
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "led-tot-cnt"),
+                                total_count as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
                             .child(tr(cx, "changes", "项变更")),
                     )
-                    .when(undone_count > 0, |d| {
-                        d.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .child(format!("{undone_count}")),
-                                )
-                                .child(tr(cx, "undone", "已撤销")),
-                        )
-                    }),
+                    .child(pro_presence(
+                        pro_eid(&self.id, "led-undone-pres"),
+                        undone_count > 0,
+                        0.18,
+                        0.14,
+                        {
+                            let undone_lbl = tr(cx, "undone", "已撤销").to_string();
+                            let cnt_el = pro_rolling_number(
+                                pro_eid(&self.id, "led-und-cnt"),
+                                undone_count.max(1) as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            );
+                            let mut cnt_opt = Some(cnt_el);
+                            move |amt| {
+                                div()
+                                    .opacity(amt)
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.0))
+                                    .children(cnt_opt.take())
+                                    .child(undone_lbl.clone())
+                                    .into_any_element()
+                            }
+                        },
+                    )),
             );
 
         if self.empty || self.entries.is_empty() {
@@ -676,12 +695,46 @@ impl Render for AgentLedger {
             )
             .clamp(0.0, 1.0);
 
-            let row_bg: Option<Hsla> = if is_preview_root {
-                Some(p.blue.opacity(if p.dark { 0.11 } else { 0.065 }))
-            } else if is_also {
-                Some(p.blue.opacity(if p.dark { 0.075 } else { 0.045 }))
-            } else if is_kept {
-                Some(p.amber.opacity(if p.dark { 0.10 } else { 0.08 }))
+            let root_t = pro_spring_f32(
+                pro_eid(&self.id, format!("blast-root-{eid}")),
+                if is_preview_root { 1.0 } else { 0.0 },
+                0.22,
+                window,
+                cx,
+            );
+            let also_t = pro_spring_f32(
+                pro_eid(&self.id, format!("blast-also-{eid}")),
+                if is_also { 1.0 } else { 0.0 },
+                0.22,
+                window,
+                cx,
+            );
+            let kept_t = pro_spring_f32(
+                pro_eid(&self.id, format!("blast-kept-{eid}")),
+                if is_kept { 1.0 } else { 0.0 },
+                0.22,
+                window,
+                cx,
+            );
+
+            let row_bg: Option<Hsla> = if root_t > 0.01 {
+                Some(pro_mix_color(
+                    transparent_black(),
+                    p.blue.opacity(if p.dark { 0.11 } else { 0.065 }),
+                    root_t,
+                ))
+            } else if also_t > 0.01 {
+                Some(pro_mix_color(
+                    transparent_black(),
+                    p.blue.opacity(if p.dark { 0.075 } else { 0.045 }),
+                    also_t,
+                ))
+            } else if kept_t > 0.01 {
+                Some(pro_mix_color(
+                    transparent_black(),
+                    p.amber.opacity(if p.dark { 0.10 } else { 0.08 }),
+                    kept_t,
+                ))
             } else {
                 None
             };
@@ -807,8 +860,6 @@ impl Render for AgentLedger {
                     .into_any_element()
             } else if is_undone {
                 let redo_id = eid.clone();
-                let hover_btn = p.chip_hover;
-                let focus_c = p.focus;
                 let aria = match &entry.target {
                     Some(t) => format!("Redo: {} {t}", entry.action),
                     None => format!("Redo: {}", entry.action),
@@ -825,30 +876,32 @@ impl Render for AgentLedger {
                                 .child(time_str),
                         )
                     })
-                    .child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("redo-{eid}")))
-                            .role(Role::Button)
-                            .aria_label(aria)
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(if compact { 6.0 } else { 8.0 }))
-                            .rounded(px(6.0))
-                            .bg(p.chip)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .flex()
-                            .items_center()
-                            .gap(px(5.0))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_btn))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
-                            .child(pro_svg("0 0 24 24", REDO_SVG, 12.5, p.ink))
-                            .when(!compact, |d| d.child(tr(cx, "Redo", "重做"))),
-                        cx,
-                        move |this, _, cx| this.perform_redo(redo_id.clone(), cx),
-                    ))
+                    .child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("redo-{eid}")),
+                            aria,
+                            6.0,
+                            p.chip,
+                            p.chip_hover,
+                            transparent_black(),
+                            p.line,
+                            false,
+                            div()
+                                .h(px(24.0))
+                                .px(px(if compact { 6.0 } else { 8.0 }))
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .flex()
+                                .items_center()
+                                .gap(px(5.0))
+                                .child(pro_svg("0 0 24 24", REDO_SVG, 12.5, p.ink))
+                                .when(!compact, |d| d.child(tr(cx, "Redo", "重做"))),
+                            cx,
+                            move |this, _, cx| this.perform_redo(redo_id.clone(), cx),
+                        )
+                        .w_auto(),
+                    )
                     .into_any_element()
             } else {
                 let undo_id = eid.clone();
@@ -859,8 +912,6 @@ impl Render for AgentLedger {
                     p.chip
                 };
                 let btn_fg = if is_preview_root { p.blue } else { p.ink };
-                let hover_btn = p.accent_soft;
-                let focus_c = p.focus;
                 let base_desc = match &entry.target {
                     Some(t) => format!("{} {t}", entry.action),
                     None => entry.action.to_string(),
@@ -883,25 +934,9 @@ impl Render for AgentLedger {
                                 .child(time_str),
                         )
                     })
-                    .child(activate(
+                    .child(
                         div()
-                            .id(pro_eid(&self.id, format!("undo-{eid}")))
-                            .role(Role::Button)
-                            .aria_label(aria)
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(if compact { 6.0 } else { 8.0 }))
-                            .rounded(px(6.0))
-                            .bg(btn_bg)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(btn_fg)
-                            .flex()
-                            .items_center()
-                            .gap(px(5.0))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_btn))
-                            .focus_visible(move |s| s.border_1().border_color(focus_c))
+                            .id(pro_eid(&self.id, format!("undo-hov-{eid}")))
                             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                                 let next = if *inside {
                                     Some(hov_id.clone())
@@ -916,11 +951,33 @@ impl Render for AgentLedger {
                                     cx.notify();
                                 }
                             }))
-                            .child(pro_icon(ProIcon::Undo, 12.5, btn_fg))
-                            .when(!compact, |d| d.child(tr(cx, "Undo", "撤销"))),
-                        cx,
-                        move |this, _, cx| this.perform_undo(undo_id.clone(), cx),
-                    ))
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("undo-{eid}")),
+                                    aria,
+                                    6.0,
+                                    btn_bg,
+                                    p.accent_soft,
+                                    transparent_black(),
+                                    p.blue.opacity(0.45),
+                                    is_preview_root,
+                                    div()
+                                        .h(px(24.0))
+                                        .px(px(if compact { 6.0 } else { 8.0 }))
+                                        .text_size(px(12.0))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(btn_fg)
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.0))
+                                        .child(pro_icon(ProIcon::Undo, 12.5, btn_fg))
+                                        .when(!compact, |d| d.child(tr(cx, "Undo", "撤销"))),
+                                    cx,
+                                    move |this, _, cx| this.perform_undo(undo_id.clone(), cx),
+                                )
+                                .w_auto(),
+                            ),
+                    )
                     .into_any_element()
             };
 

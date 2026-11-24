@@ -6,8 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_connector_pulse, pro_eid, pro_empty_state,
-        pro_mix_color, pro_shimmer_text, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_popover_presence, pro_presence, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         family::disabled_motion,
@@ -15,7 +17,7 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use web_time::Instant;
 
 const STEP_W: f32 = 256.0;
@@ -332,6 +334,80 @@ fn collect_skipped_ids(steps: &[FlowStep], out: &mut Vec<SharedString>) {
     }
 }
 
+fn collect_all_path_ids(steps: &[FlowStep], out: &mut Vec<SharedString>) {
+    for s in steps {
+        for p in &s.paths {
+            out.push(p.id.clone());
+            collect_all_path_ids(&p.steps, out);
+        }
+    }
+}
+
+fn collect_flow_spotlight(
+    steps: &[FlowStep],
+    focus_id: &str,
+) -> (HashSet<SharedString>, HashSet<SharedString>) {
+    let mut lit_steps = HashSet::new();
+    let mut lit_paths = HashSet::new();
+
+    if let Some(pos) = steps.iter().position(|s| s.id.as_ref() == focus_id) {
+        lit_steps.insert(steps[pos].id.clone());
+        if pos > 0 {
+            lit_steps.insert(steps[pos - 1].id.clone());
+        }
+        if pos + 1 < steps.len() {
+            lit_steps.insert(steps[pos + 1].id.clone());
+        }
+        if steps[pos].kind == FlowStepKind::Branch {
+            for p in &steps[pos].paths {
+                lit_paths.insert(p.id.clone());
+                if let Some(first) = p.steps.first() {
+                    lit_steps.insert(first.id.clone());
+                }
+            }
+        }
+        return (lit_steps, lit_paths);
+    }
+
+    fn search_branch(
+        steps: &[FlowStep],
+        focus_id: &str,
+        lit_steps: &mut HashSet<SharedString>,
+        lit_paths: &mut HashSet<SharedString>,
+    ) -> bool {
+        for (idx, s) in steps.iter().enumerate() {
+            if s.id.as_ref() == focus_id {
+                for step in steps {
+                    lit_steps.insert(step.id.clone());
+                }
+                if s.kind == FlowStepKind::Branch {
+                    for p in &s.paths {
+                        lit_paths.insert(p.id.clone());
+                        if let Some(first) = p.steps.first() {
+                            lit_steps.insert(first.id.clone());
+                        }
+                    }
+                }
+                let _ = idx;
+                return true;
+            }
+            for p in &s.paths {
+                if search_branch(&p.steps, focus_id, lit_steps, lit_paths) {
+                    lit_paths.insert(p.id.clone());
+                    for trunk in steps.iter().take(idx + 1) {
+                        lit_steps.insert(trunk.id.clone());
+                    }
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    search_branch(steps, focus_id, &mut lit_steps, &mut lit_paths);
+    (lit_steps, lit_paths)
+}
+
 fn build_run_schedule(
     steps: &[FlowStep],
     t_cursor: &mut f32,
@@ -399,6 +475,7 @@ pub struct FlowBuilder {
     selected_id: Option<SharedString>,
     hovered_id: Option<SharedString>,
     open_menu: Option<FlowInsertTarget>,
+    last_open_menu: Option<FlowInsertTarget>,
     undo_stack: Vec<Vec<FlowStep>>,
     toast: Option<(SharedString, Instant)>,
     next_seq: usize,
@@ -427,6 +504,7 @@ impl FlowBuilder {
             selected_id: None,
             hovered_id: None,
             open_menu: None,
+            last_open_menu: None,
             undo_stack: Vec::new(),
             toast: None,
             next_seq: 100,
@@ -808,6 +886,8 @@ struct RuntimeSnapshot {
     incoming_pulse: HashMap<SharedString, f32>,
     branch_pulse: HashMap<(SharedString, usize), f32>,
     active_banner: Option<(FlowRunStatus, String)>,
+    step_opacities: HashMap<SharedString, f32>,
+    path_opacities: HashMap<SharedString, f32>,
 }
 
 impl FlowBuilder {
@@ -819,6 +899,8 @@ impl FlowBuilder {
             incoming_pulse: HashMap::new(),
             branch_pulse: HashMap::new(),
             active_banner: None,
+            step_opacities: HashMap::new(),
+            path_opacities: HashMap::new(),
         };
 
         for (k, &st) in &self.controlled_status {
@@ -948,6 +1030,73 @@ impl FlowBuilder {
             }
         }
 
+        if let Some(m) = &self.open_menu {
+            self.last_open_menu = Some(m.clone());
+        }
+
+        let focus_id = if self.live_run.is_none() {
+            self.hovered_id.clone().or_else(|| self.selected_id.clone())
+        } else {
+            None
+        };
+        let (lit_steps, lit_paths) = match &focus_id {
+            Some(fid) => collect_flow_spotlight(&self.steps, fid.as_ref()),
+            None => (HashSet::new(), HashSet::new()),
+        };
+
+        let mut all_step_ids = Vec::new();
+        flatten_step_ids(&self.steps, &mut all_step_ids);
+        for sid in all_step_ids {
+            let skipped = snap
+                .step_status
+                .get(&sid)
+                .is_some_and(|&(st, _, _)| st == FlowRunStatus::Skipped);
+            let target_op = if focus_id.is_some() {
+                if lit_steps.contains(&sid) {
+                    1.0_f32
+                } else {
+                    0.34_f32
+                }
+            } else if skipped {
+                0.48_f32
+            } else {
+                1.0_f32
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("fstep-op-{sid}")),
+                target_op,
+                0.22,
+                window,
+                cx,
+            );
+            snap.step_opacities.insert(sid, op);
+        }
+
+        let mut all_path_ids = Vec::new();
+        collect_all_path_ids(&self.steps, &mut all_path_ids);
+        for pid in all_path_ids {
+            let skipped = snap.skipped_paths.contains(&pid);
+            let target_op = if focus_id.is_some() {
+                if lit_paths.contains(&pid) {
+                    1.0_f32
+                } else {
+                    0.34_f32
+                }
+            } else if skipped {
+                0.48_f32
+            } else {
+                1.0_f32
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("fpath-op-{pid}")),
+                target_op,
+                0.22,
+                window,
+                cx,
+            );
+            snap.path_opacities.insert(pid, op);
+        }
+
         snap
     }
 
@@ -1029,48 +1178,53 @@ impl FlowBuilder {
         let plus_fg = if menu_open { p.blue } else { p.muted };
         let plus_border = if menu_open { link_c } else { p.line_strong };
         let hover_border = link_c;
-        let hover_fg = p.blue;
         let aria = tr(cx, aria_en, aria_zh).to_string();
+        let menu_shown =
+            (menu_open || self.last_open_menu.as_ref() == Some(&target)) && !is_running;
 
-        let plus_btn = div()
-            .id(pro_eid(&self.id, format!("plus-{key}")))
-            .role(Role::Button)
-            .aria_label(aria)
-            .tab_index(if is_running { -1 } else { 0 })
+        let plus_btn: AnyElement = if is_running {
+            div()
+                .id(pro_eid(&self.id, format!("plus-{key}")))
+                .size(px(20.))
+                .opacity(0.0)
+                .into_any_element()
+        } else {
+            pro_tactile(
+                pro_eid(&self.id, format!("plus-{key}")),
+                aria,
+                10.0,
+                card_bg,
+                p.hover,
+                plus_border,
+                hover_border,
+                menu_open,
+                div()
+                    .size(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_icon(ProIcon::Plus, 11., plus_fg)),
+                cx,
+                move |this, _, cx| {
+                    if this.open_menu.as_ref() == Some(&target_for_btn) {
+                        this.open_menu = None;
+                    } else {
+                        this.last_open_menu = Some(target_for_btn.clone());
+                        this.open_menu = Some(target_for_btn.clone());
+                    }
+                    cx.notify();
+                },
+            )
             .size(px(20.))
-            .rounded_full()
-            .bg(card_bg)
-            .border_1()
-            .border_color(plus_border)
-            .text_color(plus_fg)
-            .opacity(if is_running { 0.0 } else { 1.0 })
-            .when(!is_running, |d| {
-                d.cursor_pointer()
-                    .hover(move |s| s.border_color(hover_border).text_color(hover_fg))
-                    .focus_visible(move |s| s.border_2().border_color(p.focus))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.open_menu = if this.open_menu.as_ref() == Some(&target_for_btn) {
-                            None
-                        } else {
-                            Some(target_for_btn.clone())
-                        };
-                        cx.notify();
-                    }))
-            })
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(pro_icon(ProIcon::Plus, 11., plus_fg));
+            .into_any_element()
+        };
 
-        let menu_el = if menu_open && !is_running {
+        let menu_el = if menu_shown {
             let pop_bg: Hsla = if p.dark { rgb(0x1f1f22).into() } else { p.card };
             let mut menu_col = div()
                 .id(pro_eid(&self.id, format!("menu-{key}")))
                 .role(Role::Group)
                 .aria_label(tr(cx, "Insert workflow step", "插入工作流步骤"))
-                .absolute()
-                .top(px(link_h * 0.5 + 12.0))
-                .left(px(-(MENU_W * 0.5 - 12.0)))
                 .w(px(MENU_W))
                 .p(px(4.))
                 .rounded(px(10.))
@@ -1090,27 +1244,23 @@ impl FlowBuilder {
                 let t_detail = tr(cx, tpl.detail.as_ref(), tpl.detail_zh.as_ref()).to_string();
                 let tile_icon =
                     step_icon_element(tpl.kind, Some(tpl.icon.as_ref()), false, 0.0, p, cx);
-                menu_col = menu_col.child(
+                menu_col = menu_col.child(pro_tactile(
+                    pro_eid(&self.id, format!("tpl-{key}-{t_idx}")),
+                    t_title.clone(),
+                    6.0,
+                    transparent_black(),
+                    item_hover,
+                    transparent_black(),
+                    transparent_black(),
+                    false,
                     div()
-                        .id(pro_eid(&self.id, format!("tpl-{key}-{t_idx}")))
-                        .role(Role::Button)
-                        .aria_label(t_title.clone())
-                        .tab_index(0)
                         .w_full()
                         .min_h(px(38.))
                         .px(px(8.))
                         .py(px(4.))
-                        .rounded(px(6.))
-                        .cursor_pointer()
                         .flex()
                         .items_center()
                         .gap(px(9.))
-                        .hover(move |s| s.bg(item_hover))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            let step = this.instantiate_template(&tpl_clone);
-                            this.insert_step_at(&target_clone, step, cx);
-                        }))
                         .child(tile_icon)
                         .child(
                             div()
@@ -1134,9 +1284,24 @@ impl FlowBuilder {
                                         .child(t_detail),
                                 ),
                         ),
-                );
+                    cx,
+                    move |this, _, cx| {
+                        let step = this.instantiate_template(&tpl_clone);
+                        this.insert_step_at(&target_clone, step, cx);
+                    },
+                ));
             }
-            Some(menu_col)
+            Some(
+                div()
+                    .absolute()
+                    .top(px(link_h * 0.5 + 12.0))
+                    .left(px(-(MENU_W * 0.5 - 12.0)))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, format!("menu-pop-{key}")),
+                        menu_open && !is_running,
+                        move || menu_col.into_any_element(),
+                    )),
+            )
         } else {
             None
         };
@@ -1176,7 +1341,7 @@ impl FlowBuilder {
         let is_skipped = status == FlowRunStatus::Skipped;
         let is_selected = self.selected_id.as_ref() == Some(&step.id);
         let is_hovered = self.hovered_id.as_ref() == Some(&step.id);
-        let other_selected = self.selected_id.is_some() && !is_selected && self.live_run.is_none();
+        let step_op = snap.step_opacities.get(&step.id).copied().unwrap_or(1.0);
 
         let card_bg: Hsla = if is_skipped {
             transparent_black()
@@ -1196,6 +1361,11 @@ impl FlowBuilder {
         } else {
             hsla(0., 0., 0., 0.07)
         };
+        let hover_bg = if is_skipped {
+            p.hover
+        } else {
+            pro_mix_color(card_bg, p.blue, if p.dark { 0.05 } else { 0.03 })
+        };
 
         let tile = step_icon_element(
             step.kind,
@@ -1206,7 +1376,7 @@ impl FlowBuilder {
             cx,
         );
 
-        let badge_el = status_pill(step.kind, status, p, cx);
+        let badge_el = status_pill(&self.id, step.id.as_ref(), step.kind, status, p, cx);
 
         let note_str = step
             .display_note(cx)
@@ -1281,12 +1451,9 @@ impl FlowBuilder {
         let step_id_hover = step.id.clone();
         let show_tools = (is_hovered || is_selected) && self.live_run.is_none();
 
-        let tools_overlay = show_tools.then(|| {
+        let tools_overlay = {
             let pop_bg: Hsla = if p.dark { rgb(0x232327).into() } else { p.card };
             let mut bar = div()
-                .absolute()
-                .top(px(-10.))
-                .right(px(6.))
                 .h(px(22.))
                 .px(px(3.))
                 .rounded_full()
@@ -1300,196 +1467,192 @@ impl FlowBuilder {
 
             if can_move_up {
                 let id_up = step.id.clone();
-                let hov_bg = p.hover;
                 bar = bar.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("up-{}", step.id)))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Move step up", "上移步骤"))
-                        .tab_index(0)
-                        .size(px(18.))
-                        .rounded_full()
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .hover(move |s| s.bg(hov_bg))
-                        .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let _ = ev;
-                            cx.stop_propagation();
+                    pro_icon_btn(
+                        pro_eid(&self.id, format!("up-{}", step.id)),
+                        tr(cx, "Move step up", "上移步骤"),
+                        ProIcon::ChevronUp,
+                        18.0,
+                        false,
+                        cx,
+                        move |this, _, cx| {
                             this.move_step(id_up.as_ref(), -1, cx);
-                        }))
-                        .child(pro_icon(ProIcon::ChevronUp, 11., p.muted)),
+                        },
+                    )
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(|_, _, cx| cx.stop_propagation()),
                 );
             }
             if can_move_down {
                 let id_dn = step.id.clone();
-                let hov_bg = p.hover;
                 bar = bar.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("dn-{}", step.id)))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Move step down", "下移步骤"))
-                        .tab_index(0)
-                        .size(px(18.))
-                        .rounded_full()
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .hover(move |s| s.bg(hov_bg))
-                        .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let _ = ev;
-                            cx.stop_propagation();
+                    pro_icon_btn(
+                        pro_eid(&self.id, format!("dn-{}", step.id)),
+                        tr(cx, "Move step down", "下移步骤"),
+                        ProIcon::ChevronDown,
+                        18.0,
+                        false,
+                        cx,
+                        move |this, _, cx| {
                             this.move_step(id_dn.as_ref(), 1, cx);
-                        }))
-                        .child(pro_icon(ProIcon::ChevronDown, 11., p.muted)),
+                        },
+                    )
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(|_, _, cx| cx.stop_propagation()),
                 );
             }
             if can_remove {
                 let id_rm = step.id.clone();
-                let hov_bg = p.red_soft;
                 bar = bar.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("rm-{}", step.id)))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Remove step", "删除步骤"))
-                        .tab_index(0)
-                        .size(px(18.))
-                        .rounded_full()
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .hover(move |s| s.bg(hov_bg))
-                        .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let _ = ev;
-                            cx.stop_propagation();
+                    pro_icon_btn(
+                        pro_eid(&self.id, format!("rm-{}", step.id)),
+                        tr(cx, "Remove step", "删除步骤"),
+                        ProIcon::Close,
+                        18.0,
+                        false,
+                        cx,
+                        move |this, _, cx| {
                             this.remove_step(id_rm.as_ref(), cx);
-                        }))
-                        .child(pro_icon(ProIcon::Close, 10.5, p.red_ink)),
+                        },
+                    )
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(|_, _, cx| cx.stop_propagation()),
                 );
             }
-            bar
-        });
+            div()
+                .absolute()
+                .top(px(-10.))
+                .right(px(6.))
+                .child(pro_presence(
+                    pro_eid(&self.id, format!("tools-pres-{}", step.id)),
+                    show_tools,
+                    0.15,
+                    0.11,
+                    move |amt| {
+                        div()
+                            .relative()
+                            .top(px(2.0 * (1.0 - amt)))
+                            .opacity(amt)
+                            .child(bar)
+                            .into_any_element()
+                    },
+                ))
+        };
 
         let title_str = step.display_title(cx).to_string();
         let detail_str = step.display_detail(cx).unwrap_or("").to_string();
+        let step_bar = pro_spring_bar(
+            pro_eid(&self.id, format!("sbar-{}", step.id)),
+            meter_ratio,
+            3.0,
+            2.0,
+            p.line,
+            meter_fill,
+        );
 
         div()
             .relative()
             .w(px(STEP_W))
-            .opacity(if other_selected { 0.58 } else { 1.0 })
+            .opacity(step_op)
             .child(
-                div()
-                    .id(pro_eid(&self.id, format!("card-{}", step.id)))
-                    .role(Role::Button)
-                    .aria_label(title_str.clone())
-                    .tab_index(0)
-                    .relative()
-                    .w(px(STEP_W))
-                    .h(px(STEP_H))
-                    .px(px(10.))
-                    .pt(px(10.))
-                    .pb(px(9.))
-                    .rounded(px(8.))
-                    .overflow_hidden()
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(border_c)
-                    .when(!p.dark && !is_skipped, |d| d.shadow_sm())
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_2().border_color(p.focus))
-                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                        if *inside {
-                            this.hovered_id = Some(step_id_hover.clone());
-                        } else if this.hovered_id.as_ref() == Some(&step_id_hover) {
-                            this.hovered_id = None;
-                        }
-                        cx.notify();
-                    }))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                pro_tactile(
+                    pro_eid(&self.id, format!("card-{}", step.id)),
+                    title_str.clone(),
+                    8.0,
+                    card_bg,
+                    hover_bg,
+                    border_c,
+                    p.line_strong,
+                    is_selected,
+                    div()
+                        .relative()
+                        .w(px(STEP_W))
+                        .h(px(STEP_H))
+                        .px(px(10.))
+                        .pt(px(10.))
+                        .pb(px(9.))
+                        .overflow_hidden()
+                        .children(ambient_wash)
+                        .child(
+                            div()
+                                .relative()
+                                .size_full()
+                                .flex()
+                                .flex_col()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .h(px(30.))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .child(tile)
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .flex()
+                                                .flex_col()
+                                                .child(
+                                                    div()
+                                                        .text_size(px(13.))
+                                                        .line_height(px(16.))
+                                                        .font_weight(FontWeight::MEDIUM)
+                                                        .text_color(p.strong)
+                                                        .truncate()
+                                                        .child(title_str),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(11.5))
+                                                        .line_height(px(14.))
+                                                        .text_color(p.muted)
+                                                        .truncate()
+                                                        .child(detail_str),
+                                                ),
+                                        )
+                                        .children(badge_el),
+                                )
+                                .child(note_el)
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .child(div().flex_1().child(step_bar))
+                                        .child(
+                                            div()
+                                                .min_w(px(26.))
+                                                .text_size(px(11.))
+                                                .text_color(p.muted)
+                                                .text_right()
+                                                .child(dur_text),
+                                        ),
+                                ),
+                        ),
+                    cx,
+                    move |this, _, cx| {
                         let next = if this.selected_id.as_ref() == Some(&step_id_click) {
                             None
                         } else {
                             Some(step_id_click.clone())
                         };
                         this.select_step(next, cx);
-                    }))
-                    .children(ambient_wash)
-                    .child(
-                        div()
-                            .relative()
-                            .size_full()
-                            .flex()
-                            .flex_col()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .h(px(30.))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(tile)
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .flex()
-                                            .flex_col()
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.))
-                                                    .line_height(px(16.))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(p.strong)
-                                                    .truncate()
-                                                    .child(title_str),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.5))
-                                                    .line_height(px(14.))
-                                                    .text_color(p.muted)
-                                                    .truncate()
-                                                    .child(detail_str),
-                                            ),
-                                    )
-                                    .children(badge_el),
-                            )
-                            .child(note_el)
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .h(px(3.))
-                                            .rounded_full()
-                                            .bg(p.line)
-                                            .overflow_hidden()
-                                            .child(
-                                                div()
-                                                    .h_full()
-                                                    .w(relative(meter_ratio))
-                                                    .rounded_full()
-                                                    .bg(meter_fill),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .min_w(px(26.))
-                                            .text_size(px(11.))
-                                            .text_color(p.muted)
-                                            .text_right()
-                                            .child(dur_text),
-                                    ),
-                            ),
-                    ),
+                    },
+                )
+                .w(px(STEP_W))
+                .h(px(STEP_H))
+                .when(!p.dark && !is_skipped, |d| d.shadow_sm())
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_id = Some(step_id_hover.clone());
+                    } else if this.hovered_id.as_ref() == Some(&step_id_hover) {
+                        this.hovered_id = None;
+                    }
+                    cx.notify();
+                })),
             )
-            .children(tools_overlay)
+            .child(tools_overlay)
             .into_any_element()
     }
 
@@ -1649,13 +1812,13 @@ impl FlowBuilder {
         let link_c = pro_mix_color(p.blue, card_bg, if p.dark { 0.35 } else { 0.42 });
         let pulse_c = p.blue;
 
-        type LaneArcSpec = (usize, bool, Option<f32>);
+        type LaneArcSpec = (usize, f32, Option<f32>);
         let arc_specs: Vec<LaneArcSpec> = (0..lane_count)
             .map(|idx| {
                 let p_id = &branch.paths[idx].id;
-                let skipped = snap.skipped_paths.contains(p_id);
+                let path_op = snap.path_opacities.get(p_id).copied().unwrap_or(1.0);
                 let pulse = snap.branch_pulse.get(&(branch.id.clone(), idx)).copied();
-                (idx, skipped, pulse)
+                (idx, path_op, pulse)
             })
             .collect();
 
@@ -1665,13 +1828,9 @@ impl FlowBuilder {
                 let mid_x = bounds.center().x;
                 let top_y = bounds.top();
                 let bot_y = bounds.bottom();
-                for &(idx, skipped, pulse) in &arc_specs {
+                for &(idx, path_op, pulse) in &arc_specs {
                     let lane_cx = bounds.left() + px(idx as f32 * LANE_W + LANE_W * 0.5);
-                    let base = if skipped {
-                        link_c.opacity(0.32)
-                    } else {
-                        link_c
-                    };
+                    let base = link_c.opacity(path_op.clamp(0.28, 1.0));
                     pro_connector_pulse(
                         point(mid_x, top_y),
                         point(lane_cx, bot_y),
@@ -1713,6 +1872,7 @@ impl FlowBuilder {
         let mut lanes_row = div().flex().items_start();
         for (p_idx, path) in branch.paths.iter().enumerate() {
             let skipped = snap.skipped_paths.contains(&path.id);
+            let path_op = snap.path_opacities.get(&path.id).copied().unwrap_or(1.0);
             let pill_label = path.display_label(cx).to_string();
             let seq = self.render_sequence(
                 &path.steps,
@@ -1725,7 +1885,6 @@ impl FlowBuilder {
             let lane = div()
                 .w(px(LANE_W))
                 .px(px(LANE_PAD_X))
-                .opacity(if skipped { 0.48 } else { 1.0 })
                 .flex()
                 .flex_col()
                 .items_center()
@@ -1735,6 +1894,7 @@ impl FlowBuilder {
                         .px(px(8.))
                         .rounded_full()
                         .bg(brand_bg)
+                        .opacity(path_op)
                         .text_size(px(11.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(brand_fg)
@@ -1823,6 +1983,8 @@ fn step_icon_element(
 }
 
 fn status_pill(
+    base_id: &ElementId,
+    key: &str,
     kind: FlowStepKind,
     status: FlowRunStatus,
     p: &ProPalette,
@@ -1868,7 +2030,15 @@ fn status_pill(
             .flex()
             .items_center()
             .gap(px(3.5))
-            .when(check, |d| d.child(pro_icon(ProIcon::Check, 10., fg)))
+            .when(check, |d| {
+                d.child(pro_check_draw(
+                    pro_eid(base_id, format!("chk-{key}")),
+                    true,
+                    12.0,
+                    false,
+                    fg,
+                ))
+            })
             .when(status == FlowRunStatus::Running, |d| {
                 d.child(
                     div()
@@ -1929,8 +2099,8 @@ impl Render for FlowBuilder {
         let is_running = self.live_run.is_some();
         let card_bg: Hsla = if p.dark { rgb(0x1c1c1e).into() } else { p.card };
 
-        let run_btn = {
-            let can_run = self.steps.len() >= 2 || !self.steps.is_empty();
+        let run_btn: AnyElement = {
+            let can_run = !self.steps.is_empty();
             let hover_bg = if is_running {
                 p.chip_hover
             } else {
@@ -1941,47 +2111,75 @@ impl Render for FlowBuilder {
             } else {
                 tr(cx, "Test run", "测试运行")
             };
-            div()
-                .id(pro_eid(&self.id, "run-btn"))
-                .role(Role::Button)
-                .aria_label(btn_label)
-                .tab_index(if can_run { 0 } else { -1 })
-                .h(px(28.))
-                .px(px(10.))
-                .rounded(px(6.))
-                .bg(if is_running { card_bg } else { p.primary })
-                .when(is_running, |d| d.border_1().border_color(p.line_strong))
-                .text_color(if is_running { p.ink } else { p.on_primary })
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .opacity(if can_run { 1.0 } else { 0.42 })
-                .when(can_run, |d| {
-                    d.cursor_pointer()
-                        .hover(move |s| s.bg(hover_bg))
-                        .focus_visible(move |s| s.border_2().border_color(p.focus))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            if this.is_running() {
-                                this.stop_test_run(cx);
-                            } else {
-                                this.start_test_run(cx);
-                            }
-                        }))
-                })
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(if is_running {
+            let rest_bg = if is_running { card_bg } else { p.primary };
+            let rest_bdr = if is_running { p.line_strong } else { p.primary };
+            let fg_c = if is_running { p.ink } else { p.on_primary };
+            if can_run {
+                pro_tactile(
+                    pro_eid(&self.id, "run-btn"),
+                    btn_label,
+                    6.0,
+                    rest_bg,
+                    hover_bg,
+                    rest_bdr,
+                    rest_bdr,
+                    false,
                     div()
-                        .size(px(9.))
-                        .rounded(px(2.))
-                        .bg(p.ink)
-                        .into_any_element()
-                } else {
-                    pro_icon(ProIcon::Play, 11.5, p.on_primary)
-                })
-                .child(btn_label)
+                        .h(px(28.))
+                        .px(px(10.))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(if is_running {
+                            div()
+                                .size(px(9.))
+                                .rounded(px(2.))
+                                .bg(p.ink)
+                                .into_any_element()
+                        } else {
+                            pro_icon(ProIcon::Play, 11.5, p.on_primary)
+                        })
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "run-btn-lbl"),
+                            btn_label,
+                            12.5,
+                            FontWeight::MEDIUM,
+                            fg_c,
+                        )),
+                    cx,
+                    |this, _, cx| {
+                        if this.is_running() {
+                            this.stop_test_run(cx);
+                        } else {
+                            this.start_test_run(cx);
+                        }
+                    },
+                )
+                .into_any_element()
+            } else {
+                div()
+                    .id(pro_eid(&self.id, "run-btn"))
+                    .role(Role::Button)
+                    .aria_label(btn_label)
+                    .tab_index(-1)
+                    .h(px(28.))
+                    .px(px(10.))
+                    .rounded(px(6.))
+                    .bg(p.primary)
+                    .text_color(p.on_primary)
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .opacity(0.42)
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(pro_icon(ProIcon::Play, 11.5, p.on_primary))
+                    .child(btn_label)
+                    .into_any_element()
+            }
         };
 
+        let steps_sfx = tr(cx, " steps", " 个步骤");
         let header = div()
             .w_full()
             .min_h(px(32.))
@@ -2004,16 +2202,16 @@ impl Render for FlowBuilder {
                             .truncate()
                             .child(tr(cx, self.name.as_ref(), self.name_zh.as_ref()).to_string()),
                     )
-                    .child(
-                        div().text_size(px(12.)).text_color(p.muted).child(
-                            tr(
-                                cx,
-                                &format!("{total_steps} steps"),
-                                &format!("{total_steps} 个步骤"),
-                            )
-                            .to_string(),
-                        ),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "step-count"),
+                        total_steps as f64,
+                        0,
+                        "",
+                        steps_sfx,
+                        12.0,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             )
             .child(run_btn);
 
@@ -2136,7 +2334,7 @@ impl Render for FlowBuilder {
         };
 
         let left_foot = if let Some((st, msg)) = &snap.active_banner {
-            let pill = status_pill(FlowStepKind::Action, *st, &p, cx);
+            let pill = status_pill(&self.id, "foot-banner", FlowStepKind::Action, *st, &p, cx);
             div()
                 .flex()
                 .items_center()
@@ -2179,32 +2377,17 @@ impl Render for FlowBuilder {
         };
 
         let undo_btn = self.can_undo().then(|| {
-            let hover_bg = p.chip_hover;
-            div()
-                .id(pro_eid(&self.id, "undo-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Undo last workflow change", "撤销上一步修改"))
-                .tab_index(0)
-                .h(px(26.))
-                .px(px(9.))
-                .rounded(px(6.))
-                .bg(card_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .focus_visible(move |s| s.border_2().border_color(p.focus))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            pro_btn(
+                pro_eid(&self.id, "undo-btn"),
+                tr(cx, "Undo", "撤销"),
+                Some(ProIcon::Undo),
+                ProBtnStyle::Secondary,
+                true,
+                cx,
+                |this, _, cx| {
                     this.undo(cx);
-                }))
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .text_size(px(12.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.ink)
-                .child(pro_icon(ProIcon::Undo, 12., p.ink))
-                .child(tr(cx, "Undo", "撤销"))
+                },
+            )
         });
 
         let footer = div()

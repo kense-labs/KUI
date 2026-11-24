@@ -7,8 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_eid, pro_empty_state, pro_fold, pro_skeleton_bar,
-        pro_step_transition, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_popover_presence, pro_skeleton_bar,
+        pro_step_transition, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -410,6 +411,10 @@ pub struct DecisionCard {
     folded: bool,
     allow_own: bool,
     composer_chrome: bool,
+    mode_menu_open: bool,
+    composer_mode_idx: usize,
+    model_menu_open: bool,
+    composer_model_idx: usize,
     own_editor: Option<Entity<Editor>>,
     own_focused: bool,
     composer_editor: Option<Entity<Editor>>,
@@ -439,6 +444,10 @@ impl DecisionCard {
             folded: false,
             allow_own: true,
             composer_chrome: true,
+            mode_menu_open: false,
+            composer_mode_idx: 0,
+            model_menu_open: false,
+            composer_model_idx: 0,
             own_editor: None,
             own_focused: false,
             composer_editor: None,
@@ -796,226 +805,167 @@ impl Render for DecisionCard {
                         .truncate()
                         .child(wait_txt),
                 )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "show-folded-btn"))
-                        .role(Role::Button)
-                        .aria_label(show_lbl)
-                        .tab_index(0)
-                        .h(px(24.0))
-                        .px(px(9.0))
-                        .rounded(px(6.0))
-                        .flex()
-                        .items_center()
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(fill_bg))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.set_folded(false, cx);
-                        }))
-                        .child(show_lbl),
-                )
+                .child(pro_btn(
+                    pro_eid(&self.id, "show-folded-btn"),
+                    show_lbl,
+                    None,
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.set_folded(false, cx);
+                    },
+                ))
                 .into_any_element()
         } else {
             div().into_any_element()
         };
 
-        let expanded_box = if let Some(prompt) = self.decisions.get(cur_idx).cloned() {
-            let eff_opts = Self::effective_options(&prompt, cx);
-            let opt_count = eff_opts.len();
-            let own_num = opt_count + 1;
+        let expanded_box =
+            if let Some(prompt) = self.decisions.get(cur_idx).cloned() {
+                let eff_opts = Self::effective_options(&prompt, cx);
+                let opt_count = eff_opts.len();
+                let own_num = opt_count + 1;
 
-            let task_localized: SharedString = match prompt.task.as_ref() {
-                "Ingest pipeline" => tr(cx, "Ingest pipeline", "数据采集流水线").into(),
-                "Pricing page" => tr(cx, "Pricing page", "定价对比页").into(),
-                "Production release" => tr(cx, "Production release", "生产环境发布").into(),
-                _ => prompt.task.clone(),
-            };
-            let q_localized: SharedString = match prompt.question.as_ref() {
-                "Which queue should the ingest service use?" => tr(
-                    cx,
-                    "Which queue should the ingest service use?",
-                    "数据采集服务应当采用哪种消息队列？",
-                )
-                .into(),
-                "Which layout should the plan comparison section use?" => tr(
-                    cx,
-                    "Which layout should the plan comparison section use?",
-                    "套餐对比区块应当采用哪种版式？",
-                )
-                .into(),
-                "Deploy ingest-worker v2.4.0 to us-east-1?" => tr(
-                    cx,
-                    "Deploy ingest-worker v2.4.0 to us-east-1?",
-                    "是否将 ingest-worker v2.4.0 部署至生产可用区 us-east-1？",
-                )
-                .into(),
-                _ => prompt.question.clone(),
-            };
+                let task_localized: SharedString = match prompt.task.as_ref() {
+                    "Ingest pipeline" => tr(cx, "Ingest pipeline", "数据采集流水线").into(),
+                    "Pricing page" => tr(cx, "Pricing page", "定价对比页").into(),
+                    "Production release" => tr(cx, "Production release", "生产环境发布").into(),
+                    _ => prompt.task.clone(),
+                };
+                let q_localized: SharedString = match prompt.question.as_ref() {
+                    "Which queue should the ingest service use?" => tr(
+                        cx,
+                        "Which queue should the ingest service use?",
+                        "数据采集服务应当采用哪种消息队列？",
+                    )
+                    .into(),
+                    "Which layout should the plan comparison section use?" => tr(
+                        cx,
+                        "Which layout should the plan comparison section use?",
+                        "套餐对比区块应当采用哪种版式？",
+                    )
+                    .into(),
+                    "Deploy ingest-worker v2.4.0 to us-east-1?" => tr(
+                        cx,
+                        "Deploy ingest-worker v2.4.0 to us-east-1?",
+                        "是否将 ingest-worker v2.4.0 部署至生产可用区 us-east-1？",
+                    )
+                    .into(),
+                    _ => prompt.question.clone(),
+                };
 
-            let pager_tools = {
-                let later_lbl = tr(cx, "Later", "稍后");
-                let mut tools = div().flex().items_center().gap(px(4.0));
-                if open_len > 1 {
-                    let prev_lbl = tr(cx, "Previous decision", "上一题");
-                    let next_lbl = tr(cx, "Next decision", "下一题");
-                    tools = tools.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(2.0))
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "dc-prev"))
-                                    .role(Role::Button)
-                                    .aria_label(prev_lbl)
-                                    .tab_index(0)
-                                    .size(px(22.0))
-                                    .rounded(px(6.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(fill_bg))
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                let pager_tools = {
+                    let later_lbl = tr(cx, "Later", "稍后");
+                    let mut tools = div().flex().items_center().gap(px(4.0));
+                    if open_len > 1 {
+                        let prev_lbl = tr(cx, "Previous decision", "上一题");
+                        let next_lbl = tr(cx, "Next decision", "下一题");
+                        let page_str: SharedString =
+                            format!("{} / {}", cur_idx + 1, open_len).into();
+                        tools = tools.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(2.0))
+                                .child(pro_icon_btn(
+                                    pro_eid(&self.id, "dc-prev"),
+                                    prev_lbl,
+                                    ProIcon::ChevronLeft,
+                                    22.0,
+                                    false,
+                                    cx,
+                                    |this, _, cx| {
                                         this.step_page(-1, cx);
-                                    }))
-                                    .child(pro_icon(ProIcon::ChevronLeft, 12.0, p.muted)),
-                            )
-                            .child(
-                                div()
-                                    .min_w(px(36.0))
-                                    .text_center()
-                                    .text_size(px(12.0))
-                                    .text_color(p.muted)
-                                    .child(format!("{} / {}", cur_idx + 1, open_len)),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "dc-next"))
-                                    .role(Role::Button)
-                                    .aria_label(next_lbl)
-                                    .tab_index(0)
-                                    .size(px(22.0))
-                                    .rounded(px(6.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(fill_bg))
-                                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                    },
+                                ))
+                                .child(div().min_w(px(36.0)).flex().justify_center().child(
+                                    pro_swap_label(
+                                        pro_eid(&self.id, "dc-page-lbl"),
+                                        page_str,
+                                        12.0,
+                                        FontWeight::NORMAL,
+                                        p.muted,
+                                    ),
+                                ))
+                                .child(pro_icon_btn(
+                                    pro_eid(&self.id, "dc-next"),
+                                    next_lbl,
+                                    ProIcon::ChevronRight,
+                                    22.0,
+                                    false,
+                                    cx,
+                                    |this, _, cx| {
                                         this.step_page(1, cx);
-                                    }))
-                                    .child(pro_icon(ProIcon::ChevronRight, 12.0, p.muted)),
-                            ),
-                    );
-                }
-                tools.child(
-                    div()
-                        .id(pro_eid(&self.id, "dc-later"))
-                        .role(Role::Button)
-                        .aria_label(later_lbl)
-                        .tab_index(0)
-                        .h(px(24.0))
-                        .px(px(8.0))
-                        .rounded(px(6.0))
-                        .flex()
-                        .items_center()
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.text)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(fill_bg).text_color(p.ink))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                    },
+                                )),
+                        );
+                    }
+                    tools.child(pro_btn(
+                        pro_eid(&self.id, "dc-later"),
+                        later_lbl,
+                        None,
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        |this, _, cx| {
                             this.set_folded(true, cx);
-                        }))
-                        .child(later_lbl),
-                )
-            };
+                        },
+                    ))
+                };
 
-            let facts_el = (!prompt.facts.is_empty()).then(|| {
-                let mut f_col = div()
-                    .w_full()
-                    .px(px(6.0))
-                    .py(px(4.0))
-                    .rounded(px(8.0))
-                    .bg(well_bg)
-                    .flex()
-                    .flex_col()
-                    .gap(px(3.0));
-                for fact in &prompt.facts {
-                    f_col = f_col.child(
-                        div()
+                let facts_el = (!prompt.facts.is_empty()).then(|| {
+                    let mut f_col = div()
+                        .w_full()
+                        .px(px(6.0))
+                        .py(px(4.0))
+                        .rounded(px(8.0))
+                        .bg(well_bg)
+                        .flex()
+                        .flex_col()
+                        .gap(px(3.0));
+                    for fact in &prompt.facts {
+                        f_col = f_col.child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .gap(px(12.0))
+                                .text_size(px(12.5))
+                                .child(
+                                    div()
+                                        .w(px(72.0))
+                                        .flex_none()
+                                        .text_color(p.muted)
+                                        .truncate()
+                                        .child(fact.label.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_color(p.ink)
+                                        .truncate()
+                                        .child(fact.value.clone()),
+                                ),
+                        );
+                    }
+                    f_col
+                });
+
+                // Options body: either Pick Tiles (above 420px) or Numbered Rows (both powered by `pro_tactile`)
+                let options_el = if prompt.kind == DecisionKind::Pick && !tiles_as_rows {
+                    let mut grid = div().w_full().flex().items_stretch().gap(px(6.0));
+                    for (i, opt) in eff_opts.iter().enumerate() {
+                        let is_hi = self.highlighted_opt == i && !self.own_focused;
+                        let opt_id = opt.id.clone();
+                        let rec_lbl = tr(cx, "Recommended", "推荐");
+                        let tile_body = div()
                             .w_full()
-                            .flex()
-                            .items_center()
-                            .gap(px(12.0))
-                            .text_size(px(12.5))
-                            .child(
-                                div()
-                                    .w(px(72.0))
-                                    .flex_none()
-                                    .text_color(p.muted)
-                                    .truncate()
-                                    .child(fact.label.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .text_color(p.ink)
-                                    .truncate()
-                                    .child(fact.value.clone()),
-                            ),
-                    );
-                }
-                f_col
-            });
-
-            // Options body: either Pick Tiles (above 420px) or Numbered Rows
-            let options_el = if prompt.kind == DecisionKind::Pick && !tiles_as_rows {
-                let mut grid = div().w_full().flex().items_stretch().gap(px(6.0));
-                for (i, opt) in eff_opts.iter().enumerate() {
-                    let is_hi = self.highlighted_opt == i && !self.own_focused;
-                    let opt_id = opt.id.clone();
-                    let rec_lbl = tr(cx, "Recommended", "推荐");
-                    grid = grid.child(
-                        div()
-                            .id(pro_eid(&self.id, format!("tile-{i}")))
-                            .role(Role::ListBoxOption)
-                            .aria_label(opt.title.clone())
-                            .aria_selected(is_hi)
-                            .tab_index(0)
-                            .flex_1()
-                            .min_w_0()
                             .p(px(5.0))
-                            .rounded(px(10.0))
-                            .bg(if is_hi { fill_bg } else { transparent_black() })
                             .flex()
                             .flex_col()
                             .gap(px(6.0))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(fill_bg))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                                if *inside {
-                                    this.highlighted_opt = i;
-                                    cx.notify();
-                                }
-                            }))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, w, cx| {
-                                this.submit_answer(
-                                    DecisionAnswer::Option(opt_id.clone()),
-                                    Some(w),
-                                    cx,
-                                );
-                            }))
                             .child(
                                 div()
                                     .relative()
@@ -1061,12 +1011,13 @@ impl Render for DecisionCard {
                                             .flex_none()
                                             .rounded(px(5.5))
                                             .bg(if is_hi { card_bg } else { fill_bg })
+                                            .when(is_hi, |d| d.border_1().border_color(p.line))
                                             .flex()
                                             .items_center()
                                             .justify_center()
                                             .text_size(px(11.0))
                                             .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.muted)
+                                            .text_color(if is_hi { p.ink } else { p.muted })
                                             .child(format!("{}", i + 1)),
                                     )
                                     .child(
@@ -1093,56 +1044,58 @@ impl Render for DecisionCard {
                                                 )
                                             }),
                                     ),
-                            ),
-                    );
-                }
-                grid.into_any_element()
-            } else {
-                let mut rows = div().w_full().flex().flex_col().gap(px(2.0));
-                let is_approval =
-                    prompt.kind == DecisionKind::Approval && prompt.options.is_empty();
-                for (i, opt) in eff_opts.iter().enumerate() {
-                    let is_hi = self.highlighted_opt == i && !self.own_focused;
-                    let opt_id = opt.id.clone();
-                    let rec_lbl = tr(cx, "Recommended", "推荐");
-                    rows = rows.child(
-                        div()
-                            .id(pro_eid(&self.id, format!("opt-{i}")))
-                            .role(Role::ListBoxOption)
-                            .aria_label(opt.title.clone())
-                            .aria_selected(is_hi)
-                            .tab_index(0)
+                            );
+
+                        grid = grid.child(
+                            pro_tactile(
+                                pro_eid(&self.id, format!("tile-{i}")),
+                                opt.title.clone(),
+                                10.0,
+                                transparent_black(),
+                                fill_bg,
+                                transparent_black(),
+                                p.line,
+                                is_hi,
+                                tile_body,
+                                cx,
+                                move |this, w, cx| {
+                                    this.submit_answer(
+                                        DecisionAnswer::Option(opt_id.clone()),
+                                        Some(w),
+                                        cx,
+                                    );
+                                },
+                            )
+                            .flex_1()
+                            .min_w_0()
+                            .on_hover(cx.listener(
+                                move |this, inside: &bool, _, cx| {
+                                    if *inside && this.highlighted_opt != i {
+                                        this.highlighted_opt = i;
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                        );
+                    }
+                    grid.into_any_element()
+                } else {
+                    let mut rows = div().w_full().flex().flex_col().gap(px(2.0));
+                    let is_approval =
+                        prompt.kind == DecisionKind::Approval && prompt.options.is_empty();
+                    for (i, opt) in eff_opts.iter().enumerate() {
+                        let is_hi = self.highlighted_opt == i && !self.own_focused;
+                        let opt_id = opt.id.clone();
+                        let rec_lbl = tr(cx, "Recommended", "推荐");
+                        let row_body = div()
                             .w_full()
                             .min_h(px(42.0))
                             .pl(px(6.0))
                             .pr(px(8.0))
                             .py(px(4.0))
-                            .rounded(px(8.0))
-                            .bg(if is_hi { fill_bg } else { transparent_black() })
                             .flex()
                             .items_center()
                             .gap(px(10.0))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(fill_bg))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                                if *inside {
-                                    this.highlighted_opt = i;
-                                    cx.notify();
-                                }
-                            }))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, w, cx| {
-                                let ans = if is_approval {
-                                    if i == 0 {
-                                        DecisionAnswer::Approve
-                                    } else {
-                                        DecisionAnswer::Decline
-                                    }
-                                } else {
-                                    DecisionAnswer::Option(opt_id.clone())
-                                };
-                                this.submit_answer(ans, Some(w), cx);
-                            }))
                             .child(
                                 div()
                                     .size(px(22.0))
@@ -1155,7 +1108,7 @@ impl Render for DecisionCard {
                                     .justify_center()
                                     .text_size(px(12.0))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
+                                    .text_color(if is_hi { p.ink } else { p.muted })
                                     .child(format!("{}", i + 1)),
                             )
                             .child(
@@ -1200,77 +1153,106 @@ impl Render for DecisionCard {
                                         .text_color(p.muted)
                                         .child(rec_lbl),
                                 )
-                            }),
-                    );
-                }
-                rows.into_any_element()
-            };
+                            });
 
-            let own_row = self.allow_own.then(|| {
-                let has_own_text = self
-                    .own_editor
-                    .as_ref()
-                    .is_some_and(|ed| !ed.read(cx).value().trim().is_empty());
-                let ed_view = self.own_editor.clone();
-                let send_lbl = tr(cx, "Send custom answer", "发送自定义回答");
-                div()
-                    .w_full()
-                    .min_h(px(36.0))
-                    .px(px(6.0))
-                    .py(px(3.0))
-                    .rounded(px(8.0))
-                    .bg(if self.own_focused {
-                        well_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .border_1()
-                    .border_color(if self.own_focused {
-                        p.line_strong
-                    } else {
-                        transparent_black()
-                    })
-                    .flex()
-                    .items_center()
-                    .gap(px(10.0))
-                    .hover(move |s| s.bg(well_bg))
-                    .child(
-                        div()
-                            .size(px(22.0))
-                            .flex_none()
-                            .rounded(px(6.0))
-                            .bg(fill_bg)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(format!("{own_num}")),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .h(px(22.0))
-                            .when_some(ed_view, |d, ed| d.child(ed)),
-                    )
-                    .when(has_own_text, |d| {
-                        d.child(
+                        rows = rows.child(
+                            pro_tactile(
+                                pro_eid(&self.id, format!("opt-{i}")),
+                                opt.title.clone(),
+                                8.0,
+                                transparent_black(),
+                                fill_bg,
+                                transparent_black(),
+                                p.line,
+                                is_hi,
+                                row_body,
+                                cx,
+                                move |this, w, cx| {
+                                    let ans = if is_approval {
+                                        if i == 0 {
+                                            DecisionAnswer::Approve
+                                        } else {
+                                            DecisionAnswer::Decline
+                                        }
+                                    } else {
+                                        DecisionAnswer::Option(opt_id.clone())
+                                    };
+                                    this.submit_answer(ans, Some(w), cx);
+                                },
+                            )
+                            .w_full()
+                            .on_hover(cx.listener(
+                                move |this, inside: &bool, _, cx| {
+                                    if *inside && this.highlighted_opt != i {
+                                        this.highlighted_opt = i;
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                        );
+                    }
+                    rows.into_any_element()
+                };
+
+                let own_row = self.allow_own.then(|| {
+                    let has_own_text = self
+                        .own_editor
+                        .as_ref()
+                        .is_some_and(|ed| !ed.read(cx).value().trim().is_empty());
+                    let ed_view = self.own_editor.clone();
+                    let send_lbl = tr(cx, "Send custom answer", "发送自定义回答");
+                    div()
+                        .w_full()
+                        .min_h(px(36.0))
+                        .px(px(6.0))
+                        .py(px(3.0))
+                        .rounded(px(8.0))
+                        .bg(if self.own_focused {
+                            well_bg
+                        } else {
+                            transparent_black()
+                        })
+                        .border_1()
+                        .border_color(if self.own_focused {
+                            p.line_strong
+                        } else {
+                            transparent_black()
+                        })
+                        .flex()
+                        .items_center()
+                        .gap(px(10.0))
+                        .hover(move |s| s.bg(well_bg))
+                        .child(
                             div()
-                                .id(pro_eid(&self.id, "own-send-btn"))
-                                .role(Role::Button)
-                                .aria_label(send_lbl)
-                                .tab_index(0)
-                                .size(px(24.0))
+                                .size(px(22.0))
                                 .flex_none()
-                                .rounded_full()
-                                .bg(p.primary)
+                                .rounded(px(6.0))
+                                .bg(if self.own_focused { card_bg } else { fill_bg })
+                                .when(self.own_focused, |d| d.border_1().border_color(p.line))
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .cursor_pointer()
-                                .on_click(cx.listener(|this, _: &ClickEvent, w, cx| {
+                                .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if self.own_focused { p.ink } else { p.muted })
+                                .child(format!("{own_num}")),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .h(px(22.0))
+                                .when_some(ed_view, |d, ed| d.child(ed)),
+                        )
+                        .when(has_own_text, |d| {
+                            d.child(pro_icon_btn(
+                                pro_eid(&self.id, "own-send-btn"),
+                                send_lbl,
+                                ProIcon::ArrowUp,
+                                24.0,
+                                true,
+                                cx,
+                                |this, w, cx| {
                                     if let Some(ed) = &this.own_editor {
                                         let val = ed.read(cx).value().trim().to_owned();
                                         if !val.is_empty() {
@@ -1281,86 +1263,85 @@ impl Render for DecisionCard {
                                             );
                                         }
                                     }
-                                }))
-                                .child(pro_icon(ProIcon::ArrowUp, 12.0, p.on_primary)),
-                        )
-                    })
-            });
+                                },
+                            ))
+                        })
+                });
 
-            let body_step = pro_step_transition(
-                pro_eid(&self.id, "dc-step"),
-                self.step_serial,
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .gap(px(5.0))
-                    .child(
-                        div()
-                            .px(px(6.0))
-                            .pt(px(3.0))
-                            .pb(px(1.0))
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .line_height(px(20.0))
-                            .text_color(p.strong)
-                            .child(q_localized),
-                    )
-                    .when_some(facts_el, |d, f| d.child(f))
-                    .child(options_el)
-                    .when_some(own_row, |d, r| d.child(r)),
-            );
-
-            div()
-                .w_full()
-                .p(px(6.0))
-                .rounded(px(14.0))
-                .bg(card_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_md()
-                .flex()
-                .flex_col()
-                .gap(px(4.0))
-                .child(
+                let body_step = pro_step_transition(
+                    pro_eid(&self.id, "dc-step"),
+                    self.step_serial,
                     div()
                         .w_full()
-                        .h(px(28.0))
-                        .pl(px(6.0))
-                        .pr(px(2.0))
                         .flex()
-                        .items_center()
-                        .gap(px(8.0))
+                        .flex_col()
+                        .gap(px(5.0))
                         .child(
                             div()
-                                .h(px(18.0))
                                 .px(px(6.0))
-                                .flex_none()
-                                .rounded(px(5.0))
-                                .bg(p.amber_soft)
-                                .text_color(p.amber_ink)
-                                .text_size(px(11.0))
+                                .pt(px(3.0))
+                                .pb(px(1.0))
+                                .text_size(px(14.0))
                                 .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .child(tr(cx, "Needs you", "待你拍板")),
+                                .line_height(px(20.0))
+                                .text_color(p.strong)
+                                .child(q_localized),
                         )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(12.0))
-                                .text_color(p.muted)
-                                .truncate()
-                                .child(task_localized),
-                        )
-                        .child(pager_tools),
-                )
-                .child(body_step)
-                .into_any_element()
-        } else {
-            div().into_any_element()
-        };
+                        .when_some(facts_el, |d, f| d.child(f))
+                        .child(options_el)
+                        .when_some(own_row, |d, r| d.child(r)),
+                );
+
+                div()
+                    .w_full()
+                    .p(px(6.0))
+                    .rounded(px(14.0))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(28.0))
+                            .pl(px(6.0))
+                            .pr(px(2.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(
+                                div()
+                                    .h(px(18.0))
+                                    .px(px(6.0))
+                                    .flex_none()
+                                    .rounded(px(5.0))
+                                    .bg(p.amber_soft)
+                                    .text_color(p.amber_ink)
+                                    .text_size(px(11.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .flex()
+                                    .items_center()
+                                    .child(tr(cx, "Needs you", "待你拍板")),
+                            )
+                            .child(div().flex_1().min_w_0().overflow_hidden().child(
+                                pro_swap_label(
+                                    pro_eid(&self.id, "dc-task-lbl"),
+                                    task_localized,
+                                    12.0,
+                                    FontWeight::NORMAL,
+                                    p.muted,
+                                ),
+                            ))
+                            .child(pager_tools),
+                    )
+                    .child(body_step)
+                    .into_any_element()
+            } else {
+                div().into_any_element()
+            };
 
         let decision_dock = div()
             .w_full()
@@ -1429,36 +1410,27 @@ impl Render for DecisionCard {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(13.0))
-                            .text_color(p.muted)
-                            .truncate()
-                            .child(status_txt),
+                            .overflow_hidden()
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "dc-orch-status"),
+                                status_txt,
+                                13.0,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
                     )
                     .when(open_len < self.initial_decisions.len(), |d| {
-                        d.child(
-                            div()
-                                .id(pro_eid(&self.id, "dc-reset"))
-                                .role(Role::Button)
-                                .aria_label(replay_lbl)
-                                .tab_index(0)
-                                .h(px(24.0))
-                                .px(px(8.0))
-                                .rounded(px(6.0))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.text)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(fill_bg).text_color(p.ink))
-                                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                    this.reset(cx);
-                                }))
-                                .child(pro_icon(ProIcon::Undo, 11.5, p.muted))
-                                .child(replay_lbl),
-                        )
+                        d.child(pro_btn(
+                            pro_eid(&self.id, "dc-reset"),
+                            replay_lbl,
+                            Some(ProIcon::Undo),
+                            ProBtnStyle::Ghost,
+                            true,
+                            cx,
+                            |this, _, cx| {
+                                this.reset(cx);
+                            },
+                        ))
                     }),
             );
         }
@@ -1477,6 +1449,152 @@ impl Render for DecisionCard {
                 .as_ref()
                 .is_some_and(|ed| !ed.read(cx).value().trim().is_empty());
             let send_lbl = tr(cx, "Send message", "发送消息");
+
+            let modes: [(&'static str, ProIcon); 3] = [
+                (tr(cx, "Ask before acting", "操作前询问"), ProIcon::Shield),
+                (tr(cx, "Auto-edit safe", "安全变更自动执行"), ProIcon::Bolt),
+                (tr(cx, "Plan only", "仅生成计划"), ProIcon::List),
+            ];
+            let active_mode_idx = self.composer_mode_idx.min(modes.len() - 1);
+            let (active_mode_lbl, active_mode_icon) = modes[active_mode_idx];
+            let mode_open = self.mode_menu_open;
+
+            let mut mode_menu_col = div()
+                .w(px(196.0))
+                .p(px(4.0))
+                .rounded(px(10.0))
+                .bg(card_bg)
+                .border_1()
+                .border_color(p.line_strong)
+                .shadow_lg()
+                .flex()
+                .flex_col()
+                .gap(px(2.0));
+            for (m_idx, (m_lbl, m_ic)) in modes.into_iter().enumerate() {
+                let sel = m_idx == active_mode_idx;
+                let row_inner = div()
+                    .w_full()
+                    .h(px(28.0))
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(7.0))
+                    .child(pro_icon(m_ic, 13.5, if sel { p.ink } else { p.muted }))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.0))
+                            .font_weight(if sel {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .text_color(if sel { p.strong } else { p.text })
+                            .truncate()
+                            .child(m_lbl),
+                    )
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("dc-mode-chk-{m_idx}")),
+                        sel,
+                        14.0,
+                        false,
+                        p.primary,
+                    ));
+                mode_menu_col = mode_menu_col.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("dc-mode-opt-{m_idx}")),
+                        m_lbl,
+                        6.0,
+                        transparent_black(),
+                        fill_bg,
+                        transparent_black(),
+                        transparent_black(),
+                        sel,
+                        row_inner,
+                        cx,
+                        move |this, _, cx| {
+                            this.composer_mode_idx = m_idx;
+                            this.mode_menu_open = false;
+                            cx.notify();
+                        },
+                    )
+                    .w_full(),
+                );
+            }
+
+            let models: [(&'static str, &'static str); 3] = [
+                ("claude", "Sonnet 5.5"),
+                ("openai", "GPT-6 Sol"),
+                ("gemini", "Gemini 3.1 Pro"),
+            ];
+            let active_model_idx = self.composer_model_idx.min(models.len() - 1);
+            let (active_brand, active_model_lbl) = models[active_model_idx];
+            let model_open = self.model_menu_open;
+
+            let mut model_menu_col = div()
+                .w(px(184.0))
+                .p(px(4.0))
+                .rounded(px(10.0))
+                .bg(card_bg)
+                .border_1()
+                .border_color(p.line_strong)
+                .shadow_lg()
+                .flex()
+                .flex_col()
+                .gap(px(2.0));
+            for (md_idx, (brand, md_lbl)) in models.into_iter().enumerate() {
+                let sel = md_idx == active_model_idx;
+                let row_inner = div()
+                    .w_full()
+                    .h(px(28.0))
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(7.0))
+                    .when_some(pro_app_artwork(brand, 13.0, cx), |d, m| d.child(m))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.0))
+                            .font_weight(if sel {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .text_color(if sel { p.strong } else { p.text })
+                            .truncate()
+                            .child(md_lbl),
+                    )
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("dc-model-chk-{md_idx}")),
+                        sel,
+                        14.0,
+                        false,
+                        p.primary,
+                    ));
+                model_menu_col = model_menu_col.child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("dc-model-opt-{md_idx}")),
+                        md_lbl,
+                        6.0,
+                        transparent_black(),
+                        fill_bg,
+                        transparent_black(),
+                        transparent_black(),
+                        sel,
+                        row_inner,
+                        cx,
+                        move |this, _, cx| {
+                            this.composer_model_idx = md_idx;
+                            this.model_menu_open = false;
+                            cx.notify();
+                        },
+                    )
+                    .w_full(),
+                );
+            }
 
             column = column.child(
                 div()
@@ -1524,17 +1642,67 @@ impl Render for DecisionCard {
                                     )
                                     .child(
                                         div()
-                                            .h(px(28.0))
-                                            .px(px(8.0))
-                                            .rounded(px(8.0))
-                                            .bg(well_bg)
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.0))
-                                            .text_size(px(12.0))
-                                            .text_color(p.muted)
-                                            .child(pro_icon(ProIcon::Shield, 14.0, p.muted))
-                                            .child(tr(cx, "Ask before acting", "操作前询问")),
+                                            .relative()
+                                            .child(
+                                                div()
+                                                    .id(pro_eid(&self.id, "dc-mode-trigger"))
+                                                    .role(Role::Button)
+                                                    .aria_label(active_mode_lbl)
+                                                    .aria_expanded(mode_open)
+                                                    .tab_index(0)
+                                                    .h(px(28.0))
+                                                    .px(px(8.0))
+                                                    .rounded(px(8.0))
+                                                    .bg(if mode_open { fill_bg } else { well_bg })
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(6.0))
+                                                    .cursor_pointer()
+                                                    .hover(move |s| s.bg(fill_bg))
+                                                    .focus_visible(move |s| {
+                                                        s.border_1().border_color(p.focus)
+                                                    })
+                                                    .on_click(cx.listener(
+                                                        |this, _: &ClickEvent, _, cx| {
+                                                            this.mode_menu_open =
+                                                                !this.mode_menu_open;
+                                                            if this.mode_menu_open {
+                                                                this.model_menu_open = false;
+                                                            }
+                                                            cx.notify();
+                                                        },
+                                                    ))
+                                                    .child(pro_icon(
+                                                        active_mode_icon,
+                                                        14.0,
+                                                        p.muted,
+                                                    ))
+                                                    .child(pro_swap_label(
+                                                        pro_eid(&self.id, "dc-mode-lbl"),
+                                                        active_mode_lbl,
+                                                        12.0,
+                                                        FontWeight::NORMAL,
+                                                        p.muted,
+                                                    ))
+                                                    .child(pro_icon(
+                                                        if mode_open {
+                                                            ProIcon::ChevronUp
+                                                        } else {
+                                                            ProIcon::ChevronDown
+                                                        },
+                                                        11.5,
+                                                        p.muted,
+                                                    )),
+                                            )
+                                            .child(
+                                                div().absolute().bottom(px(34.0)).left_0().child(
+                                                    pro_popover_presence(
+                                                        pro_eid(&self.id, "dc-mode-pop"),
+                                                        mode_open,
+                                                        move || mode_menu_col.into_any_element(),
+                                                    ),
+                                                ),
+                                            ),
                                     ),
                             )
                             .child(
@@ -1544,65 +1712,100 @@ impl Render for DecisionCard {
                                     .gap(px(6.0))
                                     .child(
                                         div()
-                                            .h(px(28.0))
-                                            .px(px(8.0))
-                                            .rounded(px(8.0))
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(5.0))
-                                            .text_size(px(12.0))
-                                            .text_color(p.ink)
-                                            .when_some(
-                                                pro_app_artwork("claude", 13.0, cx),
-                                                |d, m| d.child(m),
+                                            .relative()
+                                            .child(
+                                                div()
+                                                    .id(pro_eid(&self.id, "dc-model-trigger"))
+                                                    .role(Role::Button)
+                                                    .aria_label(active_model_lbl)
+                                                    .aria_expanded(model_open)
+                                                    .tab_index(0)
+                                                    .h(px(28.0))
+                                                    .px(px(8.0))
+                                                    .rounded(px(8.0))
+                                                    .bg(if model_open {
+                                                        fill_bg
+                                                    } else {
+                                                        transparent_black()
+                                                    })
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(5.0))
+                                                    .cursor_pointer()
+                                                    .hover(move |s| s.bg(fill_bg))
+                                                    .focus_visible(move |s| {
+                                                        s.border_1().border_color(p.focus)
+                                                    })
+                                                    .on_click(cx.listener(
+                                                        |this, _: &ClickEvent, _, cx| {
+                                                            this.model_menu_open =
+                                                                !this.model_menu_open;
+                                                            if this.model_menu_open {
+                                                                this.mode_menu_open = false;
+                                                            }
+                                                            cx.notify();
+                                                        },
+                                                    ))
+                                                    .when_some(
+                                                        pro_app_artwork(active_brand, 13.0, cx),
+                                                        |d, m| d.child(m),
+                                                    )
+                                                    .child(pro_swap_label(
+                                                        pro_eid(&self.id, "dc-model-lbl"),
+                                                        active_model_lbl,
+                                                        12.0,
+                                                        FontWeight::NORMAL,
+                                                        p.ink,
+                                                    ))
+                                                    .child(pro_icon(
+                                                        if model_open {
+                                                            ProIcon::ChevronUp
+                                                        } else {
+                                                            ProIcon::ChevronDown
+                                                        },
+                                                        12.0,
+                                                        p.muted,
+                                                    )),
                                             )
-                                            .child("Sonnet 5.5")
-                                            .child(pro_icon(ProIcon::ChevronDown, 12.0, p.muted)),
+                                            .child(
+                                                div().absolute().bottom(px(34.0)).right_0().child(
+                                                    pro_popover_presence(
+                                                        pro_eid(&self.id, "dc-model-pop"),
+                                                        model_open,
+                                                        move || model_menu_col.into_any_element(),
+                                                    ),
+                                                ),
+                                            ),
                                     )
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&self.id, "composer-send"))
-                                            .role(Role::Button)
-                                            .aria_label(send_lbl)
-                                            .tab_index(0)
-                                            .size(px(28.0))
-                                            .rounded(px(8.0))
-                                            .bg(if comp_has_text { p.primary } else { fill_bg })
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|this, _: &ClickEvent, w, cx| {
-                                                if let Some(ed) = &this.composer_editor {
-                                                    let val = ed.read(cx).value().trim().to_owned();
-                                                    if !val.is_empty() {
-                                                        ed.update(cx, |e, cx| {
-                                                            e.set_value("", w, cx)
-                                                        });
-                                                        this.toast = Some((
-                                                            tr(
-                                                                cx,
-                                                                "Message sent to orchestrator",
-                                                                "已向编排智能体发送消息",
-                                                            )
-                                                            .into(),
-                                                            Instant::now(),
-                                                        ));
-                                                        cx.emit(
-                                                            DecisionCardEvent::ComposerSubmitted(
-                                                                val.into(),
-                                                            ),
-                                                        );
-                                                        cx.notify();
-                                                    }
+                                    .child(pro_icon_btn(
+                                        pro_eid(&self.id, "composer-send"),
+                                        send_lbl,
+                                        ProIcon::ArrowUp,
+                                        28.0,
+                                        comp_has_text,
+                                        cx,
+                                        |this, w, cx| {
+                                            if let Some(ed) = &this.composer_editor {
+                                                let val = ed.read(cx).value().trim().to_owned();
+                                                if !val.is_empty() {
+                                                    ed.update(cx, |e, cx| e.set_value("", w, cx));
+                                                    this.toast = Some((
+                                                        tr(
+                                                            cx,
+                                                            "Message sent to orchestrator",
+                                                            "已向编排智能体发送消息",
+                                                        )
+                                                        .into(),
+                                                        Instant::now(),
+                                                    ));
+                                                    cx.emit(DecisionCardEvent::ComposerSubmitted(
+                                                        val.into(),
+                                                    ));
+                                                    cx.notify();
                                                 }
-                                            }))
-                                            .child(pro_icon(
-                                                ProIcon::ArrowUp,
-                                                14.0,
-                                                if comp_has_text { p.on_primary } else { p.faint },
-                                            )),
-                                    ),
+                                            }
+                                        },
+                                    )),
                             ),
                     ),
             );
@@ -1632,7 +1835,21 @@ impl Render for DecisionCard {
             .border_1()
             .border_color(transparent_black())
             .focus_visible(move |s| s.rounded(px(16.0)).border_color(focus_ring))
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                if this.mode_menu_open || this.model_menu_open {
+                    this.mode_menu_open = false;
+                    this.model_menu_open = false;
+                    cx.notify();
+                }
+            }))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, w, cx| {
+                if ev.keystroke.key == "escape" && (this.mode_menu_open || this.model_menu_open) {
+                    this.mode_menu_open = false;
+                    this.model_menu_open = false;
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
                 if this.own_focused || this.composer_focused || this.decisions.is_empty() {
                     return;
                 }

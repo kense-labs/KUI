@@ -5,13 +5,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_eid, pro_empty_state,
-        pro_modal_appear, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_eid, pro_empty_state, pro_icon_btn,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::activate,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork, pro_icon},
+        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork},
     },
 };
 use gpui::{prelude::*, *};
@@ -195,8 +197,10 @@ pub struct AgentOverlapMap {
     people: Vec<OverlapPerson>,
     conflicts: Vec<OverlapConflict>,
     custom_data: bool,
+    severity_filter: Option<OverlapSeverity>,
     hover: Option<OverlapHover>,
     modal: Option<OverlapModal>,
+    last_modal: Option<OverlapModal>,
     toast: Option<(SharedString, Instant)>,
     loading: bool,
     empty: bool,
@@ -219,8 +223,10 @@ impl AgentOverlapMap {
             people,
             conflicts,
             custom_data: false,
+            severity_filter: None,
             hover: None,
             modal: None,
+            last_modal: None,
             toast: None,
             loading: false,
             empty: false,
@@ -445,20 +451,12 @@ impl AgentOverlapMap {
         };
         let (sev_bg, sev_fg) = severity_badge_colors(conflict.severity, p);
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "o-close-cdlg"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close conflict card", "关闭冲突卡片"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "o-close-cdlg"),
+            tr(cx, "Close conflict card", "关闭冲突卡片"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.modal = None;
@@ -615,22 +613,7 @@ impl AgentOverlapMap {
                     )),
             );
 
-        div()
-            .id(pro_eid(&self.id, "o-scrim-c"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.modal = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "o-modal-c"),
-                cid,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
-            .into_any_element()
+        dialog.into_any_element()
     }
 
     fn render_agent_dialog(
@@ -647,20 +630,12 @@ impl AgentOverlapMap {
             .filter(|c| c.sides.iter().any(|s| s.key() == skey))
             .collect();
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "o-close-adlg"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close agent card", "关闭智能体卡片"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "o-close-adlg"),
+            tr(cx, "Close agent card", "关闭智能体卡片"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.modal = None;
@@ -681,18 +656,26 @@ impl AgentOverlapMap {
             let cid = rc.id.clone();
             let (sbg, sfg) = severity_badge_colors(rc.severity, p);
             let row_hov = p.hover;
-            list = list.child(activate(
+            let row_lbl = if self.custom_data {
+                rc.label.clone()
+            } else {
+                tr_conflict_label(&rc.label, cx).into()
+            };
+            list = list.child(pro_tactile(
+                pro_eid(&self.id, format!("o-arel-{ri}")),
+                format!("{row_lbl} — {}", rc.title),
+                7.0,
+                p.subtle,
+                row_hov,
+                transparent_black(),
+                p.line_strong,
+                false,
                 div()
-                    .id(pro_eid(&self.id, format!("o-arel-{ri}")))
-                    .role(Role::Button)
+                    .w_full()
                     .p(px(7.))
-                    .rounded(px(7.))
-                    .bg(p.subtle)
                     .flex()
                     .flex_col()
                     .gap(px(4.))
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(row_hov))
                     .child(
                         div()
                             .flex()
@@ -709,11 +692,7 @@ impl AgentOverlapMap {
                                     .font_weight(FontWeight::MEDIUM)
                                     .flex()
                                     .items_center()
-                                    .child(if self.custom_data {
-                                        rc.label.clone()
-                                    } else {
-                                        tr_conflict_label(&rc.label, cx).into()
-                                    }),
+                                    .child(row_lbl),
                             )
                             .child(
                                 div()
@@ -799,22 +778,7 @@ impl AgentOverlapMap {
             })
             .child(list);
 
-        div()
-            .id(pro_eid(&self.id, "o-scrim-a"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.modal = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "o-modal-a"),
-                skey,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
-            .into_any_element()
+        dialog.into_any_element()
     }
 }
 
@@ -893,6 +857,19 @@ impl Render for AgentOverlapMap {
                 .into_any_element();
         }
 
+        if let Some(m) = &self.modal {
+            self.last_modal = Some(m.clone());
+        }
+
+        let all_valid_conflicts = self.valid_conflicts();
+        let valid_conflicts: Vec<OverlapConflict> = match self.severity_filter {
+            Some(sev) => all_valid_conflicts
+                .iter()
+                .filter(|c| c.severity == sev)
+                .cloned()
+                .collect(),
+            None => all_valid_conflicts.clone(),
+        };
         let container_w = self.measured_width.get();
         let two_sided = container_w >= 580.0;
         let slots = self.build_slots(&valid_conflicts, two_sided);
@@ -902,6 +879,105 @@ impl Render for AgentOverlapMap {
             .title
             .clone()
             .unwrap_or_else(|| tr(cx, "Agent overlaps", "智能体工作重叠").into());
+
+        let filter_key: SharedString = match self.severity_filter {
+            None => "all".into(),
+            Some(OverlapSeverity::High) => "high".into(),
+            Some(OverlapSeverity::Medium) => "med".into(),
+            Some(OverlapSeverity::Low) => "low".into(),
+        };
+        let filter_sensor = pro_selection_sensor();
+        let pill_bg: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.10)
+        } else {
+            p.card
+        };
+        let focus_tab = p.focus;
+        let filter_tabs = {
+            let mut bar = div()
+                .id(pro_eid(&self.id, "o-sev-tabs"))
+                .role(Role::TabList)
+                .relative()
+                .p(px(2.))
+                .rounded(px(8.))
+                .bg(p.subtle)
+                .border_1()
+                .border_color(p.line)
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(2.))
+                .child(pro_pill_indicator(
+                    pro_eid(&self.id, "o-sev-ind"),
+                    filter_key,
+                    filter_sensor.clone(),
+                    6.0,
+                    pill_bg,
+                    Some(p.line),
+                    !p.dark,
+                ));
+
+            let items: [(Option<OverlapSeverity>, &str, Option<Hsla>, &str); 4] = [
+                (None, "all", None, tr(cx, "All", "全部")),
+                (
+                    Some(OverlapSeverity::High),
+                    "high",
+                    Some(p.red),
+                    OverlapSeverity::High.legend_label(cx),
+                ),
+                (
+                    Some(OverlapSeverity::Medium),
+                    "med",
+                    Some(p.amber),
+                    OverlapSeverity::Medium.legend_label(cx),
+                ),
+                (
+                    Some(OverlapSeverity::Low),
+                    "low",
+                    Some(p.faint),
+                    OverlapSeverity::Low.legend_label(cx),
+                ),
+            ];
+            for (opt_sev, skey, dot_c, lbl) in items {
+                let active = self.severity_filter == opt_sev;
+                let hov_fg = p.strong;
+                bar = bar.child(activate(
+                    div()
+                        .id(pro_eid(&self.id, format!("o-ftab-{skey}")))
+                        .role(Role::Tab)
+                        .aria_selected(active)
+                        .tab_index(if active { 0 } else { -1 })
+                        .relative()
+                        .h(px(24.))
+                        .px(px(8.))
+                        .rounded(px(6.))
+                        .cursor_pointer()
+                        .when(!active, |d| d.hover(move |s| s.text_color(hov_fg)))
+                        .focus_visible(move |s| s.border_2().border_color(focus_tab))
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.5))
+                        .font_weight(if active {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if active { p.strong } else { p.muted })
+                        .when(active, |d| d.child(pro_mark_selected(&filter_sensor)))
+                        .child(if let Some(dc) = dot_c {
+                            legend_dot(dc, lbl).into_any_element()
+                        } else {
+                            lbl.to_string().into_any_element()
+                        }),
+                    cx,
+                    move |this, _, cx| {
+                        this.severity_filter = opt_sev;
+                        cx.notify();
+                    },
+                ));
+            }
+            bar
+        };
 
         let header = div()
             .w_full()
@@ -928,31 +1004,21 @@ impl Render for AgentOverlapMap {
                             .px(px(7.))
                             .rounded(px(6.))
                             .bg(p.chip)
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
                             .flex()
                             .items_center()
-                            .child(format!("{}", valid_conflicts.len())),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "o-cnt"),
+                                valid_conflicts.len() as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.muted,
+                            )),
                     ),
             )
-            .when(!valid_conflicts.is_empty(), |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap(px(14.))
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .child(legend_dot(p.red, OverlapSeverity::High.legend_label(cx)))
-                        .child(legend_dot(
-                            p.amber,
-                            OverlapSeverity::Medium.legend_label(cx),
-                        ))
-                        .child(legend_dot(p.faint, OverlapSeverity::Low.legend_label(cx))),
-                )
-            });
+            .when(!all_valid_conflicts.is_empty(), |d| d.child(filter_tabs));
 
         if valid_conflicts.is_empty() {
             return div()
@@ -1004,12 +1070,90 @@ impl Render for AgentOverlapMap {
                 .into_any_element();
         }
 
-        // Determine active focus highlight (hover or modal)
+        // Determine active focus highlight (hover or modal) and sample smooth springs!
         let active_foc = self.hover.clone().or_else(|| match &self.modal {
             Some(OverlapModal::Conflict(id)) => Some(OverlapHover::Conflict(id.clone())),
             Some(OverlapModal::Agent(key)) => Some(OverlapHover::Agent(key.clone())),
             None => None,
         });
+
+        let mut slot_opacities: HashMap<SharedString, f32> = HashMap::with_capacity(slots.len());
+        for sl in &slots {
+            let dimmed = match &active_foc {
+                Some(OverlapHover::Agent(ak)) => ak != &sl.key,
+                Some(OverlapHover::Conflict(cid)) => !valid_conflicts
+                    .iter()
+                    .find(|c| &c.id == cid)
+                    .map(|c| c.sides.iter().any(|s| s.key() == sl.key))
+                    .unwrap_or(false),
+                None => false,
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("ochip-op-{}", sl.key)),
+                if dimmed { 0.28 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
+            slot_opacities.insert(sl.key.clone(), op);
+        }
+
+        let mut badge_opacities: HashMap<SharedString, f32> =
+            HashMap::with_capacity(valid_conflicts.len());
+        let mut edge_springs: HashMap<SharedString, (f32, f32)> = HashMap::new();
+        for cf in &valid_conflicts {
+            let dimmed = match &active_foc {
+                Some(OverlapHover::Conflict(id)) => id != &cf.id,
+                Some(OverlapHover::Agent(ak)) => !cf.sides.iter().any(|s| &s.key() == ak),
+                None => false,
+            };
+            let bop = pro_spring_f32(
+                pro_eid(&self.id, format!("obadge-op-{}", cf.id)),
+                if dimmed { 0.25 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
+            badge_opacities.insert(cf.id.clone(), bop);
+
+            for side in &cf.sides {
+                let skey = side.key();
+                let ekey: SharedString = format!("{}->{}", cf.id, skey).into();
+                let is_lit = match &active_foc {
+                    Some(OverlapHover::Conflict(cid)) => cid == &cf.id,
+                    Some(OverlapHover::Agent(ak)) => ak == &skey,
+                    None => false,
+                };
+                let is_dim = active_foc.is_some() && !is_lit;
+                let base_rest = match cf.severity {
+                    OverlapSeverity::High | OverlapSeverity::Medium => 0.44_f32,
+                    OverlapSeverity::Low => 0.28_f32,
+                };
+                let target_alpha = if is_lit {
+                    0.90_f32
+                } else if is_dim {
+                    0.10_f32
+                } else {
+                    base_rest
+                };
+                let target_w = if is_lit { 1.85_f32 } else { 1.25_f32 };
+                let sp_a = pro_spring_f32(
+                    pro_eid(&self.id, format!("oedge-a-{ekey}")),
+                    target_alpha,
+                    0.22,
+                    w,
+                    cx,
+                );
+                let sp_w = pro_spring_f32(
+                    pro_eid(&self.id, format!("oedge-w-{ekey}")),
+                    target_w,
+                    0.20,
+                    w,
+                    cx,
+                );
+                edge_springs.insert(ekey, (sp_a, sp_w));
+            }
+        }
 
         let mut slot_sensors: HashMap<SharedString, Rc<Cell<Option<Bounds<Pixels>>>>> =
             HashMap::new();
@@ -1030,52 +1174,30 @@ impl Render for AgentOverlapMap {
                 let pid = sl.person_id.clone();
                 let aname = sl.agent_name.clone();
                 let col = slot_color(sl.color_idx, &p);
-                let dimmed = match &active_foc {
-                    Some(OverlapHover::Agent(ak)) => ak != &sl.key,
-                    Some(OverlapHover::Conflict(cid)) => !valid_conflicts
-                        .iter()
-                        .find(|c| &c.id == cid)
-                        .map(|c| c.sides.iter().any(|s| s.key() == sl.key))
-                        .unwrap_or(false),
-                    None => false,
-                };
-                let hov_border = p.line_strong;
-                let focus_c = p.focus;
+                let op = slot_opacities.get(&sl.key).copied().unwrap_or(1.0);
+                let is_sel = self.modal == Some(OverlapModal::Agent(sl.key.clone()));
 
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("ochip-{}", sl.key)),
+                    format!("{} · {}", sl.full_name, sl.agent_name),
+                    8.0,
+                    chip_bg,
+                    pro_mix_color(chip_bg, col, if p.dark { 0.08 } else { 0.04 }),
+                    if is_sel {
+                        col.opacity(0.65)
+                    } else {
+                        p.line_strong.opacity(0.75)
+                    },
+                    p.line_strong,
+                    is_sel,
                     div()
-                        .id(pro_eid(&self.id, format!("ochip-{}", sl.key)))
-                        .role(Role::Button)
-                        .aria_label(format!("{} · {}", sl.full_name, sl.agent_name))
-                        .tab_index(0)
-                        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                            let next = if *hovered {
-                                Some(OverlapHover::Agent(skey_hov.clone()))
-                            } else if this.hover == Some(OverlapHover::Agent(skey_hov.clone())) {
-                                None
-                            } else {
-                                this.hover.clone()
-                            };
-                            if this.hover != next {
-                                this.hover = next;
-                                cx.notify();
-                            }
-                        }))
                         .w(px(chip_w))
                         .h(px(36.))
                         .px(px(11.))
                         .relative()
-                        .opacity(if dimmed { 0.28 } else { 1.0 })
-                        .rounded(px(8.))
-                        .bg(chip_bg)
-                        .border_1()
-                        .border_color(p.line_strong.opacity(0.75))
                         .flex()
                         .items_center()
                         .gap(px(8.))
-                        .cursor_pointer()
-                        .hover(move |s| s.border_color(hov_border))
-                        .focus_visible(move |s| s.border_color(focus_c))
                         .child(
                             canvas(
                                 move |bounds, _, _| {
@@ -1122,6 +1244,22 @@ impl Render for AgentOverlapMap {
                         cx.notify();
                     },
                 )
+                .w(px(chip_w))
+                .h(px(36.))
+                .opacity(op)
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    let next = if *hovered {
+                        Some(OverlapHover::Agent(skey_hov.clone()))
+                    } else if this.hover == Some(OverlapHover::Agent(skey_hov.clone())) {
+                        None
+                    } else {
+                        this.hover.clone()
+                    };
+                    if this.hover != next {
+                        this.hover = next;
+                        cx.notify();
+                    }
+                }))
             };
 
         let mut left_col = div()
@@ -1162,11 +1300,8 @@ impl Render for AgentOverlapMap {
             let b_sens = Rc::new(Cell::new(None));
             badge_sensors.insert(cid.clone(), b_sens.clone());
 
-            let dimmed = match &active_foc {
-                Some(OverlapHover::Conflict(id)) => id != &cf.id,
-                Some(OverlapHover::Agent(ak)) => !cf.sides.iter().any(|s| &s.key() == ak),
-                None => false,
-            };
+            let bop = badge_opacities.get(&cf.id).copied().unwrap_or(1.0);
+            let is_cf_sel = self.modal == Some(OverlapModal::Conflict(cf.id.clone()));
             let (bg_c, fg_c) = severity_badge_colors(cf.severity, &p);
             let bdr_c = match cf.severity {
                 OverlapSeverity::High => p.red.opacity(0.28),
@@ -1178,66 +1313,65 @@ impl Render for AgentOverlapMap {
             } else {
                 tr_conflict_label(&cf.label, cx).into()
             };
-            let focus_c = p.focus;
 
-            mid_col = mid_col.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("obadge-{cid}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{disp_lbl} — {}", cf.title))
-                    .tab_index(0)
-                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                        let next = if *hovered {
-                            Some(OverlapHover::Conflict(cid_hov.clone()))
-                        } else if this.hover == Some(OverlapHover::Conflict(cid_hov.clone())) {
-                            None
-                        } else {
-                            this.hover.clone()
-                        };
-                        if this.hover != next {
-                            this.hover = next;
-                            cx.notify();
-                        }
-                    }))
-                    .h(px(24.))
-                    .px(px(10.))
-                    .relative()
-                    .opacity(if dimmed { 0.25 } else { 1.0 })
-                    .rounded(px(6.))
-                    .bg(bg_c)
-                    .border_1()
-                    .border_color(bdr_c)
-                    .text_size(px(12.5))
-                    .text_color(fg_c)
-                    .flex()
-                    .items_center()
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_color(focus_c))
-                    .child(
-                        canvas(
-                            move |bounds, _, _| {
-                                b_sens.set(Some(bounds));
-                            },
-                            |_, _, _, _| (),
+            mid_col = mid_col.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("obadge-{cid}")),
+                    format!("{disp_lbl} — {}", cf.title),
+                    6.0,
+                    bg_c,
+                    pro_mix_color(bg_c, fg_c, 0.08),
+                    bdr_c,
+                    fg_c.opacity(0.55),
+                    is_cf_sel,
+                    div()
+                        .h(px(24.))
+                        .px(px(10.))
+                        .relative()
+                        .text_size(px(12.5))
+                        .text_color(fg_c)
+                        .flex()
+                        .items_center()
+                        .child(
+                            canvas(
+                                move |bounds, _, _| {
+                                    b_sens.set(Some(bounds));
+                                },
+                                |_, _, _, _| (),
+                            )
+                            .absolute()
+                            .inset_0(),
                         )
-                        .absolute()
-                        .inset_0(),
-                    )
-                    .child(disp_lbl),
-                cx,
-                move |this, _, cx| {
-                    this.modal = Some(OverlapModal::Conflict(cid.clone()));
-                    cx.emit(AgentOverlapMapEvent::ConflictSelected {
-                        conflict_id: cid.clone(),
-                    });
-                    cx.notify();
-                },
-            ));
+                        .child(disp_lbl),
+                    cx,
+                    move |this, _, cx| {
+                        this.modal = Some(OverlapModal::Conflict(cid.clone()));
+                        cx.emit(AgentOverlapMapEvent::ConflictSelected {
+                            conflict_id: cid.clone(),
+                        });
+                        cx.notify();
+                    },
+                )
+                .h(px(24.))
+                .opacity(bop)
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    let next = if *hovered {
+                        Some(OverlapHover::Conflict(cid_hov.clone()))
+                    } else if this.hover == Some(OverlapHover::Conflict(cid_hov.clone())) {
+                        None
+                    } else {
+                        this.hover.clone()
+                    };
+                    if this.hover != next {
+                        this.hover = next;
+                        cx.notify();
+                    }
+                })),
+            );
         }
 
         // Smooth Bezier curve canvas connecting each conflict's sides to its badge
         let conflicts_paint = valid_conflicts.clone();
-        let foc_paint = active_foc;
         let p_canvas = p;
 
         let curves_canvas = canvas(
@@ -1266,30 +1400,15 @@ impl Render for AgentOverlapMap {
                             (f32::from(s_rect.left()), br)
                         };
 
-                        let is_lit = match &foc_paint {
-                            Some(OverlapHover::Conflict(cid)) => cid == &cf.id,
-                            Some(OverlapHover::Agent(ak)) => ak == &skey,
-                            None => false,
-                        };
-                        let is_dim = foc_paint.is_some() && !is_lit;
+                        let ekey: SharedString = format!("{}->{}", cf.id, skey).into();
+                        let (alpha, stroke_w) =
+                            edge_springs.get(&ekey).copied().unwrap_or((0.44, 1.25));
 
                         let base_col = match cf.severity {
                             OverlapSeverity::High => p_canvas.red,
                             OverlapSeverity::Medium => p_canvas.amber,
                             OverlapSeverity::Low => p_canvas.muted,
                         };
-                        let alpha = if is_lit {
-                            0.88
-                        } else if is_dim {
-                            0.10
-                        } else {
-                            match cf.severity {
-                                OverlapSeverity::High => 0.44,
-                                OverlapSeverity::Medium => 0.44,
-                                OverlapSeverity::Low => 0.28,
-                            }
-                        };
-                        let stroke_w = if is_lit { 1.75 } else { 1.25 };
 
                         if cf.severity == OverlapSeverity::Low {
                             paint_dashed_cubic_bezier(
@@ -1344,15 +1463,58 @@ impl Render for AgentOverlapMap {
             None
         };
 
-        let open_modal = self.modal.clone().and_then(|m| match m {
-            OverlapModal::Conflict(cid) => {
-                let cf = valid_conflicts.iter().find(|c| c.id == cid)?;
-                Some(self.render_conflict_dialog(cf, &slots, &p, cx))
-            }
-            OverlapModal::Agent(skey) => {
-                let sl = slots.iter().find(|x| x.key == skey)?;
-                Some(self.render_agent_dialog(sl, &valid_conflicts, &p, cx))
-            }
+        let modal_open = self.modal.is_some();
+        let shown_modal = self.modal.clone().or_else(|| self.last_modal.clone());
+        let all_slots = self.build_slots(&all_valid_conflicts, two_sided);
+        let open_modal = shown_modal.and_then(|m| {
+            let (mkey, card): (SharedString, AnyElement) = match m {
+                OverlapModal::Conflict(cid) => {
+                    let cf = all_valid_conflicts.iter().find(|c| c.id == cid)?;
+                    (
+                        format!("cf:{cid}").into(),
+                        self.render_conflict_dialog(cf, &all_slots, &p, cx),
+                    )
+                }
+                OverlapModal::Agent(skey) => {
+                    let sl = all_slots.iter().find(|x| x.key == skey)?;
+                    (
+                        format!("ag:{skey}").into(),
+                        self.render_agent_dialog(sl, &all_valid_conflicts, &p, cx),
+                    )
+                }
+            };
+            let scrim_alpha = if p.dark { 0.46 } else { 0.20 };
+            let on_scrim_click = cx.listener(|this, _, w, cx| {
+                this.modal = None;
+                this.focus.focus(w, cx);
+                cx.notify();
+            });
+            let card_vtx = pro_view_transition(pro_eid(&self.id, "o-modal-vtx"), mkey, card);
+            let card_pop =
+                pro_popover_presence(pro_eid(&self.id, "o-modal-pop"), modal_open, move || {
+                    card_vtx
+                });
+            Some(pro_presence(
+                pro_eid(&self.id, "o-modal-pres"),
+                modal_open,
+                0.18,
+                0.14,
+                move |amt| {
+                    let mut scrim = div()
+                        .id(pro_eid(&ElementId::Name("o-scrim".into()), "ov"))
+                        .absolute()
+                        .inset_0()
+                        .bg(hsla(0., 0., 0., scrim_alpha * amt))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .p(px(16.));
+                    if modal_open {
+                        scrim = scrim.on_click(on_scrim_click);
+                    }
+                    scrim.child(card_pop).into_any_element()
+                },
+            ))
         });
 
         div()

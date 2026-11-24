@@ -6,14 +6,17 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_eid, pro_empty_state, pro_fold,
-        pro_presence, pro_shimmer_text, pro_skeleton_bar, pro_switch, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_popover_presence, pro_selection_sensor, pro_shimmer_text,
+        pro_skeleton_bar, pro_swap_label, pro_switch, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, EditorShortcutEvent, InputMode},
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
@@ -24,6 +27,175 @@ use web_time::Instant;
 const SVG_HAND_PALM: &str = r#"<path d="M52.5305 32.6557V24.8463C52.5305 22.1016 54.7555 19.8766 57.5001 19.8766C60.2448 19.8766 62.4698 22.1016 62.4698 24.8463V42.027C62.4698 53.3194 53.3154 62.4735 42.0233 62.4735H34.2388M22.7127 39.7552L15.94 31.8537C14.8314 30.5602 13.2129 29.8159 11.5094 29.8159H11.1235C8.11379 29.8159 5.67395 32.2558 5.67395 35.2655C5.67395 36.3412 5.99241 37.393 6.58919 38.2881L16.4118 53.0221C20.3482 58.9269 26.9753 62.4735 34.0719 62.4735" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M52.534 24.1378V16.3284C52.534 13.5837 50.3091 11.3588 47.5644 11.3588C44.8197 11.3588 42.5948 13.5837 42.5948 16.3284V29.8174" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M42.5958 29.8198V10.6513C42.5958 7.90661 40.3708 5.68163 37.6262 5.68163C34.8815 5.68163 32.6565 7.90661 32.6565 10.6513V28.4" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M32.6576 28.3975V16.3284C32.6576 13.5837 30.4326 11.3588 27.6879 11.3588C24.9433 11.3588 22.7183 13.5837 22.7183 16.3284V39.7567" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 const SVG_BLUE_FOLDER: &str = r#"<path d="M1.4 3.1c0-.72.58-1.3 1.3-1.3h1.72c.38 0 .73.19.94.5l.6.9h3.34c.72 0 1.3.58 1.3 1.3V6H1.4Z" fill="currentColor"></path><path d="M1 6.95C.86 6.3 1.36 5.7 2.02 5.7h7.96c.66 0 1.16.6 1.02 1.25l-.5 2.4a1.3 1.3 0 0 1-1.27 1.05H2.77A1.3 1.3 0 0 1 1.5 9.35Z" fill="currentColor" opacity="0.48"></path>"#;
+
+struct SendBtnAnim {
+    hover: Slide,
+    press: Slide,
+    active_val: bool,
+    active_slide: Slide,
+}
+
+type ComposerClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+#[derive(IntoElement)]
+struct ComposerSendVisual {
+    state_id: ElementId,
+    aria: SharedString,
+    enabled: bool,
+    on_click: ComposerClickHandler,
+}
+
+impl RenderOnce for ComposerSendVisual {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let init_en = self.enabled;
+        let st = w.use_keyed_state(self.state_id, cx, |_, _| SendBtnAnim {
+            hover: Slide::snappy(0.),
+            press: Slide::snappy(0.),
+            active_val: init_en,
+            active_slide: Slide::snappy(f32::from(init_en)),
+        });
+        let (hov, down, act) = st.update(cx, |s, cx| {
+            if s.active_val != self.enabled {
+                s.active_val = self.enabled;
+                s.active_slide.duration(f32::from(self.enabled), 0.18, cx);
+            }
+            (
+                s.hover.get(w, cx).clamp(0., 1.),
+                s.press.get(w, cx).clamp(0., 1.),
+                s.active_slide.get(w, cx).clamp(0., 1.),
+            )
+        });
+        let base_bg = pro_mix_color(p.chip, p.primary, act);
+        let hover_target = pro_mix_color(p.primary, p.on_primary, 0.14);
+        let face_bg = pro_mix_color(base_bg, hover_target, hov * act);
+        let fg = pro_mix_color(p.faint, p.on_primary, act);
+        let icon_sz = 15. * (1. - 0.10 * down);
+        let enabled = self.enabled;
+        let on_click = self.on_click;
+
+        let paint_face = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 1. || bh <= 1. {
+                    return;
+                }
+                let inset = 1.6 * down;
+                let rect = Bounds::new(
+                    point(bounds.origin.x + px(inset), bounds.origin.y + px(inset)),
+                    size(px((bw - 2. * inset).max(1.)), px((bh - 2. * inset).max(1.))),
+                );
+                let r = px(8.).min(rect.size.width / 2.).min(rect.size.height / 2.);
+                window.paint_quad(fill(rect, face_bg).corner_radii(r));
+            },
+        )
+        .absolute()
+        .inset_0();
+
+        div()
+            .id("composer-send-hit")
+            .role(Role::Button)
+            .aria_label(self.aria)
+            .tab_index(0)
+            .size(px(28.))
+            .relative()
+            .rounded(px(8.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .when(enabled, |d| d.cursor_pointer())
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_hover({
+                let st = st.clone();
+                move |inside, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.hover.set(if *inside && enabled { 1. } else { 0. }, cx);
+                        if !*inside {
+                            s.press.set(0., cx);
+                        }
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_down(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    if enabled {
+                        st.update(cx, |s, cx| {
+                            s.press.set(1., cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    }
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_mouse_up_out(MouseButton::Left, {
+                let st = st.clone();
+                move |_, w, cx| {
+                    st.update(cx, |s, cx| {
+                        s.press.set(0., cx);
+                        cx.notify();
+                    });
+                    w.refresh();
+                }
+            })
+            .on_click(move |ev, w, cx| (on_click)(ev, w, cx))
+            .child(paint_face)
+            .child(
+                div()
+                    .relative()
+                    .top(px(-0.8 * hov * act + 0.6 * down))
+                    .child(pro_icon(ProIcon::ArrowUp, icon_sz, fg)),
+            )
+    }
+}
+
+#[derive(IntoElement)]
+struct ChipEntrance {
+    id: ElementId,
+    animate_in: bool,
+    exiting_progress: Option<f32>,
+    content: AnyElement,
+}
+
+impl RenderOnce for ChipEntrance {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let init_anim = self.animate_in;
+        let st = w.use_keyed_state(pro_eid(&self.id, "chip-in"), cx, |_, inner_cx| {
+            let mut clk = PhaseClock::default();
+            if init_anim {
+                clk.restart(inner_cx);
+            }
+            clk
+        });
+        let enter_t = st.update(cx, |clk, cx| {
+            let age = clk.time(0.18, w, cx);
+            pro_ease((age / 0.18).clamp(0., 1.))
+        });
+        let t = match self.exiting_progress {
+            Some(ex_u) => (1. - pro_ease(ex_u.clamp(0., 1.))) * enter_t,
+            None => enter_t,
+        };
+        div()
+            .relative()
+            .top(px(3.0 * (1. - t)))
+            .opacity(t)
+            .child(self.content)
+    }
+}
 
 /// Execution permission policy selected in the [`ChatComposer`] toolbar.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -305,8 +477,12 @@ pub struct ChatComposer {
     approval_requesting_since: Option<Instant>,
     load_ms: u64,
     pending_approval: Option<PendingToolApproval>,
+    last_approval: Option<PendingToolApproval>,
     inspect_payload_open: bool,
     attachments: Vec<ComposerAttachment>,
+    last_attachments: Vec<ComposerAttachment>,
+    exiting_attachments: Vec<(ComposerAttachment, Instant)>,
+    animate_added_chips: bool,
     sample_attach_seq: usize,
     folders: Vec<SharedString>,
     active_folder: Option<SharedString>,
@@ -314,6 +490,7 @@ pub struct ChatComposer {
     dictation_script: SharedString,
     recording_since: Option<Instant>,
     open_menu: Option<OpenMenu>,
+    last_open_menu: Option<OpenMenu>,
     menu_cursor: usize,
     loading: bool,
     empty: bool,
@@ -329,6 +506,8 @@ impl ChatComposer {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
+        let init_approval = Some(default_tool_approval());
+        let init_attachments = default_attachments();
         Self {
             id: id.into(),
             focus: cx.focus_handle(),
@@ -341,9 +520,13 @@ impl ChatComposer {
             approval_mode: ComposerApprovalMode::RequestApproval,
             approval_requesting_since: None,
             load_ms: 1100,
-            pending_approval: Some(default_tool_approval()),
+            pending_approval: init_approval.clone(),
+            last_approval: init_approval,
             inspect_payload_open: false,
-            attachments: default_attachments(),
+            attachments: init_attachments.clone(),
+            last_attachments: init_attachments,
+            exiting_attachments: Vec::new(),
+            animate_added_chips: false,
             sample_attach_seq: 0,
             folders: default_folders(),
             active_folder: Some("kense-ui/registry".into()),
@@ -351,6 +534,7 @@ impl ChatComposer {
             dictation_script: "Summarize the open PRs in GitHub, cross-check Linear blockers, and post the release checklist to Slack.".into(),
             recording_since: None,
             open_menu: None,
+            last_open_menu: None,
             menu_cursor: 0,
             loading: false,
             empty: false,
@@ -388,6 +572,7 @@ impl ChatComposer {
 
     /// Override the initial file [`ComposerAttachment`] chips.
     pub fn with_attachments(mut self, attachments: Vec<ComposerAttachment>) -> Self {
+        self.last_attachments = attachments.clone();
         self.attachments = attachments;
         self
     }
@@ -406,6 +591,9 @@ impl ChatComposer {
 
     /// Set or hide (`None`) the inline tool approval request banner above the composer.
     pub fn with_tool_approval(mut self, approval: Option<PendingToolApproval>) -> Self {
+        if approval.is_some() {
+            self.last_approval = approval.clone();
+        }
         self.pending_approval = approval;
         self
     }
@@ -551,7 +739,11 @@ impl ChatComposer {
             .get(self.active_model_idx)
             .map(|m| m.id.clone())
             .unwrap_or_else(|| "claude-sonnet".into());
+        if !self.attachments.is_empty() {
+            self.last_attachments = self.attachments.clone();
+        }
         let attachments = std::mem::take(&mut self.attachments);
+        self.exiting_attachments.clear();
         let connected_apps = self.connected_app_ids();
         let folder = self.active_folder.clone();
         self.open_menu = None;
@@ -584,7 +776,9 @@ impl ChatComposer {
         self.sample_attach_seq += 1;
         let att =
             ComposerAttachment::new(format!("att-extra-{}", self.sample_attach_seq), name, sz);
+        self.animate_added_chips = true;
         self.attachments.push(att.clone());
+        self.last_attachments = self.attachments.clone();
         cx.emit(ChatComposerEvent::Attach(att));
         cx.notify();
     }
@@ -635,6 +829,7 @@ impl ChatComposer {
             self.open_menu = None;
         } else {
             self.open_menu = Some(target);
+            self.last_open_menu = Some(target);
             self.menu_cursor = match target {
                 OpenMenu::Model => self.active_model_idx,
                 OpenMenu::Approval => match self.approval_mode {
@@ -854,238 +1049,237 @@ impl Render for ChatComposer {
             .is_some_and(|e| !e.read(cx).value().trim().is_empty())
             || !self.attachments.is_empty();
 
-        // 1. Inline Tool Approval Banner tucked cleanly at the top of the outer tray (`pro_fold`).
-        let approval_banner = pro_fold(
-            pro_eid(&self.id, "tool-approval-fold"),
-            self.pending_approval.is_some(),
-            54.,
-            0.,
-            {
-                let req = self.pending_approval.clone();
-                let app_tile = req.as_ref().map(|r| pro_app_tile(&r.app, 18., cx));
-                let show_payload = self.inspect_payload_open;
-                let entity = cx.entity().clone();
-                let base_id = self.id.clone();
-                let inspect_lbl = tr(cx, "Inspect", "查看参数").to_owned();
-                let deny_lbl = tr(cx, "Deny", "拒绝").to_owned();
-                let allow_lbl = tr(cx, "Allow", "允许执行").to_owned();
-                move || {
-                    let Some(req) = req else {
-                        return div().into_any_element();
-                    };
-                    let ent_insp = entity.clone();
-                    let ent_deny = entity.clone();
-                    let ent_allow = entity.clone();
+        if let Some(ref cur_req) = self.pending_approval {
+            self.last_approval = Some(cur_req.clone());
+        }
+        if !self.attachments.is_empty() {
+            self.last_attachments = self.attachments.clone();
+        }
+        if let Some(cur_menu) = self.open_menu {
+            self.last_open_menu = Some(cur_menu);
+        }
+        self.exiting_attachments
+            .retain(|(_, started)| !reduced && started.elapsed().as_secs_f32() < 0.18);
+        if !self.exiting_attachments.is_empty() {
+            w.request_animation_frame();
+        }
 
+        // 1. Inline Tool Approval Banner tucked cleanly at the top of the outer tray (`pro_fold` + tactile `pro_btn`).
+        let banner_open = self.pending_approval.is_some();
+        let shown_approval = self
+            .pending_approval
+            .clone()
+            .or_else(|| self.last_approval.clone());
+        let approval_body: AnyElement = if let Some(req) = shown_approval {
+            let app_tile = pro_app_tile(&req.app, 18., cx);
+            let payload_txt = req.payload.clone();
+            let payload_fold = pro_fold(
+                pro_eid(&self.id, "tool-payload-fold"),
+                self.inspect_payload_open,
+                34.,
+                0.,
+                move || {
                     div()
-                        .w_full()
-                        .px(px(10.))
-                        .pt(px(8.))
-                        .pb(px(6.))
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.))
+                        .pt(px(2.))
                         .child(
                             div()
-                                .flex()
-                                .flex_wrap()
-                                .items_center()
-                                .justify_between()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(8.))
-                                        .min_w_0()
-                                        .flex_1()
-                                        .when_some(app_tile, |d, t| d.child(t))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .truncate()
-                                                .text_size(px(12.))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.ink)
-                                                .child(req.summary),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(4.))
-                                        .child(
-                                            div()
-                                                .id(pro_eid(&base_id, "tool-inspect"))
-                                                .role(Role::Button)
-                                                .aria_label(inspect_lbl.clone())
-                                                .tab_index(0)
-                                                .h(px(24.))
-                                                .px(px(7.))
-                                                .rounded(px(6.))
-                                                .cursor_pointer()
-                                                .flex()
-                                                .items_center()
-                                                .text_size(px(11.5))
-                                                .text_color(p.muted)
-                                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                                .on_click(move |_, _, app| {
-                                                    ent_insp.update(app, |this, cx| {
-                                                        this.inspect_payload_open =
-                                                            !this.inspect_payload_open;
-                                                        cx.notify();
-                                                    });
-                                                })
-                                                .child(inspect_lbl),
-                                        )
-                                        .child(
-                                            div()
-                                                .id(pro_eid(&base_id, "tool-deny"))
-                                                .role(Role::Button)
-                                                .aria_label(deny_lbl.clone())
-                                                .tab_index(0)
-                                                .h(px(24.))
-                                                .px(px(8.))
-                                                .rounded(px(6.))
-                                                .bg(p.card)
-                                                .border_1()
-                                                .border_color(p.line_strong)
-                                                .cursor_pointer()
-                                                .flex()
-                                                .items_center()
-                                                .text_size(px(11.5))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.text)
-                                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                                .on_click(move |_, _, app| {
-                                                    ent_deny.update(app, |this, cx| {
-                                                        this.decide_tool_approval(false, cx);
-                                                    });
-                                                })
-                                                .child(deny_lbl),
-                                        )
-                                        .child(
-                                            div()
-                                                .id(pro_eid(&base_id, "tool-allow"))
-                                                .role(Role::Button)
-                                                .aria_label(allow_lbl.clone())
-                                                .tab_index(0)
-                                                .h(px(24.))
-                                                .px(px(9.))
-                                                .rounded(px(6.))
-                                                .bg(p.primary)
-                                                .cursor_pointer()
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(4.))
-                                                .text_size(px(11.5))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.on_primary)
-                                                .on_click(move |_, _, app| {
-                                                    ent_allow.update(app, |this, cx| {
-                                                        this.decide_tool_approval(true, cx);
-                                                    });
-                                                })
-                                                .child(pro_icon(ProIcon::Check, 12., p.on_primary))
-                                                .child(allow_lbl),
-                                        ),
-                                ),
+                                .px(px(8.))
+                                .py(px(5.))
+                                .rounded(px(6.))
+                                .bg(p.card)
+                                .border_1()
+                                .border_color(p.line)
+                                .text_size(px(11.))
+                                .text_color(p.text)
+                                .child(payload_txt),
                         )
-                        .when(show_payload, |d| {
-                            d.child(
-                                div()
-                                    .px(px(8.))
-                                    .py(px(5.))
-                                    .rounded(px(6.))
-                                    .bg(p.card)
-                                    .border_1()
-                                    .border_color(p.line)
-                                    .text_size(px(11.))
-                                    .text_color(p.text)
-                                    .child(req.payload),
-                            )
-                        })
                         .into_any_element()
-                }
-            },
-        );
+                },
+            );
 
-        // 2. Attachment Chips inside the write card (`pro_fold`).
-        let attachments_fold = pro_fold(
-            pro_eid(&self.id, "att-chips-fold"),
-            !self.attachments.is_empty(),
-            32.,
-            0.,
-            {
-                let items = self.attachments.clone();
-                let entity = cx.entity().clone();
-                let base_id = self.id.clone();
-                move || {
-                    let mut row = div()
-                        .pb(px(8.))
+            div()
+                .w_full()
+                .px(px(10.))
+                .pt(px(8.))
+                .pb(px(6.))
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(
+                    div()
                         .flex()
                         .flex_wrap()
                         .items_center()
-                        .gap(px(6.));
-                    for (ai, att) in items.into_iter().enumerate() {
-                        let ent = entity.clone();
-                        let aid = att.id.clone();
-                        row = row.child(
+                        .justify_between()
+                        .gap(px(8.))
+                        .child(
                             div()
-                                .h(px(26.))
-                                .pl(px(7.))
-                                .pr(px(5.))
-                                .rounded(px(7.))
-                                .bg(p.subtle)
-                                .border_1()
-                                .border_color(p.line)
                                 .flex()
                                 .items_center()
-                                .gap(px(5.))
-                                .child(pro_icon(ProIcon::PageDoc, 13., p.blue))
+                                .gap(px(8.))
+                                .min_w_0()
+                                .flex_1()
+                                .child(app_tile)
                                 .child(
                                     div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
                                         .text_size(px(12.))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.ink)
-                                        .child(att.name),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .text_color(p.faint)
-                                        .child(att.size_label),
-                                )
-                                .child(
-                                    div()
-                                        .id(pro_eid(&base_id, format!("rm-att-{ai}")))
-                                        .role(Role::Button)
-                                        .aria_label("Remove attachment")
-                                        .tab_index(0)
-                                        .size(px(18.))
-                                        .rounded(px(4.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .hover(move |s| s.bg(p.hover))
-                                        .on_click(move |_, _, app| {
-                                            let rm_id = aid.clone();
-                                            ent.update(app, |this, cx| {
-                                                this.attachments.retain(|x| x.id != rm_id);
-                                                cx.emit(ChatComposerEvent::RemoveAttachment(rm_id));
-                                                cx.notify();
-                                            });
-                                        })
-                                        .child(pro_icon(ProIcon::Close, 11., p.muted)),
+                                        .child(req.summary),
                                 ),
-                        );
-                    }
-                    row.into_any_element()
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .child(pro_btn(
+                                    pro_eid(&self.id, "tool-inspect"),
+                                    tr(cx, "Inspect", "查看参数"),
+                                    None,
+                                    ProBtnStyle::Ghost,
+                                    true,
+                                    cx,
+                                    |this, _, cx| {
+                                        this.inspect_payload_open = !this.inspect_payload_open;
+                                        cx.notify();
+                                    },
+                                ))
+                                .child(pro_btn(
+                                    pro_eid(&self.id, "tool-deny"),
+                                    tr(cx, "Deny", "拒绝"),
+                                    None,
+                                    ProBtnStyle::Secondary,
+                                    true,
+                                    cx,
+                                    |this, _, cx| {
+                                        this.decide_tool_approval(false, cx);
+                                    },
+                                ))
+                                .child(pro_btn(
+                                    pro_eid(&self.id, "tool-allow"),
+                                    tr(cx, "Allow", "允许执行"),
+                                    Some(ProIcon::Check),
+                                    ProBtnStyle::Primary,
+                                    true,
+                                    cx,
+                                    |this, _, cx| {
+                                        this.decide_tool_approval(true, cx);
+                                    },
+                                )),
+                        ),
+                )
+                .child(payload_fold)
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
+        let approval_banner = pro_fold(
+            pro_eid(&self.id, "tool-approval-fold"),
+            banner_open,
+            54.,
+            0.,
+            move || approval_body,
+        );
+
+        // 2. Attachment Chips inside the write card (`pro_fold` + per-chip entrance/exit presence).
+        let chips_open = !self.attachments.is_empty() || !self.exiting_attachments.is_empty();
+        let chips_body: AnyElement = {
+            let live_items: Vec<(ComposerAttachment, Option<f32>)> = if chips_open {
+                let mut v: Vec<(ComposerAttachment, Option<f32>)> = self
+                    .attachments
+                    .iter()
+                    .cloned()
+                    .map(|a| (a, None))
+                    .collect();
+                for (ex_att, started) in &self.exiting_attachments {
+                    let u = (started.elapsed().as_secs_f32() / 0.18).clamp(0., 1.);
+                    v.push((ex_att.clone(), Some(u)));
                 }
-            },
+                v
+            } else {
+                self.last_attachments
+                    .iter()
+                    .cloned()
+                    .map(|a| (a, None))
+                    .collect()
+            };
+            let animate_in = self.animate_added_chips;
+            let mut row = div()
+                .pb(px(8.))
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(6.));
+            for (ai, (att, exiting_u)) in live_items.into_iter().enumerate() {
+                let aid = att.id.clone();
+                let att_snapshot = att.clone();
+                let chip_eid = pro_eid(&self.id, format!("chip-item-{aid}"));
+                let rm_btn = pro_icon_btn(
+                    pro_eid(&self.id, format!("rm-att-{ai}")),
+                    "Remove attachment",
+                    ProIcon::Close,
+                    18.,
+                    false,
+                    cx,
+                    move |this, _, cx| {
+                        let rm_id = aid.clone();
+                        if this.attachments.iter().any(|x| x.id == rm_id) {
+                            if this.attachments.len() > 1 && !disabled_motion(cx) {
+                                this.exiting_attachments
+                                    .push((att_snapshot.clone(), Instant::now()));
+                            }
+                            this.attachments.retain(|x| x.id != rm_id);
+                            cx.emit(ChatComposerEvent::RemoveAttachment(rm_id));
+                            cx.notify();
+                        }
+                    },
+                );
+                let chip_card = div()
+                    .h(px(26.))
+                    .pl(px(7.))
+                    .pr(px(5.))
+                    .rounded(px(7.))
+                    .bg(p.subtle)
+                    .border_1()
+                    .border_color(p.line)
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .child(pro_icon(ProIcon::PageDoc, 13., p.blue))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(att.name),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(p.faint)
+                            .child(att.size_label),
+                    )
+                    .child(rm_btn)
+                    .into_any_element();
+                row = row.child(ChipEntrance {
+                    id: chip_eid,
+                    animate_in,
+                    exiting_progress: exiting_u,
+                    content: chip_card,
+                });
+            }
+            row.into_any_element()
+        };
+        let attachments_fold = pro_fold(
+            pro_eid(&self.id, "att-chips-fold"),
+            chips_open,
+            34.,
+            0.,
+            move || chips_body,
         );
 
         // 3. Message Editor or Live Voice Dictation Draft Surface.
@@ -1139,79 +1333,79 @@ impl Render for ChatComposer {
         let is_unrestricted = self.approval_mode == ComposerApprovalMode::Unrestricted;
         let approval_fg = if is_unrestricted { p.red_ink } else { p.muted };
 
+        let appr_open = self.open_menu == Some(OpenMenu::Approval);
+        let appr_inner = div()
+            .h(px(28.))
+            .px(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .child(pro_svg(
+                "0 0 68.155 68.155",
+                SVG_HAND_PALM,
+                15.,
+                approval_fg,
+            ))
+            .when(!compact, |d| {
+                d.child(if requesting_access {
+                    pro_shimmer_text(
+                        pro_eid(&self.id, "req-shim"),
+                        tr(cx, "Requesting access…", "正在请求权限…"),
+                        p.muted,
+                        p.strong,
+                        12.5,
+                        FontWeight::NORMAL,
+                        true,
+                    )
+                } else {
+                    pro_swap_label(
+                        pro_eid(&self.id, "appr-mode-lbl"),
+                        self.approval_mode.label(cx),
+                        12.5,
+                        FontWeight::NORMAL,
+                        if is_unrestricted { p.red_ink } else { p.text },
+                    )
+                })
+            });
+
         let left_tools = div()
             .flex()
             .items_center()
             .gap(px(4.))
             .min_w_0()
-            // `+` Add attachment button
+            // `+` Add attachment button (`pro_icon_btn`)
+            .child(pro_icon_btn(
+                pro_eid(&self.id, "btn-attach"),
+                tr(cx, "Add attachment", "添加附件"),
+                ProIcon::Plus,
+                28.,
+                false,
+                cx,
+                |this, _, cx| this.add_sample_attachment(cx),
+            ))
+            // Approval mode trigger (`pro_tactile`)
             .child(
-                div()
-                    .id(pro_eid(&self.id, "btn-attach"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Add attachment", "添加附件"))
-                    .tab_index(0)
-                    .size(px(28.))
-                    .rounded(px(8.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _, _, cx| this.add_sample_attachment(cx)))
-                    .child(pro_icon(ProIcon::Plus, 15., p.muted)),
-            )
-            // Approval mode trigger (`Request approval` / `Unrestricted access`)
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "btn-approval-mode"))
-                    .role(Role::Button)
-                    .aria_label(self.approval_mode.label(cx))
-                    .aria_expanded(self.open_menu == Some(OpenMenu::Approval))
-                    .tab_index(0)
-                    .h(px(28.))
-                    .px(px(8.))
-                    .rounded(px(8.))
-                    .bg(if self.open_menu == Some(OpenMenu::Approval) {
+                pro_tactile(
+                    pro_eid(&self.id, "btn-approval-mode"),
+                    self.approval_mode.label(cx),
+                    8.,
+                    if appr_open {
                         if is_unrestricted { p.red_soft } else { p.hover }
                     } else {
                         transparent_black()
-                    })
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(if is_unrestricted { p.red_soft } else { p.hover }))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    },
+                    if is_unrestricted { p.red_soft } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    appr_open,
+                    appr_inner,
+                    cx,
+                    |this, _, cx| {
                         this.toggle_menu(OpenMenu::Approval, cx);
-                    }))
-                    .child(pro_svg(
-                        "0 0 68.155 68.155",
-                        SVG_HAND_PALM,
-                        15.,
-                        approval_fg,
-                    ))
-                    .when(!compact, |d| {
-                        d.child(if requesting_access {
-                            pro_shimmer_text(
-                                pro_eid(&self.id, "req-shim"),
-                                tr(cx, "Requesting access…", "正在请求权限…"),
-                                p.muted,
-                                p.strong,
-                                12.5,
-                                FontWeight::NORMAL,
-                                true,
-                            )
-                        } else {
-                            div()
-                                .text_size(px(12.5))
-                                .text_color(if is_unrestricted { p.red_ink } else { p.text })
-                                .child(self.approval_mode.label(cx))
-                                .into_any_element()
-                        })
-                    }),
+                    },
+                )
+                .flex_none()
+                .aria_expanded(appr_open),
             );
 
         let right_tools = if recording {
@@ -1239,146 +1433,136 @@ impl Render for ChatComposer {
                 .items_center()
                 .gap(px(6.))
                 .child(waveform)
+                .child(pro_icon_btn(
+                    pro_eid(&self.id, "voice-discard"),
+                    tr(cx, "Discard recording", "放弃录音"),
+                    ProIcon::Close,
+                    28.,
+                    false,
+                    cx,
+                    |this, w, cx| {
+                        this.finish_recording(false, w, cx);
+                    },
+                ))
                 .child(
-                    div()
-                        .id(pro_eid(&self.id, "voice-discard"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Discard recording", "放弃录音"))
-                        .tab_index(0)
-                        .size(px(28.))
-                        .rounded(px(8.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .on_click(cx.listener(|this, _, w, cx| {
-                            this.finish_recording(false, w, cx);
-                        }))
-                        .child(pro_icon(ProIcon::Close, 14., p.ink)),
-                )
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "voice-commit"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Use recording", "使用语音转写"))
-                        .tab_index(0)
-                        .size(px(28.))
-                        .rounded(px(8.))
-                        .bg(p.primary)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .on_click(cx.listener(|this, _, w, cx| {
+                    pro_tactile(
+                        pro_eid(&self.id, "voice-commit"),
+                        tr(cx, "Use recording", "使用语音转写"),
+                        8.,
+                        p.primary,
+                        pro_mix_color(p.primary, p.on_primary, 0.14),
+                        transparent_black(),
+                        transparent_black(),
+                        false,
+                        div()
+                            .size(px(28.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_icon(ProIcon::Check, 15., p.on_primary)),
+                        cx,
+                        |this, w, cx| {
                             this.finish_recording(true, w, cx);
-                        }))
-                        .child(pro_icon(ProIcon::Check, 15., p.on_primary)),
+                        },
+                    )
+                    .flex_none(),
                 )
         } else {
             let model_open = self.open_menu == Some(OpenMenu::Model);
+            let model_btn_inner = div()
+                .h(px(28.))
+                .pl(px(8.))
+                .pr(px(6.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(Self::render_model_artwork(
+                    &active_model.provider,
+                    14.,
+                    &p,
+                    cx,
+                ))
+                .child(
+                    div()
+                        .max_w(px(if compact { 100. } else { 150. }))
+                        .overflow_hidden()
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "active-model-lbl"),
+                            active_model.name.clone(),
+                            12.5,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        )),
+                )
+                .child(pro_icon(
+                    if model_open {
+                        ProIcon::ChevronUp
+                    } else {
+                        ProIcon::ChevronDown
+                    },
+                    13.,
+                    p.muted,
+                ));
+
+            let send_id = pro_eid(&self.id, "btn-send");
+            let send_state_id = pro_eid(&send_id, "send-st");
+            let on_send: ComposerClickHandler =
+                Rc::new(cx.listener(|this, _: &ClickEvent, w, cx| {
+                    this.submit_prompt(w, cx);
+                }));
+
             div()
                 .flex()
                 .items_center()
                 .gap(px(4.))
-                // Model picker button
+                // Model picker button (`pro_tactile`)
                 .child(
-                    div()
-                        .id(pro_eid(&self.id, "btn-model-picker"))
-                        .role(Role::Button)
-                        .aria_label(format!("Model: {}", active_model.name))
-                        .aria_expanded(model_open)
-                        .tab_index(0)
-                        .h(px(28.))
-                        .pl(px(8.))
-                        .pr(px(6.))
-                        .rounded(px(8.))
-                        .bg(if model_open {
+                    pro_tactile(
+                        pro_eid(&self.id, "btn-model-picker"),
+                        format!("Model: {}", active_model.name),
+                        8.,
+                        if model_open {
                             p.hover
                         } else {
                             transparent_black()
-                        })
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(|this, _, _, cx| {
+                        },
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        model_open,
+                        model_btn_inner,
+                        cx,
+                        |this, _, cx| {
                             this.toggle_menu(OpenMenu::Model, cx);
-                        }))
-                        .child(Self::render_model_artwork(
-                            &active_model.provider,
-                            14.,
-                            &p,
-                            cx,
-                        ))
-                        .child(
-                            div()
-                                .max_w(px(if compact { 100. } else { 150. }))
-                                .truncate()
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(active_model.name),
-                        )
-                        .child(pro_icon(
-                            if model_open {
-                                ProIcon::ChevronUp
-                            } else {
-                                ProIcon::ChevronDown
-                            },
-                            13.,
-                            p.muted,
-                        )),
+                        },
+                    )
+                    .flex_none()
+                    .aria_expanded(model_open),
                 )
-                // Voice input button
+                // Voice input button (`pro_icon_btn`)
+                .child(pro_icon_btn(
+                    pro_eid(&self.id, "btn-voice"),
+                    tr(cx, "Voice input", "语音输入"),
+                    ProIcon::Mic,
+                    28.,
+                    false,
+                    cx,
+                    |this, _, cx| this.start_recording(cx),
+                ))
+                // Snappy Send button (`ComposerSendVisual` with `Slide::snappy` press & active spring)
                 .child(
                     div()
-                        .id(pro_eid(&self.id, "btn-voice"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Voice input", "语音输入"))
-                        .tab_index(0)
-                        .size(px(28.))
-                        .rounded(px(8.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(|this, _, _, cx| this.start_recording(cx)))
-                        .child(pro_icon(ProIcon::Mic, 15., p.muted)),
-                )
-                // Send button
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "btn-send"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Send message", "发送消息"))
-                        .tab_index(0)
+                        .id(send_id)
                         .ml(px(2.))
                         .size(px(28.))
+                        .flex_none()
                         .rounded(px(8.))
-                        .bg(if draft_non_empty { p.primary } else { p.chip })
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(draft_non_empty, |d| d.cursor_pointer())
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(|this, _, w, cx| this.submit_prompt(w, cx)))
-                        .child(pro_icon(
-                            ProIcon::ArrowUp,
-                            15.,
-                            if draft_non_empty {
-                                p.on_primary
-                            } else {
-                                p.faint
-                            },
-                        )),
+                        .child(ComposerSendVisual {
+                            state_id: send_state_id,
+                            aria: tr(cx, "Send message", "发送消息").into(),
+                            enabled: draft_non_empty,
+                            on_click: on_send,
+                        }),
                 )
         };
 
@@ -1519,9 +1703,10 @@ impl Render for ChatComposer {
                     .when(!connected_list.is_empty(), |d| d.child(app_marks)),
             );
 
-        // 6. Floating Popover Menu (`Model`, `Approval`, `Folder`, or `Connected Apps`).
+        // 6. Floating Popover Menu (`pro_popover_presence` + `pro_pill_indicator` + `pro_check_draw`).
+        let popover_open = self.open_menu.is_some();
+        let shown_menu = self.open_menu.or(self.last_open_menu);
         let popover_body: Option<AnyElement> = {
-            let menu = self.open_menu;
             let cursor = self.menu_cursor;
             let models = self.models.clone();
             let active_model_idx = self.active_model_idx;
@@ -1533,8 +1718,31 @@ impl Render for ChatComposer {
             let base_id = self.id.clone();
             let entity = cx.entity().clone();
 
-            menu.map(|open| {
+            shown_menu.map(|open| {
                 let align_right = matches!(open, OpenMenu::Model | OpenMenu::Apps);
+                let menu_key = match open {
+                    OpenMenu::Model => "menu-model",
+                    OpenMenu::Approval => "menu-approval",
+                    OpenMenu::Folder => "menu-folder",
+                    OpenMenu::Apps => "menu-apps",
+                };
+                let row_sensor = pro_selection_sensor();
+                let mut rows_wrap =
+                    div()
+                        .relative()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(pro_pill_indicator(
+                            pro_eid(&base_id, format!("pop-pill-{menu_key}")),
+                            format!("cur-{cursor}"),
+                            row_sensor.clone(),
+                            7.,
+                            p.hover,
+                            None,
+                            false,
+                        ));
+
                 let mut panel = div()
                     .w(px(276.))
                     .p(px(5.))
@@ -1562,27 +1770,34 @@ impl Render for ChatComposer {
                             let selected = mi == active_model_idx;
                             let highlighted = mi == cursor;
                             let ent = entity.clone();
+                            let ent_hov = entity.clone();
                             let m_emit = m.clone();
-                            panel = panel.child(
+                            rows_wrap = rows_wrap.child(
                                 div()
                                     .id(pro_eid(&base_id, format!("opt-model-{mi}")))
                                     .role(Role::ListBoxOption)
                                     .aria_label(m.name.clone())
                                     .aria_selected(selected)
                                     .tab_index(0)
+                                    .relative()
                                     .px(px(8.))
                                     .py(px(6.))
                                     .rounded(px(7.))
-                                    .bg(if highlighted {
-                                        p.hover
-                                    } else {
-                                        transparent_black()
-                                    })
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
                                     .gap(px(9.))
-                                    .hover(move |s| s.bg(p.hover))
+                                    .when(highlighted, |d| d.child(pro_mark_selected(&row_sensor)))
+                                    .on_hover(move |inside: &bool, _, app| {
+                                        if *inside {
+                                            ent_hov.update(app, |this, cx| {
+                                                if this.menu_cursor != mi {
+                                                    this.menu_cursor = mi;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    })
                                     .on_click(move |_, _, app| {
                                         let chosen = m_emit.clone();
                                         ent.update(app, |this, cx| {
@@ -1618,11 +1833,22 @@ impl Render for ChatComposer {
                                                     .child(m.description),
                                             ),
                                     )
-                                    .when(selected, |d| {
-                                        d.child(pro_icon(ProIcon::Check, 14., p.blue))
-                                    }),
+                                    .child(
+                                        div()
+                                            .w(px(if selected { 15. } else { 0. }))
+                                            .h(px(15.))
+                                            .overflow_hidden()
+                                            .child(pro_check_draw(
+                                                pro_eid(&base_id, format!("opt-model-chk-{mi}")),
+                                                selected,
+                                                15.,
+                                                false,
+                                                p.blue,
+                                            )),
+                                    ),
                             );
                         }
+                        panel = panel.child(rows_wrap);
                     }
                     OpenMenu::Approval => {
                         let modes = [
@@ -1656,27 +1882,34 @@ impl Render for ChatComposer {
                             let highlighted = idx == cursor;
                             let alert_tone = mode == ComposerApprovalMode::Unrestricted;
                             let ent = entity.clone();
-                            panel = panel.child(
+                            let ent_hov = entity.clone();
+                            rows_wrap = rows_wrap.child(
                                 div()
                                     .id(pro_eid(&base_id, format!("opt-appr-{idx}")))
                                     .role(Role::ListBoxOption)
                                     .aria_label(mode.label(cx))
                                     .aria_selected(selected)
                                     .tab_index(0)
+                                    .relative()
                                     .px(px(8.))
                                     .py(px(6.))
                                     .rounded(px(7.))
-                                    .bg(if highlighted {
-                                        p.hover
-                                    } else {
-                                        transparent_black()
-                                    })
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
                                     .justify_between()
                                     .gap(px(8.))
-                                    .hover(move |s| s.bg(p.hover))
+                                    .when(highlighted, |d| d.child(pro_mark_selected(&row_sensor)))
+                                    .on_hover(move |inside: &bool, _, app| {
+                                        if *inside {
+                                            ent_hov.update(app, |this, cx| {
+                                                if this.menu_cursor != idx {
+                                                    this.menu_cursor = idx;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    })
                                     .on_click(move |_, _, app| {
                                         ent.update(app, |this, cx| {
                                             this.open_menu = None;
@@ -1719,11 +1952,22 @@ impl Render for ChatComposer {
                                                     .child(desc),
                                             ),
                                     )
-                                    .when(selected, |d| {
-                                        d.child(pro_icon(ProIcon::Check, 14., p.blue))
-                                    }),
+                                    .child(
+                                        div()
+                                            .w(px(if selected { 15. } else { 0. }))
+                                            .h(px(15.))
+                                            .overflow_hidden()
+                                            .child(pro_check_draw(
+                                                pro_eid(&base_id, format!("opt-appr-chk-{idx}")),
+                                                selected,
+                                                15.,
+                                                false,
+                                                p.blue,
+                                            )),
+                                    ),
                             );
                         }
+                        panel = panel.child(rows_wrap);
                         if !has_pending_banner {
                             panel = panel.child(
                                 div()
@@ -1743,7 +1987,9 @@ impl Render for ChatComposer {
                                         true,
                                         cx,
                                         |this, _, cx| {
-                                            this.pending_approval = Some(default_tool_approval());
+                                            let req = default_tool_approval();
+                                            this.last_approval = Some(req.clone());
+                                            this.pending_approval = Some(req);
                                             this.open_menu = None;
                                             cx.notify();
                                         },
@@ -1765,27 +2011,34 @@ impl Render for ChatComposer {
                             let selected = active_folder.as_ref() == Some(&folder);
                             let highlighted = fi == cursor;
                             let ent = entity.clone();
+                            let ent_hov = entity.clone();
                             let f_click = folder.clone();
-                            panel = panel.child(
+                            rows_wrap = rows_wrap.child(
                                 div()
                                     .id(pro_eid(&base_id, format!("opt-folder-{fi}")))
                                     .role(Role::ListBoxOption)
                                     .aria_label(folder.clone())
                                     .aria_selected(selected)
                                     .tab_index(0)
+                                    .relative()
                                     .h(px(30.))
                                     .px(px(8.))
                                     .rounded(px(7.))
-                                    .bg(if highlighted {
-                                        p.hover
-                                    } else {
-                                        transparent_black()
-                                    })
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
                                     .gap(px(8.))
-                                    .hover(move |s| s.bg(p.hover))
+                                    .when(highlighted, |d| d.child(pro_mark_selected(&row_sensor)))
+                                    .on_hover(move |inside: &bool, _, app| {
+                                        if *inside {
+                                            ent_hov.update(app, |this, cx| {
+                                                if this.menu_cursor != fi {
+                                                    this.menu_cursor = fi;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    })
                                     .on_click(move |_, _, app| {
                                         let picked = f_click.clone();
                                         ent.update(app, |this, cx| {
@@ -1810,11 +2063,22 @@ impl Render for ChatComposer {
                                             .text_color(p.strong)
                                             .child(folder),
                                     )
-                                    .when(selected, |d| {
-                                        d.child(pro_icon(ProIcon::Check, 14., p.blue))
-                                    }),
+                                    .child(
+                                        div()
+                                            .w(px(if selected { 15. } else { 0. }))
+                                            .h(px(15.))
+                                            .overflow_hidden()
+                                            .child(pro_check_draw(
+                                                pro_eid(&base_id, format!("opt-folder-chk-{fi}")),
+                                                selected,
+                                                15.,
+                                                false,
+                                                p.blue,
+                                            )),
+                                    ),
                             );
                         }
+                        panel = panel.child(rows_wrap);
                     }
                     OpenMenu::Apps => {
                         panel = panel.child(
@@ -1831,23 +2095,30 @@ impl Render for ChatComposer {
                             let app_id_str = app_item.id.to_string();
                             let app_id_row = app_id_str.clone();
                             let ent_row = entity.clone();
-                            panel = panel.child(
+                            let ent_hov = entity.clone();
+                            rows_wrap = rows_wrap.child(
                                 div()
                                     .id(pro_eid(&base_id, format!("opt-app-row-{ai}")))
+                                    .relative()
                                     .h(px(34.))
                                     .px(px(8.))
                                     .rounded(px(7.))
-                                    .bg(if highlighted {
-                                        p.hover
-                                    } else {
-                                        transparent_black()
-                                    })
                                     .flex()
                                     .items_center()
                                     .justify_between()
                                     .gap(px(8.))
                                     .cursor_pointer()
-                                    .hover(move |s| s.bg(p.hover))
+                                    .when(highlighted, |d| d.child(pro_mark_selected(&row_sensor)))
+                                    .on_hover(move |inside: &bool, _, app| {
+                                        if *inside {
+                                            ent_hov.update(app, |this, cx| {
+                                                if this.menu_cursor != ai {
+                                                    this.menu_cursor = ai;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    })
                                     .on_click(move |_, _, app| {
                                         let id_c = app_id_row.clone();
                                         ent_row.update(app, |this, cx| {
@@ -1879,6 +2150,7 @@ impl Render for ChatComposer {
                                     )),
                             );
                         }
+                        panel = panel.child(rows_wrap);
                     }
                 }
 
@@ -1887,19 +2159,20 @@ impl Render for ChatComposer {
                     .mb(px(8.))
                     .flex()
                     .when(align_right, |d| d.justify_end())
-                    .child(panel)
+                    .child(div().w(px(276.)).child(pro_view_transition(
+                        pro_eid(&base_id, "composer-pop-vtx"),
+                        menu_key,
+                        panel,
+                    )))
                     .into_any_element()
             })
         };
-        let popover = pro_presence(
+        let popover = pro_popover_presence(
             pro_eid(&self.id, "composer-popover"),
-            self.open_menu.is_some(),
-            0.18,
-            0.14,
-            move |amt| {
+            popover_open,
+            move || {
                 div()
                     .w_full()
-                    .opacity(amt)
                     .when_some(popover_body, |d, b| d.child(b))
                     .into_any_element()
             },

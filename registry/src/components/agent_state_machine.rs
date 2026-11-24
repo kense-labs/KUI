@@ -5,15 +5,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_ease, pro_eid,
-        pro_empty_state, pro_modal_appear, pro_rolling_number, pro_skeleton_bar, pro_toast_banner,
-        tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_ease,
+        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::{
-        control::activate,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon},
-    },
+    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, rc::Rc};
@@ -234,7 +232,9 @@ pub struct AgentStateMachine {
     custom_data: bool,
     entered_current_at: Instant,
     hovered_state_id: Option<SharedString>,
+    hovered_tx_id: Option<SharedString>,
     inspect: Option<MachineInspect>,
+    last_inspect: Option<MachineInspect>,
     active_pulse: Option<ActiveTxPulse>,
     demo_step: usize,
     toast: Option<(SharedString, Instant)>,
@@ -264,7 +264,9 @@ impl AgentStateMachine {
             custom_data: false,
             entered_current_at: now,
             hovered_state_id: None,
+            hovered_tx_id: None,
             inspect: None,
+            last_inspect: None,
             active_pulse: Some(ActiveTxPulse {
                 tx_id: "t-search-code".into(),
                 started: now,
@@ -522,20 +524,12 @@ impl AgentStateMachine {
             st.dwell_ms
         };
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "sm-close-sdlg"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close state inspector", "关闭状态检查器"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "sm-close-sdlg"),
+            tr(cx, "Close state inspector", "关闭状态检查器"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.inspect = None;
@@ -578,42 +572,50 @@ impl AgentStateMachine {
                     }
                 })
                 .unwrap_or_else(|| ex.to.clone());
-            let row_hov = p.hover;
-            exits_box = exits_box.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("sm-exit-{ei}")))
-                    .role(Role::Button)
-                    .h(px(28.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(p.subtle)
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .text_size(px(12.))
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(row_hov))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(ex.label.clone()),
-                    )
-                    .child(pro_icon(ProIcon::ArrowRight, 11., p.muted))
-                    .child(div().text_color(p.text).child(to_label))
-                    .child(
-                        div()
-                            .ml_auto()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(format!("{}×", format_count(ex.count))),
-                    ),
-                cx,
-                move |this, _, cx| {
-                    this.inspect = None;
-                    this.fire_transition(tid.clone(), cx);
-                },
-            ));
+            exits_box = exits_box.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("sm-exit-{ei}")),
+                    format!("{} -> {}", ex.label, to_label),
+                    6.,
+                    p.subtle,
+                    p.hover,
+                    transparent_black(),
+                    p.line_strong,
+                    false,
+                    div()
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .text_size(px(12.))
+                        .child(
+                            div()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(ex.label.clone()),
+                        )
+                        .child(pro_icon(ProIcon::ArrowRight, 11., p.muted))
+                        .child(div().text_color(p.text).child(to_label))
+                        .child(div().ml_auto().child(pro_rolling_number(
+                            pro_eid(&self.id, format!("sm-ex-cnt-{tid}")),
+                            f64::from(ex.count),
+                            0,
+                            "",
+                            "×",
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.muted,
+                        ))),
+                    cx,
+                    move |this, _, cx| {
+                        this.inspect = None;
+                        this.fire_transition(tid.clone(), cx);
+                    },
+                )
+                .w_full(),
+            );
         }
 
         let mut tools_row = div().flex().flex_wrap().gap(px(5.));
@@ -657,7 +659,7 @@ impl AgentStateMachine {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(render_state_mark(st, is_cur, p))
+                    .child(render_state_mark(&self.id, st, is_cur, p))
                     .child(
                         div()
                             .flex_1()
@@ -762,22 +764,7 @@ impl AgentStateMachine {
             );
         }
 
-        div()
-            .id(pro_eid(&self.id, "sm-scrim-s"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.inspect = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "sm-modal-s"),
-                sid,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
-            .into_any_element()
+        dialog.into_any_element()
     }
 
     fn render_transition_dialog(
@@ -786,8 +773,7 @@ impl AgentStateMachine {
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let tid = tx.id.clone();
-        let tid_fire = tid.clone();
+        let tid_fire = tx.id.clone();
         let from_lbl = self
             .states
             .iter()
@@ -801,20 +787,12 @@ impl AgentStateMachine {
             .map(|s| s.label.clone())
             .unwrap_or_else(|| tx.to.clone());
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "sm-close-tdlg"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close transition card", "关闭迁移详情"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "sm-close-tdlg"),
+            tr(cx, "Close transition card", "关闭迁移详情"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.inspect = None;
@@ -823,7 +801,7 @@ impl AgentStateMachine {
             },
         );
 
-        let dialog = div()
+        div()
             .id(pro_eid(&self.id, "sm-tdlg"))
             .role(Role::Dialog)
             .aria_label(tx.label.clone())
@@ -865,17 +843,16 @@ impl AgentStateMachine {
                     .child(from_lbl)
                     .child(pro_icon(ProIcon::ArrowRight, 12., p.muted))
                     .child(to_lbl)
-                    .child(
-                        div()
-                            .ml_auto()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(format!(
-                                "{}× {}",
-                                format_count(tx.count),
-                                tr(cx, "taken", "次触发")
-                            )),
-                    ),
+                    .child(div().ml_auto().child(pro_rolling_number(
+                        pro_eid(&self.id, format!("sm-tdlg-cnt-{}", tx.id)),
+                        f64::from(tx.count),
+                        0,
+                        "",
+                        format!("× {}", tr(cx, "taken", "次触发")),
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))),
             )
             .when(!tx.detail.is_empty(), |d| {
                 d.child(
@@ -906,23 +883,7 @@ impl AgentStateMachine {
                             this.fire_transition(tid_fire.clone(), cx);
                         },
                     )),
-            );
-
-        div()
-            .id(pro_eid(&self.id, "sm-scrim-t"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.inspect = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "sm-modal-t"),
-                tid,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
+            )
             .into_any_element()
     }
 }
@@ -1138,12 +1099,25 @@ impl Render for AgentStateMachine {
                             .px(px(8.))
                             .rounded(px(5.))
                             .bg(hdr_bg)
-                            .text_color(hdr_fg)
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
                             .flex()
                             .items_center()
-                            .child(format!("{hdr_prefix} · {cur_label}")),
+                            .gap(px(5.))
+                            .when(cur_kind == MachineStateKind::Final, |d| {
+                                d.child(pro_check_draw(
+                                    pro_eid(&self.id, "sm-hdr-chk"),
+                                    true,
+                                    12.5,
+                                    false,
+                                    p.green,
+                                ))
+                            })
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "sm-hdr-st"),
+                                format!("{hdr_prefix} · {cur_label}"),
+                                11.5,
+                                FontWeight::MEDIUM,
+                                hdr_fg,
+                            )),
                     ),
             );
 
@@ -1181,7 +1155,51 @@ impl Render for AgentStateMachine {
             });
         }
 
-        let hov_state = self.hovered_state_id.clone();
+        let focus_state_id = self.hovered_state_id.clone().or_else(|| {
+            if let Some(MachineInspect::State(ref sid)) = self.inspect {
+                Some(sid.clone())
+            } else {
+                None
+            }
+        });
+        let focus_tx_id = self.hovered_tx_id.clone().or_else(|| {
+            if let Some(MachineInspect::Transition(ref tid)) = self.inspect {
+                Some(tid.clone())
+            } else {
+                None
+            }
+        });
+
+        let mut tx_focus_weights: HashMap<SharedString, (f32, f32)> =
+            HashMap::with_capacity(tx_geoms.len());
+        for tg in &tx_geoms {
+            let incident = if let Some(ref ftx) = focus_tx_id {
+                &tg.id == ftx
+            } else if let Some(ref fst) = focus_state_id {
+                &tg.from == fst || &tg.to == fst
+            } else {
+                true
+            };
+            let spotlighted = (focus_tx_id.is_some() || focus_state_id.is_some()) && incident;
+            let vis = pro_spring_f32(
+                pro_eid(&self.id, format!("sm-tx-vis-{}", tg.id)),
+                if incident { 1.0 } else { 0.22 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            let spot = pro_spring_f32(
+                pro_eid(&self.id, format!("sm-tx-spt-{}", tg.id)),
+                if spotlighted { 1.0 } else { 0.0 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            tx_focus_weights.insert(tg.id.clone(), (vis, spot));
+        }
+
         let pulse_info = self.active_pulse.as_ref().and_then(|pl| {
             if reduced {
                 None
@@ -1197,7 +1215,7 @@ impl Render for AgentStateMachine {
             .first()
             .and_then(|s| state_rects.get(&s.id).copied());
         let tx_paint = tx_geoms.clone();
-        let hov_paint = hov_state.clone();
+        let tx_weights_paint = tx_focus_weights.clone();
         let p_canvas = p;
 
         let arrows_canvas = canvas(
@@ -1237,28 +1255,30 @@ impl Render for AgentStateMachine {
                     if tg.pts.len() < 2 {
                         continue;
                     }
-                    let incident = match &hov_paint {
-                        Some(hid) => &tg.from == hid || &tg.to == hid,
-                        None => true,
-                    };
+                    let (vis, spot) = tx_weights_paint.get(&tg.id).copied().unwrap_or((1.0, 0.0));
                     let active_u = pulse_info
                         .as_ref()
                         .and_then(|(pid, u)| if pid == &tg.id { Some(*u) } else { None });
 
-                    let base_col = if active_u.is_some() {
-                        p_canvas.blue.opacity(0.85)
-                    } else if !incident {
-                        p_canvas.line_strong.opacity(0.22)
-                    } else if tg.count > 0 {
+                    let rest_col = if tg.count > 0 {
                         p_canvas
                             .ink
-                            .opacity(if p_canvas.dark { 0.42 } else { 0.34 })
+                            .opacity((if p_canvas.dark { 0.42 } else { 0.34 }) * vis)
                     } else {
-                        p_canvas.line_strong.opacity(0.85)
+                        p_canvas.line_strong.opacity(0.85 * vis)
+                    };
+                    let base_col = if active_u.is_some() {
+                        p_canvas.blue.opacity(0.85)
+                    } else {
+                        pro_mix_color(rest_col, p_canvas.blue.opacity(0.82), spot * 0.72)
                     };
 
-                    let mut pb =
-                        PathBuilder::stroke(px(if active_u.is_some() { 1.9 } else { 1.4 }));
+                    let stroke_w = if active_u.is_some() {
+                        1.9
+                    } else {
+                        1.4 + 0.45 * spot
+                    };
+                    let mut pb = PathBuilder::stroke(px(stroke_w));
                     for (i, &(x, y)) in tg.pts.iter().enumerate() {
                         let pt = point(px(ox + x), px(oy + y));
                         if i == 0 {
@@ -1287,8 +1307,9 @@ impl Render for AgentStateMachine {
         // Render interactive State Cards
         let breathe = 0.5 + 0.5 * ((elapsed_ms / 1000.0) * 2.8).sin();
         let mut state_elements: Vec<AnyElement> = Vec::with_capacity(self.states.len());
+        let states_snapshot = self.states.clone();
 
-        for st in &self.states {
+        for st in &states_snapshot {
             let Some(&(sx, sy, sw, sh)) = state_rects.get(&st.id) else {
                 continue;
             };
@@ -1296,15 +1317,27 @@ impl Render for AgentStateMachine {
             let sid_hov = sid.clone();
             let is_cur = self.current == sid;
 
-            let incident_to_hover = match &hov_state {
-                Some(hid) => {
-                    hid == &sid
-                        || self.transitions.iter().any(|t| {
-                            (&t.from == hid && t.to == sid) || (&t.to == hid && t.from == sid)
-                        })
-                }
-                None => true,
+            let incident_to_focus = if let Some(ref ftx) = focus_tx_id {
+                self.transitions
+                    .iter()
+                    .any(|t| &t.id == ftx && (t.from == sid || t.to == sid))
+            } else if let Some(ref hid) = focus_state_id {
+                hid == &sid
+                    || self
+                        .transitions
+                        .iter()
+                        .any(|t| (&t.from == hid && t.to == sid) || (&t.to == hid && t.from == sid))
+            } else {
+                true
             };
+            let st_op = pro_spring_f32(
+                pro_eid(&self.id, format!("sm-st-op-{sid}")),
+                if incident_to_focus { 1.0 } else { 0.32 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
 
             let disp_lbl: SharedString = if self.custom_data {
                 st.label.clone()
@@ -1342,8 +1375,10 @@ impl Render for AgentStateMachine {
                 _ => (p.card, p.line_strong.opacity(0.85)),
             };
 
-            let focus_c = p.focus;
             let hov_bdr = if is_cur { p.blue } else { p.ink.opacity(0.35) };
+            let hov_bg = pro_mix_color(card_bg, p.hover, 0.70);
+            let is_inspected =
+                matches!(&self.inspect, Some(MachineInspect::State(id)) if id == &sid);
 
             let mut tools_mini = div().flex_none().flex().items_center();
             if sw >= 108.0 && !st.tools.is_empty() {
@@ -1363,44 +1398,23 @@ impl Render for AgentStateMachine {
             };
 
             state_elements.push(
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("sm-st-{sid}")),
+                    format!("{disp_lbl}: {meta_str}"),
+                    9.,
+                    card_bg,
+                    hov_bg,
+                    card_bdr,
+                    hov_bdr,
+                    is_inspected,
                     div()
-                        .id(pro_eid(&self.id, format!("sm-st-{sid}")))
-                        .role(Role::Button)
-                        .aria_label(format!("{disp_lbl}: {meta_str}"))
-                        .tab_index(0)
-                        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                            let next = if *hovered {
-                                Some(sid_hov.clone())
-                            } else if this.hovered_state_id.as_ref() == Some(&sid_hov) {
-                                None
-                            } else {
-                                this.hovered_state_id.clone()
-                            };
-                            if this.hovered_state_id != next {
-                                this.hovered_state_id = next;
-                                cx.notify();
-                            }
-                        }))
-                        .absolute()
-                        .left(px(sx))
-                        .top(px(sy))
                         .w(px(sw))
                         .h(px(sh))
-                        .opacity(if incident_to_hover { 1.0 } else { 0.30 })
-                        .rounded(px(9.))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(card_bdr)
-                        .when(glow_alpha > 0.01, |d| d.shadow_md())
                         .px(px(9.))
                         .py(px(7.))
                         .flex()
                         .flex_col()
                         .justify_between()
-                        .cursor_pointer()
-                        .hover(move |s| s.border_color(hov_bdr))
-                        .focus_visible(move |s| s.border_color(focus_c))
                         .child(
                             div()
                                 .w_full()
@@ -1408,7 +1422,7 @@ impl Render for AgentStateMachine {
                                 .items_center()
                                 .gap(px(6.))
                                 .min_w_0()
-                                .child(render_state_mark(st, is_cur, &p))
+                                .child(render_state_mark(&self.id, st, is_cur, &p))
                                 .child(
                                     div()
                                         .flex_1()
@@ -1444,18 +1458,40 @@ impl Render for AgentStateMachine {
                         ),
                     cx,
                     move |this, _, cx| {
-                        this.inspect = Some(MachineInspect::State(sid.clone()));
+                        let next_ins = MachineInspect::State(sid.clone());
+                        this.inspect = Some(next_ins.clone());
+                        this.last_inspect = Some(next_ins);
                         cx.emit(AgentStateMachineEvent::StateSelected {
                             state_id: sid.clone(),
                         });
                         cx.notify();
                     },
                 )
+                .absolute()
+                .left(px(sx))
+                .top(px(sy))
+                .w(px(sw))
+                .h(px(sh))
+                .opacity(st_op)
+                .when(glow_alpha > 0.01, |d| d.shadow_md())
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    let next = if *hovered {
+                        Some(sid_hov.clone())
+                    } else if this.hovered_state_id.as_ref() == Some(&sid_hov) {
+                        None
+                    } else {
+                        this.hovered_state_id.clone()
+                    };
+                    if this.hovered_state_id != next {
+                        this.hovered_state_id = next;
+                        cx.notify();
+                    }
+                }))
                 .into_any_element(),
             );
         }
 
-        // Render clickable Transition Count Pills (`N×`) with rolling numbers
+        // Render clickable Transition Count Pills (`N×`) with rolling numbers & tactile press
         let mut count_pills: Vec<AnyElement> = Vec::with_capacity(tx_geoms.len());
         let pill_bg: Hsla = if p.dark {
             rgb(0x27272b).into()
@@ -1465,36 +1501,29 @@ impl Render for AgentStateMachine {
 
         for tg in &tx_geoms {
             let tid = tg.id.clone();
-            let incident = match &hov_state {
-                Some(hid) => &tg.from == hid || &tg.to == hid,
-                None => true,
-            };
+            let tid_hov = tid.clone();
+            let (vis, _) = tx_focus_weights.get(&tid).copied().unwrap_or((1.0, 0.0));
             let (px_c, py_c) = tg.pill_pos;
             let text_col = if tg.count > 0 { p.ink } else { p.faint };
-            let hov_bdr = p.line_strong;
+            let is_tx_inspected =
+                matches!(&self.inspect, Some(MachineInspect::Transition(id)) if id == &tid);
 
             count_pills.push(
-                activate(
+                pro_tactile(
+                    pro_eid(&self.id, format!("sm-cnt-{tid}")),
+                    format!("{}: {}×", tg.label, tg.count),
+                    999.,
+                    pill_bg,
+                    pro_mix_color(pill_bg, p.chip_hover, 0.65),
+                    p.line_strong,
+                    p.blue,
+                    is_tx_inspected,
                     div()
-                        .id(pro_eid(&self.id, format!("sm-cnt-{tid}")))
-                        .role(Role::Button)
-                        .aria_label(format!("{}: {}×", tg.label, tg.count))
-                        .tab_index(0)
-                        .absolute()
-                        .left(px(px_c - 14.0))
-                        .top(px(py_c - 9.5))
                         .h(px(19.))
                         .px(px(5.5))
-                        .opacity(if incident { 1.0 } else { 0.25 })
-                        .rounded(px(999.))
-                        .bg(pill_bg)
-                        .border_1()
-                        .border_color(p.line_strong)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .cursor_pointer()
-                        .hover(move |s| s.border_color(hov_bdr))
                         .child(pro_rolling_number(
                             pro_eid(&self.id, format!("sm-rnum-{tid}")),
                             f64::from(tg.count),
@@ -1507,26 +1536,89 @@ impl Render for AgentStateMachine {
                         )),
                     cx,
                     move |this, _, cx| {
-                        this.inspect = Some(MachineInspect::Transition(tid.clone()));
+                        let next_ins = MachineInspect::Transition(tid.clone());
+                        this.inspect = Some(next_ins.clone());
+                        this.last_inspect = Some(next_ins);
                         cx.emit(AgentStateMachineEvent::TransitionSelected {
                             transition_id: tid.clone(),
                         });
                         cx.notify();
                     },
                 )
+                .absolute()
+                .left(px(px_c - 14.0))
+                .top(px(py_c - 9.5))
+                .opacity(vis)
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    let next = if *hovered {
+                        Some(tid_hov.clone())
+                    } else if this.hovered_tx_id.as_ref() == Some(&tid_hov) {
+                        None
+                    } else {
+                        this.hovered_tx_id.clone()
+                    };
+                    if this.hovered_tx_id != next {
+                        this.hovered_tx_id = next;
+                        cx.notify();
+                    }
+                }))
                 .into_any_element(),
             );
         }
 
-        let open_modal = self.inspect.clone().and_then(|ins| match ins {
-            MachineInspect::State(sid) => {
-                let st = self.states.iter().find(|s| s.id == sid)?;
-                Some(self.render_state_dialog(st, live_dwell_extra, &p, cx))
-            }
-            MachineInspect::Transition(tid) => {
-                let tx = self.transitions.iter().find(|t| t.id == tid)?;
-                Some(self.render_transition_dialog(tx, &p, cx))
-            }
+        let active_ins = self.inspect.clone().or_else(|| self.last_inspect.clone());
+        let open_modal = active_ins.and_then(|ins| {
+            let (key, dialog_el): (SharedString, AnyElement) = match ins {
+                MachineInspect::State(sid) => {
+                    let st = self.states.iter().find(|s| s.id == sid)?;
+                    (
+                        format!("st-{sid}").into(),
+                        self.render_state_dialog(st, live_dwell_extra, &p, cx),
+                    )
+                }
+                MachineInspect::Transition(tid) => {
+                    let tx = self.transitions.iter().find(|t| t.id == tid)?;
+                    (
+                        format!("tx-{tid}").into(),
+                        self.render_transition_dialog(tx, &p, cx),
+                    )
+                }
+            };
+            let vtx = pro_view_transition(pro_eid(&self.id, "sm-modal-vtx"), key, dialog_el);
+            let dark = p.dark;
+            let scrim_id = pro_eid(&self.id, "sm-scrim");
+            let on_scrim = cx.listener(|this, _: &ClickEvent, w, cx| {
+                this.inspect = None;
+                this.focus.focus(w, cx);
+                cx.notify();
+            });
+            Some(pro_presence(
+                pro_eid(&self.id, "sm-modal-pres"),
+                self.inspect.is_some(),
+                0.20,
+                0.16,
+                move |amt| {
+                    let scrim_a = (if dark { 0.46 } else { 0.20 }) * amt;
+                    div()
+                        .id(scrim_id)
+                        .absolute()
+                        .inset_0()
+                        .bg(hsla(0., 0., 0., scrim_a))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .p(px(16.))
+                        .on_click(on_scrim)
+                        .child(
+                            div()
+                                .relative()
+                                .top(px(8. * (1. - amt)))
+                                .opacity(amt)
+                                .child(vtx),
+                        )
+                        .into_any_element()
+                },
+            ))
         });
 
         div()
@@ -1569,26 +1661,36 @@ impl Render for AgentStateMachine {
     }
 }
 
-fn render_state_mark(st: &MachineState, is_cur: bool, p: &ProPalette) -> AnyElement {
+fn render_state_mark(
+    base_id: &ElementId,
+    st: &MachineState,
+    is_cur: bool,
+    p: &ProPalette,
+) -> AnyElement {
     match st.kind {
         MachineStateKind::Final => {
-            // Bullseye concentric target mark
-            let col = if is_cur || st.visits > 0 {
-                p.green
+            if is_cur || st.visits > 0 {
+                pro_check_draw(
+                    pro_eid(base_id, format!("sm-fchk-{}", st.id)),
+                    true,
+                    14.,
+                    false,
+                    p.green,
+                )
             } else {
-                p.muted
-            };
-            div()
-                .size(px(13.))
-                .flex_none()
-                .rounded_full()
-                .border_2()
-                .border_color(col)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(div().size(px(5.)).rounded_full().bg(col))
-                .into_any_element()
+                // Bullseye concentric target mark when unreached
+                div()
+                    .size(px(13.))
+                    .flex_none()
+                    .rounded_full()
+                    .border_2()
+                    .border_color(p.muted)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(div().size(px(5.)).rounded_full().bg(p.muted))
+                    .into_any_element()
+            }
         }
         MachineStateKind::Waiting => div()
             .size(px(10.))

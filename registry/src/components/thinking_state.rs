@@ -7,21 +7,20 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_ease, pro_eid, pro_empty_state,
-        pro_fold, pro_presence, pro_shimmer_text, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_popover_presence, pro_shimmer_text, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         family::disabled_motion,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
+        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
 use std::collections::BTreeSet;
 use web_time::Instant;
-
-const SVG_DONE_CHECK: &str = r##"<circle cx="8" cy="8" r="7" fill="currentColor"></circle><path d="M4.8 8.2l2.1 2.1 4.3-4.5" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>"##;
 
 /// Visual node type for a [`ThinkingStep`] in [`ThinkingState`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -221,6 +220,7 @@ pub struct ThinkingState {
     done_settled_at: Option<Instant>,
     expanded_more_steps: BTreeSet<usize>,
     hovered_source_tip: Option<(usize, usize, SharedString)>,
+    last_source_tip: Option<(usize, SharedString)>,
     loading: bool,
     empty: bool,
     toast: Option<(SharedString, Instant)>,
@@ -251,6 +251,7 @@ impl ThinkingState {
             done_settled_at: None,
             expanded_more_steps: BTreeSet::new(),
             hovered_source_tip: None,
+            last_source_tip: None,
             loading: false,
             empty: false,
             toast: None,
@@ -471,7 +472,97 @@ impl Render for ThinkingState {
             ((raw_elapsed_ms / self.step_ms) as usize + 1).clamp(1, self.steps.len())
         };
 
-        // Header button (`pro_shimmer_text` + live `0:08` timer + chevron) + Replay/Done toggle.
+        if let Some((si, _, ref url)) = self.hovered_source_tip {
+            self.last_source_tip = Some((si, url.clone()));
+        }
+
+        // Header button (`pro_tactile` + `pro_check_draw` when Done + `pro_shimmer_text` + live `0:08` timer) + Replay/Done toggle.
+        let head_lead_icon = div()
+            .relative()
+            .size(px(16.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .when(!is_done, |d| {
+                d.child(render_pixel_mark(
+                    p.blue,
+                    true,
+                    raw_elapsed_ms as f32,
+                    reduced,
+                ))
+            })
+            .child(
+                div()
+                    .when(!is_done, |d| d.absolute().inset_0().opacity(0.))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "head-done-chk"),
+                        is_done,
+                        16.,
+                        false,
+                        p.green,
+                    )),
+            );
+
+        let head_btn_inner = div()
+            .h(px(36.))
+            .px(px(10.))
+            .flex()
+            .items_center()
+            .gap(px(9.))
+            .child(head_lead_icon)
+            .child(if is_done {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "head-status-lbl"),
+                        tr(cx, "Worked for", "思考耗时"),
+                        13.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::NORMAL)
+                            .text_color(p.muted)
+                            .child(timer_str.clone()),
+                    )
+                    .into_any_element()
+            } else {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.))
+                    .child(pro_shimmer_text(
+                        pro_eid(&self.id, "head-shimmer"),
+                        tr(cx, "Thinking", "正在思考"),
+                        p.muted,
+                        p.strong,
+                        13.,
+                        FontWeight::MEDIUM,
+                        true,
+                    ))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(p.faint)
+                            .child(timer_str.clone()),
+                    )
+                    .into_any_element()
+            })
+            .child(pro_icon(
+                if self.expanded {
+                    ProIcon::ChevronDown
+                } else {
+                    ProIcon::ChevronRight
+                },
+                14.,
+                p.muted,
+            ));
+
         let header_row = div()
             .w_full()
             .flex()
@@ -479,80 +570,27 @@ impl Render for ThinkingState {
             .justify_between()
             .gap(px(8.))
             .child(
-                div()
-                    .id(pro_eid(&self.id, "think-head-btn"))
-                    .role(Role::Button)
-                    .aria_label(if is_done {
-                        format!("{} {timer_str}", tr(cx, "Worked for", "思考耗时"))
-                    } else {
-                        format!("{} {timer_str}", tr(cx, "Thinking", "思考中"))
-                    })
-                    .aria_expanded(self.expanded)
-                    .tab_index(0)
-                    .h(px(36.))
-                    .px(px(10.))
-                    .mx(px(-10.))
-                    .rounded(px(8.))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(9.))
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_expanded(cx)))
-                    .child(render_pixel_mark(
-                        p.blue,
-                        !is_done,
-                        raw_elapsed_ms as f32,
-                        reduced,
-                    ))
-                    .child(if is_done {
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .text_size(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(tr(cx, "Worked for", "思考耗时"))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::NORMAL)
-                                    .text_color(p.muted)
-                                    .child(timer_str.clone()),
-                            )
-                            .into_any_element()
-                    } else {
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(7.))
-                            .child(pro_shimmer_text(
-                                pro_eid(&self.id, "head-shimmer"),
-                                tr(cx, "Thinking", "正在思考"),
-                                p.muted,
-                                p.strong,
-                                13.,
-                                FontWeight::MEDIUM,
-                                true,
-                            ))
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .text_color(p.faint)
-                                    .child(timer_str),
-                            )
-                            .into_any_element()
-                    })
-                    .child(pro_icon(
-                        if self.expanded {
-                            ProIcon::ChevronDown
+                div().mx(px(-10.)).child(
+                    pro_tactile(
+                        pro_eid(&self.id, "think-head-btn"),
+                        if is_done {
+                            format!("{} {timer_str}", tr(cx, "Worked for", "思考耗时"))
                         } else {
-                            ProIcon::ChevronRight
+                            format!("{} {timer_str}", tr(cx, "Thinking", "思考中"))
                         },
-                        14.,
-                        p.muted,
-                    )),
+                        8.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        false,
+                        head_btn_inner,
+                        cx,
+                        |this, _, cx| this.toggle_expanded(cx),
+                    )
+                    .flex_none()
+                    .aria_expanded(self.expanded),
+                ),
             )
             .child(if is_done {
                 pro_btn(
@@ -576,7 +614,7 @@ impl Render for ThinkingState {
                 )
             });
 
-        // Collapsible step timeline (`pro_fold`).
+        // Collapsible step timeline (`pro_fold` + `pro_tactile` pills + `pro_check_draw` completion node).
         let zh_locale = UiLanguage::current(cx) == UiLanguage::Chinese;
         let steps_snapshot: Vec<ThinkingStep> = self
             .steps
@@ -615,324 +653,312 @@ impl Render for ThinkingState {
             };
         let expanded_sets = self.expanded_more_steps.clone();
         let hovered_tip = self.hovered_source_tip.clone();
+        let last_tip = self.last_source_tip.clone();
         let step_ms = self.step_ms;
         let base_id = self.id.clone();
-        let entity = cx.entity().clone();
         let more_word = tr(cx, "more", "更多");
-        let step_tiles: Vec<Vec<AnyElement>> = steps_snapshot
-            .iter()
-            .enumerate()
-            .map(|(si, step)| {
-                let show_all = expanded_sets.contains(&si);
-                let limit = if show_all {
-                    step.sources.len()
+
+        let body_content: AnyElement = {
+            let total_rows = steps_snapshot.len() + usize::from(is_done);
+            let mut list = div().pt(px(8.)).flex().flex_col();
+
+            for (si, step) in steps_snapshot.into_iter().enumerate() {
+                let is_active = active_step_idx == Some(si);
+                let has_next_rail = si + 1 < total_rows;
+
+                // Smooth fade + 6px vertical glide for newly arriving steps!
+                let (step_alpha, step_dy) = if is_done || reduced {
+                    (1.0, 0.0)
                 } else {
-                    step.visible_source_limit.min(step.sources.len())
+                    let step_birth_ms = (si as u64) * step_ms;
+                    let age_ms = raw_elapsed_ms.saturating_sub(step_birth_ms) as f32;
+                    let t = pro_ease((age_ms / 380.0).clamp(0.0, 1.0));
+                    (t, 6.0 * (1.0 - t))
                 };
-                step.sources
-                    .iter()
-                    .take(limit)
-                    .map(|pill| pro_app_tile(&pill.brand, 14., cx))
-                    .collect()
-            })
-            .collect();
+
+                let node_icon = match step.kind {
+                    ThinkingStepKind::Search => pro_icon(ProIcon::Globe, 15., p.muted),
+                    ThinkingStepKind::Step => {
+                        if is_active {
+                            let pulse = if reduced {
+                                1.0
+                            } else {
+                                0.45 + 0.55 * ((raw_elapsed_ms as f32 / 160.0).sin() * 0.5 + 0.5)
+                            };
+                            div()
+                                .size(px(6.))
+                                .rounded(px(1.5))
+                                .bg(p.blue.opacity(pulse))
+                                .into_any_element()
+                        } else {
+                            div()
+                                .size(px(5.))
+                                .rounded_full()
+                                .bg(p.blue.opacity(0.65))
+                                .into_any_element()
+                        }
+                    }
+                };
+
+                let label_el = if is_active && !reduced {
+                    pro_shimmer_text(
+                        pro_eid(&base_id, format!("step-shim-{si}")),
+                        step.label,
+                        p.muted,
+                        p.strong,
+                        13.,
+                        FontWeight::NORMAL,
+                        true,
+                    )
+                } else {
+                    div()
+                        .text_size(px(13.))
+                        .line_height(px(20.))
+                        .text_color(p.text)
+                        .child(step.label)
+                        .into_any_element()
+                };
+
+                // Branded source pills (`pro_tactile`) + `"+N more"` disclosure + URL preview (`pro_popover_presence`).
+                let sources_el = if !step.sources.is_empty() {
+                    let show_all = expanded_sets.contains(&si);
+                    let limit = if show_all {
+                        step.sources.len()
+                    } else {
+                        step.visible_source_limit.min(step.sources.len())
+                    };
+                    let hidden_n = step.sources.len().saturating_sub(limit);
+                    let mut pills_row = div()
+                        .mt(px(7.))
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(6.));
+
+                    for (pi, pill) in step.sources.into_iter().take(limit).enumerate() {
+                        let tile = pro_app_tile(&pill.brand, 14., cx);
+                        let pill_clk = pill.clone();
+                        let tip_url = pill.href.clone().unwrap_or_else(|| pill.label.clone());
+                        let is_tip_active = hovered_tip
+                            .as_ref()
+                            .is_some_and(|(s_idx, p_idx, _)| *s_idx == si && *p_idx == pi);
+
+                        let pill_inner = div()
+                            .h(px(26.))
+                            .pl(px(6.))
+                            .pr(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .text_size(px(12.))
+                            .text_color(p.ink)
+                            .whitespace_nowrap()
+                            .child(tile)
+                            .child(pill.label.clone());
+
+                        pills_row = pills_row.child(
+                            pro_tactile(
+                                pro_eid(&base_id, format!("src-pill-{si}-{pi}")),
+                                pill.label,
+                                6.,
+                                p.card,
+                                p.subtle,
+                                p.line,
+                                p.blue.opacity(0.45),
+                                is_tip_active,
+                                pill_inner,
+                                cx,
+                                move |this, _, cx| {
+                                    let p_ev = pill_clk.clone();
+                                    this.toast = Some((
+                                        SharedString::from(format!(
+                                            "{} · {}",
+                                            p_ev.label,
+                                            p_ev.href.as_deref().unwrap_or("workspace")
+                                        )),
+                                        Instant::now(),
+                                    ));
+                                    cx.emit(ThinkingStateEvent::SourceOpened(p_ev));
+                                    cx.notify();
+                                },
+                            )
+                            .flex_none()
+                            .on_hover(cx.listener(
+                                move |this, inside: &bool, _, cx| {
+                                    if *inside {
+                                        this.hovered_source_tip = Some((si, pi, tip_url.clone()));
+                                    } else if this
+                                        .hovered_source_tip
+                                        .as_ref()
+                                        .is_some_and(|(a, b, _)| *a == si && *b == pi)
+                                    {
+                                        this.hovered_source_tip = None;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        );
+                    }
+
+                    if hidden_n > 0 {
+                        let more_inner = div()
+                            .h(px(26.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.text)
+                            .whitespace_nowrap()
+                            .child(format!("+{hidden_n} {more_word}"));
+                        pills_row = pills_row.child(
+                            pro_tactile(
+                                pro_eid(&base_id, format!("more-srcs-{si}")),
+                                format!("+{hidden_n} more"),
+                                6.,
+                                transparent_black(),
+                                p.hover,
+                                p.line_strong,
+                                p.line_strong,
+                                false,
+                                more_inner,
+                                cx,
+                                move |this, _, cx| {
+                                    this.expanded_more_steps.insert(si);
+                                    cx.emit(ThinkingStateEvent::MoreSourcesExpanded {
+                                        step_index: si,
+                                    });
+                                    cx.notify();
+                                },
+                            )
+                            .flex_none(),
+                        );
+                    }
+
+                    let live_tip = hovered_tip
+                        .as_ref()
+                        .filter(|(s_idx, _, _)| *s_idx == si)
+                        .map(|(_, _, u)| u.clone());
+                    let tip_open = live_tip.is_some();
+                    let shown_tip = live_tip.or_else(|| {
+                        last_tip
+                            .as_ref()
+                            .filter(|(s_idx, _)| *s_idx == si)
+                            .map(|(_, u)| u.clone())
+                    });
+
+                    let tip_banner = pro_popover_presence(
+                        pro_eid(&base_id, format!("src-tip-{si}")),
+                        tip_open,
+                        move || {
+                            let url = shown_tip.unwrap_or_default();
+                            div()
+                                .mt(px(5.))
+                                .px(px(8.))
+                                .py(px(4.))
+                                .rounded(px(6.))
+                                .bg(p.subtle)
+                                .border_1()
+                                .border_color(p.line)
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_size(px(11.))
+                                .text_color(p.muted)
+                                .child(pro_icon(ProIcon::Link, 11., p.blue))
+                                .child(url)
+                                .into_any_element()
+                        },
+                    );
+
+                    Some(div().flex().flex_col().child(pills_row).child(tip_banner))
+                } else {
+                    None
+                };
+
+                list = list.child(
+                    div()
+                        .relative()
+                        .top(px(step_dy))
+                        .opacity(step_alpha)
+                        .pb(px(12.))
+                        .flex()
+                        .items_start()
+                        .gap(px(10.))
+                        .when(has_next_rail, |d| {
+                            d.child(
+                                div()
+                                    .absolute()
+                                    .left(px(7.5))
+                                    .top(px(21.))
+                                    .bottom(px(2.))
+                                    .w(px(1.))
+                                    .bg(p.line_strong),
+                            )
+                        })
+                        .child(
+                            div()
+                                .w(px(16.))
+                                .h(px(20.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(node_icon),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(label_el)
+                                .when_some(sources_el, |d, s| d.child(s)),
+                        ),
+                );
+            }
+
+            // Always keep `pro_check_draw` mounted so flipping `!is_done -> is_done` progressively draws the checkmark!
+            list = list.child(
+                div()
+                    .when(!is_done, |d| d.h(px(0.)).overflow_hidden().opacity(0.))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .w(px(16.))
+                            .h(px(20.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_check_draw(
+                                pro_eid(&base_id, "step-done-chk"),
+                                is_done,
+                                15.,
+                                false,
+                                p.blue,
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(done_label),
+                    ),
+            );
+
+            list.into_any_element()
+        };
 
         let body_fold = pro_fold(
             pro_eid(&self.id, "think-body-fold"),
             self.expanded,
             230.,
             0.,
-            move || {
-                let total_rows = steps_snapshot.len() + usize::from(is_done);
-                let mut list = div().pt(px(8.)).flex().flex_col();
-
-                for (si, (step, tiles)) in steps_snapshot.into_iter().zip(step_tiles).enumerate() {
-                    let is_active = active_step_idx == Some(si);
-                    let has_next_rail = si + 1 < total_rows;
-
-                    // Smooth fade + 6px vertical glide for newly arriving steps!
-                    let (step_alpha, step_dy) = if is_done || reduced {
-                        (1.0, 0.0)
-                    } else {
-                        let step_birth_ms = (si as u64) * step_ms;
-                        let age_ms = raw_elapsed_ms.saturating_sub(step_birth_ms) as f32;
-                        let t = pro_ease((age_ms / 380.0).clamp(0.0, 1.0));
-                        (t, 6.0 * (1.0 - t))
-                    };
-
-                    let node_icon = match step.kind {
-                        ThinkingStepKind::Search => pro_icon(ProIcon::Globe, 15., p.muted),
-                        ThinkingStepKind::Step => {
-                            if is_active {
-                                let pulse = if reduced {
-                                    1.0
-                                } else {
-                                    0.45 + 0.55
-                                        * ((raw_elapsed_ms as f32 / 160.0).sin() * 0.5 + 0.5)
-                                };
-                                div()
-                                    .size(px(6.))
-                                    .rounded(px(1.5))
-                                    .bg(p.blue.opacity(pulse))
-                                    .into_any_element()
-                            } else {
-                                div()
-                                    .size(px(5.))
-                                    .rounded_full()
-                                    .bg(p.blue.opacity(0.65))
-                                    .into_any_element()
-                            }
-                        }
-                    };
-
-                    let label_el = if is_active && !reduced {
-                        pro_shimmer_text(
-                            pro_eid(&base_id, format!("step-shim-{si}")),
-                            step.label,
-                            p.muted,
-                            p.strong,
-                            13.,
-                            FontWeight::NORMAL,
-                            true,
-                        )
-                    } else {
-                        div()
-                            .text_size(px(13.))
-                            .line_height(px(20.))
-                            .text_color(p.text)
-                            .child(step.label)
-                            .into_any_element()
-                    };
-
-                    // Branded source pills + `"+N more"` disclosure + URL preview tooltip.
-                    let sources_el = if !step.sources.is_empty() {
-                        let show_all = expanded_sets.contains(&si);
-                        let limit = if show_all {
-                            step.sources.len()
-                        } else {
-                            step.visible_source_limit.min(step.sources.len())
-                        };
-                        let hidden_n = step.sources.len().saturating_sub(limit);
-                        let mut pills_row = div()
-                            .mt(px(7.))
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap(px(6.));
-
-                        for (pi, (pill, tile)) in
-                            step.sources.into_iter().take(limit).zip(tiles).enumerate()
-                        {
-                            let ent_hov = entity.clone();
-                            let ent_clk = entity.clone();
-                            let pill_clk = pill.clone();
-                            let tip_url = pill.href.clone().unwrap_or_else(|| pill.label.clone());
-                            let is_tip_active = hovered_tip
-                                .as_ref()
-                                .is_some_and(|(s_idx, p_idx, _)| *s_idx == si && *p_idx == pi);
-
-                            pills_row = pills_row.child(
-                                div()
-                                    .id(pro_eid(&base_id, format!("src-pill-{si}-{pi}")))
-                                    .role(Role::Button)
-                                    .aria_label(pill.label.clone())
-                                    .tab_index(0)
-                                    .h(px(26.))
-                                    .pl(px(6.))
-                                    .pr(px(8.))
-                                    .rounded(px(6.))
-                                    .bg(if is_tip_active { p.subtle } else { p.card })
-                                    .border_1()
-                                    .border_color(if is_tip_active {
-                                        p.blue.opacity(0.45)
-                                    } else {
-                                        p.line
-                                    })
-                                    .shadow_xs()
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .text_size(px(12.))
-                                    .text_color(p.ink)
-                                    .hover(move |s| s.bg(p.hover))
-                                    .focus_visible(move |s| s.border_color(p.focus))
-                                    .on_hover(move |inside: &bool, _, app| {
-                                        let u = tip_url.clone();
-                                        ent_hov.update(app, |this, cx| {
-                                            if *inside {
-                                                this.hovered_source_tip = Some((si, pi, u));
-                                            } else if this
-                                                .hovered_source_tip
-                                                .as_ref()
-                                                .is_some_and(|(a, b, _)| *a == si && *b == pi)
-                                            {
-                                                this.hovered_source_tip = None;
-                                            }
-                                            cx.notify();
-                                        });
-                                    })
-                                    .on_click(move |_, _, app| {
-                                        let p_ev = pill_clk.clone();
-                                        ent_clk.update(app, |this, cx| {
-                                            this.toast = Some((
-                                                SharedString::from(format!(
-                                                    "{} · {}",
-                                                    p_ev.label,
-                                                    p_ev.href.as_deref().unwrap_or("workspace")
-                                                )),
-                                                Instant::now(),
-                                            ));
-                                            cx.emit(ThinkingStateEvent::SourceOpened(p_ev));
-                                            cx.notify();
-                                        });
-                                    })
-                                    .child(tile)
-                                    .child(pill.label),
-                            );
-                        }
-
-                        if hidden_n > 0 {
-                            let ent_more = entity.clone();
-                            pills_row = pills_row.child(
-                                div()
-                                    .id(pro_eid(&base_id, format!("more-srcs-{si}")))
-                                    .role(Role::Button)
-                                    .aria_label(format!("+{hidden_n} more"))
-                                    .tab_index(0)
-                                    .h(px(26.))
-                                    .px(px(8.))
-                                    .rounded(px(6.))
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.text)
-                                    .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                    .focus_visible(move |s| s.border_color(p.focus))
-                                    .on_click(move |_, _, app| {
-                                        ent_more.update(app, |this, cx| {
-                                            this.expanded_more_steps.insert(si);
-                                            cx.emit(ThinkingStateEvent::MoreSourcesExpanded {
-                                                step_index: si,
-                                            });
-                                            cx.notify();
-                                        });
-                                    })
-                                    .child(format!("+{hidden_n} {more_word}")),
-                            );
-                        }
-
-                        let step_tip_url = hovered_tip
-                            .as_ref()
-                            .filter(|(s_idx, _, _)| *s_idx == si)
-                            .map(|(_, _, u)| u.clone());
-
-                        let tip_banner = pro_presence(
-                            pro_eid(&base_id, format!("src-tip-{si}")),
-                            step_tip_url.is_some(),
-                            0.14,
-                            0.10,
-                            move |amt| {
-                                let url = step_tip_url.unwrap_or_default();
-                                div()
-                                    .mt(px(5.))
-                                    .px(px(8.))
-                                    .py(px(4.))
-                                    .rounded(px(6.))
-                                    .bg(p.subtle)
-                                    .border_1()
-                                    .border_color(p.line)
-                                    .opacity(amt)
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .text_size(px(11.))
-                                    .text_color(p.muted)
-                                    .child(pro_icon(ProIcon::Link, 11., p.blue))
-                                    .child(url)
-                                    .into_any_element()
-                            },
-                        );
-
-                        Some(div().flex().flex_col().child(pills_row).child(tip_banner))
-                    } else {
-                        None
-                    };
-
-                    list = list.child(
-                        div()
-                            .relative()
-                            .top(px(step_dy))
-                            .opacity(step_alpha)
-                            .pb(px(12.))
-                            .flex()
-                            .items_start()
-                            .gap(px(10.))
-                            .when(has_next_rail, |d| {
-                                d.child(
-                                    div()
-                                        .absolute()
-                                        .left(px(7.5))
-                                        .top(px(21.))
-                                        .bottom(px(2.))
-                                        .w(px(1.))
-                                        .bg(p.line_strong),
-                                )
-                            })
-                            .child(
-                                div()
-                                    .w(px(16.))
-                                    .h(px(20.))
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(node_icon),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(label_el)
-                                    .when_some(sources_el, |d, s| d.child(s)),
-                            ),
-                    );
-                }
-
-                if is_done {
-                    list = list.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(10.))
-                            .child(
-                                div()
-                                    .w(px(16.))
-                                    .h(px(20.))
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(pro_svg("0 0 16 16", SVG_DONE_CHECK, 15., p.blue)),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .child(done_label),
-                            ),
-                    );
-                }
-
-                list.into_any_element()
-            },
+            move || body_content,
         );
 
         div()

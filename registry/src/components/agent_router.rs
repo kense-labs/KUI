@@ -5,15 +5,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_connector_pulse, pro_ease, pro_eid,
-        pro_empty_state, pro_modal_appear, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
-        pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_connector_pulse,
+        pro_ease, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence,
+        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::{
-        control::activate,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
-    },
+    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, rc::Rc};
@@ -298,7 +296,10 @@ pub struct AgentRouter {
     flight: Option<RoutingFlight>,
     arrival_glows: HashMap<SharedString, Instant>,
     filter_agent_id: Option<SharedString>,
+    hovered_agent_id: Option<SharedString>,
+    hovered_req_target: Option<SharedString>,
     inspect_req_id: Option<SharedString>,
+    last_inspect_req_id: Option<SharedString>,
     sample_cursor: usize,
     sr_status: SharedString,
     toast: Option<(SharedString, Instant)>,
@@ -339,7 +340,10 @@ impl AgentRouter {
             flight,
             arrival_glows: HashMap::new(),
             filter_agent_id: None,
+            hovered_agent_id: None,
+            hovered_req_target: None,
             inspect_req_id: None,
+            last_inspect_req_id: None,
             sample_cursor: 0,
             sr_status: "Routing Refund for order #4821 to Billing (94% sure)".into(),
             toast: None,
@@ -647,20 +651,12 @@ impl AgentRouter {
         let rid = req.id.clone();
         let conf_pct = (req.confidence * 100.0).round() as u32;
 
-        let hover_bg = p.chip_hover;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "r-close-dlg"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close routing breakdown", "关闭路由评分详情"))
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "r-close-dlg"),
+            tr(cx, "Close routing breakdown", "关闭路由评分详情"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.inspect_req_id = None;
@@ -699,27 +695,26 @@ impl AgentRouter {
             let is_current = req.to.as_ref() == Some(&ag.id);
             let req_c = rid.clone();
             let target_c = ag.id.clone();
-            let row_hov = p.hover;
 
-            candidates = candidates.child(activate(
+            candidates = candidates.child(pro_tactile(
+                pro_eid(&self.id, format!("r-cand-{ai}")),
+                format!("{} {:.0}%", ag.name, score * 100.0),
+                7.,
+                if is_current { p.select } else { p.subtle },
+                p.hover,
+                if is_current {
+                    p.line_strong
+                } else {
+                    transparent_black()
+                },
+                p.line_strong,
+                is_current,
                 div()
-                    .id(pro_eid(&self.id, format!("r-cand-{ai}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {:.0}%", ag.name, score * 100.0))
+                    .w_full()
                     .p(px(7.))
-                    .rounded(px(7.))
-                    .bg(if is_current { p.select } else { p.subtle })
-                    .border_1()
-                    .border_color(if is_current {
-                        p.line_strong
-                    } else {
-                        transparent_black()
-                    })
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(row_hov))
                     .child(if ag.human {
                         div()
                             .size(px(22.))
@@ -753,13 +748,16 @@ impl AgentRouter {
                                             .text_color(p.strong)
                                             .child(ag.name.clone()),
                                     )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(if is_current { p.ink } else { p.muted })
-                                            .child(format!("{:.0}%", score * 100.0)),
-                                    ),
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, format!("sc-pct-{}-{ai}", req.id)),
+                                        f64::from(score * 100.0),
+                                        0,
+                                        "",
+                                        "%",
+                                        11.5,
+                                        FontWeight::MEDIUM,
+                                        if is_current { p.ink } else { p.muted },
+                                    )),
                             )
                             .child(pro_spring_bar(
                                 pro_eid(&self.id, format!("sc-bar-{}-{ai}", req.id)),
@@ -778,16 +776,29 @@ impl AgentRouter {
                             .bg(if is_current { p.chip } else { p.card })
                             .border_1()
                             .border_color(p.line)
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if is_current { p.muted } else { p.ink })
                             .flex()
                             .items_center()
-                            .child(if is_current {
-                                tr(cx, "Assigned", "当前分配")
-                            } else {
-                                tr(cx, "Reroute", "改派")
-                            }),
+                            .gap(px(4.))
+                            .when(is_current, |d| {
+                                d.child(pro_check_draw(
+                                    pro_eid(&self.id, format!("sc-chk-{}-{ai}", req.id)),
+                                    true,
+                                    12.,
+                                    false,
+                                    p.green,
+                                ))
+                            })
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("sc-lbl-{}-{ai}", req.id)),
+                                if is_current {
+                                    tr(cx, "Assigned", "当前分配")
+                                } else {
+                                    tr(cx, "Reroute", "改派")
+                                },
+                                11.,
+                                FontWeight::MEDIUM,
+                                if is_current { p.muted } else { p.ink },
+                            )),
                     ),
                 cx,
                 move |this, _, cx| {
@@ -877,22 +888,41 @@ impl AgentRouter {
             })
             .child(candidates);
 
-        div()
-            .id(pro_eid(&self.id, "r-scrim"))
-            .absolute()
-            .inset_0()
-            .on_click(cx.listener(|this, _, w, cx| {
-                this.inspect_req_id = None;
-                this.focus.focus(w, cx);
-                cx.notify();
-            }))
-            .child(pro_modal_appear(
-                pro_eid(&self.id, "r-modal"),
-                rid,
-                if p.dark { 0.46 } else { 0.20 },
-                dialog,
-            ))
-            .into_any_element()
+        let dialog_body = pro_view_transition(pro_eid(&self.id, "r-modal-vtx"), rid, dialog);
+        let dark = p.dark;
+        let scrim_id = pro_eid(&self.id, "r-scrim");
+        let on_scrim = cx.listener(|this, _: &ClickEvent, w, cx| {
+            this.inspect_req_id = None;
+            this.focus.focus(w, cx);
+            cx.notify();
+        });
+        pro_presence(
+            pro_eid(&self.id, "r-modal-pres"),
+            self.inspect_req_id.is_some(),
+            0.20,
+            0.16,
+            move |amt| {
+                let scrim_a = (if dark { 0.46 } else { 0.20 }) * amt;
+                div()
+                    .id(scrim_id)
+                    .absolute()
+                    .inset_0()
+                    .bg(hsla(0., 0., 0., scrim_a))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p(px(16.))
+                    .on_click(on_scrim)
+                    .child(
+                        div()
+                            .relative()
+                            .top(px(8. * (1. - amt)))
+                            .opacity(amt)
+                            .child(dialog_body),
+                    )
+                    .into_any_element()
+            },
+        )
     }
 }
 
@@ -1049,26 +1079,46 @@ impl Render for AgentRouter {
                     .text_size(px(12.))
                     .text_color(p.muted)
                     .when(routing_cnt > 0, |d| {
-                        d.child(
-                            div()
-                                .text_color(p.blue)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(format!("{routing_cnt} {}", tr(cx, "routing", "判定中"))),
-                        )
+                        d.child(pro_rolling_number(
+                            pro_eid(&self.id, "r-hdr-rtg"),
+                            routing_cnt as f64,
+                            0,
+                            "",
+                            format!(" {}", tr(cx, "routing", "判定中")),
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.blue,
+                        ))
                     })
                     .when(escalated_cnt > 0, |d| {
-                        d.child(
-                            div()
-                                .text_color(p.amber_ink)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(format!(
-                                    "{escalated_cnt} {}",
-                                    tr(cx, "needs human", "人工待办")
-                                )),
-                        )
+                        d.child(pro_rolling_number(
+                            pro_eid(&self.id, "r-hdr-esc"),
+                            escalated_cnt as f64,
+                            0,
+                            "",
+                            format!(" {}", tr(cx, "needs human", "人工待办")),
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.amber_ink,
+                        ))
                     })
-                    .child(format!("{routed_cnt} {}", tr(cx, "routed", "已分发"))),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "r-hdr-rtd"),
+                        routed_cnt as f64,
+                        0,
+                        "",
+                        format!(" {}", tr(cx, "routed", "已分发")),
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             );
+
+        let focus_target = self
+            .hovered_agent_id
+            .clone()
+            .or_else(|| self.hovered_req_target.clone())
+            .or_else(|| self.filter_agent_id.clone());
 
         let incoming_req = self
             .active_incoming_id
@@ -1086,6 +1136,7 @@ impl Render for AgentRouter {
         // Stage 1: Top Incoming Request Card
         let incoming_el = if let Some(ref req) = incoming_req {
             let rid = req.id.clone();
+            let req_to_hov = req.to.clone();
             let sens = incoming_sensor.clone();
             let conf_pct = (req.confidence * 100.0).round() as u32;
             let (sbg, sfg) = match req.status {
@@ -1095,135 +1146,154 @@ impl Render for AgentRouter {
                     (p.green_soft, p.green_ink)
                 }
             };
-            let hov_bdr = p.line_strong;
-            let focus_c = p.focus;
+            let is_settled_ok = matches!(
+                req.status,
+                RouterRequestStatus::Routed | RouterRequestStatus::Done
+            );
 
-            activate(
-                div()
-                    .id(pro_eid(&self.id, "r-incoming-card"))
-                    .role(Role::Button)
-                    .aria_label(format!("{}: {}", req.title, req.status.label(cx)))
-                    .tab_index(0)
-                    .when(wide, |d| d.w(px(244.)))
-                    .when(!wide, |d| d.w_full())
-                    .rounded(px(10.))
-                    .bg(p.tray)
-                    .border_1()
-                    .border_color(p.line_soft)
-                    .p(px(2.5))
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_bdr))
-                    .focus_visible(move |s| s.border_color(focus_c))
-                    .child(
-                        div()
-                            .w_full()
-                            .relative()
-                            .rounded(px(8.))
-                            .bg(p.card)
-                            .border_1()
-                            .border_color(p.line)
-                            .p(px(10.))
-                            .flex()
-                            .flex_col()
-                            .gap(px(6.))
-                            .child(
-                                canvas(
-                                    move |bounds, _, _| {
-                                        sens.set(Some(bounds));
-                                    },
-                                    |_, _, _, _| (),
+            pro_tactile(
+                pro_eid(&self.id, "r-incoming-card"),
+                format!("{}: {}", req.title, req.status.label(cx)),
+                10.,
+                p.tray,
+                pro_mix_color(p.tray, p.chip_hover, 0.45),
+                p.line_soft,
+                p.line_strong,
+                self.inspect_req_id.as_ref() == Some(&rid),
+                div().w_full().p(px(2.5)).child(
+                    div()
+                        .w_full()
+                        .relative()
+                        .rounded(px(8.))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .p(px(10.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.))
+                        .child(
+                            canvas(
+                                move |bounds, _, _| {
+                                    sens.set(Some(bounds));
+                                },
+                                |_, _, _, _| (),
+                            )
+                            .absolute()
+                            .inset_0(),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .size(px(22.))
+                                        .flex_none()
+                                        .rounded(px(6.))
+                                        .bg(p.chip)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_icon(req.channel.icon(), 12.5, p.ink)),
                                 )
-                                .absolute()
-                                .inset_0(),
-                            )
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .min_w_0()
-                                    .child(
-                                        div()
-                                            .size(px(22.))
-                                            .flex_none()
-                                            .rounded(px(6.))
-                                            .bg(p.chip)
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(pro_icon(req.channel.icon(), 12.5, p.ink)),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .flex()
-                                            .flex_col()
-                                            .child(
-                                                div()
-                                                    .text_size(px(12.5))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(p.strong)
-                                                    .truncate()
-                                                    .child(req.title.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.))
-                                                    .text_color(p.muted)
-                                                    .truncate()
-                                                    .child(req.from.clone()),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .h(px(18.))
-                                            .px(px(6.))
-                                            .flex_none()
-                                            .rounded(px(4.))
-                                            .bg(sbg)
-                                            .text_color(sfg)
-                                            .text_size(px(11.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(3.))
-                                            .when(req.status == RouterRequestStatus::Routing, |d| {
-                                                d.child(pro_svg(
-                                                    "0 0 24 24",
-                                                    SPIN_ARC_SVG,
-                                                    11.,
-                                                    sfg,
-                                                ))
-                                            })
-                                            .child(req.status.label(cx)),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(16.))
-                                    .text_color(p.text)
-                                    .truncate()
-                                    .child(req.preview.clone()),
-                            )
-                            .child(
-                                div().text_size(px(11.)).text_color(p.muted).child(format!(
-                                    "{conf_pct}% {}",
-                                    tr(cx, "confidence", "置信度")
-                                )),
-                            ),
-                    ),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .child(
+                                            div()
+                                                .text_size(px(12.5))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.strong)
+                                                .truncate()
+                                                .child(req.title.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(p.muted)
+                                                .truncate()
+                                                .child(req.from.clone()),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .h(px(18.))
+                                        .px(px(6.))
+                                        .flex_none()
+                                        .rounded(px(4.))
+                                        .bg(sbg)
+                                        .text_color(sfg)
+                                        .text_size(px(11.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(3.5))
+                                        .when(req.status == RouterRequestStatus::Routing, |d| {
+                                            d.child(pro_svg("0 0 24 24", SPIN_ARC_SVG, 11., sfg))
+                                        })
+                                        .when(is_settled_ok, |d| {
+                                            d.child(pro_check_draw(
+                                                pro_eid(&self.id, "r-inc-chk"),
+                                                true,
+                                                11.5,
+                                                false,
+                                                p.green,
+                                            ))
+                                        })
+                                        .child(pro_swap_label(
+                                            pro_eid(&self.id, "r-inc-st"),
+                                            req.status.label(cx),
+                                            11.,
+                                            FontWeight::MEDIUM,
+                                            sfg,
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .text_color(p.text)
+                                .truncate()
+                                .child(req.preview.clone()),
+                        )
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, "r-inc-conf"),
+                            f64::from(conf_pct),
+                            0,
+                            "",
+                            format!("% {}", tr(cx, "confidence", "置信度")),
+                            11.,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        )),
+                ),
                 cx,
                 move |this, _, cx| {
                     this.inspect_req_id = Some(rid.clone());
+                    this.last_inspect_req_id = Some(rid.clone());
                     cx.emit(AgentRouterEvent::RequestSelected {
                         request_id: rid.clone(),
                     });
                     cx.notify();
                 },
             )
+            .when(wide, |d| d.w(px(244.)))
+            .when(!wide, |d| d.w_full())
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = if *inside { req_to_hov.clone() } else { None };
+                if this.hovered_req_target != next {
+                    this.hovered_req_target = next;
+                    cx.notify();
+                }
+            }))
             .into_any_element()
         } else {
             div().into_any_element()
@@ -1314,16 +1384,19 @@ impl Render for AgentRouter {
                                     .px(px(6.))
                                     .rounded(px(4.))
                                     .bg(p.accent_soft)
-                                    .text_color(p.blue)
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
                                     .flex()
                                     .items_center()
-                                    .child(if router_busy {
-                                        tr(cx, "Routing", "分析中")
-                                    } else {
-                                        tr(cx, "Ready", "监听中")
-                                    }),
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "r-hub-st"),
+                                        if router_busy {
+                                            tr(cx, "Routing", "分析中")
+                                        } else {
+                                            tr(cx, "Ready", "监听中")
+                                        },
+                                        11.,
+                                        FontWeight::MEDIUM,
+                                        p.blue,
+                                    )),
                             ),
                     )
                     .child(
@@ -1356,12 +1429,16 @@ impl Render for AgentRouter {
                                 p.chip,
                                 conf_col,
                             )))
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .text_color(p.muted)
-                                    .child(format!("{conf_pct}% {}", tr(cx, "sure", "确信"))),
-                            ),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "r-hub-conf"),
+                                f64::from(conf_pct),
+                                0,
+                                "",
+                                format!("% {}", tr(cx, "sure", "确信")),
+                                11.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
                     ),
             )
             .when_some(incoming_req.as_ref(), |d, req| {
@@ -1381,8 +1458,20 @@ impl Render for AgentRouter {
             });
 
         let human_agent = self.agents.iter().find(|a| a.human).cloned();
+        let human_dimmed = focus_target
+            .as_ref()
+            .is_some_and(|ft| human_agent.as_ref().is_some_and(|h| &h.id != ft));
+        let human_op = pro_spring_f32(
+            pro_eid(&self.id, "r-human-op"),
+            if human_dimmed { 0.34 } else { 1.0 },
+            0.22,
+            w,
+            cx,
+        )
+        .clamp(0.0, 1.0);
         let human_tag = human_agent.map(|hag| {
             let hid = hag.id.clone();
+            let hid_hov = hid.clone();
             let h_cnt = self.queue_len(&hid);
             let h_sens = human_sensor.clone();
             let glowing = self.arrival_glows.contains_key(&hid);
@@ -1391,30 +1480,29 @@ impl Render for AgentRouter {
                 .iter()
                 .find(|r| r.to.as_ref() == Some(&hid))
                 .map(|r| r.id.clone());
-            let hov_bdr = p.line_strong;
+            let rest_bg = if glowing || h_cnt > 0 {
+                p.amber_soft
+            } else {
+                p.card
+            };
+            let rest_bdr = if h_cnt > 0 { p.amber } else { p.line_strong };
 
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, "r-human-tag"),
+                format!("Human fallback: {h_cnt}"),
+                999.,
+                rest_bg,
+                pro_mix_color(rest_bg, p.chip_hover, 0.50),
+                rest_bdr,
+                if h_cnt > 0 { p.amber } else { p.blue },
+                focus_target.as_ref() == Some(&hid),
                 div()
-                    .id(pro_eid(&self.id, "r-human-tag"))
-                    .role(Role::Button)
-                    .aria_label(format!("Human fallback: {h_cnt}"))
-                    .tab_index(0)
                     .h(px(28.))
                     .px(px(9.))
                     .relative()
-                    .rounded(px(999.))
-                    .bg(if glowing || h_cnt > 0 {
-                        p.amber_soft
-                    } else {
-                        p.card
-                    })
-                    .border_1()
-                    .border_color(if h_cnt > 0 { p.amber } else { p.line_strong })
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_bdr))
                     .child(
                         canvas(
                             move |bounds, _, _| {
@@ -1442,21 +1530,39 @@ impl Render for AgentRouter {
                             .text_color(if h_cnt > 0 { p.amber_ink } else { p.ink })
                             .child(tr(cx, "Human", "人工坐席")),
                     )
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(if h_cnt > 0 { p.amber_ink } else { p.muted })
-                            .child(format!("{h_cnt}")),
-                    ),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "r-hcnt"),
+                        h_cnt as f64,
+                        0,
+                        "",
+                        "",
+                        11.5,
+                        FontWeight::SEMIBOLD,
+                        if h_cnt > 0 { p.amber_ink } else { p.muted },
+                    )),
                 cx,
                 move |this, _, cx| {
                     if let Some(ref erid) = escalated_req_id {
                         this.inspect_req_id = Some(erid.clone());
+                        this.last_inspect_req_id = Some(erid.clone());
                         cx.notify();
                     }
                 },
             )
+            .opacity(human_op)
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = if *inside {
+                    Some(hid_hov.clone())
+                } else if this.hovered_agent_id.as_ref() == Some(&hid_hov) {
+                    None
+                } else {
+                    this.hovered_agent_id.clone()
+                };
+                if this.hovered_agent_id != next {
+                    this.hovered_agent_id = next;
+                    cx.notify();
+                }
+            }))
         });
 
         let router_stage_row = if wide {
@@ -1494,8 +1600,12 @@ impl Render for AgentRouter {
             .collect();
 
         let mut spec_cols: Vec<AnyElement> = Vec::with_capacity(specialists.len());
+        let mut spec_link_weights: HashMap<SharedString, (f32, f32)> =
+            HashMap::with_capacity(specialists.len());
+
         for (ai, spec) in &specialists {
             let sid = spec.id.clone();
+            let sid_hov = sid.clone();
             let acol = self.specialist_color(*ai, spec, &p);
             let s_sens = Rc::new(Cell::new(None));
             spec_sensors.insert(sid.clone(), s_sens.clone());
@@ -1507,11 +1617,28 @@ impl Render for AgentRouter {
                 .cloned()
                 .collect();
             let q_cnt = queued.len();
-            let dimmed = self
-                .filter_agent_id
+            let dimmed = focus_target
                 .as_ref()
                 .map(|fid| fid != &sid)
                 .unwrap_or(false);
+            let spotlighted = focus_target.as_ref() == Some(&sid);
+            let col_op = pro_spring_f32(
+                pro_eid(&self.id, format!("rspec-op-{sid}")),
+                if dimmed { 0.32 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            let link_spot = pro_spring_f32(
+                pro_eid(&self.id, format!("rspec-spt-{sid}")),
+                if spotlighted { 1.0 } else { 0.0 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            spec_link_weights.insert(sid.clone(), (col_op, link_spot));
 
             let glow_overlay = self.arrival_glows.get(&sid).map(|started| {
                 let age = (started.elapsed().as_secs_f32() / 0.95).clamp(0.0, 1.0);
@@ -1529,136 +1656,137 @@ impl Render for AgentRouter {
 
             let pkey = infer_provider_key(&spec.model);
             let filter_click = sid.clone();
-            let hov_bdr = p.line_strong;
+            let is_filtered = self.filter_agent_id.as_ref() == Some(&sid);
 
-            let spec_card = activate(
-                div()
-                    .id(pro_eid(&self.id, format!("rspec-{sid}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{}, {} in queue", spec.name, q_cnt))
-                    .tab_index(0)
-                    .w_full()
-                    .rounded(px(10.))
-                    .bg(p.tray)
-                    .border_1()
-                    .border_color(if self.filter_agent_id.as_ref() == Some(&sid) {
-                        acol
-                    } else {
-                        p.line_soft
-                    })
-                    .p(px(2.5))
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_bdr))
-                    .child(
-                        div()
-                            .w_full()
-                            .relative()
-                            .overflow_hidden()
-                            .rounded(px(8.))
-                            .bg(p.card)
-                            .border_1()
-                            .border_color(p.line)
-                            .p(px(10.))
-                            .flex()
-                            .flex_col()
-                            .gap(px(6.))
-                            .children(glow_overlay)
-                            .child(
-                                canvas(
-                                    move |bounds, _, _| {
-                                        s_sens.set(Some(bounds));
-                                    },
-                                    |_, _, _, _| (),
-                                )
-                                .absolute()
-                                .inset_0(),
+            let spec_card = pro_tactile(
+                pro_eid(&self.id, format!("rspec-{sid}")),
+                format!("{}, {} in queue", spec.name, q_cnt),
+                10.,
+                p.tray,
+                pro_mix_color(p.tray, p.chip_hover, 0.45),
+                if is_filtered { acol } else { p.line_soft },
+                acol,
+                is_filtered,
+                div().w_full().p(px(2.5)).child(
+                    div()
+                        .w_full()
+                        .relative()
+                        .overflow_hidden()
+                        .rounded(px(8.))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .p(px(10.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.))
+                        .children(glow_overlay)
+                        .child(
+                            canvas(
+                                move |bounds, _, _| {
+                                    s_sens.set(Some(bounds));
+                                },
+                                |_, _, _, _| (),
                             )
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .min_w_0()
-                                    .child(pro_agent_avatar(
-                                        &spec.id,
-                                        acol,
-                                        22.,
-                                        q_cnt > 0,
-                                        elapsed_ms,
-                                        cx,
-                                    ))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .flex()
-                                            .flex_col()
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(p.strong)
-                                                    .truncate()
-                                                    .child(spec.name.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(4.))
-                                                    .text_size(px(11.))
-                                                    .text_color(p.muted)
-                                                    .children(pro_app_artwork(pkey, 11., cx))
-                                                    .child(spec.model.clone()),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .h(px(18.))
-                                            .px(px(6.))
-                                            .rounded(px(4.))
-                                            .bg(if q_cnt > 0 { p.accent_soft } else { p.chip })
-                                            .text_color(if q_cnt > 0 { p.blue } else { p.muted })
-                                            .text_size(px(11.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .flex()
-                                            .items_center()
-                                            .child(if q_cnt > 0 {
+                            .absolute()
+                            .inset_0(),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .min_w_0()
+                                .child(pro_agent_avatar(
+                                    &spec.id,
+                                    acol,
+                                    22.,
+                                    q_cnt > 0,
+                                    elapsed_ms,
+                                    cx,
+                                ))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .child(
+                                            div()
+                                                .text_size(px(13.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.strong)
+                                                .truncate()
+                                                .child(spec.name.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(4.))
+                                                .text_size(px(11.))
+                                                .text_color(p.muted)
+                                                .children(pro_app_artwork(pkey, 11., cx))
+                                                .child(spec.model.clone()),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .h(px(18.))
+                                        .px(px(6.))
+                                        .rounded(px(4.))
+                                        .bg(if q_cnt > 0 { p.accent_soft } else { p.chip })
+                                        .flex()
+                                        .items_center()
+                                        .child(pro_swap_label(
+                                            pro_eid(&self.id, format!("rspec-st-{sid}")),
+                                            if q_cnt > 0 {
                                                 tr(cx, "Active", "处理中")
                                             } else {
                                                 tr(cx, "Idle", "空闲")
-                                            }),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(16.))
-                                    .text_color(p.text)
-                                    .truncate()
-                                    .child(spec.activity.clone()),
-                            )
-                            .child(
-                                div()
-                                    .w_full()
-                                    .h(px(14.))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(div().flex_1().child(pro_spring_bar(
-                                        pro_eid(&self.id, format!("sload-{sid}")),
-                                        (spec.load + (q_cnt as f32) * 0.14).clamp(0.08, 0.96),
-                                        3.0,
-                                        2.0,
-                                        p.chip,
-                                        acol,
-                                    )))
-                                    .child(div().text_size(px(11.)).text_color(p.muted).child(
-                                        format!("{q_cnt} {}", tr(cx, "in queue", "条排队")),
-                                    )),
-                            ),
-                    ),
+                                            },
+                                            11.,
+                                            FontWeight::MEDIUM,
+                                            if q_cnt > 0 { p.blue } else { p.muted },
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .text_color(p.text)
+                                .truncate()
+                                .child(spec.activity.clone()),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .h(px(14.))
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(div().flex_1().child(pro_spring_bar(
+                                    pro_eid(&self.id, format!("sload-{sid}")),
+                                    (spec.load + (q_cnt as f32) * 0.14).clamp(0.08, 0.96),
+                                    3.0,
+                                    2.0,
+                                    p.chip,
+                                    acol,
+                                )))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("sqcnt-{sid}")),
+                                    q_cnt as f64,
+                                    0,
+                                    "",
+                                    format!(" {}", tr(cx, "in queue", "条排队")),
+                                    11.,
+                                    FontWeight::NORMAL,
+                                    p.muted,
+                                )),
+                        ),
+                ),
                 cx,
                 move |this, _, cx| {
                     if this.filter_agent_id.as_ref() == Some(&filter_click) {
@@ -1668,7 +1796,21 @@ impl Render for AgentRouter {
                     }
                     cx.notify();
                 },
-            );
+            )
+            .w_full()
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = if *inside {
+                    Some(sid_hov.clone())
+                } else if this.hovered_agent_id.as_ref() == Some(&sid_hov) {
+                    None
+                } else {
+                    this.hovered_agent_id.clone()
+                };
+                if this.hovered_agent_id != next {
+                    this.hovered_agent_id = next;
+                    cx.notify();
+                }
+            }));
 
             // Task queue container directly under specialist card
             let mut queue_box = div()
@@ -1701,12 +1843,18 @@ impl Render for AgentRouter {
                                 .px(px(6.))
                                 .rounded(px(4.))
                                 .bg(p.chip)
-                                .text_size(px(11.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.muted)
                                 .flex()
                                 .items_center()
-                                .child(format!("{q_cnt}")),
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("sqpill-{sid}")),
+                                    q_cnt as f64,
+                                    0,
+                                    "",
+                                    "",
+                                    11.,
+                                    FontWeight::MEDIUM,
+                                    p.muted,
+                                )),
                         ),
                 );
 
@@ -1728,8 +1876,8 @@ impl Render for AgentRouter {
             } else {
                 for qreq in queued.iter().take(3) {
                     let qrid = qreq.id.clone();
+                    let q_target = qreq.to.clone();
                     let qconf = (qreq.confidence * 100.0).round() as u32;
-                    let qhov = p.line_strong;
                     let mut tags_el = div().flex().flex_wrap().gap(px(4.));
                     for tg in &qreq.tags {
                         tags_el = tags_el.child(
@@ -1745,58 +1893,70 @@ impl Render for AgentRouter {
                                 .child(tg.clone()),
                         );
                     }
-                    queue_box = queue_box.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("qitem-{qrid}")))
-                            .role(Role::Button)
-                            .aria_label(format!("{} · {qconf}%", qreq.title))
-                            .w_full()
-                            .p(px(8.))
-                            .rounded(px(7.))
-                            .bg(p.card)
-                            .border_1()
-                            .border_color(p.line)
-                            .flex()
-                            .flex_col()
-                            .gap(px(5.))
-                            .cursor_pointer()
-                            .hover(move |s| s.border_color(qhov))
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .min_w_0()
-                                    .child(pro_icon(qreq.channel.icon(), 12., p.muted))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .truncate()
-                                            .child(qreq.title.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(10.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(acol)
-                                            .child(format!("{qconf}%")),
-                                    ),
-                            )
-                            .when(!qreq.tags.is_empty(), |d| d.child(tags_el)),
-                        cx,
-                        move |this, _, cx| {
-                            this.inspect_req_id = Some(qrid.clone());
-                            cx.emit(AgentRouterEvent::RequestSelected {
-                                request_id: qrid.clone(),
-                            });
-                            cx.notify();
-                        },
-                    ));
+                    queue_box = queue_box.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("qitem-{qrid}")),
+                            format!("{} · {qconf}%", qreq.title),
+                            7.,
+                            p.card,
+                            pro_mix_color(p.card, p.hover, 0.75),
+                            p.line,
+                            p.line_strong,
+                            self.inspect_req_id.as_ref() == Some(&qrid),
+                            div()
+                                .w_full()
+                                .p(px(8.))
+                                .flex()
+                                .flex_col()
+                                .gap(px(5.))
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .min_w_0()
+                                        .child(pro_icon(qreq.channel.icon(), 12., p.muted))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .text_size(px(12.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.strong)
+                                                .truncate()
+                                                .child(qreq.title.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(10.5))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(acol)
+                                                .child(format!("{qconf}%")),
+                                        ),
+                                )
+                                .when(!qreq.tags.is_empty(), |d| d.child(tags_el)),
+                            cx,
+                            move |this, _, cx| {
+                                this.inspect_req_id = Some(qrid.clone());
+                                this.last_inspect_req_id = Some(qrid.clone());
+                                cx.emit(AgentRouterEvent::RequestSelected {
+                                    request_id: qrid.clone(),
+                                });
+                                cx.notify();
+                            },
+                        )
+                        .w_full()
+                        .on_hover(cx.listener(
+                            move |this, inside: &bool, _, cx| {
+                                let next = if *inside { q_target.clone() } else { None };
+                                if this.hovered_req_target != next {
+                                    this.hovered_req_target = next;
+                                    cx.notify();
+                                }
+                            },
+                        )),
+                    );
                 }
             }
 
@@ -1804,7 +1964,7 @@ impl Render for AgentRouter {
                 div()
                     .when(wide, |d| d.flex_1().min_w_0())
                     .when(!wide, |d| d.w_full())
-                    .opacity(if dimmed { 0.38 } else { 1.0 })
+                    .opacity(col_op)
                     .flex()
                     .flex_col()
                     .gap(px(8.))
@@ -1844,6 +2004,29 @@ impl Render for AgentRouter {
         let pulse_orange = p.orange;
         let card_bg = p.card;
         let human_id = self.agents.iter().find(|a| a.human).map(|a| a.id.clone());
+        let human_spot = pro_spring_f32(
+            pro_eid(&self.id, "r-human-spt"),
+            if human_id
+                .as_ref()
+                .is_some_and(|hid| focus_target.as_ref() == Some(hid))
+            {
+                1.0
+            } else {
+                0.0
+            },
+            0.22,
+            w,
+            cx,
+        )
+        .clamp(0.0, 1.0);
+        let in_spot = pro_spring_f32(
+            pro_eid(&self.id, "r-in-spt"),
+            if focus_target.is_some() { 1.0 } else { 0.0 },
+            0.22,
+            w,
+            cx,
+        )
+        .clamp(0.0, 1.0);
 
         let connectors_canvas = canvas(
             |_, _, _| (),
@@ -1852,10 +2035,19 @@ impl Render for AgentRouter {
                 if let (Some(bi), Some(br)) = (incoming_sensor.get(), router_sensor.get()) {
                     let p0 = point((bi.left() + bi.right()) * 0.5, bi.bottom() + px(2.5));
                     let p1 = point((br.left() + br.right()) * 0.5, br.top() - px(2.5));
+                    let in_c = pro_mix_color(link_blue, pulse_blue, in_spot * 0.60);
                     pro_connector_pulse(
-                        p0, p1, 6.0, true, link_blue, pulse_blue, in_prog, 1.5, window,
+                        p0,
+                        p1,
+                        6.0,
+                        true,
+                        in_c,
+                        pulse_blue,
+                        in_prog,
+                        1.5 + 0.35 * in_spot,
+                        window,
                     );
-                    paint_ring_dot(p0, 3.0, card_bg, link_blue, 1.5, window);
+                    paint_ring_dot(p0, 3.0, card_bg, in_c, 1.5, window);
                 }
 
                 // 2) Router -> Specialist bottom S-bends + Router -> Human right fade line
@@ -1869,15 +2061,21 @@ impl Render for AgentRouter {
                         let prog = out_prog
                             .as_ref()
                             .and_then(|(tid, pr)| if tid == sid { Some(*pr) } else { None });
+                        let (vis, spot) = spec_link_weights.get(sid).copied().unwrap_or((1.0, 0.0));
+                        let base_alpha = if prog.is_some() {
+                            0.85
+                        } else {
+                            (0.45 * vis + 0.45 * spot).clamp(0.14, 0.92)
+                        };
                         pro_connector_pulse(
                             p0,
                             p1,
                             8.0,
                             true,
-                            link_blue.opacity(if prog.is_some() { 0.85 } else { 0.45 }),
+                            link_blue.opacity(base_alpha),
                             pulse_blue,
                             prog,
-                            1.5,
+                            1.5 + 0.45 * spot,
                             window,
                         );
                     }
@@ -1891,15 +2089,20 @@ impl Render for AgentRouter {
                         let hprog = out_prog
                             .as_ref()
                             .and_then(|(tid, pr)| if tid == hid { Some(*pr) } else { None });
+                        let h_alpha = (0.38 * human_op + 0.50 * human_spot).clamp(0.14, 0.90);
                         pro_connector_pulse(
                             hp0,
                             hp1,
                             6.0,
                             false,
-                            link_blue.opacity(0.38),
+                            pro_mix_color(
+                                link_blue.opacity(h_alpha),
+                                pulse_orange.opacity(0.88),
+                                human_spot * 0.70,
+                            ),
                             pulse_orange,
                             hprog,
-                            1.5,
+                            1.5 + 0.45 * human_spot,
                             window,
                         );
                         paint_ring_dot(hp0, 3.0, card_bg, link_blue, 1.5, window);
@@ -1910,10 +2113,14 @@ impl Render for AgentRouter {
         .absolute()
         .inset_0();
 
-        let open_modal = self.inspect_req_id.clone().and_then(|rid| {
-            let req = self.requests.iter().find(|r| r.id == rid)?;
-            Some(self.render_score_modal(req, &p, cx))
-        });
+        let open_modal = self
+            .inspect_req_id
+            .clone()
+            .or_else(|| self.last_inspect_req_id.clone())
+            .and_then(|rid| {
+                let req = self.requests.iter().find(|r| r.id == rid)?;
+                Some(self.render_score_modal(req, &p, cx))
+            });
 
         let sr_announce = self.sr_status.clone();
 

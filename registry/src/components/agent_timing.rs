@@ -8,15 +8,17 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_presence, pro_skeleton_bar, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_icon_btn,
+        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, tr,
     },
+    foundation::Theme,
     primitives::{
-        family::disabled_motion,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon},
+        family::{Slide, disabled_motion},
+        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells},
     },
 };
 use gpui::{prelude::*, *};
-use std::{collections::HashMap, f32::consts::TAU};
+use std::{cell::Cell, collections::HashMap, f32::consts::TAU, rc::Rc};
 use web_time::Instant;
 
 const ROW_H: f32 = 64.0;
@@ -507,6 +509,11 @@ pub struct AgentTiming {
     live: bool,
     replay_mode: bool,
     inspected: Option<TimingInspection>,
+    last_inspected: Option<TimingInspection>,
+    hovered_who: Option<SharedString>,
+    plot_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    scrubber_frac: Option<f32>,
+    scrubber_slide: Slide,
     started_at: Instant,
     loading: bool,
     empty: bool,
@@ -530,6 +537,11 @@ impl AgentTiming {
             live: true,
             replay_mode: false,
             inspected: None,
+            last_inspected: None,
+            hovered_who: None,
+            plot_bounds: Rc::new(Cell::new(None)),
+            scrubber_frac: None,
+            scrubber_slide: Slide::snappy(0.5),
             started_at: Instant::now(),
             loading: false,
             empty: false,
@@ -606,6 +618,9 @@ impl AgentTiming {
     /// Set or clear the inspected step/handoff readout card.
     pub fn set_inspected(&mut self, target: Option<TimingInspection>, cx: &mut Context<Self>) {
         if self.inspected != target {
+            if let Some(t) = target {
+                self.last_inspected = Some(t);
+            }
             self.inspected = target;
             cx.emit(AgentTimingEvent::Inspect(target));
             cx.notify();
@@ -626,7 +641,7 @@ impl AgentTiming {
 impl Render for AgentTiming {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let dur = self.duration_secs.max(1.0);
         let now_s = self.current_now_secs(reduced);
         let wall_ms = self.started_at.elapsed().as_secs_f32() * 1000.0;
@@ -686,12 +701,12 @@ impl Render for AgentTiming {
             .unwrap_or_else(|| tr(cx, "Agent timing", "智能体时序波形"))
             .into();
 
-        let handoff_word = if tr(cx, "en", "zh") == "zh" {
-            format!("{visible_handoffs_count} 次交接")
+        let handoff_unit = if tr(cx, "en", "zh") == "zh" {
+            "次交接"
         } else if visible_handoffs_count == 1 {
-            "1 hand-off".to_string()
+            "hand-off"
         } else {
-            format!("{visible_handoffs_count} hand-offs")
+            "hand-offs"
         };
 
         let header = div()
@@ -733,7 +748,23 @@ impl Render for AgentTiming {
                                 .child(tr(cx, "Waiting on you", "等待您确认")),
                         )
                     })
-                    .child(handoff_word)
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(px(4.))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "atg-ho-cnt"),
+                                visible_handoffs_count as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
+                            .child(handoff_unit),
+                    )
                     .child(
                         div()
                             .min_w(px(32.))
@@ -742,23 +773,17 @@ impl Render for AgentTiming {
                             .text_color(p.ink)
                             .child(format_secs_axis(now_s)),
                     )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "atg-replay"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Replay timing diagram", "重放时序图"))
-                            .size(px(22.))
-                            .rounded(px(5.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.hover))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.replay(cx);
-                            }))
-                            .child(pro_icon(ProIcon::Refresh, 12., p.muted)),
-                    ),
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "atg-replay"),
+                        tr(cx, "Replay timing diagram", "重放时序图"),
+                        ProIcon::Refresh,
+                        22.,
+                        false,
+                        cx,
+                        |this, _, cx| {
+                            this.replay(cx);
+                        },
+                    )),
             );
 
         if self.loading {
@@ -855,6 +880,69 @@ impl Render for AgentTiming {
             row_colors.push(col);
         }
 
+        let mut row_alphas: Vec<f32> = Vec::with_capacity(self.participants.len());
+        for part in &self.participants {
+            let row_dim = if let Some(hw) = &self.hovered_who {
+                hw != &part.id
+            } else if let Some(ins) = self.inspected {
+                match ins {
+                    TimingInspection::Segment(si) => {
+                        self.segments.get(si).is_some_and(|s| s.who != part.id)
+                    }
+                    TimingInspection::Handoff(hi) => self
+                        .handoffs
+                        .get(hi)
+                        .is_some_and(|h| h.from != part.id && h.to != part.id),
+                }
+            } else {
+                false
+            };
+            let ra = pro_spring_f32(
+                pro_eid(&self.id, format!("atg-row-a-{}", part.id)),
+                if row_dim { 0.34 } else { 1.0 },
+                0.20,
+                window,
+                cx,
+            );
+            row_alphas.push(ra);
+        }
+
+        let mut seg_alphas: Vec<f32> = Vec::with_capacity(self.segments.len());
+        for (s_idx, seg) in self.segments.iter().enumerate() {
+            let dim = if let Some(hw) = &self.hovered_who {
+                hw != &seg.who
+            } else {
+                self.inspected
+                    .is_some_and(|ins| ins != TimingInspection::Segment(s_idx))
+            };
+            let sa = pro_spring_f32(
+                pro_eid(&self.id, format!("atg-seg-a-{s_idx}")),
+                if dim { 0.30 } else { 1.0 },
+                0.20,
+                window,
+                cx,
+            );
+            seg_alphas.push(sa);
+        }
+
+        let mut ho_alphas: Vec<f32> = Vec::with_capacity(self.handoffs.len());
+        for (h_idx, ho) in self.handoffs.iter().enumerate() {
+            let dim = if let Some(hw) = &self.hovered_who {
+                hw != &ho.from && hw != &ho.to
+            } else {
+                self.inspected
+                    .is_some_and(|ins| ins != TimingInspection::Handoff(h_idx))
+            };
+            let ha = pro_spring_f32(
+                pro_eid(&self.id, format!("atg-ho-a-{h_idx}")),
+                if dim { 0.28 } else { 0.85 },
+                0.20,
+                window,
+                cx,
+            );
+            ho_alphas.push(ha);
+        }
+
         // Left participant column (`64px` per row: pixel mark + name + current live status!)
         let mut names_col = div()
             .w(px(GUTTER_W))
@@ -864,6 +952,7 @@ impl Render for AgentTiming {
             .flex_col();
         for (r_idx, part) in self.participants.iter().enumerate() {
             let pid = &part.id;
+            let pid_hov = pid.clone();
             let active_seg = self.segments.iter().rfind(|s| {
                 &s.who == pid && s.start <= now_s && s.end.is_none_or(|e| e > now_s - 0.01)
             });
@@ -887,8 +976,17 @@ impl Render for AgentTiming {
 
             names_col = names_col.child(
                 div()
+                    .id(pro_eid(&self.id, format!("atg-who-{pid}")))
                     .h(px(ROW_H))
                     .pt(px(15.))
+                    .opacity(row_alphas[r_idx])
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        let next = if *inside { Some(pid_hov.clone()) } else { None };
+                        if this.hovered_who != next {
+                            this.hovered_who = next;
+                            cx.notify();
+                        }
+                    }))
                     .flex()
                     .items_start()
                     .gap(px(8.))
@@ -922,14 +1020,30 @@ impl Render for AgentTiming {
             );
         }
 
-        // Prepare plot canvas data
+        // Prepare plot canvas data + Slide::snappy time-scrubber crosshair
+        let scrub_x = self.scrubber_slide.get(window, cx).clamp(0.0, 1.0);
+        let scrub_alpha = pro_spring_f32(
+            pro_eid(&self.id, "atg-scrub-a"),
+            if self.scrubber_frac.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            0.18,
+            window,
+            cx,
+        );
+        let scrub_line_c = p.ink.opacity(0.32);
+
         let num_rows = self.participants.len();
         let plot_h = (num_rows as f32) * ROW_H;
         let parts_snapshot = self.participants.clone();
         let segs_snapshot = self.segments.clone();
         let handoffs_snapshot = self.handoffs.clone();
         let row_colors_snap = row_colors.clone();
-        let inspected_snap = self.inspected;
+        let row_alphas_snap = row_alphas.clone();
+        let seg_alphas_snap = seg_alphas.clone();
+        let ho_alphas_snap = ho_alphas.clone();
         let pulse_phase = if reduced {
             0.0
         } else {
@@ -945,9 +1059,12 @@ impl Render for AgentTiming {
         } else {
             hsla(0., 0., 0., 0.10)
         };
+        let bounds_for_prepaint = self.plot_bounds.clone();
 
         let plot_canvas = canvas(
-            |_, _, _| (),
+            move |bounds, _, _| {
+                bounds_for_prepaint.set(Some(bounds));
+            },
             move |bounds, _, win, _| {
                 let pw = f32::from(bounds.size.width);
                 let ph = f32::from(bounds.size.height);
@@ -990,9 +1107,7 @@ impl Render for AgentTiming {
                     let Some(&r_idx) = r_lookup.get(seg.who.as_ref()) else {
                         continue;
                     };
-                    let dim =
-                        inspected_snap.is_some_and(|ins| ins != TimingInspection::Segment(s_idx));
-                    let alpha_mul = if dim { 0.30 } else { 1.0 };
+                    let alpha_mul = seg_alphas_snap.get(s_idx).copied().unwrap_or(1.0);
                     let s0 = seg.start.max(0.0);
                     let s1 = seg.end.unwrap_or(now_s).min(now_s);
                     let x0 = ox + (s0 / dur).clamp(0., 1.) * pw;
@@ -1055,15 +1170,8 @@ impl Render for AgentTiming {
                         .collect();
                     let row_top = (r_idx as f32) * ROW_H;
                     let wf_pts = build_row_waveform_points(&row_segs, now_s, dur, pw, row_top);
-                    let row_dim = inspected_snap.is_some_and(|ins| match ins {
-                        TimingInspection::Segment(si) => segs_snapshot[si].who != part.id,
-                        TimingInspection::Handoff(hi) => {
-                            handoffs_snapshot[hi].from != part.id
-                                && handoffs_snapshot[hi].to != part.id
-                        }
-                    });
-                    let stroke_c =
-                        row_colors_snap[r_idx].opacity(if row_dim { 0.30 } else { 0.92 });
+                    let row_a = row_alphas_snap.get(r_idx).copied().unwrap_or(1.0);
+                    let stroke_c = row_colors_snap[r_idx].opacity(0.92 * row_a);
                     if wf_pts.len() >= 2 {
                         let mut pb = PathBuilder::stroke(px(1.6));
                         for (i, &(x, y)) in wf_pts.iter().enumerate() {
@@ -1126,8 +1234,7 @@ impl Render for AgentTiming {
                     let Some(&r_to) = r_lookup.get(ho.to.as_ref()) else {
                         continue;
                     };
-                    let dim =
-                        inspected_snap.is_some_and(|ins| ins != TimingInspection::Handoff(h_idx));
+                    let ho_a = ho_alphas_snap.get(h_idx).copied().unwrap_or(0.72);
                     let draw_t = if reduced {
                         1.0
                     } else {
@@ -1137,7 +1244,7 @@ impl Render for AgentTiming {
                     let y0 = oy + (r_from as f32) * ROW_H + BASELINE_Y;
                     let y1_full = oy + (r_to as f32) * ROW_H + BASELINE_Y;
                     let y1 = y0 + (y1_full - y0) * draw_t;
-                    let hc = row_colors_snap[r_from].opacity(if dim { 0.25 } else { 0.72 });
+                    let hc = row_colors_snap[r_from].opacity(ho_a);
 
                     let dist = (y1 - y0).abs();
                     let dir = (y1 - y0).signum();
@@ -1159,14 +1266,25 @@ impl Render for AgentTiming {
                             point(px(hx), px(y1_full)),
                             2.6,
                             card_bg,
-                            row_colors_snap[r_from].opacity(if dim { 0.3 } else { 0.95 }),
+                            row_colors_snap[r_from].opacity((ho_a * 1.15).min(0.95)),
                             1.35,
                             win,
                         );
                     }
                 }
 
-                // 5) Vertical `"now"` line
+                // 5) Smooth `Slide::snappy` time-scrubber crosshair on hover
+                if scrub_alpha > 0.01 {
+                    let sx = ox + scrub_x * pw;
+                    let mut spb = PathBuilder::stroke(px(1.0));
+                    spb.move_to(point(px(sx), px(oy)));
+                    spb.line_to(point(px(sx), px(oy + ph + 4.0)));
+                    if let Ok(path) = spb.build() {
+                        win.paint_path(path, scrub_line_c.opacity(scrub_line_c.a * scrub_alpha));
+                    }
+                }
+
+                // 6) Vertical `"now"` line
                 let nx = ox + (now_s / dur).clamp(0., 1.) * pw;
                 let mut now_pb = PathBuilder::stroke(px(1.0));
                 now_pb.move_to(point(px(nx), px(oy)));
@@ -1179,6 +1297,7 @@ impl Render for AgentTiming {
         .absolute()
         .inset_0();
 
+        let bounds_for_move = self.plot_bounds.clone();
         let mut plot_box = div()
             .id(pro_eid(&self.id, "atg-plot"))
             .role(Role::Group)
@@ -1192,6 +1311,23 @@ impl Render for AgentTiming {
             .h(px(plot_h))
             .relative()
             .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_mouse_move(cx.listener(move |this, ev: &MouseMoveEvent, _, cx| {
+                if let Some(b) = bounds_for_move.get() {
+                    let bw = f32::from(b.size.width);
+                    if bw > 8.0 {
+                        let frac = ((f32::from(ev.position.x - b.left())) / bw).clamp(0.0, 1.0);
+                        this.scrubber_frac = Some(frac);
+                        this.scrubber_slide.set(frac, cx);
+                        cx.notify();
+                    }
+                }
+            }))
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if !*inside && this.scrubber_frac.is_some() {
+                    this.scrubber_frac = None;
+                    cx.notify();
+                }
+            }))
             .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _, cx| {
                 let vis_segs: Vec<usize> = this
                     .segments
@@ -1253,14 +1389,13 @@ impl Render for AgentTiming {
             };
             let s0 = seg.start.max(0.0);
             let s1 = seg.end.unwrap_or(now_s).min(now_s);
+            let seg_finished = seg.end.is_some_and(|e| e <= now_s);
             let left_f = (s0 / dur).clamp(0., 0.99);
             let width_f = ((s1 - s0).max(0.4) / dur).clamp(0.015, 1.0 - left_f);
             let step_h = seg.state.level_px();
             let top_px = (r_idx as f32) * ROW_H + BASELINE_Y - step_h;
             let row_c = row_colors[r_idx];
-            let dim = self
-                .inspected
-                .is_some_and(|ins| ins != TimingInspection::Segment(s_idx));
+            let seg_a = seg_alphas.get(s_idx).copied().unwrap_or(1.0);
 
             let inline_label: Option<String> = if width_f >= 0.085 {
                 match seg.state {
@@ -1293,7 +1428,7 @@ impl Render for AgentTiming {
                     .h(px(step_h))
                     .px(px(6.))
                     .pt(px(4.))
-                    .opacity(if dim { 0.32 } else { 1.0 })
+                    .opacity(seg_a)
                     .cursor_pointer()
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
@@ -1314,16 +1449,33 @@ impl Render for AgentTiming {
                     .when_some(inline_label, |d, lbl| {
                         d.child(
                             div()
-                                .truncate()
-                                .text_size(px(11.))
-                                .line_height(px(15.))
-                                .font_weight(if seg.state == TimingState::Thinking {
-                                    FontWeight::NORMAL
-                                } else {
-                                    FontWeight::MEDIUM
+                                .flex()
+                                .items_center()
+                                .gap(px(3.5))
+                                .min_w_0()
+                                .when(seg_finished && width_f >= 0.12, |row| {
+                                    row.child(pro_check_draw(
+                                        pro_eid(&self.id, format!("atg-seg-chk-{s_idx}")),
+                                        true,
+                                        12.0,
+                                        false,
+                                        p.green_ink,
+                                    ))
                                 })
-                                .text_color(lbl_color)
-                                .child(lbl),
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(11.))
+                                        .line_height(px(15.))
+                                        .font_weight(if seg.state == TimingState::Thinking {
+                                            FontWeight::NORMAL
+                                        } else {
+                                            FontWeight::MEDIUM
+                                        })
+                                        .text_color(lbl_color)
+                                        .child(lbl),
+                                ),
                         )
                     }),
             );
@@ -1364,164 +1516,170 @@ impl Render for AgentTiming {
             );
         }
 
-        // Hover / Keyboard Step & Handoff Readout Card (`ui-atgc__tip`)
-        let tip_data: Option<(String, String, Hsla, String, String, f32, usize)> =
-            match self.inspected {
-                Some(TimingInspection::Segment(si)) => self.segments.get(si).and_then(|seg| {
-                    let r_i = *row_of.get(seg.who.as_ref())?;
-                    let who_name = self.participants[r_i].display_name(cx).to_string();
-                    let badge = seg.state.badge_label(cx).to_string();
-                    let col = if seg.state == TimingState::Waiting {
-                        amber_c
-                    } else {
-                        row_colors[r_i]
-                    };
-                    let lbl = seg
-                        .display_label(cx)
-                        .unwrap_or_else(|| seg.state.badge_label(cx))
-                        .to_string();
-                    let end_v = seg.end.unwrap_or(now_s).min(now_s);
-                    let took = (end_v - seg.start).max(0.0);
-                    let meta = if seg.end.is_some_and(|e| e <= now_s) {
-                        format!(
-                            "{} – {} · {:.1}s",
-                            format_secs_axis(seg.start),
-                            format_secs_axis(end_v),
-                            took
-                        )
-                    } else {
-                        format!(
-                            "{} – {} · {:.1}s ({})",
-                            format_secs_axis(seg.start),
-                            tr(cx, "now", "此刻"),
-                            took,
-                            tr(cx, "running", "进行中")
-                        )
-                    };
-                    Some((
-                        who_name,
-                        badge,
-                        col,
-                        lbl,
-                        meta,
-                        (seg.start / dur).clamp(0., 1.),
-                        r_i,
-                    ))
-                }),
-                Some(TimingInspection::Handoff(hi)) => self.handoffs.get(hi).and_then(|ho| {
-                    let r_from = *row_of.get(ho.from.as_ref())?;
-                    let r_to = *row_of.get(ho.to.as_ref())?;
-                    let head = format!(
-                        "{} → {}",
-                        self.participants[r_from].display_name(cx),
-                        self.participants[r_to].display_name(cx)
-                    );
-                    let badge = tr(cx, "Hand-off", "交接").to_string();
-                    let lbl = ho
-                        .display_label(cx)
-                        .unwrap_or_else(|| tr(cx, "Context hand-off", "上下文交接"))
-                        .to_string();
-                    let meta = format!(
-                        "{} {}",
-                        tr(cx, "Sent at", "发送于"),
-                        format_secs_axis(ho.at)
-                    );
-                    Some((
-                        head,
-                        badge,
-                        row_colors[r_from],
-                        lbl,
-                        meta,
-                        (ho.at / dur).clamp(0., 1.),
-                        r_from.min(r_to),
-                    ))
-                }),
-                None => None,
-            };
-
-        let tip_el = pro_presence(
-            pro_eid(&self.id, "atg-tip"),
-            tip_data.is_some(),
-            0.15,
-            0.12,
-            move |amt| {
-                let Some((head_s, badge_s, col, body_s, meta_s, ux, r_i)) = tip_data.as_ref()
-                else {
-                    return div().into_any_element();
-                };
-                let align_right = *ux > 0.58;
-                let top_y = ((*r_i as f32) * ROW_H + 4.0).min(plot_h - 76.0).max(2.0);
-                let card = div()
-                    .min_w(px(184.))
-                    .max_w(px(264.))
-                    .px(px(11.))
-                    .py(px(9.))
-                    .rounded(px(10.))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .shadow_md()
-                    .opacity(amt)
-                    .flex()
-                    .flex_col()
-                    .gap(px(3.))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(head_s.clone()),
-                            )
-                            .child(
-                                div()
-                                    .ml_auto()
-                                    .h(px(18.))
-                                    .px(px(6.))
-                                    .flex_none()
-                                    .rounded(px(4.))
-                                    .bg(col.opacity(0.14))
-                                    .text_color(*col)
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .flex()
-                                    .items_center()
-                                    .child(badge_s.clone()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .text_color(p.text)
-                            .child(body_s.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(p.muted)
-                            .child(meta_s.clone()),
-                    );
-
-                let pos_wrap = div().absolute().top(px(top_y + 3. * (1. - amt)));
-                if align_right {
-                    pos_wrap.right(px(8.)).child(card).into_any_element()
+        // Hover / Keyboard Step & Handoff Readout Card (`pro_popover_presence`)
+        let tip_open = self.inspected.is_some();
+        let tip_target = self.inspected.or(self.last_inspected);
+        type TipTuple = (String, String, Hsla, String, String, f32, usize, bool);
+        let tip_data: Option<TipTuple> = match tip_target {
+            Some(TimingInspection::Segment(si)) => self.segments.get(si).and_then(|seg| {
+                let r_i = *row_of.get(seg.who.as_ref())?;
+                let who_name = self.participants[r_i].display_name(cx).to_string();
+                let badge = seg.state.badge_label(cx).to_string();
+                let col = if seg.state == TimingState::Waiting {
+                    amber_c
                 } else {
-                    pos_wrap
-                        .left(relative((*ux).clamp(0.02, 0.52)))
-                        .child(card)
-                        .into_any_element()
-                }
-            },
-        );
-        plot_box = plot_box.child(tip_el);
+                    row_colors[r_i]
+                };
+                let lbl = seg
+                    .display_label(cx)
+                    .unwrap_or_else(|| seg.state.badge_label(cx))
+                    .to_string();
+                let end_v = seg.end.unwrap_or(now_s).min(now_s);
+                let took = (end_v - seg.start).max(0.0);
+                let is_done_seg = seg.end.is_some_and(|e| e <= now_s);
+                let meta = if is_done_seg {
+                    format!(
+                        "{} – {} · {:.1}s",
+                        format_secs_axis(seg.start),
+                        format_secs_axis(end_v),
+                        took
+                    )
+                } else {
+                    format!(
+                        "{} – {} · {:.1}s ({})",
+                        format_secs_axis(seg.start),
+                        tr(cx, "now", "此刻"),
+                        took,
+                        tr(cx, "running", "进行中")
+                    )
+                };
+                Some((
+                    who_name,
+                    badge,
+                    col,
+                    lbl,
+                    meta,
+                    (seg.start / dur).clamp(0., 1.),
+                    r_i,
+                    is_done_seg,
+                ))
+            }),
+            Some(TimingInspection::Handoff(hi)) => self.handoffs.get(hi).and_then(|ho| {
+                let r_from = *row_of.get(ho.from.as_ref())?;
+                let r_to = *row_of.get(ho.to.as_ref())?;
+                let head = format!(
+                    "{} → {}",
+                    self.participants[r_from].display_name(cx),
+                    self.participants[r_to].display_name(cx)
+                );
+                let badge = tr(cx, "Hand-off", "交接").to_string();
+                let lbl = ho
+                    .display_label(cx)
+                    .unwrap_or_else(|| tr(cx, "Context hand-off", "上下文交接"))
+                    .to_string();
+                let meta = format!(
+                    "{} {}",
+                    tr(cx, "Sent at", "发送于"),
+                    format_secs_axis(ho.at)
+                );
+                Some((
+                    head,
+                    badge,
+                    row_colors[r_from],
+                    lbl,
+                    meta,
+                    (ho.at / dur).clamp(0., 1.),
+                    r_from.min(r_to),
+                    true,
+                ))
+            }),
+            None => None,
+        };
 
-        // Bottom X-axis (`0:00`, `0:10`, `0:20`, `0:30`, `0:40` + live blue `"now"` pill!)
+        if let Some((head_s, badge_s, col, body_s, meta_s, ux, r_i, show_done_chk)) = tip_data {
+            let align_right = ux > 0.58;
+            let top_y = ((r_i as f32) * ROW_H + 4.0).min(plot_h - 76.0).max(2.0);
+            let smooth_ux = pro_spring_f32(
+                pro_eid(&self.id, "atg-tip-ux"),
+                ux.clamp(0.02, 0.52),
+                0.20,
+                window,
+                cx,
+            );
+            let smooth_top =
+                pro_spring_f32(pro_eid(&self.id, "atg-tip-top"), top_y, 0.20, window, cx);
+            let chk_id = pro_eid(&self.id, "atg-tip-chk");
+            let card = div()
+                .min_w(px(184.))
+                .max_w(px(264.))
+                .px(px(11.))
+                .py(px(9.))
+                .rounded(px(10.))
+                .bg(card_bg)
+                .border_1()
+                .border_color(p.line_strong)
+                .shadow_md()
+                .flex()
+                .flex_col()
+                .gap(px(3.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(head_s),
+                        )
+                        .child(
+                            div()
+                                .ml_auto()
+                                .h(px(18.))
+                                .px(px(6.))
+                                .flex_none()
+                                .rounded(px(4.))
+                                .bg(col.opacity(0.14))
+                                .text_color(col)
+                                .text_size(px(11.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .when(show_done_chk, |d| {
+                                    d.child(pro_check_draw(chk_id, true, 12.0, false, col))
+                                })
+                                .child(badge_s),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .line_height(px(16.))
+                        .text_color(p.text)
+                        .child(body_s),
+                )
+                .child(div().text_size(px(11.5)).text_color(p.muted).child(meta_s))
+                .into_any_element();
+            let mut cell = Some(card);
+            let pop_inner =
+                pro_popover_presence(pro_eid(&self.id, "atg-tip"), tip_open, move || {
+                    cell.take().unwrap_or_else(|| div().into_any_element())
+                });
+            let pos_wrap = div().absolute().top(px(smooth_top));
+            plot_box = plot_box.child(if align_right {
+                pos_wrap.right(px(8.)).child(pop_inner)
+            } else {
+                pos_wrap
+                    .left(relative(smooth_ux.clamp(0.02, 0.52)))
+                    .child(pop_inner)
+            });
+        }
+
+        // Bottom X-axis (`0:00`, `0:10`, `0:20`, `0:30`, `0:40` + live blue `"now"` pill + scrubber pill!)
         let now_frac = (now_s / dur).clamp(0., 1.);
         let mut x_axis = div().w_full().h(px(AXIS_H)).relative();
         for step in 0..=4usize {
@@ -1564,6 +1722,28 @@ impl Render for AgentTiming {
                 .items_center()
                 .child(format_secs_axis(now_s)),
         );
+        if scrub_alpha > 0.01 {
+            x_axis = x_axis.child(
+                div()
+                    .absolute()
+                    .top(px(4.))
+                    .left(relative(scrub_x.clamp(0.03, 0.94)))
+                    .ml(px(-16.))
+                    .h(px(18.))
+                    .px(px(6.))
+                    .rounded(px(5.))
+                    .bg(card_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .opacity(scrub_alpha)
+                    .text_color(p.ink)
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .flex()
+                    .items_center()
+                    .child(format_secs_axis(scrub_x * dur)),
+            );
+        }
 
         let right_col = div()
             .flex_1()

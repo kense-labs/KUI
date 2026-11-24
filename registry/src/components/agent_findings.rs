@@ -6,12 +6,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_rolling_number, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, tr,
+        ProPalette, pro_agent_avatar, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_icon_btn, pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
-        family::{PhaseClock, disabled_motion},
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -308,21 +309,23 @@ struct SlidingFindingRow {
 
 impl RenderOnce for SlidingFindingRow {
     fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let st = w.use_keyed_state(pro_eid(&self.id, "fslide"), cx, |_, inner_cx| {
-            let mut clock = PhaseClock::default();
-            clock.restart(inner_cx);
-            clock
+            let mut s = Slide::new(if reduced { 1.0 } else { 0.0 });
+            s.duration(1.0, 0.34, inner_cx);
+            s
         });
-        let t = st.update(cx, |clock, cx| {
-            let age = clock.time(0.36, w, cx);
-            pro_ease((age / 0.36).clamp(0.0, 1.0))
-        });
+        let t = if reduced {
+            1.0
+        } else {
+            st.update(cx, |s, cx| s.get(w, cx).clamp(0.0, 1.0))
+        };
         let dy = -10.0 * (1.0 - t);
         div()
             .w_full()
             .relative()
             .top(px(dy))
-            .opacity(0.25 + 0.75 * t)
+            .opacity(0.22 + 0.78 * t)
             .child(self.content)
     }
 }
@@ -801,110 +804,132 @@ impl Render for AgentFindings {
             };
 
             let name_txt = ag.display_name(cx).to_string();
-            let step_txt = if status == FindingAgentStatus::Done {
+            let is_done = status == FindingAgentStatus::Done;
+            let step_txt = if is_done {
                 tr(cx, "All checks passed", "全部检查已完成").to_string()
             } else {
                 ag.display_step(cx).to_string()
             };
-            let hover_bg = p.hover;
+            let dim_alpha = pro_spring_f32(
+                pro_eid(&self.id, format!("ag-dim-{aid}")),
+                if dimmed { 0.50 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
 
             agents_list = agents_list.child(
-                div()
-                    .id(pro_eid(&self.id, format!("agent-{aid}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{name_txt} – {step_txt}"))
-                    .aria_toggled(selected.into())
-                    .tab_index(0)
-                    .h(px(48.0))
-                    .px(px(10.0))
-                    .rounded(px(8.0))
-                    .when(selected, |d| d.bg(p.select))
-                    .opacity(if dimmed { 0.50 } else { 1.0 })
-                    .hover(move |s| s.bg(hover_bg).opacity(if dimmed { 0.82 } else { 1.0 }))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(12.0))
-                    .on_key_down(cx.listener({
+                div().w_full().opacity(dim_alpha).child(pro_tactile(
+                    pro_eid(&self.id, format!("agent-{aid}")),
+                    format!("{name_txt} – {step_txt}"),
+                    8.0,
+                    if selected {
+                        p.select
+                    } else {
+                        transparent_black()
+                    },
+                    p.hover,
+                    if selected {
+                        p.line_strong
+                    } else {
+                        transparent_black()
+                    },
+                    p.line_strong,
+                    selected,
+                    div()
+                        .w_full()
+                        .h(px(48.0))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(12.0))
+                        .child(avatar)
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap(px(1.5))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .child(
+                                            div()
+                                                .truncate()
+                                                .text_size(px(13.0))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.ink)
+                                                .child(name_txt),
+                                        )
+                                        .when(is_done, |d| {
+                                            d.child(pro_check_draw(
+                                                pro_eid(&self.id, format!("ag-chk-{aid}")),
+                                                true,
+                                                13.5,
+                                                false,
+                                                p.green,
+                                            ))
+                                        }),
+                                )
+                                .child(div().truncate().child(pro_swap_label(
+                                    pro_eid(&self.id, format!("ag-step-{aid}")),
+                                    step_txt,
+                                    12.0,
+                                    FontWeight::NORMAL,
+                                    if is_done { p.green_ink } else { p.muted },
+                                ))),
+                        )
+                        .child(div().w(px(124.0)).flex_none().child(pro_spring_bar(
+                            pro_eid(&self.id, format!("bar-{aid}")),
+                            ratio,
+                            6.0,
+                            3.0,
+                            p.chip_hover,
+                            fill_col,
+                        )))
+                        .child(
+                            div()
+                                .w(px(46.0))
+                                .flex_none()
+                                .text_size(px(12.0))
+                                .text_color(p.muted)
+                                .text_right()
+                                .child(format!("{} / {}", ag.done, ag.total)),
+                        )
+                        .child(
+                            div()
+                                .w(px(62.0))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .gap(px(9.0))
+                                .child(agent_found_pill(
+                                    CRIT_GRID_SVG,
+                                    ag_crit,
+                                    p.red_ink,
+                                    p.faint,
+                                    p.muted,
+                                ))
+                                .child(agent_found_pill(
+                                    WARN_GRID_SVG,
+                                    ag_warn,
+                                    p.amber_ink,
+                                    p.faint,
+                                    p.muted,
+                                )),
+                        ),
+                    cx,
+                    {
                         let aid = aid.clone();
-                        move |this, ev: &KeyDownEvent, _, cx| {
-                            if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                                this.toggle_filter(aid.as_ref(), cx);
-                                cx.stop_propagation();
-                            }
-                        }
-                    }))
-                    .on_click(cx.listener({
-                        let aid = aid.clone();
-                        move |this, _, _, cx| {
+                        move |this, _, cx| {
                             this.toggle_filter(aid.as_ref(), cx);
                         }
-                    }))
-                    .child(avatar)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap(px(1.5))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(name_txt),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(12.0))
-                                    .text_color(p.muted)
-                                    .child(step_txt),
-                            ),
-                    )
-                    .child(div().w(px(124.0)).flex_none().child(pro_spring_bar(
-                        pro_eid(&self.id, format!("bar-{aid}")),
-                        ratio,
-                        6.0,
-                        3.0,
-                        p.chip_hover,
-                        fill_col,
-                    )))
-                    .child(
-                        div()
-                            .w(px(46.0))
-                            .flex_none()
-                            .text_size(px(12.0))
-                            .text_color(p.muted)
-                            .text_right()
-                            .child(format!("{} / {}", ag.done, ag.total)),
-                    )
-                    .child(
-                        div()
-                            .w(px(62.0))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap(px(9.0))
-                            .child(agent_found_pill(
-                                CRIT_GRID_SVG,
-                                ag_crit,
-                                p.red_ink,
-                                p.faint,
-                                p.muted,
-                            ))
-                            .child(agent_found_pill(
-                                WARN_GRID_SVG,
-                                ag_warn,
-                                p.amber_ink,
-                                p.faint,
-                                p.muted,
-                            )),
-                    ),
+                    },
+                )),
             );
         }
 
@@ -915,6 +940,99 @@ impl Render for AgentFindings {
                 .find(|a| &a.id == fid)
                 .map(|a| a.display_name(cx).to_string())
         });
+        let has_filter_chip = active_filter_name.is_some();
+        let clear_lbl = format!(
+            "{} {}",
+            tr(cx, "Clear filter", "清除筛选"),
+            active_filter_name.as_deref().unwrap_or("")
+        );
+        let clear_chip_btn = pro_tactile(
+            pro_eid(&self.id, "clear-filter-chip"),
+            clear_lbl,
+            6.0,
+            p.chip,
+            p.chip_hover,
+            transparent_black(),
+            p.line,
+            false,
+            div()
+                .h(px(20.0))
+                .pl(px(8.0))
+                .pr(px(6.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .text_size(px(11.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.ink)
+                .child(active_filter_name.unwrap_or_default())
+                .child(pro_icon(ProIcon::Close, 11.0, p.muted)),
+            cx,
+            |this, _, cx| {
+                this.filter_agent = None;
+                cx.emit(AgentFindingsEvent::FilterAgent(None));
+                cx.notify();
+            },
+        )
+        .w_auto();
+        let filter_chip_pres = pro_presence(
+            pro_eid(&self.id, "flt-chip-pres"),
+            has_filter_chip,
+            0.18,
+            0.14,
+            {
+                let mut chip_opt = Some(clear_chip_btn);
+                move |amt| {
+                    div()
+                        .opacity(amt)
+                        .children(chip_opt.take())
+                        .into_any_element()
+                }
+            },
+        );
+
+        let show_next_btn = any_running && !self.pending_findings.is_empty();
+        let next_btn = pro_tactile(
+            pro_eid(&self.id, "step-next-btn"),
+            tr(cx, "Advance check", "推进检查"),
+            5.0,
+            p.chip,
+            p.chip_hover,
+            transparent_black(),
+            p.line,
+            false,
+            div()
+                .h(px(22.0))
+                .px(px(8.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .text_size(px(11.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.ink)
+                .child(pro_icon(ProIcon::Bolt, 11.5, p.accent_info))
+                .child(tr(cx, "Next check", "下一步")),
+            cx,
+            |this, _, cx| {
+                this.step_swarm(cx);
+            },
+        )
+        .w_auto();
+        let next_btn_pres = pro_presence(
+            pro_eid(&self.id, "next-btn-pres"),
+            show_next_btn,
+            0.18,
+            0.14,
+            {
+                let mut btn_opt = Some(next_btn);
+                move |amt| {
+                    div()
+                        .opacity(amt)
+                        .children(btn_opt.take())
+                        .into_any_element()
+                }
+            },
+        );
 
         let feed_head = div()
             .h(px(40.0))
@@ -938,65 +1056,9 @@ impl Render for AgentFindings {
                             .text_color(p.muted)
                             .child(tr(cx, "LATEST FINDINGS", "最新发现")),
                     )
-                    .when_some(active_filter_name, |row, fname| {
-                        row.child(
-                            div()
-                                .id(pro_eid(&self.id, "clear-filter-chip"))
-                                .role(Role::Button)
-                                .aria_label(format!(
-                                    "{} {fname}",
-                                    tr(cx, "Clear filter", "清除筛选")
-                                ))
-                                .tab_index(0)
-                                .h(px(20.0))
-                                .pl(px(8.0))
-                                .pr(px(6.0))
-                                .rounded(px(6.0))
-                                .bg(p.chip)
-                                .hover(move |s| s.bg(p.chip_hover))
-                                .cursor_pointer()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.filter_agent = None;
-                                    cx.emit(AgentFindingsEvent::FilterAgent(None));
-                                    cx.notify();
-                                }))
-                                .child(fname)
-                                .child(pro_icon(ProIcon::Close, 11.0, p.muted)),
-                        )
-                    }),
+                    .child(filter_chip_pres),
             )
-            .when(any_running && !self.pending_findings.is_empty(), |bar| {
-                bar.child(
-                    div()
-                        .id(pro_eid(&self.id, "step-next-btn"))
-                        .role(Role::Button)
-                        .aria_label(tr(cx, "Advance check", "推进检查"))
-                        .tab_index(0)
-                        .h(px(22.0))
-                        .px(px(8.0))
-                        .rounded(px(5.0))
-                        .bg(p.chip)
-                        .hover(move |s| s.bg(p.chip_hover))
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.0))
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.step_swarm(cx);
-                        }))
-                        .child(pro_icon(ProIcon::Bolt, 11.5, p.accent_info))
-                        .child(tr(cx, "Next check", "下一步")),
-                )
-            });
+            .child(next_btn_pres);
 
         // Filtered visible findings
         let zh_mode = tr(cx, "en", "zh") == "zh";
@@ -1057,45 +1119,76 @@ impl Render for AgentFindings {
                     .map(|a| a.display_name(cx).to_string())
                     .unwrap_or_else(|| f.agent_id.to_string());
                 let time_lbl = format_relative_age(f.age_secs, zh_mode);
-                let hover_bg = p.hover;
                 let detail_opt = f.display_detail(cx).map(SharedString::from);
                 let f_for_click = f.clone();
-                let f_for_key = f.clone();
 
-                let row_btn = div()
-                    .id(pro_eid(&self.id, format!("finding-{fid}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{sev_lbl}: {f_title} ({ag_name})"))
-                    .aria_expanded(is_open)
-                    .tab_index(0)
-                    .h(px(40.0))
-                    .px(px(10.0))
-                    .rounded(px(8.0))
-                    .when(is_open, |d| d.bg(p.select))
-                    .hover(move |s| s.bg(hover_bg))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.0))
-                    .on_key_down(cx.listener({
+                let row_btn = pro_tactile(
+                    pro_eid(&self.id, format!("finding-{fid}")),
+                    format!("{sev_lbl}: {f_title} ({ag_name})"),
+                    8.0,
+                    if is_open {
+                        p.select
+                    } else {
+                        transparent_black()
+                    },
+                    p.hover,
+                    if is_open {
+                        p.line_strong
+                    } else {
+                        transparent_black()
+                    },
+                    p.line,
+                    is_open,
+                    div()
+                        .w_full()
+                        .h(px(40.0))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(10.0))
+                        .child(pro_svg("0 0 10 10", f.severity.svg(), 10.0, sev_col))
+                        .child(
+                            div()
+                                .flex_none()
+                                .max_w(px(270.0))
+                                .truncate()
+                                .text_size(px(13.0))
+                                .text_color(p.ink)
+                                .child(f_title),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .text_size(px(12.0))
+                                .text_color(p.muted)
+                                .child(div().truncate().child(ag_name))
+                                .when_some(f.location.clone(), |meta, loc| {
+                                    meta.child(div().text_color(p.faint).child("·")).child(
+                                        div()
+                                            .truncate()
+                                            .text_size(px(11.5))
+                                            .text_color(p.muted)
+                                            .child(loc),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .w(px(34.0))
+                                .flex_none()
+                                .text_size(px(12.0))
+                                .text_color(p.faint)
+                                .text_right()
+                                .child(time_lbl),
+                        ),
+                    cx,
+                    {
                         let fid = fid.clone();
-                        move |this, ev: &KeyDownEvent, _, cx| {
-                            if matches!(ev.keystroke.key.as_str(), "enter" | "space" | " ") {
-                                if this.selected_finding.as_ref() == Some(&fid) {
-                                    this.selected_finding = None;
-                                } else {
-                                    this.selected_finding = Some(fid.clone());
-                                }
-                                cx.emit(AgentFindingsEvent::OpenFinding(f_for_key.clone()));
-                                cx.stop_propagation();
-                                cx.notify();
-                            }
-                        }
-                    }))
-                    .on_click(cx.listener({
-                        let fid = fid.clone();
-                        move |this, _, _, cx| {
+                        move |this, _, cx| {
                             if this.selected_finding.as_ref() == Some(&fid) {
                                 this.selected_finding = None;
                             } else {
@@ -1104,46 +1197,8 @@ impl Render for AgentFindings {
                             cx.emit(AgentFindingsEvent::OpenFinding(f_for_click.clone()));
                             cx.notify();
                         }
-                    }))
-                    .child(pro_svg("0 0 10 10", f.severity.svg(), 10.0, sev_col))
-                    .child(
-                        div()
-                            .flex_none()
-                            .max_w(px(270.0))
-                            .truncate()
-                            .text_size(px(13.0))
-                            .text_color(p.ink)
-                            .child(f_title),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.0))
-                            .text_size(px(12.0))
-                            .text_color(p.muted)
-                            .child(div().truncate().child(ag_name))
-                            .when_some(f.location.clone(), |meta, loc| {
-                                meta.child(div().text_color(p.faint).child("·")).child(
-                                    div()
-                                        .truncate()
-                                        .text_size(px(11.5))
-                                        .text_color(p.muted)
-                                        .child(loc),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .w(px(34.0))
-                            .flex_none()
-                            .text_size(px(12.0))
-                            .text_color(p.faint)
-                            .text_right()
-                            .child(time_lbl),
-                    );
+                    },
+                );
 
                 let detail_fold = pro_fold(
                     pro_eid(&self.id, format!("fdet-{fid}")),

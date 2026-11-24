@@ -6,15 +6,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_switch,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::{UiLanguage, activate},
-        family::{PhaseClock, disabled_motion},
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        family::{PhaseClock, Slide, disabled_motion},
+        pro_icons::{ProIcon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -296,31 +297,58 @@ fn format_metric_point(val: f64, metric: DashboardMetric, currency: &str) -> Str
     }
 }
 
+struct GroupedRollState {
+    val: Slide,
+    nudge: Slide,
+    last_target: f64,
+}
+
 #[derive(IntoElement)]
 struct GroupedRollingReadout {
     id: ElementId,
     target: f64,
     prefix: SharedString,
     font_size: f32,
+    weight: FontWeight,
     color: Hsla,
 }
 
 impl RenderOnce for GroupedRollingReadout {
     fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
-        let v = pro_spring_f32(
-            pro_eid(&self.id, "grp-roll"),
-            self.target as f32,
-            0.30,
-            w,
-            cx,
+        let init_t = self.target;
+        let st = w.use_keyed_state(pro_eid(&self.id, "grp-roll"), cx, |_, _| GroupedRollState {
+            val: Slide::new(init_t as f32),
+            nudge: Slide::snappy(0.),
+            last_target: init_t,
+        });
+        let (shown, dy) = st.update(cx, |s, cx| {
+            if (s.last_target - self.target).abs() > 0.4 {
+                let dir = if self.target >= s.last_target {
+                    1.
+                } else {
+                    -1.
+                };
+                s.last_target = self.target;
+                s.val.duration(self.target as f32, 0.30, cx);
+                s.nudge.reset(dir * 3.5);
+                s.nudge.set(0., cx);
+            }
+            (s.val.get(w, cx).max(0.0) as f64, s.nudge.get(w, cx))
+        });
+        let text = format!(
+            "{}{}",
+            self.prefix,
+            format_grouped_u64(shown.round() as u64)
+        );
+        div().overflow_hidden().child(
+            div()
+                .relative()
+                .top(px(dy))
+                .text_size(px(self.font_size))
+                .font_weight(self.weight)
+                .text_color(self.color)
+                .child(text),
         )
-        .max(0.0) as f64;
-        let text = format!("{}{}", self.prefix, format_grouped_u64(v.round() as u64));
-        div()
-            .text_size(px(self.font_size))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(self.color)
-            .child(text)
     }
 }
 
@@ -348,6 +376,17 @@ fn resample_vec(src: &[f32], len: usize) -> Vec<f32> {
         .collect()
 }
 
+fn sample_series(vals: &[f32], pos: f32) -> f32 {
+    if vals.is_empty() {
+        return 0.;
+    }
+    let clamped = pos.clamp(0., (vals.len() - 1) as f32);
+    let i0 = (clamped.floor() as usize).min(vals.len() - 1);
+    let i1 = (i0 + 1).min(vals.len() - 1);
+    let frac = clamped - i0 as f32;
+    vals[i0] + (vals[i1] - vals[i0]) * frac
+}
+
 struct DashboardPlotAnim {
     from_cur: Vec<f32>,
     to_cur: Vec<f32>,
@@ -355,6 +394,9 @@ struct DashboardPlotAnim {
     to_prev: Vec<f32>,
     morph_clock: PhaseClock,
     mount_clock: PhaseClock,
+    scrub_pos: Slide,
+    scrub_alpha: Slide,
+    was_scrubbing: bool,
 }
 
 #[derive(IntoElement)]
@@ -387,11 +429,15 @@ impl RenderOnce for DashboardTrendCanvas {
                 to_prev: ip,
                 morph_clock: PhaseClock::default(),
                 mount_clock,
+                scrub_pos: Slide::snappy(0.),
+                scrub_alpha: Slide::snappy(0.),
+                was_scrubbing: false,
             }
         });
 
         let reduced = disabled_motion(cx);
-        let (cur_vals, prev_vals, reveal) = st.update(cx, |s, cx| {
+        let valid_hover = self.hover_idx.filter(|&i| i < self.current.len());
+        let (cur_vals, prev_vals, reveal, scrub_pos, scrub_alpha) = st.update(cx, |s, cx| {
             let age = s.morph_clock.time(0.30, w, cx);
             let ct = pro_ease((age / 0.30).clamp(0., 1.));
             if s.to_cur != self.current || s.to_prev != self.previous {
@@ -446,7 +492,22 @@ impl RenderOnce for DashboardTrendCanvas {
             } else {
                 pro_ease((mage / 0.55).clamp(0., 1.))
             };
-            (cv, pv, rev)
+
+            if let Some(hi) = valid_hover {
+                if !s.was_scrubbing && s.scrub_alpha.value(cx) < 0.08 {
+                    s.scrub_pos.reset(hi as f32);
+                } else {
+                    s.scrub_pos.set(hi as f32, cx);
+                }
+                s.scrub_alpha.set(1., cx);
+                s.was_scrubbing = true;
+            } else {
+                s.scrub_alpha.set(0., cx);
+                s.was_scrubbing = false;
+            }
+            let sp = s.scrub_pos.get(w, cx);
+            let sa = s.scrub_alpha.get(w, cx).clamp(0., 1.);
+            (cv, pv, rev, sp, sa)
         });
 
         let kind = self.kind;
@@ -456,7 +517,6 @@ impl RenderOnce for DashboardTrendCanvas {
         let card_bg = self.card_bg;
         let grid_color = self.grid_color;
         let guide_color = self.guide_color;
-        let hover_idx = self.hover_idx;
 
         canvas(
             |_, _, _| (),
@@ -501,6 +561,10 @@ impl RenderOnce for DashboardTrendCanvas {
                         }
                         let x_of = |idx: usize, count: usize| -> Pixels {
                             let tx = idx as f32 / count.saturating_sub(1).max(1) as f32;
+                            bounds.left() + px(tx * bw)
+                        };
+                        let x_of_pos = |pos: f32, count: usize| -> Pixels {
+                            let tx = (pos / count.saturating_sub(1).max(1) as f32).clamp(0., 1.);
                             bounds.left() + px(tx * bw)
                         };
 
@@ -563,26 +627,35 @@ impl RenderOnce for DashboardTrendCanvas {
                             window.paint_path(path, accent);
                         }
 
-                        if let Some(hi) = hover_idx.filter(|&i| i < n) {
-                            let hx = x_of(hi, n);
-                            let hy = y_of(cur_vals[hi]);
+                        if scrub_alpha > 0.01 {
+                            let hx = x_of_pos(scrub_pos, n);
+                            let hy = y_of(sample_series(&cur_vals, scrub_pos));
                             let mut guide = PathBuilder::stroke(px(1.));
                             guide.move_to(point(hx, bounds.top() + px(pad_top)));
                             guide.line_to(point(hx, floor_y));
                             if let Ok(path) = guide.build() {
-                                window.paint_path(path, guide_color);
+                                window.paint_path(
+                                    path,
+                                    guide_color.opacity(guide_color.a * scrub_alpha),
+                                );
                             }
-                            if show_compare && hi < prev_vals.len() {
-                                let py = y_of(prev_vals[hi]);
-                                let ro = px(4.5);
-                                let ri = px(3.0);
+                            let scale = 0.78 + 0.22 * scrub_alpha;
+                            if show_compare && !prev_vals.is_empty() {
+                                let prev_pos = if n > 1 && prev_vals.len() > 1 {
+                                    (scrub_pos / (n - 1) as f32) * (prev_vals.len() - 1) as f32
+                                } else {
+                                    0.
+                                };
+                                let py = y_of(sample_series(&prev_vals, prev_pos));
+                                let ro = px(4.5 * scale);
+                                let ri = px(3.0 * scale);
                                 window.paint_quad(
                                     fill(
                                         Bounds::new(
                                             point(hx, py) - point(ro, ro),
                                             size(ro * 2., ro * 2.),
                                         ),
-                                        card_bg,
+                                        card_bg.opacity(scrub_alpha),
                                     )
                                     .corner_radii(ro),
                                 );
@@ -592,20 +665,20 @@ impl RenderOnce for DashboardTrendCanvas {
                                             point(hx, py) - point(ri, ri),
                                             size(ri * 2., ri * 2.),
                                         ),
-                                        accent.opacity(0.5),
+                                        accent.opacity(0.5 * scrub_alpha),
                                     )
                                     .corner_radii(ri),
                                 );
                             }
-                            let ro = px(5.5);
-                            let ri = px(3.75);
+                            let ro = px(5.5 * scale);
+                            let ri = px(3.75 * scale);
                             window.paint_quad(
                                 fill(
                                     Bounds::new(
                                         point(hx, hy) - point(ro, ro),
                                         size(ro * 2., ro * 2.),
                                     ),
-                                    card_bg,
+                                    card_bg.opacity(scrub_alpha),
                                 )
                                 .corner_radii(ro),
                             );
@@ -615,7 +688,7 @@ impl RenderOnce for DashboardTrendCanvas {
                                         point(hx, hy) - point(ri, ri),
                                         size(ri * 2., ri * 2.),
                                     ),
-                                    accent,
+                                    accent.opacity(scrub_alpha),
                                 )
                                 .corner_radii(ri),
                             );
@@ -626,9 +699,24 @@ impl RenderOnce for DashboardTrendCanvas {
                         let gap = (slot_w * 0.24).clamp(2.0, 6.0);
                         let group_w = (slot_w - gap).max(2.0);
 
+                        if scrub_alpha > 0.01 {
+                            let gx = bounds.left()
+                                + px((scrub_pos.clamp(0., (n - 1) as f32) + 0.5) * slot_w);
+                            let mut guide = PathBuilder::stroke(px(1.));
+                            guide.move_to(point(gx, bounds.top() + px(pad_top)));
+                            guide.line_to(point(gx, floor_y));
+                            if let Ok(path) = guide.build() {
+                                window.paint_path(
+                                    path,
+                                    guide_color.opacity(guide_color.a * 0.65 * scrub_alpha),
+                                );
+                            }
+                        }
+
                         for (i, &v) in cur_vals.iter().enumerate() {
                             let slot_x = bounds.left() + px(i as f32 * slot_w + gap * 0.5);
-                            let dimmed = hover_idx.is_some_and(|hi| hi != i);
+                            let dist = (i as f32 - scrub_pos).abs().min(1.0);
+                            let dim_mix = scrub_alpha * dist;
                             let cur_h = ((v / y_max).clamp(0.0, 1.0) * plot_h * reveal).max(1.5);
 
                             if show_compare && i < prev_vals.len() {
@@ -640,28 +728,24 @@ impl RenderOnce for DashboardTrendCanvas {
                                     point(slot_x, floor_y - px(prev_h)),
                                     size(px(sub_w), px(prev_h)),
                                 );
+                                let prev_op = 0.32 + (0.14 - 0.32) * dim_mix;
+                                let cur_op = 0.90 + (0.40 - 0.90) * dim_mix;
                                 window.paint_quad(
-                                    fill(
-                                        prev_rect,
-                                        accent.opacity(if dimmed { 0.14 } else { 0.32 }),
-                                    )
-                                    .corner_radii(Corners {
-                                        top_left: px(3.),
-                                        top_right: px(3.),
-                                        bottom_left: px(1.),
-                                        bottom_right: px(1.),
-                                    }),
+                                    fill(prev_rect, accent.opacity(prev_op)).corner_radii(
+                                        Corners {
+                                            top_left: px(3.),
+                                            top_right: px(3.),
+                                            bottom_left: px(1.),
+                                            bottom_right: px(1.),
+                                        },
+                                    ),
                                 );
                                 let cur_rect = Bounds::new(
                                     point(slot_x + px(sub_w + 2.0), floor_y - px(cur_h)),
                                     size(px(sub_w), px(cur_h)),
                                 );
                                 window.paint_quad(
-                                    fill(
-                                        cur_rect,
-                                        accent.opacity(if dimmed { 0.40 } else { 0.88 }),
-                                    )
-                                    .corner_radii(Corners {
+                                    fill(cur_rect, accent.opacity(cur_op)).corner_radii(Corners {
                                         top_left: px(3.),
                                         top_right: px(3.),
                                         bottom_left: px(1.),
@@ -673,12 +757,9 @@ impl RenderOnce for DashboardTrendCanvas {
                                     point(slot_x, floor_y - px(cur_h)),
                                     size(px(group_w), px(cur_h)),
                                 );
+                                let cur_op = 0.88 + (0.38 - 0.88) * dim_mix;
                                 window.paint_quad(
-                                    fill(
-                                        bar_rect,
-                                        accent.opacity(if dimmed { 0.38 } else { 0.86 }),
-                                    )
-                                    .corner_radii(Corners {
+                                    fill(bar_rect, accent.opacity(cur_op)).corner_radii(Corners {
                                         top_left: px(3.5),
                                         top_right: px(3.5),
                                         bottom_left: px(1.),
@@ -693,6 +774,139 @@ impl RenderOnce for DashboardTrendCanvas {
         )
         .w_full()
         .h(px(self.height))
+    }
+}
+
+struct DashboardReadoutState {
+    last_idx: usize,
+    x_ratio: Slide,
+    alpha: Slide,
+    was_open: bool,
+    host_w: Rc<Cell<f32>>,
+}
+
+#[derive(IntoElement)]
+struct DashboardScrubReadout {
+    id: ElementId,
+    active_idx: Option<usize>,
+    count: usize,
+    pill_width: f32,
+    render_pill: Box<dyn FnOnce(usize) -> AnyElement>,
+}
+
+impl RenderOnce for DashboardScrubReadout {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(pro_eid(&self.id, "mdc-scrub-tip"), cx, |_, _| {
+            DashboardReadoutState {
+                last_idx: 0,
+                x_ratio: Slide::snappy(0.5),
+                alpha: Slide::snappy(0.),
+                was_open: false,
+                host_w: Rc::new(Cell::new(620.)),
+            }
+        });
+
+        let count = self.count;
+        let (shown_idx, rx, amt, host_cell) = st.update(cx, |s, cx| {
+            if let Some(bi) = self.active_idx.filter(|&b| b < count) {
+                let ratio = if count > 1 {
+                    bi as f32 / (count - 1) as f32
+                } else {
+                    0.5
+                };
+                if !s.was_open && s.alpha.value(cx) < 0.08 {
+                    s.x_ratio.reset(ratio);
+                } else {
+                    s.x_ratio.set(ratio, cx);
+                }
+                s.last_idx = bi;
+                s.alpha.set(1., cx);
+                s.was_open = true;
+            } else {
+                s.alpha.set(0., cx);
+                s.was_open = false;
+            }
+            (
+                s.last_idx.min(count.saturating_sub(1)),
+                s.x_ratio.get(w, cx).clamp(0., 1.),
+                s.alpha.get(w, cx).clamp(0., 1.),
+                s.host_w.clone(),
+            )
+        });
+
+        let cw = host_cell.get().max(self.pill_width + 12.);
+        let measure_cell = host_cell.clone();
+        let sensor = canvas(
+            move |b, window, _| {
+                let nw = f32::from(b.size.width);
+                if nw > 12. && (measure_cell.get() - nw).abs() > 1.0 {
+                    measure_cell.set(nw);
+                    window.request_animation_frame();
+                }
+            },
+            |_, _, _, _| (),
+        )
+        .w_full()
+        .h(px(0.));
+
+        if amt <= 0.01 || count == 0 {
+            return div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .top_0()
+                .child(sensor)
+                .into_any_element();
+        }
+
+        let left_px =
+            (rx * cw - self.pill_width * 0.5).clamp(6., (cw - self.pill_width - 6.).max(6.));
+        div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .top_0()
+            .child(sensor)
+            .child(
+                div()
+                    .absolute()
+                    .left(px(left_px))
+                    .top(px(4. + 4. * (1. - amt)))
+                    .opacity(amt)
+                    .child((self.render_pill)(shown_idx)),
+            )
+            .into_any_element()
+    }
+}
+
+#[derive(IntoElement)]
+struct RankedRowSurface {
+    id: ElementId,
+    hover_bg: Hsla,
+    content: Div,
+}
+
+impl RenderOnce for RankedRowSurface {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(pro_eid(&self.id, "rk-hov"), cx, |_, _| {
+            (false, Slide::snappy(0.))
+        });
+        let hov_t = st.update(cx, |s, cx| s.1.get(w, cx).clamp(0., 1.));
+        let st_h = st.clone();
+        let bg = pro_mix_color(transparent_black(), self.hover_bg, hov_t);
+        div()
+            .id(self.id)
+            .w_full()
+            .rounded(px(6.))
+            .bg(bg)
+            .on_hover(move |inside, _, cx| {
+                st_h.update(cx, |s, cx| {
+                    s.0 = *inside;
+                    s.1.set(if *inside { 1. } else { 0. }, cx);
+                    cx.notify();
+                });
+            })
+            .child(self.content)
     }
 }
 
@@ -1117,6 +1331,7 @@ impl MetricsDashboardBlock {
         m: DashboardMetric,
         cur: &PeriodRollup,
         prev: Option<&PeriodRollup>,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let p = ProPalette::get(cx);
@@ -1130,6 +1345,7 @@ impl MetricsDashboardBlock {
                 target: cur.revenue,
                 prefix: sym.into(),
                 font_size: 24.,
+                weight: FontWeight::MEDIUM,
                 color: p.strong,
             }
             .into_any_element(),
@@ -1138,6 +1354,7 @@ impl MetricsDashboardBlock {
                 target: cur.orders as f64,
                 prefix: "".into(),
                 font_size: 24.,
+                weight: FontWeight::MEDIUM,
                 color: p.strong,
             }
             .into_any_element(),
@@ -1199,83 +1416,99 @@ impl MetricsDashboardBlock {
             _ => None,
         });
 
-        let inner_opacity = if selected { 1.0 } else { 0.48 };
+        let inner_opacity = pro_spring_f32(
+            pro_eid(&self.id, format!("kpi-op-{}", m.slug())),
+            if selected { 1.0 } else { 0.52 },
+            0.22,
+            w,
+            cx,
+        );
+        let sel_mix = pro_spring_f32(
+            pro_eid(&self.id, format!("kpi-sel-{}", m.slug())),
+            if selected { 1.0 } else { 0.0 },
+            0.22,
+            w,
+            cx,
+        );
+        let rest_border = pro_mix_color(p.line, p.line_strong, sel_mix);
+        let hover_bg = if selected {
+            p.card
+        } else {
+            pro_mix_color(p.card, p.hover, 0.55)
+        };
 
-        activate(
-            div()
-                .id(pro_eid(&self.id, format!("kpi-tab-{}", m.slug())))
-                .role(Role::Tab)
-                .aria_label(label)
-                .tab_index(0)
-                .flex_1()
-                .min_w_0()
-                .rounded(px(10.))
-                .bg(p.card)
-                .border_1()
-                .border_color(if selected { p.line_strong } else { p.line })
-                .px(px(16.))
-                .py(px(14.))
-                .when(!selected, |d| {
-                    d.hover(move |s| s.border_color(p.line_strong))
-                })
-                .focus_visible(move |s| s.border_color(p.focus))
-                .cursor_pointer()
-                .child(
+        let content = div()
+            .w_full()
+            .px(px(16.))
+            .py(px(14.))
+            .opacity(inner_opacity)
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(p.text)
+                    .truncate()
+                    .child(label),
+            )
+            .child(value_el)
+            .when_some(delta_badge, |d, (up, good, text)| {
+                let (bg, fg) = if good {
+                    (p.green_soft, p.green_ink)
+                } else {
+                    (p.red_soft, p.red_ink)
+                };
+                d.child(
                     div()
-                        .opacity(inner_opacity)
+                        .mt(px(2.))
+                        .w(px(64.))
+                        .min_w(px(54.))
                         .flex()
-                        .flex_col()
-                        .gap(px(4.))
+                        .items_center()
                         .child(
                             div()
-                                .text_size(px(13.))
-                                .text_color(p.text)
-                                .truncate()
-                                .child(label),
-                        )
-                        .child(value_el)
-                        .when_some(delta_badge, |d, (up, good, text)| {
-                            let (bg, fg) = if good {
-                                (p.green_soft, p.green_ink)
-                            } else {
-                                (p.red_soft, p.red_ink)
-                            };
-                            d.child(
-                                div()
-                                    .mt(px(2.))
-                                    .w(px(64.))
-                                    .min_w(px(54.))
-                                    .flex()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .h(px(20.))
-                                            .px(px(6.))
-                                            .rounded(px(5.))
-                                            .bg(bg)
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(fg)
-                                            .whitespace_nowrap()
-                                            .child(pro_svg(
-                                                "0 0 8 8",
-                                                if up { DELTA_UP_SVG } else { DELTA_DOWN_SVG },
-                                                6.,
-                                                fg,
-                                            ))
-                                            .child(text),
-                                    ),
-                            )
-                        }),
-                ),
+                                .h(px(20.))
+                                .px(px(6.))
+                                .rounded(px(5.))
+                                .bg(bg)
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(fg)
+                                .whitespace_nowrap()
+                                .child(pro_svg(
+                                    "0 0 8 8",
+                                    if up { DELTA_UP_SVG } else { DELTA_DOWN_SVG },
+                                    6.,
+                                    fg,
+                                ))
+                                .child(text),
+                        ),
+                )
+            });
+
+        pro_tactile(
+            pro_eid(&self.id, format!("kpi-tab-{}", m.slug())),
+            label,
+            10.,
+            p.card,
+            hover_bg,
+            rest_border,
+            p.line_strong,
+            selected,
+            content,
             cx,
             move |this, _, cx| {
                 this.set_metric(m, cx);
             },
         )
+        .role(Role::Tab)
+        .flex_1()
+        .min_w_0()
+        .when(sel_mix > 0.12, |d| d.shadow_sm())
     }
 
     fn render_ranked_card(
@@ -1326,54 +1559,56 @@ impl MetricsDashboardBlock {
                 )
                 .clamp(0.0, 1.0);
 
-                let formatted_val = if use_orders {
-                    let count = (cur_rollup.orders as f64 * item.share).round() as u64;
-                    format_grouped_u64(count)
+                let (val_target, val_prefix): (f64, SharedString) = if use_orders {
+                    ((cur_rollup.orders as f64 * item.share).round(), "".into())
                 } else {
-                    let amount = (cur_rollup.revenue * item.share).round() as u64;
-                    format!("{sym}{}", format_grouped_u64(amount))
+                    ((cur_rollup.revenue * item.share).round(), sym.into())
                 };
 
-                list = list.child(
-                    div()
-                        .relative()
-                        .w_full()
-                        .h(px(30.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .overflow_hidden()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .child(
-                            div()
-                                .absolute()
-                                .top_0()
-                                .bottom_0()
-                                .left_0()
-                                .w(relative(spring_ratio))
-                                .rounded(px(6.))
-                                .bg(bar_tint),
-                        )
-                        .child(
-                            div()
-                                .relative()
-                                .min_w_0()
-                                .text_size(px(13.))
-                                .text_color(p.ink)
-                                .truncate()
-                                .child(item.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .relative()
-                                .flex_none()
-                                .text_size(px(13.))
-                                .text_color(p.text)
-                                .child(formatted_val),
-                        ),
-                );
+                let row_inner = div()
+                    .relative()
+                    .w_full()
+                    .h(px(30.))
+                    .px(px(8.))
+                    .rounded(px(6.))
+                    .overflow_hidden()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left_0()
+                            .w(relative(spring_ratio))
+                            .rounded(px(6.))
+                            .bg(bar_tint),
+                    )
+                    .child(
+                        div()
+                            .relative()
+                            .min_w_0()
+                            .text_size(px(13.))
+                            .text_color(p.ink)
+                            .truncate()
+                            .child(item.name.clone()),
+                    )
+                    .child(div().relative().flex_none().child(GroupedRollingReadout {
+                        id: pro_eid(&self.id, format!("{list_id}-val-{idx}")),
+                        target: val_target,
+                        prefix: val_prefix,
+                        font_size: 13.,
+                        weight: FontWeight::NORMAL,
+                        color: p.text,
+                    }));
+
+                list = list.child(RankedRowSurface {
+                    id: pro_eid(&self.id, format!("{list_id}-row-{idx}")),
+                    hover_bg: p.hover,
+                    content: row_inner,
+                });
             }
             list
         };
@@ -1407,13 +1642,13 @@ impl MetricsDashboardBlock {
                             .truncate()
                             .child(heading.to_owned()),
                     )
-                    .child(
-                        div()
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(col_caption),
-                    ),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, format!("{list_id}-col-cap")),
+                        col_caption,
+                        10.5,
+                        FontWeight::MEDIUM,
+                        p.muted,
+                    )),
             )
             .child(body)
     }
@@ -1471,66 +1706,88 @@ impl Render for MetricsDashboardBlock {
         for r in DashboardRange::ALL {
             let sel = self.range == r;
             let lbl = r.button_label(cx);
-            range_seg = range_seg.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("mdc-range-{}", r.slug())))
-                    .role(Role::RadioButton)
-                    .aria_label(lbl)
-                    .tab_index(0)
-                    .relative()
-                    .when(compact, |d| d.flex_1())
-                    .when(!compact, |d| d.w(px(62.)))
-                    .h(px(24.))
-                    .rounded(px(6.))
-                    .when(sel, |d| d.child(pro_mark_selected(&range_sensor)))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if sel { p.strong } else { p.text })
-                    .cursor_pointer()
-                    .child(lbl),
-                cx,
-                move |this, _, cx| {
-                    this.set_range(r, cx);
-                },
-            ));
+            let r_hover = if sel { transparent_black() } else { p.hover };
+            range_seg = range_seg.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("mdc-range-{}", r.slug())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    r_hover,
+                    transparent_black(),
+                    transparent_black(),
+                    sel,
+                    div()
+                        .when(!compact, |d| d.w(px(62.)))
+                        .h(px(24.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .whitespace_nowrap()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.strong } else { p.text })
+                        .child(lbl),
+                    cx,
+                    move |this, _, cx| {
+                        this.set_range(r, cx);
+                    },
+                )
+                .role(Role::RadioButton)
+                .relative()
+                .when(compact, |d| d.flex_1())
+                .when(!compact, |d| d.flex_none())
+                .when(sel, |d| d.child(pro_mark_selected(&range_sensor))),
+            );
         }
 
-        let export_btn = activate(
+        let export_lbl = if export_confirmed {
+            tr(cx, "Exported", "已导出")
+        } else {
+            tr(cx, "Export", "导出")
+        };
+        let export_btn = pro_tactile(
+            pro_eid(&self.id, "mdc-export-btn"),
+            tr(cx, "Export CSV", "导出数据"),
+            7.,
+            p.card,
+            p.hover,
+            if export_confirmed {
+                p.green.opacity(0.42)
+            } else {
+                p.line_strong
+            },
+            p.line_strong,
+            export_confirmed,
             div()
-                .id(pro_eid(&self.id, "mdc-export-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Export CSV", "导出数据"))
-                .tab_index(0)
                 .h(px(28.))
                 .px(px(10.))
-                .rounded(px(7.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_color(p.focus))
-                .flex_none()
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.strong)
-                .cursor_pointer()
+                .whitespace_nowrap()
                 .child(if export_confirmed {
-                    pro_icon(ProIcon::Check, 13., p.green)
+                    pro_check_draw(
+                        pro_eid(&self.id, "mdc-export-chk"),
+                        true,
+                        13.,
+                        false,
+                        p.green,
+                    )
                 } else {
-                    pro_svg("0 0 24 24", EXPORT_ARROW_SVG, 14., p.muted)
+                    pro_svg("0 0 24 24", EXPORT_ARROW_SVG, 14., p.muted).into_any_element()
                 })
-                .child(if export_confirmed {
-                    tr(cx, "Exported", "已导出")
-                } else {
-                    tr(cx, "Export", "导出")
-                }),
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "mdc-export-lbl"),
+                    export_lbl,
+                    13.,
+                    FontWeight::MEDIUM,
+                    if export_confirmed {
+                        p.green_ink
+                    } else {
+                        p.strong
+                    },
+                )),
             cx,
             |this, _, cx| {
                 this.exported_at = Some(Instant::now());
@@ -1544,7 +1801,8 @@ impl Render for MetricsDashboardBlock {
                 });
                 cx.notify();
             },
-        );
+        )
+        .flex_none();
 
         let top_bar = div()
             .w_full()
@@ -1566,13 +1824,13 @@ impl Render for MetricsDashboardBlock {
                             .truncate()
                             .child(title_str),
                     )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .truncate()
-                            .child(sub_str),
-                    ),
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "mdc-sub-lbl"),
+                        sub_str,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
             )
             .child(
                 div()
@@ -1679,26 +1937,26 @@ impl Render for MetricsDashboardBlock {
                         .w_full()
                         .flex()
                         .gap(px(8.))
-                        .child(self.render_kpi_card(m0, &cur_rollup, prev_rollup.as_ref(), cx))
-                        .child(self.render_kpi_card(m1, &cur_rollup, prev_rollup.as_ref(), cx)),
+                        .child(self.render_kpi_card(m0, &cur_rollup, prev_rollup.as_ref(), w, cx))
+                        .child(self.render_kpi_card(m1, &cur_rollup, prev_rollup.as_ref(), w, cx)),
                 )
                 .child(
                     div()
                         .w_full()
                         .flex()
                         .gap(px(8.))
-                        .child(self.render_kpi_card(m2, &cur_rollup, prev_rollup.as_ref(), cx))
-                        .child(self.render_kpi_card(m3, &cur_rollup, prev_rollup.as_ref(), cx)),
+                        .child(self.render_kpi_card(m2, &cur_rollup, prev_rollup.as_ref(), w, cx))
+                        .child(self.render_kpi_card(m3, &cur_rollup, prev_rollup.as_ref(), w, cx)),
                 )
         } else {
             div()
                 .w_full()
                 .flex()
                 .gap(px(12.))
-                .child(self.render_kpi_card(m0, &cur_rollup, prev_rollup.as_ref(), cx))
-                .child(self.render_kpi_card(m1, &cur_rollup, prev_rollup.as_ref(), cx))
-                .child(self.render_kpi_card(m2, &cur_rollup, prev_rollup.as_ref(), cx))
-                .child(self.render_kpi_card(m3, &cur_rollup, prev_rollup.as_ref(), cx))
+                .child(self.render_kpi_card(m0, &cur_rollup, prev_rollup.as_ref(), w, cx))
+                .child(self.render_kpi_card(m1, &cur_rollup, prev_rollup.as_ref(), w, cx))
+                .child(self.render_kpi_card(m2, &cur_rollup, prev_rollup.as_ref(), w, cx))
+                .child(self.render_kpi_card(m3, &cur_rollup, prev_rollup.as_ref(), w, cx))
         };
 
         // Central Trend Chart Card
@@ -1722,6 +1980,8 @@ impl Render for MetricsDashboardBlock {
             DashboardChartKind::Area => "area",
             DashboardChartKind::Bars => "bars",
         };
+        let is_area = self.chart_kind == DashboardChartKind::Area;
+        let is_bars = self.chart_kind == DashboardChartKind::Bars;
         let kind_toggle = div()
             .relative()
             .p(px(2.))
@@ -1739,82 +1999,90 @@ impl Render for MetricsDashboardBlock {
                 Some(p.line),
                 true,
             ))
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "mdc-kind-area"))
-                    .role(Role::RadioButton)
-                    .aria_label(tr(cx, "Area chart", "面积折线图"))
-                    .tab_index(0)
-                    .relative()
-                    .w(px(28.))
-                    .h(px(24.))
-                    .rounded(px(6.))
-                    .when(self.chart_kind == DashboardChartKind::Area, |d| {
-                        d.child(pro_mark_selected(&kind_sensor))
-                    })
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .child(pro_svg(
-                        "0 0 24 24",
-                        KIND_AREA_SVG,
-                        15.,
-                        if self.chart_kind == DashboardChartKind::Area {
-                            p.strong
-                        } else {
-                            p.muted
-                        },
-                    )),
-                cx,
-                |this, _, cx| {
-                    if this.chart_kind != DashboardChartKind::Area {
-                        this.chart_kind = DashboardChartKind::Area;
-                        cx.emit(MetricsDashboardEvent::ChartKindChanged(
-                            DashboardChartKind::Area,
-                        ));
-                        cx.notify();
-                    }
-                },
-            ))
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "mdc-kind-bars"))
-                    .role(Role::RadioButton)
-                    .aria_label(tr(cx, "Bar chart", "柱状图"))
-                    .tab_index(0)
-                    .relative()
-                    .w(px(28.))
-                    .h(px(24.))
-                    .rounded(px(6.))
-                    .when(self.chart_kind == DashboardChartKind::Bars, |d| {
-                        d.child(pro_mark_selected(&kind_sensor))
-                    })
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .child(pro_svg(
-                        "0 0 24 24",
-                        KIND_BARS_SVG,
-                        15.,
-                        if self.chart_kind == DashboardChartKind::Bars {
-                            p.strong
-                        } else {
-                            p.muted
-                        },
-                    )),
-                cx,
-                |this, _, cx| {
-                    if this.chart_kind != DashboardChartKind::Bars {
-                        this.chart_kind = DashboardChartKind::Bars;
-                        cx.emit(MetricsDashboardEvent::ChartKindChanged(
-                            DashboardChartKind::Bars,
-                        ));
-                        cx.notify();
-                    }
-                },
-            ));
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, "mdc-kind-area"),
+                    tr(cx, "Area chart", "面积折线图"),
+                    6.,
+                    transparent_black(),
+                    if is_area {
+                        transparent_black()
+                    } else {
+                        p.hover
+                    },
+                    transparent_black(),
+                    transparent_black(),
+                    is_area,
+                    div()
+                        .w(px(28.))
+                        .h(px(24.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_svg(
+                            "0 0 24 24",
+                            KIND_AREA_SVG,
+                            15.,
+                            if is_area { p.strong } else { p.muted },
+                        )),
+                    cx,
+                    |this, _, cx| {
+                        if this.chart_kind != DashboardChartKind::Area {
+                            this.chart_kind = DashboardChartKind::Area;
+                            cx.emit(MetricsDashboardEvent::ChartKindChanged(
+                                DashboardChartKind::Area,
+                            ));
+                            cx.notify();
+                        }
+                    },
+                )
+                .role(Role::RadioButton)
+                .relative()
+                .flex_none()
+                .when(is_area, |d| d.child(pro_mark_selected(&kind_sensor))),
+            )
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, "mdc-kind-bars"),
+                    tr(cx, "Bar chart", "柱状图"),
+                    6.,
+                    transparent_black(),
+                    if is_bars {
+                        transparent_black()
+                    } else {
+                        p.hover
+                    },
+                    transparent_black(),
+                    transparent_black(),
+                    is_bars,
+                    div()
+                        .w(px(28.))
+                        .h(px(24.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_svg(
+                            "0 0 24 24",
+                            KIND_BARS_SVG,
+                            15.,
+                            if is_bars { p.strong } else { p.muted },
+                        )),
+                    cx,
+                    |this, _, cx| {
+                        if this.chart_kind != DashboardChartKind::Bars {
+                            this.chart_kind = DashboardChartKind::Bars;
+                            cx.emit(MetricsDashboardEvent::ChartKindChanged(
+                                DashboardChartKind::Bars,
+                            ));
+                            cx.notify();
+                        }
+                    },
+                )
+                .role(Role::RadioButton)
+                .relative()
+                .flex_none()
+                .when(is_bars, |d| d.child(pro_mark_selected(&kind_sensor))),
+            );
 
         let compare_label = if medium_narrow {
             tr(cx, "Compare", "同比对比")
@@ -1824,101 +2092,111 @@ impl Render for MetricsDashboardBlock {
 
         let bucket_count = cur_buckets.len();
         let hover_bi = self.hover_bucket.filter(|&b| b < bucket_count);
-        let tooltip_el = hover_bi.map(|bi| {
-            let (ref d_lbl, cur_v) = cur_buckets[bi];
-            let prev_v = prev_buckets.get(bi).copied();
-            let on_right_half = bucket_count > 1 && bi * 2 >= bucket_count;
-            let pop_bg: Hsla = if p.dark {
-                rgb(0x252528).into()
-            } else {
-                rgb(0xffffff).into()
-            };
-            let mut pop = div()
-                .absolute()
-                .top(px(4.))
-                .min_w(px(156.))
-                .px(px(10.))
-                .py(px(7.))
-                .rounded(px(10.))
-                .bg(pop_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_md()
-                .flex()
-                .flex_col()
-                .gap(px(4.))
-                .child(
-                    div()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .pb(px(3.))
-                        .border_b_1()
-                        .border_color(p.line)
-                        .child(d_lbl.clone()),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_color(p.text)
-                                .child(div().size(px(7.)).rounded(px(2.)).bg(p.blue))
-                                .child(self.metric.label(cx)),
-                        )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .child(format_metric_point(cur_v, self.metric, &self.currency)),
-                        ),
-                );
-            if self.compare
-                && let Some(pv) = prev_v
-            {
-                pop = pop.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .text_size(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .text_color(p.muted)
-                                .child(
-                                    div()
-                                        .w(px(7.))
-                                        .h(px(2.))
-                                        .rounded(px(1.))
-                                        .bg(p.blue.opacity(0.42)),
-                                )
-                                .child(tr(cx, "Previous", "上周期")),
-                        )
-                        .child(div().text_color(p.text).child(format_metric_point(
-                            pv,
-                            self.metric,
-                            &self.currency,
-                        ))),
-                );
-            }
-            if on_right_half {
-                pop = pop.left(px(8.));
-            } else {
-                pop = pop.right(px(8.));
-            }
-            pop
-        });
+        let cur_buckets_tip = cur_buckets.clone();
+        let prev_buckets_tip = prev_buckets.clone();
+        let active_metric = self.metric;
+        let metric_lbl_str = active_metric.label(cx).to_owned();
+        let prev_tip_lbl = tr(cx, "Previous", "上周期").to_owned();
+        let currency_code = self.currency.clone();
+        let show_compare_tip = self.compare;
+        let tooltip_overlay = DashboardScrubReadout {
+            id: pro_eid(&self.id, "mdc-tip"),
+            active_idx: hover_bi,
+            count: bucket_count,
+            pill_width: 168.,
+            render_pill: Box::new(move |bi| {
+                let (d_lbl, cur_v) = cur_buckets_tip
+                    .get(bi)
+                    .cloned()
+                    .unwrap_or_else(|| (SharedString::default(), 0.0));
+                let prev_v = prev_buckets_tip.get(bi).copied();
+                let pop_bg: Hsla = if p.dark {
+                    rgb(0x252528).into()
+                } else {
+                    rgb(0xffffff).into()
+                };
+                let mut pop = div()
+                    .min_w(px(156.))
+                    .px(px(10.))
+                    .py(px(7.))
+                    .rounded(px(10.))
+                    .bg(pop_bg)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_md()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .pb(px(3.))
+                            .border_b_1()
+                            .border_color(p.line)
+                            .child(d_lbl),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.text)
+                                    .child(div().size(px(7.)).rounded(px(2.)).bg(p.blue))
+                                    .child(metric_lbl_str),
+                            )
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(format_metric_point(
+                                        cur_v,
+                                        active_metric,
+                                        &currency_code,
+                                    )),
+                            ),
+                    );
+                if show_compare_tip && let Some(pv) = prev_v {
+                    pop = pop.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_color(p.muted)
+                                    .child(
+                                        div()
+                                            .w(px(7.))
+                                            .h(px(2.))
+                                            .rounded(px(1.))
+                                            .bg(p.blue.opacity(0.42)),
+                                    )
+                                    .child(prev_tip_lbl),
+                            )
+                            .child(div().text_color(p.text).child(format_metric_point(
+                                pv,
+                                active_metric,
+                                &currency_code,
+                            ))),
+                    );
+                }
+                pop.into_any_element()
+            }),
+        };
 
         let plot_height = if compact { 164. } else { 184. };
         let hit_slices = div()
@@ -1992,13 +2270,13 @@ impl Render for MetricsDashboardBlock {
                                     .border_2()
                                     .border_color(p.blue),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .child(self.metric.label(cx)),
-                            ),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "mdc-chart-metric-lbl"),
+                                self.metric.label(cx),
+                                13.,
+                                FontWeight::MEDIUM,
+                                p.strong,
+                            )),
                     )
                     .child(
                         div()
@@ -2090,7 +2368,7 @@ impl Render for MetricsDashboardBlock {
                                         hover_idx: hover_bi,
                                         height: plot_height,
                                     })
-                                    .when_some(tooltip_el, |d, tip| d.child(tip))
+                                    .child(tooltip_overlay)
                                     .child(hit_slices),
                             )
                             .child(

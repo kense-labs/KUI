@@ -5,9 +5,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32,
-        pro_toast_banner, tr,
+        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_toast_banner, tr,
     },
     primitives::{
         family::{PhaseClock, disabled_motion},
@@ -601,7 +601,10 @@ pub struct StatCard {
     single_item: StatCardItem,
     selected_single: Option<bool>,
     selected_showcase_id: Option<SharedString>,
+    hovered_tile_id: Option<SharedString>,
+    pressed_tile_id: Option<SharedString>,
     hovered_spark: Option<(SharedString, usize)>,
+    last_hovered_spark: Option<(SharedString, usize)>,
     spark_bounds: Vec<Rc<Cell<Option<Bounds<Pixels>>>>>,
     loading: bool,
     empty: bool,
@@ -630,7 +633,10 @@ impl StatCard {
             single_item,
             selected_single: None,
             selected_showcase_id: None,
+            hovered_tile_id: None,
+            pressed_tile_id: None,
             hovered_spark: None,
+            last_hovered_spark: None,
             spark_bounds: (0..4).map(|_| Rc::new(Cell::new(None))).collect(),
             loading: false,
             empty: false,
@@ -940,14 +946,13 @@ impl StatCard {
                         )),
                 )
                 .when_some(item.change_label.clone(), |d, vs| {
-                    d.child(
-                        div()
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .text_color(p.muted)
-                            .truncate()
-                            .child(vs),
-                    )
+                    d.child(div().truncate().child(pro_swap_label(
+                        pro_eid(&tile_id, "chg-vs-lbl"),
+                        vs,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )))
                 })
                 .into_any_element()
         });
@@ -963,9 +968,14 @@ impl StatCard {
                 .hovered_spark
                 .as_ref()
                 .and_then(|(id, hi)| (id == &cid).then_some(*hi));
+            let last_pt = self
+                .last_hovered_spark
+                .as_ref()
+                .and_then(|(id, hi)| (id == &cid).then_some(*hi));
+            let tag_open = hovered_pt.is_some();
             let val_count = spec.values.len();
 
-            let tag_el: Option<AnyElement> = hovered_pt.and_then(|hi| {
+            let tag_inner: Option<AnyElement> = hovered_pt.or(last_pt).and_then(|hi| {
                 let raw_v = *spec.values.get(hi)?;
                 let lbl = spec.labels.get(hi).cloned().unwrap_or_default();
                 let formatted = format!(
@@ -1009,6 +1019,9 @@ impl StatCard {
                         .into_any_element(),
                 )
             });
+            let tag_el = tag_inner.map(|inner| {
+                pro_popover_presence(pro_eid(&tile_id, "spark-tag-pres"), tag_open, move || inner)
+            });
 
             let sink_move = sink.clone();
             let cid_move = cid.clone();
@@ -1036,7 +1049,8 @@ impl StatCard {
                     .min(val_count - 1);
                     let next = Some((cid_move.clone(), hi));
                     if this.hovered_spark != next {
-                        this.hovered_spark = next;
+                        this.hovered_spark = next.clone();
+                        this.last_hovered_spark = next;
                         cx.emit(StatCardEvent::SparkHoverChanged {
                             card_id: cid_move.clone(),
                             index: Some(hi),
@@ -1106,15 +1120,56 @@ impl StatCard {
         let item_href = item.href.clone();
         let item_label = item.label.clone();
         let interactive = item.interactive || item.href.is_some();
+        let is_tile_hovered = self.hovered_tile_id.as_ref() == Some(&item_id);
+        let is_tile_pressed = self.pressed_tile_id.as_ref() == Some(&item_id);
+        let is_tile_selected =
+            self.showcase_mode && self.selected_showcase_id.as_ref() == Some(&item_id);
+
+        let hov_amt = pro_spring_f32(
+            pro_eid(&tile_id, "hov"),
+            if interactive && is_tile_hovered {
+                1.0
+            } else {
+                0.0
+            },
+            0.18,
+            w,
+            cx,
+        )
+        .clamp(0.0, 1.0);
+        let press_amt = pro_spring_f32(
+            pro_eid(&tile_id, "prs"),
+            if interactive && is_tile_pressed {
+                1.0
+            } else {
+                0.0
+            },
+            0.11,
+            w,
+            cx,
+        )
+        .clamp(0.0, 1.0);
+        let dy = -2.0 * hov_amt + 1.6 * press_amt;
+        let resolved_border = if is_tile_selected {
+            p.blue.opacity(0.48)
+        } else {
+            pro_mix_color(card_border, card_hover_border, hov_amt)
+        };
 
         let mut card = div()
             .id(tile_id)
             .w_full()
+            .relative()
+            .top(px(dy))
             .rounded(px(10.))
             .bg(card_bg)
             .border_1()
-            .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .border_color(resolved_border)
+            .when_else(
+                hov_amt > 0.25 && press_amt < 0.5,
+                |d| d.shadow_sm(),
+                |d| d.when(!dark, |s| s.shadow_xs()),
+            )
             .flex()
             .flex_col();
 
@@ -1124,13 +1179,50 @@ impl StatCard {
             } else {
                 Role::Button
             };
+            let hover_id = item_id.clone();
+            let down_id = item_id.clone();
+            let up_id = item_id.clone();
             card = card
                 .role(role)
                 .aria_label(item_label.clone())
                 .tab_index(0)
                 .cursor_pointer()
-                .hover(move |s| s.border_color(card_hover_border))
+                .focus_visible(move |s| s.border_color(p.focus))
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_tile_id = Some(hover_id.clone());
+                    } else if this.hovered_tile_id.as_ref() == Some(&hover_id) {
+                        this.hovered_tile_id = None;
+                    }
+                    cx.notify();
+                }))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.pressed_tile_id = Some(down_id.clone());
+                        cx.notify();
+                    }),
+                )
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        if this.pressed_tile_id.as_ref() == Some(&up_id) {
+                            this.pressed_tile_id = None;
+                            cx.notify();
+                        }
+                    }),
+                )
+                .on_mouse_up_out(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        if this.pressed_tile_id.is_some() {
+                            this.pressed_tile_id = None;
+                            cx.notify();
+                        }
+                    }),
+                )
                 .on_click(cx.listener(move |this, _, _, cx| {
+                    this.pressed_tile_id = None;
                     if this.showcase_mode {
                         if this.selected_showcase_id.as_ref() == Some(&item_id) {
                             this.selected_showcase_id = None;
@@ -1235,19 +1327,26 @@ impl Render for StatCard {
 
         let sensor = pro_selection_sensor();
         let pill_fill: Hsla = if dark {
-            hsla(0., 0., 1., 0.10)
+            hsla(0., 0., 1., 0.12)
         } else {
-            hsla(0., 0., 0., 0.06)
+            rgb(0xffffff).into()
         };
+        let pill_border: Option<Hsla> = Some(if dark {
+            hsla(0., 0., 1., 0.14)
+        } else {
+            hsla(0., 0., 0., 0.08)
+        });
         let mut range_seg = div()
             .relative()
             .p(px(2.))
             .rounded(px(7.))
             .bg(if dark {
-                hsla(0., 0., 1., 0.04)
+                hsla(0., 0., 1., 0.045)
             } else {
-                hsla(0., 0., 0., 0.03)
+                hsla(0., 0., 0., 0.035)
             })
+            .border_1()
+            .border_color(p.line)
             .flex()
             .items_center()
             .gap(px(2.))
@@ -1257,8 +1356,8 @@ impl Render for StatCard {
                 sensor.clone(),
                 5.5,
                 pill_fill,
-                None,
-                false,
+                pill_border,
+                !dark,
             ));
 
         for (rid, rlbl) in [("7d", "7D"), ("30d", "30D")] {
@@ -1280,11 +1379,14 @@ impl Render for StatCard {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(if selected { p.ink } else { p.text })
                     .cursor_pointer()
+                    .active(|s| s.top(px(0.75)))
+                    .when(!selected, move |d| d.hover(move |s| s.text_color(p.ink)))
                     .when(selected, |d| d.child(pro_mark_selected(&sensor)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if this.active_range.as_ref() != rid {
                             this.active_range = rid.into();
                             this.hovered_spark = None;
+                            this.last_hovered_spark = None;
                             cx.emit(StatCardEvent::RangeChanged(rid.into()));
                             cx.notify();
                         }

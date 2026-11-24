@@ -6,8 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mix_color, pro_shimmer_text, pro_skeleton_bar,
-        pro_spring_f32, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mix_color, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
@@ -173,6 +174,8 @@ pub struct Dropzone {
     max_size_bytes: u64,
     hint: Option<SharedString>,
     items: Vec<UploadItem>,
+    entering_ids: Vec<(SharedString, bool)>,
+    exiting_items: Vec<(UploadItem, Instant)>,
     tracks: Vec<UploadSimTrack>,
     error_shakes: Vec<(SharedString, Instant)>,
     sample_cursor: usize,
@@ -180,6 +183,7 @@ pub struct Dropzone {
     area_hovered: bool,
     drag_active: bool,
     fan_slide: Slide,
+    drag_slide: Slide,
     autoplay: bool,
     loading: bool,
     empty: bool,
@@ -221,6 +225,8 @@ impl Dropzone {
             max_size_bytes: 25 * 1024 * 1024,
             hint: None,
             items,
+            entering_ids: Vec::new(),
+            exiting_items: Vec::new(),
             tracks,
             error_shakes: Vec::new(),
             sample_cursor: 0,
@@ -228,6 +234,7 @@ impl Dropzone {
             area_hovered: false,
             drag_active: false,
             fan_slide: Slide::snappy(0.),
+            drag_slide: Slide::snappy(0.),
             autoplay: true,
             loading: false,
             empty: false,
@@ -303,6 +310,8 @@ impl Dropzone {
             0.0
         };
         self.fan_slide.duration(target, 0.28, cx);
+        self.drag_slide
+            .duration(if active { 1.0 } else { 0.0 }, 0.24, cx);
         cx.notify();
     }
 
@@ -338,7 +347,8 @@ impl Dropzone {
                     1.0,
                     UploadStatus::Error(err_msg),
                 );
-                self.error_shakes.push((id, Instant::now()));
+                self.error_shakes.push((id.clone(), Instant::now()));
+                self.entering_ids.push((id, false));
                 self.items.insert(0, rejected.clone());
                 cx.emit(DropzoneEvent::FilesAdded(vec![rejected.clone()]));
                 cx.emit(DropzoneEvent::Changed(self.items.clone()));
@@ -357,7 +367,8 @@ impl Dropzone {
                 1.0,
                 UploadStatus::Error(err_msg),
             );
-            self.error_shakes.push((id, Instant::now()));
+            self.error_shakes.push((id.clone(), Instant::now()));
+            self.entering_ids.push((id, false));
             self.items.insert(0, rejected.clone());
             cx.emit(DropzoneEvent::FilesAdded(vec![rejected.clone()]));
             cx.emit(DropzoneEvent::Changed(self.items.clone()));
@@ -377,6 +388,7 @@ impl Dropzone {
 
         let dur = (2.2 + (size_bytes as f32 / (4.0 * 1024.0 * 1024.0))).clamp(2.0, 5.5);
         let item = UploadItem::new(id.clone(), name, size_bytes, 0.04, UploadStatus::Uploading);
+        self.entering_ids.push((id.clone(), false));
         self.tracks.push(UploadSimTrack {
             item_id: id,
             started_at: Instant::now(),
@@ -412,6 +424,7 @@ impl Dropzone {
         self.drag_active = false;
         self.fan_slide
             .duration(if self.area_hovered { 0.48 } else { 0.0 }, 0.26, cx);
+        self.drag_slide.duration(0.0, 0.22, cx);
         self.add_file(name, bytes, fail, cx);
     }
 
@@ -468,12 +481,15 @@ impl Dropzone {
 
     /// Remove a single upload row by id.
     pub fn remove_item(&mut self, item_id: &str, cx: &mut Context<Self>) -> bool {
-        let before = self.items.len();
-        self.items.retain(|i| i.id.as_ref() != item_id);
-        self.tracks.retain(|t| t.item_id.as_ref() != item_id);
-        if self.items.len() == before {
+        let Some(pos) = self.items.iter().position(|i| i.id.as_ref() == item_id) else {
             return false;
-        }
+        };
+        let removed = self.items.remove(pos);
+        self.entering_ids.retain(|(id, _)| id.as_ref() != item_id);
+        self.exiting_items
+            .retain(|(it, _)| it.id.as_ref() != item_id);
+        self.exiting_items.push((removed, Instant::now()));
+        self.tracks.retain(|t| t.item_id.as_ref() != item_id);
         cx.emit(DropzoneEvent::Removed(SharedString::from(
             item_id.to_string(),
         )));
@@ -487,7 +503,12 @@ impl Dropzone {
         if self.items.is_empty() {
             return;
         }
-        self.items.clear();
+        let now = Instant::now();
+        self.entering_ids.clear();
+        for item in self.items.drain(..) {
+            self.exiting_items.retain(|(it, _)| it.id != item.id);
+            self.exiting_items.push((item, now));
+        }
         self.tracks.clear();
         cx.emit(DropzoneEvent::Cleared);
         cx.emit(DropzoneEvent::Changed(Vec::new()));
@@ -566,13 +587,7 @@ impl Dropzone {
         }
     }
 
-    fn render_row(
-        &self,
-        item: &UploadItem,
-        index: usize,
-        w: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_row(&self, item: &UploadItem, index: usize, cx: &mut Context<Self>) -> AnyElement {
         let p = ProPalette::get(cx);
         let iid = item.id.clone();
         let (badge_bg, badge_fg) = item.kind.colors(&p);
@@ -585,15 +600,6 @@ impl Dropzone {
         } else {
             0.0
         };
-
-        let smooth_prog = pro_spring_f32(
-            pro_eid(&self.id, format!("prog-{iid}")),
-            item.progress.clamp(0.0, 1.0),
-            0.22,
-            w,
-            cx,
-        )
-        .clamp(0.0, 1.0);
 
         let badge = div()
             .h(px(20.))
@@ -664,61 +670,57 @@ impl Dropzone {
 
         let show_bar = !item.is_done();
         let bar_color = if item.is_error() { p.red } else { p.blue };
+        let is_done = item.is_done();
 
         let can_retry = item.is_error() && item.size_bytes <= self.max_size_bytes;
         let retry_btn = if can_retry {
             let iid_retry = iid.clone();
-            Some(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("retry-{iid}")))
-                    .role(Role::Button)
-                    .aria_label(format!("{} {}", tr(cx, "Retry", "重试"), item.name))
-                    .tab_index(0)
-                    .h(px(26.))
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .bg(p.chip)
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.chip_hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .child(pro_icon(ProIcon::Refresh, 12.5, p.ink))
-                    .child(tr(cx, "Retry", "重试")),
-                cx,
-                move |this, _, cx| {
-                    this.retry_item(&iid_retry, cx);
-                },
-            ))
+            Some(
+                pro_tactile(
+                    pro_eid(&self.id, format!("retry-{iid}")),
+                    format!("{} {}", tr(cx, "Retry", "重试"), item.name),
+                    6.,
+                    p.chip,
+                    p.chip_hover,
+                    transparent_black(),
+                    p.line_strong,
+                    false,
+                    div()
+                        .h(px(26.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.ink)
+                        .whitespace_nowrap()
+                        .child(pro_icon(ProIcon::Refresh, 12.5, p.ink))
+                        .child(tr(cx, "Retry", "重试")),
+                    cx,
+                    move |this, _, cx| {
+                        this.retry_item(&iid_retry, cx);
+                    },
+                )
+                .flex_none(),
+            )
         } else {
             None
         };
 
         let iid_rm = iid.clone();
-        let remove_btn = activate(
-            div()
-                .id(pro_eid(&self.id, format!("rm-{iid}")))
-                .role(Role::Button)
-                .aria_label(format!("{} {}", tr(cx, "Remove", "移除"), item.name))
-                .tab_index(0)
-                .size(px(28.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.hover))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .child(pro_icon(ProIcon::Close, 14., p.muted)),
+        let remove_btn = pro_icon_btn(
+            pro_eid(&self.id, format!("rm-{iid}")),
+            format!("{} {}", tr(cx, "Remove", "移除"), item.name),
+            ProIcon::Close,
+            28.,
+            false,
             cx,
             move |this, _, cx| {
                 this.remove_item(&iid_rm, cx);
             },
-        );
+        )
+        .flex_none();
 
         div()
             .id(pro_eid(&self.id, format!("dz-row-{iid}")))
@@ -744,7 +746,7 @@ impl Dropzone {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(if is_done { px(6.) } else { px(0.) })
                             .min_w_0()
                             .child(
                                 div()
@@ -755,28 +757,35 @@ impl Dropzone {
                                     .text_color(p.ink)
                                     .child(item.name.clone()),
                             )
-                            .when(item.is_done(), |d| {
-                                d.child(pro_icon(ProIcon::Check, 14., p.green))
-                            }),
+                            .child(
+                                div()
+                                    .w(px(if is_done { 14. } else { 0. }))
+                                    .h(px(14.))
+                                    .flex_none()
+                                    .overflow_hidden()
+                                    .opacity(if is_done { 1.0 } else { 0.0 })
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, format!("done-chk-{iid}")),
+                                        is_done,
+                                        14.,
+                                        false,
+                                        p.green,
+                                    )),
+                            ),
                     )
                     .child(meta_line)
                     .when(show_bar, |d| {
-                        d.child(
-                            div()
-                                .mt(px(4.))
-                                .w_full()
-                                .h(px(3.))
-                                .rounded(px(1.5))
-                                .bg(p.chip)
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .h_full()
-                                        .w(relative(smooth_prog))
-                                        .rounded(px(1.5))
-                                        .bg(bar_color),
-                                ),
-                        )
+                        d.child(div().mt(px(4.)).w_full().child(pro_spring_bar(
+                            pro_eid(&self.id, format!("prog-{iid}")),
+                            item.progress.clamp(0.0, 1.0),
+                            3.5,
+                            1.75,
+                            p.chip,
+                            bar_color,
+                        )))
                     }),
             )
             .child(
@@ -833,6 +842,7 @@ impl Render for Dropzone {
         }
 
         let fan = self.fan_slide.get(w, cx).clamp(0.0, 1.2);
+        let drag_amt = self.drag_slide.get(w, cx).clamp(0.0, 1.0);
         let left_x = -13.0 - 15.0 * fan;
         let right_x = 13.0 + 15.0 * fan;
         let mid_y = -2.0 - 6.0 * fan;
@@ -849,11 +859,11 @@ impl Render for Dropzone {
             SHEET_PNG_LIGHT
         };
 
-        let upload_glyph_color = if self.drag_active {
-            p.blue
-        } else {
-            pro_mix_color(p.muted, p.ink, (fan * 1.6).clamp(0.0, 1.0))
-        };
+        let upload_glyph_color = pro_mix_color(
+            pro_mix_color(p.muted, p.ink, (fan * 1.6).clamp(0.0, 1.0)),
+            p.blue,
+            drag_amt,
+        );
 
         let fanning_stack = div()
             .w(px(92.))
@@ -884,11 +894,7 @@ impl Render for Dropzone {
                     .rounded(px(6.))
                     .bg(p.card)
                     .border_1()
-                    .border_color(if self.drag_active {
-                        p.blue
-                    } else {
-                        p.line_strong
-                    })
+                    .border_color(pro_mix_color(p.line_strong, p.blue, drag_amt))
                     .when(!p.dark, |d| d.shadow_xs())
                     .flex()
                     .items_center()
@@ -896,9 +902,7 @@ impl Render for Dropzone {
                     .child(pro_icon(ProIcon::Upload, 15.5, upload_glyph_color)),
             );
 
-        let dash_color = if self.drag_active {
-            p.blue
-        } else if self.area_hovered {
+        let base_dash = if self.area_hovered {
             if p.dark {
                 hsla(0., 0., 1., 0.26)
             } else {
@@ -909,21 +913,32 @@ impl Render for Dropzone {
         } else {
             hsla(0., 0., 0., 0.13)
         };
-        let solid_drag = self.drag_active;
+        let dash_color = pro_mix_color(base_dash, p.blue, drag_amt);
+        let glow_color = p.blue.opacity(0.22 * drag_amt);
 
         let dashed_outline = canvas(
             |_, _, _| (),
             move |bounds, _, window, _| {
-                if solid_drag {
+                if drag_amt > 0.02 {
+                    window.paint_quad(quad(
+                        bounds,
+                        Corners::all(px(10.)),
+                        transparent_black(),
+                        Edges::all(px(3.5 * drag_amt)),
+                        glow_color,
+                        BorderStyle::Solid,
+                    ));
                     window.paint_quad(quad(
                         bounds,
                         Corners::all(px(10.)),
                         transparent_black(),
                         Edges::all(px(1.5)),
-                        dash_color,
+                        p.blue.opacity(drag_amt),
                         BorderStyle::Solid,
                     ));
-                    return;
+                    if drag_amt > 0.96 {
+                        return;
+                    }
                 }
                 let x0 = f32::from(bounds.left()) + 0.5;
                 let y0 = f32::from(bounds.top()) + 0.5;
@@ -1026,6 +1041,14 @@ impl Render for Dropzone {
             }
         };
 
+        let base_area_bg: Hsla = if self.area_hovered {
+            p.hover.opacity(0.6)
+        } else {
+            p.card
+        };
+        let area_bg = pro_mix_color(base_area_bg, p.accent_soft, drag_amt);
+        let pad_v = (if narrow { 18.0 } else { 22.0 }) + 2.0 * drag_amt;
+
         let drop_area = activate(
             div()
                 .id(pro_eid(&self.id, "drop-area"))
@@ -1037,17 +1060,12 @@ impl Render for Dropzone {
                 ))
                 .tab_index(0)
                 .w_full()
-                .py(if narrow { px(18.) } else { px(22.) })
+                .py(px(pad_v))
                 .px(if narrow { px(12.) } else { px(16.) })
                 .relative()
+                .top(px(-drag_amt))
                 .rounded(px(10.))
-                .bg(if self.drag_active {
-                    p.accent_soft
-                } else if self.area_hovered {
-                    p.hover.opacity(0.6)
-                } else {
-                    p.card
-                })
+                .bg(area_bg)
                 .cursor_pointer()
                 .focus_visible(move |s| s.border_1().border_color(p.focus))
                 .on_hover(cx.listener(|this, inside: &bool, w, cx| {
@@ -1128,76 +1146,108 @@ impl Render for Dropzone {
                 "png" => "Brand-Keynote.png",
                 _ => "Pipeline-Config.json",
             };
-            badge_adders = badge_adders.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("qadd-{ext}")))
-                    .role(Role::Button)
-                    .aria_label(format!("Add {ext} file"))
-                    .tab_index(0)
-                    .h(px(22.))
-                    .px(px(7.))
-                    .rounded(px(5.))
-                    .bg(p.chip)
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.text)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.chip_hover).text_color(p.ink))
-                    .child(label),
-                cx,
-                move |this, _, cx| {
-                    this.add_file(fname, sz, fail, cx);
-                },
-            ));
+            badge_adders = badge_adders.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("qadd-{ext}")),
+                    format!("Add {ext} file"),
+                    5.,
+                    p.chip,
+                    p.chip_hover,
+                    transparent_black(),
+                    p.line_strong,
+                    false,
+                    div()
+                        .h(px(22.))
+                        .px(px(7.))
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.text)
+                        .whitespace_nowrap()
+                        .child(label),
+                    cx,
+                    move |this, _, cx| {
+                        this.add_file(fname, sz, fail, cx);
+                    },
+                )
+                .flex_none(),
+            );
         }
 
         let drag_toggle_active = self.drag_active;
-        let drag_sim_btn = activate(
+        let drag_lbl = tr(
+            cx,
+            if drag_toggle_active {
+                "Dragging active"
+            } else {
+                "Preview drag"
+            },
+            if drag_toggle_active {
+                "拖拽态已开启"
+            } else {
+                "预览拖拽态"
+            },
+        );
+        let drag_sim_btn = pro_tactile(
+            pro_eid(&self.id, "sim-drag"),
+            tr(cx, "Preview drag state", "预览拖拽悬停态"),
+            5.,
+            if drag_toggle_active {
+                p.accent_soft
+            } else {
+                p.chip
+            },
+            p.chip_hover,
+            if drag_toggle_active {
+                p.blue.opacity(0.36)
+            } else {
+                transparent_black()
+            },
+            p.line_strong,
+            drag_toggle_active,
             div()
-                .id(pro_eid(&self.id, "sim-drag"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Preview drag state", "预览拖拽悬停态"))
-                .tab_index(0)
                 .h(px(22.))
                 .px(px(8.))
-                .rounded(px(5.))
-                .bg(if drag_toggle_active {
-                    p.accent_soft
-                } else {
-                    p.chip
-                })
                 .flex()
                 .items_center()
                 .gap(px(4.))
-                .text_size(px(11.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(if drag_toggle_active { p.blue } else { p.muted })
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.chip_hover).text_color(p.ink))
-                .child(tr(
-                    cx,
-                    if drag_toggle_active {
-                        "Dragging active"
-                    } else {
-                        "Preview drag"
-                    },
-                    if drag_toggle_active {
-                        "拖拽态已开启"
-                    } else {
-                        "预览拖拽态"
-                    },
+                .whitespace_nowrap()
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "sim-drag-lbl"),
+                    drag_lbl,
+                    11.,
+                    FontWeight::MEDIUM,
+                    if drag_toggle_active { p.blue } else { p.muted },
                 )),
             cx,
             |this, _, cx| {
                 let next = !this.drag_active;
                 this.set_drag_active(next, cx);
             },
-        );
+        )
+        .flex_none();
         quick_strip = quick_strip.child(badge_adders).child(drag_sim_btn);
 
+        let reduced = disabled_motion(cx);
+        if reduced {
+            self.entering_ids.clear();
+            self.exiting_items.clear();
+        } else {
+            self.exiting_items
+                .retain(|(_, t)| t.elapsed().as_secs_f32() < 0.28);
+            if !self.exiting_items.is_empty() || self.entering_ids.iter().any(|(_, ready)| !*ready)
+            {
+                w.request_animation_frame();
+            }
+        }
+
         let items_snapshot = self.items.clone();
+        let exiting_snapshot: Vec<UploadItem> = self
+            .exiting_items
+            .iter()
+            .map(|(it, _)| it.clone())
+            .collect();
         let rows_section = if self.empty {
             pro_empty_state(
                 ProIcon::Upload,
@@ -1219,7 +1269,7 @@ impl Render for Dropzone {
                 cx,
             )
             .into_any_element()
-        } else if items_snapshot.is_empty() {
+        } else if items_snapshot.is_empty() && exiting_snapshot.is_empty() {
             div().into_any_element()
         } else {
             let mut list = div()
@@ -1231,7 +1281,39 @@ impl Render for Dropzone {
                 .flex()
                 .flex_col();
             for (idx, item) in items_snapshot.iter().enumerate() {
-                list = list.child(self.render_row(item, idx, w, cx));
+                let iid = item.id.clone();
+                let fold_open =
+                    if let Some(entry) = self.entering_ids.iter_mut().find(|(id, _)| *id == iid) {
+                        if entry.1 {
+                            true
+                        } else {
+                            entry.1 = true;
+                            false
+                        }
+                    } else {
+                        true
+                    };
+                let row_el = self.render_row(item, idx, cx);
+                list = list.child(pro_fold(
+                    pro_eid(&self.id, format!("dz-fold-{iid}")),
+                    fold_open,
+                    52.,
+                    0.,
+                    move || row_el,
+                ));
+            }
+            self.entering_ids.retain(|(_, ready)| !*ready);
+            let base_len = items_snapshot.len();
+            for (e_idx, item) in exiting_snapshot.iter().enumerate() {
+                let iid = item.id.clone();
+                let row_el = self.render_row(item, base_len + e_idx, cx);
+                list = list.child(pro_fold(
+                    pro_eid(&self.id, format!("dz-fold-{iid}")),
+                    false,
+                    52.,
+                    0.,
+                    move || row_el,
+                ));
             }
             list.into_any_element()
         };
@@ -1356,50 +1438,40 @@ impl Render for Dropzone {
                         .items_center()
                         .gap(px(6.))
                         .when(recoverable, |d| {
-                            d.child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, "foot-retry-all"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Retry failed", "全部重试"))
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(10.))
-                                    .rounded(px(6.))
-                                    .bg(p.accent_soft)
-                                    .flex()
-                                    .items_center()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.blue)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.opacity(0.85))
-                                    .child(tr(cx, "Retry failed", "重试失败项")),
-                                cx,
-                                |this, _, cx| {
-                                    this.retry_all_failed(cx);
-                                },
-                            ))
+                            d.child(
+                                pro_tactile(
+                                    pro_eid(&self.id, "foot-retry-all"),
+                                    tr(cx, "Retry failed", "全部重试"),
+                                    6.,
+                                    p.accent_soft,
+                                    p.blue.opacity(0.20),
+                                    p.blue.opacity(0.32),
+                                    p.blue.opacity(0.48),
+                                    false,
+                                    div()
+                                        .h(px(28.))
+                                        .px(px(10.))
+                                        .flex()
+                                        .items_center()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.blue)
+                                        .whitespace_nowrap()
+                                        .child(tr(cx, "Retry failed", "重试失败项")),
+                                    cx,
+                                    |this, _, cx| {
+                                        this.retry_all_failed(cx);
+                                    },
+                                )
+                                .flex_none(),
+                            )
                         })
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "foot-clear"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Clear all", "清空列表"))
-                                .tab_index(0)
-                                .h(px(28.))
-                                .px(px(10.))
-                                .rounded(px(6.))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line)
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover).border_color(p.line_strong))
-                                .child(tr(cx, "Clear", "清空")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, "foot-clear"),
+                            tr(cx, "Clear", "清空"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
                             cx,
                             |this, _, cx| {
                                 this.clear_all(cx);

@@ -7,7 +7,11 @@
 use crate::{
     components::pro_chrome::{ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, tr},
     foundation::{Theme, ThemeMode},
-    primitives::{control::UiLanguage, family::Slide, pro_icons::ProIcon},
+    primitives::{
+        control::UiLanguage,
+        family::{Slide, disabled_motion},
+        pro_icons::ProIcon,
+    },
 };
 use gpui::{prelude::*, *};
 use image::{Frame, RgbaImage};
@@ -46,6 +50,8 @@ struct FolderCacheKey {
     custom_accent: bool,
     doc_count: u8,
     open_q: u16,
+    tilt_x_q: i8,
+    tilt_y_q: i8,
 }
 
 struct FolderSurfaceCache {
@@ -491,9 +497,15 @@ fn rasterize_glass_folder(
             )
         };
 
+    let par_x = f32::from(key.tilt_x_q) / 10.0;
+    let par_y = f32::from(key.tilt_y_q) / 10.0;
+
     for slot in 0..count {
-        let (tx, ty, deg) = document_pose(slot, count, open_t);
-        let rad = deg.to_radians();
+        let (base_tx, base_ty, deg) = document_pose(slot, count, open_t);
+        let depth_factor = 0.65 + 0.35 * (slot as f32 / count.saturating_sub(1).max(1) as f32);
+        let tx = base_tx + par_x * 9.5 * depth_factor;
+        let ty = base_ty + par_y * 6.0 * depth_factor;
+        let rad = (deg + par_x * 1.4 * depth_factor).to_radians();
         let (sin_r, cos_r) = rad.sin_cos();
         let pivot_x = tx + 140.;
         let pivot_y = ty + 175.;
@@ -666,13 +678,18 @@ pub struct GlassFolder {
     doc_labels: Vec<SharedString>,
     hovered: bool,
     pinned_open: bool,
+    hover_slide: Slide,
     open_slide: Slide,
+    press_slide: Slide,
+    tilt_x: Slide,
+    tilt_y: Slide,
     width: Option<Pixels>,
     height: Option<Pixels>,
     loading: bool,
     empty: bool,
     clock: Instant,
     measured_w: Rc<Cell<f32>>,
+    stage_bounds: Rc<Cell<Bounds<Pixels>>>,
     cache: Rc<RefCell<FolderSurfaceCache>>,
 }
 
@@ -691,13 +708,18 @@ impl GlassFolder {
             doc_labels: Vec::new(),
             hovered: false,
             pinned_open: false,
+            hover_slide: Slide::new(0.),
             open_slide: Slide::new(0.),
+            press_slide: Slide::snappy(0.),
+            tilt_x: Slide::snappy(0.),
+            tilt_y: Slide::snappy(0.),
             width: None,
             height: None,
             loading: false,
             empty: false,
-            clock: Instant::now(),
+            clock: cx.background_executor().now(),
             measured_w: Rc::new(Cell::new(420.)),
+            stage_bounds: Rc::new(Cell::new(Bounds::default())),
             cache: Rc::new(RefCell::new(FolderSurfaceCache::new())),
         }
     }
@@ -776,8 +798,7 @@ impl GlassFolder {
     pub fn set_open(&mut self, open: bool, cx: &mut Context<Self>) {
         if self.pinned_open != open {
             self.pinned_open = open;
-            self.open_slide
-                .duration(f32::from(self.is_open()), 0.55, cx);
+            self.open_slide.duration(f32::from(open), 0.48, cx);
             cx.notify();
         }
     }
@@ -813,20 +834,27 @@ impl GlassFolder {
             cx.notify();
         }
     }
+
+    fn effective_open_target(&self, focused: bool) -> (f32, f32) {
+        let peek = f32::from(self.hovered || (focused && !self.pinned_open));
+        let full = f32::from(self.pinned_open);
+        (peek, full)
+    }
 }
 
 impl Render for GlassFolder {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
 
         if self.loading {
             let phase = if reduced {
                 0.0
             } else {
                 w.request_animation_frame();
-                (self.clock.elapsed().as_secs_f32() / 1.4).fract()
+                (now.saturating_duration_since(self.clock).as_secs_f32() / 1.4).fract()
             };
             return div()
                 .id(pro_eid(&self.id, "loading"))
@@ -861,13 +889,24 @@ impl Render for GlassFolder {
         }
 
         let focused = self.focus.is_focused(w);
-        let target_open = f32::from(self.hovered || self.pinned_open || focused);
-        self.open_slide.duration(target_open, 0.55, cx);
-        let open_t = if reduced {
-            target_open
+        let (target_peek, target_open) = self.effective_open_target(focused);
+        self.hover_slide.duration(target_peek, 0.24, cx);
+        self.open_slide.duration(target_open, 0.48, cx);
+
+        let (hover_t, full_open_t, press_t, cur_tx, cur_ty) = if reduced {
+            (target_peek, target_open, 0.0, 0.0, 0.0)
         } else {
-            self.open_slide.get(w, cx).clamp(0., 1.)
+            (
+                self.hover_slide.get(w, cx).clamp(0., 1.),
+                self.open_slide.get(w, cx).clamp(0., 1.),
+                self.press_slide.get(w, cx).clamp(0., 1.),
+                self.tilt_x.get(w, cx).clamp(-1., 1.),
+                self.tilt_y.get(w, cx).clamp(-1., 1.),
+            )
         };
+
+        // Hover peeks ~30% open before clicking; clicking toggles full 100% open.
+        let open_t = (full_open_t + 0.30 * hover_t * (1.0 - full_open_t)).clamp(0., 1.);
 
         let a11y_label = self.label.clone().unwrap_or_else(|| {
             tr(
@@ -879,6 +918,7 @@ impl Render for GlassFolder {
         });
 
         let measured_cell = self.measured_w.clone();
+        let bounds_cell = self.stage_bounds.clone();
         let stage_w = self
             .width
             .map(f32::from)
@@ -898,6 +938,8 @@ impl Render for GlassFolder {
             custom_accent,
             doc_count: self.doc_count.min(5) as u8,
             open_q: (open_t * 1000.).round() as u16,
+            tilt_x_q: (cur_tx * 10.).round().clamp(-10., 10.) as i8,
+            tilt_y_q: (cur_ty * 10.).round().clamp(-10., 10.) as i8,
         };
         let cache = self.cache.clone();
         let focus_ring = p.focus;
@@ -914,22 +956,75 @@ impl Render for GlassFolder {
             .border_1()
             .border_color(transparent_black())
             .focus_visible(move |s| s.rounded(px(14.)).border_color(focus_ring))
-            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
-                if this.hovered != *hovered {
-                    this.hovered = *hovered;
+            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, w, cx| {
+                if w.last_input_was_touch() {
+                    return;
+                }
+                let b = this.stage_bounds.get();
+                let bw = f32::from(b.size.width);
+                let bh = f32::from(b.size.height);
+                if bw > 4. && bh > 4. {
+                    let nx = ((f32::from(e.position.x - b.left()) / bw - 0.5) * 2.0).clamp(-1., 1.);
+                    let ny = ((f32::from(e.position.y - b.top()) / bh - 0.5) * 2.0).clamp(-1., 1.);
+                    this.tilt_x.duration(nx, 0.18, cx);
+                    this.tilt_y.duration(ny, 0.18, cx);
                     cx.notify();
                 }
             }))
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                if this.hovered != *hovered {
+                    this.hovered = *hovered;
+                    if !*hovered {
+                        this.press_slide.set(0., cx);
+                        this.tilt_x.duration(0., 0.36, cx);
+                        this.tilt_y.duration(0., 0.36, cx);
+                    }
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, w, cx| {
+                    this.focus.focus(w, cx);
+                    this.press_slide.set(1., cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.press_slide.set(0., cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.press_slide.set(0., cx);
+                    cx.notify();
+                }),
+            )
             .on_click(cx.listener(|this, _, _, cx| {
                 this.pinned_open = !this.pinned_open;
+                this.open_slide
+                    .duration(f32::from(this.pinned_open), 0.48, cx);
                 cx.emit(GlassFolderEvent::OpenChanged(this.pinned_open));
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                 if matches!(e.keystroke.key.as_str(), "enter" | "space" | " ") {
+                    this.press_slide.set(1., cx);
                     this.pinned_open = !this.pinned_open;
+                    this.open_slide
+                        .duration(f32::from(this.pinned_open), 0.48, cx);
                     cx.emit(GlassFolderEvent::OpenChanged(this.pinned_open));
                     cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .on_key_up(cx.listener(|this, e: &KeyUpEvent, _, cx| {
+                if matches!(e.keystroke.key.as_str(), "enter" | "space" | " ") {
+                    this.press_slide.set(0., cx);
                     cx.notify();
                 }
             }));
@@ -942,6 +1037,7 @@ impl Render for GlassFolder {
 
         let width_sensor = canvas(
             move |bounds, window, _| {
+                bounds_cell.set(bounds);
                 let bw = f32::from(bounds.size.width);
                 if bw > 20. && (bw - measured_cell.get()).abs() > 1.0 {
                     measured_cell.set(bw);
@@ -955,10 +1051,13 @@ impl Render for GlassFolder {
                     return;
                 }
                 let fit_w = bw.min(bh * 1.5);
-                let draw_w = fit_w * (0.31 / 0.72);
+                let press_scale = 1.0 - 0.026 * press_t;
+                let draw_w = fit_w * (0.31 / 0.72) * press_scale;
                 let draw_h = draw_w * (TEX_H as f32 / TEX_W as f32);
-                let ox = bounds.origin.x + px((bw - draw_w) * 0.5);
-                let oy = bounds.origin.y + px((bh - draw_h) * 0.5);
+                let par_dx = cur_tx * 5.5;
+                let par_dy = cur_ty * 3.8 - hover_t * 2.2 + press_t * 1.8;
+                let ox = bounds.origin.x + px((bw - draw_w) * 0.5 + par_dx);
+                let oy = bounds.origin.y + px((bh - draw_h) * 0.5 + par_dy);
                 let dest = Bounds::new(point(ox, oy), size(px(draw_w), px(draw_h)));
                 let image = cache.borrow_mut().render_frame(key, window);
                 let _ = window.paint_image(dest, dest, Corners::default(), image, 0, false);
@@ -972,14 +1071,14 @@ impl Render for GlassFolder {
         if !self.doc_labels.is_empty() && open_t > 0.05 {
             let mut badges = div()
                 .absolute()
-                .bottom(px(12.))
+                .bottom(px(12. - 4. * (1. - open_t)))
                 .left_0()
                 .right_0()
                 .flex()
                 .items_center()
                 .justify_center()
                 .gap(px(6.))
-                .opacity(open_t);
+                .opacity((open_t * 1.25).clamp(0., 1.));
             for name in &self.doc_labels {
                 badges = badges.child(
                     div()
@@ -1004,9 +1103,11 @@ impl Render for GlassFolder {
 #[cfg(test)]
 mod tests {
     use super::{
-        FolderCacheKey, RenderImage, TEX_H, TEX_W, document_pose, rasterize_glass_folder,
-        sd_folder_back, sd_front_pocket,
+        FolderCacheKey, GlassFolder, RenderImage, TEX_H, TEX_W, document_pose,
+        rasterize_glass_folder, sd_folder_back, sd_front_pocket,
     };
+    use gpui::{TestAppContext, point, px, size};
+    use std::time::Duration;
 
     fn render_key(dark: bool, open_q: u16, doc_count: u8) -> RenderImage {
         let len = TEX_W * TEX_H;
@@ -1024,6 +1125,8 @@ mod tests {
                 custom_accent: false,
                 doc_count,
                 open_q,
+                tilt_x_q: 0,
+                tilt_y_q: 0,
             },
             &mut ab,
             &mut at,
@@ -1052,8 +1155,9 @@ mod tests {
     #[test]
     fn hover_open_fans_documents_upward_and_preserves_transparent_corners() {
         let rest_mid = document_pose(2, 3, 0.0);
+        let peek_mid = document_pose(2, 3, 0.30);
         let open_mid = document_pose(2, 3, 1.0);
-        assert!(open_mid.1 < rest_mid.1);
+        assert!(peek_mid.1 < rest_mid.1 && open_mid.1 < peek_mid.1);
         assert!(open_mid.2 < rest_mid.2);
 
         let light = render_key(false, 0, 3);
@@ -1070,5 +1174,65 @@ mod tests {
         // Upper paper region in dark mode renders darker slate than light mode's white paper.
         let paper_sample = ((TEX_H * 33 / 100) * TEX_W + TEX_W / 2) * 4;
         assert!(dark_bytes[paper_sample + 2] < bytes[paper_sample + 2]);
+    }
+
+    #[gpui::test]
+    fn hover_peeks_thirty_percent_and_click_toggles_full_open_with_parallax(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (folder, window) = cx.add_window_view(|_, cx| GlassFolder::new("gf-peek", cx));
+        window.simulate_resize(size(px(420.), px(280.)));
+        window.run_until_parked();
+
+        // Simulate pointer hover + parallax move in upper-right quadrant before clicking
+        window.simulate_mouse_move(point(px(310.), px(90.)), None, gpui::Modifiers::default());
+        window.run_until_parked();
+        exec.advance_clock(Duration::from_millis(320));
+        window.update(|w, app| w.simulate_next_frame(app));
+        window.run_until_parked();
+
+        let (hover_val, open_val, tx_val) = window.update(|_, app| {
+            let f = folder.read(app);
+            (
+                f.hover_slide.value(app),
+                f.open_slide.value(app),
+                f.tilt_x.value(app),
+            )
+        });
+        assert!(
+            hover_val > 0.90,
+            "expected hover_slide near 1.0, got {hover_val}"
+        );
+        assert!(
+            open_val < 0.05,
+            "expected pinned open_slide at 0 before click, got {open_val}"
+        );
+        let peek_open = full_blend(open_val, hover_val);
+        assert!(
+            (0.27..=0.33).contains(&peek_open),
+            "expected ~30% hover-peek opening before click, got {peek_open}"
+        );
+        assert!(
+            tx_val > 0.2,
+            "expected positive pointer parallax tilt_x, got {tx_val}"
+        );
+
+        // Click toggles full open (`open_slide -> 1.0`)
+        window.simulate_click(point(px(210.), px(140.)), gpui::Modifiers::default());
+        exec.advance_clock(Duration::from_millis(600));
+        window.update(|w, app| w.simulate_next_frame(app));
+        window.run_until_parked();
+
+        let full_val = window.update(|_, app| folder.read(app).open_slide.value(app));
+        assert!(
+            full_val > 0.96,
+            "expected full open after click, got {full_val}"
+        );
+    }
+
+    fn full_blend(full_open: f32, hover: f32) -> f32 {
+        (full_open + 0.30 * hover * (1.0 - full_open)).clamp(0., 1.)
     }
 }

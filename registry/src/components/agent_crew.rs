@@ -5,13 +5,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_connector_pulse,
-        pro_ease, pro_eid, pro_empty_state, pro_modal_appear, pro_shimmer_text, pro_skeleton_bar,
-        pro_spring_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_modal_appear, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::activate,
         editor::{EditEvent, Editor, InputMode},
         family::disabled_motion,
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
@@ -320,7 +321,9 @@ pub struct AgentCrew {
     active_project_idx: usize,
     project_menu_open: bool,
     focused_card_idx: usize,
+    hovered_agent_id: Option<SharedString>,
     open_agent_id: Option<SharedString>,
+    inspector_details_open: bool,
     seen_handoffs: Vec<SharedString>,
     active_flight: Option<ActiveFlight>,
     card_glows: HashMap<SharedString, (Instant, GlowSide)>,
@@ -353,7 +356,9 @@ impl AgentCrew {
             active_project_idx: 0,
             project_menu_open: false,
             focused_card_idx: 0,
+            hovered_agent_id: None,
             open_agent_id: None,
+            inspector_details_open: true,
             seen_handoffs: Vec::new(),
             active_flight: Some(ActiveFlight {
                 hops: vec![
@@ -519,6 +524,7 @@ impl AgentCrew {
             if self.active_project_idx != idx {
                 self.active_project_idx = idx;
                 self.focused_card_idx = 0;
+                self.hovered_agent_id = None;
                 self.open_agent_id = None;
                 self.active_flight = None;
                 self.card_glows.clear();
@@ -935,7 +941,7 @@ impl AgentCrew {
         let pct_int = (ratio * 100.0).round() as u32;
         let used_k = ((ratio * (agent.context_limit as f32)) / 1000.0).round() as u32;
         let lim_k = (agent.context_limit / 1000).max(1);
-        let ctx_label = format!("{used_k}k / {lim_k}k");
+        let ctx_suffix = format!("k / {lim_k}k");
 
         let bar_color = if ratio >= 0.95 {
             p.red
@@ -982,7 +988,13 @@ impl AgentCrew {
                 d.child(div().size(px(5.5)).rounded_full().bg(p.amber))
             })
             .when(agent.status == CrewStatus::Done, |d| {
-                d.child(pro_icon(ProIcon::Check, 11., st_fg))
+                d.child(pro_check_draw(
+                    pro_eid(&self.id, format!("done-chk-{}", agent.id)),
+                    true,
+                    12.,
+                    false,
+                    p.green,
+                ))
             })
             .when(agent.status == CrewStatus::Failed, |d| {
                 d.child(pro_icon(ProIcon::AlertTriangle, 11., st_fg))
@@ -990,7 +1002,13 @@ impl AgentCrew {
             .when(agent.status == CrewStatus::Paused, |d| {
                 d.child(pro_icon(ProIcon::Pause, 10.5, st_fg))
             })
-            .child(agent.status.label(cx));
+            .child(pro_swap_label(
+                pro_eid(&self.id, format!("st-lbl-{}", agent.id)),
+                agent.status.label(cx),
+                11.,
+                FontWeight::MEDIUM,
+                st_fg,
+            ));
 
         let act_color = match agent.status {
             CrewStatus::Waiting => p.amber_ink,
@@ -1041,8 +1059,6 @@ impl AgentCrew {
         };
 
         let border_c = if is_open { p.line_strong } else { p.line };
-        let hover_border = p.line_strong;
-        let focus_c = p.focus;
 
         let mut card_inner = div()
             .w_full()
@@ -1123,14 +1139,16 @@ impl AgentCrew {
                         p.chip,
                         bar_color,
                     )))
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(11.))
-                            .line_height(px(14.))
-                            .text_color(ctx_num_color)
-                            .child(ctx_label),
-                    ),
+                    .child(div().flex_none().child(pro_rolling_number(
+                        pro_eid(&self.id, format!("ctx-num-{}", agent.id)),
+                        used_k as f64,
+                        0,
+                        "",
+                        ctx_suffix,
+                        11.,
+                        FontWeight::NORMAL,
+                        ctx_num_color,
+                    ))),
             );
 
         // Prepaint bounds sensor inside card_inner so connectors attach to the card box!
@@ -1228,27 +1246,26 @@ impl AgentCrew {
             pct_int
         );
         let click_id = agent.id.clone();
+        let hover_id = agent.id.clone();
 
-        let outer = activate(
-            div()
-                .id(pro_eid(&self.id, format!("node-{}", agent.id)))
-                .role(Role::TreeItem)
-                .aria_label(aria)
-                .tab_index(0)
-                .when(full_width, |d| d.w_full())
-                .when(!full_width, |d| d.w(px(214.)))
-                .rounded(px(10.))
-                .bg(p.tray)
-                .border_1()
-                .border_color(if is_open { p.line_strong } else { p.line_soft })
-                .p(px(2.5))
-                .flex()
-                .flex_col()
-                .cursor_pointer()
-                .hover(move |s| s.border_color(hover_border))
-                .focus_visible(move |s| s.border_color(focus_c))
-                .child(card_inner)
-                .when(has_tray_foot, |d| d.child(tray_foot)),
+        let tray_body = div()
+            .w_full()
+            .p(px(2.5))
+            .flex()
+            .flex_col()
+            .child(card_inner)
+            .when(has_tray_foot, |d| d.child(tray_foot));
+
+        pro_tactile(
+            pro_eid(&self.id, format!("node-{}", agent.id)),
+            aria,
+            10.,
+            p.tray,
+            p.chip_hover,
+            if is_open { p.line_strong } else { p.line_soft },
+            branch_color.opacity(0.60),
+            is_open,
+            tray_body,
             cx,
             move |this, _, cx| {
                 let target = click_id.clone();
@@ -1261,8 +1278,24 @@ impl AgentCrew {
                 }
                 cx.notify();
             },
-        );
-        outer.into_any_element()
+        )
+        .role(Role::TreeItem)
+        .when(full_width, |d| d.w_full())
+        .when(!full_width, |d| d.w(px(214.)))
+        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+            let next = if *hovered {
+                Some(hover_id.clone())
+            } else if this.hovered_agent_id.as_ref() == Some(&hover_id) {
+                None
+            } else {
+                this.hovered_agent_id.clone()
+            };
+            if this.hovered_agent_id != next {
+                this.hovered_agent_id = next;
+                cx.notify();
+            }
+        }))
+        .into_any_element()
     }
 
     fn render_steering_modal(
@@ -1416,23 +1449,12 @@ impl AgentCrew {
             }
         }
 
-        let hover_bg = p.chip_hover;
-        let focus_c = p.focus;
-        let close_btn = activate(
-            div()
-                .id(pro_eid(&self.id, "close-steer"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Close inspector", "关闭详情面板"))
-                .tab_index(0)
-                .size(px(24.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .focus_visible(move |s| s.border_1().border_color(focus_c))
-                .child(pro_icon(ProIcon::Close, 13., p.muted)),
+        let close_btn = pro_icon_btn(
+            pro_eid(&self.id, "close-steer"),
+            tr(cx, "Close inspector", "关闭详情面板"),
+            ProIcon::Close,
+            24.,
+            false,
             cx,
             |this, w, cx| {
                 this.open_agent_id = None;
@@ -1459,6 +1481,100 @@ impl AgentCrew {
                     .child(tool.clone()),
             );
         }
+
+        let details_open = self.inspector_details_open;
+        let has_details = !agent.tools.is_empty() || agent.last.is_some();
+        let details_toggle = if has_details {
+            Some(
+                pro_tactile(
+                    pro_eid(&self.id, "steer-details-toggle"),
+                    tr(cx, "Context and handoff details", "上下文与交接详情"),
+                    6.,
+                    p.subtle,
+                    p.chip_hover,
+                    p.line_soft,
+                    p.line,
+                    details_open,
+                    div()
+                        .w_full()
+                        .h(px(24.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.text)
+                        .child(tr(cx, "Tools & handoff", "连接工具与交接"))
+                        .child(pro_icon(
+                            if details_open {
+                                ProIcon::ChevronUp
+                            } else {
+                                ProIcon::ChevronDown
+                            },
+                            12.,
+                            p.muted,
+                        )),
+                    cx,
+                    |this, _, cx| {
+                        this.inspector_details_open = !this.inspector_details_open;
+                        cx.notify();
+                    },
+                )
+                .into_any_element(),
+            )
+        } else {
+            None
+        };
+
+        let last_clone = agent.last.clone();
+        let has_tools = !agent.tools.is_empty();
+        let p_fold = *p;
+        let details_fold = if has_details {
+            Some(pro_fold(
+                pro_eid(&self.id, format!("steer-fold-{aid}")),
+                details_open,
+                64.,
+                4.,
+                move || {
+                    div()
+                        .w_full()
+                        .pt(px(2.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.))
+                        .when(has_tools, |d| d.child(tools_wrap))
+                        .when_some(last_clone.as_ref(), |d, last| {
+                            d.child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .items_start()
+                                    .gap(px(5.))
+                                    .text_size(px(11.5))
+                                    .line_height(px(16.))
+                                    .text_color(p_fold.muted)
+                                    .child(pro_svg(
+                                        "0 0 24 24",
+                                        CORNER_HANDOFF_SVG,
+                                        12.,
+                                        p_fold.muted,
+                                    ))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p_fold.text)
+                                            .child(format!("{}:", last.from)),
+                                    )
+                                    .child(div().flex_1().min_w_0().child(last.text.clone())),
+                            )
+                        })
+                        .into_any_element()
+                },
+            ))
+        } else {
+            None
+        };
 
         let editor_box = if let Some(ed) = &self.steer_editor {
             div()
@@ -1498,6 +1614,39 @@ impl AgentCrew {
             div()
         };
 
+        let cost_val_el = if agent.cost.is_finite() && agent.cost >= 0.01 {
+            pro_rolling_number(
+                pro_eid(&self.id, format!("steer-cost-{aid}")),
+                agent.cost,
+                2,
+                "$",
+                "",
+                12.5,
+                FontWeight::MEDIUM,
+                p.ink,
+            )
+        } else {
+            div()
+                .text_size(px(12.5))
+                .line_height(px(16.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.ink)
+                .truncate()
+                .child(cost_str.clone())
+                .into_any_element()
+        };
+
+        let ctx_val_el = pro_rolling_number(
+            pro_eid(&self.id, format!("steer-ctx-{aid}")),
+            used_k as f64,
+            0,
+            "",
+            format!("k / {lim_k}k"),
+            12.5,
+            FontWeight::MEDIUM,
+            p.ink,
+        );
+
         let dialog = div()
             .id(pro_eid(&self.id, "steer-dialog"))
             .role(Role::Dialog)
@@ -1536,11 +1685,26 @@ impl AgentCrew {
                             .flex_col()
                             .child(
                                 div()
-                                    .text_size(px(13.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .truncate()
-                                    .child(disp_name),
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .child(
+                                        div()
+                                            .text_size(px(13.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.strong)
+                                            .truncate()
+                                            .child(disp_name),
+                                    )
+                                    .when(agent.status == CrewStatus::Done, |d| {
+                                        d.child(pro_check_draw(
+                                            pro_eid(&self.id, format!("steer-done-{aid}")),
+                                            true,
+                                            14.,
+                                            false,
+                                            p.green,
+                                        ))
+                                    }),
                             )
                             .child(
                                 div()
@@ -1570,43 +1734,35 @@ impl AgentCrew {
                     .border_b_1()
                     .border_color(p.line)
                     .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(usage_cell(
-                        tr(cx, "Time", "耗时"),
-                        format_duration_secs(live_secs),
-                        p,
-                    ))
-                    .when(!cost_str.is_empty(), |d| {
-                        d.child(usage_cell(tr(cx, "Cost", "花费"), cost_str, p))
-                    })
-                    .child(usage_cell(
-                        tr(cx, "Context", "上下文"),
-                        format!("{used_k}k / {lim_k}k"),
-                        p,
+                    .flex_col()
+                    .gap(px(7.))
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(usage_cell(
+                                tr(cx, "Time", "耗时"),
+                                format_duration_secs(live_secs),
+                                p,
+                            ))
+                            .when(!cost_str.is_empty(), |d| {
+                                d.child(usage_cell_el(tr(cx, "Cost", "花费"), cost_val_el, p))
+                            })
+                            .child(usage_cell_el(tr(cx, "Context", "上下文"), ctx_val_el, p)),
+                    )
+                    .child(pro_spring_bar(
+                        pro_eid(&self.id, format!("steer-bar-{aid}")),
+                        ratio,
+                        4.0,
+                        2.0,
+                        p.chip,
+                        branch_color,
                     )),
             )
-            .when(!agent.tools.is_empty(), |d| d.child(tools_wrap))
-            .when_some(agent.last.as_ref(), |d, last| {
-                d.child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_start()
-                        .gap(px(5.))
-                        .text_size(px(11.5))
-                        .line_height(px(16.))
-                        .text_color(p.muted)
-                        .child(pro_svg("0 0 24 24", CORNER_HANDOFF_SVG, 12., p.muted))
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.text)
-                                .child(format!("{}:", last.from)),
-                        )
-                        .child(div().flex_1().min_w_0().child(last.text.clone())),
-                )
-            })
+            .children(details_toggle)
+            .children(details_fold)
             .child(actions_row)
             .child(editor_box);
 
@@ -1723,6 +1879,7 @@ impl Render for AgentCrew {
         let total_agents = count_tree_all(&root_clone);
         let working_agents = count_tree_by(&root_clone, |a| a.status == CrewStatus::Active);
         let waiting_agents = count_tree_by(&root_clone, |a| a.status == CrewStatus::Waiting);
+        let total_cost = sum_tree_cost(&root_clone);
 
         let proj_title: SharedString = if self.custom_data {
             active_proj.name.clone()
@@ -1731,28 +1888,28 @@ impl Render for AgentCrew {
         };
 
         let menu_open = self.project_menu_open;
-        let hover_fill = p.chip_hover;
-        let open_fill = p.chip;
-        let focus_c = p.focus;
 
         let header_left = if self.projects.len() > 1 {
-            let btn = activate(
+            pro_tactile(
+                pro_eid(&self.id, "proj-btn"),
+                proj_title.clone(),
+                6.,
+                if menu_open {
+                    p.chip
+                } else {
+                    transparent_black()
+                },
+                p.chip_hover,
+                transparent_black(),
+                p.line,
+                menu_open,
                 div()
-                    .id(pro_eid(&self.id, "proj-btn"))
-                    .role(Role::Button)
-                    .aria_label(proj_title.clone())
-                    .tab_index(0)
                     .h(px(28.))
                     .pl(px(8.))
                     .pr(px(7.))
-                    .rounded(px(6.))
-                    .when(menu_open, |d| d.bg(open_fill))
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(hover_fill))
-                    .focus_visible(move |s| s.border_1().border_color(focus_c))
                     .child(pro_icon(ProIcon::Folder, 14., p.muted))
                     .child(
                         div()
@@ -1776,8 +1933,8 @@ impl Render for AgentCrew {
                     this.project_menu_open = !this.project_menu_open;
                     cx.notify();
                 },
-            );
-            btn.into_any_element()
+            )
+            .into_any_element()
         } else {
             div()
                 .text_size(px(13.5))
@@ -1816,12 +1973,16 @@ impl Render for AgentCrew {
                         },
                     ))
                     .when(working_agents > 0, |d| {
-                        d.child(
-                            div()
-                                .text_color(p.blue)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(format!("{working_agents} {}", tr(cx, "working", "工作中"))),
-                        )
+                        d.child(pro_rolling_number(
+                            pro_eid(&self.id, "hdr-working"),
+                            working_agents as f64,
+                            0,
+                            "",
+                            format!(" {}", tr(cx, "working", "工作中")),
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.blue,
+                        ))
                     })
                     .when(waiting_agents > 0, |d| {
                         d.child(
@@ -1834,6 +1995,18 @@ impl Render for AgentCrew {
                                 )),
                         )
                     })
+                    .when(total_cost >= 0.01, |d| {
+                        d.child(pro_rolling_number(
+                            pro_eid(&self.id, "hdr-cost"),
+                            total_cost,
+                            2,
+                            "$",
+                            "",
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        ))
+                    })
                     .child(
                         div()
                             .text_color(p.muted)
@@ -1845,7 +2018,20 @@ impl Render for AgentCrew {
         let branch_palette = [p.purple, p.cyan, p.green, p.orange, p.pink, p.teal];
         let mut sensors: HashMap<SharedString, Rc<Cell<Option<Bounds<Pixels>>>>> = HashMap::new();
         let mut color_map: HashMap<SharedString, Hsla> = HashMap::new();
-        let mut edges: Vec<(SharedString, SharedString, Hsla, bool, bool)> = Vec::new();
+        let mut edges: Vec<(SharedString, SharedString, Hsla, bool, bool, f32)> = Vec::new();
+
+        let focus_agent = self
+            .hovered_agent_id
+            .clone()
+            .or_else(|| self.open_agent_id.clone());
+        let any_spot = pro_spring_f32(
+            pro_eid(&self.id, "any-spot"),
+            if focus_agent.is_some() { 1.0 } else { 0.0 },
+            0.22,
+            w,
+            cx,
+        )
+        .clamp(0., 1.);
 
         let lead_sensor = Rc::new(Cell::new(None));
         sensors.insert(root_clone.id.clone(), lead_sensor.clone());
@@ -1856,12 +2042,41 @@ impl Render for AgentCrew {
             sensors.insert(l1.id.clone(), Rc::new(Cell::new(None)));
             color_map.insert(l1.id.clone(), bcol);
             let rest = l1.status != CrewStatus::Active && l1.status != CrewStatus::Waiting;
-            edges.push((root_clone.id.clone(), l1.id.clone(), p.blue, wide, rest));
+            let lit1 = focus_agent
+                .as_ref()
+                .is_some_and(|fid| fid == &root_clone.id || fid == &l1.id);
+            let spot1 = pro_spring_f32(
+                pro_eid(&self.id, format!("edge-spot-{}-{}", root_clone.id, l1.id)),
+                if lit1 { 1.0 } else { 0.0 },
+                0.22,
+                w,
+                cx,
+            )
+            .clamp(0., 1.);
+            edges.push((
+                root_clone.id.clone(),
+                l1.id.clone(),
+                p.blue,
+                wide,
+                rest,
+                spot1,
+            ));
             for l2 in &l1.children {
                 sensors.insert(l2.id.clone(), Rc::new(Cell::new(None)));
                 color_map.insert(l2.id.clone(), bcol);
                 let l2_rest = l2.status != CrewStatus::Active && l2.status != CrewStatus::Waiting;
-                edges.push((l1.id.clone(), l2.id.clone(), bcol, false, l2_rest));
+                let lit2 = focus_agent
+                    .as_ref()
+                    .is_some_and(|fid| fid == &l1.id || fid == &l2.id);
+                let spot2 = pro_spring_f32(
+                    pro_eid(&self.id, format!("edge-spot-{}-{}", l1.id, l2.id)),
+                    if lit2 { 1.0 } else { 0.0 },
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0., 1.);
+                edges.push((l1.id.clone(), l2.id.clone(), bcol, false, l2_rest, spot2));
             }
         }
 
@@ -1933,8 +2148,8 @@ impl Render for AgentCrew {
         let links_canvas = canvas(
             |_, _, _| (),
             move |_, _, window, _| {
-                let mut parent_anchors: Vec<(Point<Pixels>, Hsla)> = Vec::new();
-                for (from_id, to_id, col, s_bend_vertical, rest) in &edges_paint {
+                let mut parent_anchors: Vec<(Point<Pixels>, Hsla, f32)> = Vec::new();
+                for (from_id, to_id, col, s_bend_vertical, rest, spot) in &edges_paint {
                     let Some(b0) = sensors_paint.get(from_id).and_then(|c| c.get()) else {
                         continue;
                     };
@@ -1948,34 +2163,48 @@ impl Render for AgentCrew {
                             None
                         }
                     });
-                    let base_alpha = if prog.is_some() {
+                    let rest_alpha = if prog.is_some() {
                         0.72
                     } else if *rest {
                         0.32
                     } else {
                         0.56
                     };
+                    let dim_factor = 1.0 - 0.36 * any_spot * (1.0 - *spot);
+                    let base_alpha = (rest_alpha * dim_factor
+                        + (0.94 - rest_alpha * dim_factor) * *spot)
+                        .clamp(0.14, 0.96);
+                    let stroke_w = 1.5 + 0.80 * *spot;
                     let base_c = col.opacity(base_alpha);
 
                     if *s_bend_vertical {
                         let p0 = point((b0.left() + b0.right()) * 0.5, b0.bottom() + px(2.5));
                         let p1 = point((b1.left() + b1.right()) * 0.5, b1.top() - px(2.5));
-                        pro_connector_pulse(p0, p1, 8.0, true, base_c, *col, prog, 1.5, window);
-                        parent_anchors.push((p0, *col));
+                        pro_connector_pulse(
+                            p0, p1, 8.0, true, base_c, *col, prog, stroke_w, window,
+                        );
+                        parent_anchors.push((p0, *col, *spot));
                     } else {
                         // Indented L-elbow from parent bottom-left down to child center-left
                         let x0 = f32::from(b0.left()) + 14.0;
                         let y0 = f32::from(b0.bottom()) + 2.5;
                         let x1 = f32::from(b1.left()) - 2.5;
                         let y1 = (f32::from(b1.top()) + f32::from(b1.bottom())) * 0.5;
-                        paint_l_elbow(x0, y0, x1, y1, 5.0, base_c, *col, prog, 1.5, window);
-                        parent_anchors.push((point(px(x0), px(y0)), *col));
+                        paint_l_elbow(x0, y0, x1, y1, 5.0, base_c, *col, prog, stroke_w, window);
+                        parent_anchors.push((point(px(x0), px(y0)), *col, *spot));
                     }
                 }
 
                 // Ringed junction dots at parent outgoing anchors
-                for (pt, col) in parent_anchors {
-                    paint_ring_dot(pt, 3.0, card_bg, col.opacity(0.82), 1.5, window);
+                for (pt, col, spot) in parent_anchors {
+                    paint_ring_dot(
+                        pt,
+                        3.0 + 0.6 * spot,
+                        card_bg,
+                        col.opacity((0.82 + 0.16 * spot).clamp(0., 1.)),
+                        1.5 + 0.4 * spot,
+                        window,
+                    );
                 }
             },
         )
@@ -2020,57 +2249,57 @@ impl Render for AgentCrew {
                 }),
         );
 
-        // Optional project dropdown menu
-        let proj_menu =
-            if self.project_menu_open && self.projects.len() > 1 {
-                let mut list = div()
-                    .id(pro_eid(&self.id, "proj-menu"))
-                    .role(Role::ListBox)
-                    .aria_label(tr(cx, "Select project crew", "切换项目协作组"))
-                    .on_click(|_, _, cx| cx.stop_propagation())
-                    .absolute()
-                    .top(px(40.))
-                    .left(px(12.))
-                    .w(px(300.))
-                    .max_w(px((container_w - 24.).max(220.)))
-                    .p(px(4.))
-                    .rounded(px(10.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .shadow_lg()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.));
+        // Optional project dropdown menu with bidirectional spring popover presence
+        let proj_menu = if self.projects.len() > 1 {
+            let mut list = div()
+                .id(pro_eid(&self.id, "proj-menu"))
+                .role(Role::ListBox)
+                .aria_label(tr(cx, "Select project crew", "切换项目协作组"))
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .w(px(300.))
+                .max_w(px((container_w - 24.).max(220.)))
+                .p(px(4.))
+                .rounded(px(10.))
+                .bg(p.card)
+                .border_1()
+                .border_color(p.line_strong)
+                .shadow_lg()
+                .flex()
+                .flex_col()
+                .gap(px(2.));
 
-                for (pi, proj) in self.projects.iter().enumerate() {
-                    let selected = pi == self.active_project_idx;
-                    let pid = proj.id.clone();
-                    let pname: SharedString = if self.custom_data {
-                        proj.name.clone()
-                    } else {
-                        tr_project_name(&proj.id, &proj.name, cx).into()
-                    };
-                    let w_cnt = count_tree_by(&proj.root, |a| a.status == CrewStatus::Active);
-                    let u_cnt = count_tree_by(&proj.root, |a| a.status == CrewStatus::Waiting);
-                    let row_hover = p.hover;
-                    let row_sel = p.select;
+            for (pi, proj) in self.projects.iter().enumerate() {
+                let selected = pi == self.active_project_idx;
+                let pid = proj.id.clone();
+                let pname: SharedString = if self.custom_data {
+                    proj.name.clone()
+                } else {
+                    tr_project_name(&proj.id, &proj.name, cx).into()
+                };
+                let w_cnt = count_tree_by(&proj.root, |a| a.status == CrewStatus::Active);
+                let u_cnt = count_tree_by(&proj.root, |a| a.status == CrewStatus::Waiting);
 
-                    list =
-                        list.child(activate(
+                list =
+                    list.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("proj-opt-{pi}")),
+                            pname.clone(),
+                            7.,
+                            if selected {
+                                p.select
+                            } else {
+                                transparent_black()
+                            },
+                            p.hover,
+                            transparent_black(),
+                            transparent_black(),
+                            selected,
                             div()
-                                .id(pro_eid(&self.id, format!("proj-opt-{pi}")))
-                                .role(Role::ListBoxOption)
-                                .aria_label(pname.clone())
                                 .h(px(32.))
                                 .px(px(8.))
-                                .rounded(px(7.))
-                                .when(selected, |d| d.bg(row_sel))
                                 .flex()
                                 .items_center()
                                 .gap(px(8.))
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(row_hover))
                                 .child(
                                     div()
                                         .flex_1()
@@ -2098,17 +2327,37 @@ impl Render for AgentCrew {
                                         )),
                                     )
                                 })
-                                .when(selected, |d| d.child(pro_icon(ProIcon::Check, 13., p.ink))),
+                                .when(selected, |d| {
+                                    d.child(pro_check_draw(
+                                        pro_eid(&self.id, format!("proj-chk-{pi}")),
+                                        true,
+                                        14.,
+                                        false,
+                                        p.primary,
+                                    ))
+                                }),
                             cx,
                             move |this, _, cx| {
                                 this.select_project(pid.clone(), cx);
                             },
-                        ));
-                }
-                Some(list)
-            } else {
-                None
-            };
+                        )
+                        .role(Role::ListBoxOption),
+                    );
+            }
+            Some(
+                div()
+                    .absolute()
+                    .top(px(40.))
+                    .left(px(12.))
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, "proj-menu-pop"),
+                        self.project_menu_open,
+                        move || list.into_any_element(),
+                    )),
+            )
+        } else {
+            None
+        };
 
         let open_modal = self.open_agent_id.clone().and_then(|oid| {
             let found = find_agent(&root_clone, &oid)?.clone();
@@ -2291,6 +2540,32 @@ fn usage_cell(label: &str, value: String, p: &ProPalette) -> Div {
                 .truncate()
                 .child(value),
         )
+}
+
+fn usage_cell_el(label: &str, value_el: AnyElement, p: &ProPalette) -> Div {
+    div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .child(
+            div()
+                .text_size(px(11.))
+                .line_height(px(14.))
+                .text_color(p.muted)
+                .child(label.to_string()),
+        )
+        .child(div().h(px(16.)).flex().items_center().child(value_el))
+}
+
+fn sum_tree_cost(node: &CrewAgent) -> f64 {
+    let own = if node.cost.is_finite() && node.cost >= 0.0 {
+        node.cost
+    } else {
+        0.0
+    };
+    own + node.children.iter().map(sum_tree_cost).sum::<f64>()
 }
 
 fn sanitize_ratio(v: f32) -> f32 {

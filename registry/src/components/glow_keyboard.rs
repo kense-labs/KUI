@@ -5,10 +5,13 @@
 //! color waves up a two-layer Gaussian-blurred gradient floor and flashing the input halo.
 
 use crate::{
-    components::pro_chrome::{ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, tr},
+    components::pro_chrome::{
+        ProPalette, pro_eid, pro_empty_state, pro_mix_color, pro_skeleton_bar, tr,
+    },
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_raw_svg, pro_svg},
     },
 };
@@ -19,6 +22,7 @@ use std::{
     f32::consts::{PI, TAU},
     rc::Rc,
     sync::Arc,
+    time::Duration,
 };
 use web_time::Instant;
 
@@ -1057,6 +1061,109 @@ fn rasterize_glow_floor(
     RenderImage::new(vec![Frame::new(buf)])
 }
 
+const IDLE_RESUME_MS: u64 = 4500;
+
+fn is_grapheme_extend(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x0300..=0x036F
+            | 0x1AB0..=0x1AFF
+            | 0x1DC0..=0x1DFF
+            | 0x20D0..=0x20FF
+            | 0xFE00..=0xFE0F
+            | 0xFE20..=0xFE2F
+            | 0x1F3FB..=0x1F3FF
+            | 0xE0100..=0xE01EF
+    )
+}
+
+fn is_regional_indicator(ch: char) -> bool {
+    matches!(ch as u32, 0x1F1E6..=0x1F1FF)
+}
+
+/// Remove the last user-perceived grapheme cluster from `buf`.
+fn pop_last_grapheme(buf: &mut String) {
+    let Some(first_popped) = buf.pop() else {
+        return;
+    };
+    if first_popped == '\n' && buf.ends_with('\r') {
+        buf.pop();
+        return;
+    }
+    if is_regional_indicator(first_popped) {
+        let trailing_ri = buf
+            .chars()
+            .rev()
+            .take_while(|&c| is_regional_indicator(c))
+            .count();
+        if trailing_ri % 2 == 1 {
+            buf.pop();
+        }
+        return;
+    }
+    let mut cur = first_popped;
+    loop {
+        while is_grapheme_extend(cur) {
+            let Some(prev) = buf.pop() else {
+                return;
+            };
+            cur = prev;
+        }
+        if buf.ends_with('\u{200D}') {
+            buf.pop();
+            let Some(prev) = buf.pop() else {
+                return;
+            };
+            cur = prev;
+        } else {
+            break;
+        }
+    }
+}
+
+fn shifted_ascii_symbol(id: &str) -> Option<char> {
+    match id {
+        "`" => Some('~'),
+        "1" => Some('!'),
+        "2" => Some('@'),
+        "3" => Some('#'),
+        "4" => Some('$'),
+        "5" => Some('%'),
+        "6" => Some('^'),
+        "7" => Some('&'),
+        "8" => Some('*'),
+        "9" => Some('('),
+        "0" => Some(')'),
+        "-" => Some('_'),
+        "=" => Some('+'),
+        "[" => Some('{'),
+        "]" => Some('}'),
+        "\\" => Some('|'),
+        ";" => Some(':'),
+        "'" => Some('"'),
+        "," => Some('<'),
+        "." => Some('>'),
+        "/" => Some('?'),
+        _ => None,
+    }
+}
+
+struct KeyCapAnim {
+    hover: Slide,
+    press: Slide,
+    hold_until: Option<Instant>,
+}
+
+impl KeyCapAnim {
+    fn new() -> Self {
+        Self {
+            hover: Slide::snappy(0.),
+            press: Slide::snappy(0.),
+            hold_until: None,
+        }
+    }
+}
+
 /// Interactive AI chat composer and frosted glass keyboard over a reactive gradient floor.
 ///
 /// # Examples
@@ -1074,12 +1181,24 @@ pub struct GlowKeyboard {
     label: Option<SharedString>,
     background: Option<Hsla>,
     paused: bool,
-    demo_mode: bool,
     demo_epoch: Instant,
     last_demo_idx: Option<usize>,
     last_lang_zh: bool,
-    user_text: String,
-    active_presses: Vec<(&'static str, Instant)>,
+    manual_text: Option<String>,
+    idle_epoch: u64,
+    idle_timer: Option<Task<()>>,
+    sticky_shift: bool,
+    caps_lock: bool,
+    hovered_key: Option<usize>,
+    held_mouse_key: Option<usize>,
+    held_phys_keys: Vec<usize>,
+    key_anims: Vec<KeyCapAnim>,
+    glow_x: Slide,
+    glow_y: Slide,
+    glow_energy: Slide,
+    composer_hover: Slide,
+    composer_press: Slide,
+    submit_clock: PhaseClock,
     pulses: Vec<WavePulse>,
     keys: Vec<KeySpec>,
     height: Option<Pixels>,
@@ -1095,6 +1214,9 @@ impl GlowKeyboard {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
+        let keys = build_keyboard_layout();
+        let key_anims = (0..keys.len()).map(|_| KeyCapAnim::new()).collect();
+        let now = cx.background_executor().now();
         Self {
             id: id.into(),
             focus: cx.focus_handle().tab_stop(true),
@@ -1103,14 +1225,26 @@ impl GlowKeyboard {
             label: None,
             background: None,
             paused: false,
-            demo_mode: true,
-            demo_epoch: Instant::now(),
+            demo_epoch: now,
             last_demo_idx: None,
             last_lang_zh: UiLanguage::current(cx) == UiLanguage::Chinese,
-            user_text: String::new(),
-            active_presses: Vec::new(),
+            manual_text: None,
+            idle_epoch: 0,
+            idle_timer: None,
+            sticky_shift: false,
+            caps_lock: false,
+            hovered_key: None,
+            held_mouse_key: None,
+            held_phys_keys: Vec::new(),
+            key_anims,
+            glow_x: Slide::new(1100.0),
+            glow_y: Slide::new(757.0),
+            glow_energy: Slide::snappy(0.58),
+            composer_hover: Slide::snappy(0.),
+            composer_press: Slide::snappy(0.),
+            submit_clock: PhaseClock::default(),
             pulses: Vec::new(),
-            keys: build_keyboard_layout(),
+            keys,
             height: None,
             loading: false,
             empty: false,
@@ -1173,13 +1307,14 @@ impl GlowKeyboard {
 
     /// Return the current user-typed text (when in manual input mode).
     pub fn value(&self) -> &str {
-        &self.user_text
+        self.manual_text.as_deref().unwrap_or("")
     }
 
     /// Set the input value directly and switch into manual input mode.
     pub fn set_value(&mut self, value: impl Into<String>, cx: &mut Context<Self>) {
-        self.demo_mode = false;
-        self.user_text = value.into();
+        self.idle_epoch = self.idle_epoch.wrapping_add(1);
+        self.idle_timer = None;
+        self.manual_text = Some(value.into());
         cx.notify();
     }
 
@@ -1199,11 +1334,13 @@ impl GlowKeyboard {
 
     /// Resume the self-typing demo loop from the beginning.
     pub fn resume_demo(&mut self, cx: &mut Context<Self>) {
-        self.demo_mode = true;
+        self.idle_epoch = self.idle_epoch.wrapping_add(1);
+        self.idle_timer = None;
+        self.manual_text = None;
+        self.sticky_shift = false;
         self.paused = false;
-        self.demo_epoch = Instant::now();
+        self.demo_epoch = cx.background_executor().now();
         self.last_demo_idx = None;
-        self.user_text.clear();
         cx.emit(GlowKeyboardEvent::DemoPaused(false));
         cx.notify();
     }
@@ -1234,31 +1371,116 @@ impl GlowKeyboard {
         }
     }
 
-    fn key_stage_center_u(&self, key_id: &str) -> f32 {
+    fn key_index(&self, key_id: &str) -> Option<usize> {
         self.keys
             .iter()
-            .find(|k| k.id == key_id)
-            .map(|k| 312.5 + k.x + k.w * 0.5)
-            .unwrap_or(1100.0)
+            .position(|k| k.id.eq_ignore_ascii_case(key_id))
     }
 
-    fn trigger_key(&mut self, key_id: &'static str, shift: bool, reduced: bool) {
-        let now = Instant::now();
-        self.active_presses
-            .retain(|(_, t)| now.saturating_duration_since(*t).as_millis() < 220);
-        self.active_presses.push((key_id, now));
-        if shift {
-            self.active_presses.push(("shift-l", now));
+    fn key_stage_center(&self, key_id: &str) -> (f32, f32) {
+        self.keys
+            .iter()
+            .find(|k| k.id.eq_ignore_ascii_case(key_id))
+            .map(|k| (312.5 + k.x + k.w * 0.5, 440.0 + k.y + k.h * 0.5))
+            .unwrap_or((1100.0, 757.0))
+    }
+
+    fn arm_idle_resume(&mut self, cx: &mut Context<Self>) {
+        self.idle_epoch = self.idle_epoch.wrapping_add(1);
+        let epoch = self.idle_epoch;
+        self.idle_timer = Some(cx.spawn(async move |weak, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(IDLE_RESUME_MS))
+                .await;
+            let _ = weak.update(cx, |this, cx| {
+                if this.idle_epoch == epoch && this.manual_text.is_some() && !this.paused {
+                    this.manual_text = None;
+                    this.sticky_shift = false;
+                    this.demo_epoch = cx.background_executor().now();
+                    this.last_demo_idx = None;
+                    this.glow_x.duration(1100.0, 0.45, cx);
+                    this.glow_y.duration(757.0, 0.45, cx);
+                    this.glow_energy.duration(0.58, 0.45, cx);
+                    cx.notify();
+                }
+            });
+        }));
+    }
+
+    fn trigger_key(
+        &mut self,
+        key_id: &'static str,
+        shift: bool,
+        hold_phys: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let now = cx.background_executor().now();
+        let reduced = disabled_motion(cx);
+        let tap_until = now + Duration::from_millis(105);
+        if let Some(idx) = self.key_index(key_id) {
+            self.key_anims[idx].hold_until = Some(tap_until);
+            self.key_anims[idx].press.set(1.0, cx);
+            if hold_phys && !self.held_phys_keys.contains(&idx) {
+                self.held_phys_keys.push(idx);
+            }
         }
+        if shift && let Some(s_idx) = self.key_index("shift-l") {
+            self.key_anims[s_idx].hold_until = Some(tap_until);
+            self.key_anims[s_idx].press.set(1.0, cx);
+            if hold_phys && !self.held_phys_keys.contains(&s_idx) {
+                self.held_phys_keys.push(s_idx);
+            }
+        }
+        let (ux, uy) = self.key_stage_center(key_id);
+        self.glow_x.duration(ux, 0.22, cx);
+        self.glow_y.duration(uy, 0.22, cx);
+        self.glow_energy.set(1.0, cx);
         if !reduced {
-            let u_x = self.key_stage_center_u(key_id);
             self.pulses
                 .retain(|p| now.saturating_duration_since(p.born).as_secs_f32() < 0.90);
             if self.pulses.len() >= 8 {
                 self.pulses.remove(0);
             }
-            self.pulses.push(WavePulse { u_x, born: now });
+            self.pulses.push(WavePulse { u_x: ux, born: now });
         }
+    }
+
+    fn release_physical_key(&mut self, key: &str, key_char: Option<&str>, cx: &mut Context<Self>) {
+        if matches!(key, "shift" | "shift-l" | "shift-r") {
+            for sid in ["shift-l", "shift-r"] {
+                if let Some(idx) = self.key_index(sid) {
+                    self.held_phys_keys.retain(|&i| i != idx);
+                }
+            }
+            cx.notify();
+            return;
+        }
+        let mapped = match key {
+            " " | "space" => Some("space"),
+            "enter" => Some("enter"),
+            "backspace" => Some("backspace"),
+            "escape" => Some("escape"),
+            "tab" => Some("tab"),
+            "capslock" => Some("capslock"),
+            "left" => Some("left"),
+            "right" => Some("right"),
+            "up" => Some("up"),
+            "down" => Some("down"),
+            _ => self.key_index(key).map(|i| self.keys[i].id).or_else(|| {
+                key_char
+                    .and_then(|s| s.chars().next())
+                    .map(|ch| map_char_to_key(ch).0)
+            }),
+        };
+        if let Some(kid) = mapped
+            && let Some(idx) = self.key_index(kid)
+        {
+            self.held_phys_keys.retain(|&i| i != idx);
+        }
+        if self.manual_text.is_some() {
+            self.arm_idle_resume(cx);
+        }
+        cx.notify();
     }
 
     fn handle_manual_key(
@@ -1266,65 +1488,137 @@ impl GlowKeyboard {
         key: &str,
         key_char: Option<&str>,
         shift: bool,
-        reduced: bool,
+        from_physical: bool,
         cx: &mut Context<Self>,
     ) {
-        self.demo_mode = false;
+        if matches!(key, "shift-l" | "shift-r" | "shift") {
+            let sid = if key == "shift-r" {
+                "shift-r"
+            } else {
+                "shift-l"
+            };
+            if !from_physical {
+                self.sticky_shift = !self.sticky_shift;
+            }
+            if self.manual_text.is_none() {
+                self.manual_text = Some(String::new());
+            }
+            self.trigger_key(sid, false, from_physical, cx);
+            self.arm_idle_resume(cx);
+            cx.notify();
+            return;
+        }
+        if key == "capslock" {
+            self.caps_lock = !self.caps_lock;
+            if self.manual_text.is_none() {
+                self.manual_text = Some(String::new());
+            }
+            self.trigger_key("capslock", false, from_physical, cx);
+            self.arm_idle_resume(cx);
+            cx.notify();
+            return;
+        }
+        if key == "escape" {
+            self.trigger_key("escape", false, from_physical, cx);
+            self.resume_demo(cx);
+            return;
+        }
+
+        if self.manual_text.is_none() {
+            self.manual_text = Some(String::new());
+        }
+        let eff_shift = shift || self.sticky_shift;
+        self.sticky_shift = false;
+
         match key {
             "enter" => {
-                self.trigger_key("enter", false, reduced);
-                let submitted = self.user_text.trim().to_owned();
+                self.trigger_key("enter", false, from_physical, cx);
+                self.submit_clock.restart(cx);
+                let submitted = self.manual_text.as_deref().unwrap_or("").trim().to_owned();
                 if !submitted.is_empty() {
                     cx.emit(GlowKeyboardEvent::Submit(submitted.into()));
                 }
-                self.user_text.clear();
+                if let Some(buf) = self.manual_text.as_mut() {
+                    buf.clear();
+                }
                 cx.emit(GlowKeyboardEvent::Change(SharedString::default()));
             }
             "backspace" => {
-                self.trigger_key("backspace", false, reduced);
-                self.user_text.pop();
-                cx.emit(GlowKeyboardEvent::Change(self.user_text.clone().into()));
-            }
-            "escape" => {
-                self.trigger_key("escape", false, reduced);
-                if self.user_text.is_empty() {
-                    self.resume_demo(cx);
-                    return;
+                self.trigger_key("backspace", false, from_physical, cx);
+                if let Some(buf) = self.manual_text.as_mut() {
+                    pop_last_grapheme(buf);
+                    cx.emit(GlowKeyboardEvent::Change(buf.clone().into()));
                 }
-                self.user_text.clear();
-                cx.emit(GlowKeyboardEvent::Change(SharedString::default()));
             }
             "tab" => {
-                self.trigger_key("tab", false, reduced);
+                self.trigger_key("tab", false, from_physical, cx);
             }
-            "left" => self.trigger_key("left", false, reduced),
-            "right" => self.trigger_key("right", false, reduced),
-            "up" => self.trigger_key("up", false, reduced),
-            "down" => self.trigger_key("down", false, reduced),
+            "left" => self.trigger_key("left", false, from_physical, cx),
+            "right" => self.trigger_key("right", false, from_physical, cx),
+            "up" => self.trigger_key("up", false, from_physical, cx),
+            "down" => self.trigger_key("down", false, from_physical, cx),
+            "fn" | "ctrl" | "alt-l" | "alt-r" | "cmd-l" | "cmd-r" | "touchid" => {
+                if let Some(idx) = self.key_index(key) {
+                    let kid = self.keys[idx].id;
+                    self.trigger_key(kid, false, from_physical, cx);
+                }
+            }
             " " | "space" => {
-                self.trigger_key("space", false, reduced);
-                self.user_text.push(' ');
-                cx.emit(GlowKeyboardEvent::Change(self.user_text.clone().into()));
+                self.trigger_key("space", false, from_physical, cx);
+                if let Some(buf) = self.manual_text.as_mut() {
+                    buf.push(' ');
+                    cx.emit(GlowKeyboardEvent::Change(buf.clone().into()));
+                }
             }
             _ => {
-                let candidate = key_char.and_then(|s| s.chars().next()).or_else(|| {
-                    let mut it = key.chars();
-                    let first = it.next()?;
-                    it.next().is_none().then_some(first)
-                });
+                if let Some(idx) = self.key_index(key)
+                    && self.keys[idx].style == KeyStyle::FKey
+                {
+                    let kid = self.keys[idx].id;
+                    self.trigger_key(kid, false, from_physical, cx);
+                    self.arm_idle_resume(cx);
+                    cx.notify();
+                    return;
+                }
+                let candidate = key_char
+                    .and_then(|s| {
+                        let mut chars = s.chars();
+                        let c = chars.next()?;
+                        (!c.is_control()).then_some(c)
+                    })
+                    .or_else(|| {
+                        if eff_shift && let Some(sym) = shifted_ascii_symbol(key) {
+                            return Some(sym);
+                        }
+                        let mut it = key.chars();
+                        let first = it.next()?;
+                        it.next().is_none().then_some(first)
+                    });
                 if let Some(mut ch) = candidate
                     && !ch.is_control()
                 {
-                    if shift {
-                        ch = ch.to_ascii_uppercase();
+                    if ch.is_ascii_alphabetic() {
+                        if eff_shift ^ self.caps_lock {
+                            ch = ch.to_ascii_uppercase();
+                        } else {
+                            ch = ch.to_ascii_lowercase();
+                        }
+                    } else if eff_shift
+                        && key_char.is_none()
+                        && let Some(sym) = shifted_ascii_symbol(&ch.to_string())
+                    {
+                        ch = sym;
                     }
                     let (kid, sh) = map_char_to_key(ch);
-                    self.trigger_key(kid, sh || shift, reduced);
-                    self.user_text.push(ch);
-                    cx.emit(GlowKeyboardEvent::Change(self.user_text.clone().into()));
+                    self.trigger_key(kid, sh || eff_shift, from_physical, cx);
+                    if let Some(buf) = self.manual_text.as_mut() {
+                        buf.push(ch);
+                        cx.emit(GlowKeyboardEvent::Change(buf.clone().into()));
+                    }
                 }
             }
         }
+        self.arm_idle_resume(cx);
         cx.notify();
     }
 }
@@ -1333,14 +1627,15 @@ impl Render for GlowKeyboard {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let dark = Theme::global(cx).mode == ThemeMode::Dark;
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
 
         if self.loading {
             let phase = if reduced {
                 0.0
             } else {
                 w.request_animation_frame();
-                (self.demo_epoch.elapsed().as_secs_f32() / 1.4).fract()
+                (now.saturating_duration_since(self.demo_epoch).as_secs_f32() / 1.4).fract()
             };
             return div()
                 .id(pro_eid(&self.id, "loading"))
@@ -1378,7 +1673,10 @@ impl Render for GlowKeyboard {
                 .into_any_element();
         }
 
-        let now = Instant::now();
+        if !self.focus.is_focused(w) && !self.held_phys_keys.is_empty() {
+            self.held_phys_keys.clear();
+        }
+
         let is_zh = UiLanguage::current(cx) == UiLanguage::Chinese;
         if self.last_lang_zh != is_zh {
             self.last_lang_zh = is_zh;
@@ -1390,14 +1688,15 @@ impl Render for GlowKeyboard {
             .clone()
             .unwrap_or_else(|| default_glow_prompts(cx));
 
-        // Advance self-typing demo timeline when active and motion is allowed
-        let mut displayed_text = self.user_text.clone();
+        let demo_mode = self.manual_text.is_none();
+        let mut displayed_text = self.manual_text.clone().unwrap_or_default();
         let mut demo_key_down: Option<&'static str> = None;
         let mut demo_shift_down = false;
 
-        if self.demo_mode && !self.paused && !reduced && !prompts.is_empty() {
+        if demo_mode && !self.paused && !reduced && !prompts.is_empty() {
             let (timeline, total_ms) = compile_demo_timeline(&prompts);
-            let cycle_ms = (self.demo_epoch.elapsed().as_millis() as u64) % total_ms;
+            let cycle_ms =
+                (now.saturating_duration_since(self.demo_epoch).as_millis() as u64) % total_ms;
             let active_idx = timeline.partition_point(|ev| ev.at_ms <= cycle_ms);
             if active_idx > 0 {
                 let ev = &timeline[active_idx - 1];
@@ -1410,7 +1709,10 @@ impl Render for GlowKeyboard {
                 if self.last_demo_idx != Some(active_idx - 1) {
                     self.last_demo_idx = Some(active_idx - 1);
                     if let Some(kid) = ev.key_id {
-                        let ux = self.key_stage_center_u(kid);
+                        let (ux, uy) = self.key_stage_center(kid);
+                        self.glow_x.duration(ux, 0.26, cx);
+                        self.glow_y.duration(uy, 0.26, cx);
+                        self.glow_energy.set(0.92, cx);
                         self.pulses.retain(|pl| {
                             now.saturating_duration_since(pl.born).as_secs_f32() < 0.90
                         });
@@ -1420,6 +1722,7 @@ impl Render for GlowKeyboard {
                         self.pulses.push(WavePulse { u_x: ux, born: now });
                     }
                     if let DemoStepKind::EnterSubmit(submitted) = &ev.kind {
+                        self.submit_clock.restart(cx);
                         cx.emit(GlowKeyboardEvent::Submit(submitted.clone()));
                     }
                 }
@@ -1428,8 +1731,46 @@ impl Render for GlowKeyboard {
             }
         }
 
-        self.active_presses
-            .retain(|(_, t)| now.saturating_duration_since(*t).as_millis() < 160);
+        let mut any_key_down = false;
+        for (k_idx, k) in self.keys.iter().enumerate() {
+            let tap_active = self.key_anims[k_idx]
+                .hold_until
+                .is_some_and(|until| now < until);
+            if !tap_active {
+                self.key_anims[k_idx].hold_until = None;
+            }
+            let mouse_down = self.held_mouse_key == Some(k_idx);
+            let phys_down = self.held_phys_keys.contains(&k_idx);
+            let auto_down = demo_key_down == Some(k.id) || (demo_shift_down && k.id == "shift-l");
+            let sticky_down = self.sticky_shift && k.id == "shift-l";
+            let is_down = tap_active || mouse_down || phys_down || auto_down || sticky_down;
+            if is_down {
+                any_key_down = true;
+            }
+            self.key_anims[k_idx]
+                .press
+                .set(if is_down { 1.0 } else { 0.0 }, cx);
+            self.key_anims[k_idx].hover.set(
+                if self.hovered_key == Some(k_idx) {
+                    1.0
+                } else {
+                    0.0
+                },
+                cx,
+            );
+        }
+
+        if !any_key_down {
+            if let Some(hov_idx) = self.hovered_key {
+                let hk = self.keys[hov_idx];
+                self.glow_x.duration(312.5 + hk.x + hk.w * 0.5, 0.34, cx);
+                self.glow_y.duration(440.0 + hk.y + hk.h * 0.5, 0.34, cx);
+                self.glow_energy.duration(0.76, 0.30, cx);
+            } else {
+                self.glow_energy.duration(0.54, 0.48, cx);
+            }
+        }
+
         self.pulses
             .retain(|pl| now.saturating_duration_since(pl.born).as_secs_f32() < 0.90);
 
@@ -1450,9 +1791,10 @@ impl Render for GlowKeyboard {
         let bg_rgb = hsla_to_rgb8(bg_hsla);
 
         let animate_floor = !reduced && !self.paused;
-        let has_live_pulses = !self.pulses.is_empty() || !self.active_presses.is_empty();
+        let has_live_pulses = !self.pulses.is_empty() || any_key_down;
+        let elapsed_demo_s = now.saturating_duration_since(self.demo_epoch).as_secs_f32();
         let floor_phase = if animate_floor {
-            (self.demo_epoch.elapsed().as_secs_f32() / 6.0).fract()
+            (elapsed_demo_s / 6.0).fract()
         } else {
             0.0
         };
@@ -1469,6 +1811,19 @@ impl Render for GlowKeyboard {
 
         let floor_surface = self.floor.clone();
         let request_next = animate_floor || has_live_pulses;
+
+        // Sample 2D keyboard backlight spring + composer tactile state
+        let cur_glow_ux = self.glow_x.get(w, cx).clamp(320.0, 1880.0);
+        let cur_glow_uy = self.glow_y.get(w, cx).clamp(455.0, 1060.0);
+        let cur_glow_e = self.glow_energy.get(w, cx).clamp(0.0, 1.2);
+        let comp_hov = self.composer_hover.get(w, cx).clamp(0.0, 1.0);
+        let comp_down = self.composer_press.get(w, cx).clamp(0.0, 1.0);
+        let submit_age = self.submit_clock.time(0.52, w, cx);
+        let submit_pulse = if submit_age < 0.52 && !reduced {
+            (1.0 - submit_age / 0.52).powi(2)
+        } else {
+            0.0
+        };
 
         // Layer 1: Two-layer Gaussian gradient floor + rising keystroke wave plumes
         let floor_canvas = canvas(
@@ -1508,15 +1863,33 @@ impl Render for GlowKeyboard {
         let comp_w = 1046.0 * u;
         let comp_h = (153.0 * u).max(34.);
         let comp_r = comp_h * 0.5;
-        let orb_side = (95.6 * u).max(20.);
+        let orb_side = (95.6 * u).max(20.) * (1.0 + 0.06 * submit_pulse);
 
         let input_bg: Hsla = if dark {
-            hsla(240. / 360., 0.06, 0.10, 0.88)
+            hsla(
+                240. / 360.,
+                0.06,
+                0.10 + 0.02 * comp_hov,
+                0.88 + 0.05 * comp_hov,
+            )
         } else {
-            hsla(0., 0., 1., 0.91)
+            hsla(0., 0., 1., 0.91 + 0.06 * comp_hov)
         };
-        let input_bdr: Hsla = if dark {
-            hsla(0., 0., 1., 0.14)
+        let kb_focused = self.focus.is_focused(w);
+        let input_bdr: Hsla = if submit_pulse > 0.05 {
+            pro_mix_color(
+                if dark {
+                    hsla(0., 0., 1., 0.18)
+                } else {
+                    rgb(0xffffff).into()
+                },
+                hsla(18. / 360., 1.0, 0.60, 0.85),
+                submit_pulse,
+            )
+        } else if kb_focused && !demo_mode {
+            hsla(24. / 360., 0.95, 0.60, if dark { 0.52 } else { 0.68 })
+        } else if dark {
+            hsla(0., 0., 1., 0.14 + 0.08 * comp_hov)
         } else {
             rgb(0xffffff).into()
         };
@@ -1530,7 +1903,9 @@ impl Render for GlowKeyboard {
         } else {
             rgb(0xafafaf).into()
         };
-        let caret_c: Hsla = if dark {
+        let caret_c: Hsla = if !demo_mode && kb_focused {
+            hsla(18. / 360., 0.95, 0.56, 0.82)
+        } else if dark {
             hsla(0., 0., 1., 0.34)
         } else {
             hsla(0., 0., 0., 0.28)
@@ -1544,17 +1919,16 @@ impl Render for GlowKeyboard {
         let caret_on = if reduced {
             true
         } else {
-            (self.demo_epoch.elapsed().as_millis() / 530).is_multiple_of(2)
+            ((now.saturating_duration_since(self.demo_epoch).as_millis()) / 530).is_multiple_of(2)
         };
 
         let breathe_t = if animate_floor {
-            0.78 + 0.22 * (self.demo_epoch.elapsed().as_secs_f32() * TAU / 4.0).sin()
+            0.78 + 0.22 * (elapsed_demo_s * TAU / 4.0).sin()
         } else {
             0.82
-        };
+        } + 0.45 * submit_pulse;
 
         let mut composer_layer = div().absolute().inset_0();
-        // Key-hit localized flash pills behind the composer at the matching key X coordinate
         for pl in &self.pulses {
             let ux = pl.u_x;
             let age = now.saturating_duration_since(pl.born).as_secs_f32();
@@ -1578,50 +1952,77 @@ impl Render for GlowKeyboard {
             }
         }
 
+        let halo_shift_x = ((cur_glow_ux - 1100.0) / 550.0).clamp(-1.0, 1.0) * 22.0 * u;
+        let comp_inset = comp_down * 1.8 * u;
         let composer_pill = div()
             .id(pro_eid(&self.id, "composer"))
+            .role(Role::Button)
+            .aria_label(placeholder_str.clone())
             .absolute()
-            .left(px(comp_x))
-            .top(px(comp_y))
-            .w(px(comp_w))
-            .h(px(comp_h))
+            .left(px(comp_x + comp_inset))
+            .top(px(comp_y + comp_inset * 0.8))
+            .w(px((comp_w - 2.0 * comp_inset).max(40.)))
+            .h(px((comp_h - 1.6 * comp_inset).max(28.)))
             .rounded(px(comp_r))
             .px(px((27.0 * u).max(8.)))
             .bg(input_bg)
             .border_1()
             .border_color(input_bdr)
+            .cursor_text()
             .shadow(vec![
                 BoxShadow::new(
-                    px(-18. * u),
+                    px(-18. * u + halo_shift_x),
                     px(2. * u),
-                    hsla(28. / 360., 1.0, 0.50, 0.32 * breathe_t),
+                    hsla(28. / 360., 1.0, 0.50, (0.32 * breathe_t).clamp(0., 0.85)),
                 )
-                .blur_radius(px(32. * u)),
+                .blur_radius(px((32. + 14. * submit_pulse) * u)),
                 BoxShadow::new(
-                    px(18. * u),
+                    px(18. * u + halo_shift_x),
                     px(2. * u),
-                    hsla(340. / 360., 1.0, 0.50, 0.32 * breathe_t),
+                    hsla(340. / 360., 1.0, 0.50, (0.32 * breathe_t).clamp(0., 0.85)),
                 )
-                .blur_radius(px(32. * u)),
+                .blur_radius(px((32. + 14. * submit_pulse) * u)),
                 BoxShadow::new(
-                    px(0.),
+                    px(halo_shift_x * 0.5),
                     px(4. * u),
-                    hsla(8. / 360., 1.0, 0.58, 0.26 * breathe_t),
+                    hsla(8. / 360., 1.0, 0.58, (0.26 * breathe_t).clamp(0., 0.80)),
                 )
-                .blur_radius(px(16. * u)),
+                .blur_radius(px((16. + 12. * submit_pulse) * u)),
             ])
             .flex()
             .items_center()
             .gap(px((20.0 * u).max(8.)))
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                this.composer_hover.set(if *inside { 1.0 } else { 0.0 }, cx);
+                if !*inside {
+                    this.composer_press.set(0.0, cx);
+                }
+                cx.notify();
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, w, cx| {
                     this.focus.focus(w, cx);
-                    if this.demo_mode {
-                        this.demo_mode = false;
-                        this.user_text.clear();
-                        cx.notify();
+                    this.composer_press.set(1.0, cx);
+                    if this.manual_text.is_none() {
+                        this.manual_text = Some(String::new());
                     }
+                    this.arm_idle_resume(cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.composer_press.set(0.0, cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.composer_press.set(0.0, cx);
+                    cx.notify();
                 }),
             )
             .child(pro_raw_svg(ORB_SVG, orb_side, orb_side))
@@ -1690,10 +2091,15 @@ impl Render for GlowKeyboard {
         } else {
             hsla(0., 0., 1., 0.74)
         };
-        let key_down_bg: Hsla = if dark {
-            hsla(240. / 360., 0.06, 0.25, 0.97)
+        let key_hover_bg: Hsla = if dark {
+            hsla(240. / 360., 0.06, 0.19, 0.92)
         } else {
-            hsla(240. / 360., 0.10, 0.82, 0.97)
+            hsla(0., 0., 1., 0.88)
+        };
+        let key_down_bg: Hsla = if dark {
+            hsla(240. / 360., 0.06, 0.26, 0.98)
+        } else {
+            hsla(240. / 360., 0.10, 0.84, 0.98)
         };
         let key_rest_fg: Hsla = if dark {
             hsla(240. / 360., 0.20, 0.94, 0.60)
@@ -1710,6 +2116,69 @@ impl Render for GlowKeyboard {
         } else {
             hsla(0., 0., 1., 0.65)
         };
+
+        // 2D spring-driven warm ambient backlight beneath the frosted keycaps
+        let glow_local_x = (cur_glow_ux - 312.5) * u;
+        let glow_local_y = (cur_glow_uy - 440.0) * u;
+        let glow_outer_r = (260.0 * u).max(48.0);
+        let glow_inner_r = (128.0 * u).max(24.0);
+        let glow_alpha_scale = if reduced { 0.35 } else { cur_glow_e };
+
+        let backlight_layer = div()
+            .absolute()
+            .inset_0()
+            .rounded(px(board_r))
+            .overflow_hidden()
+            .child(
+                div()
+                    .absolute()
+                    .left(px(glow_local_x - glow_outer_r))
+                    .top(px(glow_local_y - glow_outer_r * 0.72))
+                    .w(px(glow_outer_r * 2.0))
+                    .h(px(glow_outer_r * 1.44))
+                    .rounded_full()
+                    .shadow(vec![
+                        BoxShadow::new(
+                            px(0.),
+                            px(0.),
+                            hsla(
+                                24. / 360.,
+                                1.0,
+                                0.56,
+                                ((if dark { 0.36 } else { 0.30 }) * glow_alpha_scale)
+                                    .clamp(0., 0.62),
+                            ),
+                        )
+                        .blur_radius(px((76.0 * u).max(18.0))),
+                        BoxShadow::new(
+                            px(0.),
+                            px(0.),
+                            hsla(
+                                342. / 360.,
+                                1.0,
+                                0.58,
+                                ((if dark { 0.28 } else { 0.24 }) * glow_alpha_scale)
+                                    .clamp(0., 0.50),
+                            ),
+                        )
+                        .blur_radius(px((112.0 * u).max(26.0))),
+                    ]),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(glow_local_x - glow_inner_r))
+                    .top(px(glow_local_y - glow_inner_r * 0.72))
+                    .w(px(glow_inner_r * 2.0))
+                    .h(px(glow_inner_r * 1.44))
+                    .rounded_full()
+                    .bg(hsla(
+                        28. / 360.,
+                        1.0,
+                        0.62,
+                        ((if dark { 0.16 } else { 0.14 }) * glow_alpha_scale).clamp(0., 0.32),
+                    )),
+            );
 
         let mut board_el = div()
             .absolute()
@@ -1728,16 +2197,21 @@ impl Render for GlowKeyboard {
                     black().opacity(if dark { 0.45 } else { 0.06 }),
                 )
                 .blur_radius(px(36. * u)),
-            ]);
+            ])
+            .child(backlight_layer);
 
         let keys_snapshot = self.keys.clone();
+        let caps_on = self.caps_lock;
         for (k_idx, k) in keys_snapshot.iter().enumerate() {
-            let user_down = self.active_presses.iter().any(|(id, _)| *id == k.id);
-            let auto_down = demo_key_down == Some(k.id) || (demo_shift_down && k.id == "shift-l");
-            let is_down = user_down || auto_down;
+            let hov_t = self.key_anims[k_idx].hover.get(w, cx).clamp(0.0, 1.0);
+            let down_t = self.key_anims[k_idx].press.get(w, cx).clamp(0.0, 1.0);
 
-            let press_shift_y = if is_down && !reduced { 3.2 * u } else { 0.0 };
-            let scale_inset = if is_down && !reduced { 2.4 * u } else { 0.0 };
+            let press_shift_y = if reduced {
+                0.0
+            } else {
+                3.6 * u * down_t - 0.8 * u * hov_t * (1.0 - down_t)
+            };
+            let scale_inset = if reduced { 0.0 } else { 2.8 * u * down_t };
 
             let kr = match k.style {
                 KeyStyle::FKey | KeyStyle::TouchId => 14.0 * u,
@@ -1754,30 +2228,48 @@ impl Render for GlowKeyboard {
             }
             .max(7.);
 
+            // Proximity illumination from 2D backlight spring
+            let key_ux = 312.5 + k.x + k.w * 0.5;
+            let key_uy = 440.0 + k.y + k.h * 0.5;
+            let dist_sq =
+                ((key_ux - cur_glow_ux) / 230.0).powi(2) + ((key_uy - cur_glow_uy) / 170.0).powi(2);
+            let proximity = ((-dist_sq).exp() * cur_glow_e * 0.42).clamp(0.0, 0.42);
+
+            let base_face = pro_mix_color(key_rest_bg, key_hover_bg, hov_t);
+            let face_bg = pro_mix_color(base_face, key_down_bg, down_t);
+            let warm_rim = hsla(18. / 360., 0.95, 0.62, 0.76);
+            let bdr_col = pro_mix_color(
+                pro_mix_color(key_bdr, warm_rim.opacity(0.45), hov_t * 0.6 + proximity),
+                warm_rim,
+                down_t,
+            );
+            let fg_col = pro_mix_color(
+                pro_mix_color(key_rest_fg, key_down_fg, hov_t * 0.55),
+                key_down_fg,
+                down_t,
+            );
+
             let kid = k.id;
             let mut key_div = div()
                 .id(pro_eid(&self.id, format!("key-{k_idx}")))
+                .role(Role::Button)
+                .aria_label(if k.legend.is_empty() { k.id } else { k.legend })
                 .absolute()
                 .left(px(k.x * u + scale_inset * 0.5))
                 .top(px(k.y * u + press_shift_y + scale_inset * 0.5))
                 .w(px((k.w * u - scale_inset).max(6.)))
                 .h(px((k.h * u - scale_inset).max(6.)))
                 .rounded(px(kr))
-                .bg(if is_down { key_down_bg } else { key_rest_bg })
+                .bg(face_bg)
                 .border_1()
-                .border_color(if is_down {
-                    hsla(18. / 360., 0.95, 0.62, 0.72)
-                } else {
-                    key_bdr
-                })
-                .when(is_down, |d| {
+                .border_color(bdr_col)
+                .when(down_t > 0.08 || hov_t > 0.15, |d| {
+                    let sh_a = ((if dark { 0.42 } else { 0.34 }) * down_t
+                        + (if dark { 0.16 } else { 0.12 }) * hov_t * (1.0 - down_t))
+                        .clamp(0.0, 0.52);
                     d.shadow(vec![
-                        BoxShadow::new(
-                            px(0.),
-                            px(2. * u),
-                            hsla(18. / 360., 0.96, 0.58, if dark { 0.42 } else { 0.34 }),
-                        )
-                        .blur_radius(px((18. * u).max(6.))),
+                        BoxShadow::new(px(0.), px(2. * u), hsla(18. / 360., 0.96, 0.58, sh_a))
+                            .blur_radius(px((18. * u).max(6.))),
                     ])
                 })
                 .flex()
@@ -1786,16 +2278,63 @@ impl Render for GlowKeyboard {
                 .cursor_pointer()
                 .text_size(px(fs))
                 .line_height(px(fs))
-                .text_color(if is_down { key_down_fg } else { key_rest_fg })
+                .text_color(fg_col)
+                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                    if *inside {
+                        this.hovered_key = Some(k_idx);
+                    } else if this.hovered_key == Some(k_idx) {
+                        this.hovered_key = None;
+                    }
+                    if this.manual_text.is_some() {
+                        this.arm_idle_resume(cx);
+                    }
+                    cx.notify();
+                }))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, e: &MouseDownEvent, w, cx| {
                         this.focus.focus(w, cx);
-                        this.handle_manual_key(kid, None, e.modifiers.shift, reduced, cx);
+                        this.held_mouse_key = Some(k_idx);
+                        this.handle_manual_key(kid, None, e.modifiers.shift, false, cx);
+                    }),
+                )
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        if this.held_mouse_key == Some(k_idx) {
+                            this.held_mouse_key = None;
+                            cx.notify();
+                        }
+                    }),
+                )
+                .on_mouse_up_out(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        if this.held_mouse_key == Some(k_idx) {
+                            this.held_mouse_key = None;
+                            cx.notify();
+                        }
                     }),
                 );
 
-            let fg_col = if is_down { key_down_fg } else { key_rest_fg };
+            if k.id == "capslock" {
+                let led_d = (9.0 * u).max(3.0);
+                key_div = key_div.child(
+                    div()
+                        .absolute()
+                        .left(px((14.0 * u).max(3.0)))
+                        .top(px((12.0 * u).max(3.0)))
+                        .size(px(led_d))
+                        .rounded_full()
+                        .bg(if caps_on {
+                            rgb(0x4ade80)
+                        } else {
+                            rgb(0x737378)
+                        }
+                        .opacity(if caps_on { 0.95 } else { 0.25 })),
+                );
+            }
+
             if k.style == KeyStyle::TouchId {
                 let ring_d = (28.0 * u).max(6.);
                 key_div = key_div.child(
@@ -1803,7 +2342,7 @@ impl Render for GlowKeyboard {
                         .size(px(ring_d))
                         .rounded(px(999.))
                         .border_1()
-                        .border_color(key_rest_fg.opacity(0.45)),
+                        .border_color(fg_col.opacity(0.50)),
                 );
             } else if let Some(svg_inner) = match k.id {
                 "backspace" => Some(
@@ -1867,10 +2406,17 @@ impl Render for GlowKeyboard {
                     e.keystroke.key.as_str(),
                     e.keystroke.key_char.as_deref(),
                     e.keystroke.modifiers.shift,
-                    reduced,
+                    true,
                     cx,
                 );
                 cx.stop_propagation();
+            }))
+            .on_key_up(cx.listener(move |this, e: &KeyUpEvent, _, cx| {
+                this.release_physical_key(
+                    e.keystroke.key.as_str(),
+                    e.keystroke.key_char.as_deref(),
+                    cx,
+                );
             }))
             .child(floor_canvas)
             .child(composer_layer)
@@ -1882,10 +2428,12 @@ impl Render for GlowKeyboard {
 #[cfg(test)]
 mod tests {
     use super::{
-        DemoStepKind, GH, GW, TEX_H, TEX_W, build_keyboard_layout, compile_demo_timeline,
-        map_char_to_key, rasterize_glow_floor,
+        DemoStepKind, GH, GW, GlowKeyboard, GlowKeyboardEvent, IDLE_RESUME_MS, TEX_H, TEX_W,
+        build_keyboard_layout, compile_demo_timeline, map_char_to_key, pop_last_grapheme,
+        rasterize_glow_floor,
     };
-    use gpui::SharedString;
+    use gpui::{SharedString, TestAppContext, px, size};
+    use std::{cell::RefCell, rc::Rc, time::Duration};
 
     #[test]
     fn keyboard_rows_align_flush_and_demo_timeline_includes_shift_and_typo_fix() {
@@ -1968,5 +2516,84 @@ mod tests {
             lum_pulse > lum_rest + 35,
             "expected keystroke wave pulse to brighten floor plume ({lum_pulse} vs {lum_rest})"
         );
+    }
+
+    #[test]
+    fn grapheme_backspace_deletes_ascii_cjk_combining_and_zwj_clusters() {
+        let mut s = String::from("Hi 山峰 e\u{0301} 👨‍👩‍👧");
+        pop_last_grapheme(&mut s);
+        assert_eq!(s, "Hi 山峰 e\u{0301} ");
+        pop_last_grapheme(&mut s);
+        pop_last_grapheme(&mut s);
+        assert_eq!(s, "Hi 山峰 ");
+        pop_last_grapheme(&mut s);
+        pop_last_grapheme(&mut s);
+        assert_eq!(s, "Hi 山");
+    }
+
+    #[gpui::test]
+    fn interactive_typing_glides_2d_backlight_submits_and_auto_resumes_demo(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let events: Rc<RefCell<Vec<GlowKeyboardEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let ev_sink = events.clone();
+
+        let (kb, window) = cx.add_window_view(|_, cx| {
+            let view = GlowKeyboard::new("gk-interactive", cx);
+            cx.subscribe_self(move |_, ev: &GlowKeyboardEvent, _| {
+                ev_sink.borrow_mut().push(ev.clone());
+            })
+            .detach();
+            view
+        });
+        window.simulate_resize(size(px(880.), px(480.)));
+        window.run_until_parked();
+
+        // Focus keyboard and type "Q!" -> 'q' is on upper-left of board, so 2D glow glides left & up.
+        let rest_gx = window.update(|_, app| kb.read(app).glow_x.value(app));
+        window.update(|w, app| {
+            kb.update(app, |this, cx| {
+                this.focus.focus(w, cx);
+                this.handle_manual_key("q", Some("q"), true, true, cx);
+                this.handle_manual_key("1", None, true, false, cx);
+            });
+        });
+        exec.advance_clock(Duration::from_millis(80));
+        window.update(|w, app| w.simulate_next_frame(app));
+        window.run_until_parked();
+
+        let (typed_val, moved_gx) = window.update(|_, app| {
+            (
+                kb.read(app).value().to_owned(),
+                kb.read(app).glow_x.value(app),
+            )
+        });
+        assert_eq!(typed_val, "Q!");
+        assert!(
+            moved_gx < rest_gx - 50.0,
+            "expected 2D glow_x to glide toward left 'q'/'1' keys"
+        );
+
+        // Backspace deletes '!', Enter submits "Q" and clears buffer.
+        window.update(|_, app| {
+            kb.update(app, |this, cx| {
+                this.handle_manual_key("backspace", None, false, true, cx);
+                this.handle_manual_key("enter", None, false, true, cx);
+            });
+        });
+        assert_eq!(window.update(|_, app| kb.read(app).value().to_owned()), "");
+        assert!(
+            events
+                .borrow()
+                .iter()
+                .any(|e| *e == GlowKeyboardEvent::Submit("Q".into()))
+        );
+
+        // After 4.5s of idle, manual_text clears to None and auto-demo resumes!
+        exec.advance_clock(Duration::from_millis(IDLE_RESUME_MS + 100));
+        window.run_until_parked();
+        assert!(window.update(|_, app| kb.read(app).manual_text.is_none()));
     }
 }

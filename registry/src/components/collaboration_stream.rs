@@ -7,19 +7,21 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_mark_selected, pro_person_avatar, pro_pill_indicator, pro_presence,
-        pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_app_tile, pro_btn,
+        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mark_selected, pro_mix_color, pro_person_avatar, pro_pill_indicator,
+        pro_popover_presence, pro_presence, pro_selection_sensor, pro_shimmer_text,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use web_time::Instant;
 
 const FILE_SHEET_SVG: &str = r#"<path d="M3.3 1h3.9L10 3.8v6.4c0 .72-.58 1.3-1.3 1.3H3.3c-.72 0-1.3-.58-1.3-1.3V2.3C2 1.58 2.58 1 3.3 1Z" fill="currentColor" opacity="0.35"></path><path d="M7.2 1v1.8c0 .55.45 1 1 1H10Z" fill="currentColor"></path><rect x="3.4" y="5.6" width="2.3" height="1.6" rx="0.4" fill="currentColor"></rect><rect x="6.3" y="5.6" width="2.3" height="1.6" rx="0.4" fill="currentColor"></rect><rect x="3.4" y="7.8" width="2.3" height="1.6" rx="0.4" fill="currentColor"></rect><rect x="6.3" y="7.8" width="2.3" height="1.6" rx="0.4" fill="currentColor"></rect>"#;
@@ -560,6 +562,13 @@ pub struct CollaborationStream {
     empty: bool,
     next_seq: usize,
     started_at: Instant,
+    tab_sensor: ProSelectionSensor,
+    msg_entrances: HashMap<SharedString, (Slide, PhaseClock)>,
+    answered_clocks: HashMap<SharedString, PhaseClock>,
+    send_hover: Slide,
+    send_press: Slide,
+    at_hover: Slide,
+    at_press: Slide,
     toast: Option<(SharedString, Instant)>,
     editor: Option<Entity<Editor>>,
     pending_insert: Option<String>,
@@ -595,6 +604,13 @@ impl CollaborationStream {
             empty: false,
             next_seq: 100,
             started_at: Instant::now(),
+            tab_sensor: pro_selection_sensor(),
+            msg_entrances: HashMap::new(),
+            answered_clocks: HashMap::new(),
+            send_hover: Slide::snappy(0.0),
+            send_press: Slide::snappy(0.0),
+            at_hover: Slide::snappy(0.0),
+            at_press: Slide::snappy(0.0),
             toast: None,
             editor: None,
             pending_insert: None,
@@ -771,7 +787,7 @@ impl CollaborationStream {
         self.next_seq += 1;
         let new_id: SharedString = format!("u-{}", self.next_seq).into();
         let mut msg = StreamMessage::new(
-            new_id,
+            new_id.clone(),
             "you",
             primary_to,
             if reply_id.is_some() {
@@ -784,7 +800,16 @@ impl CollaborationStream {
         .with_at(tr(cx, "now", "刚刚"));
         if let Some(rid) = &reply_id {
             msg = msg.with_reply_to(rid.clone());
+            self.answered_clocks
+                .entry(rid.clone())
+                .or_default()
+                .restart(cx);
         }
+        let mut ent_slide = Slide::new(12.0);
+        ent_slide.duration(0.0, 0.26, cx);
+        let mut ent_clk = PhaseClock::default();
+        ent_clk.restart(cx);
+        self.msg_entrances.insert(new_id, (ent_slide, ent_clk));
         self.messages.push(msg);
 
         self.mention_menu_open = false;
@@ -1003,8 +1028,6 @@ impl CollaborationStream {
             Some(m) => format!("{sender} · {m}"),
             None => sender.to_string(),
         };
-        let hover_close = p.hover;
-        let focus_c = p.focus;
 
         div()
             .id(pro_eid(&self.id, "file-preview-scrim"))
@@ -1080,21 +1103,12 @@ impl CollaborationStream {
                                             .child(meta_line),
                                     ),
                             )
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, "close-preview"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Close file preview", "关闭文件预览"))
-                                    .tab_index(0)
-                                    .size(px(28.0))
-                                    .rounded(px(7.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(hover_close))
-                                    .focus_visible(move |s| s.border_1().border_color(focus_c))
-                                    .child(pro_icon(ProIcon::Close, 14.0, p.muted)),
+                            .child(pro_icon_btn(
+                                pro_eid(&self.id, "close-preview"),
+                                SharedString::from(tr(cx, "Close file preview", "关闭文件预览")),
+                                ProIcon::Close,
+                                28.0,
+                                false,
                                 cx,
                                 |this, _, cx| this.close_preview(cx),
                             )),
@@ -1200,8 +1214,8 @@ impl Render for CollaborationStream {
             window.request_animation_frame();
         }
 
-        // Top participant filter tabs (`Everyone`, `You`, and each `StreamAgent`).
-        let tab_sensor = pro_selection_sensor();
+        // Top participant filter tabs (`Everyone`, `You`, and each `StreamAgent`) with persistent liquid pro_pill_indicator.
+        let tab_sensor = self.tab_sensor.clone();
         let active_tab_key: SharedString = self
             .focus_agent
             .clone()
@@ -1217,6 +1231,9 @@ impl Render for CollaborationStream {
             .relative()
             .flex_1()
             .min_w_0()
+            .p(px(2.0))
+            .rounded(px(9.0))
+            .bg(p.subtle)
             .flex()
             .flex_wrap()
             .items_center()
@@ -1226,9 +1243,9 @@ impl Render for CollaborationStream {
                 active_tab_key.clone(),
                 tab_sensor.clone(),
                 7.0,
-                p.chip,
-                None,
-                false,
+                card_bg,
+                Some(p.line),
+                true,
             ));
 
         let mut tab_defs: Vec<(Option<SharedString>, SharedString, Option<AnyElement>)> =
@@ -1240,7 +1257,7 @@ impl Render for CollaborationStream {
             Some(pro_person_avatar("You", 16.0, true, None, cx)),
         ));
         for ag in &self.agents {
-            let ag_busy = self.messages.iter().any(|m| m.from == ag.id && m.typing);
+            let ag_busy = self.live && self.messages.iter().any(|m| m.from == ag.id && m.typing);
             let av = pro_agent_avatar(&ag.id, ag.tone.color(&p), 16.0, ag_busy, elapsed_ms, cx);
             tab_defs.push((Some(ag.id.clone()), ag.name.clone(), Some(av)));
         }
@@ -1260,7 +1277,7 @@ impl Render for CollaborationStream {
                     .aria_selected(is_sel)
                     .tab_index(0)
                     .relative()
-                    .h(px(28.0))
+                    .h(px(26.0))
                     .px(px(8.0))
                     .rounded(px(7.0))
                     .flex()
@@ -1273,6 +1290,7 @@ impl Render for CollaborationStream {
                         FontWeight::NORMAL
                     })
                     .text_color(if is_sel { p.ink } else { p.muted })
+                    .hover(move |s| if is_sel { s } else { s.text_color(p.ink) })
                     .cursor_pointer()
                     .focus_visible(move |s| s.border_1().border_color(focus_c))
                     .when(is_sel, |d| d.child(pro_mark_selected(&tab_sensor)))
@@ -1283,7 +1301,9 @@ impl Render for CollaborationStream {
             ));
         }
 
-        let live_dot_alpha = if reduced {
+        let live_dot_alpha = if !self.live {
+            0.35
+        } else if reduced {
             1.0
         } else {
             0.40 + 0.60 * (0.5 + 0.5 * ((elapsed_secs / 1.4) * std::f32::consts::TAU).cos())
@@ -1296,24 +1316,55 @@ impl Render for CollaborationStream {
             .justify_between()
             .gap(px(10.0))
             .child(tabs_row)
-            .when(self.live, |d| {
-                d.child(
-                    div()
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .text_size(px(12.0))
-                        .text_color(p.muted)
-                        .child(
-                            div()
-                                .size(px(6.0))
-                                .rounded_full()
-                                .bg(p.blue.opacity(live_dot_alpha)),
-                        )
-                        .child(tr(cx, "Live", "实时")),
-                )
-            });
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(div().size(px(6.0)).rounded_full().bg(if self.live {
+                                p.blue.opacity(live_dot_alpha)
+                            } else {
+                                p.faint
+                            }))
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "live-state-swap"),
+                                if self.live {
+                                    tr(cx, "Live", "实时")
+                                } else {
+                                    tr(cx, "Paused", "已暂停")
+                                },
+                                12.0,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
+                    )
+                    .child(pro_btn(
+                        pro_eid(&self.id, "stream-live-toggle-btn"),
+                        if self.live {
+                            tr(cx, "Stop", "暂停")
+                        } else {
+                            tr(cx, "Resume", "继续")
+                        },
+                        Some(if self.live {
+                            ProIcon::Pause
+                        } else {
+                            ProIcon::Play
+                        }),
+                        ProBtnStyle::Ghost,
+                        true,
+                        cx,
+                        |this, _, cx| {
+                            this.live = !this.live;
+                            cx.notify();
+                        },
+                    )),
+            );
 
         if self.empty || self.messages.is_empty() {
             return div()
@@ -1400,14 +1451,34 @@ impl Render for CollaborationStream {
             let is_answered_q = msg.kind == StreamMessageKind::Question
                 && msg.to.as_ref() == "you"
                 && !is_unanswered_q;
+            let ans_drawn = if is_answered_q {
+                if reduced {
+                    true
+                } else if let Some(clk) = self.answered_clocks.get(&mid) {
+                    clk.time(0.28, window, cx) > 0.012
+                } else {
+                    true
+                }
+            } else {
+                false
+            };
+
+            let (ent_dy, ent_alpha) = if reduced {
+                (0.0, 1.0)
+            } else if let Some((sl, clk)) = self.msg_entrances.get(&mid) {
+                let y = sl.get(window, cx);
+                let age = clk.time(0.24, window, cx);
+                let a = 0.25 + 0.75 * pro_ease((age / 0.24).clamp(0.0, 1.0));
+                (y, a)
+            } else {
+                (0.0, 1.0)
+            };
 
             // Header row: From -> [To avatar] To + Badges + Payload toggle + Reply + Time.
             let to_av =
                 self.render_participant_avatar(msg.to.as_ref(), 15.0, false, elapsed_ms, &p, cx);
             let reply_target_id = mid.clone();
             let payload_toggle_id = mid.clone();
-            let hover_chip = p.chip_hover;
-            let focus_c = p.focus;
 
             let head_row = div()
                 .w_full()
@@ -1474,6 +1545,14 @@ impl Render for CollaborationStream {
                             .text_color(p.green_ink)
                             .flex()
                             .items_center()
+                            .gap(px(4.0))
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("ans-chk-{mid}")),
+                                ans_drawn,
+                                12.0,
+                                false,
+                                p.green_ink,
+                            ))
                             .child(tr(cx, "Answered", "已回答")),
                     )
                 })
@@ -1484,49 +1563,51 @@ impl Render for CollaborationStream {
                         .items_center()
                         .gap(px(4.0))
                         .when(has_payload, |d| {
-                            d.child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("pld-btn-{mid}")))
-                                    .role(Role::Button)
-                                    .aria_label(tr(
+                            let pld_inner = div()
+                                .h(px(20.0))
+                                .px(px(6.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(3.0))
+                                .text_size(px(11.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if payload_open { p.ink } else { p.muted })
+                                .child(tr(cx, "Details", "结构化负载"))
+                                .child(pro_icon(
+                                    if payload_open {
+                                        ProIcon::ChevronUp
+                                    } else {
+                                        ProIcon::ChevronDown
+                                    },
+                                    11.0,
+                                    p.muted,
+                                ));
+                            d.child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("pld-btn-{mid}")),
+                                    SharedString::from(tr(
                                         cx,
                                         "Toggle structured payload",
                                         "切换结构化详情",
-                                    ))
-                                    .aria_expanded(payload_open)
-                                    .tab_index(0)
-                                    .h(px(20.0))
-                                    .px(px(6.0))
-                                    .rounded(px(5.0))
-                                    .bg(if payload_open {
+                                    )),
+                                    5.0,
+                                    if payload_open {
                                         p.select
                                     } else {
                                         transparent_black()
-                                    })
-                                    .text_size(px(11.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if payload_open { p.ink } else { p.muted })
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(3.0))
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(hover_chip))
-                                    .focus_visible(move |s| s.border_1().border_color(focus_c))
-                                    .child(tr(cx, "Details", "结构化负载"))
-                                    .child(pro_icon(
-                                        if payload_open {
-                                            ProIcon::ChevronUp
-                                        } else {
-                                            ProIcon::ChevronDown
-                                        },
-                                        11.0,
-                                        p.muted,
-                                    )),
-                                cx,
-                                move |this, _, cx| {
-                                    this.toggle_payload(payload_toggle_id.clone(), cx)
-                                },
-                            ))
+                                    },
+                                    p.chip_hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    payload_open,
+                                    pld_inner,
+                                    cx,
+                                    move |this, _, cx| {
+                                        this.toggle_payload(payload_toggle_id.clone(), cx)
+                                    },
+                                )
+                                .flex_none(),
+                            )
                         })
                         .when(self.composer_enabled && !is_you, |d| {
                             let lbl = if is_unanswered_q {
@@ -1534,32 +1615,41 @@ impl Render for CollaborationStream {
                             } else {
                                 tr(cx, "Reply", "回复")
                             };
-                            d.child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("rpl-btn-{mid}")))
-                                    .role(Role::Button)
-                                    .aria_label(format!("{lbl}: {from_name}"))
-                                    .tab_index(0)
-                                    .h(px(20.0))
-                                    .px(px(6.0))
-                                    .rounded(px(5.0))
-                                    .when(is_unanswered_q, |b| b.bg(p.amber_soft))
-                                    .text_size(px(11.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if is_unanswered_q {
-                                        p.amber_ink
+                            let rpl_inner = div()
+                                .h(px(20.0))
+                                .px(px(6.0))
+                                .flex()
+                                .items_center()
+                                .text_size(px(11.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if is_unanswered_q {
+                                    p.amber_ink
+                                } else {
+                                    p.muted
+                                })
+                                .child(lbl);
+                            d.child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("rpl-btn-{mid}")),
+                                    SharedString::from(format!("{lbl}: {from_name}")),
+                                    5.0,
+                                    if is_unanswered_q {
+                                        p.amber_soft
                                     } else {
-                                        p.muted
-                                    })
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(hover_chip))
-                                    .focus_visible(move |s| s.border_1().border_color(focus_c))
-                                    .child(lbl),
-                                cx,
-                                move |this, _, cx| this.start_reply(reply_target_id.clone(), cx),
-                            ))
+                                        transparent_black()
+                                    },
+                                    p.chip_hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    false,
+                                    rpl_inner,
+                                    cx,
+                                    move |this, _, cx| {
+                                        this.start_reply(reply_target_id.clone(), cx)
+                                    },
+                                )
+                                .flex_none(),
+                            )
                         })
                         .when_some(msg.at.clone(), |d, tm| {
                             d.child(
@@ -1625,41 +1715,40 @@ impl Render for CollaborationStream {
                     .into_any_element()
             };
 
-            // Clickable file attachment chips.
+            // Clickable file attachment chips with tactile KUI physics.
             let files_row: Option<AnyElement> = (!msg.attachments.is_empty()).then(|| {
                 let mut row = div().pt(px(2.0)).flex().flex_wrap().gap(px(6.0));
                 for (ai, att) in msg.attachments.iter().enumerate() {
                     let att_clone = att.clone();
                     let sender_clone = from_name.clone();
-                    let hover_file = p.chip_hover;
-                    let focus_f = p.focus;
-                    row = row.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("file-{mid}-{ai}")))
-                            .role(Role::Button)
-                            .aria_label(format!("Preview {}", att.label))
-                            .tab_index(0)
-                            .h(px(24.0))
-                            .px(px(8.0))
-                            .rounded(px(7.0))
-                            .bg(well_bg)
-                            .border_1()
-                            .border_color(p.line)
-                            .flex()
-                            .items_center()
-                            .gap(px(5.0))
-                            .text_size(px(12.0))
-                            .text_color(p.ink)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(hover_file))
-                            .focus_visible(move |s| s.border_1().border_color(focus_f))
-                            .child(pro_svg("0 0 12 12", att.icon_svg(), 12.0, p.muted))
-                            .child(att.label.clone()),
-                        cx,
-                        move |this, _, cx| {
-                            this.open_preview(sender_clone.clone(), att_clone.clone(), cx)
-                        },
-                    ));
+                    let chip_inner = div()
+                        .h(px(24.0))
+                        .px(px(8.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.0))
+                        .text_size(px(12.0))
+                        .text_color(p.ink)
+                        .child(pro_svg("0 0 12 12", att.icon_svg(), 12.0, p.muted))
+                        .child(att.label.clone());
+                    row = row.child(
+                        pro_tactile(
+                            pro_eid(&self.id, format!("file-{mid}-{ai}")),
+                            SharedString::from(format!("Preview {}", att.label)),
+                            7.0,
+                            well_bg,
+                            p.chip_hover,
+                            p.line,
+                            p.line_strong,
+                            false,
+                            chip_inner,
+                            cx,
+                            move |this, _, cx| {
+                                this.open_preview(sender_clone.clone(), att_clone.clone(), cx)
+                            },
+                        )
+                        .flex_none(),
+                    );
                 }
                 row.into_any_element()
             });
@@ -1822,7 +1911,9 @@ impl Render for CollaborationStream {
             feed_col = feed_col.child(
                 div()
                     .w_full()
-                    .opacity(item_opacity)
+                    .relative()
+                    .top(px(ent_dy))
+                    .opacity(item_opacity * ent_alpha)
                     .flex()
                     .when(is_you, |d| d.justify_end())
                     .items_start()
@@ -1896,79 +1987,130 @@ impl Render for CollaborationStream {
                 .cloned()
                 .collect();
 
-            let mention_popup = if show_mentions && !matching_agents.is_empty() {
-                let mut menu = div()
-                    .id(pro_eid(&self.id, "mention-menu"))
-                    .role(Role::ListBox)
-                    .aria_label(tr(cx, "Mention an agent", "选择点名的智能体"))
-                    .mb(px(6.0))
-                    .p(px(4.0))
-                    .w_full()
-                    .max_w(px(280.0))
-                    .rounded(px(10.0))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .shadow_lg()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.0));
-
-                for (mi, ag) in matching_agents.iter().enumerate() {
+            let mention_open = show_mentions && !matching_agents.is_empty();
+            let mention_rows: Vec<AnyElement> = matching_agents
+                .iter()
+                .enumerate()
+                .map(|(mi, ag)| {
                     let nm = ag.name.clone();
                     let av =
                         pro_agent_avatar(&ag.id, ag.tone.color(&p), 18.0, false, elapsed_ms, cx);
-                    let hover_opt = p.hover;
                     let is_cur = mi == self.mention_cursor.min(matching_agents.len() - 1);
-                    menu = menu.child(activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("mopt-{}", ag.id)))
-                            .role(Role::ListBoxOption)
-                            .aria_selected(is_cur)
-                            .tab_index(0)
-                            .h(px(32.0))
-                            .px(px(8.0))
-                            .rounded(px(7.0))
-                            .when(is_cur, |d| d.bg(p.select))
-                            .hover(move |s| s.bg(hover_opt))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .cursor_pointer()
-                            .child(av)
-                            .child(
+                    let m_inner = div()
+                        .w_full()
+                        .h(px(32.0))
+                        .px(px(8.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(av)
+                        .child(
+                            div()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(format!("@{}", ag.name)),
+                        )
+                        .when_some(ag.model.clone(), |d, mdl| {
+                            d.child(
                                 div()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("@{}", ag.name)),
+                                    .ml_auto()
+                                    .text_size(px(11.0))
+                                    .text_color(p.muted)
+                                    .child(mdl),
                             )
-                            .when_some(ag.model.clone(), |d, mdl| {
-                                d.child(
-                                    div()
-                                        .ml_auto()
-                                        .text_size(px(11.0))
-                                        .text_color(p.muted)
-                                        .child(mdl),
-                                )
-                            }),
+                        });
+                    pro_tactile(
+                        pro_eid(&self.id, format!("mopt-{}", ag.id)),
+                        SharedString::from(format!("@{}", ag.name)),
+                        7.0,
+                        if is_cur {
+                            p.select
+                        } else {
+                            transparent_black()
+                        },
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        is_cur,
+                        m_inner,
                         cx,
                         move |this, _, cx| this.insert_mention(nm.as_ref(), cx),
-                    ));
-                }
-                menu.into_any_element()
-            } else {
-                div().into_any_element()
-            };
+                    )
+                    .w_full()
+                    .into_any_element()
+                })
+                .collect();
 
-            let reply_banner: Option<AnyElement> = self
+            let mention_aria = tr(cx, "Mention an agent", "选择点名的智能体").to_owned();
+            let menu_eid = pro_eid(&self.id, "mention-menu");
+            let mention_popup = pro_popover_presence(
+                pro_eid(&self.id, "mention-pop-pres"),
+                mention_open,
+                move || {
+                    div()
+                        .id(menu_eid)
+                        .role(Role::ListBox)
+                        .aria_label(mention_aria)
+                        .mb(px(6.0))
+                        .p(px(4.0))
+                        .w_full()
+                        .max_w(px(280.0))
+                        .rounded(px(10.0))
+                        .bg(card_bg)
+                        .border_1()
+                        .border_color(p.line_strong)
+                        .shadow_lg()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.0))
+                        .children(mention_rows)
+                        .into_any_element()
+                },
+            );
+
+            let reply_target_data = self
                 .replying_to
                 .as_ref()
                 .and_then(|rid| self.messages.iter().find(|m| &m.id == rid))
                 .map(|target| {
                     let who = self.participant_display(target.from.as_ref(), cx);
                     let is_q = target.kind == StreamMessageKind::Question;
-                    let hover_x = p.hover;
+                    let summary = format!(
+                        "{} {who}: {}",
+                        if is_q {
+                            tr(cx, "Answering", "正在回答")
+                        } else {
+                            tr(cx, "Replying to", "正在回复")
+                        },
+                        target.text
+                    );
+                    (is_q, summary)
+                });
+            let has_reply_banner = reply_target_data.is_some();
+            let clear_btn = has_reply_banner.then(|| {
+                pro_icon_btn(
+                    pro_eid(&self.id, "clear-reply"),
+                    SharedString::from(tr(cx, "Cancel reply", "取消回复")),
+                    ProIcon::Close,
+                    20.0,
+                    false,
+                    cx,
+                    |this, _, cx| {
+                        this.replying_to = None;
+                        cx.notify();
+                    },
+                )
+            });
+            let reply_banner = pro_fold(
+                pro_eid(&self.id, "reply-banner-fold"),
+                has_reply_banner,
+                32.0,
+                0.0,
+                move || {
+                    let Some((is_q, summary)) = reply_target_data else {
+                        return div().into_any_element();
+                    };
                     div()
                         .w_full()
                         .px(px(9.0))
@@ -1985,38 +2127,12 @@ impl Render for CollaborationStream {
                                 .text_size(px(12.0))
                                 .text_color(if is_q { p.amber_ink } else { p.text })
                                 .truncate()
-                                .child(format!(
-                                    "{} {who}: {}",
-                                    if is_q {
-                                        tr(cx, "Answering", "正在回答")
-                                    } else {
-                                        tr(cx, "Replying to", "正在回复")
-                                    },
-                                    target.text
-                                )),
+                                .child(summary),
                         )
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "clear-reply"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Cancel reply", "取消回复"))
-                                .tab_index(0)
-                                .size(px(20.0))
-                                .rounded(px(5.0))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(hover_x))
-                                .child(pro_icon(ProIcon::Close, 11.5, p.muted)),
-                            cx,
-                            |this, _, cx| {
-                                this.replying_to = None;
-                                cx.notify();
-                            },
-                        ))
+                        .when_some(clear_btn, |d, cb| d.child(cb))
                         .into_any_element()
-                });
+                },
+            );
 
             let reply_sender = self
                 .replying_to
@@ -2036,10 +2152,35 @@ impl Render for CollaborationStream {
                 };
 
             let can_send = !draft_text.trim().is_empty();
-            let hover_at = p.chip_hover;
             let focus_c = p.focus;
-            let send_bg = if can_send { p.primary } else { p.chip };
+            let at_hov = self.at_hover.get(window, cx).clamp(0.0, 1.0);
+            let at_down = self.at_press.get(window, cx).clamp(0.0, 1.0);
+            let at_base = if show_mentions {
+                p.select
+            } else {
+                transparent_black()
+            };
+            let at_bg = pro_mix_color(at_base, p.chip_hover, at_hov);
+            let at_inset = 1.3 * at_down;
+
+            let send_hov = self.send_hover.get(window, cx).clamp(0.0, 1.0);
+            let send_down = if can_send {
+                self.send_press.get(window, cx).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let send_base = if can_send { p.primary } else { p.chip };
+            let send_bg = if can_send {
+                pro_mix_color(
+                    send_base,
+                    pro_mix_color(p.primary, p.on_primary, 0.14),
+                    send_hov,
+                )
+            } else {
+                send_base
+            };
             let send_fg = if can_send { p.on_primary } else { p.faint };
+            let send_inset = 1.4 * send_down;
 
             div()
                 .w_full()
@@ -2061,7 +2202,7 @@ impl Render for CollaborationStream {
                         .flex()
                         .flex_col()
                         .gap(px(8.0))
-                        .when_some(reply_banner, |d, rb| d.child(rb))
+                        .child(reply_banner)
                         .when_some(self.editor.clone(), |d, ed| {
                             d.child(div().w_full().h(px(26.0)).px(px(2.0)).child(ed))
                         })
@@ -2071,7 +2212,7 @@ impl Render for CollaborationStream {
                                 .flex()
                                 .items_center()
                                 .gap(px(8.0))
-                                .child(activate(
+                                .child(
                                     div()
                                         .id(pro_eid(&self.id, "at-mention-btn"))
                                         .role(Role::Button)
@@ -2079,12 +2220,8 @@ impl Render for CollaborationStream {
                                         .aria_expanded(show_mentions)
                                         .tab_index(0)
                                         .size(px(28.0))
+                                        .relative()
                                         .rounded_full()
-                                        .bg(if show_mentions {
-                                            p.select
-                                        } else {
-                                            transparent_black()
-                                        })
                                         .text_size(px(14.0))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(if show_mentions { p.ink } else { p.muted })
@@ -2092,42 +2229,161 @@ impl Render for CollaborationStream {
                                         .items_center()
                                         .justify_center()
                                         .cursor_pointer()
-                                        .hover(move |s| s.bg(hover_at))
                                         .focus_visible(move |s| s.border_1().border_color(focus_c))
-                                        .child("@"),
-                                    cx,
-                                    |this, _, cx| {
-                                        this.mention_menu_open = !this.mention_menu_open;
-                                        cx.notify();
-                                    },
-                                ))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .text_size(px(12.0))
-                                        .text_color(p.muted)
-                                        .truncate()
-                                        .child(to_summary),
+                                        .on_hover(cx.listener(|this, inside: &bool, w, cx| {
+                                            this.at_hover.set(if *inside { 1.0 } else { 0.0 }, cx);
+                                            if !*inside {
+                                                this.at_press.set(0.0, cx);
+                                            }
+                                            cx.notify();
+                                            w.refresh();
+                                        }))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _, w, cx| {
+                                                this.at_press.set(1.0, cx);
+                                                cx.notify();
+                                                w.refresh();
+                                            }),
+                                        )
+                                        .on_mouse_up(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _, w, cx| {
+                                                this.at_press.set(0.0, cx);
+                                                cx.notify();
+                                                w.refresh();
+                                            }),
+                                        )
+                                        .on_mouse_up_out(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _, w, cx| {
+                                                this.at_press.set(0.0, cx);
+                                                cx.notify();
+                                                w.refresh();
+                                            }),
+                                        )
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.mention_menu_open = !this.mention_menu_open;
+                                            cx.notify();
+                                        }))
+                                        .child(
+                                            canvas(
+                                                |_, _, _| (),
+                                                move |bounds, _, win, _| {
+                                                    if at_bg.a <= 0.001 {
+                                                        return;
+                                                    }
+                                                    let bw = f32::from(bounds.size.width);
+                                                    let bh = f32::from(bounds.size.height);
+                                                    let rect = Bounds::new(
+                                                        point(
+                                                            bounds.origin.x + px(at_inset),
+                                                            bounds.origin.y + px(at_inset),
+                                                        ),
+                                                        size(
+                                                            px((bw - 2.0 * at_inset).max(2.0)),
+                                                            px((bh - 2.0 * at_inset).max(2.0)),
+                                                        ),
+                                                    );
+                                                    win.paint_quad(
+                                                        fill(rect, at_bg)
+                                                            .corner_radii(rect.size.height / 2.),
+                                                    );
+                                                },
+                                            )
+                                            .absolute()
+                                            .inset_0(),
+                                        )
+                                        .child(div().relative().child("@")),
                                 )
-                                .child(activate(
+                                .child(div().flex_1().min_w_0().truncate().child(pro_swap_label(
+                                    pro_eid(&self.id, "to-summary-swap"),
+                                    to_summary,
+                                    12.0,
+                                    FontWeight::NORMAL,
+                                    p.muted,
+                                )))
+                                .child(
                                     div()
                                         .id(pro_eid(&self.id, "send-msg-btn"))
                                         .role(Role::Button)
                                         .aria_label(tr(cx, "Send message", "发送消息"))
                                         .tab_index(0)
                                         .size(px(28.0))
+                                        .relative()
                                         .rounded_full()
-                                        .bg(send_bg)
                                         .flex()
                                         .items_center()
                                         .justify_center()
                                         .when(can_send, |d| d.cursor_pointer())
                                         .focus_visible(move |s| s.border_1().border_color(focus_c))
-                                        .child(pro_icon(ProIcon::ArrowUp, 15.0, send_fg)),
-                                    cx,
-                                    |this, _, cx| this.submit_composer(cx),
-                                )),
+                                        .on_hover(cx.listener(|this, inside: &bool, w, cx| {
+                                            this.send_hover
+                                                .set(if *inside { 1.0 } else { 0.0 }, cx);
+                                            if !*inside {
+                                                this.send_press.set(0.0, cx);
+                                            }
+                                            cx.notify();
+                                            w.refresh();
+                                        }))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _, w, cx| {
+                                                this.send_press.set(1.0, cx);
+                                                cx.notify();
+                                                w.refresh();
+                                            }),
+                                        )
+                                        .on_mouse_up(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _, w, cx| {
+                                                this.send_press.set(0.0, cx);
+                                                cx.notify();
+                                                w.refresh();
+                                            }),
+                                        )
+                                        .on_mouse_up_out(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _, w, cx| {
+                                                this.send_press.set(0.0, cx);
+                                                cx.notify();
+                                                w.refresh();
+                                            }),
+                                        )
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.submit_composer(cx);
+                                        }))
+                                        .child(
+                                            canvas(
+                                                |_, _, _| (),
+                                                move |bounds, _, win, _| {
+                                                    let bw = f32::from(bounds.size.width);
+                                                    let bh = f32::from(bounds.size.height);
+                                                    let rect = Bounds::new(
+                                                        point(
+                                                            bounds.origin.x + px(send_inset),
+                                                            bounds.origin.y + px(send_inset),
+                                                        ),
+                                                        size(
+                                                            px((bw - 2.0 * send_inset).max(2.0)),
+                                                            px((bh - 2.0 * send_inset).max(2.0)),
+                                                        ),
+                                                    );
+                                                    win.paint_quad(
+                                                        fill(rect, send_bg)
+                                                            .corner_radii(rect.size.height / 2.),
+                                                    );
+                                                },
+                                            )
+                                            .absolute()
+                                            .inset_0(),
+                                        )
+                                        .child(div().relative().child(pro_icon(
+                                            ProIcon::ArrowUp,
+                                            15.0 * (1.0 - 0.08 * send_down),
+                                            send_fg,
+                                        ))),
+                                ),
                         ),
                 )
                 .into_any_element()

@@ -6,14 +6,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_connector_pulse, pro_eid, pro_empty_state,
-        pro_mark_selected, pro_pill_indicator, pro_progress_ring, pro_selection_sensor,
-        pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_progress_ring, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
-        family::disabled_motion,
+        control::UiLanguage,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -21,7 +23,6 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
-const RECAP_DONE_SVG: &str = r#"<circle cx="8" cy="8" r="5.75" stroke="currentColor" stroke-width="1.4"></circle><path d="m5.6 8.2 1.6 1.6 3.2-3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const RECAP_NEEDS_SVG: &str = r#"<circle cx="8" cy="5.25" r="2.5" stroke="currentColor" stroke-width="1.4"></circle><path d="M3.25 13.25c.6-2.35 2.45-3.75 4.75-3.75s4.15 1.4 4.75 3.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
 const RECAP_FAIL_SVG: &str = r#"<path d="M7.13 2.75a1 1 0 0 1 1.74 0l5.2 9.25a1 1 0 0 1-.87 1.5H2.8a1 1 0 0 1-.87-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M8 6.5v2.75M8 11.25v.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
 
@@ -757,7 +758,7 @@ impl MissionControlBlock {
         }
     }
 
-    fn render_recap_section(&self, cx: &mut Context<Self>) -> Div {
+    fn render_recap_section(&self, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = ProPalette::get(cx);
         let vis = self.visible_events();
         let done_n = vis
@@ -773,19 +774,79 @@ impl MissionControlBlock {
             .filter(|e| e.kind == MissionEventKind::Failed)
             .count();
 
-        let peaks: Vec<(f32, f32)> = vis.iter().map(|e| (e.position, e.weight)).collect();
-        let dots_meta: Vec<(SharedString, f32, MissionEventKind, bool)> = vis
-            .iter()
-            .map(|e| {
-                let hot = self.hovered_event.as_ref() == Some(&e.id);
-                (e.id.clone(), e.position, e.kind, hot)
-            })
-            .collect();
+        // Spring-morphing peak weights across ALL events so filtering rises/settles smoothly
+        let mut peaks: Vec<(f32, f32)> = Vec::with_capacity(self.events.len());
+        let mut dots_meta: Vec<(SharedString, f32, MissionEventKind, f32, f32)> =
+            Vec::with_capacity(self.events.len());
+        for ev in &self.events {
+            let is_vis = match self.filter {
+                MissionFilter::All => true,
+                other => find_agent_status(&self.agents, &ev.agent_id)
+                    .is_some_and(|st| st.matches(other)),
+            };
+            let w_anim = pro_spring_f32(
+                pro_eid(&self.id, format!("mc-pk-w-{}", ev.id)),
+                if is_vis { ev.weight } else { 0.0 },
+                0.28,
+                w,
+                cx,
+            );
+            let vis_alpha = pro_spring_f32(
+                pro_eid(&self.id, format!("mc-pk-a-{}", ev.id)),
+                if is_vis { 1.0 } else { 0.0 },
+                0.24,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            let hot_amt = pro_spring_f32(
+                pro_eid(&self.id, format!("mc-pk-h-{}", ev.id)),
+                if is_vis && self.hovered_event.as_ref() == Some(&ev.id) {
+                    1.0
+                } else {
+                    0.0
+                },
+                0.18,
+                w,
+                cx,
+            )
+            .clamp(0.0, 1.0);
+            if w_anim > 0.004 {
+                peaks.push((ev.position, w_anim));
+            }
+            if vis_alpha > 0.01 {
+                dots_meta.push((ev.id.clone(), ev.position, ev.kind, vis_alpha, hot_amt));
+            }
+        }
 
         let hovered_info = self
             .hovered_event
             .as_ref()
-            .and_then(|hid| vis.iter().copied().find(|e| &e.id == hid));
+            .and_then(|hid| vis.iter().copied().find(|e| &e.id == hid))
+            .cloned();
+
+        let scrub_st = w.use_keyed_state(pro_eid(&self.id, "mc-rcp-cur"), cx, |_, _| {
+            (Slide::snappy(0.5), Slide::snappy(0.0), false)
+        });
+        let hover_pos = hovered_info.as_ref().map(|ev| ev.position);
+        let (cur_u, cur_alpha) = scrub_st.update(cx, |s, cx| {
+            if let Some(hp) = hover_pos {
+                if !s.2 && s.1.value(cx) < 0.08 {
+                    s.0.reset(hp);
+                } else {
+                    s.0.set(hp, cx);
+                }
+                s.1.set(1.0, cx);
+                s.2 = true;
+            } else {
+                s.1.set(0.0, cx);
+                s.2 = false;
+            }
+            (
+                s.0.get(w, cx).clamp(0.0, 1.0),
+                s.1.get(w, cx).clamp(0.0, 1.0),
+            )
+        });
 
         let stroke_col = p.ink.opacity(0.46);
         let fill_col = p.ink.opacity(0.08);
@@ -875,35 +936,37 @@ impl MissionControlBlock {
                     window.paint_path(path, stroke_col);
                 }
 
-                // Event dots perched on peaks
-                for (_, pos, kind, hot) in &dots_meta {
-                    let pt = pt_at(*pos);
-                    if *hot {
-                        let mut cur = PathBuilder::stroke(px(1.));
-                        cur.move_to(point(pt.x, bounds.top()));
-                        cur.line_to(point(pt.x, bounds.bottom()));
-                        if let Ok(path) = cur.build() {
-                            window.paint_path(path, cursor_col);
-                        }
+                if cur_alpha > 0.01 {
+                    let gx = bounds.left() + px(cur_u * bw);
+                    let mut cur = PathBuilder::stroke(px(1.));
+                    cur.move_to(point(gx, bounds.top()));
+                    cur.line_to(point(gx, bounds.bottom()));
+                    if let Ok(path) = cur.build() {
+                        window.paint_path(path, cursor_col.opacity(cursor_col.a * cur_alpha));
                     }
+                }
+
+                // Event dots perched on peaks
+                for (_, pos, kind, vis_a, hot_t) in &dots_meta {
+                    let pt = pt_at(*pos);
                     let dot_c = match kind {
                         MissionEventKind::Done => done_dot,
                         MissionEventKind::NeedsYou => needs_dot,
                         MissionEventKind::Failed => fail_dot,
                     };
-                    let ri = px(if *hot { 4.2 } else { 2.8 });
+                    let ri = px(2.8 + 1.5 * hot_t);
                     let ro = ri + px(1.6);
                     window.paint_quad(
                         fill(
                             Bounds::new(pt - point(ro, ro), size(ro * 2., ro * 2.)),
-                            card_bg,
+                            card_bg.opacity(*vis_a),
                         )
                         .corner_radii(ro),
                     );
                     window.paint_quad(
                         fill(
                             Bounds::new(pt - point(ri, ri), size(ri * 2., ri * 2.)),
-                            dot_c,
+                            dot_c.opacity(dot_c.a * *vis_a),
                         )
                         .corner_radii(ri),
                     );
@@ -913,10 +976,11 @@ impl MissionControlBlock {
         .w_full()
         .h(px(78.));
 
-        // Interactive hover hit targets positioned at each event peak
+        // Interactive hover & click hit targets positioned at each event peak
         let mut hit_layer = div().absolute().inset_0();
         for ev in &vis {
             let eid = ev.id.clone();
+            let eid_click = ev.id.clone();
             let agent_id = ev.agent_id.clone();
             let left_frac = (ev.position - 0.045).clamp(0.0, 0.91);
             hit_layer = hit_layer.child(
@@ -928,6 +992,15 @@ impl MissionControlBlock {
                     .left(relative(left_frac))
                     .w(relative(0.09))
                     .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(ev_mut) = this.events.iter_mut().find(|e| e.id == eid_click) {
+                            ev_mut.kind = match ev_mut.kind {
+                                MissionEventKind::Done => MissionEventKind::NeedsYou,
+                                _ => MissionEventKind::Done,
+                            };
+                            cx.notify();
+                        }
+                    }))
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
                             this.hovered_event = Some(eid.clone());
@@ -944,40 +1017,11 @@ impl MissionControlBlock {
             );
         }
 
-        let tip_el = hovered_info.map(|ev| {
-            let tip_bg: Hsla = if p.dark {
-                rgb(0xf4f4f5).into()
-            } else {
-                rgb(0x18181b).into()
-            };
-            let tip_fg: Hsla = if p.dark {
-                rgb(0x111113).into()
-            } else {
-                rgb(0xfafafa).into()
-            };
-            let on_right = ev.position > 0.55;
-            let mut tip = div()
-                .absolute()
-                .top(px(4.))
-                .max_w(px(300.))
-                .px(px(8.))
-                .py(px(3.))
-                .rounded(px(6.))
-                .bg(tip_bg)
-                .text_color(tip_fg)
-                .text_size(px(11.5))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(div().opacity(0.68).child(ev.at_label.clone()))
-                .child(div().min_w_0().truncate().child(ev.title.clone()));
-            if on_right {
-                tip = tip.left(px(8.));
-            } else {
-                tip = tip.right(px(8.));
-            }
-            tip
-        });
+        let tip_overlay = RecapScrubTooltip {
+            id: pro_eid(&self.id, "mc-rcp-tip"),
+            hovered: hovered_info,
+            dark: p.dark,
+        };
 
         div()
             .w_full()
@@ -1052,13 +1096,20 @@ impl MissionControlBlock {
                                     .flex()
                                     .items_center()
                                     .gap(px(5.))
-                                    .child(pro_svg("0 0 16 16", RECAP_DONE_SVG, 13., p.muted))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(done_n.to_string()),
-                                    )
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, "mc-rcp-done-chk"),
+                                        done_n > 0,
+                                        13.,
+                                        false,
+                                        p.green,
+                                    ))
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "mc-rcp-done-n"),
+                                        done_n.to_string(),
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
                                     .child(tr(cx, "done", "已完成")),
                             )
                             .child(
@@ -1067,12 +1118,13 @@ impl MissionControlBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(pro_svg("0 0 16 16", RECAP_NEEDS_SVG, 13., p.orange))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(needs_n.to_string()),
-                                    )
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "mc-rcp-needs-n"),
+                                        needs_n.to_string(),
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
                                     .child(tr(cx, "need you", "待你确认")),
                             )
                             .child(
@@ -1081,12 +1133,13 @@ impl MissionControlBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(pro_svg("0 0 16 16", RECAP_FAIL_SVG, 13., p.red))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(fail_n.to_string()),
-                                    )
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "mc-rcp-fail-n"),
+                                        fail_n.to_string(),
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
                                     .child(tr(cx, "failed", "失败")),
                             ),
                     ),
@@ -1097,7 +1150,7 @@ impl MissionControlBlock {
                     .w_full()
                     .h(px(78.))
                     .child(curve_canvas)
-                    .when_some(tip_el, |d, t| d.child(t))
+                    .child(tip_overlay)
                     .child(hit_layer),
             )
             .child(
@@ -1113,7 +1166,7 @@ impl MissionControlBlock {
             )
     }
 
-    fn render_status_pill(&self, status: MissionAgentStatus, cx: &App) -> Div {
+    fn render_status_pill(&self, agent_id: &str, status: MissionAgentStatus, cx: &App) -> Div {
         let p = ProPalette::get(cx);
         let (bg, fg, label) = match status {
             MissionAgentStatus::Running => (p.accent_soft, p.blue, tr(cx, "Running", "运行中")),
@@ -1122,6 +1175,17 @@ impl MissionControlBlock {
             }
             MissionAgentStatus::Failed => (p.red_soft, p.red_ink, tr(cx, "Failed", "失败")),
             MissionAgentStatus::Done => (p.green_soft, p.green_ink, tr(cx, "Done", "已完成")),
+        };
+        let indicator: AnyElement = if status == MissionAgentStatus::Done {
+            pro_check_draw(
+                pro_eid(&self.id, format!("mc-st-chk-{agent_id}")),
+                true,
+                12.,
+                false,
+                fg,
+            )
+        } else {
+            div().size(px(5.)).rounded_full().bg(fg).into_any_element()
         };
         div()
             .h(px(18.))
@@ -1132,11 +1196,14 @@ impl MissionControlBlock {
             .flex()
             .items_center()
             .gap(px(4.))
-            .text_size(px(11.))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(fg)
-            .child(div().size(px(5.)).rounded_full().bg(fg))
-            .child(label)
+            .child(indicator)
+            .child(pro_swap_label(
+                pro_eid(&self.id, format!("mc-st-lbl-{agent_id}")),
+                label,
+                11.,
+                FontWeight::MEDIUM,
+                fg,
+            ))
     }
 
     fn render_fleet_card(
@@ -1144,6 +1211,7 @@ impl MissionControlBlock {
         wide_tree: bool,
         elapsed_ms: f32,
         pulse_t: f32,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let p = ProPalette::get(cx);
@@ -1157,10 +1225,11 @@ impl MissionControlBlock {
             .count();
         let total_cost: f64 = flat.iter().map(|a| a.cost_usd).sum();
 
-        let visible_leads: Vec<&MissionAgent> = self
+        let visible_leads: Vec<MissionAgent> = self
             .agents
             .iter()
             .filter(|lead| lead.matches_tree(self.filter))
+            .cloned()
             .collect();
 
         type AnchorSlot = Rc<Cell<Option<Point<Pixels>>>>;
@@ -1199,6 +1268,21 @@ impl MissionControlBlock {
             let faded = highlighted_agent
                 .as_ref()
                 .is_some_and(|hid| &lead.id != hid && !lead.children.iter().any(|c| &c.id == hid));
+            let lead_op = pro_spring_f32(
+                pro_eid(&self.id, format!("mc-lead-op-{}", lead.id)),
+                if faded { 0.42 } else { 1.0 },
+                0.22,
+                w,
+                cx,
+            );
+            let sel_t = pro_spring_f32(
+                pro_eid(&self.id, format!("mc-lead-sel-{}", lead.id)),
+                if is_open { 1.0 } else { 0.0 },
+                0.22,
+                w,
+                cx,
+            );
+            let rest_border = pro_mix_color(p.line, p.line_strong, sel_t);
 
             let child_summary = if lead.children.is_empty() {
                 tr(cx, "Direct agent", "独立执行").to_owned()
@@ -1250,133 +1334,147 @@ impl MissionControlBlock {
             let col = agent_hue(&lead_id, &p);
             let anchor_cell = lead_anchor.clone();
 
-            let lead_card = activate(
-                div()
-                    .id(pro_eid(&self.id, format!("fleet-lead-{lead_id}")))
-                    .role(Role::Button)
-                    .aria_label(lead.name.clone())
-                    .tab_index(0)
-                    .relative()
-                    .w_full()
-                    .rounded(px(10.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(if is_open { p.line_strong } else { p.line })
-                    .p(px(10.))
-                    .opacity(if faded { 0.42 } else { 1.0 })
-                    .hover(move |s| s.border_color(p.line_strong))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .cursor_pointer()
-                    .when(is_open && wide_tree, |d| {
-                        d.child(
-                            canvas(
-                                move |b, _, _| {
-                                    anchor_cell.set(Some(point(b.right(), b.center().y)));
-                                },
-                                |_, _, _, _| (),
-                            )
-                            .absolute()
-                            .inset_0(),
+            let lead_inner = div()
+                .w_full()
+                .p(px(10.))
+                .opacity(lead_op)
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(pro_agent_avatar(
+                            &lead_id,
+                            col,
+                            22.,
+                            lead.status == MissionAgentStatus::Running,
+                            elapsed_ms,
+                            cx,
+                        ))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.strong)
+                                        .truncate()
+                                        .child(lead.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(p.muted)
+                                        .truncate()
+                                        .child(lead.model.clone()),
+                                ),
                         )
-                    })
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(pro_agent_avatar(
-                                &lead_id,
-                                col,
-                                22.,
-                                lead.status == MissionAgentStatus::Running,
-                                elapsed_ms,
-                                cx,
-                            ))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .text_size(px(12.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .truncate()
-                                            .child(lead.name.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.))
-                                            .text_color(p.muted)
-                                            .truncate()
-                                            .child(lead.model.clone()),
-                                    ),
-                            )
-                            .child(self.render_status_pill(lead.status, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(6.))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .text_size(px(12.))
-                                    .text_color(p.text)
-                                    .truncate()
-                                    .child(lead.task.clone()),
-                            )
-                            .child(build_tools_strip(&lead.tools, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(8.))
-                            .text_size(px(11.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .text_color(p.muted)
-                                    .child(pro_progress_ring(
-                                        progress_frac,
-                                        11.,
-                                        1.6,
-                                        col,
-                                        p.line_strong,
-                                    ))
-                                    .child(child_summary),
-                            )
-                            .child(
-                                div()
-                                    .text_color(p.ink)
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(format!("${:.2} · {}", lead.cost_usd, lead.elapsed)),
-                            ),
-                    ),
+                        .child(self.render_status_pill(&lead_id, lead.status, cx)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(6.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(12.))
+                                .text_color(p.text)
+                                .truncate()
+                                .child(lead.task.clone()),
+                        )
+                        .child(build_tools_strip(&lead.tools, cx)),
+                )
+                .child(pro_spring_bar(
+                    pro_eid(&self.id, format!("mc-lead-bar-{lead_id}")),
+                    progress_frac,
+                    3.,
+                    1.5,
+                    p.chip,
+                    col,
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(8.))
+                        .text_size(px(11.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_color(p.muted)
+                                .child(pro_progress_ring(
+                                    progress_frac,
+                                    11.,
+                                    1.6,
+                                    col,
+                                    p.line_strong,
+                                ))
+                                .child(pro_swap_label(
+                                    pro_eid(&self.id, format!("mc-lead-sum-{lead_id}")),
+                                    child_summary,
+                                    11.,
+                                    FontWeight::NORMAL,
+                                    p.muted,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_color(p.ink)
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(format!("${:.2} · {}", lead.cost_usd, lead.elapsed)),
+                        ),
+                );
+
+            let lead_card = pro_tactile(
+                pro_eid(&self.id, format!("fleet-lead-{lead_id}")),
+                lead.name.clone(),
+                10.,
+                p.card,
+                pro_mix_color(p.card, p.hover, 0.55),
+                rest_border,
+                p.line_strong,
+                is_open,
+                lead_inner,
                 cx,
                 move |this, _, cx| {
                     this.open_lead = lead_id.clone();
                     cx.emit(MissionControlEvent::LeadSelected(lead_id.clone()));
                     cx.notify();
                 },
-            );
+            )
+            .relative()
+            .w_full()
+            .when(is_open && wide_tree, |d| {
+                d.child(
+                    canvas(
+                        move |b, _, _| {
+                            anchor_cell.set(Some(point(b.right(), b.center().y)));
+                        },
+                        |_, _, _, _| (),
+                    )
+                    .absolute()
+                    .inset_0(),
+                )
+            });
 
             leads_col = leads_col.child(lead_card);
 
-            // On narrow screens (< 580px), stack open children directly under their lead
-            if is_open && !wide_tree && !matching_children.is_empty() {
+            // On narrow screens (< 580px), smoothly fold open children directly under their lead
+            if !wide_tree && !matching_children.is_empty() {
                 let mut indent_col = div()
                     .pl(px(20.))
                     .ml(px(8.))
@@ -1391,10 +1489,18 @@ impl MissionControlBlock {
                         None,
                         &highlighted_agent,
                         elapsed_ms,
+                        w,
                         cx,
                     ));
                 }
-                leads_col = leads_col.child(indent_col);
+                let indent_any = indent_col.into_any_element();
+                leads_col = leads_col.child(pro_fold(
+                    pro_eid(&self.id, format!("mc-narrow-fold-{}", lead.id)),
+                    is_open,
+                    180.,
+                    8.,
+                    move || indent_any,
+                ));
             }
         }
 
@@ -1424,6 +1530,7 @@ impl MissionControlBlock {
                     Some(scell),
                     &highlighted_agent,
                     elapsed_ms,
+                    w,
                     cx,
                 ));
             }
@@ -1528,13 +1635,23 @@ impl MissionControlBlock {
                             .gap(px(10.))
                             .text_size(px(12.))
                             .text_color(p.muted)
-                            .child(format!("{running_count} {}", tr(cx, "running", "运行中")))
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format!("${total_cost:.2}")),
-                            ),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "mc-fleet-run-lbl"),
+                                format!("{running_count} {}", tr(cx, "running", "运行中")),
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "mc-fleet-cost"),
+                                total_cost,
+                                2,
+                                "$",
+                                "",
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     ),
             )
             .child(div().p(px(14.)).child(body))
@@ -1546,10 +1663,18 @@ impl MissionControlBlock {
         anchor_cell: Option<Rc<Cell<Option<Point<Pixels>>>>>,
         highlighted_agent: &Option<SharedString>,
         elapsed_ms: f32,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let p = ProPalette::get(cx);
         let faded = highlighted_agent.as_ref().is_some_and(|hid| hid != &sub.id);
+        let sub_op = pro_spring_f32(
+            pro_eid(&self.id, format!("mc-sub-op-{}", sub.id)),
+            if faded { 0.42 } else { 1.0 },
+            0.22,
+            w,
+            cx,
+        );
         let col = agent_hue(&sub.id, &p);
         let sub_id = sub.id.clone();
 
@@ -1562,53 +1687,64 @@ impl MissionControlBlock {
                 } else {
                     tr(cx, "Approve", "批准")
                 };
-                Some(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("sub-act-{aid}")))
-                        .h(px(20.))
-                        .px(px(7.))
-                        .rounded(px(5.))
-                        .bg(p.subtle)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .hover(move |s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .text_size(px(11.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .cursor_pointer()
-                        .child(btn_label),
-                    cx,
-                    move |this, _, cx| {
-                        this.resolve_approve(&aid, first_choice.clone(), cx);
-                    },
-                ))
+                Some(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("sub-act-{aid}")),
+                        btn_label,
+                        5.,
+                        p.subtle,
+                        p.hover,
+                        p.line_strong,
+                        p.line_strong,
+                        false,
+                        div()
+                            .h(px(20.))
+                            .px(px(7.))
+                            .flex()
+                            .items_center()
+                            .whitespace_nowrap()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(btn_label),
+                        cx,
+                        move |this, _, cx| {
+                            this.resolve_approve(&aid, first_choice.clone(), cx);
+                        },
+                    )
+                    .flex_none(),
+                )
             }
             MissionAgentStatus::Failed => {
                 let aid = sub_id.clone();
-                Some(activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("sub-retry-{aid}")))
-                        .h(px(20.))
-                        .px(px(7.))
-                        .rounded(px(5.))
-                        .bg(p.subtle)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .hover(move |s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .text_size(px(11.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.strong)
-                        .cursor_pointer()
-                        .child(tr(cx, "Retry", "重试")),
-                    cx,
-                    move |this, _, cx| {
-                        this.resolve_retry(&aid, cx);
-                    },
-                ))
+                let retry_lbl = tr(cx, "Retry", "重试");
+                Some(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("sub-retry-{aid}")),
+                        retry_lbl,
+                        5.,
+                        p.subtle,
+                        p.hover,
+                        p.line_strong,
+                        p.line_strong,
+                        false,
+                        div()
+                            .h(px(20.))
+                            .px(px(7.))
+                            .flex()
+                            .items_center()
+                            .whitespace_nowrap()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .child(retry_lbl),
+                        cx,
+                        move |this, _, cx| {
+                            this.resolve_retry(&aid, cx);
+                        },
+                    )
+                    .flex_none(),
+                )
             }
             _ => None,
         };
@@ -1622,7 +1758,7 @@ impl MissionControlBlock {
             .border_1()
             .border_color(p.line)
             .p(px(9.))
-            .opacity(if faded { 0.42 } else { 1.0 })
+            .opacity(sub_op)
             .flex()
             .flex_col()
             .gap(px(5.))
@@ -1661,7 +1797,7 @@ impl MissionControlBlock {
                             .truncate()
                             .child(sub.name.clone()),
                     )
-                    .child(self.render_status_pill(sub.status, cx)),
+                    .child(self.render_status_pill(&sub.id, sub.status, cx)),
             )
             .child(
                 div()
@@ -1683,13 +1819,13 @@ impl MissionControlBlock {
             )
     }
 
-    fn render_inbox_queue(&self, cx: &mut Context<Self>) -> Div {
+    fn render_inbox_queue(&self, w: &mut Window, cx: &mut Context<Self>) -> Div {
         let p = ProPalette::get(cx);
         let highlighted_agent = self.highlighted_agent_from_hover().cloned();
 
         let mut flat = Vec::new();
         flatten_agents(&self.agents, &mut flat);
-        let actionable: Vec<&MissionAgent> = flat
+        let actionable: Vec<MissionAgent> = flat
             .into_iter()
             .filter(|a| {
                 matches!(
@@ -1697,6 +1833,7 @@ impl MissionControlBlock {
                     MissionAgentStatus::Waiting | MissionAgentStatus::Failed
                 ) && a.status.matches(self.filter)
             })
+            .cloned()
             .collect();
 
         let lane_bg: Hsla = if p.dark {
@@ -1712,15 +1849,33 @@ impl MissionControlBlock {
                     .w_full()
                     .py(px(36.))
                     .px(px(12.))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.))
                     .text_center()
                     .text_size(px(12.5))
                     .text_color(p.muted)
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, "mc-inb-clear-chk"),
+                        true,
+                        18.,
+                        false,
+                        p.green,
+                    ))
                     .child(tr(cx, "Nothing waiting on you", "暂无待你处理的请求")),
             );
         } else {
             for ag in &actionable {
                 let aid = ag.id.clone();
                 let faded = highlighted_agent.as_ref().is_some_and(|hid| hid != &aid);
+                let inb_op = pro_spring_f32(
+                    pro_eid(&self.id, format!("mc-inb-op-{aid}")),
+                    if faded { 0.42 } else { 1.0 },
+                    0.22,
+                    w,
+                    cx,
+                );
                 let is_failed = ag.status == MissionAgentStatus::Failed;
 
                 let (headline, desc, desc_col) = if is_failed {
@@ -1749,48 +1904,23 @@ impl MissionControlBlock {
                         .items_center()
                         .justify_end()
                         .gap(px(6.))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("inb-dismiss-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Dismiss", "忽略"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(10.))
-                                .rounded(px(6.))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .hover(move |s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .child(tr(cx, "Dismiss", "忽略")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("inb-dismiss-{aid}")),
+                            tr(cx, "Dismiss", "忽略"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_reject_or_dismiss(&aid_dis, true, cx);
                             },
                         ))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("inb-retry-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Retry", "重试"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(11.))
-                                .rounded(px(6.))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .child(tr(cx, "Retry", "重试")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("inb-retry-{aid}")),
+                            tr(cx, "Retry", "重试"),
+                            None,
+                            ProBtnStyle::Primary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_retry(&aid_ret, cx);
@@ -1809,28 +1939,16 @@ impl MissionControlBlock {
                         let aid_ch = aid.clone();
                         let ch_val = choice.clone();
                         let is_primary = ci + 1 == ask.choices.len();
-                        row = row.child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("inb-ans-{aid}-{ci}")))
-                                .role(Role::Button)
-                                .aria_label(ch_val.clone())
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(9.))
-                                .rounded(px(6.))
-                                .bg(if is_primary { p.primary } else { p.card })
-                                .when(!is_primary, |d| {
-                                    d.border_1()
-                                        .border_color(p.line_strong)
-                                        .hover(move |s| s.bg(p.hover))
-                                })
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(if is_primary { p.on_primary } else { p.ink })
-                                .cursor_pointer()
-                                .child(ch_val.clone()),
+                        row = row.child(pro_btn(
+                            pro_eid(&self.id, format!("inb-ans-{aid}-{ci}")),
+                            ch_val.clone(),
+                            None,
+                            if is_primary {
+                                ProBtnStyle::Primary
+                            } else {
+                                ProBtnStyle::Secondary
+                            },
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_approve(&aid_ch, Some(ch_val.clone()), cx);
@@ -1846,48 +1964,23 @@ impl MissionControlBlock {
                         .items_center()
                         .justify_end()
                         .gap(px(6.))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("inb-rej-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Reject", "拒绝"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(10.))
-                                .rounded(px(6.))
-                                .bg(p.card)
-                                .border_1()
-                                .border_color(p.line_strong)
-                                .hover(move |s| s.bg(p.hover))
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .child(tr(cx, "Reject", "拒绝")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("inb-rej-{aid}")),
+                            tr(cx, "Reject", "拒绝"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_reject_or_dismiss(&aid_rej, false, cx);
                             },
                         ))
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, format!("inb-app-{aid}")))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Approve", "批准"))
-                                .tab_index(0)
-                                .h(px(26.))
-                                .px(px(11.))
-                                .rounded(px(6.))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .child(tr(cx, "Approve", "批准")),
+                        .child(pro_btn(
+                            pro_eid(&self.id, format!("inb-app-{aid}")),
+                            tr(cx, "Approve", "批准"),
+                            None,
+                            ProBtnStyle::Primary,
+                            true,
                             cx,
                             move |this, _, cx| {
                                 this.resolve_approve(&aid_app, None, cx);
@@ -1903,7 +1996,7 @@ impl MissionControlBlock {
                         .border_1()
                         .border_color(p.line)
                         .p(px(11.))
-                        .opacity(if faded { 0.42 } else { 1.0 })
+                        .opacity(inb_op)
                         .flex()
                         .flex_col()
                         .gap(px(6.))
@@ -2010,13 +2103,130 @@ impl MissionControlBlock {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(actionable.len().to_string()),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "mc-inb-cnt"),
+                                actionable.len().to_string(),
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     ),
             )
             .child(cards_col)
+    }
+}
+
+struct RecapTipState {
+    last_ev: Option<MissionRecapEvent>,
+    x_ratio: Slide,
+    alpha: Slide,
+    was_open: bool,
+    host_w: Rc<Cell<f32>>,
+}
+
+#[derive(IntoElement)]
+struct RecapScrubTooltip {
+    id: ElementId,
+    hovered: Option<MissionRecapEvent>,
+    dark: bool,
+}
+
+impl RenderOnce for RecapScrubTooltip {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let st = w.use_keyed_state(pro_eid(&self.id, "rcp-tip-st"), cx, |_, _| RecapTipState {
+            last_ev: None,
+            x_ratio: Slide::snappy(0.5),
+            alpha: Slide::snappy(0.),
+            was_open: false,
+            host_w: Rc::new(Cell::new(720.)),
+        });
+        let (shown_ev, rx, amt, host_cell) = st.update(cx, |s, cx| {
+            if let Some(ev) = self.hovered {
+                if !s.was_open && s.alpha.value(cx) < 0.08 {
+                    s.x_ratio.reset(ev.position);
+                } else {
+                    s.x_ratio.set(ev.position, cx);
+                }
+                s.last_ev = Some(ev);
+                s.alpha.set(1.0, cx);
+                s.was_open = true;
+            } else {
+                s.alpha.set(0.0, cx);
+                s.was_open = false;
+            }
+            (
+                s.last_ev.clone(),
+                s.x_ratio.get(w, cx).clamp(0.0, 1.0),
+                s.alpha.get(w, cx).clamp(0.0, 1.0),
+                s.host_w.clone(),
+            )
+        });
+
+        let cw = host_cell.get().max(260.);
+        let measure_cell = host_cell.clone();
+        let sensor = canvas(
+            move |b, window, _| {
+                let nw = f32::from(b.size.width);
+                if nw > 12. && (measure_cell.get() - nw).abs() > 1.0 {
+                    measure_cell.set(nw);
+                    window.request_animation_frame();
+                }
+            },
+            |_, _, _, _| (),
+        )
+        .w_full()
+        .h(px(0.));
+
+        let Some(ev) = shown_ev.filter(|_| amt > 0.01) else {
+            return div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .top_0()
+                .child(sensor)
+                .into_any_element();
+        };
+
+        let tip_bg: Hsla = if self.dark {
+            rgb(0xf4f4f5).into()
+        } else {
+            rgb(0x18181b).into()
+        };
+        let tip_fg: Hsla = if self.dark {
+            rgb(0x111113).into()
+        } else {
+            rgb(0xfafafa).into()
+        };
+        let pill_w = 248.0_f32;
+        let left_px = (rx * cw - pill_w * 0.5).clamp(6., (cw - pill_w - 6.).max(6.));
+
+        div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .top_0()
+            .child(sensor)
+            .child(
+                div()
+                    .absolute()
+                    .left(px(left_px))
+                    .top(px(4. + 4. * (1. - amt)))
+                    .max_w(px(280.))
+                    .px(px(8.))
+                    .py(px(3.))
+                    .rounded(px(6.))
+                    .bg(tip_bg)
+                    .text_color(tip_fg)
+                    .text_size(px(11.5))
+                    .shadow_sm()
+                    .opacity(amt)
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(div().opacity(0.68).child(ev.at_label))
+                    .child(div().min_w_0().truncate().child(ev.title)),
+            )
+            .into_any_element()
     }
 }
 
@@ -2078,32 +2288,45 @@ impl Render for MissionControlBlock {
         for f in MissionFilter::ALL {
             let sel = self.filter == f;
             let count = count_mission_agents(&self.agents, f);
-            filter_bar = filter_bar.child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("mc-filter-{}", f.slug())))
-                    .role(Role::RadioButton)
-                    .aria_label(format!("{} {count}", f.label(cx)))
-                    .tab_index(0)
-                    .relative()
-                    .h(px(26.))
-                    .px(px(9.))
-                    .rounded(px(7.))
-                    .when(sel, |d| d.child(pro_mark_selected(&filter_sensor)))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if sel { p.strong } else { p.text })
-                    .cursor_pointer()
-                    .child(f.label(cx))
-                    .child(div().text_color(p.muted).child(count.to_string())),
-                cx,
-                move |this, _, cx| {
-                    this.set_filter(f, cx);
-                },
-            ));
+            let f_lbl = f.label(cx);
+            filter_bar = filter_bar.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("mc-filter-{}", f.slug())),
+                    format!("{f_lbl} {count}"),
+                    7.,
+                    transparent_black(),
+                    if sel { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    sel,
+                    div()
+                        .h(px(26.))
+                        .px(px(9.))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .whitespace_nowrap()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.strong } else { p.text })
+                        .child(f_lbl)
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, format!("mc-fcnt-{}", f.slug())),
+                            count.to_string(),
+                            12.5,
+                            FontWeight::MEDIUM,
+                            p.muted,
+                        )),
+                    cx,
+                    move |this, _, cx| {
+                        this.set_filter(f, cx);
+                    },
+                )
+                .role(Role::RadioButton)
+                .relative()
+                .flex_none()
+                .when(sel, |d| d.child(pro_mark_selected(&filter_sensor))),
+            );
         }
 
         let top_bar = div()
@@ -2188,9 +2411,9 @@ impl Render for MissionControlBlock {
                 );
         }
 
-        let recap_card = self.render_recap_section(cx);
-        let fleet_card = self.render_fleet_card(wide_fleet_tree, elapsed_ms, pulse_t, cx);
-        let inbox_queue = self.render_inbox_queue(cx);
+        let recap_card = self.render_recap_section(w, cx);
+        let fleet_card = self.render_fleet_card(wide_fleet_tree, elapsed_ms, pulse_t, w, cx);
+        let inbox_queue = self.render_inbox_queue(w, cx);
 
         let lower_grid = div()
             .w_full()

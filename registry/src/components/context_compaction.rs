@@ -8,8 +8,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_mix_color, pro_presence, pro_rolling_number,
+        pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_swap_label, tr,
     },
     foundation::Theme,
     primitives::{
@@ -722,10 +723,20 @@ impl Render for ContextCompaction {
                         format_tokens_compact(self.limit)
                     )),
             )
-            .child(div().truncate().child(right_meta));
+            .child(div().truncate().child(pro_swap_label(
+                pro_eid(&self.id, "ctx-right-meta"),
+                right_meta,
+                12.0,
+                FontWeight::NORMAL,
+                if saved_tokens > 0 {
+                    p.green_ink
+                } else {
+                    p.muted
+                },
+            )));
 
         // Ordered Entry List (`Slide` fold on retired entries + active rows)
-        let list_section = self.render_entries_list(active_highlight_id.as_ref(), &p, cx);
+        let list_section = self.render_entries_list(active_highlight_id.as_ref(), w, &p, cx);
 
         // Footer Legend & `Compact now` / `+ Turn` / `Reset` controls
         let can_compact = !is_compacting && !self.compactable_ids().is_empty();
@@ -733,6 +744,32 @@ impl Render for ContextCompaction {
             .entries
             .iter()
             .any(|e| e.kind == ContextEntryKind::Summary);
+        let reset_btn = pro_btn(
+            pro_eid(&self.id, "reset-ctx-btn"),
+            tr(cx, "Reset", "还原"),
+            Some(ProIcon::Undo),
+            ProBtnStyle::Ghost,
+            true,
+            cx,
+            |this, _, cx| {
+                this.reset_context(cx);
+            },
+        );
+        let reset_pres = pro_presence(
+            pro_eid(&self.id, "reset-ctx-pres"),
+            has_summary,
+            0.18,
+            0.14,
+            {
+                let mut btn_opt = Some(reset_btn);
+                move |amt| {
+                    div()
+                        .opacity(amt)
+                        .children(btn_opt.take())
+                        .into_any_element()
+                }
+            },
+        );
 
         let footer = div()
             .mt(px(8.0))
@@ -763,19 +800,7 @@ impl Render for ContextCompaction {
                     .flex()
                     .items_center()
                     .gap(px(6.0))
-                    .when(has_summary, |d| {
-                        d.child(pro_btn(
-                            pro_eid(&self.id, "reset-ctx-btn"),
-                            tr(cx, "Reset", "还原"),
-                            Some(ProIcon::Undo),
-                            ProBtnStyle::Ghost,
-                            true,
-                            cx,
-                            |this, _, cx| {
-                                this.reset_context(cx);
-                            },
-                        ))
-                    })
+                    .child(reset_pres)
                     .child(pro_btn(
                         pro_eid(&self.id, "add-turn-btn"),
                         tr(cx, "+ Turn", "+ 轮次"),
@@ -868,6 +893,13 @@ impl ContextCompaction {
             .clamp(0.0, 1.0);
             let is_hot = active_id == Some(&eid);
             let dimmed = active_id.is_some() && !is_hot;
+            let seg_alpha = pro_spring_f32(
+                pro_eid(&self.id, format!("salpha-{eid}")),
+                if dimmed { 0.35 } else { 1.0 },
+                0.20,
+                w,
+                cx,
+            );
             let col = entry.kind.slice_color(p);
 
             track = track.child(
@@ -876,7 +908,7 @@ impl ContextCompaction {
                     .h_full()
                     .w(relative(frac))
                     .bg(col)
-                    .opacity(if dimmed { 0.35 } else { 1.0 })
+                    .opacity(seg_alpha)
                     .cursor_pointer()
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
@@ -947,6 +979,7 @@ impl ContextCompaction {
     fn render_entries_list(
         &self,
         active_id: Option<&SharedString>,
+        w: &mut Window,
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
@@ -956,6 +989,13 @@ impl ContextCompaction {
         for (idx, entry) in self.entries.iter().enumerate() {
             let eid = entry.id.clone();
             let is_hot = active_id == Some(&eid);
+            let hot_t = pro_spring_f32(
+                pro_eid(&self.id, format!("rhot-{eid}")),
+                if is_hot { 1.0 } else { 0.0 },
+                0.18,
+                w,
+                cx,
+            );
             let is_shimmering = self.compacting_ids.contains(&eid);
             let is_expandable = !entry.apps.is_empty() || entry.kind == ContextEntryKind::Summary;
             let is_expanded = self.expanded_id.as_ref() == Some(&eid);
@@ -964,7 +1004,7 @@ impl ContextCompaction {
             let label_str = entry.display_label(cx).to_string();
             let tok_str = format_tokens_compact(entry.tokens);
             let kind_lbl = entry.kind.kind_name(cx);
-            let hover_bg = p.hover;
+            let row_bg = pro_mix_color(transparent_black(), p.hover, hot_t);
 
             let label_el: AnyElement = if is_shimmering {
                 pro_shimmer_text(
@@ -1027,8 +1067,7 @@ impl ContextCompaction {
                 .h(px(32.0))
                 .px(px(8.0))
                 .rounded(px(6.0))
-                .when(is_hot, |d| d.bg(hover_bg))
-                .hover(move |s| s.bg(hover_bg))
+                .bg(row_bg)
                 .when(is_expandable, |d| d.cursor_pointer())
                 .flex()
                 .items_center()
@@ -1060,6 +1099,15 @@ impl ContextCompaction {
                 }))
                 .child(lead_icon)
                 .child(div().min_w_0().overflow_hidden().child(label_el))
+                .when(entry.kind == ContextEntryKind::Summary, |d| {
+                    d.child(pro_check_draw(
+                        pro_eid(&self.id, format!("sum-chk-{}", entry.id)),
+                        true,
+                        13.0,
+                        false,
+                        p.green,
+                    ))
+                })
                 .when(!entry.apps.is_empty(), |d| d.child(app_badges))
                 .when_some(entry.before_tokens, |d, bef| {
                     d.child(

@@ -7,8 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -276,7 +278,9 @@ pub struct AgentQueue {
     live_flow: bool,
     applied_ticks: usize,
     seq_counter: usize,
+    lane_filter: SharedString,
     selected_job: Option<SharedString>,
+    last_inspected_job: Option<QueueJob>,
     loading: bool,
     empty: bool,
     started_at: Instant,
@@ -311,7 +315,9 @@ impl AgentQueue {
             live_flow: true,
             applied_ticks: 0,
             seq_counter: 502,
+            lane_filter: SharedString::from("all"),
             selected_job: None,
+            last_inspected_job: None,
             loading: false,
             empty: false,
             started_at: Instant::now(),
@@ -495,6 +501,7 @@ impl AgentQueue {
         };
         let removed = self.jobs.remove(pos);
         if self.selected_job.as_deref() == Some(job_id) {
+            self.last_inspected_job = Some(removed.clone());
             self.selected_job = None;
         }
         if !self.paused && self.rate_limit_ticks_left == 0 {
@@ -550,6 +557,7 @@ impl AgentQueue {
             for &idx in finished_indices.iter().rev() {
                 let completed = self.jobs.remove(idx);
                 if self.selected_job.as_ref() == Some(&completed.id) {
+                    self.last_inspected_job = Some(completed.clone());
                     self.selected_job = None;
                 }
                 if tick.is_multiple_of(11) && completed.attempt == 1 {
@@ -755,13 +763,13 @@ impl Render for AgentQueue {
                             .items_center()
                             .gap(px(5.0))
                             .child(div().size(px(6.0)).rounded_full().bg(status_fg))
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(status_fg)
-                                    .child(status_lbl),
-                            ),
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "q-status-lbl"),
+                                status_lbl,
+                                11.5,
+                                FontWeight::MEDIUM,
+                                status_fg,
+                            )),
                     ),
             )
             .child(
@@ -771,84 +779,92 @@ impl Render for AgentQueue {
                     .gap(px(7.0))
                     // Simulate Rate Limit toggle button
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "rate-limit-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Simulate 429 rate limit", "模拟 429 速率限制"))
-                            .aria_toggled(limited.into())
-                            .tab_index(0)
-                            .h(px(28.0))
-                            .px(px(9.0))
-                            .rounded(px(6.0))
-                            .bg(if limited { p.amber_soft } else { card_bg })
-                            .border_1()
-                            .border_color(if limited {
+                        pro_tactile(
+                            pro_eid(&self.id, "rate-limit-btn"),
+                            tr(cx, "Simulate 429 rate limit", "模拟 429 速率限制"),
+                            6.0,
+                            if limited { p.amber_soft } else { card_bg },
+                            p.hover,
+                            if limited {
                                 p.amber.opacity(0.35)
                             } else {
                                 p.line_strong
-                            })
-                            .hover(move |s| s.bg(p.hover))
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .gap(px(5.0))
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if limited { p.amber_ink } else { p.ink })
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            },
+                            p.line_strong,
+                            limited,
+                            div()
+                                .h(px(28.0))
+                                .px(px(9.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(5.0))
+                                .child(pro_icon(
+                                    ProIcon::Bolt,
+                                    13.0,
+                                    if limited { p.amber_ink } else { p.muted },
+                                ))
+                                .child(pro_swap_label(
+                                    pro_eid(&self.id, "rl-btn-lbl"),
+                                    if limited {
+                                        tr(cx, "Clear limit", "解除限流")
+                                    } else {
+                                        tr(cx, "Rate limit", "模拟限流")
+                                    },
+                                    12.0,
+                                    FontWeight::MEDIUM,
+                                    if limited { p.amber_ink } else { p.ink },
+                                )),
+                            cx,
+                            |this, _, cx| {
                                 this.toggle_rate_limit(cx);
-                            }))
-                            .child(pro_icon(
-                                ProIcon::Bolt,
-                                13.0,
-                                if limited { p.amber_ink } else { p.muted },
-                            ))
-                            .child(if limited {
-                                tr(cx, "Clear limit", "解除限流")
-                            } else {
-                                tr(cx, "Rate limit", "模拟限流")
-                            }),
+                            },
+                        )
+                        .w_auto(),
                     )
                     // Pause / Resume toggle
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "pause-queue-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Pause the queue", "暂停任务队列"))
-                            .aria_toggled(self.paused.into())
-                            .tab_index(0)
-                            .h(px(28.0))
-                            .px(px(9.0))
-                            .rounded(px(6.0))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .hover(move |s| s.bg(p.hover))
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .gap(px(5.0))
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if self.paused { p.accent_info } else { p.ink })
-                            .on_click(cx.listener(|this, _, _, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, "pause-queue-btn"),
+                            tr(cx, "Pause the queue", "暂停任务队列"),
+                            6.0,
+                            card_bg,
+                            p.hover,
+                            p.line_strong,
+                            p.line_strong,
+                            self.paused,
+                            div()
+                                .h(px(28.0))
+                                .px(px(9.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(5.0))
+                                .child(pro_icon(
+                                    if self.paused {
+                                        ProIcon::Play
+                                    } else {
+                                        ProIcon::Pause
+                                    },
+                                    13.0,
+                                    if self.paused { p.accent_info } else { p.muted },
+                                ))
+                                .child(pro_swap_label(
+                                    pro_eid(&self.id, "pause-btn-lbl"),
+                                    if self.paused {
+                                        tr(cx, "Resume", "恢复")
+                                    } else {
+                                        tr(cx, "Pause", "暂停")
+                                    },
+                                    12.0,
+                                    FontWeight::MEDIUM,
+                                    if self.paused { p.accent_info } else { p.ink },
+                                )),
+                            cx,
+                            |this, _, cx| {
                                 let next = !this.paused;
                                 this.set_paused(next, cx);
-                            }))
-                            .child(pro_icon(
-                                if self.paused {
-                                    ProIcon::Play
-                                } else {
-                                    ProIcon::Pause
-                                },
-                                13.0,
-                                if self.paused { p.accent_info } else { p.muted },
-                            ))
-                            .child(if self.paused {
-                                tr(cx, "Resume", "恢复")
-                            } else {
-                                tr(cx, "Pause", "暂停")
-                            }),
+                            },
+                        )
+                        .w_auto(),
                     )
                     // Workers `- N +` concurrency stepper
                     .child(
@@ -874,64 +890,79 @@ impl Render for AgentQueue {
                                     .child(tr(cx, "Workers", "并发")),
                             )
                             .child(
-                                div()
-                                    .id(pro_eid(&self.id, "worker-dec"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "One worker less", "减少一个工作槽"))
-                                    .tab_index(0)
-                                    .size(px(22.0))
-                                    .rounded(px(4.5))
-                                    .opacity(if self.concurrency <= self.min_concurrency {
+                                pro_tactile(
+                                    pro_eid(&self.id, "worker-dec"),
+                                    tr(cx, "One worker less", "减少一个工作槽"),
+                                    4.5,
+                                    transparent_black(),
+                                    p.hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    false,
+                                    div()
+                                        .size(px(22.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_icon(ProIcon::Minus, 12.0, p.ink)),
+                                    cx,
+                                    |this, _, cx| {
+                                        let next = this.concurrency.saturating_sub(1);
+                                        this.set_concurrency(next, cx);
+                                    },
+                                )
+                                .size(px(22.0))
+                                .opacity(
+                                    if self.concurrency <= self.min_concurrency {
                                         0.35
                                     } else {
                                         1.0
-                                    })
-                                    .hover(move |s| s.bg(p.hover))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        let next = this.concurrency.saturating_sub(1);
-                                        this.set_concurrency(next, cx);
-                                    }))
-                                    .child(pro_icon(ProIcon::Minus, 12.0, p.ink)),
+                                    },
+                                ),
                             )
+                            .child(div().min_w(px(18.0)).flex().justify_center().child(
+                                pro_rolling_number(
+                                    pro_eid(&self.id, "conc-num"),
+                                    self.concurrency as f64,
+                                    0,
+                                    "",
+                                    "",
+                                    12.5,
+                                    FontWeight::SEMIBOLD,
+                                    p.strong,
+                                ),
+                            ))
                             .child(
-                                div()
-                                    .min_w(px(18.0))
-                                    .text_center()
-                                    .text_size(px(12.5))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(p.strong)
-                                    .child(self.concurrency.to_string()),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "worker-inc"))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "One worker more", "增加一个工作槽"))
-                                    .tab_index(0)
-                                    .size(px(22.0))
-                                    .rounded(px(4.5))
-                                    .opacity(
-                                        if self.concurrency
-                                            >= self.max_concurrency.min(self.workers_catalog.len())
-                                        {
-                                            0.35
-                                        } else {
-                                            1.0
-                                        },
-                                    )
-                                    .hover(move |s| s.bg(p.hover))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                pro_tactile(
+                                    pro_eid(&self.id, "worker-inc"),
+                                    tr(cx, "One worker more", "增加一个工作槽"),
+                                    4.5,
+                                    transparent_black(),
+                                    p.hover,
+                                    transparent_black(),
+                                    transparent_black(),
+                                    false,
+                                    div()
+                                        .size(px(22.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pro_icon(ProIcon::Plus, 12.0, p.ink)),
+                                    cx,
+                                    |this, _, cx| {
                                         this.set_concurrency(this.concurrency + 1, cx);
-                                    }))
-                                    .child(pro_icon(ProIcon::Plus, 12.0, p.ink)),
+                                    },
+                                )
+                                .size(px(22.0))
+                                .opacity(
+                                    if self.concurrency
+                                        >= self.max_concurrency.min(self.workers_catalog.len())
+                                    {
+                                        0.35
+                                    } else {
+                                        1.0
+                                    },
+                                ),
                             ),
                     ),
             );
@@ -1025,6 +1056,7 @@ impl Render for AgentQueue {
             .count();
         let waiting_count = queued_jobs.len() as u32;
         let over_bp = waiting_count >= self.backpressure;
+        let util_ratio = (running_count as f32 / self.concurrency.max(1) as f32).clamp(0.0, 1.0);
 
         // 4-Column KPI Strip
         let stats_strip = div()
@@ -1040,6 +1072,7 @@ impl Render for AgentQueue {
                 None,
                 if over_bp { p.amber_ink } else { p.strong },
                 false,
+                None,
                 &p,
             ))
             .child(self.render_kpi_cell(
@@ -1049,6 +1082,7 @@ impl Render for AgentQueue {
                 Some(format!("/ {}", self.concurrency)),
                 p.strong,
                 true,
+                Some((util_ratio, if limited { p.amber } else { p.accent_info })),
                 &p,
             ))
             .child(self.render_kpi_cell(
@@ -1058,6 +1092,7 @@ impl Render for AgentQueue {
                 Some(tr(cx, "/min", "/分钟").to_string()),
                 p.strong,
                 true,
+                None,
                 &p,
             ))
             .child(self.render_kpi_cell(
@@ -1067,13 +1102,15 @@ impl Render for AgentQueue {
                 Some("s".to_string()),
                 if limited { p.amber_ink } else { p.strong },
                 true,
+                None,
                 &p,
             ));
 
-        // 3-Stage Flow Area: QUEUE -> WORKERS -> DONE / FAILED
+        // 3-Stage Flow Area: status pill filter + QUEUE -> WORKERS -> DONE / FAILED
         let flow_area = self.render_flow_lanes(
             &queued_jobs,
             running_count,
+            util_ratio,
             limited,
             card_bg,
             wash_bg,
@@ -1082,7 +1119,7 @@ impl Render for AgentQueue {
             cx,
         );
 
-        // Optional pinned Job Inspector Card
+        // Smooth pro_fold Job Inspector Disclosure
         let inspector = self.render_job_inspector(&p, cx);
 
         // Bottom Queue Depth Area Chart (`PathBuilder`)
@@ -1108,7 +1145,7 @@ impl Render for AgentQueue {
                     .child(header)
                     .child(stats_strip)
                     .child(flow_area)
-                    .when_some(inspector, |d, ins| d.child(ins))
+                    .child(inspector)
                     .child(chart_area),
             )
             .into_any_element()
@@ -1125,6 +1162,7 @@ impl AgentQueue {
         suffix_muted: Option<String>,
         val_color: Hsla,
         left_border: bool,
+        util_bar: Option<(f32, Hsla)>,
         p: &ProPalette,
     ) -> Div {
         div()
@@ -1134,7 +1172,7 @@ impl AgentQueue {
             .when(left_border, |d| d.border_l_1().border_color(p.line))
             .flex()
             .flex_col()
-            .gap(px(2.0))
+            .gap(px(3.0))
             .child(
                 div()
                     .truncate()
@@ -1162,6 +1200,16 @@ impl AgentQueue {
                         row.child(div().text_size(px(12.5)).text_color(p.muted).child(sfx))
                     }),
             )
+            .when_some(util_bar, |d, (ratio, fill_c)| {
+                d.child(pro_spring_bar(
+                    pro_eid(&self.id, format!("{key}-bar")),
+                    ratio,
+                    3.5,
+                    2.0,
+                    p.chip,
+                    fill_c,
+                ))
+            })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1169,6 +1217,7 @@ impl AgentQueue {
         &self,
         queued_jobs: &[QueueJob],
         running_count: usize,
+        util_ratio: f32,
         limited: bool,
         card_bg: Hsla,
         wash_bg: Hsla,
@@ -1176,10 +1225,126 @@ impl AgentQueue {
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> Div {
+        let active_lane = self.lane_filter.as_ref();
+        let lane_sensor = pro_selection_sensor();
+        let pill_fill: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.11)
+        } else {
+            rgb(0xffffff).into()
+        };
+        let needs_you_count = queued_jobs
+            .iter()
+            .filter(|j| j.kind == QueueJobKind::Human || j.priority == QueuePriority::High)
+            .count();
+
+        let tabs: [(&'static str, String); 4] = [
+            ("all", tr(cx, "All lanes", "全部泳道").to_string()),
+            (
+                "needs",
+                format!("{} · {needs_you_count}", tr(cx, "Needs you", "待关注")),
+            ),
+            (
+                "running",
+                format!("{} · {running_count}", tr(cx, "Running", "运行中")),
+            ),
+            (
+                "done",
+                format!("{} · {}", tr(cx, "Done", "已完成"), self.done_total),
+            ),
+        ];
+
+        let mut filter_strip = div()
+            .id(pro_eid(&self.id, "lane-tabs"))
+            .role(Role::TabList)
+            .aria_label(tr(cx, "Queue status lanes", "队列状态筛选"))
+            .relative()
+            .h(px(28.0))
+            .p(px(2.5))
+            .rounded(px(7.5))
+            .bg(wash_bg)
+            .border_1()
+            .border_color(p.line)
+            .flex()
+            .items_center()
+            .gap(px(2.0))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "lane-pill"),
+                self.lane_filter.clone(),
+                lane_sensor.clone(),
+                5.5,
+                pill_fill,
+                Some(p.line_strong),
+                !p.dark,
+            ));
+
+        for (key, lbl) in tabs {
+            let is_sel = active_lane == key;
+            let key_ss = SharedString::from(key);
+            filter_strip = filter_strip.child(
+                div()
+                    .id(pro_eid(&self.id, format!("lane-tab-{key}")))
+                    .role(Role::Tab)
+                    .aria_selected(is_sel)
+                    .tab_index(0)
+                    .relative()
+                    .h(px(22.0))
+                    .px(px(9.0))
+                    .rounded(px(5.5))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.0))
+                    .font_weight(if is_sel {
+                        FontWeight::SEMIBOLD
+                    } else {
+                        FontWeight::MEDIUM
+                    })
+                    .text_color(if is_sel { p.strong } else { p.muted })
+                    .hover(|s| s.text_color(p.strong))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.lane_filter = key_ss.clone();
+                        cx.notify();
+                    }))
+                    .when(is_sel, |d| d.child(pro_mark_selected(&lane_sensor)))
+                    .child(lbl),
+            );
+        }
+
+        let q_target = if active_lane == "all" || active_lane == "needs" {
+            1.0
+        } else {
+            0.46
+        };
+        let w_target = if active_lane == "all" || active_lane == "running" {
+            1.0
+        } else {
+            0.46
+        };
+        let b_target = if active_lane == "all" || active_lane == "done" {
+            1.0
+        } else {
+            0.46
+        };
+        let q_alpha = pro_spring_f32(pro_eid(&self.id, "q-lane-a"), q_target, 0.24, w, cx);
+        let w_alpha = pro_spring_f32(pro_eid(&self.id, "w-lane-a"), w_target, 0.24, w, cx);
+        let b_alpha = pro_spring_f32(pro_eid(&self.id, "b-lane-a"), b_target, 0.24, w, cx);
+
+        let visible_queued: Vec<&QueueJob> = queued_jobs
+            .iter()
+            .filter(|j| {
+                if active_lane == "needs" {
+                    j.kind == QueueJobKind::Human || j.priority == QueuePriority::High
+                } else {
+                    true
+                }
+            })
+            .collect();
+
         // Left column: QUEUE
         let mut queue_col = div()
             .w(px(214.0))
             .flex_none()
+            .opacity(q_alpha)
             .flex()
             .flex_col()
             .gap(px(7.0))
@@ -1200,33 +1365,40 @@ impl AgentQueue {
                                     .text_color(p.muted)
                                     .child(tr(cx, "QUEUE", "待处理队列")),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(queued_jobs.len().to_string()),
-                            ),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "q-col-cnt"),
+                                visible_queued.len() as f64,
+                                0,
+                                "",
+                                "",
+                                12.0,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     )
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, "enqueue-high-btn"))
-                            .role(Role::Button)
-                            .aria_label(tr(cx, "Enqueue urgent job", "加入高优任务"))
-                            .tab_index(0)
-                            .h(px(20.0))
-                            .px(px(6.0))
-                            .rounded(px(4.5))
-                            .bg(p.chip)
-                            .hover(move |s| s.bg(p.chip_hover))
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .gap(px(3.0))
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .on_click(cx.listener(|this, _, _, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, "enqueue-high-btn"),
+                            tr(cx, "Enqueue urgent job", "加入高优任务"),
+                            4.5,
+                            p.chip,
+                            p.chip_hover,
+                            transparent_black(),
+                            p.line_strong,
+                            false,
+                            div()
+                                .h(px(20.0))
+                                .px(px(6.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(3.0))
+                                .text_size(px(10.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(pro_icon(ProIcon::Plus, 10.5, p.muted))
+                                .child(tr(cx, "Urgent", "高优")),
+                            cx,
+                            |this, _, cx| {
                                 this.seq_counter += 1;
                                 let n = this.seq_counter;
                                 let urgent = QueueJob::new(
@@ -1237,9 +1409,9 @@ impl AgentQueue {
                                 .with_name_zh(format!("VIP 紧急工单 #{n}"))
                                 .with_priority(QueuePriority::High);
                                 this.enqueue_job(urgent, cx);
-                            }))
-                            .child(pro_icon(ProIcon::Plus, 10.5, p.muted))
-                            .child(tr(cx, "Urgent", "高优")),
+                            },
+                        )
+                        .w_auto(),
                     ),
             );
 
@@ -1254,7 +1426,7 @@ impl AgentQueue {
             .flex_col()
             .gap(px(5.0));
 
-        if queued_jobs.is_empty() {
+        if visible_queued.is_empty() {
             queue_stack = queue_stack.justify_center().items_center().child(
                 div().text_size(px(11.5)).text_color(p.faint).child(tr(
                     cx,
@@ -1263,12 +1435,12 @@ impl AgentQueue {
                 )),
             );
         } else {
-            for qj in queued_jobs.iter().take(4) {
+            for qj in visible_queued.iter().take(4) {
                 queue_stack =
                     queue_stack.child(self.render_job_chip(qj, false, limited, card_bg, w, p, cx));
             }
-            if queued_jobs.len() > 4 {
-                let extra = queued_jobs.len() - 4;
+            if visible_queued.len() > 4 {
+                let extra = visible_queued.len() - 4;
                 queue_stack = queue_stack.child(
                     div()
                         .h(px(22.0))
@@ -1291,6 +1463,7 @@ impl AgentQueue {
         let mut workers_col = div()
             .flex_1()
             .min_w_0()
+            .opacity(w_alpha)
             .flex()
             .flex_col()
             .gap(px(7.0))
@@ -1298,21 +1471,51 @@ impl AgentQueue {
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(6.0))
+                    .justify_between()
+                    .gap(px(8.0))
                     .child(
                         div()
-                            .text_size(px(10.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.muted)
-                            .child(tr(cx, "WORKERS", "并发工作槽")),
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_size(px(10.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.muted)
+                                    .child(tr(cx, "WORKERS", "并发工作槽")),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_baseline()
+                                    .gap(px(2.0))
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "w-col-run"),
+                                        running_count as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        12.0,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    ))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.0))
+                                            .text_color(p.muted)
+                                            .child(format!("/ {}", self.concurrency)),
+                                    ),
+                            ),
                     )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(format!("{running_count} / {}", self.concurrency)),
-                    ),
+                    .child(div().w(px(72.0)).flex_none().child(pro_spring_bar(
+                        pro_eid(&self.id, "workers-util-bar"),
+                        util_ratio,
+                        4.5,
+                        2.5,
+                        p.chip,
+                        if limited { p.amber } else { p.accent_info },
+                    ))),
             );
 
         let mut slots_stack = div().flex().flex_col().gap(px(6.0));
@@ -1337,20 +1540,29 @@ impl AgentQueue {
 
             let slot_right = match running_job {
                 Some(rj) => self.render_job_chip(&rj, true, limited, card_bg, w, p, cx),
-                None => div()
-                    .flex_1()
-                    .min_w_0()
-                    .h(px(28.0))
-                    .px(px(10.0))
-                    .rounded(px(6.0))
-                    .border_1()
-                    .border_color(p.line_soft)
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.5))
-                    .text_color(p.faint)
-                    .child(tr(cx, "Idle slot", "空闲槽位"))
-                    .into_any_element(),
+                None => pro_tactile(
+                    pro_eid(&self.id, format!("idle-slot-{wid}")),
+                    tr(cx, "Idle worker slot", "空闲工作槽"),
+                    6.0,
+                    transparent_black(),
+                    p.hover,
+                    p.line_soft,
+                    p.line_strong,
+                    false,
+                    div()
+                        .w_full()
+                        .h(px(28.0))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .text_size(px(11.5))
+                        .text_color(p.faint)
+                        .child(tr(cx, "Idle slot", "空闲槽位")),
+                    cx,
+                    |_, _, _| {},
+                )
+                .into_any_element(),
             };
 
             slots_stack = slots_stack.child(
@@ -1392,13 +1604,14 @@ impl AgentQueue {
         let bins_col = div()
             .w(px(108.0))
             .flex_none()
+            .opacity(b_alpha)
             .pt(px(23.0))
             .flex()
             .flex_col()
             .gap(px(8.0))
             .child(self.render_terminal_bin(
                 "bin-done",
-                ProIcon::Check,
+                true,
                 tr(cx, "DONE", "已完成"),
                 self.done_total,
                 p.green_soft,
@@ -1406,10 +1619,11 @@ impl AgentQueue {
                 p.strong,
                 wash_bg,
                 p.line,
+                cx,
             ))
             .child(self.render_terminal_bin(
                 "bin-failed",
-                ProIcon::Close,
+                false,
                 tr(cx, "FAILED", "已失败"),
                 self.failed_total,
                 p.red_soft,
@@ -1417,6 +1631,7 @@ impl AgentQueue {
                 p.red_ink,
                 wash_bg,
                 p.line,
+                cx,
             ));
 
         div()
@@ -1424,18 +1639,31 @@ impl AgentQueue {
             .border_b_1()
             .border_color(p.line)
             .flex()
-            .items_start()
+            .flex_col()
             .gap(px(12.0))
-            .child(queue_col)
-            .child(workers_col)
-            .child(bins_col)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(filter_strip),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(12.0))
+                    .child(queue_col)
+                    .child(workers_col)
+                    .child(bins_col),
+            )
     }
 
     #[allow(clippy::too_many_arguments)]
     fn render_terminal_bin(
         &self,
         key: &str,
-        icon: ProIcon,
+        is_done_bin: bool,
         label: &str,
         count: u64,
         icon_bg: Hsla,
@@ -1443,50 +1671,79 @@ impl AgentQueue {
         num_fg: Hsla,
         wash_bg: Hsla,
         border_c: Hsla,
-    ) -> Div {
-        div()
-            .h(px(70.0))
-            .p(px(10.0))
-            .rounded(px(8.0))
-            .bg(wash_bg)
-            .border_1()
-            .border_color(border_c)
-            .flex()
-            .flex_col()
-            .justify_between()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .size(px(20.0))
-                            .rounded(px(5.0))
-                            .bg(icon_bg)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(pro_icon(icon, 11.5, icon_fg)),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(icon_fg)
-                            .child(label.to_string()),
-                    ),
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let lead_badge: AnyElement = if is_done_bin {
+            pro_check_draw(
+                pro_eid(&self.id, format!("{key}-chk")),
+                count > 0,
+                16.0,
+                true,
+                icon_fg,
             )
-            .child(pro_rolling_number(
-                pro_eid(&self.id, key),
-                count as f64,
-                0,
-                "",
-                "",
-                19.0,
-                FontWeight::MEDIUM,
-                num_fg,
-            ))
+        } else {
+            div()
+                .size(px(20.0))
+                .rounded(px(5.0))
+                .bg(icon_bg)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_icon(ProIcon::Close, 11.5, icon_fg))
+                .into_any_element()
+        };
+
+        pro_tactile(
+            pro_eid(&self.id, format!("{key}-card")),
+            label.to_string(),
+            8.0,
+            wash_bg,
+            ProPalette::get(cx).hover,
+            border_c,
+            icon_fg.opacity(0.45),
+            is_done_bin && self.lane_filter.as_ref() == "done",
+            div()
+                .h(px(70.0))
+                .p(px(10.0))
+                .flex()
+                .flex_col()
+                .justify_between()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .child(lead_badge)
+                        .child(
+                            div()
+                                .text_size(px(10.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(icon_fg)
+                                .child(label.to_string()),
+                        ),
+                )
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, key),
+                    count as f64,
+                    0,
+                    "",
+                    "",
+                    19.0,
+                    FontWeight::MEDIUM,
+                    num_fg,
+                )),
+            cx,
+            move |this, _, cx| {
+                if is_done_bin {
+                    this.lane_filter = if this.lane_filter.as_ref() == "done" {
+                        SharedString::from("all")
+                    } else {
+                        SharedString::from("done")
+                    };
+                    cx.notify();
+                }
+            },
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1501,6 +1758,7 @@ impl AgentQueue {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let jid = job.id.clone();
+        let job_snapshot = job.clone();
         let selected = self.selected_job.as_ref() == Some(&jid);
         let (k_bg, k_edge, k_ink) = if in_worker && limited {
             (p.amber_soft, p.amber.opacity(0.42), p.amber_ink)
@@ -1543,31 +1801,11 @@ impl AgentQueue {
         let title_str = job.display_name(cx).to_string();
         let aria = format!("{title_str}, {}, {meta_txt}", job.kind.label(cx));
 
-        div()
-            .id(pro_eid(&self.id, format!("job-{jid}")))
-            .role(Role::Button)
-            .aria_label(aria)
-            .aria_expanded(selected)
-            .tab_index(0)
+        let inner = div()
             .w_full()
             .h(px(28.0))
             .relative()
-            .rounded(px(6.0))
-            .bg(card_bg)
-            .border_1()
-            .border_color(if selected { k_ink } else { k_edge })
             .overflow_hidden()
-            .cursor_pointer()
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if this.selected_job.as_ref() == Some(&jid) {
-                    this.selected_job = None;
-                } else {
-                    this.selected_job = Some(jid.clone());
-                }
-                cx.emit(AgentQueueEvent::JobSelected(this.selected_job.clone()));
-                cx.notify();
-            }))
             .when(in_worker, |d| {
                 d.child(
                     div()
@@ -1626,136 +1864,223 @@ impl AgentQueue {
                                 .child(format!("↻{}", job.attempt)),
                         )
                     })
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(11.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if in_worker { k_ink } else { p.muted })
-                            .child(meta_txt),
-                    ),
-            )
-            .into_any_element()
+                    .child(div().flex_none().child(if in_worker {
+                        pro_rolling_number(
+                            pro_eid(&self.id, format!("jm-{}", job.id)),
+                            (prog * 100.0).round() as f64,
+                            0,
+                            "",
+                            "%",
+                            11.0,
+                            FontWeight::MEDIUM,
+                            k_ink,
+                        )
+                    } else {
+                        pro_rolling_number(
+                            pro_eid(&self.id, format!("jm-{}", job.id)),
+                            job.elapsed_secs as f64,
+                            1,
+                            "",
+                            "s",
+                            11.0,
+                            FontWeight::MEDIUM,
+                            p.muted,
+                        )
+                    })),
+            );
+
+        pro_tactile(
+            pro_eid(&self.id, format!("job-{jid}")),
+            aria,
+            6.0,
+            card_bg,
+            p.hover,
+            if selected { k_ink } else { k_edge },
+            k_ink,
+            selected,
+            inner,
+            cx,
+            move |this, _, cx| {
+                this.last_inspected_job = Some(job_snapshot.clone());
+                if this.selected_job.as_ref() == Some(&jid) {
+                    this.selected_job = None;
+                } else {
+                    this.selected_job = Some(jid.clone());
+                }
+                cx.emit(AgentQueueEvent::JobSelected(this.selected_job.clone()));
+                cx.notify();
+            },
+        )
+        .aria_expanded(selected)
+        .into_any_element()
     }
 
-    fn render_job_inspector(&self, p: &ProPalette, cx: &mut Context<Self>) -> Option<Div> {
-        let sel_id = self.selected_job.as_ref()?;
-        let job = self.jobs.iter().find(|j| &j.id == sel_id)?.clone();
+    fn render_job_inspector(&self, p: &ProPalette, cx: &mut Context<Self>) -> AnyElement {
+        let active_job = self
+            .selected_job
+            .as_ref()
+            .and_then(|sel_id| self.jobs.iter().find(|j| &j.id == sel_id))
+            .cloned();
+        let is_open = active_job.is_some();
+        let display_job = active_job.or_else(|| self.last_inspected_job.clone());
+        let base_id = self.id.clone();
+
+        let Some(job) = display_job else {
+            return pro_fold(
+                pro_eid(&base_id, "job-inspector-fold"),
+                false,
+                56.0,
+                0.0,
+                || div().into_any_element(),
+            );
+        };
+
         let (k_bg, _, k_ink) = job.kind.colors(p);
         let jid_prom = job.id.clone();
         let jid_canc = job.id.clone();
         let is_queued = job.status == QueueJobStatus::Queued;
+        let is_running = job.status == QueueJobStatus::Running;
         let can_promote = is_queued && job.priority != QueuePriority::High;
+        let title_s = job.display_name(cx).to_string();
+        let subtitle_s = format!(
+            "{} · {} #{}",
+            job.kind.label(cx),
+            tr(cx, "Attempt", "尝试"),
+            job.attempt
+        );
+        let err_opt = job.error.clone();
+        let prog_val = job.progress.clamp(0.0, 1.0);
+        let p_copy = *p;
 
-        Some(
-            div()
-                .px(px(16.0))
-                .py(px(10.0))
-                .border_b_1()
-                .border_color(p.line)
-                .bg(p.subtle)
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_between()
-                .gap(px(10.0))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .child(
-                            div()
-                                .size(px(24.0))
-                                .rounded(px(6.0))
-                                .bg(k_bg)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(pro_icon(job.kind.fallback_icon(), 13.0, k_ink)),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .text_size(px(12.5))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(p.strong)
-                                        .child(job.display_name(cx).to_string()),
-                                )
-                                .child(div().text_size(px(11.5)).text_color(p.muted).child(
-                                    format!(
-                                        "{} · {} #{}",
-                                        job.kind.label(cx),
-                                        tr(cx, "Attempt", "尝试"),
-                                        job.attempt
-                                    ),
-                                )),
-                        )
-                        .when_some(job.error.clone(), |row, err| {
-                            row.child(
+        let actions = div()
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .when(can_promote, |d| {
+                d.child(pro_btn(
+                    pro_eid(&self.id, "promote-job-btn"),
+                    tr(cx, "Move to front", "移至队首"),
+                    Some(ProIcon::ArrowUp),
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    move |this, _, cx| {
+                        this.promote_job(jid_prom.as_ref(), cx);
+                    },
+                ))
+            })
+            .child(pro_btn(
+                pro_eid(&self.id, "cancel-job-btn"),
+                tr(cx, "Cancel job", "取消任务"),
+                Some(ProIcon::Close),
+                ProBtnStyle::Danger,
+                true,
+                cx,
+                move |this, _, cx| {
+                    this.cancel_job(jid_canc.as_ref(), cx);
+                },
+            ))
+            .child(pro_icon_btn(
+                pro_eid(&self.id, "close-inspector-btn"),
+                tr(cx, "Close job card", "关闭任务详情"),
+                ProIcon::Close,
+                26.0,
+                false,
+                cx,
+                |this, _, cx| {
+                    if let Some(sel) = &this.selected_job
+                        && let Some(cur) = this.jobs.iter().find(|j| &j.id == sel).cloned()
+                    {
+                        this.last_inspected_job = Some(cur);
+                    }
+                    this.selected_job = None;
+                    cx.notify();
+                },
+            ));
+
+        let card = div()
+            .px(px(16.0))
+            .py(px(10.0))
+            .border_b_1()
+            .border_color(p_copy.line)
+            .bg(p_copy.subtle)
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(10.0))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(
                                 div()
-                                    .px(px(7.5))
-                                    .py(px(3.0))
-                                    .rounded(px(5.0))
-                                    .bg(p.red_soft)
-                                    .text_size(px(11.0))
-                                    .text_color(p.red_ink)
-                                    .child(err),
+                                    .size(px(24.0))
+                                    .rounded(px(6.0))
+                                    .bg(k_bg)
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(pro_icon(job.kind.fallback_icon(), 13.0, k_ink)),
                             )
-                        }),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .when(can_promote, |d| {
-                            d.child(pro_btn(
-                                pro_eid(&self.id, "promote-job-btn"),
-                                tr(cx, "Move to front", "移至队首"),
-                                Some(ProIcon::ArrowUp),
-                                ProBtnStyle::Secondary,
-                                true,
-                                cx,
-                                move |this, _, cx| {
-                                    this.promote_job(jid_prom.as_ref(), cx);
-                                },
-                            ))
-                        })
-                        .child(pro_btn(
-                            pro_eid(&self.id, "cancel-job-btn"),
-                            tr(cx, "Cancel job", "取消任务"),
-                            Some(ProIcon::Close),
-                            ProBtnStyle::Danger,
-                            true,
-                            cx,
-                            move |this, _, cx| {
-                                this.cancel_job(jid_canc.as_ref(), cx);
-                            },
-                        ))
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, "close-inspector-btn"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Close job card", "关闭任务详情"))
-                                .tab_index(0)
-                                .size(px(26.0))
-                                .rounded(px(6.0))
-                                .hover(move |s| s.bg(p.hover))
-                                .cursor_pointer()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.selected_job = None;
-                                    cx.notify();
-                                }))
-                                .child(pro_icon(ProIcon::Close, 12.0, p.muted)),
-                        ),
-                ),
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .text_size(px(12.5))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(p_copy.strong)
+                                            .child(title_s),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(p_copy.muted)
+                                            .child(subtitle_s),
+                                    ),
+                            )
+                            .when_some(err_opt, |row, err| {
+                                row.child(
+                                    div()
+                                        .px(px(7.5))
+                                        .py(px(3.0))
+                                        .rounded(px(5.0))
+                                        .bg(p_copy.red_soft)
+                                        .text_size(px(11.0))
+                                        .text_color(p_copy.red_ink)
+                                        .child(err),
+                                )
+                            }),
+                    )
+                    .child(actions),
+            )
+            .when(is_running, |d| {
+                d.child(pro_spring_bar(
+                    pro_eid(&base_id, format!("insp-prog-{}", job.id)),
+                    prog_val,
+                    4.0,
+                    2.0,
+                    p_copy.chip,
+                    k_ink,
+                ))
+            })
+            .into_any_element();
+
+        let mut cell = Some(card);
+        pro_fold(
+            pro_eid(&base_id, "job-inspector-fold"),
+            is_open,
+            64.0,
+            0.0,
+            move || cell.take().unwrap_or_else(|| div().into_any_element()),
         )
     }
 
@@ -1942,11 +2267,23 @@ impl AgentQueue {
                             .gap(px(12.0))
                             .text_size(px(11.0))
                             .text_color(p.muted)
-                            .child(format!(
-                                "{} {}",
-                                tr(cx, "Peak", "峰值"),
-                                peak.round() as u32
-                            ))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_baseline()
+                                    .gap(px(3.5))
+                                    .child(tr(cx, "Peak", "峰值"))
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, "depth-peak-num"),
+                                        peak.round() as f64,
+                                        0,
+                                        "",
+                                        "",
+                                        11.0,
+                                        FontWeight::MEDIUM,
+                                        p.ink,
+                                    )),
+                            )
                             .child(format!(
                                 "{} {}",
                                 tr(cx, "Backpressure", "背压阈值"),

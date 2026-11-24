@@ -7,11 +7,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mix_color, pro_skeleton_bar, tr,
+        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_skeleton_bar,
+        pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
+        family::{Slide, disabled_motion},
         kense_mark,
         pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon},
     },
@@ -67,6 +69,17 @@ impl ProjectFlowNode {
             Self::Subtasks => "subtasks",
             Self::ProjectManager => "project-manager",
             Self::UxDesigner => "ux-designer",
+        }
+    }
+
+    const fn index(self) -> usize {
+        match self {
+            Self::Client => 0,
+            Self::Task => 1,
+            Self::Notes => 2,
+            Self::Subtasks => 3,
+            Self::ProjectManager => 4,
+            Self::UxDesigner => 5,
         }
     }
 
@@ -569,7 +582,10 @@ pub struct ProjectFlow {
     task_title: Option<SharedString>,
     selected_node: Option<ProjectFlowNode>,
     hovered_node: Option<ProjectFlowNode>,
-    replay_hovered: bool,
+    node_hover: [Slide; 6],
+    node_press: [Slide; 6],
+    conn_illum: [Slide; 5],
+    conn_packets: [Option<Instant>; 5],
     show_replay: bool,
     playing: bool,
     started_at: Instant,
@@ -594,10 +610,33 @@ impl ProjectFlow {
             task_title: None,
             selected_node: None,
             hovered_node: None,
-            replay_hovered: false,
+            node_hover: [
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+            ],
+            node_press: [
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+            ],
+            conn_illum: [
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+            ],
+            conn_packets: [None; 5],
             show_replay: true,
             playing: true,
-            started_at: Instant::now(),
+            started_at: cx.background_executor().now(),
             intro_started_at: None,
             height: None,
             loading: false,
@@ -672,9 +711,19 @@ impl ProjectFlow {
 
     /// Replay the staggered card build-in and subtask hand drag-and-drop sequence from `t = 0`.
     pub fn replay(&mut self, cx: &mut Context<Self>) {
-        self.intro_started_at = Some(Instant::now());
+        self.intro_started_at = Some(cx.background_executor().now());
         cx.emit(ProjectFlowEvent::Replay);
         cx.notify();
+    }
+
+    fn fire_incident_packets(&mut self, node: ProjectFlowNode, cx: &mut Context<Self>) {
+        let now = cx.background_executor().now();
+        for (ci, conn) in flow_connectors().iter().enumerate() {
+            if conn.touches(node) {
+                self.conn_packets[ci] = Some(now);
+                self.conn_illum[ci].duration(1.0, 0.20, cx);
+            }
+        }
     }
 
     /// Return the currently selected [`ProjectFlowNode`], if any.
@@ -684,6 +733,9 @@ impl ProjectFlow {
 
     /// Programmatically select or clear a [`ProjectFlowNode`].
     pub fn select_node(&mut self, node: Option<ProjectFlowNode>, cx: &mut Context<Self>) {
+        if let Some(target) = node {
+            self.fire_incident_packets(target, cx);
+        }
         if self.selected_node != node {
             self.selected_node = node;
             cx.emit(ProjectFlowEvent::SelectNode(node));
@@ -982,8 +1034,9 @@ impl Render for ProjectFlow {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let dark = p.dark;
-        let reduced = Theme::global(cx).reduced_motion;
-        let live_elapsed = self.started_at.elapsed().as_secs_f32();
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let live_elapsed = now.saturating_duration_since(self.started_at).as_secs_f32();
 
         if self.loading {
             let phase = (live_elapsed / 1.4).fract();
@@ -1021,7 +1074,7 @@ impl Render for ProjectFlow {
 
         let mut intro_t: Option<f32> = None;
         if let Some(t0) = self.intro_started_at {
-            let age = t0.elapsed().as_secs_f32();
+            let age = now.saturating_duration_since(t0).as_secs_f32();
             if reduced || age >= INTRO_TOTAL_SECS {
                 self.intro_started_at = None;
             } else {
@@ -1031,7 +1084,22 @@ impl Render for ProjectFlow {
 
         let intro = eval_intro_frame(intro_t);
         let animate_pulses = self.playing && !reduced && intro.steady;
-        if intro_t.is_some() || animate_pulses {
+
+        let mut packet_progs: [Option<f32>; 5] = [None; 5];
+        let mut any_packet_active = false;
+        for ci in 0..5 {
+            if let Some(t0) = self.conn_packets[ci] {
+                let age = now.saturating_duration_since(t0).as_secs_f32();
+                if age < 0.88 && !reduced {
+                    any_packet_active = true;
+                    packet_progs[ci] = Some(pro_ease((age / 0.88).clamp(0., 1.)));
+                } else {
+                    self.conn_packets[ci] = None;
+                }
+            }
+        }
+
+        if intro_t.is_some() || animate_pulses || any_packet_active {
             w.request_animation_frame();
         }
 
@@ -1051,10 +1119,43 @@ impl Render for ProjectFlow {
         let stage_h_px = STAGE_H * s;
 
         let active_focus = self.hovered_node.or(self.selected_node);
+        let mut node_hovs = [0.0f32; 6];
+        let mut node_downs = [0.0f32; 6];
+        for node in ProjectFlowNode::ALL {
+            let ni = node.index();
+            let target_hov = if self.hovered_node == Some(node) {
+                1.0
+            } else if self.selected_node == Some(node) {
+                0.75
+            } else {
+                0.0
+            };
+            self.node_hover[ni].duration(target_hov, 0.18, cx);
+            node_hovs[ni] = self.node_hover[ni].get(w, cx).clamp(0., 1.);
+            node_downs[ni] = self.node_press[ni].get(w, cx).clamp(0., 1.);
+        }
+
+        let mut conn_illums = [0.0f32; 5];
+        for (ci, conn) in flow_connectors().iter().enumerate() {
+            let touched = active_focus.is_some_and(|n| conn.touches(n));
+            let target_illum = if touched {
+                1.0
+            } else if packet_progs[ci].is_some() {
+                0.75
+            } else {
+                0.0
+            };
+            self.conn_illum[ci].duration(target_illum, 0.20, cx);
+            conn_illums[ci] = self.conn_illum[ci].get(w, cx).clamp(0., 1.);
+        }
+        let any_focus = active_focus.is_some();
+
         let node_opacity = |node: ProjectFlowNode, base_alpha: f32| -> f32 {
-            let focus_mul = match active_focus {
-                Some(f) if f != node => 0.78,
-                _ => 1.0,
+            let hov = node_hovs[node.index()];
+            let focus_mul = if any_focus && active_focus != Some(node) {
+                0.78 + 0.22 * hov
+            } else {
+                1.0
             };
             (base_alpha * focus_mul).clamp(0.0, 1.0)
         };
@@ -1166,55 +1267,66 @@ impl Render for ProjectFlow {
 
                 // 5 solid `#82BCFF` connectors + traveling pulses + white-centered anchor circles
                 let base_sw = (5.0 * sc).max(1.5);
-                for conn in flow_connectors() {
+                for (ci, conn) in flow_connectors().iter().enumerate() {
                     let draw_u = match intro_t {
                         Some(t) => ease_card((t - conn.draw_delay) / conn.draw_dur),
                         None => 1.0,
                     };
-                    let focused = active_focus.is_some_and(|n| conn.touches(n));
-                    let line_alpha = match active_focus {
-                        Some(_) if focused => 1.0,
-                        Some(_) => 0.42,
-                        None => 0.94,
+                    let illum = conn_illums[ci];
+                    let line_alpha = if any_focus {
+                        0.42 + 0.58 * illum
+                    } else {
+                        0.94 + 0.06 * illum
                     };
+                    let line_col = pro_mix_color(sky, sky_bright, illum * 0.35).opacity(line_alpha);
 
                     paint_poly_window(
                         conn,
                         0.0,
                         draw_u,
-                        if focused { base_sw * 1.18 } else { base_sw },
-                        sky.opacity(line_alpha),
+                        base_sw * (1.0 + 0.32 * illum),
+                        line_col,
                         &map_pt,
                         window,
                     );
 
-                    // Continuous traveling pulse along completed connectors
+                    // Continuous traveling pulse + immediate manual packet along completed connectors
                     if intro.steady {
-                        let head = (pulse_phase + conn.pulse_offset).fract();
-                        let span = if conn.total_len > 300.0 { 0.20 } else { 0.36 };
-                        let p_start = (head - span).max(0.0);
-                        let p_end = head.min(1.0);
-                        if p_end - p_start > 0.015 {
-                            let boost: f32 = if focused { 1.25 } else { 1.0 };
-                            paint_poly_window(
-                                conn,
-                                p_start,
-                                p_end,
-                                (12.0 * sc).max(3.2),
-                                sky.opacity((0.24 * boost).min(0.55)),
-                                &map_pt,
-                                window,
-                            );
-                            paint_poly_window(
-                                conn,
-                                (head - span * 0.48).max(0.0),
-                                p_end,
-                                (6.2 * sc).max(2.0),
-                                pro_mix_color(sky, sky_bright, 0.55)
-                                    .opacity((0.72 * boost).min(1.0)),
-                                &map_pt,
-                                window,
-                            );
+                        let span = if conn.total_len > 300.0 { 0.22 } else { 0.38 };
+                        let mut heads: Vec<(f32, f32)> = Vec::with_capacity(2);
+                        if animate_pulses {
+                            heads.push((
+                                (pulse_phase + conn.pulse_offset).fract(),
+                                1.0 + 0.30 * illum,
+                            ));
+                        }
+                        if let Some(pkt_u) = packet_progs[ci] {
+                            heads.push(((pkt_u * (1.0 + span)).min(1.0 + span), 1.45));
+                        }
+                        for (head, boost) in heads {
+                            let p_start = (head - span).clamp(0.0, 1.0);
+                            let p_end = head.clamp(0.0, 1.0);
+                            if p_end - p_start > 0.015 {
+                                paint_poly_window(
+                                    conn,
+                                    p_start,
+                                    p_end,
+                                    (12.5 * sc).max(3.2),
+                                    sky.opacity((0.26 * boost).min(0.62)),
+                                    &map_pt,
+                                    window,
+                                );
+                                paint_poly_window(
+                                    conn,
+                                    (head - span * 0.48).clamp(0.0, 1.0),
+                                    p_end,
+                                    (6.4 * sc).max(2.0),
+                                    pro_mix_color(sky, sky_bright, 0.65)
+                                        .opacity((0.76 * boost).min(1.0)),
+                                    &map_pt,
+                                    window,
+                                );
+                            }
                         }
                     }
 
@@ -1225,7 +1337,7 @@ impl Render for ProjectFlow {
                             None => 1.0,
                         } * line_alpha;
                         if dot_a > 0.01 {
-                            let r_out = (11.5 * sc).max(3.5);
+                            let r_out = ((11.5 + 1.8 * illum) * sc).max(3.5);
                             let ring_w = (3.4 * sc).max(1.25);
                             window.paint_quad(quad(
                                 Bounds::new(
@@ -1251,33 +1363,69 @@ impl Render for ProjectFlow {
         let sub_sz = (26.3 * s).max(8.0);
 
         let card_border_for = |node: ProjectFlowNode| -> Hsla {
-            if self.selected_node == Some(node) {
-                sky
-            } else if self.hovered_node == Some(node) {
-                pro_mix_color(card_border, sky, 0.65)
+            let ni = node.index();
+            let mix = if self.selected_node == Some(node) {
+                1.0
             } else {
-                card_border
-            }
+                (node_hovs[ni] * 0.72 + node_downs[ni] * 0.28).clamp(0., 1.)
+            };
+            pro_mix_color(card_border, sky, mix)
+        };
+        let node_dy_offset = |node: ProjectFlowNode| -> f32 {
+            let ni = node.index();
+            -4.5 * node_hovs[ni] * (1.0 - node_downs[ni]) + 5.0 * node_downs[ni]
         };
 
         let wire_node = |el: Stateful<Div>, node: ProjectFlowNode, cx: &mut Context<Self>| {
+            let ni = node.index();
             el.cursor_pointer()
                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                     let next = if *inside { Some(node) } else { None };
-                    if this.hovered_node != next {
+                    if *inside {
+                        if this.hovered_node != Some(node) {
+                            this.hovered_node = Some(node);
+                            this.node_hover[ni].duration(1.0, 0.18, cx);
+                            this.fire_incident_packets(node, cx);
+                            cx.notify();
+                        }
+                    } else if this.hovered_node == Some(node) {
                         this.hovered_node = next;
+                        this.node_hover[ni].duration(0.0, 0.18, cx);
+                        this.node_press[ni].duration(0., 0.14, cx);
                         cx.notify();
                     }
                 }))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                    cx.stop_propagation();
-                })
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.node_press[ni].duration(1., 0.08, cx);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }),
+                )
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.node_press[ni].duration(0., 0.14, cx);
+                        cx.notify();
+                    }),
+                )
+                .on_mouse_up_out(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.node_press[ni].duration(0., 0.14, cx);
+                        cx.notify();
+                    }),
+                )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     let next = if this.selected_node == Some(node) {
                         None
                     } else {
                         Some(node)
                     };
+                    if next.is_none() {
+                        this.fire_incident_packets(node, cx);
+                    }
                     this.select_node(next, cx);
                 }))
         };
@@ -1288,7 +1436,10 @@ impl Render for ProjectFlow {
                 .id(pro_eid(&self.id, "node-client"))
                 .absolute()
                 .left(px(807.0 * s))
-                .top(px((152.0 + intro.client_dy) * s))
+                .top(px((152.0
+                    + intro.client_dy
+                    + node_dy_offset(ProjectFlowNode::Client))
+                    * s))
                 .w(px(652.0 * s))
                 .h(px(138.0 * s))
                 .rounded(px(card_r))
@@ -1355,7 +1506,10 @@ impl Render for ProjectFlow {
                 .id(pro_eid(&self.id, "node-task"))
                 .absolute()
                 .left(px(841.0 * s))
-                .top(px((359.0 + intro.task_dy) * s))
+                .top(px((359.0
+                    + intro.task_dy
+                    + node_dy_offset(ProjectFlowNode::Task))
+                    * s))
                 .w(px(584.0 * s))
                 .h(px(281.0 * s))
                 .rounded(px(card_r))
@@ -1442,7 +1596,10 @@ impl Render for ProjectFlow {
                 .id(pro_eid(&self.id, "node-notes"))
                 .absolute()
                 .left(px(1493.0 * s))
-                .top(px((428.0 + intro.notes_dy) * s))
+                .top(px((428.0
+                    + intro.notes_dy
+                    + node_dy_offset(ProjectFlowNode::Notes))
+                    * s))
                 .w(px(615.0 * s))
                 .h(px(138.0 * s))
                 .rounded(px(card_r))
@@ -1522,7 +1679,10 @@ impl Render for ProjectFlow {
                 .id(pro_eid(&self.id, "node-pm"))
                 .absolute()
                 .left(px(1335.0 * s))
-                .top(px((910.0 + intro.pm_dy) * s))
+                .top(px((910.0
+                    + intro.pm_dy
+                    + node_dy_offset(ProjectFlowNode::ProjectManager))
+                    * s))
                 .w(px(584.0 * s))
                 .h(px(281.0 * s))
                 .rounded(px(card_r))
@@ -1596,7 +1756,10 @@ impl Render for ProjectFlow {
                 .id(pro_eid(&self.id, "node-ux"))
                 .absolute()
                 .left(px(1335.0 * s))
-                .top(px((1235.0 + intro.ux_dy) * s))
+                .top(px((1235.0
+                    + intro.ux_dy
+                    + node_dy_offset(ProjectFlowNode::UxDesigner))
+                    * s))
                 .w(px(584.0 * s))
                 .h(px(281.0 * s))
                 .rounded(px(card_r))
@@ -1672,7 +1835,11 @@ impl Render for ProjectFlow {
                 .id(pro_eid(&self.id, "node-subtasks"))
                 .absolute()
                 .left(px(sub_origin_dx + (264.75 + intro.sub_dx) * sub_sc))
-                .top(px(sub_origin_dy + (816.85 + intro.sub_dy) * sub_sc))
+                .top(px(sub_origin_dy
+                    + (816.85
+                        + intro.sub_dy
+                        + node_dy_offset(ProjectFlowNode::Subtasks))
+                        * sub_sc))
                 .w(px(702.0 * sub_sc))
                 .h(px(437.82 * sub_sc))
                 .opacity(node_opacity(ProjectFlowNode::Subtasks, intro.sub_alpha))
@@ -1877,60 +2044,55 @@ impl Render for ProjectFlow {
                 rgb(0x52525b).into()
             };
             let replay_btn = div()
-                .id(pro_eid(&self.id, "replay-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Replay workflow animation", "重播流程动画"))
-                .tab_index(0)
                 .absolute()
                 .right(px(12.0))
                 .top(px(12.0))
-                .h(px(26.0))
-                .px(px(10.0))
-                .rounded_full()
-                .bg(if self.replay_hovered {
-                    pro_mix_color(rep_bg, sky, 0.14)
-                } else {
-                    rep_bg
-                })
-                .border_1()
-                .border_color(rep_border)
-                .shadow_xs()
-                .flex()
-                .items_center()
-                .gap(px(5.0))
-                .cursor_pointer()
-                .focus_visible(move |st| st.border_color(p.focus))
-                .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                    if this.replay_hovered != *inside {
-                        this.replay_hovered = *inside;
-                        cx.notify();
-                    }
-                }))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| {
                     cx.stop_propagation();
                 })
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.replay(cx);
-                }))
-                .child(pro_icon(ProIcon::Refresh, 12.0, rep_fg))
-                .child(
+                .child(pro_tactile(
+                    pro_eid(&self.id, "replay-btn"),
+                    tr(cx, "Replay workflow animation", "重播流程动画"),
+                    9999.,
+                    rep_bg,
+                    pro_mix_color(rep_bg, sky, 0.16),
+                    rep_border,
+                    sky.opacity(0.65),
+                    false,
                     div()
-                        .text_size(px(11.5))
-                        .line_height(px(13.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rep_fg)
-                        .whitespace_nowrap()
-                        .child(tr(cx, "Replay", "重播")),
-                );
+                        .h(px(26.0))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.0))
+                        .child(pro_icon(ProIcon::Refresh, 12.0, rep_fg))
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .line_height(px(13.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(rep_fg)
+                                .whitespace_nowrap()
+                                .child(tr(cx, "Replay", "重播")),
+                        ),
+                    cx,
+                    |this, _, cx| {
+                        this.replay(cx);
+                    },
+                ));
             stage_div = stage_div.child(replay_btn);
         }
 
         let measure_sensor = canvas(
-            move |bounds, _, _| {
+            move |bounds, window, _| {
                 let bw = f32::from(bounds.size.width);
                 let bh = f32::from(bounds.size.height);
                 if bw > 24.0 && bh > 24.0 {
-                    size_cell.set((bw, bh));
+                    let prev = size_cell.get();
+                    if (bw - prev.0).abs() > 1.0 || (bh - prev.1).abs() > 1.0 {
+                        size_cell.set((bw, bh));
+                        window.request_animation_frame();
+                    }
                 }
             },
             |_, _, _, _| (),
@@ -2006,8 +2168,13 @@ impl Render for ProjectFlow {
 #[cfg(test)]
 mod tests {
     use super::{
-        INTRO_TOTAL_SECS, ProjectFlowNode, dashed_drag_guide_pts, eval_intro_frame, flow_connectors,
+        INTRO_TOTAL_SECS, ProjectFlow, ProjectFlowEvent, ProjectFlowNode, STAGE_H, STAGE_W,
+        dashed_drag_guide_pts, eval_intro_frame, flow_connectors,
     };
+    use gpui::{
+        MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point, px, size,
+    };
+    use std::{cell::RefCell, rc::Rc, time::Duration};
 
     #[test]
     fn connectors_and_dashed_drag_guide_cover_all_six_workflow_nodes() {
@@ -2050,5 +2217,79 @@ mod tests {
         let done = eval_intro_frame(Some(INTRO_TOTAL_SECS + 0.1));
         assert!(done.steady);
         assert!((done.ux_alpha - 1.0).abs() < 1e-4);
+    }
+
+    #[gpui::test]
+    fn hovering_and_clicking_workflow_node_illuminates_incident_connectors_and_fires_packets(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let events: Rc<RefCell<Vec<ProjectFlowEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let ev_sink = events.clone();
+
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            let pf = ProjectFlow::new("pf-test", cx).with_playing(false);
+            cx.subscribe_self(move |_, ev: &ProjectFlowEvent, _| {
+                ev_sink.borrow_mut().push(ev.clone());
+            })
+            .detach();
+            pf
+        });
+        vcx.simulate_resize(size(px(760.), px(540.)));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        // Compute `Client Notes` card (`(1493, 428, 615 × 138)`) center in stage coordinates
+        let notes_pt = vcx.update(|_, app| {
+            let (mw, _) = view.read(app).measured_size.get();
+            let auto_h = (mw * (STAGE_H / STAGE_W)).clamp(250.0, 660.0);
+            let s = (mw / STAGE_W).min(auto_h / STAGE_H).max(0.14);
+            let ox = (mw - STAGE_W * s) * 0.5;
+            let oy = (auto_h - STAGE_H * s) * 0.5;
+            point(px(ox + (1493.0 + 300.0) * s), px(oy + (428.0 + 69.0) * s))
+        });
+
+        vcx.simulate_event(MouseMoveEvent {
+            position: notes_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        exec.advance_clock(Duration::from_millis(160));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let pf = view.read(app);
+            assert_eq!(pf.hovered_node, Some(ProjectFlowNode::Notes));
+            // Connector 1 (`Task -> Client Notes`) illuminates and launches a traveling packet!
+            assert!(pf.conn_packets[1].is_some());
+            assert!(pf.conn_illum[1].value(app) > 0.6);
+        });
+
+        vcx.simulate_event(MouseDownEvent {
+            position: notes_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: notes_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        vcx.run_until_parked();
+
+        assert_eq!(
+            vcx.update(|_, app| view.read(app).selected_node()),
+            Some(ProjectFlowNode::Notes)
+        );
+        assert!(
+            events
+                .borrow()
+                .contains(&ProjectFlowEvent::SelectNode(Some(ProjectFlowNode::Notes)))
+        );
     }
 }

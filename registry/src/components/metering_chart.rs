@@ -1,15 +1,15 @@
 //! Daily usage metering bars with blue-to-lilac gradients, live Today bar, and rolling totals.
 //!
 //! Renders per-day usage slots drifting through soft blue, periwinkle, and lilac vertical gradients,
-//! an accented live bar for `"Today"` with sweeping sheen and `Slide` growth, per-day tool breakdown tooltips, and rolling period totals.
+//! Dock-like `Slide::snappy` proximity highlights, X-gliding breakdown tooltips, click-to-pin inspection, and rolling totals.
 
 use crate::{
     components::pro_chrome::{
         ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, tr,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     primitives::{
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork, pro_svg},
     },
 };
@@ -138,7 +138,7 @@ impl MeteringTotal {
 /// Typed events emitted by [`MeteringChart`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum MeteringChartEvent {
-    /// Emitted when pointer hover or keyboard navigation changes the inspected day slot.
+    /// Emitted when pointer hover, pin toggle, or keyboard navigation changes the inspected day slot.
     HoverDayChanged(Option<usize>),
     /// Emitted when a live metering increment updates Today's bar and rolling totals.
     LiveIncremented { day_index: usize, value: f64 },
@@ -214,26 +214,6 @@ pub fn compute_whole_percentages(
         .collect()
 }
 
-fn format_grouped_int(val: f64) -> String {
-    if !val.is_finite() {
-        return "0".to_string();
-    }
-    let rounded = val.round() as i64;
-    let abs_s = rounded.unsigned_abs().to_string();
-    let mut out = String::with_capacity(abs_s.len() + abs_s.len() / 3);
-    for (i, ch) in abs_s.chars().enumerate() {
-        if i > 0 && (abs_s.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(ch);
-    }
-    if rounded < 0 {
-        format!("\u{2212}{out}")
-    } else {
-        out
-    }
-}
-
 fn format_axis_short(val: f64) -> String {
     if val <= 0.0 || !val.is_finite() {
         return "0".to_string();
@@ -293,6 +273,12 @@ fn sample_color_ramp(stops: &[Hsla], t: f32) -> Hsla {
     pro_mix_color(stops[i0], stops[i1], pos - i0 as f32)
 }
 
+/// Proximity curve (`0.0..=1.0`) giving macOS Dock / audio-meter smooth brightness & lift across adjacent bars.
+fn dock_proximity(distance_slots: f32) -> f32 {
+    let t = (1.0 - distance_slots.abs() / 2.65).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// Daily usage metering bar chart component (`metering-chart`).
 pub struct MeteringChart {
     id: ElementId,
@@ -309,6 +295,13 @@ pub struct MeteringChart {
     other_label: SharedString,
     empty_text: Option<SharedString>,
     hovered_day: Option<usize>,
+    pinned_day: Option<usize>,
+    pointer_slot: Option<f32>,
+    hover_slides: Vec<Slide>,
+    spotlight_mix: Slide,
+    tooltip_x: Slide,
+    tooltip_presence: Slide,
+    tooltip_ready: bool,
     loading: bool,
     empty: bool,
     plot_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
@@ -351,6 +344,7 @@ impl MeteringChart {
             data.push(MeteringDay::new(label, val).with_breakdown(breakdown));
         }
 
+        let hover_slides = (0..data.len()).map(|_| Slide::snappy(0.0)).collect();
         let totals = vec![
             MeteringTotal::new("vol", "Total volume", 52.05).with_format(1.0, 2, "$", "k"),
             MeteringTotal::new("evt", "Total events", 62.46).with_format(1.0, 1, "", "k"),
@@ -376,6 +370,13 @@ impl MeteringChart {
             other_label: "Other".into(),
             empty_text: None,
             hovered_day: None,
+            pinned_day: None,
+            pointer_slot: None,
+            hover_slides,
+            spotlight_mix: Slide::snappy(0.0),
+            tooltip_x: Slide::snappy(0.0),
+            tooltip_presence: Slide::snappy(0.0),
+            tooltip_ready: false,
             loading: false,
             empty: false,
             plot_bounds: Rc::new(Cell::new(None)),
@@ -392,8 +393,11 @@ impl MeteringChart {
 
     /// Replace the daily usage bars (oldest first; when `live` is true, the last bar represents Today).
     pub fn with_data(mut self, data: Vec<MeteringDay>) -> Self {
+        self.hover_slides = (0..data.len()).map(|_| Slide::snappy(0.0)).collect();
         self.data = data;
         self.hovered_day = None;
+        self.pinned_day = None;
+        self.pointer_slot = None;
         self
     }
 
@@ -473,9 +477,24 @@ impl MeteringChart {
         self
     }
 
-    /// Return the currently inspected day index, if any.
+    /// Return the currently inspected day index (hovered or pinned), if any.
     pub fn active_day(&self) -> Option<usize> {
-        self.hovered_day.filter(|&i| i < self.data.len())
+        self.hovered_day
+            .or(self.pinned_day)
+            .filter(|&i| i < self.data.len())
+    }
+
+    fn toggle_pin_day(&mut self, day_idx: usize, cx: &mut Context<Self>) {
+        if day_idx >= self.data.len() {
+            return;
+        }
+        if self.pinned_day == Some(day_idx) {
+            self.pinned_day = None;
+        } else {
+            self.pinned_day = Some(day_idx);
+        }
+        cx.emit(MeteringChartEvent::HoverDayChanged(self.active_day()));
+        cx.notify();
     }
 
     /// Increment Today's live bar and update rolling totals smoothly.
@@ -509,35 +528,46 @@ impl MeteringChart {
         let max_i = self.data.len() - 1;
         match ev.keystroke.key.as_str() {
             "left" => {
-                let next = match self.hovered_day {
+                let next = match self.active_day() {
                     Some(i) => i.saturating_sub(1),
                     None => max_i,
                 };
                 self.hovered_day = Some(next);
+                self.pointer_slot = Some(next as f32);
                 cx.emit(MeteringChartEvent::HoverDayChanged(Some(next)));
                 cx.notify();
             }
             "right" => {
-                let next = match self.hovered_day {
+                let next = match self.active_day() {
                     Some(i) => (i + 1).min(max_i),
                     None => 0,
                 };
                 self.hovered_day = Some(next);
+                self.pointer_slot = Some(next as f32);
                 cx.emit(MeteringChartEvent::HoverDayChanged(Some(next)));
                 cx.notify();
             }
+            "enter" | "space" => {
+                if let Some(cur) = self.active_day() {
+                    self.toggle_pin_day(cur, cx);
+                }
+            }
             "home" => {
                 self.hovered_day = Some(0);
+                self.pointer_slot = Some(0.0);
                 cx.emit(MeteringChartEvent::HoverDayChanged(Some(0)));
                 cx.notify();
             }
             "end" => {
                 self.hovered_day = Some(max_i);
+                self.pointer_slot = Some(max_i as f32);
                 cx.emit(MeteringChartEvent::HoverDayChanged(Some(max_i)));
                 cx.notify();
             }
-            "escape" if self.hovered_day.is_some() => {
+            "escape" if self.hovered_day.is_some() || self.pinned_day.is_some() => {
                 self.hovered_day = None;
+                self.pinned_day = None;
+                self.pointer_slot = None;
                 cx.emit(MeteringChartEvent::HoverDayChanged(None));
                 cx.notify();
             }
@@ -666,17 +696,20 @@ impl Render for MeteringChart {
         };
 
         let n_days = self.data.len();
+        let mut all_days_sum = 0.0f64;
         let max_val = self
             .data
             .iter()
             .enumerate()
             .filter_map(|(i, d)| {
                 d.value.map(|v| {
-                    if self.live && i + 1 == n_days {
+                    let eff = if self.live && i + 1 == n_days {
                         v + live_growth
                     } else {
                         v
-                    }
+                    };
+                    all_days_sum += eff;
+                    eff
                 })
             })
             .fold(0.0f64, f64::max);
@@ -685,8 +718,25 @@ impl Render for MeteringChart {
         let anim_ceil =
             pro_spring_f32(pro_eid(&self.id, "ceil"), ceiling as f32, 0.36, w, cx).max(1.0) as f64;
 
+        // Sync per-bar `Slide::snappy` proximity highlight slides (macOS Dock / audio meter feel).
+        if self.hover_slides.len() < n_days {
+            self.hover_slides.resize_with(n_days, || Slide::snappy(0.0));
+        } else if self.hover_slides.len() > n_days {
+            self.hover_slides.truncate(n_days);
+        }
+
+        let hovered_idx = self.active_day();
+        let focus_slot: Option<f32> = self
+            .pointer_slot
+            .or_else(|| hovered_idx.map(|idx| idx as f32));
+        self.spotlight_mix
+            .set(if focus_slot.is_some() { 1.0 } else { 0.0 }, cx);
+        let spot_mix = self.spotlight_mix.get(w, cx).clamp(0.0, 1.0);
+
         let mut bar_heights = Vec::with_capacity(n_days);
         let mut bar_colors = Vec::with_capacity(n_days);
+        let mut bar_hovs = Vec::with_capacity(n_days);
+
         for (i, d) in self.data.iter().enumerate() {
             let is_live_bar = self.live && i + 1 == n_days;
             let eff_val = d
@@ -712,6 +762,13 @@ impl Render for MeteringChart {
                 pro_ease(((elapsed - delay) / 0.52).clamp(0., 1.))
             };
             bar_heights.push(spring_r * wave_reveal);
+
+            let target_hov = match focus_slot {
+                Some(center) => dock_proximity(i as f32 - center),
+                None => 0.0,
+            };
+            self.hover_slides[i].set(target_hov, cx);
+            bar_hovs.push(self.hover_slides[i].get(w, cx).clamp(0.0, 1.0));
 
             let c = if is_live_bar {
                 if dark {
@@ -776,33 +833,115 @@ impl Render for MeteringChart {
         });
 
         let wash: Hsla = if dark {
-            hsla(0., 0., 1., 0.05)
+            hsla(0., 0., 1., 0.06)
         } else {
-            hsla(0., 0., 0., 0.035)
+            hsla(0., 0., 0., 0.04)
         };
         let burst_btn: Option<AnyElement> = self.live.then(|| {
-            div()
-                .id(pro_eid(&self.id, "burst-btn"))
-                .role(Role::Button)
-                .aria_label(tr(cx, "Simulate live API traffic", "模拟实时 API 流量"))
-                .tab_index(0)
-                .h(px(22.))
-                .px(px(7.))
-                .rounded(px(5.))
-                .border_1()
-                .border_color(p.line)
-                .text_size(px(11.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.text)
-                .flex()
-                .items_center()
-                .cursor_pointer()
-                .hover(move |s| s.bg(wash).text_color(p.ink))
-                .on_click(cx.listener(|this, _, _, cx| {
+            pro_tactile(
+                pro_eid(&self.id, "burst-btn"),
+                tr(cx, "Simulate live API traffic", "模拟实时 API 流量"),
+                5.,
+                transparent_black(),
+                wash,
+                p.line,
+                p.line_strong,
+                false,
+                div()
+                    .h(px(22.))
+                    .px(px(7.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(11.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.text)
+                    .whitespace_nowrap()
+                    .child(tr(cx, "+320 calls", "+320 次调用")),
+                cx,
+                |this, _, cx| {
                     this.record_live_burst(320.0, cx);
-                }))
-                .child(tr(cx, "+320 calls", "+320 次调用"))
+                },
+            )
+            .flex_none()
+            .into_any_element()
+        });
+
+        // Inspection status readout in top-right using `pro_swap_label` (clickable when pinned to unpin).
+        let status_label: Option<SharedString> = if let Some(pi) = self.pinned_day
+            && let Some(d) = self.data.get(pi)
+        {
+            Some(format!("{} \u{00b7} {}", tr(cx, "Pinned", "已固定"), d.label).into())
+        } else if let Some(hi) = self.hovered_day
+            && let Some(d) = self.data.get(hi)
+        {
+            Some(format!("{} \u{00b7} {}", tr(cx, "Inspecting", "查看"), d.label).into())
+        } else {
+            self.period.clone()
+        };
+
+        let is_pinned = self.pinned_day.is_some();
+        let status_el: Option<AnyElement> = status_label.map(|lbl| {
+            if is_pinned {
+                pro_tactile(
+                    pro_eid(&self.id, "pin-chip"),
+                    tr(cx, "Unpin day inspection", "取消固定日期"),
+                    5.,
+                    p.accent_soft,
+                    p.accent_soft,
+                    p.blue.opacity(0.32),
+                    p.blue.opacity(0.55),
+                    true,
+                    div()
+                        .h(px(22.))
+                        .px(px(7.))
+                        .flex()
+                        .items_center()
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "inspect-lbl"),
+                            lbl,
+                            11.5,
+                            FontWeight::MEDIUM,
+                            p.blue,
+                        )),
+                    cx,
+                    |this, _, cx| {
+                        this.pinned_day = None;
+                        cx.emit(MeteringChartEvent::HoverDayChanged(this.active_day()));
+                        cx.notify();
+                    },
+                )
+                .flex_none()
                 .into_any_element()
+            } else {
+                div()
+                    .h(px(22.))
+                    .flex()
+                    .items_center()
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "inspect-lbl"),
+                        lbl,
+                        12.,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
+                    .into_any_element()
+            }
+        });
+
+        // Pinned/inspected day share for dynamic rolling `Total volume` / `Total events`.
+        let pinned_share: Option<(f64, SharedString)> = self.pinned_day.and_then(|pi| {
+            let d = self.data.get(pi)?;
+            let is_live_d = self.live && pi + 1 == n_days;
+            let dv = d
+                .value
+                .map(|v| if is_live_d { v + live_growth } else { v })?;
+            let ratio = if all_days_sum > 1e-9 {
+                (dv / all_days_sum).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            Some((ratio, d.label.clone()))
         });
 
         let mut totals_row = div()
@@ -822,21 +961,30 @@ impl Render for MeteringChart {
             } else {
                 0.0
             };
-            let scaled = (tot.value + live_bump) / tot.divisor;
+            let full_scaled = (tot.value + live_bump) / tot.divisor;
+            let (shown_val, shown_lbl) = if let Some((ratio, ref dlbl)) = pinned_share {
+                (
+                    full_scaled * ratio,
+                    SharedString::from(format!("{} \u{00b7} {}", tot.label, dlbl)),
+                )
+            } else {
+                (full_scaled, tot.label.clone())
+            };
             totals_row = totals_row.child(
                 div()
                     .flex()
                     .items_baseline()
                     .gap(px(6.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(p.text)
-                            .child(tot.label.clone()),
-                    )
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, format!("tlbl-{}", tot.id)),
+                        shown_lbl,
+                        13.,
+                        FontWeight::NORMAL,
+                        p.text,
+                    ))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, format!("tot-{}", tot.id)),
-                        scaled,
+                        shown_val,
                         tot.decimals,
                         tot.prefix.clone(),
                         tot.suffix.clone(),
@@ -848,11 +996,12 @@ impl Render for MeteringChart {
         }
 
         let plot_h = self.height;
-        let hovered_idx = self.active_day();
         let fade_bottom = if dark { 0.30f32 } else { 0.42f32 };
         let live_flag = self.live;
+        let pinned_for_paint = self.pinned_day;
         let bounds_cell = self.plot_bounds.clone();
         let canvas_bar_colors = bar_colors.clone();
+        let canvas_bar_hovs = bar_hovs.clone();
 
         let plot_canvas = canvas(
             {
@@ -893,7 +1042,7 @@ impl Render for MeteringChart {
 
                 let n = bar_heights.len();
                 let slot_w = bw / n as f32;
-                let bar_w = (slot_w * 0.62).clamp(2.5, 11.0);
+                let base_bar_w = (slot_w * 0.62).clamp(2.5, 11.0);
                 let bot_y = f32::from(bounds.bottom());
 
                 for i in 0..n {
@@ -902,22 +1051,32 @@ impl Render for MeteringChart {
                         continue;
                     }
                     let is_live = live_flag && i + 1 == n;
-                    let dimmed = hovered_idx.is_some_and(|hi| hi != i);
-                    let alpha_mul = if dimmed {
-                        if dark { 0.30 } else { 0.38 }
-                    } else {
-                        1.0
-                    };
+                    let hov = canvas_bar_hovs[i];
+                    let is_pin = pinned_for_paint == Some(i);
+                    let boost = if is_pin { hov.max(0.85) } else { hov };
 
-                    let h_px = (bh * ratio).max(3.0);
+                    let dim_floor = if dark { 0.66 } else { 0.58 };
+                    let alpha_mul = (1.0 - spot_mix * dim_floor * (1.0 - boost)).clamp(0.30, 1.0);
+
+                    let bar_w =
+                        (base_bar_w * (1.0 + 0.14 * boost)).min((slot_w - 1.5).max(base_bar_w));
+                    let h_px = (bh * ratio * (1.0 + 0.035 * boost)).clamp(3.0, bh);
                     let cx_x = f32::from(bounds.left()) + (i as f32 + 0.5) * slot_w;
                     let x0 = cx_x - bar_w * 0.5;
                     let y0 = bot_y - h_px;
                     let r = px(3.5f32.min(bar_w * 0.5).min(h_px * 0.5));
                     let bar_rect = Bounds::new(point(px(x0), px(y0)), size(px(bar_w), px(h_px)));
 
-                    let c = canvas_bar_colors[i];
-                    let bot_alpha = if is_live { 0.58 } else { fade_bottom };
+                    let c = pro_mix_color(
+                        canvas_bar_colors[i],
+                        rgb(0xffffff).into(),
+                        (if dark { 0.22 } else { 0.14 }) * boost,
+                    );
+                    let bot_alpha = if is_live {
+                        0.58 + 0.20 * boost
+                    } else {
+                        fade_bottom + 0.24 * boost
+                    };
                     let mut bar_path = PathBuilder::fill();
                     let rf = f32::from(r);
                     bar_path.move_to(point(px(x0), px(bot_y)));
@@ -937,8 +1096,21 @@ impl Render for MeteringChart {
                             linear_gradient(
                                 180.,
                                 linear_color_stop(c.opacity(alpha_mul), 0.),
-                                linear_color_stop(c.opacity(bot_alpha * alpha_mul), 1.),
+                                linear_color_stop(c.opacity((bot_alpha * alpha_mul).min(1.0)), 1.),
                             ),
+                        );
+                    }
+
+                    if is_pin {
+                        window.paint_quad(
+                            fill(
+                                Bounds::new(
+                                    point(px(cx_x - 2.2), px(bot_y + 2.5)),
+                                    size(px(4.4), px(4.4)),
+                                ),
+                                c,
+                            )
+                            .corner_radii(px(99.)),
                         );
                     }
 
@@ -968,6 +1140,47 @@ impl Render for MeteringChart {
         )
         .size_full();
 
+        let plot_w = self
+            .plot_bounds
+            .get()
+            .map(|b| f32::from(b.size.width))
+            .unwrap_or(440.);
+
+        if let Some(idx) = hovered_idx
+            && let Some(day) = self.data.get(idx)
+            && day.value.is_some()
+        {
+            let parts_empty = day.breakdown.is_empty();
+            let slot_cx = ((idx as f32 + 0.5) / n_days.max(1) as f32) * plot_w;
+            let target_left = if parts_empty {
+                let chip_w = 112.0f32;
+                (slot_cx - chip_w * 0.5).clamp(0.0, (plot_w - chip_w).max(0.0))
+            } else {
+                let card_w = 212.0f32;
+                let flip_left = slot_cx > plot_w * 0.52;
+                if flip_left {
+                    (slot_cx - card_w - 14.0).max(0.0)
+                } else {
+                    (slot_cx + 14.0).min((plot_w - card_w).max(0.0))
+                }
+            };
+            if !self.tooltip_ready {
+                self.tooltip_x.reset(target_left);
+                self.tooltip_ready = true;
+            } else {
+                self.tooltip_x.set(target_left, cx);
+            }
+            self.tooltip_presence.set(1.0, cx);
+        } else {
+            self.tooltip_presence.set(0.0, cx);
+            if self.tooltip_presence.value(cx) < 0.04 {
+                self.tooltip_ready = false;
+            }
+        }
+
+        let gliding_left_px = self.tooltip_x.get(w, cx);
+        let tip_alpha = self.tooltip_presence.get(w, cx).clamp(0.0, 1.0);
+
         let tag_overlay: Option<AnyElement> = hovered_idx.and_then(|idx| {
             let day = self.data.get(idx)?;
             let is_live_day = self.live && idx + 1 == n_days;
@@ -990,25 +1203,22 @@ impl Render for MeteringChart {
                 hsla(0., 0., 1., 0.15)
             };
             let bar_tint = bar_colors.get(idx).copied().unwrap_or(self.accent);
+            let day_tag: SharedString = if self.pinned_day == Some(idx) {
+                format!("{} \u{00b7} {}", tr(cx, "Pinned", "已固定"), day.label).into()
+            } else {
+                day.label.clone()
+            };
 
             let parts =
                 compute_whole_percentages(&day.breakdown, self.breakdown_limit, &self.other_label);
 
-            let plot_w = self
-                .plot_bounds
-                .get()
-                .map(|b| f32::from(b.size.width))
-                .unwrap_or(440.);
-            let slot_cx = ((idx as f32 + 0.5) / n_days.max(1) as f32) * plot_w;
-
             if parts.is_empty() {
-                let chip_w = 108.0f32;
-                let left_px = (slot_cx - chip_w * 0.5).clamp(0.0, (plot_w - chip_w).max(0.0));
                 return Some(
                     div()
                         .absolute()
-                        .top(px(6.))
-                        .left(px(left_px))
+                        .top(px(6. + 3. * (1. - tip_alpha)))
+                        .left(px(gliding_left_px))
+                        .opacity(tip_alpha)
                         .px(px(8.))
                         .py(px(3.))
                         .rounded(px(6.))
@@ -1019,24 +1229,28 @@ impl Render for MeteringChart {
                         .gap(px(6.))
                         .text_size(px(11.5))
                         .text_color(chip_fg)
-                        .child(
-                            div()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(format_grouped_int(val)),
-                        )
-                        .child(div().opacity(0.68).child(day.label.clone()))
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, "tip-val"),
+                            val,
+                            0,
+                            "",
+                            "",
+                            11.5,
+                            FontWeight::SEMIBOLD,
+                            chip_fg,
+                        ))
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "tip-day"),
+                            day_tag,
+                            11.5,
+                            FontWeight::NORMAL,
+                            chip_fg.opacity(0.68),
+                        ))
                         .into_any_element(),
                 );
             }
 
             let card_w = 212.0f32;
-            let flip_left = slot_cx > plot_w * 0.52;
-            let left_px = if flip_left {
-                (slot_cx - card_w - 14.0).max(0.0)
-            } else {
-                (slot_cx + 14.0).min((plot_w - card_w).max(0.0))
-            };
-
             let mut part_rows = div()
                 .mt(px(6.))
                 .pt(px(6.))
@@ -1046,7 +1260,15 @@ impl Render for MeteringChart {
                 .flex_col()
                 .gap(px(4.));
 
-            for (lbl, logo, pct) in parts {
+            for (pi, (lbl, logo, pct)) in parts.into_iter().enumerate() {
+                let anim_pct = pro_spring_f32(
+                    pro_eid(&self.id, format!("tip-bar-{pi}")),
+                    (pct as f32 / 100.0).clamp(0.0, 1.0),
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0.0, 1.0);
                 part_rows = part_rows.child(
                     div()
                         .h(px(16.))
@@ -1076,27 +1298,32 @@ impl Render for MeteringChart {
                                 .child(
                                     div()
                                         .h_full()
-                                        .w(relative((pct as f32 / 100.0).clamp(0., 1.)))
+                                        .w(relative(anim_pct))
                                         .rounded(px(2.))
                                         .bg(bar_tint),
                                 ),
                         )
-                        .child(
-                            div()
-                                .w(px(28.))
-                                .flex_none()
-                                .text_right()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(format!("{pct}%")),
-                        ),
+                        .child(div().w(px(28.)).flex_none().flex().justify_end().child(
+                            pro_rolling_number(
+                                pro_eid(&self.id, format!("tip-pct-{pi}")),
+                                pct as f64,
+                                0,
+                                "",
+                                "%",
+                                11.,
+                                FontWeight::MEDIUM,
+                                chip_fg,
+                            ),
+                        )),
                 );
             }
 
             Some(
                 div()
                     .absolute()
-                    .top(px(8.))
-                    .left(px(left_px))
+                    .top(px(8. + 3. * (1. - tip_alpha)))
+                    .left(px(gliding_left_px))
+                    .opacity(tip_alpha)
                     .w(px(card_w))
                     .px(px(10.))
                     .py(px(8.))
@@ -1111,12 +1338,23 @@ impl Render for MeteringChart {
                             .gap(px(6.))
                             .text_size(px(11.5))
                             .text_color(chip_fg)
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(format_grouped_int(val)),
-                            )
-                            .child(div().opacity(0.68).child(day.label.clone())),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "tip-val"),
+                                val,
+                                0,
+                                "",
+                                "",
+                                11.5,
+                                FontWeight::SEMIBOLD,
+                                chip_fg,
+                            ))
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "tip-day"),
+                                day_tag,
+                                11.5,
+                                FontWeight::NORMAL,
+                                chip_fg.opacity(0.68),
+                            )),
                     )
                     .child(part_rows)
                     .into_any_element(),
@@ -1148,6 +1386,7 @@ impl Render for MeteringChart {
         });
 
         let bounds_for_move = self.plot_bounds.clone();
+        let bounds_for_click = self.plot_bounds.clone();
         let plot_box = div()
             .id(pro_eid(&self.id, "plot"))
             .w_full()
@@ -1155,7 +1394,7 @@ impl Render for MeteringChart {
             .h(px(plot_h))
             .relative()
             .cursor(if has_values {
-                CursorStyle::Crosshair
+                CursorStyle::PointingHand
             } else {
                 CursorStyle::Arrow
             })
@@ -1169,20 +1408,44 @@ impl Render for MeteringChart {
                 };
                 let bw = f32::from(b.size.width).max(1.0);
                 let rel_x = f32::from(ev.position.x - b.left()).clamp(0.0, bw - 0.01);
+                let slot_f = ((rel_x / bw) * n as f32 - 0.5).clamp(0.0, (n - 1) as f32);
                 let idx = ((rel_x / bw) * n as f32).floor() as usize;
                 let idx = idx.min(n - 1);
+                let slot_shifted = this
+                    .pointer_slot
+                    .is_none_or(|prev| (prev - slot_f).abs() > 0.03);
+                this.pointer_slot = Some(slot_f);
                 if this.hovered_day != Some(idx) {
                     this.hovered_day = Some(idx);
                     cx.emit(MeteringChartEvent::HoverDayChanged(Some(idx)));
                     cx.notify();
+                } else if slot_shifted {
+                    cx.notify();
                 }
             }))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                if !*inside && this.hovered_day.is_some() {
+                if !*inside && (this.hovered_day.is_some() || this.pointer_slot.is_some()) {
                     this.hovered_day = None;
-                    cx.emit(MeteringChartEvent::HoverDayChanged(None));
+                    this.pointer_slot = None;
+                    cx.emit(MeteringChartEvent::HoverDayChanged(this.active_day()));
                     cx.notify();
                 }
+            }))
+            .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                let n = this.data.len();
+                if n == 0 {
+                    return;
+                }
+                let target_idx = if let Some(b) = bounds_for_click.get() {
+                    let bw = f32::from(b.size.width).max(1.0);
+                    let rel_x = f32::from(ev.position().x - b.left()).clamp(0.0, bw - 0.01);
+                    (((rel_x / bw) * n as f32).floor() as usize).min(n - 1)
+                } else if let Some(hi) = this.hovered_day {
+                    hi
+                } else {
+                    return;
+                };
+                this.toggle_pin_day(target_idx, cx);
             }))
             .child(plot_canvas)
             .when_some(empty_overlay, |d, el| d.child(el))
@@ -1191,6 +1454,7 @@ impl Render for MeteringChart {
         // Pick 4 clean X-axis date ticks (e.g. Sep 5, Sep 11, Sep 17, Today).
         let mut x_ticks = div()
             .w_full()
+            .flex_none()
             .mt(px(8.))
             .h(px(16.))
             .flex()
@@ -1263,15 +1527,7 @@ impl Render for MeteringChart {
                             .flex()
                             .items_center()
                             .gap(px(8.))
-                            .when_some(self.period.clone(), |d, per| {
-                                d.child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .line_height(px(16.))
-                                        .text_color(p.muted)
-                                        .child(per),
-                                )
-                            })
+                            .when_some(status_el, |d, st| d.child(st))
                             .when_some(burst_btn, |d, btn| d.child(btn)),
                     ),
             )
@@ -1315,8 +1571,9 @@ impl Render for MeteringChart {
 
 #[cfg(test)]
 mod tests {
-    use super::{MeteringBreakdownPart, MeteringChart, compute_whole_percentages};
-    use gpui::{AppContext, TestAppContext};
+    use super::{MeteringBreakdownPart, MeteringChart, compute_whole_percentages, dock_proximity};
+    use gpui::{AppContext, TestAppContext, px, size};
+    use std::time::Duration;
 
     #[test]
     fn whole_percentages_fold_remainder_and_sum_to_hundred() {
@@ -1344,6 +1601,39 @@ mod tests {
             c.record_live_burst(500.0, cx);
             let after = c.data.last().and_then(|d| d.value).unwrap_or(0.0);
             assert!((after - (before + 500.0)).abs() < 1e-6);
+        });
+    }
+
+    #[gpui::test]
+    fn dock_proximity_slides_and_click_pinning_glide_smoothly(cx: &mut TestAppContext) {
+        assert!((dock_proximity(0.0) - 1.0).abs() < 1e-5);
+        assert!(dock_proximity(1.0) > 0.5 && dock_proximity(1.0) < 0.9);
+        assert_eq!(dock_proximity(3.0), 0.0);
+
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let (chart, w) = cx.add_window_view(|_, cx| MeteringChart::new("mtr-glide", cx));
+        w.simulate_resize(size(px(520.), px(340.)));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            chart.update(app, |c, cx| {
+                c.toggle_pin_day(10, cx);
+                assert_eq!(c.active_day(), Some(10));
+            });
+        });
+        w.run_until_parked();
+
+        exec.advance_clock(Duration::from_millis(45));
+        w.update(|win, app| win.simulate_next_frame(app));
+        w.run_until_parked();
+
+        w.update(|_, app| {
+            let c = chart.read(app);
+            let center_h = c.hover_slides[10].value(app);
+            let neighbor_h = c.hover_slides[11].value(app);
+            let far_h = c.hover_slides[2].value(app);
+            assert!(center_h > neighbor_h && neighbor_h > far_h);
         });
     }
 }

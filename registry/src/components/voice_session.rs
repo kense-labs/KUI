@@ -6,13 +6,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_presence, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
-        family::disabled_motion,
+        family::{Slide, disabled_motion},
         pro_icons::{
             AGENT_WAVE_MS, ProIcon, agent_pixel_cells, person_initials, pro_icon, pro_svg,
         },
@@ -215,6 +216,9 @@ pub struct VoiceSession {
     call_accum_secs: f32,
     sample_accum: f32,
     cycle_clock: f32,
+    prev_status: VoiceCallStatus,
+    person_amp_slide: Slide,
+    agent_amp_slide: Slide,
     started_at: Instant,
     last_frame: Option<Instant>,
     loading: bool,
@@ -253,6 +257,9 @@ impl VoiceSession {
             call_accum_secs: 0.0,
             sample_accum: 0.0,
             cycle_clock: 2.2,
+            prev_status: VoiceCallStatus::Speaking,
+            person_amp_slide: Slide::new(0.18),
+            agent_amp_slide: Slide::new(1.0),
             started_at: Instant::now(),
             last_frame: None,
             loading: false,
@@ -287,6 +294,10 @@ impl VoiceSession {
     /// Set the initial [`VoiceCallStatus`].
     pub fn with_status(mut self, status: VoiceCallStatus) -> Self {
         self.status = status;
+        self.prev_status = status;
+        let (p_target, a_target) = speaker_amp_targets(status);
+        self.person_amp_slide = Slide::new(p_target);
+        self.agent_amp_slide = Slide::new(a_target);
         self
     }
 
@@ -369,6 +380,9 @@ impl VoiceSession {
             last_agent.interrupted = true;
         }
         self.status = VoiceCallStatus::Listening;
+        self.prev_status = VoiceCallStatus::Listening;
+        self.person_amp_slide.duration(1.0, 0.24, cx);
+        self.agent_amp_slide.duration(0.16, 0.24, cx);
         self.cycle_clock = 0.0;
         self.paused = false;
         let turn_number = self.turns.len();
@@ -385,7 +399,16 @@ impl VoiceSession {
         cx.notify();
     }
 
-    fn step_simulation_tick(&mut self) {
+    fn sync_speaker_slides(&mut self, cx: &mut Context<Self>) {
+        if self.prev_status != self.status {
+            self.prev_status = self.status;
+            let (p_target, a_target) = speaker_amp_targets(self.status);
+            self.person_amp_slide.duration(p_target, 0.28, cx);
+            self.agent_amp_slide.duration(a_target, 0.28, cx);
+        }
+    }
+
+    fn step_simulation_tick(&mut self, p_gain: f32, a_gain: f32) {
         // 9.0s natural conversational loop:
         // 0.0..2.2s -> Listening (person wave active)
         // 2.2..3.1s -> Thinking (silence gap measured, both waves quiet)
@@ -401,18 +424,20 @@ impl VoiceSession {
         self.status = next_status;
 
         let t = self.call_accum_secs;
+        let raw_p =
+            (0.35 + 0.55 * (t * 6.3).sin().abs() * (t * 2.7 + 0.8).cos().abs()).clamp(0.12, 0.94);
+        let raw_a =
+            (0.30 + 0.62 * (t * 7.1 + 0.4).sin().abs() * (t * 2.9).cos().abs()).clamp(0.10, 0.96);
         let (p_lvl, a_lvl) = match self.status {
-            VoiceCallStatus::Listening => {
-                let env = (0.35 + 0.55 * (t * 6.3).sin().abs() * (t * 2.7 + 0.8).cos().abs())
-                    .clamp(0.12, 0.94);
-                (env, 0.02)
-            }
+            VoiceCallStatus::Listening => (
+                (raw_p * p_gain.clamp(0.35, 1.0)).clamp(0.12, 0.94),
+                (0.02 + 0.08 * (a_gain - 0.18).max(0.0)).clamp(0.02, 0.10),
+            ),
             VoiceCallStatus::Thinking => (0.02, 0.02),
-            VoiceCallStatus::Speaking => {
-                let env = (0.30 + 0.62 * (t * 7.1 + 0.4).sin().abs() * (t * 2.9).cos().abs())
-                    .clamp(0.10, 0.96);
-                (0.02, env)
-            }
+            VoiceCallStatus::Speaking => (
+                (0.02 + 0.08 * (p_gain - 0.18).max(0.0)).clamp(0.02, 0.10),
+                (raw_a * a_gain.clamp(0.35, 1.0)).clamp(0.10, 0.96),
+            ),
             _ => (0.02, 0.02),
         };
 
@@ -574,6 +599,11 @@ impl Render for VoiceSession {
                 ));
         }
 
+        // Sample smooth Slide speaker amplitude envelopes across turn handoffs
+        self.sync_speaker_slides(cx);
+        let person_gain = self.person_amp_slide.get(w, cx).clamp(0.0, 1.0);
+        let agent_gain = self.agent_amp_slide.get(w, cx).clamp(0.0, 1.0);
+
         // Advance live 90ms audio waveform bins & call timer unless paused or ended
         let now = Instant::now();
         if !self.paused && self.status != VoiceCallStatus::Ended {
@@ -584,7 +614,8 @@ impl Render for VoiceSession {
                 self.sample_accum += dt;
                 while self.sample_accum >= 0.09 {
                     self.sample_accum -= 0.09;
-                    self.step_simulation_tick();
+                    self.step_simulation_tick(person_gain, agent_gain);
+                    self.sync_speaker_slides(cx);
                 }
             }
             self.last_frame = Some(now);
@@ -599,139 +630,152 @@ impl Render for VoiceSession {
             VoiceCallStatus::Thinking | VoiceCallStatus::Speaking
         ) && !self.paused;
 
-        // Header + Call settings menu
-        let settings_menu = pro_presence(
-            pro_eid(&self.id, "vsn-settings-pres"),
-            self.settings_open,
-            0.18,
-            0.14,
-            {
-                let base_id = self.id.clone();
-                let show_tr = self.show_transcript;
-                let nr = self.noise_reduction;
-                let rec = self.record_call;
-                let bud = self.budget_ms;
+        // Header + Call settings menu via pro_popover_presence
+        let settings_menu = {
+            let base_id = self.id.clone();
+            let show_tr = self.show_transcript;
+            let nr = self.noise_reduction;
+            let rec = self.record_call;
+            let bud = self.budget_ms;
 
-                let mk_toggle = |key: &'static str,
-                                 label: &str,
-                                 checked: bool,
-                                 handler: fn(&mut Self, &mut Context<Self>)|
-                 -> Stateful<Div> {
-                    div()
-                        .id(pro_eid(&base_id, format!("vsn-opt-{key}")))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .w_full()
-                        .h(px(30.))
-                        .px(px(8.))
-                        .rounded(px(6.))
-                        .hover(|s| s.bg(p.hover))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.))
-                        .cursor_pointer()
-                        .text_size(px(12.5))
-                        .text_color(p.ink)
-                        .on_click(cx.listener(move |this, _, _, cx| handler(this, cx)))
-                        .child(label.to_owned())
-                        .when(checked, |d| d.child(pro_icon(ProIcon::Check, 13., p.ink)))
-                };
+            let mk_toggle = |key: &'static str,
+                             label: &str,
+                             checked: bool,
+                             handler: fn(&mut Self, &mut Context<Self>)|
+             -> AnyElement {
+                let lbl_str = SharedString::from(label.to_owned());
+                let inner = div()
+                    .w_full()
+                    .h(px(30.))
+                    .px(px(8.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .text_size(px(12.5))
+                    .text_color(p.ink)
+                    .child(lbl_str.clone())
+                    .child(pro_check_draw(
+                        pro_eid(&base_id, format!("vsn-chk-{key}")),
+                        checked,
+                        13.,
+                        false,
+                        p.ink,
+                    ));
+                pro_tactile(
+                    pro_eid(&base_id, format!("vsn-opt-{key}")),
+                    lbl_str,
+                    6.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    checked,
+                    inner,
+                    cx,
+                    move |this, _, cx| handler(this, cx),
+                )
+                .w_full()
+                .into_any_element()
+            };
 
-                let tr_row = mk_toggle(
-                    "transcript",
-                    tr(cx, "Show transcript", "显示实时字幕"),
-                    show_tr,
-                    |this, cx| {
-                        this.show_transcript = !this.show_transcript;
-                        cx.emit(VoiceSessionEvent::SettingChanged {
-                            key: "show_transcript".into(),
-                        });
-                        cx.notify();
-                    },
-                );
-                let nr_row = mk_toggle(
-                    "noise",
-                    tr(cx, "Noise reduction", "AI 降噪"),
-                    nr,
-                    |this, cx| {
-                        this.noise_reduction = !this.noise_reduction;
-                        cx.emit(VoiceSessionEvent::SettingChanged {
-                            key: "noise_reduction".into(),
-                        });
-                        cx.notify();
-                    },
-                );
-                let rec_row = mk_toggle(
-                    "record",
-                    tr(cx, "Record call", "通话录音"),
-                    rec,
-                    |this, cx| {
-                        this.record_call = !this.record_call;
-                        cx.emit(VoiceSessionEvent::SettingChanged {
-                            key: "record_call".into(),
-                        });
-                        cx.notify();
-                    },
-                );
-                let bud_600 = mk_toggle("b600", "600 ms budget", bud == 600, |this, cx| {
-                    this.budget_ms = 600;
+            let tr_row = mk_toggle(
+                "transcript",
+                tr(cx, "Show transcript", "显示实时字幕"),
+                show_tr,
+                |this, cx| {
+                    this.show_transcript = !this.show_transcript;
                     cx.emit(VoiceSessionEvent::SettingChanged {
-                        key: "budget_600".into(),
+                        key: "show_transcript".into(),
                     });
                     cx.notify();
-                });
-                let bud_800 = mk_toggle("b800", "800 ms budget", bud == 800, |this, cx| {
-                    this.budget_ms = 800;
+                },
+            );
+            let nr_row = mk_toggle(
+                "noise",
+                tr(cx, "Noise reduction", "AI 降噪"),
+                nr,
+                |this, cx| {
+                    this.noise_reduction = !this.noise_reduction;
                     cx.emit(VoiceSessionEvent::SettingChanged {
-                        key: "budget_800".into(),
+                        key: "noise_reduction".into(),
                     });
                     cx.notify();
+                },
+            );
+            let rec_row = mk_toggle(
+                "record",
+                tr(cx, "Record call", "通话录音"),
+                rec,
+                |this, cx| {
+                    this.record_call = !this.record_call;
+                    cx.emit(VoiceSessionEvent::SettingChanged {
+                        key: "record_call".into(),
+                    });
+                    cx.notify();
+                },
+            );
+            let bud_600 = mk_toggle("b600", "600 ms budget", bud == 600, |this, cx| {
+                this.budget_ms = 600;
+                cx.emit(VoiceSessionEvent::SettingChanged {
+                    key: "budget_600".into(),
                 });
-                let sec_lbl = tr(cx, "Latency target", "延迟预算线").to_owned();
+                cx.notify();
+            });
+            let bud_800 = mk_toggle("b800", "800 ms budget", bud == 800, |this, cx| {
+                this.budget_ms = 800;
+                cx.emit(VoiceSessionEvent::SettingChanged {
+                    key: "budget_800".into(),
+                });
+                cx.notify();
+            });
+            let sec_lbl = tr(cx, "Latency target", "延迟预算线").to_owned();
 
-                move |amt| {
-                    div()
-                        .absolute()
-                        .top(px(32.0 - 4.0 * (1.0 - amt)))
-                        .right(px(0.))
-                        .opacity(amt)
-                        .w(px(210.))
-                        .p(px(4.))
-                        .rounded(px(10.))
-                        .bg(if p.dark { rgb(0x202024).into() } else { p.card })
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child(tr_row)
-                        .child(nr_row)
-                        .child(rec_row)
-                        .child(
-                            div()
-                                .mt(px(3.))
-                                .pt(px(4.))
-                                .border_t_1()
-                                .border_color(p.line)
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .px(px(8.))
-                                        .py(px(3.))
-                                        .text_size(px(11.))
-                                        .text_color(p.muted)
-                                        .child(sec_lbl),
-                                )
-                                .child(bud_600)
-                                .child(bud_800),
-                        )
-                        .into_any_element()
-                }
-            },
-        );
+            div()
+                .absolute()
+                .top(px(32.))
+                .right(px(0.))
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "vsn-settings-pres"),
+                    self.settings_open,
+                    move || {
+                        div()
+                            .w(px(210.))
+                            .p(px(4.))
+                            .rounded(px(10.))
+                            .bg(if p.dark { rgb(0x202024).into() } else { p.card })
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .shadow_lg()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(tr_row)
+                            .child(nr_row)
+                            .child(rec_row)
+                            .child(
+                                div()
+                                    .mt(px(3.))
+                                    .pt(px(4.))
+                                    .border_t_1()
+                                    .border_color(p.line)
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .px(px(8.))
+                                            .py(px(3.))
+                                            .text_size(px(11.))
+                                            .text_color(p.muted)
+                                            .child(sec_lbl),
+                                    )
+                                    .child(bud_600)
+                                    .child(bud_800),
+                            )
+                            .into_any_element()
+                    },
+                ))
+        };
 
         let head = div()
             .px(px(20.))
@@ -760,30 +804,18 @@ impl Render for VoiceSession {
                 div()
                     .relative()
                     .ml_auto()
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "vsn-settings-btn"))
-                            .role(Role::Button)
-                            .aria_label(SharedString::from(tr(cx, "Call settings", "通话设置")))
-                            .tab_index(0)
-                            .size(px(28.))
-                            .rounded(px(6.))
-                            .bg(if self.settings_open {
-                                p.chip
-                            } else {
-                                transparent_black()
-                            })
-                            .hover(|s| s.bg(p.hover))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings_open = !this.settings_open;
-                                cx.notify();
-                            }))
-                            .child(pro_icon(ProIcon::Sliders, 15., p.muted)),
-                    )
+                    .child(pro_icon_btn(
+                        pro_eid(&self.id, "vsn-settings-btn"),
+                        SharedString::from(tr(cx, "Call settings", "通话设置")),
+                        ProIcon::Sliders,
+                        28.,
+                        self.settings_open,
+                        cx,
+                        |this, _, cx| {
+                            this.settings_open = !this.settings_open;
+                            cx.notify();
+                        },
+                    ))
                     .child(settings_menu),
             );
 
@@ -939,8 +971,8 @@ impl Render for VoiceSession {
             (self.sample_accum / 0.09).clamp(0.0, 1.0)
         };
 
-        let person_col = p.ink.opacity(0.84);
-        let agent_col = p.blue;
+        let person_col = p.ink.opacity((0.55 + 0.35 * person_gain).clamp(0.55, 0.90));
+        let agent_col = p.blue.opacity((0.62 + 0.38 * agent_gain).clamp(0.62, 1.0));
         let dot_col = p.line_strong;
         let bracket_col = if over_budget {
             p.red_ink.opacity(0.65)
@@ -1032,6 +1064,13 @@ impl Render for VoiceSession {
 
         let mid_ratio = ((gap_start + gap_end) as f32 * 0.5 / WAVE_BINS as f32).clamp(0.18, 0.82);
 
+        let pause_fg = if over_budget {
+            p.red_ink
+        } else if is_thinking {
+            p.blue
+        } else {
+            p.text
+        };
         let pause_badge = div()
             .id(pro_eid(&self.id, "vsn-pause-pill"))
             .role(Role::Button)
@@ -1050,19 +1089,12 @@ impl Render for VoiceSession {
             } else {
                 p.line_strong
             })
+            .hover(|s| s.bg(p.chip_hover))
             .shadow_xs()
             .flex()
             .items_center()
+            .gap(px(2.))
             .cursor_pointer()
-            .text_size(px(11.))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(if over_budget {
-                p.red_ink
-            } else if is_thinking {
-                p.blue
-            } else {
-                p.text
-            })
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if this.pause_tip_open != *inside {
                     this.pause_tip_open = *inside;
@@ -1073,51 +1105,64 @@ impl Render for VoiceSession {
                 this.pause_tip_open = !this.pause_tip_open;
                 cx.notify();
             }))
-            .child(format!("{total_ms} ms"));
+            .child(pro_rolling_number(
+                pro_eid(&self.id, "vsn-pause-ms"),
+                total_ms as f64,
+                0,
+                "",
+                " ms",
+                11.,
+                FontWeight::MEDIUM,
+                pause_fg,
+            ));
 
-        let pause_tooltip = self.pause_tip_open.then(|| {
-            div()
-                .absolute()
-                .bottom(px(54.))
-                .left(relative(mid_ratio))
-                .ml(px(-92.))
-                .w(px(186.))
-                .p(px(8.))
-                .rounded(px(8.))
-                .bg(if p.dark { rgb(0xf4f4f5) } else { rgb(0x18181b) })
-                .text_color(if p.dark { rgb(0x111113) } else { rgb(0xfafafa) })
-                .shadow_md()
-                .flex()
-                .flex_col()
-                .gap(px(4.))
-                .text_size(px(11.))
-                .child(
+        let tip_gap_lbl = tr(cx, "silence gap", "轮次静音间隔").to_owned();
+        let tip_breakdown = format!("{}+ {}+ {} ms", lat.stt_ms, lat.llm_ms, lat.tts_ms);
+        let pause_tooltip = div()
+            .absolute()
+            .bottom(px(54.))
+            .left(relative(mid_ratio))
+            .ml(px(-92.))
+            .child(pro_popover_presence(
+                pro_eid(&self.id, "vsn-pause-tip-pres"),
+                self.pause_tip_open,
+                move || {
                     div()
+                        .w(px(186.))
+                        .p(px(8.))
+                        .rounded(px(8.))
+                        .bg(if p.dark { rgb(0xf4f4f5) } else { rgb(0x18181b) })
+                        .text_color(if p.dark { rgb(0x111113) } else { rgb(0xfafafa) })
+                        .shadow_md()
                         .flex()
-                        .items_center()
-                        .justify_between()
+                        .flex_col()
+                        .gap(px(4.))
+                        .text_size(px(11.))
                         .child(
                             div()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(format!("{total_ms} ms")),
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(format!("{total_ms} ms")),
+                                )
+                                .child(div().opacity(0.7).child(tip_gap_lbl)),
                         )
                         .child(
                             div()
-                                .opacity(0.7)
-                                .child(tr(cx, "silence gap", "轮次静音间隔")),
-                        ),
-                )
-                .child(
-                    div()
-                        .pt(px(4.))
-                        .border_t_1()
-                        .border_color(hsla(0., 0., 0.5, 0.25))
-                        .flex()
-                        .justify_between()
-                        .child("STT + LLM + TTS")
-                        .child(format!("{}+ {}+ {} ms", lat.stt_ms, lat.llm_ms, lat.tts_ms)),
-                )
-        });
+                                .pt(px(4.))
+                                .border_t_1()
+                                .border_color(hsla(0., 0., 0.5, 0.25))
+                                .flex()
+                                .justify_between()
+                                .child("STT + LLM + TTS")
+                                .child(tip_breakdown),
+                        )
+                        .into_any_element()
+                },
+            ));
 
         let lanes_section = div()
             .mt(px(16.))
@@ -1136,6 +1181,7 @@ impl Render for VoiceSession {
                     .py(px(10.))
                     .child(
                         div()
+                            .opacity((0.55 + 0.45 * person_gain).clamp(0.55, 1.0))
                             .flex()
                             .items_center()
                             .gap(px(6.))
@@ -1148,6 +1194,7 @@ impl Render for VoiceSession {
                     )
                     .child(
                         div()
+                            .opacity((0.55 + 0.45 * agent_gain).clamp(0.55, 1.0))
                             .flex()
                             .items_center()
                             .gap(px(6.))
@@ -1174,7 +1221,7 @@ impl Render for VoiceSession {
                             .ml(px(-28.))
                             .child(pause_badge),
                     )
-                    .when_some(pause_tooltip, |d, tip| d.child(tip)),
+                    .child(pause_tooltip),
             );
 
         // Panel 2: Stacked Voice-to-Voice Latency Breakdown vs Target Budget Line
@@ -1273,6 +1320,7 @@ impl Render for VoiceSession {
         for (li, (lbl, ms_v)) in seg_meta.into_iter().enumerate() {
             let dimmed = self.hovered_slice.is_some() && self.hovered_slice != Some(li);
             let hot = self.hovered_slice == Some(li);
+            let stage_ratio = (ms_v as f32 / self.budget_ms.max(1) as f32).clamp(0.0, 1.0);
             legend_grid = legend_grid.child(
                 div()
                     .id(pro_eid(&self.id, format!("vsn-leg-{li}")))
@@ -1280,14 +1328,13 @@ impl Render for VoiceSession {
                     .tab_index(0)
                     .w(px(if compact { 126. } else { 132. }))
                     .px(px(5.))
-                    .py(px(3.))
+                    .py(px(4.))
                     .rounded(px(6.))
                     .bg(if hot { p.hover } else { transparent_black() })
                     .opacity(if dimmed { 0.32 } else { 1.0 })
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(6.))
+                    .flex_col()
+                    .gap(px(4.))
                     .cursor_pointer()
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         let next = (*inside).then_some(li);
@@ -1306,43 +1353,60 @@ impl Render for VoiceSession {
                     }))
                     .child(
                         div()
+                            .w_full()
                             .flex()
                             .items_center()
+                            .justify_between()
                             .gap(px(6.))
-                            .min_w_0()
                             .child(
                                 div()
-                                    .size(px(7.))
-                                    .flex_none()
-                                    .rounded(px(2.))
-                                    .bg(seg_colors[li]),
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .size(px(7.))
+                                            .flex_none()
+                                            .rounded(px(2.))
+                                            .bg(seg_colors[li]),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .text_color(p.text)
+                                            .truncate()
+                                            .child(lbl),
+                                    ),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(p.text)
-                                    .truncate()
-                                    .child(lbl),
-                            ),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("vsn-leg-ms-{li}")),
+                                ms_v as f64,
+                                0,
+                                "",
+                                " ms",
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            )),
                     )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
-                            .child(format!("{ms_v} ms")),
-                    ),
+                    .child(pro_spring_bar(
+                        pro_eid(&self.id, format!("vsn-leg-bar-{li}")),
+                        stage_ratio,
+                        3.5,
+                        2.0,
+                        p.subtle,
+                        seg_colors[li],
+                    )),
             );
         }
 
-        // Footer stats & Pause / Barge in controls
+        // Footer stats & tactile Pause / Barge in controls
         let total_call_s = (self.base_call_secs + self.call_accum_secs).floor() as u32;
         let call_clock = format!("{:02}:{:02}", total_call_s / 60, total_call_s % 60);
         let p50_ms = self.p50_latency_ms();
-        let sec_btn_bg = if p.dark { rgb(0x2c2c2f).into() } else { p.card };
 
-        let mk_stat = |icon_el: AnyElement, label: String| -> Div {
+        let mk_stat_el = |icon_el: AnyElement, body_el: AnyElement| -> Div {
             div()
                 .h(px(22.))
                 .px(px(7.))
@@ -1354,7 +1418,7 @@ impl Render for VoiceSession {
                 .text_size(px(12.))
                 .text_color(p.text)
                 .when(!compact, |d| d.child(icon_el))
-                .child(label)
+                .child(body_el)
         };
 
         let footer = div()
@@ -1374,14 +1438,28 @@ impl Render for VoiceSession {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(mk_stat(pro_icon(ProIcon::Clock, 13., p.muted), call_clock))
-                    .child(mk_stat(
-                        pro_icon(ProIcon::Thread, 13., p.muted),
-                        format!("{turn_num} {}", tr(cx, "turns", "轮")),
+                    .child(mk_stat_el(
+                        pro_icon(ProIcon::Clock, 13., p.muted),
+                        div().child(call_clock).into_any_element(),
                     ))
-                    .child(mk_stat(
+                    .child(mk_stat_el(
+                        pro_icon(ProIcon::Thread, 13., p.muted),
+                        div()
+                            .child(format!("{turn_num} {}", tr(cx, "turns", "轮")))
+                            .into_any_element(),
+                    ))
+                    .child(mk_stat_el(
                         pro_svg("0 0 24 24", GAUGE_STAT_SVG, 13., p.muted),
-                        format!("P50 {p50_ms} ms"),
+                        pro_rolling_number(
+                            pro_eid(&self.id, "vsn-p50-ms"),
+                            p50_ms as f64,
+                            0,
+                            "P50 ",
+                            " ms",
+                            12.,
+                            FontWeight::NORMAL,
+                            p.text,
+                        ),
                     )),
             )
             .child(
@@ -1389,63 +1467,32 @@ impl Render for VoiceSession {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "vsn-pause-btn"))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .bg(sec_btn_bg)
-                            .border_1()
-                            .border_color(p.line_strong)
-                            .shadow_xs()
-                            .hover(|s| s.bg(p.chip_hover))
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .cursor_pointer()
-                            .text_size(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_pause(cx)))
-                            .child(pro_icon(
-                                if self.paused {
-                                    ProIcon::Play
-                                } else {
-                                    ProIcon::Pause
-                                },
-                                13.,
-                                p.muted,
-                            ))
-                            .child(if self.paused {
-                                tr(cx, "Resume", "继续")
-                            } else {
-                                tr(cx, "Pause", "暂停")
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "vsn-barge-btn"))
-                            .role(Role::Button)
-                            .tab_index(0)
-                            .h(px(28.))
-                            .px(px(10.))
-                            .rounded(px(6.))
-                            .bg(p.primary)
-                            .text_color(p.on_primary)
-                            .hover(|s| s.opacity(0.9))
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .cursor_pointer()
-                            .text_size(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .on_click(cx.listener(|this, _, _, cx| this.barge_in(cx)))
-                            .child(pro_icon(ProIcon::Mic, 13., p.on_primary))
-                            .child(tr(cx, "Barge in", "插话打断")),
-                    ),
+                    .child(pro_btn(
+                        pro_eid(&self.id, "vsn-pause-btn"),
+                        if self.paused {
+                            tr(cx, "Resume", "继续")
+                        } else {
+                            tr(cx, "Pause", "暂停")
+                        },
+                        Some(if self.paused {
+                            ProIcon::Play
+                        } else {
+                            ProIcon::Pause
+                        }),
+                        ProBtnStyle::Secondary,
+                        true,
+                        cx,
+                        |this, _, cx| this.toggle_pause(cx),
+                    ))
+                    .child(pro_btn(
+                        pro_eid(&self.id, "vsn-barge-btn"),
+                        tr(cx, "Barge in", "插话打断"),
+                        Some(ProIcon::Mic),
+                        ProBtnStyle::Primary,
+                        true,
+                        cx,
+                        |this, _, cx| this.barge_in(cx),
+                    )),
             );
 
         let card = div()
@@ -1487,10 +1534,13 @@ impl Render for VoiceSession {
                                     .bg(status_bg)
                                     .flex()
                                     .items_center()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(status_fg)
-                                    .child(status_lbl),
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "vsn-status-swap"),
+                                        status_lbl,
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        status_fg,
+                                    )),
                             ),
                     )
                     .child(transcript_fold)
@@ -1553,10 +1603,13 @@ impl Render for VoiceSession {
                                     })
                                     .flex()
                                     .items_center()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if over_budget { p.red_ink } else { p.green_ink })
-                                    .child(budget_badge_txt),
+                                    .child(pro_swap_label(
+                                        pro_eid(&self.id, "vsn-bud-badge-swap"),
+                                        budget_badge_txt,
+                                        12.,
+                                        FontWeight::MEDIUM,
+                                        if over_budget { p.red_ink } else { p.green_ink },
+                                    )),
                             ),
                     )
                     .child(stacked_bar)
@@ -1594,6 +1647,15 @@ impl Render for VoiceSession {
             )
             .child(card)
             .child(pro_toast_banner(self.toast.clone()))
+    }
+}
+
+fn speaker_amp_targets(status: VoiceCallStatus) -> (f32, f32) {
+    match status {
+        VoiceCallStatus::Listening => (1.0, 0.18),
+        VoiceCallStatus::Thinking => (0.18, 0.45),
+        VoiceCallStatus::Speaking => (0.18, 1.0),
+        VoiceCallStatus::Connecting | VoiceCallStatus::Ended => (0.18, 0.18),
     }
 }
 

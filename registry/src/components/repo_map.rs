@@ -7,9 +7,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_ease, pro_eid, pro_empty_state, pro_mix_color,
-        pro_skeleton_bar, pro_spring_f32, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
+        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_f32, pro_tactile, pro_view_transition, tr,
     },
+    foundation::Theme,
     primitives::{
         family::disabled_motion,
         pro_icons::{ProIcon, pro_icon},
@@ -384,8 +387,10 @@ pub struct RepoMap {
     depth: usize,
     map_height: f32,
     isolated_agent: Option<SharedString>,
+    hovered_agent: Option<SharedString>,
     hovered_file: Option<usize>,
     focused_file: Option<usize>,
+    last_tip_idx: Option<usize>,
     measured_w: Rc<Cell<f32>>,
     hop_timestamps: HashMap<SharedString, Instant>,
     hop_tick: usize,
@@ -419,8 +424,10 @@ impl RepoMap {
             depth: 2,
             map_height: DEFAULT_MAP_H,
             isolated_agent: None,
+            hovered_agent: None,
             hovered_file: None,
             focused_file: None,
+            last_tip_idx: None,
             measured_w: Rc::new(Cell::new(DEFAULT_MAP_W)),
             hop_timestamps,
             hop_tick: 0,
@@ -641,7 +648,7 @@ impl RepoMap {
 impl Render for RepoMap {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed_s = self.started_at.elapsed().as_secs_f32();
         let elapsed_ms = elapsed_s * 1_000.0;
         let panel_bg: Hsla = if p.dark {
@@ -758,15 +765,12 @@ impl Render for RepoMap {
                     .items_center()
                     .gap(px(10.))
                     .when(conflict_n > 0, |d| {
-                        let c_lbl = if conflict_n == 1 {
-                            tr(cx, "1 conflict", "1 处冲突").to_string()
+                        let c_suf = if tr(cx, "en", "zh") == "zh" {
+                            " 处冲突"
+                        } else if conflict_n == 1 {
+                            " conflict"
                         } else {
-                            tr(
-                                cx,
-                                &format!("{conflict_n} conflicts"),
-                                &format!("{conflict_n} 处冲突"),
-                            )
-                            .to_string()
+                            " conflicts"
                         };
                         d.child(
                             div()
@@ -774,12 +778,18 @@ impl Render for RepoMap {
                                 .px(px(7.))
                                 .rounded(px(6.))
                                 .bg(p.amber_soft)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.amber_ink)
                                 .flex()
                                 .items_center()
-                                .child(c_lbl),
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "conflict-cnt"),
+                                    conflict_n as f64,
+                                    0,
+                                    "",
+                                    c_suf,
+                                    11.5,
+                                    FontWeight::MEDIUM,
+                                    p.amber_ink,
+                                )),
                         )
                     })
                     .child(
@@ -789,12 +799,16 @@ impl Render for RepoMap {
                             .gap(px(3.))
                             .text_size(px(12.))
                             .text_color(p.muted)
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(changed_n.to_string()),
-                            )
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "changed-cnt"),
+                                changed_n as f64,
+                                0,
+                                "",
+                                "",
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
                             .child(
                                 tr(
                                     cx,
@@ -806,16 +820,60 @@ impl Render for RepoMap {
                     ),
             );
 
-        // Top Row 2: Agent filter pills + "Hop step" live simulation button
-        let pill_card_bg: Hsla = if p.dark { rgb(0x222226).into() } else { p.card };
-        let mut agent_strip = div()
-            .w_full()
-            .mt(px(8.))
-            .mb(px(12.))
+        // Top Row 2: Agent filter pills (with liquid `pro_pill_indicator`) + "Step agents" button
+        let pill_card_bg: Hsla = if p.dark { rgb(0x28282d).into() } else { p.card };
+        let ag_sensor = pro_selection_sensor();
+        let active_ag_key: SharedString = self
+            .isolated_agent
+            .clone()
+            .unwrap_or_else(|| SharedString::from("__all__"));
+        let all_active = self.isolated_agent.is_none();
+
+        let mut filter_pills = div()
+            .relative()
+            .p(px(2.5))
+            .rounded(px(9.5))
+            .bg(p.chip)
             .flex()
             .flex_wrap()
             .items_center()
-            .gap(px(6.));
+            .gap(px(4.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "ag-pill-ind"),
+                active_ag_key,
+                ag_sensor.clone(),
+                7.5,
+                pill_card_bg,
+                Some(p.line_strong),
+                true,
+            ))
+            .child(
+                div()
+                    .id(pro_eid(&self.id, "ag-pill-all"))
+                    .role(Role::Button)
+                    .aria_label(tr(cx, "All agents", "全部智能体"))
+                    .aria_toggled(all_active.into())
+                    .tab_index(0)
+                    .relative()
+                    .h(px(26.))
+                    .px(px(9.))
+                    .rounded(px(7.5))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if all_active { p.ink } else { p.muted })
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        if this.isolated_agent.is_some() {
+                            this.isolated_agent = None;
+                            cx.emit(RepoMapEvent::AgentIsolated(None));
+                            cx.notify();
+                        }
+                    }))
+                    .when(all_active, |d| d.child(pro_mark_selected(&ag_sensor)))
+                    .child(tr(cx, "All", "全部")),
+            );
 
         for ag in &self.agents {
             let ac = agent_accent(ag.color_idx, &p);
@@ -826,36 +884,46 @@ impl Render for RepoMap {
                 .count();
             let pressed = self.isolated_agent.as_ref() == Some(&ag.id);
             let dimmed = self.isolated_agent.is_some() && !pressed;
+            let pill_op = pro_spring_f32(
+                pro_eid(&self.id, format!("ag-pop-{}", ag.id)),
+                if dimmed { 0.55 } else { 1.0 },
+                0.20,
+                window,
+                cx,
+            );
             let aid = ag.id.clone();
-            let hov_border = ac.opacity(0.55);
+            let aid_hov = ag.id.clone();
 
-            agent_strip = agent_strip.child(
+            filter_pills = filter_pills.child(
                 div()
                     .id(pro_eid(&self.id, format!("ag-pill-{}", ag.id)))
                     .role(Role::Button)
                     .aria_label(format!("{} ({touched_cnt})", ag.display_name(cx)))
+                    .aria_toggled(pressed.into())
                     .tab_index(0)
+                    .relative()
                     .h(px(26.))
                     .pl(px(6.))
-                    .pr(px(5.))
-                    .rounded(px(8.))
-                    .bg(pill_card_bg)
-                    .border_1()
-                    .border_color(if pressed {
-                        ac.opacity(0.75)
-                    } else {
-                        p.line_strong
-                    })
-                    .opacity(if dimmed { 0.45 } else { 1.0 })
+                    .pr(px(6.))
+                    .rounded(px(7.5))
+                    .opacity(pill_op)
                     .cursor_pointer()
-                    .hover(move |s| s.border_color(hov_border))
                     .focus_visible(move |s| s.border_2().border_color(p.focus))
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        if *inside {
+                            this.hovered_agent = Some(aid_hov.clone());
+                        } else if this.hovered_agent.as_ref() == Some(&aid_hov) {
+                            this.hovered_agent = None;
+                        }
+                        cx.notify();
+                    }))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.toggle_isolate_agent(aid.as_ref(), cx);
                     }))
                     .flex()
                     .items_center()
                     .gap(px(6.))
+                    .when(pressed, |d| d.child(pro_mark_selected(&ag_sensor)))
                     .child(pro_agent_avatar(
                         ag.id.as_ref(),
                         ac,
@@ -868,7 +936,7 @@ impl Render for RepoMap {
                         div()
                             .text_size(px(12.))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
+                            .text_color(if pressed || all_active { p.ink } else { p.text })
                             .child(ag.display_name(cx).to_string()),
                     )
                     .child(
@@ -878,50 +946,43 @@ impl Render for RepoMap {
                             .px(px(5.))
                             .rounded(px(4.))
                             .bg(p.chip)
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.text)
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(touched_cnt.to_string()),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("ag-cnt-{}", ag.id)),
+                                touched_cnt as f64,
+                                0,
+                                "",
+                                "",
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.text,
+                            )),
                     ),
             );
         }
 
-        let step_hover = p.chip_hover;
-        agent_strip = agent_strip.child(
-            div()
-                .id(pro_eid(&self.id, "hop-step"))
-                .role(Role::Button)
-                .aria_label(tr(
-                    cx,
-                    "Advance agents to next files",
-                    "推进智能体跳转至下一批文件",
-                ))
-                .tab_index(0)
-                .ml_auto()
-                .h(px(26.))
-                .px(px(8.))
-                .rounded(px(7.))
-                .bg(pill_card_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .cursor_pointer()
-                .hover(move |s| s.bg(step_hover))
-                .focus_visible(move |s| s.border_2().border_color(p.focus))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+        let agent_strip = div()
+            .w_full()
+            .mt(px(8.))
+            .mb(px(12.))
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.))
+            .child(filter_pills)
+            .child(div().ml_auto().child(pro_btn(
+                pro_eid(&self.id, "hop-step"),
+                tr(cx, "Step agents", "推进跳转"),
+                Some(ProIcon::Play),
+                ProBtnStyle::Secondary,
+                true,
+                cx,
+                |this, _, cx| {
                     this.step_simulation(cx);
-                }))
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .text_size(px(11.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.text)
-                .child(pro_icon(ProIcon::Play, 11., p.muted))
-                .child(tr(cx, "Step agents", "推进跳转")),
-        );
+                },
+            )));
 
         // Compute Treemap Layout
         let map_w = self.measured_w.get();
@@ -1047,15 +1108,27 @@ impl Render for RepoMap {
             }))
             .child(width_sensor);
 
-        // 1. Folder group boxes
-        for folder in &layout.folders {
-            let folder_lit = match &self.isolated_agent {
+        let active_agent_spot = self
+            .hovered_agent
+            .clone()
+            .or_else(|| self.isolated_agent.clone());
+
+        // 1. Folder group boxes (with smooth `pro_spring_f32` spotlight)
+        for (f_idx, folder) in layout.folders.iter().enumerate() {
+            let folder_lit = match &active_agent_spot {
                 None => true,
                 Some(aid) => folder
                     .file_indices
                     .iter()
                     .any(|&fi| self.agent_touched_file(aid.as_ref(), &self.files[fi])),
             };
+            let folder_op = pro_spring_f32(
+                pro_eid(&self.id, format!("rm-fop-{f_idx}")),
+                if folder_lit { 1.0 } else { 0.34 },
+                0.22,
+                window,
+                cx,
+            );
             map_area = map_area.child(
                 div()
                     .absolute()
@@ -1065,7 +1138,7 @@ impl Render for RepoMap {
                     .h(px(folder.rect.h))
                     .rounded(px(8.))
                     .bg(folder_bg)
-                    .opacity(if folder_lit { 1.0 } else { 0.36 })
+                    .opacity(folder_op)
                     .child(
                         div()
                             .px(px(7.))
@@ -1081,6 +1154,9 @@ impl Render for RepoMap {
 
         // 2. Individual file tiles with bottom-up agent fill, sweeping sheen, dashed read outline, or orange conflict blink
         let active_tip_idx = self.hovered_file.or(self.focused_file);
+        if let Some(ti) = active_tip_idx {
+            self.last_tip_idx = Some(ti);
+        }
         for (fi, file) in self.files.iter().enumerate() {
             let r = layout.tile_rects[fi];
             if r.w < 6.0 || r.h < 6.0 {
@@ -1105,11 +1181,38 @@ impl Render for RepoMap {
                 .last()
                 .and_then(|ed| self.agents.iter().find(|a| a.id == ed.agent_id));
 
-            let lit = match &self.isolated_agent {
-                None => true,
-                Some(aid) => self.agent_touched_file(aid.as_ref(), file),
-            };
             let is_inspected = active_tip_idx == Some(fi);
+            let target_tile_op = match &active_agent_spot {
+                Some(aid) => {
+                    if self.agent_touched_file(aid.as_ref(), file) {
+                        1.0
+                    } else {
+                        0.30
+                    }
+                }
+                None if self.focused_file.is_some() => {
+                    if is_inspected {
+                        1.0
+                    } else {
+                        0.58
+                    }
+                }
+                None => 1.0,
+            };
+            let tile_op = pro_spring_f32(
+                pro_eid(&self.id, format!("rm-top-{fi}")),
+                target_tile_op,
+                0.20,
+                window,
+                cx,
+            );
+            let hot_t = pro_spring_f32(
+                pro_eid(&self.id, format!("rm-thot-{fi}")),
+                f32::from(is_inspected),
+                0.18,
+                window,
+                cx,
+            );
 
             // Compute bottom-up fill progress when an editor hops onto a file
             let fill_prog = if active_editor.is_some() && !reduced {
@@ -1131,6 +1234,7 @@ impl Render for RepoMap {
                 .map(|ag| agent_accent(ag.color_idx, &p));
             let read_col = active_reader.map(|ag| agent_accent(ag.color_idx, &p));
             let is_editing = active_editor.is_some() && !is_conflict;
+            let is_settled_edit = !file.edits.is_empty() && !is_conflict && active_editor.is_none();
             let sheen_phase = ((elapsed_s + fi as f32 * 0.19) / 2.2).fract();
             let dark = p.dark;
 
@@ -1151,22 +1255,21 @@ impl Render for RepoMap {
                     } else {
                         file_base_bg
                     };
-                    let edge_c = if is_inspected {
-                        p.focus
-                    } else if is_conflict {
+                    let rest_edge = if is_conflict {
                         p.orange.opacity(0.75)
                     } else if let Some(tc) = tint_col {
                         tc.opacity(if is_editing { 0.52 } else { 0.28 })
                     } else {
                         file_base_edge
                     };
+                    let edge_c = pro_mix_color(rest_edge, p.focus, hot_t);
 
                     window.paint_quad(quad(
                         bounds,
                         Corners::all(rad),
                         base_bg,
-                        Edges::all(px(if is_inspected {
-                            1.5
+                        Edges::all(px(if hot_t > 0.05 {
+                            1.0 + 0.5 * hot_t
                         } else if read_col.is_some() && tint_col.is_none() {
                             0.0
                         } else {
@@ -1283,52 +1386,47 @@ impl Render for RepoMap {
                     .flex()
                     .items_center()
                     .gap(px(5.))
-                    .text_size(px(11.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(div().text_color(add_c).child(format!("+{total_added}")))
-                    .child(div().text_color(del_c).child(format!("−{total_removed}")))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("tadd-{fi}")),
+                        total_added as f64,
+                        0,
+                        "+",
+                        "",
+                        11.,
+                        FontWeight::MEDIUM,
+                        add_c,
+                    ))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("tdel-{fi}")),
+                        total_removed as f64,
+                        0,
+                        "−",
+                        "",
+                        11.,
+                        FontWeight::MEDIUM,
+                        del_c,
+                    ))
                     .into_any_element()
             } else {
-                div()
-                    .text_size(px(11.))
-                    .text_color(p.muted)
-                    .child(format!("{} {}", file.lines, tr(cx, "lines", "行")))
-                    .into_any_element()
+                pro_rolling_number(
+                    pro_eid(&self.id, format!("tloc-{fi}")),
+                    file.lines as f64,
+                    0,
+                    "",
+                    format!(" {}", tr(cx, "lines", "行")),
+                    11.,
+                    FontWeight::NORMAL,
+                    p.muted,
+                )
             };
 
             let fpath_click = file.path.clone();
-            let tile_el = div()
-                .id(pro_eid(&self.id, format!("tile-{fi}")))
-                .role(Role::Button)
-                .aria_label(format!("{}, {} lines", file.path, file.lines))
-                .absolute()
-                .left(px(r.x))
-                .top(px(r.y))
+            let tile_rad = 6.0_f32.min(r.w * 0.25).min(r.h * 0.25);
+            let tile_inner = div()
                 .w(px(r.w))
                 .h(px(r.h))
-                .rounded(px(6.))
+                .relative()
                 .overflow_hidden()
-                .opacity(if lit { 1.0 } else { 0.32 })
-                .cursor_pointer()
-                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                    if *inside {
-                        this.hovered_file = Some(fi);
-                    } else if this.hovered_file == Some(fi) {
-                        this.hovered_file = None;
-                    }
-                    cx.notify();
-                }))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.focused_file = if this.focused_file == Some(fi) {
-                        None
-                    } else {
-                        Some(fi)
-                    };
-                    cx.emit(RepoMapEvent::FileSelected(
-                        this.focused_file.map(|_| fpath_click.clone()),
-                    ));
-                    cx.notify();
-                }))
                 .child(tile_canvas)
                 .when(show_name, |d| {
                     d.child(
@@ -1341,21 +1439,74 @@ impl Render for RepoMap {
                             .gap(px(1.))
                             .child(
                                 div()
-                                    .text_size(px(11.5))
-                                    .line_height(px(15.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(name_fg)
-                                    .truncate()
-                                    .child(file.basename().to_string()),
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .text_size(px(11.5))
+                                            .line_height(px(15.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(name_fg)
+                                            .truncate()
+                                            .child(file.basename().to_string()),
+                                    )
+                                    .when(is_settled_edit && r.w >= 92.0, |row| {
+                                        row.child(pro_check_draw(
+                                            pro_eid(&self.id, format!("tchk-{fi}")),
+                                            true,
+                                            12.,
+                                            false,
+                                            tint_col.unwrap_or(p.green),
+                                        ))
+                                    }),
                             )
                             .when(show_sub, |d2| d2.child(sub_el)),
                     )
                 });
 
-            map_area = map_area.child(tile_el);
+            let tile_el = pro_tactile(
+                pro_eid(&self.id, format!("tile-{fi}")),
+                format!("{}, {} lines", file.path, file.lines),
+                tile_rad,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                self.focused_file == Some(fi),
+                tile_inner,
+                cx,
+                move |this, _, cx| {
+                    this.focused_file = if this.focused_file == Some(fi) {
+                        None
+                    } else {
+                        Some(fi)
+                    };
+                    cx.emit(RepoMapEvent::FileSelected(
+                        this.focused_file.map(|_| fpath_click.clone()),
+                    ));
+                    cx.notify();
+                },
+            )
+            .w(px(r.w))
+            .h(px(r.h))
+            .opacity(tile_op)
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_file = Some(fi);
+                } else if this.hovered_file == Some(fi) {
+                    this.hovered_file = None;
+                }
+                cx.notify();
+            }));
+
+            map_area = map_area.child(div().absolute().left(px(r.x)).top(px(r.y)).child(tile_el));
         }
 
-        // 3. Smoothly hopping Agent Avatar Pins (pro_spring_f32 X/Y coordinates!)
+        // 3. Smoothly hopping Agent Avatar Pins (pro_spring_f32 X/Y coordinates & spotlight opacity!)
         let mut slot_per_file: HashMap<usize, usize> = HashMap::new();
         for ag in &self.agents {
             let Some(fpath) = &ag.file else {
@@ -1388,18 +1539,22 @@ impl Render for RepoMap {
                 window,
                 cx,
             );
+            let dimmed = active_agent_spot.as_ref().is_some_and(|iso| iso != &ag.id);
+            let pin_op = pro_spring_f32(
+                pro_eid(&self.id, format!("pinop-{}", ag.id)),
+                if dimmed { 0.32 } else { 1.0 },
+                0.20,
+                window,
+                cx,
+            );
             let ac = agent_accent(ag.color_idx, &p);
-            let dimmed = self
-                .isolated_agent
-                .as_ref()
-                .is_some_and(|iso| iso != &ag.id);
 
             map_area = map_area.child(
                 div()
                     .absolute()
                     .left(px(pin_x))
                     .top(px(pin_y))
-                    .opacity(if dimmed { 0.35 } else { 1.0 })
+                    .opacity(pin_op)
                     .child(pro_agent_avatar(
                         ag.id.as_ref(),
                         ac,
@@ -1411,133 +1566,218 @@ impl Render for RepoMap {
             );
         }
 
-        // 4. Floating File Hover / Focus Inspector Popover
-        let tip_overlay = active_tip_idx.and_then(|fi| {
+        // 4. Bidirectional Floating File Hover / Focus Inspector Popover (`pro_popover_presence` + `pro_view_transition`)
+        let tip_open = active_tip_idx.is_some();
+        let display_tip_idx = active_tip_idx.or(self.last_tip_idx);
+        let tip_overlay = display_tip_idx.and_then(|fi| {
             let file = self.files.get(fi)?;
             let r = layout.tile_rects.get(fi).copied()?;
             let cx_tile = r.x + r.w * 0.5;
-            let left_px = (cx_tile - TIP_W * 0.5).clamp(8.0, (map_w - TIP_W - 8.0).max(8.0));
+            let target_left = (cx_tile - TIP_W * 0.5).clamp(8.0, (map_w - TIP_W - 8.0).max(8.0));
             let place_below = r.y < 110.0;
+            let left_px =
+                pro_spring_f32(pro_eid(&self.id, "rm-tip-x"), target_left, 0.22, window, cx);
 
-            let active_here: Vec<(&RepoAgent, Hsla)> = self
+            let active_here: Vec<(String, Hsla, String)> = self
                 .agents
                 .iter()
                 .filter(|a| a.file.as_ref() == Some(&file.path))
-                .map(|a| (a, agent_accent(a.color_idx, &p)))
+                .map(|a| {
+                    let mode_lbl = match a.action {
+                        RepoAction::Edit => tr(cx, "editing", "正在编辑"),
+                        RepoAction::Read => tr(cx, "reading", "正在读取"),
+                    };
+                    let task_suffix = a
+                        .display_task(cx)
+                        .map(|t| format!(" · {t}"))
+                        .unwrap_or_default();
+                    (
+                        a.display_name(cx).to_string(),
+                        agent_accent(a.color_idx, &p),
+                        format!("{mode_lbl}{task_suffix}"),
+                    )
+                })
                 .collect();
-            let editors_n = active_here
+            let editors_n = self
+                .agents
                 .iter()
-                .filter(|(a, _)| a.action == RepoAction::Edit)
+                .filter(|a| a.file.as_ref() == Some(&file.path) && a.action == RepoAction::Edit)
                 .count();
 
-            let tip_bg: Hsla = if p.dark { rgb(0x26262a).into() } else { p.card };
-            let mut card = div()
-                .absolute()
-                .left(px(left_px))
-                .when(place_below, |d| {
-                    d.top(px((r.y + r.h + 8.0).min(map_h - 32.0)))
+            let edit_rows: Vec<(String, u32, u32, SharedString)> = file
+                .edits
+                .iter()
+                .map(|ed| {
+                    let who = self
+                        .agents
+                        .iter()
+                        .find(|a| a.id == ed.agent_id)
+                        .map_or(ed.agent_id.as_ref(), |a| a.display_name(cx))
+                        .to_string();
+                    (who, ed.added, ed.removed, ed.agent_id.clone())
                 })
-                .when(!place_below, |d| d.bottom(px(map_h - r.y + 8.0)))
-                .w(px(TIP_W))
-                .px(px(12.))
-                .py(px(10.))
-                .rounded(px(10.))
-                .bg(tip_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_lg()
-                .flex()
-                .flex_col()
-                .gap(px(5.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .font_family("Menlo")
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .child(file.path.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_size(px(11.))
-                                .text_color(p.muted)
-                                .child(format!("{} LOC", file.lines)),
-                        ),
-                );
+                .collect();
 
-            for (ag, ac) in &active_here {
-                let mode_lbl = match ag.action {
-                    RepoAction::Edit => tr(cx, "editing", "正在编辑"),
-                    RepoAction::Read => tr(cx, "reading", "正在读取"),
-                };
-                let task_suffix = ag
-                    .display_task(cx)
-                    .map(|t| format!(" · {t}"))
-                    .unwrap_or_default();
-                card =
-                    card.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .text_size(px(11.5))
-                            .child(div().size(px(6.)).rounded_full().bg(*ac))
-                            .child(div().flex_1().min_w_0().truncate().text_color(p.ink).child(
-                                format!("{}: {mode_lbl}{task_suffix}", ag.display_name(cx)),
-                            )),
+            let tip_bg: Hsla = if p.dark { rgb(0x26262a).into() } else { p.card };
+            let fpath = file.path.clone();
+            let fpath_vtx = file.path.clone();
+            let flines = file.lines;
+            let loc_rn = pro_rolling_number(
+                pro_eid(&self.id, "rm-tip-loc"),
+                flines as f64,
+                0,
+                "",
+                " LOC",
+                11.,
+                FontWeight::NORMAL,
+                p.muted,
+            );
+            let edit_chk_rows: Vec<(String, AnyElement, AnyElement, AnyElement)> = edit_rows
+                .into_iter()
+                .enumerate()
+                .map(|(e_i, (who, added, removed, aid))| {
+                    let chk = pro_check_draw(
+                        pro_eid(&self.id, format!("rm-ed-chk-{e_i}-{aid}")),
+                        true,
+                        12.,
+                        false,
+                        p.green,
                     );
-            }
+                    let add_rn = pro_rolling_number(
+                        pro_eid(&self.id, format!("rm-ed-add-{e_i}")),
+                        added as f64,
+                        0,
+                        "+",
+                        "",
+                        11.5,
+                        FontWeight::MEDIUM,
+                        add_c,
+                    );
+                    let del_rn = pro_rolling_number(
+                        pro_eid(&self.id, format!("rm-ed-del-{e_i}")),
+                        removed as f64,
+                        0,
+                        "−",
+                        "",
+                        11.5,
+                        FontWeight::MEDIUM,
+                        del_c,
+                    );
+                    (who, chk, add_rn, del_rn)
+                })
+                .collect();
 
-            for ed in &file.edits {
-                let who = self
-                    .agents
-                    .iter()
-                    .find(|a| a.id == ed.agent_id)
-                    .map_or(ed.agent_id.as_ref(), |a| a.display_name(cx));
-                card = card.child(
-                    div()
+            let conflict_warn_txt = tr(
+                cx,
+                "Write conflict — two agents editing this file simultaneously",
+                "并发写入冲突 — 两个智能体正同时修改此文件",
+            )
+            .to_string();
+            let vtx_id = pro_eid(&self.id, "rm-tip-vtx");
+            let p_tip = p;
+
+            let pop_pres =
+                pro_popover_presence(pro_eid(&self.id, "rm-tip-pop"), tip_open, move || {
+                    let mut card = div()
+                        .w(px(TIP_W))
+                        .px(px(12.))
+                        .py(px(10.))
+                        .rounded(px(10.))
+                        .bg(tip_bg)
+                        .border_1()
+                        .border_color(p_tip.line_strong)
+                        .shadow_lg()
                         .flex()
-                        .items_center()
-                        .justify_between()
-                        .text_size(px(11.5))
-                        .child(div().text_color(p.text).child(who.to_string()))
+                        .flex_col()
+                        .gap(px(5.))
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(5.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(div().text_color(add_c).child(format!("+{}", ed.added)))
-                                .child(div().text_color(del_c).child(format!("−{}", ed.removed))),
-                        ),
-                );
-            }
+                                .justify_between()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .font_family("Menlo")
+                                        .text_size(px(11.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p_tip.strong)
+                                        .child(fpath),
+                                )
+                                .child(div().flex_none().child(loc_rn)),
+                        );
 
-            if editors_n >= 2 {
-                card = card.child(
-                    div()
-                        .pt(px(2.))
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.amber_ink)
-                        .child(tr(
-                            cx,
-                            "Write conflict — two agents editing this file simultaneously",
-                            "并发写入冲突 — 两个智能体正同时修改此文件",
-                        )),
-                );
-            }
-            Some(card)
+                    for (ag_name, ac, mode_desc) in active_here {
+                        card = card.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .text_size(px(11.5))
+                                .child(div().size(px(6.)).rounded_full().bg(ac))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_color(p_tip.ink)
+                                        .child(format!("{ag_name}: {mode_desc}")),
+                                ),
+                        );
+                    }
+
+                    for (who, chk, add_rn, del_rn) in edit_chk_rows {
+                        card = card.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .text_size(px(11.5))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .child(chk)
+                                        .child(div().text_color(p_tip.text).child(who)),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .child(add_rn)
+                                        .child(del_rn),
+                                ),
+                        );
+                    }
+
+                    if editors_n >= 2 {
+                        card = card.child(
+                            div()
+                                .pt(px(2.))
+                                .text_size(px(11.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p_tip.amber_ink)
+                                .child(conflict_warn_txt),
+                        );
+                    }
+                    pro_view_transition(vtx_id, fpath_vtx, card)
+                });
+
+            Some(
+                div()
+                    .absolute()
+                    .left(px(left_px))
+                    .when(place_below, |d| {
+                        d.top(px((r.y + r.h + 8.0).min(map_h - 32.0)))
+                    })
+                    .when(!place_below, |d| d.bottom(px(map_h - r.y + 8.0)))
+                    .child(pop_pres),
+            )
         });
 
         let map_with_tip = div()

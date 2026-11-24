@@ -7,18 +7,24 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_connector_pulse, pro_eid, pro_empty_state,
-        pro_shimmer_text, pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_connector_pulse, pro_eid,
+        pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         family::disabled_motion,
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 use web_time::Instant;
 
 const FAULT_TREE_MARK_SVG: &str = r#"<path d="M12 7.8v3.4M6 15.8v-2.9h12v2.9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/><rect x="8.1" y="2.4" width="7.8" height="5.4" rx="1.8" fill="currentColor"/><circle cx="6" cy="18.6" r="2.8" fill="currentColor"/><circle cx="18" cy="18.6" r="2.8" fill="currentColor"/>"#;
@@ -500,6 +506,8 @@ struct PlacedNode {
 
 #[derive(Clone)]
 struct PlacedLink {
+    parent_id: SharedString,
+    child_id: SharedString,
     p_parent: (f32, f32),
     p_child: (f32, f32),
     status: CauseStatus,
@@ -508,10 +516,37 @@ struct PlacedLink {
 
 #[derive(Clone)]
 struct PlacedGate {
+    node_id: SharedString,
     gate: CauseGate,
     x: f32,
     y: f32,
     on_causal_path: bool,
+}
+
+fn collect_cause_descendants(node: &CauseNode, out: &mut HashSet<SharedString>) {
+    out.insert(node.id.clone());
+    for ch in &node.children {
+        collect_cause_descendants(ch, out);
+    }
+}
+
+fn collect_cause_chain(root: &CauseNode, target_id: &str) -> HashSet<SharedString> {
+    fn walk(n: &CauseNode, target_id: &str, out: &mut HashSet<SharedString>) -> bool {
+        if n.id.as_ref() == target_id {
+            collect_cause_descendants(n, out);
+            return true;
+        }
+        for ch in &n.children {
+            if walk(ch, target_id, out) {
+                out.insert(n.id.clone());
+                return true;
+            }
+        }
+        false
+    }
+    let mut out = HashSet::new();
+    walk(root, target_id, &mut out);
+    out
 }
 
 fn leaf_weight(n: &CauseNode) -> usize {
@@ -585,14 +620,16 @@ fn layout_fault_tree(
                     gates,
                     max_y,
                 );
-                child_centers.push((ccx, ccy, ch.status, ch_causal));
+                child_centers.push((ch.id.clone(), ccx, ccy, ch.status, ch_causal));
             }
-            let first_x = child_centers.first().map(|c| c.0).unwrap_or(0.0);
-            let last_x = child_centers.last().map(|c| c.0).unwrap_or(first_x);
+            let first_x = child_centers.first().map(|c| c.1).unwrap_or(0.0);
+            let last_x = child_centers.last().map(|c| c.1).unwrap_or(first_x);
             let my_cx = (first_x + last_x) * 0.5_f32;
             let p_bot = (my_cx, y + card_h);
-            for (ccx, ccy, st, ch_causal) in &child_centers {
+            for (cid, ccx, ccy, st, ch_causal) in &child_centers {
                 links.push(PlacedLink {
+                    parent_id: n.id.clone(),
+                    child_id: cid.clone(),
                     p_parent: p_bot,
                     p_child: (*ccx, *ccy),
                     status: *st,
@@ -601,6 +638,7 @@ fn layout_fault_tree(
             }
             if n.children.len() > 1 {
                 gates.push(PlacedGate {
+                    node_id: n.id.clone(),
                     gate: n.gate,
                     x: my_cx,
                     y: y + card_h + level_gap * 0.5_f32,
@@ -655,6 +693,8 @@ pub struct RootCauseTree {
     step_started: Instant,
     live: bool,
     selected_id: Option<SharedString>,
+    hovered_id: Option<SharedString>,
+    last_evidence: Option<CauseEvidence>,
     boot_at: Instant,
     measured_width: Rc<Cell<f32>>,
     toast: Option<(SharedString, Instant)>,
@@ -678,6 +718,8 @@ impl RootCauseTree {
             step_started: now,
             live: true,
             selected_id: None,
+            hovered_id: None,
+            last_evidence: None,
             boot_at: now,
             measured_width: Rc::new(Cell::new(680.0)),
             toast: None,
@@ -958,15 +1000,16 @@ impl Render for RootCauseTree {
         } else {
             rgb(0x006dcb).into()
         };
-        let focus_col = p.focus;
         let hover_border = p.line_strong;
 
-        // 1. Header Bar
-        let sum_txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-            format!("{total_hyp} 项假设 · 已排除 {ruled_out} 项")
+        // 1. Header Bar with rolling hypothesis & ruled-out counts
+        let hyp_sfx = tr(cx, " hypotheses · ", " 项假设 · ");
+        let ruled_pfx = if UiLanguage::current(cx) == UiLanguage::Chinese {
+            "已排除 "
         } else {
-            format!("{total_hyp} hypotheses · {ruled_out} ruled out")
+            ""
         };
+        let ruled_sfx = tr(cx, " ruled out", " 项");
 
         let head_bar = div()
             .w_full()
@@ -1019,11 +1062,135 @@ impl Render for RootCauseTree {
                                 .font_weight(FontWeight::MEDIUM)
                                 .flex()
                                 .items_center()
+                                .gap(px(4.))
+                                .child(pro_check_draw(
+                                    pro_eid(&self.id, "rc-hdr-chk"),
+                                    true,
+                                    12.0,
+                                    false,
+                                    brand_fg,
+                                ))
                                 .child(tr(cx, "Root cause found", "已定位根因")),
                         )
                     })
-                    .child(div().text_size(px(12.)).text_color(p.muted).child(sum_txt)),
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rc-hyp-cnt"),
+                                total_hyp as f64,
+                                0,
+                                "",
+                                hyp_sfx,
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "rc-ruled-cnt"),
+                                ruled_out as f64,
+                                0,
+                                ruled_pfx,
+                                ruled_sfx,
+                                12.,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            )),
+                    ),
             );
+
+        let eff_tree_w = stage_w.min(720.0);
+        let (placed_nodes, placed_links, placed_gates, tree_h) =
+            layout_fault_tree(&failure, eff_tree_w);
+
+        // Connected-branch spotlight via pro_spring_f32!
+        let spotlight_id = self.hovered_id.clone().or_else(|| self.selected_id.clone());
+        let chain_ids = match &spotlight_id {
+            Some(fid) => collect_cause_chain(&failure, fid.as_ref()),
+            None => HashSet::new(),
+        };
+        let has_spotlight = spotlight_id.is_some();
+
+        let mut node_opacities: HashMap<SharedString, f32> = HashMap::new();
+        for pn in &placed_nodes {
+            let nid = pn.node.id.clone();
+            let is_ruled = pn.node.status == CauseStatus::RuledOut;
+            let is_sel = nid == active_id;
+            let target_op = if has_spotlight {
+                if chain_ids.contains(&nid) {
+                    1.0_f32
+                } else if is_ruled {
+                    0.28_f32
+                } else {
+                    0.34_f32
+                }
+            } else if is_ruled && !is_sel {
+                0.58_f32
+            } else {
+                1.0_f32
+            };
+            let op = pro_spring_f32(
+                pro_eid(&self.id, format!("rc-op-{nid}")),
+                target_op,
+                0.22,
+                w,
+                cx,
+            );
+            node_opacities.insert(nid, op);
+        }
+
+        let link_springs: Vec<(f32, f32)> = placed_links
+            .iter()
+            .map(|lk| {
+                let on_chain = has_spotlight
+                    && chain_ids.contains(&lk.parent_id)
+                    && chain_ids.contains(&lk.child_id);
+                let target_vis = if has_spotlight {
+                    if on_chain { 1.0_f32 } else { 0.28_f32 }
+                } else {
+                    1.0_f32
+                };
+                let target_spt = if on_chain { 1.0_f32 } else { 0.0_f32 };
+                let vis = pro_spring_f32(
+                    pro_eid(&self.id, format!("rc-lk-{}-{}", lk.parent_id, lk.child_id)),
+                    target_vis,
+                    0.22,
+                    w,
+                    cx,
+                );
+                let spt = pro_spring_f32(
+                    pro_eid(&self.id, format!("rc-lks-{}-{}", lk.parent_id, lk.child_id)),
+                    target_spt,
+                    0.20,
+                    w,
+                    cx,
+                );
+                (vis, spt)
+            })
+            .collect();
+
+        let gate_opacities: Vec<f32> = placed_gates
+            .iter()
+            .map(|g| {
+                let target_op = if has_spotlight {
+                    if chain_ids.contains(&g.node_id) {
+                        1.0_f32
+                    } else {
+                        0.32_f32
+                    }
+                } else {
+                    1.0_f32
+                };
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("rc-gt-{}", g.node_id)),
+                    target_op,
+                    0.22,
+                    w,
+                    cx,
+                )
+            })
+            .collect();
 
         // Card renderer shared by tree & narrow indented view
         let render_card = |pn: &PlacedNode, full_width: bool, cx: &mut Context<Self>| {
@@ -1034,6 +1201,7 @@ impl Render for RootCauseTree {
             let is_checking = n.status == CauseStatus::Checking;
             let is_leaf_root =
                 !pn.is_top_failure && n.children.is_empty() && n.status == CauseStatus::Confirmed;
+            let op = node_opacities.get(&nid).copied().unwrap_or(1.0);
 
             let border_c = if is_sel {
                 path_blue.opacity(0.65)
@@ -1091,6 +1259,14 @@ impl Render for RootCauseTree {
                             .font_weight(FontWeight::MEDIUM)
                             .flex()
                             .items_center()
+                            .gap(px(3.))
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("rc-fnd-{nid}")),
+                                true,
+                                12.0,
+                                false,
+                                brand_fg,
+                            ))
                             .child(tr(cx, "Found", "已定位"))
                             .into_any_element()
                     } else {
@@ -1107,7 +1283,13 @@ impl Render for RootCauseTree {
                     .flex()
                     .items_center()
                     .gap(px(5.))
-                    .child(pro_icon(ProIcon::AlertTriangle, 11., p.red_ink))
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("rc-leaf-chk-{nid}")),
+                        true,
+                        12.0,
+                        false,
+                        p.red_ink,
+                    ))
                     .child(
                         div()
                             .h(px(16.))
@@ -1135,7 +1317,13 @@ impl Render for RootCauseTree {
                         p.muted,
                     ),
                     CauseStatus::Confirmed => (
-                        pro_icon(ProIcon::Check, 11., brand_fg),
+                        pro_check_draw(
+                            pro_eid(&self.id, format!("rc-chk-{nid}")),
+                            true,
+                            12.0,
+                            false,
+                            brand_fg,
+                        ),
                         tr(cx, "Confirmed", "已证实"),
                         brand_fg,
                     ),
@@ -1156,30 +1344,32 @@ impl Render for RootCauseTree {
             };
 
             let nid_click = nid.clone();
-            activate(
+            let nid_hov = nid.clone();
+            let rest_bg = if is_ruled {
+                transparent_black()
+            } else {
+                card_bg
+            };
+            let hover_bg = if is_ruled {
+                p.hover
+            } else {
+                pro_mix_color(card_bg, path_blue, if p.dark { 0.05 } else { 0.03 })
+            };
+
+            pro_tactile(
+                pro_eid(&self.id, format!("rcnode-{nid}")),
+                title_str.clone(),
+                10.0,
+                rest_bg,
+                hover_bg,
+                border_c,
+                hover_border,
+                is_sel,
                 div()
-                    .id(pro_eid(&self.id, format!("rcnode-{nid}")))
-                    .role(Role::Button)
-                    .aria_label(title_str.clone())
-                    .aria_selected(is_sel)
-                    .tab_index(0)
                     .when(!full_width, |d| d.w(px(pn.w)).h(px(pn.h)))
                     .when(full_width, |d| d.w_full())
                     .p(px(10.))
                     .pb(px(9.))
-                    .rounded(px(10.))
-                    .bg(if is_ruled {
-                        transparent_black()
-                    } else {
-                        card_bg
-                    })
-                    .border_1()
-                    .border_color(border_c)
-                    .when(!is_ruled && !p.dark, |d| d.shadow_xs())
-                    .opacity(if is_ruled && !is_sel { 0.58 } else { 1.0 })
-                    .hover(move |s| s.border_color(hover_border).opacity(1.0))
-                    .focus_visible(move |s| s.border_2().border_color(focus_col))
-                    .cursor_pointer()
                     .flex()
                     .flex_col()
                     .justify_between()
@@ -1279,11 +1469,18 @@ impl Render for RootCauseTree {
                     this.select_node(Some(nid_click.clone()), cx);
                 },
             )
+            .when(!full_width, |d| d.w(px(pn.w)).h(px(pn.h)))
+            .when(full_width, |d| d.w_full())
+            .when(!is_ruled && !p.dark, |d| d.shadow_xs())
+            .opacity(op)
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = (*inside).then(|| nid_hov.clone());
+                if this.hovered_id != next {
+                    this.hovered_id = next;
+                    cx.notify();
+                }
+            }))
         };
-
-        let eff_tree_w = stage_w.min(720.0);
-        let (placed_nodes, placed_links, placed_gates, tree_h) =
-            layout_fault_tree(&failure, eff_tree_w);
 
         let tree_el = if narrow {
             let mut list = div().w_full().flex().flex_col().gap(px(6.));
@@ -1300,16 +1497,18 @@ impl Render for RootCauseTree {
             list.into_any_element()
         } else {
             let links_c = placed_links;
+            let l_springs_c = link_springs;
             let lines_canvas = canvas(
                 |_, _, _| (),
                 move |surface, _, window, _| {
                     let ox = f32::from(surface.origin.x);
                     let oy = f32::from(surface.origin.y);
-                    for lk in &links_c {
+                    for (idx, lk) in links_c.iter().enumerate() {
+                        let (vis, spt) = l_springs_c.get(idx).copied().unwrap_or((1.0, 0.0));
                         let p_par = point(px(ox + lk.p_parent.0), px(oy + lk.p_parent.1));
                         let p_ch = point(px(ox + lk.p_child.0), px(oy + lk.p_child.1));
                         if lk.status == CauseStatus::RuledOut {
-                            paint_dashed_tree_link(p_par, p_ch, rail_col, window);
+                            paint_dashed_tree_link(p_par, p_ch, rail_col.opacity(vis), window);
                         } else if lk.on_causal_path {
                             // Causal path runs upward from confirmed child -> parent!
                             pro_connector_pulse(
@@ -1317,15 +1516,25 @@ impl Render for RootCauseTree {
                                 p_par,
                                 8.0,
                                 true,
-                                path_blue,
+                                path_blue.opacity(vis),
                                 rgb(0xb9e0ff).into(),
                                 pulse_t,
-                                1.85,
+                                1.85 + 0.35 * spt,
                                 window,
                             );
                         } else {
+                            let base_c =
+                                pro_mix_color(rail_col, path_blue, 0.65 * spt).opacity(vis);
                             pro_connector_pulse(
-                                p_par, p_ch, 8.0, true, rail_col, path_blue, None, 1.5, window,
+                                p_par,
+                                p_ch,
+                                8.0,
+                                true,
+                                base_c,
+                                path_blue.opacity(vis),
+                                (spt > 0.45).then_some(pulse_t).flatten(),
+                                1.5 + 0.35 * spt,
+                                window,
                             );
                         }
                     }
@@ -1341,7 +1550,8 @@ impl Render for RootCauseTree {
                 .relative()
                 .child(lines_canvas);
 
-            for g in &placed_gates {
+            for (g_idx, g) in placed_gates.iter().enumerate() {
+                let g_op = gate_opacities.get(g_idx).copied().unwrap_or(1.0);
                 let g_txt = match g.gate {
                     CauseGate::Or => "OR",
                     CauseGate::And => "AND",
@@ -1365,6 +1575,7 @@ impl Render for RootCauseTree {
                         } else {
                             p.line_strong
                         })
+                        .opacity(g_op)
                         .flex()
                         .items_center()
                         .justify_center()
@@ -1448,66 +1659,89 @@ impl Render for RootCauseTree {
             );
         }
 
-        let evidence_code_el = if inspected_node.status != CauseStatus::Open
-            && let Some(ev) = &inspected_node.evidence
-        {
-            let mut lines_box = div().flex().flex_col().gap(px(1.));
-            for line in ev.content.lines() {
-                let (l_bg, l_fg) = if line.starts_with("+ ") || line.starts_with('+') {
-                    (p.green_soft, p.green_ink)
-                } else if line.starts_with("- ") || line.starts_with('-') {
-                    (p.red_soft, p.red_ink)
-                } else {
-                    (transparent_black(), p.ink)
-                };
-                lines_box = lines_box.child(
-                    div()
-                        .px(px(6.))
-                        .py(px(1.))
-                        .rounded(px(4.))
-                        .bg(l_bg)
-                        .font_family("Menlo")
-                        .text_size(px(11.5))
-                        .line_height(px(17.))
-                        .text_color(l_fg)
-                        .child(line.to_owned()),
-                );
-            }
-            Some(
-                div()
-                    .w_full()
-                    .p(px(8.))
-                    .rounded(px(8.))
-                    .bg(well_bg)
-                    .border_1()
-                    .border_color(p.line)
-                    .flex()
-                    .flex_col()
-                    .gap(px(5.))
-                    .child(
-                        div()
-                            .px(px(4.))
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(ev.kind.to_uppercase())
-                            .when_some(ev.source.as_ref(), |d, src| {
-                                d.child(
-                                    div()
-                                        .font_family("Menlo")
-                                        .text_color(p.faint)
-                                        .child(src.clone()),
-                                )
-                            }),
-                    )
-                    .child(lines_box),
-            )
+        let ev_open =
+            inspected_node.status != CauseStatus::Open && inspected_node.evidence.is_some();
+        if ev_open && let Some(ev) = &inspected_node.evidence {
+            self.last_evidence = Some(ev.clone());
+        }
+        let shown_ev = if ev_open {
+            inspected_node.evidence.clone()
         } else {
-            None
+            self.last_evidence.clone()
         };
+        let ev_fold_el = shown_ev.map(|ev| {
+            let line_count = ev.content.lines().count().max(1) as f32;
+            let est_h = 34.0 + line_count * 18.0;
+            let p_green_soft = p.green_soft;
+            let p_green_ink = p.green_ink;
+            let p_red_soft = p.red_soft;
+            let p_red_ink = p.red_ink;
+            let p_ink = p.ink;
+            let p_line = p.line;
+            let p_muted = p.muted;
+            let p_faint = p.faint;
+            pro_fold(
+                pro_eid(&self.id, "ev-code-fold"),
+                ev_open,
+                est_h,
+                9.0,
+                move || {
+                    let mut lines_box = div().flex().flex_col().gap(px(1.));
+                    for line in ev.content.lines() {
+                        let (l_bg, l_fg) = if line.starts_with("+ ") || line.starts_with('+') {
+                            (p_green_soft, p_green_ink)
+                        } else if line.starts_with("- ") || line.starts_with('-') {
+                            (p_red_soft, p_red_ink)
+                        } else {
+                            (transparent_black(), p_ink)
+                        };
+                        lines_box = lines_box.child(
+                            div()
+                                .px(px(6.))
+                                .py(px(1.))
+                                .rounded(px(4.))
+                                .bg(l_bg)
+                                .font_family("Menlo")
+                                .text_size(px(11.5))
+                                .line_height(px(17.))
+                                .text_color(l_fg)
+                                .child(line.to_owned()),
+                        );
+                    }
+                    div()
+                        .w_full()
+                        .p(px(8.))
+                        .rounded(px(8.))
+                        .bg(well_bg)
+                        .border_1()
+                        .border_color(p_line)
+                        .flex()
+                        .flex_col()
+                        .gap(px(5.))
+                        .child(
+                            div()
+                                .px(px(4.))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .text_size(px(10.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p_muted)
+                                .child(ev.kind.to_uppercase())
+                                .when_some(ev.source.as_ref(), |d, src| {
+                                    d.child(
+                                        div()
+                                            .font_family("Menlo")
+                                            .text_color(p_faint)
+                                            .child(src.clone()),
+                                    )
+                                }),
+                        )
+                        .child(lines_box)
+                        .into_any_element()
+                },
+            )
+        });
 
         let cid_fix = inspected_node.id.clone();
         let cid_retry = inspected_node.id.clone();
@@ -1555,22 +1789,21 @@ impl Render for RootCauseTree {
                                 .text_color(p.strong)
                                 .child(self.localize_str(&inspected_node.title, cx).to_owned()),
                         )
-                        .child(
-                            div()
-                                .ml_auto()
-                                .text_size(px(12.))
-                                .text_color(if is_leaf_root_cause {
-                                    p.red_ink
-                                } else {
-                                    p.muted
-                                })
-                                .font_weight(if is_leaf_root_cause {
-                                    FontWeight::MEDIUM
-                                } else {
-                                    FontWeight::NORMAL
-                                })
-                                .child(ev_status_txt),
-                        ),
+                        .child(div().ml_auto().child(pro_swap_label(
+                            pro_eid(&self.id, "ev-st-lbl"),
+                            ev_status_txt,
+                            12.0,
+                            if is_leaf_root_cause {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            },
+                            if is_leaf_root_cause {
+                                p.red_ink
+                            } else {
+                                p.muted
+                            },
+                        ))),
                 )
                 .child(
                     div()
@@ -1584,7 +1817,7 @@ impl Render for RootCauseTree {
                         .child(verdict_line),
                 )
                 .when(!inspected_node.files.is_empty(), |d| d.child(file_chips))
-                .when_some(evidence_code_el, |d, code| d.child(code))
+                .when_some(ev_fold_el, |d, code| d.child(code))
                 .child(
                     div()
                         .pt(px(2.))

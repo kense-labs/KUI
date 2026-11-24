@@ -6,22 +6,22 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_eid, pro_empty_state, pro_fold, pro_skeleton_bar,
-        pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
-        family::disabled_motion,
+        family::{PhaseClock, Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
-const DONE_MARK_SVG: &str = r##"<circle cx="7" cy="7" r="6" fill="currentColor"></circle><path d="M4.3 7.2 6.1 9 9.7 5.2" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>"##;
 const FAILED_MARK_SVG: &str = r##"<circle cx="7" cy="7" r="6" fill="currentColor"></circle><path d="M7 4v3.4" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"></path><circle cx="7" cy="9.8" r="0.85" fill="#ffffff"></circle>"##;
 const NEEDS_MARK_SVG: &str = r#"<circle cx="7" cy="7" r="5.25" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2.25" fill="currentColor"></circle>"#;
 
@@ -170,6 +170,10 @@ pub struct AwaySummary {
     collapsed: bool,
     thread_chrome: bool,
     replies: Vec<SharedString>,
+    reply_entrances: Vec<(Slide, PhaseClock)>,
+    done_clocks: HashMap<SharedString, PhaseClock>,
+    send_hover: Slide,
+    send_press: Slide,
     reply_editor: Option<Entity<Editor>>,
     editor_focused: bool,
     boot_at: Instant,
@@ -197,6 +201,10 @@ impl AwaySummary {
             collapsed: false,
             thread_chrome: true,
             replies: Vec::new(),
+            reply_entrances: Vec::new(),
+            done_clocks: HashMap::new(),
+            send_hover: Slide::snappy(0.0),
+            send_press: Slide::snappy(0.0),
             reply_editor: None,
             editor_focused: false,
             boot_at: Instant::now(),
@@ -300,6 +308,7 @@ impl AwaySummary {
             return;
         };
         let prev_kind = item.kind;
+        let resolved_id = item.id.clone();
         match prev_kind {
             AwayItemKind::NeedsYou => {
                 item.kind = AwayItemKind::Done;
@@ -312,6 +321,7 @@ impl AwaySummary {
                     .into(),
                 );
                 item.action = None;
+                self.done_clocks.entry(resolved_id).or_default().restart(cx);
                 self.toast = Some((
                     tr(cx, "Approved weekly report", "已批准发送周报").into(),
                     Instant::now(),
@@ -328,6 +338,7 @@ impl AwaySummary {
                     .into(),
                 );
                 item.action = None;
+                self.done_clocks.entry(resolved_id).or_default().restart(cx);
                 self.toast = Some((
                     tr(cx, "Retried billing sync · succeeded", "账单同步已重试成功").into(),
                     Instant::now(),
@@ -342,6 +353,17 @@ impl AwaySummary {
             id: id.to_owned().into(),
             kind: prev_kind,
         });
+        cx.notify();
+    }
+
+    fn push_reply(&mut self, msg: SharedString, cx: &mut Context<Self>) {
+        self.replies.push(msg.clone());
+        let mut sl = Slide::new(10.0);
+        sl.duration(0.0, 0.24, cx);
+        let mut clk = PhaseClock::default();
+        clk.restart(cx);
+        self.reply_entrances.push((sl, clk));
+        cx.emit(AwaySummaryEvent::ThreadReplySent(msg));
         cx.notify();
     }
 
@@ -366,11 +388,8 @@ impl AwaySummary {
                 EditEvent::Submitted => {
                     let val = ed_ent.read(cx).value().trim().to_owned();
                     if !val.is_empty() {
-                        let msg: SharedString = val.into();
-                        this.replies.push(msg.clone());
                         ed_ent.update(cx, |e, cx| e.set_value("", w, cx));
-                        cx.emit(AwaySummaryEvent::ThreadReplySent(msg));
-                        cx.notify();
+                        this.push_reply(val.into(), cx);
                     }
                 }
                 _ => {}
@@ -384,6 +403,7 @@ impl AwaySummary {
         &self,
         item: &AwayItem,
         halo_scale_alpha: f32,
+        done_draw: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let p = ProPalette::get(cx);
@@ -418,7 +438,13 @@ impl AwaySummary {
                 .child(pro_svg("0 0 14 14", NEEDS_MARK_SVG, 14.0, p.amber))
                 .into_any_element(),
             AwayItemKind::Failed => pro_svg("0 0 14 14", FAILED_MARK_SVG, 14.0, p.red),
-            AwayItemKind::Done => pro_svg("0 0 14 14", DONE_MARK_SVG, 14.0, p.blue),
+            AwayItemKind::Done => pro_check_draw(
+                pro_eid(&self.id, format!("done-chk-{}", item.id)),
+                done_draw,
+                14.0,
+                true,
+                p.blue,
+            ),
         };
 
         let title_str: SharedString = match item.title.as_ref() {
@@ -505,48 +531,62 @@ impl AwaySummary {
                             .child(title_str.clone()),
                     )
                     .when_some(detail_str, |d, det| {
-                        d.child(
-                            div()
-                                .text_size(px(12.0))
-                                .line_height(px(16.0))
-                                .text_color(p.muted)
-                                .truncate()
-                                .child(det),
-                        )
+                        d.child(div().min_w_0().line_height(px(16.0)).truncate().child(
+                            pro_swap_label(
+                                pro_eid(&self.id, format!("det-swap-{}", item.id)),
+                                det,
+                                12.0,
+                                FontWeight::NORMAL,
+                                p.muted,
+                            ),
+                        ))
                     }),
             )
             .when_some(act_label, |d, act_lbl| {
-                let aria = format!("{act_lbl}: {title_str}");
+                let aria = SharedString::from(format!("{act_lbl}: {title_str}"));
+                let act_inner = div()
+                    .min_w(px(58.0))
+                    .h(px(26.0))
+                    .px(px(10.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, format!("act-lbl-{}", item.id)),
+                        act_lbl,
+                        12.0,
+                        FontWeight::MEDIUM,
+                        if is_needs { p.ink } else { p.text },
+                    ));
                 d.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("act-{}", item.id)))
-                        .role(Role::Button)
-                        .aria_label(aria)
-                        .tab_index(0)
-                        .min_w(px(58.0))
-                        .h(px(26.0))
-                        .px(px(10.0))
-                        .flex_none()
-                        .rounded(px(6.0))
-                        .bg(if is_needs {
+                    pro_tactile(
+                        pro_eid(&self.id, format!("act-{}", item.id)),
+                        aria,
+                        6.0,
+                        if is_needs {
                             card_bg
                         } else {
                             transparent_black()
-                        })
-                        .when(is_needs, |b| b.border_1().border_color(p.line_strong))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(px(12.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(if is_needs { p.ink } else { p.text })
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.chip).text_color(p.ink))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        },
+                        p.chip,
+                        if is_needs {
+                            p.line_strong
+                        } else {
+                            transparent_black()
+                        },
+                        if is_needs {
+                            p.line_strong
+                        } else {
+                            transparent_black()
+                        },
+                        false,
+                        act_inner,
+                        cx,
+                        move |this, _, cx| {
                             this.trigger_action(item_id.as_ref(), cx);
-                        }))
-                        .child(act_lbl),
+                        },
+                    )
+                    .flex_none(),
                 )
             })
             .into_any_element()
@@ -671,6 +711,19 @@ impl Render for AwaySummary {
             format!("You were away {} · {} updates", when_txt, total_n).into()
         };
 
+        let divider_inner = div()
+            .h(px(28.0))
+            .pl(px(10.0))
+            .pr(px(8.0))
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .text_size(px(12.0))
+            .text_color(p.muted)
+            .child(div().size(px(6.0)).rounded_full().bg(divider_dot_c))
+            .child(div().truncate().child(divider_text.clone()))
+            .child(pro_icon(ProIcon::ChevronDown, 12.0, p.faint));
+
         let divider_el = div()
             .w_full()
             .py(px(2.0))
@@ -679,46 +732,52 @@ impl Render for AwaySummary {
             .gap(px(8.0))
             .child(div().flex_1().h(px(1.0)).bg(p.line_strong))
             .child(
-                div()
-                    .id(pro_eid(&self.id, "divider-open-btn"))
-                    .role(Role::Button)
-                    .aria_label(divider_text.clone())
-                    .aria_expanded(false)
-                    .tab_index(0)
-                    .h(px(28.0))
-                    .pl(px(10.0))
-                    .pr(px(8.0))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .text_size(px(12.0))
-                    .text_color(p.muted)
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.chip).text_color(p.ink))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.set_collapsed(false, false, cx);
-                    }))
-                    .child(div().size(px(6.0)).rounded_full().bg(divider_dot_c))
-                    .child(div().truncate().child(divider_text))
-                    .child(pro_icon(ProIcon::ChevronDown, 12.0, p.faint)),
+                pro_tactile(
+                    pro_eid(&self.id, "divider-open-btn"),
+                    divider_text,
+                    999.0,
+                    transparent_black(),
+                    p.chip,
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    divider_inner,
+                    cx,
+                    |this, _, cx| this.set_collapsed(false, false, cx),
+                )
+                .flex_none(),
             )
             .child(div().flex_1().h(px(1.0)).bg(p.line_strong));
 
-        // 2. Expanded summary card
+        // 2. Expanded summary card — pre-sample done_clocks for completed rows
+        let mut done_draws_map: HashMap<SharedString, bool> = HashMap::new();
+        for item in &self.items {
+            if item.kind == AwayItemKind::Done {
+                let drawn = if reduced {
+                    true
+                } else if let Some(clk) = self.done_clocks.get(&item.id) {
+                    clk.time(0.28, w, cx) > 0.012
+                } else {
+                    true
+                };
+                done_draws_map.insert(item.id.clone(), drawn);
+            }
+        }
+
         let visible_slice: Vec<AwayItem> = self.items.iter().take(self.limit).cloned().collect();
         let extra_slice: Vec<AwayItem> = self.items.iter().skip(self.limit).cloned().collect();
         let extra_len = extra_slice.len();
 
         let mut primary_rows = div().w_full().flex().flex_col();
         for item in &visible_slice {
-            primary_rows = primary_rows.child(self.render_row(item, halo_alpha, cx));
+            let draw_ok = done_draws_map.get(&item.id).copied().unwrap_or(true);
+            primary_rows = primary_rows.child(self.render_row(item, halo_alpha, draw_ok, cx));
         }
 
         let mut extra_rows = div().w_full().flex().flex_col();
         for item in &extra_slice {
-            extra_rows = extra_rows.child(self.render_row(item, halo_alpha, cx));
+            let draw_ok = done_draws_map.get(&item.id).copied().unwrap_or(true);
+            extra_rows = extra_rows.child(self.render_row(item, halo_alpha, draw_ok, cx));
         }
 
         let show_all = self.show_all;
@@ -730,30 +789,19 @@ impl Render for AwaySummary {
             } else {
                 format!("Show {extra_len} more").into()
             };
-            div()
-                .id(pro_eid(&self.id, "show-more-btn"))
-                .role(Role::Button)
-                .aria_label(lbl.clone())
-                .aria_expanded(show_all)
-                .tab_index(0)
+            let more_inner = div()
                 .h(px(28.0))
                 .px(px(8.0))
-                .rounded(px(6.0))
                 .flex()
                 .items_center()
                 .gap(px(4.0))
-                .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.text)
-                .cursor_pointer()
-                .hover(move |s| s.bg(p.chip).text_color(p.ink))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.show_all = !this.show_all;
-                    cx.emit(AwaySummaryEvent::ShowMoreToggled(this.show_all));
-                    cx.notify();
-                }))
-                .child(lbl)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, "show-more-swap"),
+                    lbl.clone(),
+                    12.0,
+                    FontWeight::MEDIUM,
+                    p.text,
+                ))
                 .child(pro_icon(
                     if show_all {
                         ProIcon::ChevronUp
@@ -762,36 +810,38 @@ impl Render for AwaySummary {
                     },
                     12.0,
                     p.faint,
-                ))
+                ));
+            pro_tactile(
+                pro_eid(&self.id, "show-more-btn"),
+                lbl,
+                6.0,
+                transparent_black(),
+                p.chip,
+                transparent_black(),
+                transparent_black(),
+                false,
+                more_inner,
+                cx,
+                |this, _, cx| {
+                    this.show_all = !this.show_all;
+                    cx.emit(AwaySummaryEvent::ShowMoreToggled(this.show_all));
+                    cx.notify();
+                },
+            )
+            .flex_none()
         });
 
-        let got_it_lbl = tr(cx, "Got it", "知道了");
-        let got_it_btn = div()
-            .id(pro_eid(&self.id, "got-it-btn"))
-            .role(Role::Button)
-            .aria_label(got_it_lbl)
-            .aria_expanded(true)
-            .tab_index(0)
-            .h(px(28.0))
-            .pl(px(8.0))
-            .pr(px(10.0))
-            .rounded(px(6.0))
-            .flex()
-            .items_center()
-            .gap(px(5.0))
-            .text_size(px(12.0))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(p.text)
-            .cursor_pointer()
-            .hover(move |s| s.bg(p.chip).text_color(p.ink))
-            .focus_visible(move |s| s.border_1().border_color(p.focus))
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.set_collapsed(true, true, cx);
-            }))
-            .child(pro_icon(ProIcon::Check, 13.0, p.muted))
-            .child(got_it_lbl);
+        let got_it_btn = pro_btn(
+            pro_eid(&self.id, "got-it-btn"),
+            tr(cx, "Got it", "知道了"),
+            Some(ProIcon::Check),
+            ProBtnStyle::Ghost,
+            true,
+            cx,
+            |this, _, cx| this.set_collapsed(true, true, cx),
+        );
 
-        // Header counts strip
+        // Header counts strip with rolling numbers
         let mut counts_row = div()
             .flex()
             .flex_wrap()
@@ -802,18 +852,23 @@ impl Render for AwaySummary {
         let mut pushed_any = false;
         if needs_n > 0 {
             pushed_any = true;
-            let txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-                format!("{needs_n} 待确认")
-            } else {
-                format!("{needs_n} needs you")
-            };
             counts_row = counts_row.child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(5.0))
                     .child(div().size(px(6.0)).rounded_full().bg(p.amber))
-                    .child(txt),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "cnt-needs"),
+                        needs_n as f64,
+                        0,
+                        "",
+                        "",
+                        12.0,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))
+                    .child(tr(cx, "needs you", "待确认")),
             );
         }
         if failed_n > 0 {
@@ -821,36 +876,46 @@ impl Render for AwaySummary {
                 counts_row = counts_row.child(div().text_color(p.faint).child("·"));
             }
             pushed_any = true;
-            let txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-                format!("{failed_n} 失败")
-            } else {
-                format!("{failed_n} failed")
-            };
             counts_row = counts_row.child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(5.0))
                     .child(div().size(px(6.0)).rounded_full().bg(p.red))
-                    .child(txt),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "cnt-failed"),
+                        failed_n as f64,
+                        0,
+                        "",
+                        "",
+                        12.0,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))
+                    .child(tr(cx, "failed", "失败")),
             );
         }
         if done_n > 0 {
             if pushed_any {
                 counts_row = counts_row.child(div().text_color(p.faint).child("·"));
             }
-            let txt = if UiLanguage::current(cx) == UiLanguage::Chinese {
-                format!("{done_n} 已完成")
-            } else {
-                format!("{done_n} done")
-            };
             counts_row = counts_row.child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(5.0))
                     .child(div().size(px(6.0)).rounded_full().bg(p.blue))
-                    .child(txt),
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "cnt-done"),
+                        done_n as f64,
+                        0,
+                        "",
+                        "",
+                        12.0,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))
+                    .child(tr(cx, "done", "已完成")),
             );
         }
 
@@ -1009,26 +1074,43 @@ impl Render for AwaySummary {
         thread_col = thread_col.child(summary_region);
 
         if self.thread_chrome {
-            for r_msg in &self.replies {
+            for (r_idx, r_msg) in self.replies.iter().enumerate() {
                 let user_bubble_bg: Hsla = if p.dark {
                     hsla(0.0, 0.0, 1.0, 0.07)
                 } else {
                     rgb(0xf1f1f2).into()
                 };
+                let (dy, alpha) = if reduced {
+                    (0.0, 1.0)
+                } else if let Some((sl, clk)) = self.reply_entrances.get(r_idx) {
+                    let y = sl.get(w, cx);
+                    let age = clk.time(0.22, w, cx);
+                    let a = 0.25 + 0.75 * pro_ease((age / 0.22).clamp(0.0, 1.0));
+                    (y, a)
+                } else {
+                    (0.0, 1.0)
+                };
                 thread_col = thread_col.child(
-                    div().w_full().flex().justify_end().child(
-                        div()
-                            .min_w_0()
-                            .max_w(relative(0.88))
-                            .px(px(14.0))
-                            .py(px(8.0))
-                            .rounded(px(16.0))
-                            .bg(user_bubble_bg)
-                            .text_size(px(13.0))
-                            .line_height(px(20.0))
-                            .text_color(p.ink)
-                            .child(r_msg.clone()),
-                    ),
+                    div()
+                        .w_full()
+                        .relative()
+                        .top(px(dy))
+                        .opacity(alpha)
+                        .flex()
+                        .justify_end()
+                        .child(
+                            div()
+                                .min_w_0()
+                                .max_w(relative(0.88))
+                                .px(px(14.0))
+                                .py(px(8.0))
+                                .rounded(px(16.0))
+                                .bg(user_bubble_bg)
+                                .text_size(px(13.0))
+                                .line_height(px(20.0))
+                                .text_color(p.ink)
+                                .child(r_msg.clone()),
+                        ),
                 );
             }
 
@@ -1039,6 +1121,14 @@ impl Render for AwaySummary {
             };
             let ed_view = self.reply_editor.clone();
             let send_lbl = tr(cx, "Send reply", "发送回复");
+            let send_hov = self.send_hover.get(w, cx).clamp(0.0, 1.0);
+            let send_down = self.send_press.get(w, cx).clamp(0.0, 1.0);
+            let send_bg = pro_mix_color(
+                p.primary,
+                pro_mix_color(p.primary, p.on_primary, 0.14),
+                send_hov,
+            );
+            let send_inset = 1.4 * send_down;
             thread_col = thread_col.child(
                 div()
                     .w_full()
@@ -1071,25 +1161,86 @@ impl Render for AwaySummary {
                             .tab_index(0)
                             .size(px(28.0))
                             .flex_none()
+                            .relative()
                             .rounded_full()
-                            .bg(p.primary)
                             .flex()
                             .items_center()
                             .justify_center()
                             .cursor_pointer()
+                            .on_hover(cx.listener(|this, inside: &bool, w, cx| {
+                                this.send_hover.set(if *inside { 1.0 } else { 0.0 }, cx);
+                                if !*inside {
+                                    this.send_press.set(0.0, cx);
+                                }
+                                cx.notify();
+                                w.refresh();
+                            }))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, w, cx| {
+                                    this.send_press.set(1.0, cx);
+                                    cx.notify();
+                                    w.refresh();
+                                }),
+                            )
+                            .on_mouse_up(
+                                MouseButton::Left,
+                                cx.listener(|this, _, w, cx| {
+                                    this.send_press.set(0.0, cx);
+                                    cx.notify();
+                                    w.refresh();
+                                }),
+                            )
+                            .on_mouse_up_out(
+                                MouseButton::Left,
+                                cx.listener(|this, _, w, cx| {
+                                    this.send_press.set(0.0, cx);
+                                    cx.notify();
+                                    w.refresh();
+                                }),
+                            )
                             .on_click(cx.listener(|this, _: &ClickEvent, w, cx| {
-                                if let Some(ed) = &this.reply_editor {
-                                    let val = ed.read(cx).value().trim().to_owned();
-                                    if !val.is_empty() {
-                                        let msg: SharedString = val.into();
-                                        this.replies.push(msg.clone());
+                                let val = this
+                                    .reply_editor
+                                    .as_ref()
+                                    .map(|ed| ed.read(cx).value().trim().to_owned())
+                                    .unwrap_or_default();
+                                if !val.is_empty() {
+                                    if let Some(ed) = &this.reply_editor {
                                         ed.update(cx, |e, cx| e.set_value("", w, cx));
-                                        cx.emit(AwaySummaryEvent::ThreadReplySent(msg));
-                                        cx.notify();
                                     }
+                                    this.push_reply(val.into(), cx);
                                 }
                             }))
-                            .child(pro_icon(ProIcon::ArrowUp, 14.0, p.on_primary)),
+                            .child(
+                                canvas(
+                                    |_, _, _| (),
+                                    move |bounds, _, window, _| {
+                                        let bw = f32::from(bounds.size.width);
+                                        let bh = f32::from(bounds.size.height);
+                                        let rect = Bounds::new(
+                                            point(
+                                                bounds.origin.x + px(send_inset),
+                                                bounds.origin.y + px(send_inset),
+                                            ),
+                                            size(
+                                                px((bw - 2.0 * send_inset).max(2.0)),
+                                                px((bh - 2.0 * send_inset).max(2.0)),
+                                            ),
+                                        );
+                                        window.paint_quad(
+                                            fill(rect, send_bg).corner_radii(rect.size.height / 2.),
+                                        );
+                                    },
+                                )
+                                .absolute()
+                                .inset_0(),
+                            )
+                            .child(div().relative().child(pro_icon(
+                                ProIcon::ArrowUp,
+                                14.0 * (1.0 - 0.08 * send_down),
+                                p.on_primary,
+                            ))),
                     ),
             );
         }

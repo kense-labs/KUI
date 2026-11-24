@@ -6,8 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_presence, pro_shimmer_text, pro_skeleton_bar,
-        pro_view_transition, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mix_color, pro_presence, pro_shimmer_text, pro_skeleton_bar, pro_swap_label,
+        pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -764,6 +765,26 @@ impl WritingAssistant {
         }
     }
 
+    fn discard_message(&mut self, idx: usize, w: Option<&mut Window>, cx: &mut Context<Self>) {
+        if self.messages.len() <= 2 {
+            self.reset_chat(w, cx);
+            return;
+        }
+        if idx < self.messages.len() {
+            self.messages.remove(idx);
+            if idx > 0
+                && self
+                    .messages
+                    .get(idx - 1)
+                    .is_some_and(|m| m.role == WritingRole::User)
+            {
+                self.messages.remove(idx - 1);
+            }
+            self.stream = None;
+            cx.notify();
+        }
+    }
+
     fn toggle_dictation(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if self.speech_mode == SpeechMode::Hidden {
             return;
@@ -863,7 +884,7 @@ impl WritingAssistant {
         &mut self,
         w: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Option<(usize, usize, bool)> {
+    ) -> Option<(usize, usize, f32, bool)> {
         let reduced = disabled_motion(cx);
 
         if let Some(dic_started) = self.dictation.as_ref().map(|d| d.started_at) {
@@ -901,17 +922,18 @@ impl WritingAssistant {
                 }
                 w.request_animation_frame();
                 if elapsed < THINKING_SECS {
-                    return Some((idx, 0, true));
+                    return Some((idx, 0, 0.0, true));
                 }
                 let words = split_stream_words(msg.text.as_ref());
                 let total = words.len();
-                let shown =
-                    (((elapsed - THINKING_SECS) / WORD_STEP_SECS).floor() as usize + 1).min(total);
-                if shown >= total {
+                let raw_pos = (elapsed - THINKING_SECS) / WORD_STEP_SECS;
+                let shown = (raw_pos.floor() as usize + 1).min(total);
+                let tail_frac = pro_ease(raw_pos.fract());
+                if shown >= total && raw_pos >= total as f32 {
                     self.stream = None;
                     return None;
                 }
-                return Some((idx, shown, false));
+                return Some((idx, shown, tail_frac, false));
             } else {
                 self.stream = None;
             }
@@ -1062,32 +1084,23 @@ impl Render for WritingAssistant {
             pro_raw_svg(SPARK_LIGHT_SVG, 16., 16.)
         };
 
-        let new_chat_lbl: SharedString = tr(cx, "New chat", "新建对话").into();
-        let this_new = cx.entity();
-        let new_btn = pro_presence(pro_eid(&self.id, "new-chat-pres"), has_chat, 0.24, 0.18, {
-            let id = pro_eid(&self.id, "new-chat-btn");
-            move |amt| {
-                div()
-                    .id(id)
-                    .role(Role::Button)
-                    .aria_label(new_chat_lbl.clone())
-                    .tab_index(0)
-                    .size(px(28.))
-                    .rounded(px(6.))
-                    .opacity(amt)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(move |_, w, cx| {
-                        this_new.update(cx, |v, cx| v.reset_chat(Some(w), cx));
-                    })
-                    .child(pro_icon(ProIcon::Plus, 15., p.muted))
-                    .into_any_element()
-            }
-        });
+        let new_btn_inner = pro_icon_btn(
+            pro_eid(&self.id, "new-chat-btn"),
+            tr(cx, "New chat", "新建对话"),
+            ProIcon::Plus,
+            28.,
+            false,
+            cx,
+            |v, w, cx| v.reset_chat(Some(w), cx),
+        )
+        .into_any_element();
+        let new_btn = pro_presence(
+            pro_eid(&self.id, "new-chat-pres"),
+            has_chat,
+            0.24,
+            0.18,
+            move |amt| div().opacity(amt).child(new_btn_inner).into_any_element(),
+        );
 
         let header = div()
             .pl(px(16.))
@@ -1190,39 +1203,32 @@ impl Render for WritingAssistant {
                 let chip_id = pro_eid(&self.id, format!("chip-{idx}-{}", chip.id));
                 let prompt = chip.prompt;
                 let label = chip.label;
+                let chip_inner = div()
+                    .px(px(10.))
+                    .py(px(4.))
+                    .text_size(px(13.))
+                    .line_height(px(20.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.text)
+                    .whitespace_nowrap()
+                    .child(label.clone());
                 chip_row = chip_row.child(
-                    div()
-                        .id(chip_id)
-                        .role(Role::Button)
-                        .aria_label(label.clone())
-                        .tab_index(0)
-                        .px(px(10.))
-                        .py(px(4.))
-                        .rounded(px(6.))
-                        .bg(chip_bg)
-                        .border_1()
-                        .border_color(p.line)
-                        .text_size(px(13.))
-                        .line_height(px(20.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.text)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(chip_hover_bg).text_color(p.ink))
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_key_down({
-                            let prompt = prompt.clone();
-                            cx.listener(move |v, ev: &KeyDownEvent, w, cx| {
-                                if matches!(ev.keystroke.key.as_str(), "enter" | "space") {
-                                    w.prevent_default();
-                                    cx.stop_propagation();
-                                    v.submit_prompt(prompt.clone(), Some(w), cx);
-                                }
-                            })
-                        })
-                        .on_click(cx.listener(move |v, _, w, cx| {
+                    pro_tactile(
+                        chip_id,
+                        label,
+                        6.,
+                        chip_bg.into(),
+                        chip_hover_bg.into(),
+                        p.line,
+                        p.line_strong,
+                        false,
+                        chip_inner,
+                        cx,
+                        move |v, w, cx| {
                             v.submit_prompt(prompt.clone(), Some(w), cx);
-                        }))
-                        .child(label),
+                        },
+                    )
+                    .flex_none(),
                 );
             }
 
@@ -1276,18 +1282,16 @@ impl Render for WritingAssistant {
                         );
                     }
                     WritingRole::Assistant => {
-                        let stream_state = stream_info.filter(|(s_idx, _, _)| *s_idx == idx);
-                        let is_thinking = stream_state.is_some_and(|(_, _, th)| th);
-                        let is_streaming_words = stream_state.is_some_and(|(_, _, th)| !th);
-                        let visible_text: SharedString =
-                            if let Some((_, count, false)) = stream_state {
-                                let tokens = split_stream_words(msg.text.as_ref());
-                                tokens[..count.min(tokens.len())].concat().into()
-                            } else {
-                                msg.text.clone()
-                            };
+                        let stream_state = stream_info.filter(|(s_idx, _, _, _)| *s_idx == idx);
+                        let is_thinking = stream_state.is_some_and(|(_, _, _, th)| th);
+                        let is_streaming_words = stream_state.is_some_and(|(_, _, _, th)| !th);
+                        let attempt_num = if last_assistant_idx == Some(idx) {
+                            self.last_prompt.as_ref().map_or(0, |(_, a)| *a)
+                        } else {
+                            0
+                        };
 
-                        let body_el = if is_thinking {
+                        let body_raw: AnyElement = if is_thinking {
                             pro_shimmer_text(
                                 pro_eid(&self.id, format!("think-{idx}")),
                                 tr(cx, "Drafting…", "正在起草…"),
@@ -1301,152 +1305,267 @@ impl Render for WritingAssistant {
                                 FontWeight::NORMAL,
                                 true,
                             )
+                        } else if let Some((_, count, tail_frac, false)) = stream_state {
+                            let tokens = split_stream_words(msg.text.as_ref());
+                            let capped = count.min(tokens.len());
+                            let settled_prefix: String =
+                                tokens[..capped.saturating_sub(1)].concat();
+                            let tail_word = tokens
+                                .get(capped.saturating_sub(1))
+                                .copied()
+                                .unwrap_or_default()
+                                .to_owned();
+                            div()
+                                .text_size(px(13.))
+                                .line_height(px(20.))
+                                .text_color(p.ink)
+                                .child(format!("{settled_prefix}{tail_word}"))
+                                .child(
+                                    div()
+                                        .mt(px(3.))
+                                        .w(px(5.))
+                                        .h(px(5.))
+                                        .rounded_full()
+                                        .bg(p.blue.opacity(0.35 + 0.65 * tail_frac)),
+                                )
+                                .into_any_element()
                         } else {
                             div()
                                 .text_size(px(13.))
                                 .line_height(px(20.))
                                 .text_color(p.ink)
-                                .child(visible_text)
+                                .child(msg.text.clone())
                                 .into_any_element()
                         };
+
+                        let body_el = pro_view_transition(
+                            pro_eid(&self.id, format!("assist-vtx-{idx}")),
+                            format!("draft-{idx}-{attempt_num}"),
+                            body_raw,
+                        );
 
                         let show_actions =
                             last_assistant_idx == Some(idx) && !is_thinking && !is_streaming_words;
                         let accepted = msg.accepted;
                         let is_copied = copied_recent == Some(idx);
 
-                        let mut msg_col = div()
+                        let accept_lbl: SharedString = if accepted {
+                            tr(cx, "Inserted", "已插入").into()
+                        } else {
+                            tr(cx, "Accept", "采纳插入").into()
+                        };
+                        let discard_lbl: SharedString = tr(cx, "Discard", "放弃").into();
+                        let retry_lbl: SharedString = tr(cx, "Retry", "重写").into();
+                        let copy_lbl: SharedString = if is_copied {
+                            tr(cx, "Copied", "已复制").into()
+                        } else {
+                            tr(cx, "Copy", "复制").into()
+                        };
+
+                        let accept_icon = div()
+                            .relative()
+                            .size(px(13.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when(!accepted, |d| {
+                                d.child(pro_icon(ProIcon::Check, 12., p.on_primary))
+                            })
+                            .child(
+                                div()
+                                    .when(!accepted, |d| d.absolute().inset_0().opacity(0.))
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, format!("accept-chk-{idx}")),
+                                        accepted,
+                                        13.,
+                                        false,
+                                        p.green,
+                                    )),
+                            );
+                        let accept_inner = div()
+                            .h(px(24.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(accept_icon)
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("accept-lbl-{idx}")),
+                                accept_lbl.clone(),
+                                11.5,
+                                FontWeight::MEDIUM,
+                                if accepted { p.green_ink } else { p.on_primary },
+                            ));
+
+                        let discard_inner = div()
+                            .h(px(24.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .text_size(px(11.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.text)
+                            .whitespace_nowrap()
+                            .child(pro_icon(ProIcon::Close, 11., p.muted))
+                            .child(discard_lbl.clone());
+
+                        let retry_inner = div()
+                            .h(px(24.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .text_size(px(11.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.text)
+                            .whitespace_nowrap()
+                            .child(pro_icon(ProIcon::Refresh, 12., p.muted))
+                            .child(retry_lbl.clone());
+
+                        let copy_icon = div()
+                            .relative()
+                            .size(px(12.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when(!is_copied, |d| {
+                                d.child(pro_icon(ProIcon::Copy, 12., p.muted))
+                            })
+                            .child(
+                                div()
+                                    .when(!is_copied, |d| d.absolute().inset_0().opacity(0.))
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, format!("copy-chk-{idx}")),
+                                        is_copied,
+                                        12.,
+                                        false,
+                                        p.green,
+                                    )),
+                            );
+                        let copy_inner = div()
+                            .h(px(24.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(copy_icon)
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("copy-lbl-{idx}")),
+                                copy_lbl.clone(),
+                                11.5,
+                                FontWeight::MEDIUM,
+                                if is_copied { p.green_ink } else { p.text },
+                            ));
+
+                        let actions_row: AnyElement = div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("accept-{idx}")),
+                                    accept_lbl,
+                                    6.,
+                                    if accepted { p.green_soft } else { p.primary },
+                                    if accepted {
+                                        p.green.opacity(0.22)
+                                    } else {
+                                        pro_mix_color(p.primary, p.on_primary, 0.14)
+                                    },
+                                    transparent_black(),
+                                    if accepted {
+                                        p.green.opacity(0.35)
+                                    } else {
+                                        transparent_black()
+                                    },
+                                    accepted,
+                                    accept_inner,
+                                    cx,
+                                    move |v, _, cx| {
+                                        v.accept_message(idx, cx);
+                                    },
+                                )
+                                .flex_none(),
+                            )
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("discard-{idx}")),
+                                    discard_lbl,
+                                    6.,
+                                    p.chip,
+                                    p.chip_hover,
+                                    p.line,
+                                    p.line_strong,
+                                    false,
+                                    discard_inner,
+                                    cx,
+                                    move |v, w, cx| {
+                                        v.discard_message(idx, Some(w), cx);
+                                    },
+                                )
+                                .flex_none(),
+                            )
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("retry-{idx}")),
+                                    retry_lbl,
+                                    6.,
+                                    p.chip,
+                                    p.chip_hover,
+                                    p.line,
+                                    p.line_strong,
+                                    false,
+                                    retry_inner,
+                                    cx,
+                                    |v, _, cx| {
+                                        v.retry_last(cx);
+                                    },
+                                )
+                                .flex_none(),
+                            )
+                            .child(
+                                pro_tactile(
+                                    pro_eid(&self.id, format!("copy-{idx}")),
+                                    copy_lbl,
+                                    6.,
+                                    if is_copied { p.green_soft } else { p.chip },
+                                    p.chip_hover,
+                                    p.line,
+                                    if is_copied {
+                                        p.green.opacity(0.35)
+                                    } else {
+                                        p.line_strong
+                                    },
+                                    is_copied,
+                                    copy_inner,
+                                    cx,
+                                    move |v, _, cx| {
+                                        v.copy_message(idx, cx);
+                                    },
+                                )
+                                .flex_none(),
+                            )
+                            .into_any_element();
+
+                        let actions_fold = pro_fold(
+                            pro_eid(&self.id, format!("actions-fold-{idx}")),
+                            show_actions,
+                            28.,
+                            8.,
+                            move || actions_row,
+                        );
+
+                        let msg_col = div()
                             .max_w(relative(0.94))
                             .flex()
                             .flex_col()
                             .gap(px(8.))
-                            .child(body_el);
-
-                        if show_actions {
-                            let accept_lbl: SharedString = if accepted {
-                                tr(cx, "Inserted", "已插入").into()
-                            } else {
-                                tr(cx, "Accept", "采纳插入").into()
-                            };
-                            let retry_lbl: SharedString = tr(cx, "Retry", "重写").into();
-                            let copy_lbl: SharedString = if is_copied {
-                                tr(cx, "Copied", "已复制").into()
-                            } else {
-                                tr(cx, "Copy", "复制").into()
-                            };
-
-                            msg_col = msg_col.child(
-                                div()
-                                    .flex()
-                                    .flex_wrap()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&self.id, format!("accept-{idx}")))
-                                            .role(Role::Button)
-                                            .aria_label(accept_lbl.clone())
-                                            .tab_index(0)
-                                            .h(px(24.))
-                                            .px(px(8.))
-                                            .rounded(px(6.))
-                                            .bg(if accepted { p.green_soft } else { p.primary })
-                                            .text_color(if accepted {
-                                                p.green_ink
-                                            } else {
-                                                p.on_primary
-                                            })
-                                            .text_size(px(11.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .cursor_pointer()
-                                            .focus_visible(move |s| {
-                                                s.border_1().border_color(p.focus)
-                                            })
-                                            .on_click(cx.listener(move |v, _, _, cx| {
-                                                v.accept_message(idx, cx);
-                                            }))
-                                            .child(pro_icon(
-                                                ProIcon::Check,
-                                                12.,
-                                                if accepted { p.green_ink } else { p.on_primary },
-                                            ))
-                                            .child(accept_lbl),
-                                    )
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&self.id, format!("retry-{idx}")))
-                                            .role(Role::Button)
-                                            .aria_label(retry_lbl.clone())
-                                            .tab_index(0)
-                                            .h(px(24.))
-                                            .px(px(8.))
-                                            .rounded(px(6.))
-                                            .bg(p.chip)
-                                            .border_1()
-                                            .border_color(p.line)
-                                            .text_color(p.text)
-                                            .text_size(px(11.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .cursor_pointer()
-                                            .hover(move |s| s.bg(p.chip_hover).text_color(p.ink))
-                                            .focus_visible(move |s| {
-                                                s.border_1().border_color(p.focus)
-                                            })
-                                            .on_click(cx.listener(move |v, _, _, cx| {
-                                                v.retry_last(cx);
-                                            }))
-                                            .child(pro_icon(ProIcon::Refresh, 12., p.muted))
-                                            .child(retry_lbl),
-                                    )
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&self.id, format!("copy-{idx}")))
-                                            .role(Role::Button)
-                                            .aria_label(copy_lbl.clone())
-                                            .tab_index(0)
-                                            .h(px(24.))
-                                            .px(px(8.))
-                                            .rounded(px(6.))
-                                            .bg(p.chip)
-                                            .border_1()
-                                            .border_color(p.line)
-                                            .text_color(if is_copied {
-                                                p.green_ink
-                                            } else {
-                                                p.text
-                                            })
-                                            .text_size(px(11.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .cursor_pointer()
-                                            .hover(move |s| s.bg(p.chip_hover).text_color(p.ink))
-                                            .focus_visible(move |s| {
-                                                s.border_1().border_color(p.focus)
-                                            })
-                                            .on_click(cx.listener(move |v, _, _, cx| {
-                                                v.copy_message(idx, cx);
-                                            }))
-                                            .child(pro_icon(
-                                                if is_copied {
-                                                    ProIcon::Check
-                                                } else {
-                                                    ProIcon::Copy
-                                                },
-                                                12.,
-                                                if is_copied { p.green_ink } else { p.muted },
-                                            ))
-                                            .child(copy_lbl),
-                                    ),
-                            );
-                        }
+                            .child(body_el)
+                            .child(actions_fold);
 
                         list = list.child(msg_col);
                     }
@@ -1591,37 +1710,38 @@ impl Render for WritingAssistant {
             div().into_any_element()
         };
 
-        let send_lbl: SharedString = tr(cx, "Send message", "发送").into();
-        let this_send = cx.entity();
+        let send_btn_el = pro_tactile(
+            pro_eid(&self.id, "send-btn"),
+            tr(cx, "Send message", "发送"),
+            6.,
+            p.primary,
+            pro_mix_color(p.primary, p.on_primary, 0.14),
+            transparent_black(),
+            transparent_black(),
+            false,
+            div()
+                .size(px(28.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_icon(ProIcon::ArrowUp, 15., p.on_primary)),
+            cx,
+            |v, w, cx| v.submit_from_editor(w, cx),
+        )
+        .flex_none()
+        .into_any_element();
         let send_el = pro_presence(
             pro_eid(&self.id, "send-pres"),
             has_input_text && !listening,
             0.20,
             0.15,
-            {
-                let id = pro_eid(&self.id, "send-btn");
-                move |amt| {
-                    div()
-                        .id(id)
-                        .role(Role::Button)
-                        .aria_label(send_lbl.clone())
-                        .tab_index(0)
-                        .size(px(28.))
-                        .flex_none()
-                        .rounded(px(6.))
-                        .opacity(amt)
-                        .bg(p.primary)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .focus_visible(move |s| s.border_1().border_color(p.focus))
-                        .on_click(move |_, w, cx| {
-                            this_send.update(cx, |v, cx| v.submit_from_editor(w, cx));
-                        })
-                        .child(pro_icon(ProIcon::ArrowUp, 15., p.on_primary))
-                        .into_any_element()
-                }
+            move |amt| {
+                div()
+                    .relative()
+                    .top(px(3.0 * (1. - amt)))
+                    .opacity(amt)
+                    .child(send_btn_el)
+                    .into_any_element()
             },
         );
 

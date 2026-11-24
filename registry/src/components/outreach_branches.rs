@@ -12,6 +12,7 @@ use crate::{
     foundation::Theme,
     primitives::{
         control::UiLanguage,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_app_artwork},
     },
 };
@@ -487,12 +488,17 @@ fn outreach_channel_mark(channel_id: &str, width: f32, dark: bool, cx: &App) -> 
 /// ```
 pub struct OutreachBranches {
     id: ElementId,
+    focus: FocusHandle,
     label: Option<SharedString>,
     channels: [OutreachChannel; 3],
     playing: bool,
     focused_branch: Option<usize>,
     hovered_branch: Option<usize>,
     source_hovered: bool,
+    branch_illum: [Slide; 3],
+    tile_press: [Slide; 3],
+    apex_illum: Slide,
+    apex_press: Slide,
     height: Option<Pixels>,
     loading: bool,
     empty: bool,
@@ -509,16 +515,21 @@ impl OutreachBranches {
             .detach();
         Self {
             id: id.into(),
+            focus: cx.focus_handle().tab_stop(true),
             label: None,
             channels: default_outreach_channels(),
             playing: true,
             focused_branch: None,
             hovered_branch: None,
             source_hovered: false,
+            branch_illum: [Slide::snappy(0.), Slide::snappy(0.), Slide::snappy(0.)],
+            tile_press: [Slide::snappy(0.), Slide::snappy(0.), Slide::snappy(0.)],
+            apex_illum: Slide::snappy(0.),
+            apex_press: Slide::snappy(0.),
             height: None,
             loading: false,
             empty: false,
-            started_at: Instant::now(),
+            started_at: cx.background_executor().now(),
             bursts: [None, None, None],
             measured_size: Rc::new(Cell::new((480.0, 320.0))),
         }
@@ -604,7 +615,7 @@ impl OutreachBranches {
         if branch >= 3 {
             return;
         }
-        self.bursts[branch] = Some(Instant::now());
+        self.bursts[branch] = Some(cx.background_executor().now());
         self.focused_branch = if self.focused_branch == Some(branch) {
             None
         } else {
@@ -620,7 +631,7 @@ impl OutreachBranches {
 
     /// Fire synchronized light pulses down all three branches from the top source node.
     pub fn trigger_all(&mut self, cx: &mut Context<Self>) {
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         self.bursts = [Some(now), Some(now), Some(now)];
         self.focused_branch = None;
         cx.emit(OutreachBranchesEvent::TriggerAll);
@@ -657,8 +668,9 @@ impl OutreachBranches {
 impl Render for OutreachBranches {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = Theme::global(cx).reduced_motion;
-        let elapsed = self.started_at.elapsed().as_secs_f32();
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let elapsed = now.saturating_duration_since(self.started_at).as_secs_f32();
 
         if self.loading {
             let phase = (elapsed / 1.4).fract();
@@ -711,7 +723,7 @@ impl Render for OutreachBranches {
 
         for b in 0..3 {
             if let Some(t0) = self.bursts[b] {
-                let age = t0.elapsed().as_secs_f32();
+                let age = now.saturating_duration_since(t0).as_secs_f32();
                 if age < 2.6 && !reduced {
                     any_burst_active = true;
                     branch_states[b] = branch_phase_state(age / LOOP_SECS);
@@ -742,6 +754,32 @@ impl Render for OutreachBranches {
         });
 
         let active_focus = self.hovered_branch.or(self.focused_branch);
+        let mut illums = [0.0f32; 3];
+        let mut downs = [0.0f32; 3];
+        for b in 0..3 {
+            let target_illum = if self.hovered_branch == Some(b) || self.source_hovered {
+                1.0
+            } else if self.focused_branch == Some(b) {
+                0.85
+            } else if self.bursts[b].is_some() {
+                0.65
+            } else {
+                0.0
+            };
+            self.branch_illum[b].duration(target_illum, 0.18, cx);
+            illums[b] = self.branch_illum[b].get(w, cx).clamp(0., 1.);
+            downs[b] = self.tile_press[b].get(w, cx).clamp(0., 1.);
+        }
+        self.apex_illum
+            .duration(if self.source_hovered { 1.0 } else { 0.0 }, 0.18, cx);
+        let apex_illum_v = self.apex_illum.get(w, cx).clamp(0., 1.);
+        let apex_down_v = self.apex_press.get(w, cx).clamp(0., 1.);
+        let accents = [
+            self.channels[0].accent,
+            self.channels[1].accent,
+            self.channels[2].accent,
+        ];
+
         let size_cell = self.measured_size.clone();
         let (meas_w, meas_h) = size_cell.get();
         let resolved_h = self
@@ -758,7 +796,6 @@ impl Render for OutreachBranches {
         } else {
             rgb(0xe4e7ec).into()
         };
-        let source_hovered = self.source_hovered;
 
         let canvas_layer = canvas(
             |_, _, _| (),
@@ -774,15 +811,16 @@ impl Render for OutreachBranches {
                 let map_pt =
                     |ax: f32, ay: f32| -> Point<Pixels> { point(px(ox + ax * s), px(oy + ay * s)) };
 
-                // 1. Base branching curves
+                // 1. Base branching curves with `Slide::snappy` illumination & tint
                 for b in 0..3 {
                     let pts = sample_branch_line(b, 44);
+                    let illum = illums[b];
                     let dim = match active_focus {
-                        Some(fb) if fb != b => 0.48,
-                        Some(_) => 1.35,
-                        None => 1.0,
+                        Some(fb) if fb != b && illum < 0.05 => 0.48,
+                        _ => 1.0,
                     };
-                    let mut pb = PathBuilder::stroke(px((1.2 * s).max(1.0)));
+                    let stroke_w = ((1.2 + 0.9 * illum) * s).max(1.0);
+                    let mut pb = PathBuilder::stroke(px(stroke_w));
                     for (idx, &(ax, ay)) in pts.iter().enumerate() {
                         let pt = map_pt(ax, ay);
                         if idx == 0 {
@@ -792,21 +830,26 @@ impl Render for OutreachBranches {
                         }
                     }
                     if let Ok(path) = pb.build() {
-                        window.paint_path(
-                            path,
-                            base_line_col.opacity((base_line_col.a * dim).clamp(0.05, 0.42)),
+                        let base_op = (base_line_col.a * dim).clamp(0.05, 0.42);
+                        let lit_col = pro_mix_color(
+                            base_line_col.opacity(base_op),
+                            accents[b].opacity(if dark { 0.65 } else { 0.78 }),
+                            illum * 0.85,
                         );
+                        window.paint_path(path, lit_col);
                     }
                 }
 
-                // 2. Subtle source apex halo on hover
-                if source_hovered {
+                // 2. Smooth source apex halo on hover / press
+                if apex_illum_v > 0.01 || apex_down_v > 0.01 {
                     let apex = map_pt(160.0, 52.0);
-                    let r = px(4.5 * s);
+                    let r = px((4.0 + 2.8 * apex_illum_v - 1.0 * apex_down_v) * s);
                     window.paint_quad(
                         fill(
                             Bounds::new(point(apex.x - r, apex.y - r), size(r * 2.0, r * 2.0)),
-                            rgb(0xb98ee5).opacity(0.28),
+                            rgb(0xb98ee5).opacity(
+                                (0.36 * apex_illum_v + 0.22 * apex_down_v).clamp(0., 0.65),
+                            ),
                         )
                         .corner_radii(r),
                     );
@@ -950,21 +993,22 @@ impl Render for OutreachBranches {
         for b in 0..3 {
             let spec = TILE_SPECS[b];
             let ch = &self.channels[b];
-            let is_hovered = self.hovered_branch == Some(b);
-            let is_focused = self.focused_branch == Some(b);
-            let lift = if is_hovered { -1.5 * scale } else { 0.0 };
-            let tx = spec.x * scale;
-            let ty = spec.y * scale + lift;
-            let t_side = spec.side * scale;
+            let illum = illums[b];
+            let down = downs[b];
+            let lift = (-2.0 * illum * (1.0 - down) + 1.6 * down) * scale;
+            let press_inset = 1.1 * down * scale;
+            let tx = spec.x * scale + press_inset;
+            let ty = spec.y * scale + lift + press_inset;
+            let t_side = (spec.side * scale - press_inset * 2.0).max(16.0);
             let t_rx = spec.rx * scale;
-            let mark_w = if b == 1 { 28.0 } else { 30.0 } * scale;
+            let mark_w = (if b == 1 { 28.0 } else { 30.0 }) * scale * (1.0 - 0.06 * down);
             let land_glow = branch_states[b].2;
-            let border_c = if is_hovered || is_focused || land_glow > 0.15 {
+            let border_mix = (land_glow * 0.75 + illum * 0.72 + down * 0.35).clamp(0.0, 1.0);
+            let border_c = if border_mix > 0.02 {
                 pro_mix_color(
                     tile_border,
-                    ch.accent.opacity(if dark { 0.45 } else { 0.65 }),
-                    (land_glow * 0.75 + if is_hovered || is_focused { 0.6 } else { 0.0 })
-                        .clamp(0.0, 1.0),
+                    ch.accent.opacity(if dark { 0.58 } else { 0.78 }),
+                    border_mix,
                 )
             } else {
                 tile_border
@@ -975,8 +1019,8 @@ impl Render for OutreachBranches {
                 div()
                     .absolute()
                     .left(px(tx + 1.0 * scale))
-                    .top(px(ty + 3.0 * scale))
-                    .size(px(t_side - 2.0 * scale))
+                    .top(px(ty + (3.0 - 1.2 * down) * scale))
+                    .size(px((t_side - 2.0 * scale).max(4.0)))
                     .rounded(px(t_rx))
                     .bg(shadow_col),
             );
@@ -1001,18 +1045,51 @@ impl Render for OutreachBranches {
                     .focus_visible(move |s| s.border_color(p.focus))
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         let next = if *inside { Some(b) } else { None };
-                        if this.hovered_branch != next {
+                        if *inside {
+                            if this.hovered_branch != Some(b) {
+                                this.hovered_branch = Some(b);
+                                this.branch_illum[b].duration(1.0, 0.18, cx);
+                                // Immediately launch a traveling comet packet along this branch on hover!
+                                this.bursts[b] = Some(cx.background_executor().now());
+                                cx.emit(OutreachBranchesEvent::FocusBranch(Some(b)));
+                                cx.notify();
+                            }
+                        } else if this.hovered_branch == Some(b) {
                             this.hovered_branch = next;
+                            this.branch_illum[b].duration(0.0, 0.18, cx);
+                            this.tile_press[b].duration(0., 0.14, cx);
+                            cx.emit(OutreachBranchesEvent::FocusBranch(this.focused_branch));
                             cx.notify();
                         }
                     }))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.tile_press[b].duration(1., 0.08, cx);
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.tile_press[b].duration(0., 0.14, cx);
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.tile_press[b].duration(0., 0.14, cx);
+                            cx.notify();
+                        }),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.trigger_branch(b, cx);
                     }))
                     .child(
                         div()
                             .w_full()
-                            .h(px((t_side - 2.4 * scale).max(1.0)))
+                            .h(px((t_side - (2.4 - 1.4 * down) * scale).max(1.0)))
                             .rounded(px((t_rx - 0.8 * scale).max(2.0)))
                             .bg(tile_bg)
                             .flex()
@@ -1040,20 +1117,41 @@ impl Render for OutreachBranches {
                 .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                     if this.source_hovered != *inside {
                         this.source_hovered = *inside;
+                        if !*inside {
+                            this.apex_press.duration(0., 0.14, cx);
+                        }
                         cx.notify();
                     }
                 }))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        this.apex_press.duration(1., 0.08, cx);
+                        cx.notify();
+                    }),
+                )
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        this.apex_press.duration(0., 0.14, cx);
+                        cx.notify();
+                    }),
+                )
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.trigger_all(cx);
                 })),
         );
 
         let measure_sensor = canvas(
-            move |bounds, _, _| {
+            move |bounds, window, _| {
                 let bw = f32::from(bounds.size.width);
                 let bh = f32::from(bounds.size.height);
                 if bw > 8.0 && bh > 8.0 {
-                    size_cell.set((bw, bh));
+                    let prev = size_cell.get();
+                    if (bw - prev.0).abs() > 1.0 || (bh - prev.1).abs() > 1.0 {
+                        size_cell.set((bw, bh));
+                        window.request_animation_frame();
+                    }
                 }
             },
             |_, _, _, _| (),
@@ -1063,6 +1161,8 @@ impl Render for OutreachBranches {
 
         div()
             .id(self.id.clone())
+            .track_focus(&self.focus)
+            .tab_index(0)
             .role(Role::Image)
             .aria_label(aria_label)
             .relative()
@@ -1072,6 +1172,38 @@ impl Render for OutreachBranches {
             .flex()
             .items_center()
             .justify_center()
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |s| s.rounded(px(14.)).border_color(p.focus))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                match ev.keystroke.key.as_str() {
+                    "right" | "down" => {
+                        let next = this.focused_branch.map_or(0, |b| (b + 1) % 3);
+                        this.set_focused_branch(Some(next), cx);
+                        this.bursts[next] = Some(cx.background_executor().now());
+                        cx.stop_propagation();
+                    }
+                    "left" | "up" => {
+                        let prev = this.focused_branch.map_or(2, |b| (b + 2) % 3);
+                        this.set_focused_branch(Some(prev), cx);
+                        this.bursts[prev] = Some(cx.background_executor().now());
+                        cx.stop_propagation();
+                    }
+                    "enter" | "space" | " " => {
+                        if let Some(b) = this.focused_branch {
+                            this.trigger_branch(b, cx);
+                        } else {
+                            this.trigger_all(cx);
+                        }
+                        cx.stop_propagation();
+                    }
+                    "escape" => {
+                        this.set_focused_branch(None, cx);
+                        cx.stop_propagation();
+                    }
+                    _ => {}
+                }
+            }))
             .child(measure_sensor)
             .child(art_stage.child(canvas_layer))
             .into_any_element()
@@ -1081,9 +1213,14 @@ impl Render for OutreachBranches {
 #[cfg(test)]
 mod tests {
     use super::{
-        TILE_SPECS, branch_phase_state, cumulative_lengths, default_outreach_channels,
-        pulse_bezier, pulse_gradient_color, sample_branch_line, sample_tile_half_perimeter,
+        ART_H, ART_W, OutreachBranches, OutreachBranchesEvent, TILE_SPECS, branch_phase_state,
+        cumulative_lengths, default_outreach_channels, pulse_bezier, pulse_gradient_color,
+        sample_branch_line, sample_tile_half_perimeter,
     };
+    use gpui::{
+        MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point, px, size,
+    };
+    use std::{cell::RefCell, rc::Rc, time::Duration};
 
     #[test]
     fn default_channels_and_branch_endpoints_align_with_tiles() {
@@ -1131,5 +1268,78 @@ mod tests {
         let c_left = pulse_gradient_color(40.0);
         let c_right = pulse_gradient_color(280.0);
         assert_ne!(c_left, c_right);
+    }
+
+    #[gpui::test]
+    fn hover_and_click_on_channel_tile_illuminates_bezier_and_fires_comet_packet(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let events: Rc<RefCell<Vec<OutreachBranchesEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let ev_sink = events.clone();
+
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            let ob = OutreachBranches::new("ob-test", cx).with_playing(false);
+            cx.subscribe_self(move |_, ev: &OutreachBranchesEvent, _| {
+                ev_sink.borrow_mut().push(ev.clone());
+            })
+            .detach();
+            ob
+        });
+        vcx.simulate_resize(size(px(480.), px(320.)));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        // Compute Gmail tile (`branch = 0`) center on the centered `320x240` scaled stage
+        let gmail_pt = vcx.update(|_, app| {
+            let (mw, mh) = view.read(app).measured_size.get();
+            let s = (mw / ART_W).min(mh / ART_H).max(0.5);
+            let ox = (mw - ART_W * s) * 0.5;
+            let oy = (mh - ART_H * s) * 0.5;
+            let spec = TILE_SPECS[0];
+            point(
+                px(ox + (spec.x + spec.side * 0.5) * s),
+                px(oy + (spec.y + spec.side * 0.5) * s),
+            )
+        });
+
+        vcx.simulate_event(MouseMoveEvent {
+            position: gmail_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        exec.advance_clock(Duration::from_millis(160));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let ob = view.read(app);
+            assert_eq!(ob.hovered_branch, Some(0));
+            assert!(ob.bursts[0].is_some());
+            assert!(ob.branch_illum[0].value(app) > 0.65);
+        });
+
+        vcx.simulate_event(MouseDownEvent {
+            position: gmail_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: gmail_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        vcx.run_until_parked();
+
+        assert!(events.borrow().iter().any(|e| {
+            matches!(
+                e,
+                OutreachBranchesEvent::TriggerBranch { index: 0, channel } if channel.as_ref() == "gmail"
+            )
+        }));
     }
 }

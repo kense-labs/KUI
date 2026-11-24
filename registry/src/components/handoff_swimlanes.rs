@@ -7,12 +7,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_connector_pulse, pro_ease, pro_eid,
-        pro_empty_state, pro_mix_color, pro_presence, pro_skeleton_bar, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_connector_pulse,
+        pro_ease, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::activate,
         family::disabled_motion,
         pro_icons::{
             AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork, pro_icon, pro_svg,
@@ -28,7 +29,6 @@ use std::{
 use web_time::Instant;
 
 const VERCEL_MARK_SVG: &str = r#"<path d="M12 3.5 22 20.5H2z" fill="currentColor"></path>"#;
-const CHECK_TINY_SVG: &str = r#"<path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const CROSS_TINY_SVG: &str = r#"<path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"></path>"#;
 const GATE_ASK_SVG: &str = r#"<circle cx="12" cy="12" r="2.4" fill="currentColor"></circle>"#;
 
@@ -452,6 +452,28 @@ fn build_swim_graph(lanes: &[SwimLane], tasks: &[SwimTask]) -> SwimGraph {
         by_id: id_to_node,
         col_count: if n == 0 { 0 } else { max_col_overall + 1 },
     }
+}
+
+fn collect_swim_chain(graph: &SwimGraph, root_idx: usize) -> HashSet<usize> {
+    let mut out = HashSet::new();
+    out.insert(root_idx);
+    let mut up_stack = vec![root_idx];
+    while let Some(u) = up_stack.pop() {
+        for &p in &graph.nodes[u].preds {
+            if out.insert(p) {
+                up_stack.push(p);
+            }
+        }
+    }
+    let mut dn_stack = vec![root_idx];
+    while let Some(u) = dn_stack.pop() {
+        for &s in &graph.nodes[u].succs {
+            if out.insert(s) {
+                dn_stack.push(s);
+            }
+        }
+    }
+    out
 }
 
 fn layout_swim_columns(graph: &mut SwimGraph, tasks: &[SwimTask], canvas_w: f32, label_w: f32) {
@@ -974,7 +996,9 @@ pub struct HandoffSwimlanes {
     initial_lanes: Vec<SwimLane>,
     initial_tasks: Vec<SwimTask>,
     selected: Option<SwimSelection>,
+    last_selected: Option<SwimSelection>,
     hovered_node: Option<SharedString>,
+    hovered_lane: Option<SharedString>,
     allow_actions: bool,
     loading: bool,
     empty: bool,
@@ -1002,7 +1026,9 @@ impl HandoffSwimlanes {
             lanes,
             tasks,
             selected: None,
+            last_selected: None,
             hovered_node: None,
+            hovered_lane: None,
             allow_actions: true,
             loading: false,
             empty: false,
@@ -1294,7 +1320,7 @@ impl HandoffSwimlanes {
             rgb(0xffffff).into()
         };
 
-        let status_chip = |st: SwimTaskStatus| -> Div {
+        let status_chip = |key: &str, st: SwimTaskStatus| -> Div {
             let (bg, fg) = match st {
                 SwimTaskStatus::Active => (p.accent_soft, p.blue),
                 SwimTaskStatus::Waiting => (p.amber_soft, p.amber_ink),
@@ -1312,6 +1338,16 @@ impl HandoffSwimlanes {
                 .text_color(fg)
                 .flex()
                 .items_center()
+                .gap(px(3.5))
+                .when(st == SwimTaskStatus::Done, |d| {
+                    d.child(pro_check_draw(
+                        pro_eid(&self.id, format!("sw-dchk-{key}")),
+                        true,
+                        12.0,
+                        false,
+                        fg,
+                    ))
+                })
                 .child(st.label(cx))
         };
 
@@ -1356,35 +1392,19 @@ impl HandoffSwimlanes {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(status_chip(task.status))
+                            .child(status_chip(tid.as_ref(), task.status))
                             .when_some(task.duration.clone(), |d, dur| {
                                 d.child(div().text_size(px(11.5)).text_color(p.muted).child(dur))
                             })
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("close-{tid}")))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Close card", "关闭卡片"))
-                                    .tab_index(0)
-                                    .ml_auto()
-                                    .size(px(22.0))
-                                    .rounded(px(5.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover({
-                                        let hb = p.hover;
-                                        move |s| s.bg(hb)
-                                    })
-                                    .focus_visible({
-                                        let fc = p.focus;
-                                        move |s| s.border_1().border_color(fc)
-                                    })
-                                    .child(pro_icon(ProIcon::Close, 12.0, p.muted)),
+                            .child(div().ml_auto().child(pro_icon_btn(
+                                pro_eid(&self.id, format!("close-{tid}")),
+                                tr(cx, "Close card", "关闭卡片"),
+                                ProIcon::Close,
+                                22.0,
+                                false,
                                 cx,
                                 |this, _, cx| this.close_card(cx),
-                            )),
+                            ))),
                     )
                     .child(
                         div()
@@ -1663,27 +1683,12 @@ impl HandoffSwimlanes {
                                     .truncate()
                                     .child(lane.name.clone()),
                             )
-                            .child(activate(
-                                div()
-                                    .id(pro_eid(&self.id, format!("close-lane-{lid}")))
-                                    .role(Role::Button)
-                                    .aria_label(tr(cx, "Close card", "关闭卡片"))
-                                    .tab_index(0)
-                                    .size(px(22.0))
-                                    .rounded(px(5.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .hover({
-                                        let hb = p.hover;
-                                        move |s| s.bg(hb)
-                                    })
-                                    .focus_visible({
-                                        let fc = p.focus;
-                                        move |s| s.border_1().border_color(fc)
-                                    })
-                                    .child(pro_icon(ProIcon::Close, 12.0, p.muted)),
+                            .child(pro_icon_btn(
+                                pro_eid(&self.id, format!("close-lane-{lid}")),
+                                tr(cx, "Close card", "关闭卡片"),
+                                ProIcon::Close,
+                                22.0,
+                                false,
                                 cx,
                                 |this, _, cx| this.close_card(cx),
                             )),
@@ -1934,7 +1939,12 @@ impl Render for HandoffSwimlanes {
             SwimTaskStatus::Queued | SwimTaskStatus::Skipped => (p.chip, p.text, false),
         };
 
+        if let Some(s) = &self.selected {
+            self.last_selected = Some(s.clone());
+        }
+
         let show_reset = matches!(run_status, SwimTaskStatus::Done | SwimTaskStatus::Failed);
+        let steps_sfx = format!(" {} {total_count}", tr(cx, "of", "/"));
         let header = div()
             .w_full()
             .flex()
@@ -1958,43 +1968,29 @@ impl Render for HandoffSwimlanes {
                     .items_center()
                     .gap(px(8.0))
                     .when(show_reset, |d| {
-                        d.child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "reset-run"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Replay workflow", "重放流程"))
-                                .tab_index(0)
-                                .h(px(20.0))
-                                .px(px(7.0))
-                                .rounded(px(5.0))
-                                .bg(p.chip)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .cursor_pointer()
-                                .hover({
-                                    let ch = p.chip_hover;
-                                    move |s| s.bg(ch)
-                                })
-                                .focus_visible({
-                                    let fc = p.focus;
-                                    move |s| s.border_1().border_color(fc)
-                                })
-                                .child(pro_icon(ProIcon::Refresh, 11.0, p.muted))
-                                .child(tr(cx, "Replay", "重放")),
-                            cx,
-                            |this, _, cx| this.reset_workflow(cx),
-                        ))
+                        d.child(
+                            pro_btn(
+                                pro_eid(&self.id, "reset-run"),
+                                tr(cx, "Replay", "重放"),
+                                Some(ProIcon::Refresh),
+                                ProBtnStyle::Secondary,
+                                true,
+                                cx,
+                                |this, _, cx| this.reset_workflow(cx),
+                            )
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                        )
                     })
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(p.muted)
-                            .child(format!("{done_count} {} {total_count}", tr(cx, "of", "/"))),
-                    )
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "swim-done-cnt"),
+                        done_count as f64,
+                        0,
+                        "",
+                        &steps_sfx,
+                        12.0,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    ))
                     .child(
                         div()
                             .id(pro_eid(&self.id, "run-status"))
@@ -2003,9 +1999,6 @@ impl Render for HandoffSwimlanes {
                             .px(px(7.0))
                             .rounded(px(5.0))
                             .bg(state_bg)
-                            .text_color(state_fg)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
                             .flex()
                             .items_center()
                             .gap(px(5.0))
@@ -2017,13 +2010,85 @@ impl Render for HandoffSwimlanes {
                                         .bg(state_fg.opacity(status_dot_alpha)),
                                 )
                             })
-                            .child(run_status.label(cx)),
+                            .when(run_status == SwimTaskStatus::Done, |d| {
+                                d.child(pro_check_draw(
+                                    pro_eid(&self.id, "swim-hdr-chk"),
+                                    true,
+                                    12.0,
+                                    false,
+                                    state_fg,
+                                ))
+                            })
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, "swim-run-lbl"),
+                                run_status.label(cx),
+                                12.0,
+                                FontWeight::MEDIUM,
+                                state_fg,
+                            )),
                     ),
             );
 
         let total_h = self.lanes.len() as f32 * LANE_H;
 
-        // Precompute edges for canvas painting.
+        // Connected-chain spotlight across nodes and handoff connectors via pro_spring_f32!
+        let focus_task_id = self.hovered_node.clone().or_else(|| match &self.selected {
+            Some(SwimSelection::Task(tid)) => Some(tid.clone()),
+            _ => None,
+        });
+        let focus_lane_id = self.hovered_lane.clone().or_else(|| match &self.selected {
+            Some(SwimSelection::Lane(lid)) => Some(lid.clone()),
+            _ => None,
+        });
+        let mut lit_node_indices: HashSet<usize> = HashSet::new();
+        let has_spotlight = if let Some(ftid) = &focus_task_id
+            && let Some(&n_idx) = graph.by_id.get(ftid)
+        {
+            lit_node_indices = collect_swim_chain(&graph, n_idx);
+            true
+        } else if let Some(flid) = &focus_lane_id {
+            for (n_idx, node) in graph.nodes.iter().enumerate() {
+                if &self.lanes[node.lane_idx].id == flid {
+                    lit_node_indices.insert(n_idx);
+                    for &p_idx in &node.preds {
+                        lit_node_indices.insert(p_idx);
+                    }
+                    for &s_idx in &node.succs {
+                        lit_node_indices.insert(s_idx);
+                    }
+                }
+            }
+            !lit_node_indices.is_empty()
+        } else {
+            false
+        };
+
+        let node_opacities: Vec<f32> = graph
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(n_idx, node)| {
+                let tid = &self.tasks[node.task_idx].id;
+                let target_op = if has_spotlight {
+                    if lit_node_indices.contains(&n_idx) {
+                        1.0_f32
+                    } else {
+                        0.30_f32
+                    }
+                } else {
+                    1.0_f32
+                };
+                pro_spring_f32(
+                    pro_eid(&self.id, format!("swim-nop-{tid}")),
+                    target_op,
+                    0.22,
+                    window,
+                    cx,
+                )
+            })
+            .collect();
+
+        // Precompute edges for canvas painting with spring spotlight!
         #[derive(Clone)]
         struct EdgeDraw {
             x0: f32,
@@ -2033,9 +2098,11 @@ impl Render for HandoffSwimlanes {
             state: EdgeVisualState,
             color: Hsla,
             draw_dot: bool,
+            vis: f32,
+            spt: f32,
         }
         let mut edges_to_paint: Vec<EdgeDraw> = Vec::new();
-        for dst in &graph.nodes {
+        for (dst_idx, dst) in graph.nodes.iter().enumerate() {
             let dst_task = &self.tasks[dst.task_idx];
             let dst_lane = &self.lanes[dst.lane_idx];
             let dst_color = if dst_task.status == SwimTaskStatus::Waiting {
@@ -2059,6 +2126,29 @@ impl Render for HandoffSwimlanes {
                 } else {
                     EdgeVisualState::Next
                 };
+                let on_chain = has_spotlight
+                    && lit_node_indices.contains(&src_idx)
+                    && lit_node_indices.contains(&dst_idx);
+                let target_vis = if has_spotlight {
+                    if on_chain { 1.0_f32 } else { 0.22_f32 }
+                } else {
+                    1.0_f32
+                };
+                let target_spt = if on_chain { 1.0_f32 } else { 0.0_f32 };
+                let vis = pro_spring_f32(
+                    pro_eid(&self.id, format!("swim-ev-{}-{}", src_task.id, dst_task.id)),
+                    target_vis,
+                    0.22,
+                    window,
+                    cx,
+                );
+                let spt = pro_spring_f32(
+                    pro_eid(&self.id, format!("swim-es-{}-{}", src_task.id, dst_task.id)),
+                    target_spt,
+                    0.20,
+                    window,
+                    cx,
+                );
                 edges_to_paint.push(EdgeDraw {
                     x0: src.x_right,
                     y0: src.y_center,
@@ -2067,6 +2157,8 @@ impl Render for HandoffSwimlanes {
                     state,
                     color: dst_color,
                     draw_dot: src_task.kind == SwimTaskKind::Task,
+                    vis,
+                    spt,
                 });
             }
         }
@@ -2087,39 +2179,51 @@ impl Render for HandoffSwimlanes {
                     let p0 = point(ox + px(e.x0), oy + px(e.y0));
                     let p1_line = point(ox + px((e.x1 - 4.0).max(e.x0 + 2.0)), oy + px(e.y1));
                     let p1_tip = point(ox + px(e.x1), oy + px(e.y1));
+                    let sw = 1.5 + 0.35 * e.spt;
                     match e.state {
                         EdgeVisualState::Live => {
-                            let line_c = e.color.opacity(0.65);
+                            let line_c = e.color.opacity(0.65 * e.vis);
                             pro_connector_pulse(
                                 p0,
                                 p1_line,
                                 6.0,
                                 false,
                                 line_c,
-                                e.color,
+                                e.color.opacity(e.vis),
                                 if reduced { None } else { Some(pulse_phase) },
-                                1.5,
+                                sw,
                                 window,
                             );
                             paint_arrowhead(p1_tip, line_c, window);
                         }
                         EdgeVisualState::Done => {
+                            let done_c = pro_mix_color(edge_done, e.color, 0.55 * e.spt)
+                                .opacity((edge_done.a + 0.35 * e.spt).min(0.92) * e.vis);
                             pro_connector_pulse(
-                                p0, p1_line, 6.0, false, edge_done, edge_done, None, 1.5, window,
+                                p0,
+                                p1_line,
+                                6.0,
+                                false,
+                                done_c,
+                                e.color.opacity(e.vis),
+                                (e.spt > 0.5 && !reduced).then_some(pulse_phase),
+                                sw,
+                                window,
                             );
-                            paint_arrowhead(p1_tip, edge_done, window);
+                            paint_arrowhead(p1_tip, done_c, window);
                         }
                         EdgeVisualState::Next => {
-                            paint_dashed_connector(p0, p1_line, 6.0, edge_next, 1.5, window);
-                            paint_arrowhead(p1_tip, edge_next, window);
+                            let next_c = edge_next.opacity(edge_next.a * e.vis + 0.18 * e.spt);
+                            paint_dashed_connector(p0, p1_line, 6.0, next_c, sw, window);
+                            paint_arrowhead(p1_tip, next_c, window);
                         }
                     }
 
                     if e.draw_dot {
                         let stroke_c = match e.state {
-                            EdgeVisualState::Live => e.color.opacity(0.75),
-                            EdgeVisualState::Done => edge_done,
-                            EdgeVisualState::Next => edge_next,
+                            EdgeVisualState::Live => e.color.opacity(0.75 * e.vis),
+                            EdgeVisualState::Done => edge_done.opacity(edge_done.a * e.vis),
+                            EdgeVisualState::Next => edge_next.opacity(edge_next.a * e.vis),
                         };
                         let dot_rect = Bounds::new(
                             point(p0.x - px(3.25), p0.y - px(3.25)),
@@ -2155,26 +2259,28 @@ impl Render for HandoffSwimlanes {
                 None => format!("{} – {} steps", lane.name, task_cnt),
             };
             let hover_bg = p.hover;
-            let focus_c = p.focus;
+            let lane_id_hov = lane_id.clone();
 
-            let lane_btn = activate(
+            let lane_btn = pro_tactile(
+                pro_eid(&self.id, format!("lane-btn-{lane_id}")),
+                aria,
+                6.0,
+                if lane_open {
+                    p.select
+                } else {
+                    transparent_black()
+                },
+                hover_bg,
+                transparent_black(),
+                transparent_black(),
+                lane_open,
                 div()
-                    .id(pro_eid(&self.id, format!("lane-btn-{lane_id}")))
-                    .role(Role::Button)
-                    .aria_label(aria)
-                    .aria_expanded(lane_open)
-                    .tab_index(0)
                     .w(px(label_w))
-                    .h_full()
+                    .h(px(LANE_H - 4.0))
                     .px(px(4.0))
-                    .rounded(px(6.0))
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    .cursor_pointer()
-                    .when(lane_open, |d| d.bg(p.select))
-                    .hover(move |s| s.bg(hover_bg))
-                    .focus_visible(move |s| s.border_1().border_color(focus_c))
                     .child(render_lane_mark(lane, 16.0, lane_busy, elapsed_ms, &p, cx))
                     .when(!mark_only, |d| {
                         d.child(
@@ -2208,7 +2314,24 @@ impl Render for HandoffSwimlanes {
                 move |this, _, cx| {
                     this.toggle_selection(SwimSelection::Lane(lane_id.clone()), cx);
                 },
-            );
+            )
+            .w(px(label_w))
+            .h(px(LANE_H - 4.0))
+            .aria_expanded(lane_open)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                let next = if *inside {
+                    Some(lane_id_hov.clone())
+                } else if this.hovered_lane.as_ref() == Some(&lane_id_hov) {
+                    None
+                } else {
+                    this.hovered_lane.clone()
+                };
+                if this.hovered_lane != next {
+                    this.hovered_lane = next;
+                    cx.notify();
+                }
+            }));
 
             lanes_stack = lanes_stack.child(
                 div()
@@ -2224,7 +2347,7 @@ impl Render for HandoffSwimlanes {
 
         // Build positioned task/gate/event nodes.
         let mut nodes_layer = div().absolute().inset_0();
-        for node in &graph.nodes {
+        for (n_idx, node) in graph.nodes.iter().enumerate() {
             let task = &self.tasks[node.task_idx];
             let lane = &self.lanes[node.lane_idx];
             let task_id = task.id.clone();
@@ -2232,7 +2355,7 @@ impl Render for HandoffSwimlanes {
             let is_hovered = self.hovered_node.as_ref() == Some(&task_id);
             let lane_c = lane.color(&p);
             let aria = format!("{} – {}, {}", task.title, lane.name, task.status.label(cx));
-            let focus_c = p.focus;
+            let nop = node_opacities.get(n_idx).copied().unwrap_or(1.0);
 
             let node_el: AnyElement = match task.kind {
                 SwimTaskKind::Start | SwimTaskKind::End => {
@@ -2251,38 +2374,43 @@ impl Render for HandoffSwimlanes {
                     };
                     let hov_id = task_id.clone();
                     let click_id = task_id.clone();
-                    activate(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("node-{task_id}")),
+                        aria,
+                        EVENT_SIDE * 0.5,
+                        transparent_black(),
+                        transparent_black(),
+                        transparent_black(),
+                        transparent_black(),
+                        is_open,
                         div()
-                            .id(pro_eid(&self.id, format!("node-{task_id}")))
-                            .role(Role::Button)
-                            .aria_label(aria)
-                            .aria_expanded(is_open)
-                            .tab_index(0)
-                            .absolute()
-                            .left(px(node.x_left))
-                            .top(px(node.y_center - EVENT_SIDE * 0.5))
                             .size(px(EVENT_SIDE))
                             .rounded_full()
                             .bg(box_surface)
                             .border(px(ring_w))
-                            .border_color(ring_c)
-                            .cursor_pointer()
-                            .focus_visible(move |s| s.border_2().border_color(focus_c))
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                                this.hovered_node = if *inside {
-                                    Some(hov_id.clone())
-                                } else if this.hovered_node.as_ref() == Some(&hov_id) {
-                                    None
-                                } else {
-                                    this.hovered_node.clone()
-                                };
-                                cx.notify();
-                            })),
+                            .border_color(ring_c),
                         cx,
                         move |this, _, cx| {
                             this.toggle_selection(SwimSelection::Task(click_id.clone()), cx);
                         },
                     )
+                    .aria_expanded(is_open)
+                    .absolute()
+                    .left(px(node.x_left))
+                    .top(px(node.y_center - EVENT_SIDE * 0.5))
+                    .size(px(EVENT_SIDE))
+                    .opacity(nop)
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        this.hovered_node = if *inside {
+                            Some(hov_id.clone())
+                        } else if this.hovered_node.as_ref() == Some(&hov_id) {
+                            None
+                        } else {
+                            this.hovered_node.clone()
+                        };
+                        cx.notify();
+                    }))
                     .into_any_element()
                 }
                 SwimTaskKind::Gate => {
@@ -2356,7 +2484,13 @@ impl Render for HandoffSwimlanes {
                     .inset_0();
 
                     let glyph_el = match task.status {
-                        SwimTaskStatus::Done => pro_svg("0 0 24 24", CHECK_TINY_SVG, 11.0, glyph_c),
+                        SwimTaskStatus::Done => pro_check_draw(
+                            pro_eid(&self.id, format!("swim-gchk-{task_id}")),
+                            true,
+                            12.0,
+                            false,
+                            glyph_c,
+                        ),
                         SwimTaskStatus::Failed => {
                             pro_svg("0 0 24 24", CROSS_TINY_SVG, 10.5, glyph_c)
                         }
@@ -2366,33 +2500,21 @@ impl Render for HandoffSwimlanes {
                     let hov_id = task_id.clone();
                     let click_id = task_id.clone();
                     let pill_w = 92.0_f32;
-                    activate(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("node-{task_id}")),
+                        aria,
+                        6.0,
+                        transparent_black(),
+                        transparent_black(),
+                        transparent_black(),
+                        transparent_black(),
+                        is_open,
                         div()
-                            .id(pro_eid(&self.id, format!("node-{task_id}")))
-                            .role(Role::Button)
-                            .aria_label(aria)
-                            .aria_expanded(is_open)
-                            .tab_index(0)
-                            .absolute()
-                            .left(px(node.x_center - GATE_HIT * 0.5))
-                            .top(px(node.y_center - GATE_HIT * 0.5))
                             .size(px(GATE_HIT))
-                            .rounded(px(4.0))
+                            .relative()
                             .flex()
                             .items_center()
                             .justify_center()
-                            .cursor_pointer()
-                            .focus_visible(move |s| s.border_2().border_color(focus_c))
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                                this.hovered_node = if *inside {
-                                    Some(hov_id.clone())
-                                } else if this.hovered_node.as_ref() == Some(&hov_id) {
-                                    None
-                                } else {
-                                    this.hovered_node.clone()
-                                };
-                                cx.notify();
-                            }))
                             .child(diamond_canvas)
                             .child(div().relative().child(glyph_el))
                             .child(
@@ -2426,6 +2548,23 @@ impl Render for HandoffSwimlanes {
                             this.toggle_selection(SwimSelection::Task(click_id.clone()), cx);
                         },
                     )
+                    .aria_expanded(is_open)
+                    .absolute()
+                    .left(px(node.x_center - GATE_HIT * 0.5))
+                    .top(px(node.y_center - GATE_HIT * 0.5))
+                    .size(px(GATE_HIT))
+                    .opacity(nop)
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        this.hovered_node = if *inside {
+                            Some(hov_id.clone())
+                        } else if this.hovered_node.as_ref() == Some(&hov_id) {
+                            None
+                        } else {
+                            this.hovered_node.clone()
+                        };
+                        cx.notify();
+                    }))
                     .into_any_element()
                 }
                 SwimTaskKind::Task => {
@@ -2467,9 +2606,13 @@ impl Render for HandoffSwimlanes {
                     };
 
                     let lead_glyph: Option<AnyElement> = match task.status {
-                        SwimTaskStatus::Done => {
-                            Some(pro_svg("0 0 24 24", CHECK_TINY_SVG, 11.5, lane_c))
-                        }
+                        SwimTaskStatus::Done => Some(pro_check_draw(
+                            pro_eid(&self.id, format!("swim-chk-{task_id}")),
+                            true,
+                            12.0,
+                            false,
+                            lane_c,
+                        )),
                         SwimTaskStatus::Active => {
                             Some(render_lane_mark(lane, 12.0, true, elapsed_ms, &p, cx))
                         }
@@ -2486,43 +2629,26 @@ impl Render for HandoffSwimlanes {
                     let is_skipped = task.status == SwimTaskStatus::Skipped;
                     let hov_id = task_id.clone();
                     let click_id = task_id.clone();
+                    let hover_bg = pro_mix_color(bg_c, lane_c, if p.dark { 0.08 } else { 0.05 });
 
-                    activate(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("node-{task_id}")),
+                        aria,
+                        8.0,
+                        bg_c,
+                        hover_bg,
+                        border_c,
+                        p.line_strong,
+                        is_open,
                         div()
-                            .id(pro_eid(&self.id, format!("node-{task_id}")))
-                            .role(Role::Button)
-                            .aria_label(aria)
-                            .aria_expanded(is_open)
-                            .tab_index(0)
-                            .absolute()
-                            .left(px(node.x_left))
-                            .top(px(node.y_center - TASK_H * 0.5))
                             .w(px(bw))
                             .h(px(TASK_H))
                             .px(px(9.0))
-                            .rounded(px(8.0))
-                            .bg(bg_c)
-                            .border_1()
-                            .border_color(border_c)
-                            .when(!p.dark && (is_open || is_hovered || is_active), |d| {
-                                d.shadow_xs()
-                            })
+                            .relative()
                             .overflow_hidden()
                             .flex()
                             .items_center()
                             .gap(px(5.0))
-                            .cursor_pointer()
-                            .focus_visible(move |s| s.border_2().border_color(focus_c))
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                                this.hovered_node = if *inside {
-                                    Some(hov_id.clone())
-                                } else if this.hovered_node.as_ref() == Some(&hov_id) {
-                                    None
-                                } else {
-                                    this.hovered_node.clone()
-                                };
-                                cx.notify();
-                            }))
                             .when(is_active && !reduced, |d| {
                                 let band_w = (bw * 0.52).max(28.0);
                                 let sx = -band_w + sheen_phase * (bw + band_w * 2.0);
@@ -2566,19 +2692,47 @@ impl Render for HandoffSwimlanes {
                             this.toggle_selection(SwimSelection::Task(click_id.clone()), cx);
                         },
                     )
+                    .aria_expanded(is_open)
+                    .absolute()
+                    .left(px(node.x_left))
+                    .top(px(node.y_center - TASK_H * 0.5))
+                    .w(px(bw))
+                    .h(px(TASK_H))
+                    .opacity(nop)
+                    .when(!p.dark && (is_open || is_hovered || is_active), |d| {
+                        d.shadow_xs()
+                    })
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        this.hovered_node = if *inside {
+                            Some(hov_id.clone())
+                        } else if this.hovered_node.as_ref() == Some(&hov_id) {
+                            None
+                        } else {
+                            this.hovered_node.clone()
+                        };
+                        cx.notify();
+                    }))
                     .into_any_element()
                 }
             };
             nodes_layer = nodes_layer.child(node_el);
         }
 
-        let card_overlay = if let Some(sel) = self.selected.clone() {
+        let card_open = self.selected.is_some();
+        let shown_sel = self.selected.clone().or_else(|| self.last_selected.clone());
+        let card_overlay = if let Some(sel) = shown_sel {
+            let sel_key: SharedString = match &sel {
+                SwimSelection::Task(tid) => format!("task:{tid}").into(),
+                SwimSelection::Lane(lid) => format!("lane:{lid}").into(),
+            };
             let graph_clone = graph.clone();
             let card_el =
                 self.render_detail_card(&sel, &graph_clone, canvas_w, total_h, elapsed_ms, 1.0, cx);
+            let vtx_el = pro_view_transition(pro_eid(&self.id, "swim-card-vtx"), sel_key, card_el);
             pro_presence(
                 pro_eid(&self.id, "swim-card-pres"),
-                true,
+                card_open,
                 0.18,
                 0.14,
                 move |amt| {
@@ -2586,7 +2740,7 @@ impl Render for HandoffSwimlanes {
                         .absolute()
                         .inset_0()
                         .opacity(pro_ease(amt))
-                        .child(card_el)
+                        .child(vtx_el)
                         .into_any_element()
                 },
             )

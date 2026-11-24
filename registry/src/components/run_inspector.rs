@@ -7,13 +7,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_connector_pulse, pro_eid,
-        pro_empty_state, pro_fold, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_connector_pulse,
+        pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator,
+        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
-        control::{UiLanguage, activate},
+        control::UiLanguage,
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -594,6 +596,46 @@ pub fn default_run_span() -> (RunSpan, RunSpan) {
     (run, supervisor)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum InspectorCallTab {
+    #[default]
+    All,
+    Llm,
+    Tool,
+    Failures,
+}
+
+impl InspectorCallTab {
+    const ALL: [Self; 4] = [Self::All, Self::Llm, Self::Tool, Self::Failures];
+
+    fn slug(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Llm => "llm",
+            Self::Tool => "tool",
+            Self::Failures => "fail",
+        }
+    }
+
+    fn label(self, cx: &App) -> &'static str {
+        match self {
+            Self::All => tr(cx, "All calls", "全部调用"),
+            Self::Llm => tr(cx, "LLM", "模型"),
+            Self::Tool => tr(cx, "Tools", "工具"),
+            Self::Failures => tr(cx, "Failures", "失败"),
+        }
+    }
+
+    fn matches(self, call: &RunSpan) -> bool {
+        match self {
+            Self::All => true,
+            Self::Llm => call.kind == RunSpanKind::Llm,
+            Self::Tool => call.kind == RunSpanKind::Tool,
+            Self::Failures => call.status == RunSpanStatus::Failed,
+        }
+    }
+}
+
 /// Complete single-screen multi-agent run inspector with live tree connectors and foldable call bars.
 ///
 /// # Examples
@@ -611,6 +653,7 @@ pub struct RunInspectorBlock {
     started_at_ms: u64,
     live: bool,
     selected_agent_id: Option<SharedString>,
+    call_tab: InspectorCallTab,
     open_call_id: Option<SharedString>,
     folded_agents: HashSet<SharedString>,
     root_sensor: Rc<Cell<Option<Bounds<Pixels>>>>,
@@ -641,6 +684,7 @@ impl RunInspectorBlock {
             started_at_ms: 0,
             live: true,
             selected_agent_id: None,
+            call_tab: InspectorCallTab::All,
             open_call_id: Some("tests".into()),
             folded_agents: HashSet::new(),
             root_sensor: Rc::new(Cell::new(None)),
@@ -828,7 +872,7 @@ impl RunInspectorBlock {
         }
     }
 
-    fn render_status_pill(status: RunSpanStatus, p: &ProPalette, cx: &App) -> Div {
+    fn render_status_pill(id: ElementId, status: RunSpanStatus, p: &ProPalette, cx: &App) -> Div {
         let (bg, fg) = match status {
             RunSpanStatus::Running => (p.accent_soft, p.blue),
             RunSpanStatus::Waiting => (p.amber_soft, p.amber_ink),
@@ -838,7 +882,9 @@ impl RunInspectorBlock {
         };
         let lead = match status {
             RunSpanStatus::Running => pro_svg("0 0 24 24", SVG_SPIN_ARC, 10., fg),
-            RunSpanStatus::Done => pro_icon(ProIcon::Check, 10., fg),
+            RunSpanStatus::Done => {
+                pro_check_draw(pro_eid(&id, "st-chk"), true, 12., false, p.green)
+            }
             RunSpanStatus::Failed => pro_icon(ProIcon::AlertTriangle, 10., fg),
             RunSpanStatus::Waiting => pro_icon(ProIcon::Clock, 10., fg),
             RunSpanStatus::Queued => div().size(px(5.)).rounded_full().bg(fg).into_any_element(),
@@ -853,11 +899,14 @@ impl RunInspectorBlock {
             .flex()
             .items_center()
             .gap(px(4.))
-            .text_size(px(11.))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(fg)
             .child(lead)
-            .child(status.label(cx))
+            .child(pro_swap_label(
+                pro_eid(&id, "st-lbl"),
+                status.label(cx),
+                11.,
+                FontWeight::MEDIUM,
+                fg,
+            ))
     }
 
     fn call_icon(call: &RunSpan, color: Hsla) -> AnyElement {
@@ -889,6 +938,14 @@ impl RunInspectorBlock {
         cx: &mut Context<Self>,
     ) -> Div {
         let is_open = self.open_call_id.as_ref() == Some(&call.id);
+        let tab_match = self.call_tab.matches(call);
+        let row_op = pro_spring_f32(
+            pro_eid(&self.id, format!("ri-cop-{}", call.id)),
+            if tab_match || is_open { 1.0 } else { 0.34 },
+            0.20,
+            w,
+            cx,
+        );
         let dur_ms = call.duration_ms(now_ms);
         let win = agent_window_ms.max(1000) as f32;
         let rel_left =
@@ -924,6 +981,7 @@ impl RunInspectorBlock {
         };
 
         let is_running = call.status == RunSpanStatus::Running;
+        let is_done = call.status == RunSpanStatus::Done;
         let track_el = canvas(
             |_, _, _| (),
             move |bounds, _, window, _| {
@@ -956,7 +1014,7 @@ impl RunInspectorBlock {
                 }
             },
         )
-        .w(px(56.))
+        .w(px(52.))
         .h(px(8.))
         .rounded(px(3.))
         .bg(p.chip)
@@ -969,58 +1027,77 @@ impl RunInspectorBlock {
         };
 
         let cid_click = call.id.clone();
-        let row_btn = activate(
-            div()
-                .id(pro_eid(&self.id, format!("ri-call-{}", call.id)))
-                .role(Role::Button)
-                .aria_label(format!("{}, {took_txt}", call.name))
-                .aria_expanded(is_open)
-                .tab_index(0)
-                .h(px(24.))
-                .px(px(6.))
-                .rounded(px(6.))
-                .bg(if is_open {
-                    p.accent_soft
-                } else {
-                    transparent_black()
-                })
-                .hover(move |s| s.bg(if is_open { p.accent_soft } else { p.hover }))
-                .focus_visible(move |s| s.border_1().border_color(p.focus))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .text_size(px(12.))
-                .cursor_pointer()
-                .child(Self::call_icon(call, icon_col))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_color(if is_open { p.strong } else { p.ink })
-                        .child(call.name.clone()),
+        let row_content = div()
+            .h(px(24.))
+            .px(px(6.))
+            .flex()
+            .items_center()
+            .gap(px(5.))
+            .text_size(px(12.))
+            .child(if is_done {
+                pro_check_draw(
+                    pro_eid(&self.id, format!("ri-cchk-{}", call.id)),
+                    true,
+                    12.,
+                    false,
+                    p.green,
                 )
-                .child(track_el)
-                .child(
-                    div()
-                        .w(px(40.))
-                        .flex_none()
-                        .text_right()
-                        .text_size(px(11.))
-                        .text_color(if call.status == RunSpanStatus::Failed {
-                            p.red_ink
-                        } else if is_running {
-                            p.blue
-                        } else {
-                            p.muted
-                        })
-                        .child(took_txt.clone()),
-                ),
+            } else {
+                Self::call_icon(call, icon_col)
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(if is_open { p.strong } else { p.ink })
+                    .child(call.name.clone()),
+            )
+            .child(track_el)
+            .child(
+                div()
+                    .w(px(38.))
+                    .flex_none()
+                    .text_right()
+                    .text_size(px(11.))
+                    .text_color(if call.status == RunSpanStatus::Failed {
+                        p.red_ink
+                    } else if is_running {
+                        p.blue
+                    } else {
+                        p.muted
+                    })
+                    .child(took_txt.clone()),
+            );
+
+        let row_btn = pro_tactile(
+            pro_eid(&self.id, format!("ri-call-{}", call.id)),
+            format!("{}, {took_txt}", call.name),
+            6.,
+            if is_open {
+                p.accent_soft
+            } else {
+                transparent_black()
+            },
+            if is_open {
+                pro_mix_color(p.accent_soft, p.blue, 0.12)
+            } else {
+                p.hover
+            },
+            transparent_black(),
+            if is_open {
+                p.blue.opacity(0.28)
+            } else {
+                transparent_black()
+            },
+            is_open,
+            row_content,
             cx,
             move |this, _, cx| {
                 this.toggle_call(cid_click.clone(), cx);
             },
-        );
+        )
+        .w_full();
 
         let head_meta: SharedString = if let Some(tool) = &call.tool {
             format!(
@@ -1044,6 +1121,8 @@ impl RunInspectorBlock {
         let err_opt = call.error.clone();
         let is_failed = call.status == RunSpanStatus::Failed;
         let cid_retry = call.id.to_string();
+        let cid_fold_chk = pro_eid(&self.id, format!("ri-fchk-{}", call.id));
+        let cid_fold_lbl = pro_eid(&self.id, format!("ri-flbl-{}", call.id));
         let p_copy = *p;
 
         let retry_btn = is_failed.then(|| {
@@ -1107,14 +1186,31 @@ impl RunInspectorBlock {
                             .child(
                                 div()
                                     .flex_none()
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if is_failed {
-                                        p_copy.red_ink
-                                    } else {
-                                        p_copy.muted
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .when(is_done, |d| {
+                                        d.child(pro_check_draw(
+                                            cid_fold_chk,
+                                            true,
+                                            12.,
+                                            false,
+                                            p_copy.green,
+                                        ))
                                     })
-                                    .child(state_txt),
+                                    .child(pro_swap_label(
+                                        cid_fold_lbl,
+                                        state_txt,
+                                        10.5,
+                                        FontWeight::MEDIUM,
+                                        if is_failed {
+                                            p_copy.red_ink
+                                        } else if is_done {
+                                            p_copy.green_ink
+                                        } else {
+                                            p_copy.muted
+                                        },
+                                    )),
                             ),
                     )
                     .when_some(args_opt, |d, args| {
@@ -1146,6 +1242,7 @@ impl RunInspectorBlock {
 
         div()
             .w_full()
+            .opacity(row_op)
             .flex()
             .flex_col()
             .child(row_btn)
@@ -1168,6 +1265,13 @@ impl RunInspectorBlock {
     ) -> Stateful<Div> {
         let is_selected = self.selected_agent_id.as_ref() == Some(&agent.id);
         let dimmed = self.selected_agent_id.is_some() && !is_selected;
+        let card_op = pro_spring_f32(
+            pro_eid(&self.id, format!("ri-adim-{}", agent.id)),
+            if dimmed { 0.46 } else { 1.0 },
+            0.22,
+            w,
+            cx,
+        );
         let sub_count = agent.sub_agents().count();
         let is_folded = self.folded_agents.contains(&agent.id);
 
@@ -1214,25 +1318,25 @@ impl RunInspectorBlock {
         let aid_fold = agent.id.clone();
 
         let fold_btn = (sub_count > 0).then(|| {
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, format!("ri-fold-sub-{}", agent.id)),
+                tr(cx, "Fold sub-agents", "折叠或展开子智能体"),
+                5.,
+                p.chip,
+                p.chip_hover,
+                transparent_black(),
+                p.line_strong,
+                !is_folded,
                 div()
-                    .id(pro_eid(&self.id, format!("ri-fold-sub-{}", agent.id)))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Fold sub-agents", "折叠或展开子智能体"))
-                    .aria_expanded(!is_folded)
-                    .tab_index(0)
                     .h(px(20.))
                     .px(px(6.))
-                    .rounded(px(5.))
-                    .bg(p.chip)
-                    .hover(move |s| s.bg(p.chip_hover).text_color(p.strong))
                     .flex()
                     .items_center()
                     .gap(px(3.))
+                    .whitespace_nowrap()
                     .text_size(px(11.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.text)
-                    .cursor_pointer()
                     .child(format!("{sub_count}"))
                     .child(pro_icon(
                         if is_folded {
@@ -1259,6 +1363,7 @@ impl RunInspectorBlock {
                     cx.notify();
                 },
             )
+            .flex_none()
         });
 
         let border_col = if is_selected {
@@ -1268,6 +1373,67 @@ impl RunInspectorBlock {
         } else {
             p.line
         };
+
+        let head_content = div()
+            .p(px(2.))
+            .flex()
+            .flex_col()
+            .gap(px(5.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(pro_agent_avatar(
+                        &agent.name,
+                        avatar_tint,
+                        24.,
+                        agent.status == RunSpanStatus::Running,
+                        elapsed_ms,
+                        cx,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(13.))
+                                    .line_height(px(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(agent.name.clone()),
+                            )
+                            .when_some(agent.model.clone(), |d, m| {
+                                d.child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(11.))
+                                        .line_height(px(14.))
+                                        .text_color(p.muted)
+                                        .child(m),
+                                )
+                            }),
+                    )
+                    .child(Self::render_status_pill(
+                        pro_eid(&self.id, format!("ri-ast-{}", agent.id)),
+                        agent.status,
+                        p,
+                        cx,
+                    )),
+            )
+            .when_some(agent.task.clone(), |d, t| {
+                d.child(
+                    div()
+                        .text_size(px(12.))
+                        .line_height(px(16.))
+                        .text_color(p.text)
+                        .child(t),
+                )
+            });
 
         div()
             .id(pro_eid(&self.id, format!("ri-agent-{}", agent.id)))
@@ -1280,7 +1446,7 @@ impl RunInspectorBlock {
             .border_1()
             .border_color(border_col)
             .when(!p.dark, |d| d.shadow_xs())
-            .when(dimmed, |d| d.opacity(0.46))
+            .opacity(card_op)
             .flex()
             .flex_col()
             .gap(px(6.))
@@ -1296,76 +1462,24 @@ impl RunInspectorBlock {
                     .inset_0(),
                 )
             })
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, format!("ri-ahead-{}", agent.id)))
-                    .role(Role::Button)
-                    .aria_label(format!("{}: {}", agent.name, agent.status.label(cx)))
-                    .aria_selected(is_selected)
-                    .tab_index(0)
-                    .rounded(px(6.))
-                    .p(px(2.))
-                    .hover(move |s| s.bg(p.hover))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .flex()
-                    .flex_col()
-                    .gap(px(5.))
-                    .cursor_pointer()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(pro_agent_avatar(
-                                &agent.name,
-                                avatar_tint,
-                                24.,
-                                agent.status == RunSpanStatus::Running,
-                                elapsed_ms,
-                                cx,
-                            ))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .truncate()
-                                            .text_size(px(13.))
-                                            .line_height(px(16.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .child(agent.name.clone()),
-                                    )
-                                    .when_some(agent.model.clone(), |d, m| {
-                                        d.child(
-                                            div()
-                                                .truncate()
-                                                .text_size(px(11.))
-                                                .line_height(px(14.))
-                                                .text_color(p.muted)
-                                                .child(m),
-                                        )
-                                    }),
-                            )
-                            .child(Self::render_status_pill(agent.status, p, cx)),
-                    )
-                    .when_some(agent.task.clone(), |d, t| {
-                        d.child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
-                                .text_color(p.text)
-                                .child(t),
-                        )
-                    }),
-                cx,
-                move |this, _, cx| {
-                    this.select_agent(Some(aid_select.clone()), cx);
-                },
-            ))
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("ri-ahead-{}", agent.id)),
+                    format!("{}: {}", agent.name, agent.status.label(cx)),
+                    6.,
+                    transparent_black(),
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    is_selected,
+                    head_content,
+                    cx,
+                    move |this, _, cx| {
+                        this.select_agent(Some(aid_select.clone()), cx);
+                    },
+                )
+                .w_full(),
+            )
             .child(
                 div()
                     .flex()
@@ -1374,12 +1488,27 @@ impl RunInspectorBlock {
                     .gap(px(6.))
                     .text_size(px(11.))
                     .text_color(p.muted)
-                    .child(format!(
-                        "${:.2} · {} tok · {}",
-                        agent_rollup.cost,
-                        format_tokens_short(agent_rollup.total_tokens()),
-                        format_duration_compact(agent.duration_ms(now_ms))
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("ri-acost-{}", agent.id)),
+                                agent_rollup.cost,
+                                2,
+                                "$",
+                                "",
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.muted,
+                            ))
+                            .child(format!(
+                                "· {} tok · {}",
+                                format_tokens_short(agent_rollup.total_tokens()),
+                                format_duration_compact(agent.duration_ms(now_ms))
+                            )),
+                    )
                     .when_some(fold_btn, |d, fb| d.child(fb)),
             )
             .when(!call_rows.is_empty(), |d| {
@@ -1404,11 +1533,141 @@ impl RunInspectorBlock {
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> Div {
-        let scope_name = self.selected_agent_id.as_ref().and_then(|sid| {
-            find_agent_span(&self.run, sid)
-                .or_else(|| self.supervisor.as_ref().filter(|s| &s.id == sid))
-                .map(|a| a.name.clone())
-        });
+        let thumb_bg: Hsla = if p.dark {
+            rgb(0x2a2a2e).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+
+        // Agent scope filter strip with pro_pill_indicator
+        let mut agent_choices: Vec<(Option<SharedString>, SharedString)> =
+            vec![(None, tr(cx, "Whole run", "全量运行").into())];
+        agent_choices.push((Some(self.run.id.clone()), self.run.name.clone()));
+        if let Some(sup) = &self.supervisor {
+            agent_choices.push((Some(sup.id.clone()), sup.name.clone()));
+        }
+        for sub in self.run.sub_agents() {
+            agent_choices.push((Some(sub.id.clone()), sub.name.clone()));
+        }
+
+        let scope_sensor = pro_selection_sensor();
+        let active_scope_key: SharedString = self
+            .selected_agent_id
+            .clone()
+            .unwrap_or_else(|| "whole".into());
+        let mut scope_strip = div()
+            .relative()
+            .p(px(2.))
+            .rounded(px(8.))
+            .bg(p.chip)
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(2.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "ri-scope-pill"),
+                active_scope_key,
+                scope_sensor.clone(),
+                6.,
+                thumb_bg,
+                Some(p.line),
+                true,
+            ));
+
+        for (opt_id, label) in agent_choices {
+            let sel = self.selected_agent_id == opt_id;
+            let id_slug = opt_id
+                .as_ref()
+                .map(|s| format!("ri-scope-{s}"))
+                .unwrap_or_else(|| "ri-clear-scope".to_string());
+            let target_opt = opt_id.clone();
+            scope_strip = scope_strip.child(
+                pro_tactile(
+                    pro_eid(&self.id, id_slug),
+                    label.clone(),
+                    6.,
+                    transparent_black(),
+                    if sel { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    div()
+                        .h(px(22.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.strong } else { p.muted })
+                        .child(label),
+                    cx,
+                    move |this, _, cx| {
+                        this.select_agent(target_opt.clone(), cx);
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(sel, |d| d.child(pro_mark_selected(&scope_sensor))),
+            );
+        }
+
+        // Call inspector filter tabs with pro_pill_indicator
+        let tab_sensor = pro_selection_sensor();
+        let mut tab_strip = div()
+            .relative()
+            .p(px(2.))
+            .rounded(px(8.))
+            .bg(p.chip)
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "ri-tab-pill"),
+                self.call_tab.slug(),
+                tab_sensor.clone(),
+                6.,
+                thumb_bg,
+                Some(p.line),
+                true,
+            ));
+
+        for tab in InspectorCallTab::ALL {
+            let sel = self.call_tab == tab;
+            let lbl = tab.label(cx);
+            tab_strip = tab_strip.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("ri-tab-{}", tab.slug())),
+                    lbl,
+                    6.,
+                    transparent_black(),
+                    if sel { transparent_black() } else { p.hover },
+                    transparent_black(),
+                    transparent_black(),
+                    false,
+                    div()
+                        .h(px(22.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.strong } else { p.muted })
+                        .child(lbl),
+                    cx,
+                    move |this, _, cx| {
+                        if this.call_tab != tab {
+                            this.call_tab = tab;
+                            cx.notify();
+                        }
+                    },
+                )
+                .relative()
+                .flex_none()
+                .when(sel, |d| d.child(pro_mark_selected(&tab_sensor))),
+            );
+        }
 
         let stat_cell = |id_sfx: &str, label: &'static str, val_el: AnyElement| {
             div()
@@ -1482,34 +1741,48 @@ impl RunInspectorBlock {
             stat_cell(
                 "llm",
                 tr(cx, "LLM calls", "模型调用"),
-                div()
-                    .text_size(px(13.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.ink)
-                    .child(format!("{}", rollup.llm_calls))
-                    .into_any_element(),
+                pro_rolling_number(
+                    pro_eid(&self.id, "ri-roll-llm"),
+                    rollup.llm_calls as f64,
+                    0,
+                    "",
+                    "",
+                    13.5,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ),
             ),
             stat_cell(
                 "tool",
                 tr(cx, "Tool calls", "工具调用"),
-                div()
-                    .text_size(px(13.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.ink)
-                    .child(format!("{}", rollup.tool_calls))
-                    .into_any_element(),
+                pro_rolling_number(
+                    pro_eid(&self.id, "ri-roll-tool"),
+                    rollup.tool_calls as f64,
+                    0,
+                    "",
+                    "",
+                    13.5,
+                    FontWeight::MEDIUM,
+                    p.ink,
+                ),
             ),
             stat_cell(
                 "fail",
                 tr(cx, "Failures", "失败数"),
-                div()
-                    .text_size(px(13.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(fail_col)
-                    .child(format!("{}", rollup.failures))
-                    .into_any_element(),
+                pro_rolling_number(
+                    pro_eid(&self.id, "ri-roll-fail"),
+                    rollup.failures as f64,
+                    0,
+                    "",
+                    "",
+                    13.5,
+                    FontWeight::MEDIUM,
+                    fail_col,
+                ),
             ),
         ];
+
+        let budget_ratio = (rollup.cost as f32 / 2.00).clamp(0.0, 1.0);
 
         div()
             .w_full()
@@ -1524,45 +1797,20 @@ impl RunInspectorBlock {
             .when(!p.dark, |d| d.shadow_xs())
             .flex()
             .flex_col()
-            .gap(px(8.))
-            .when_some(scope_name, |d, sname| {
-                d.child(
-                    div()
-                        .pb(px(6.))
-                        .border_b_1()
-                        .border_color(p.line_soft)
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .text_size(px(11.5))
-                        .child(
-                            div()
-                                .text_color(p.blue)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(format!(
-                                    "{}: {sname}",
-                                    tr(cx, "Scoped to agent", "当前聚焦智能体")
-                                )),
-                        )
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "ri-clear-scope"))
-                                .role(Role::Button)
-                                .tab_index(0)
-                                .px(px(6.))
-                                .py(px(1.))
-                                .rounded(px(4.))
-                                .hover(move |s| s.bg(p.hover).text_color(p.ink))
-                                .text_color(p.muted)
-                                .cursor_pointer()
-                                .child(tr(cx, "Whole run", "查看全量")),
-                            cx,
-                            |this, _, cx| {
-                                this.select_agent(None, cx);
-                            },
-                        )),
-                )
-            })
+            .gap(px(10.))
+            .child(
+                div()
+                    .pb(px(8.))
+                    .border_b_1()
+                    .border_color(p.line_soft)
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(scope_strip)
+                    .child(tab_strip),
+            )
             .child(
                 div()
                     .w_full()
@@ -1570,6 +1818,33 @@ impl RunInspectorBlock {
                     .flex_wrap()
                     .gap(px(12.))
                     .children(cells),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .pt(px(2.))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(div().flex_1().min_w_0().child(pro_spring_bar(
+                        pro_eid(&self.id, "ri-budget-bar"),
+                        budget_ratio,
+                        4.,
+                        2.,
+                        p.chip,
+                        if rollup.failures > 0 { p.amber } else { p.blue },
+                    )))
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_size(px(10.5))
+                            .text_color(p.faint)
+                            .child(format!(
+                                "{:.0}% {}",
+                                budget_ratio * 100.0,
+                                tr(cx, "of $2.00 cap", "$2.00 预算上限")
+                            )),
+                    ),
             )
     }
 }
@@ -1680,6 +1955,73 @@ impl Render for RunInspectorBlock {
                 .clone()
                 .unwrap_or_else(|| self.run.name.clone());
 
+            let fail_badge_txt: SharedString = format!(
+                "{} {}",
+                whole_rollup.failures.max(1),
+                tr(cx, "failed", "失败")
+            )
+            .into();
+            let fail_badge = pro_popover_presence(
+                pro_eid(&self.id, "ri-hdr-fail-pres"),
+                whole_rollup.failures > 0,
+                move || {
+                    div()
+                        .px(px(6.))
+                        .py(px(1.))
+                        .rounded(px(4.))
+                        .bg(p.red_soft)
+                        .text_color(p.red_ink)
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(fail_badge_txt)
+                        .into_any_element()
+                },
+            );
+
+            let live_toggle = pro_tactile(
+                pro_eid(&self.id, "ri-live-toggle"),
+                tr(cx, "Toggle live clock", "切换实时计时"),
+                5.,
+                p.chip,
+                p.chip_hover,
+                transparent_black(),
+                p.line_strong,
+                self.live,
+                div()
+                    .h(px(22.))
+                    .px(px(7.))
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .whitespace_nowrap()
+                    .child(pro_icon(
+                        if self.live {
+                            ProIcon::Pause
+                        } else {
+                            ProIcon::Play
+                        },
+                        10.,
+                        if self.live { p.blue } else { p.muted },
+                    ))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "ri-live-lbl"),
+                        if self.live {
+                            tr(cx, "Live", "实时")
+                        } else {
+                            tr(cx, "Paused", "已暂停")
+                        },
+                        11.,
+                        FontWeight::MEDIUM,
+                        if self.live { p.blue } else { p.muted },
+                    )),
+                cx,
+                |this, _, cx| {
+                    this.live = !this.live;
+                    cx.emit(RunInspectorEvent::LiveToggled(this.live));
+                    cx.notify();
+                },
+            )
+            .flex_none();
+
             let header_bar = div()
                 .w_full()
                 .max_w(px(740.))
@@ -1726,67 +2068,18 @@ impl Render for RunInspectorBlock {
                                 tr(cx, "running", "运行中")
                             )))
                         })
-                        .when(whole_rollup.failures > 0, |d| {
-                            d.child(
-                                div()
-                                    .px(px(6.))
-                                    .py(px(1.))
-                                    .rounded(px(4.))
-                                    .bg(p.red_soft)
-                                    .text_color(p.red_ink)
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(format!(
-                                        "{} {}",
-                                        whole_rollup.failures,
-                                        tr(cx, "failed", "失败")
-                                    )),
-                            )
-                        })
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(format!("${:.2}", whole_rollup.cost)),
-                        )
-                        .child(activate(
-                            div()
-                                .id(pro_eid(&self.id, "ri-live-toggle"))
-                                .role(Role::Button)
-                                .aria_label(tr(cx, "Toggle live clock", "切换实时计时"))
-                                .aria_toggled(self.live.into())
-                                .tab_index(0)
-                                .h(px(22.))
-                                .px(px(7.))
-                                .rounded(px(5.))
-                                .bg(p.chip)
-                                .hover(move |s| s.bg(p.chip_hover).text_color(p.ink))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.))
-                                .text_size(px(11.))
-                                .text_color(if self.live { p.blue } else { p.muted })
-                                .cursor_pointer()
-                                .child(pro_icon(
-                                    if self.live {
-                                        ProIcon::Pause
-                                    } else {
-                                        ProIcon::Play
-                                    },
-                                    10.,
-                                    if self.live { p.blue } else { p.muted },
-                                ))
-                                .child(if self.live {
-                                    tr(cx, "Live", "实时")
-                                } else {
-                                    tr(cx, "Paused", "已暂停")
-                                }),
-                            cx,
-                            |this, _, cx| {
-                                this.live = !this.live;
-                                cx.emit(RunInspectorEvent::LiveToggled(this.live));
-                                cx.notify();
-                            },
-                        )),
+                        .child(fail_badge)
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, "ri-hdr-cost"),
+                            whole_rollup.cost,
+                            2,
+                            "$",
+                            "",
+                            12.,
+                            FontWeight::MEDIUM,
+                            p.ink,
+                        ))
+                        .child(live_toggle),
                 );
 
             let summary_card = self.render_summary_strip(&rollup, narrow, &p, cx);
@@ -1800,7 +2093,7 @@ impl Render for RunInspectorBlock {
             let root_folded = self.folded_agents.contains(&run_clone.id);
 
             let tree_el = if narrow {
-                // Indented mobile stack with crisp vertical rail
+                // Indented mobile stack with crisp vertical rail + pro_fold on sub-agents
                 let root_card = self.render_agent_card(
                     &run_clone,
                     None,
@@ -1832,31 +2125,27 @@ impl Render for RunInspectorBlock {
                         ))
                 });
                 let mut child_els = Vec::new();
-                if !root_folded {
-                    for sub in &sub_agents {
-                        child_els.push(self.render_agent_card(
-                            sub,
-                            None,
-                            None,
-                            now_ms,
-                            elapsed_ms,
-                            sheen_phase,
-                            reduced,
-                            &p,
-                            w,
-                            cx,
-                        ));
-                    }
+                for sub in &sub_agents {
+                    child_els.push(self.render_agent_card(
+                        sub,
+                        None,
+                        None,
+                        now_ms,
+                        elapsed_ms,
+                        sheen_phase,
+                        reduced,
+                        &p,
+                        w,
+                        cx,
+                    ));
                 }
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.))
-                    .child(root_card)
-                    .when_some(sup_el, |d, s| d.child(s))
-                    .when(!child_els.is_empty(), |d| {
-                        d.child(
+                let sub_fold = (!sub_agents.is_empty()).then(|| {
+                    pro_fold(
+                        pro_eid(&self.id, "ri-sub-narrow-fold"),
+                        !root_folded,
+                        360.,
+                        10.,
+                        move || {
                             div()
                                 .pl(px(18.))
                                 .border_l_2()
@@ -1864,9 +2153,19 @@ impl Render for RunInspectorBlock {
                                 .flex()
                                 .flex_col()
                                 .gap(px(10.))
-                                .children(child_els),
-                        )
-                    })
+                                .children(child_els)
+                                .into_any_element()
+                        },
+                    )
+                });
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .child(root_card)
+                    .when_some(sup_el, |d, s| d.child(s))
+                    .when_some(sub_fold, |d, sf| d.child(sf))
                     .into_any_element()
             } else {
                 // Wide hierarchical tree with live pro_connector_pulse links
@@ -1903,35 +2202,40 @@ impl Render for RunInspectorBlock {
 
                 let mut sub_cards = Vec::new();
                 let mut active_child_flags = Vec::new();
-                if !root_folded {
-                    for (idx, sub) in sub_agents.iter().enumerate() {
-                        active_child_flags.push((
-                            sub.status == RunSpanStatus::Running,
-                            sub.status == RunSpanStatus::Failed,
-                        ));
-                        sub_cards.push(self.render_agent_card(
-                            sub,
-                            Some(self.child_sensors[idx].clone()),
-                            Some(sub_w),
-                            now_ms,
-                            elapsed_ms,
-                            sheen_phase,
-                            reduced,
-                            &p,
-                            w,
-                            cx,
-                        ));
-                    }
+                for (idx, sub) in sub_agents.iter().enumerate() {
+                    active_child_flags.push((
+                        sub.status == RunSpanStatus::Running,
+                        sub.status == RunSpanStatus::Failed,
+                    ));
+                    sub_cards.push(self.render_agent_card(
+                        sub,
+                        if root_folded {
+                            None
+                        } else {
+                            Some(self.child_sensors[idx].clone())
+                        },
+                        Some(sub_w),
+                        now_ms,
+                        elapsed_ms,
+                        sheen_phase,
+                        reduced,
+                        &p,
+                        w,
+                        cx,
+                    ));
                 }
 
                 let r_cell = self.root_sensor.clone();
                 let s_cell = self.sup_sensor.clone();
-                let c_cells: Vec<_> = self
-                    .child_sensors
-                    .iter()
-                    .take(sub_cards.len())
-                    .cloned()
-                    .collect();
+                let c_cells: Vec<_> = if root_folded {
+                    Vec::new()
+                } else {
+                    self.child_sensors
+                        .iter()
+                        .take(sub_cards.len())
+                        .cloned()
+                        .collect()
+                };
                 let link_base = if p.dark {
                     p.blue.opacity(0.36)
                 } else {
@@ -1998,6 +2302,23 @@ impl Render for RunInspectorBlock {
                 .absolute()
                 .inset_0();
 
+                let sub_row_pres = (!sub_agents.is_empty()).then(|| {
+                    pro_popover_presence(
+                        pro_eid(&self.id, "ri-sub-wide-pres"),
+                        !root_folded,
+                        move || {
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_start()
+                                .justify_center()
+                                .gap(px(10.))
+                                .children(sub_cards)
+                                .into_any_element()
+                        },
+                    )
+                });
+
                 div()
                     .relative()
                     .w_full()
@@ -2016,17 +2337,7 @@ impl Render for RunInspectorBlock {
                             .child(root_card)
                             .when_some(sup_card, |d, sc| d.child(sc)),
                     )
-                    .when(!sub_cards.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .w_full()
-                                .flex()
-                                .items_start()
-                                .justify_center()
-                                .gap(px(10.))
-                                .children(sub_cards),
-                        )
-                    })
+                    .when_some(sub_row_pres, |d, sp| d.child(sp))
                     .into_any_element()
             };
 

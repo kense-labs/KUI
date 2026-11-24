@@ -7,8 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_eid, pro_empty_state,
-        pro_rolling_number, pro_skeleton_bar, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -438,6 +440,7 @@ struct TileBoundsAnim {
     y: Slide,
     w: Slide,
     h: Slide,
+    press: Slide,
 }
 
 #[derive(IntoElement)]
@@ -447,8 +450,10 @@ struct GlidingTreemapTile {
     kind: ContextBlockKind,
     fate: Option<BlockFate>,
     label: SharedString,
+    tokens: u64,
     tokens_str: SharedString,
     pinned: bool,
+    hovered: bool,
     dimmed: bool,
     bg: Hsla,
     edge: Hsla,
@@ -476,9 +481,10 @@ impl RenderOnce for GlidingTreemapTile {
             y: Slide::new(ty),
             w: Slide::new(tw),
             h: Slide::new(th),
+            press: Slide::snappy(0.0),
         });
 
-        let (cx_x, cy_y, cw_w, ch_h) = st.update(cx, |s, cx| {
+        let (cx_x, cy_y, cw_w, ch_h, down) = st.update(cx, |s, cx| {
             if (s.tx - tx).abs() > 0.4
                 || (s.ty - ty).abs() > 0.4
                 || (s.tw - tw).abs() > 0.4
@@ -498,17 +504,63 @@ impl RenderOnce for GlidingTreemapTile {
                 s.y.get(w, cx),
                 s.w.get(w, cx).max(0.0),
                 s.h.get(w, cx).max(0.0),
+                s.press.get(w, cx).clamp(0.0, 1.0),
             )
         });
 
-        let radius = 6.0f32.min(cw_w * 0.25).min(ch_h * 0.25).max(2.0);
-        let show_name = cw_w >= 62.0 && ch_h >= 26.0;
-        let show_tokens = cw_w >= 62.0 && ch_h >= 44.0;
         let is_free = self.kind == ContextBlockKind::Free;
         let is_summarized_before = self.fate == Some(BlockFate::Summarized);
         let is_dropped_before = self.fate == Some(BlockFate::Dropped);
 
-        let edge_col = if self.pinned { self.ink } else { self.edge };
+        let target_op = if is_dropped_before {
+            0.40
+        } else if self.dimmed {
+            0.34
+        } else {
+            1.0
+        };
+        let spot_op = pro_spring_f32(pro_eid(&self.id, "top"), target_op, 0.20, w, cx);
+        let hot_t = pro_spring_f32(
+            pro_eid(&self.id, "thot"),
+            if !is_free && (self.pinned || self.hovered) {
+                1.0
+            } else {
+                0.0
+            },
+            0.18,
+            w,
+            cx,
+        );
+
+        let press_ix = if is_free {
+            0.0
+        } else {
+            (cw_w * 0.012 * down).clamp(0.0, 1.6)
+        };
+        let press_iy = if is_free {
+            0.0
+        } else {
+            (ch_h * 0.020 * down).clamp(0.0, 1.4)
+        };
+        let draw_x = cx_x + press_ix;
+        let draw_y = cy_y + press_iy;
+        let draw_w = (cw_w - 2.0 * press_ix).max(0.0);
+        let draw_h = (ch_h - 2.0 * press_iy).max(0.0);
+
+        let radius = 6.0f32.min(draw_w * 0.25).min(draw_h * 0.25).max(2.0);
+        let show_name = cw_w >= 62.0 && ch_h >= 26.0;
+        let show_tokens = cw_w >= 62.0 && ch_h >= 44.0;
+
+        let edge_col = if self.pinned {
+            self.ink
+        } else {
+            pro_mix_color(self.edge, self.ink.opacity(0.72), hot_t * 0.65)
+        };
+        let face_bg = if is_free {
+            self.bg
+        } else {
+            pro_mix_color(self.bg, self.ink.opacity(0.22), hot_t * 0.28)
+        };
         let hatch_col = self.hatch;
 
         let free_decor = if is_free || is_summarized_before {
@@ -588,33 +640,62 @@ impl RenderOnce for GlidingTreemapTile {
             None
         };
 
+        let tile_id = self.id.clone();
         let mut tile = div()
             .id(self.id)
             .role(Role::ListBoxOption)
             .aria_label(format!("{}: {}", self.label, self.tokens_str))
             .aria_selected(self.pinned)
             .absolute()
-            .left(px(cx_x))
-            .top(px(cy_y))
-            .w(px(cw_w))
-            .h(px(ch_h))
+            .left(px(draw_x))
+            .top(px(draw_y))
+            .w(px(draw_w))
+            .h(px(draw_h))
             .rounded(px(radius))
-            .bg(self.bg)
+            .bg(face_bg)
             .when(!is_free && !is_summarized_before, |d| {
                 d.border_1().border_color(edge_col)
             })
-            .opacity(if is_dropped_before {
-                0.42
-            } else if self.dimmed {
-                0.55
-            } else {
-                1.0
+            .opacity(spot_op)
+            .when(!is_free, |d| {
+                let st_down = st.clone();
+                let st_up = st.clone();
+                let st_out = st.clone();
+                d.cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, move |_, w, cx| {
+                        st_down.update(cx, |s, cx| {
+                            s.press.set(1.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    })
+                    .on_mouse_up(MouseButton::Left, move |_, w, cx| {
+                        st_up.update(cx, |s, cx| {
+                            s.press.set(0.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    })
+                    .on_mouse_up_out(MouseButton::Left, move |_, w, cx| {
+                        st_out.update(cx, |s, cx| {
+                            s.press.set(0.0, cx);
+                            cx.notify();
+                        });
+                        w.refresh();
+                    })
             })
-            .when(!is_free, |d| d.cursor_pointer())
             .overflow_hidden();
 
         if let Some(hov) = self.on_hover {
-            tile = tile.on_hover(move |inside, w, cx| hov(inside, w, cx));
+            let st_hov = st;
+            tile = tile.on_hover(move |inside, w, cx| {
+                if !*inside {
+                    st_hov.update(cx, |s, cx| {
+                        s.press.set(0.0, cx);
+                    });
+                }
+                hov(inside, w, cx);
+            });
         }
         if let Some(clk) = self.on_click {
             tile = tile.on_click(move |ev, w, cx| clk(ev, w, cx));
@@ -624,9 +705,21 @@ impl RenderOnce for GlidingTreemapTile {
         }
 
         if show_name {
+            let tok_val = if self.tokens >= 1_000 {
+                self.tokens as f64 / 1_000.0
+            } else {
+                self.tokens as f64
+            };
+            let tok_dec = if self.tokens >= 10_000 || self.tokens < 1_000 {
+                0
+            } else {
+                1
+            };
+            let tok_suf = if self.tokens >= 1_000 { "K" } else { "" };
             tile = tile.child(
                 div()
                     .relative()
+                    .top(px(0.5 * down))
                     .px(px(9.0))
                     .pt(px(7.0))
                     .flex()
@@ -634,21 +727,47 @@ impl RenderOnce for GlidingTreemapTile {
                     .gap(px(1.0))
                     .child(
                         div()
-                            .truncate()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(self.ink)
-                            .when(is_dropped_before, |d| d.line_through())
-                            .child(self.label),
+                            .flex()
+                            .items_center()
+                            .gap(px(5.0))
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(px(12.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(self.ink)
+                                    .when(is_dropped_before, |d| d.line_through())
+                                    .child(self.label),
+                            )
+                            .when(
+                                !is_free
+                                    && cw_w >= 86.0
+                                    && (self.pinned || self.kind == ContextBlockKind::Summary),
+                                |row| {
+                                    row.child(pro_check_draw(
+                                        pro_eid(&tile_id, "tchk"),
+                                        true,
+                                        12.0,
+                                        false,
+                                        self.ink,
+                                    ))
+                                },
+                            ),
                     )
                     .when(show_tokens, |col| {
-                        col.child(
-                            div()
-                                .truncate()
-                                .text_size(px(11.5))
-                                .text_color(self.ink.opacity(0.75))
-                                .child(self.tokens_str),
-                        )
+                        col.child(pro_rolling_number(
+                            pro_eid(&tile_id, "trn"),
+                            tok_val,
+                            tok_dec,
+                            "",
+                            tok_suf,
+                            11.5,
+                            FontWeight::NORMAL,
+                            self.ink.opacity(0.75),
+                        ))
                     }),
             );
         }
@@ -680,6 +799,8 @@ pub struct ContextMap {
     menu_open: bool,
     hovered_id: Option<SharedString>,
     pinned_id: Option<SharedString>,
+    filter_kind: Option<ContextBlockKind>,
+    last_inspected_block: Option<ContextBlock>,
     turn_seq: usize,
     loading: bool,
     empty: bool,
@@ -711,6 +832,8 @@ impl ContextMap {
             menu_open: false,
             hovered_id: None,
             pinned_id: None,
+            filter_kind: None,
+            last_inspected_block: None,
             turn_seq: 0,
             loading: false,
             empty: false,
@@ -992,45 +1115,54 @@ impl Render for ContextMap {
             let mark = pro_app_tile(prof.provider.as_ref(), 18.0, cx);
             let name = prof.display_name(cx).to_string();
             let lim_tag = fmt_tok(self.limit).to_ascii_lowercase();
-            div().relative().child(
-                div()
-                    .id(pro_eid(&self.id, "agent-dropdown-btn"))
-                    .role(Role::Button)
-                    .aria_label(format!("{name} ({lim_tag})"))
-                    .aria_expanded(is_open)
-                    .tab_index(0)
-                    .h(px(28.0))
-                    .pl(px(6.0))
-                    .pr(px(7.0))
-                    .rounded(px(8.0))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .hover(move |s| s.bg(p.hover))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .on_click(cx.listener(|this, _, _, cx| {
+            let btn_inner = div()
+                .h(px(28.0))
+                .pl(px(6.0))
+                .pr(px(7.0))
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .child(mark)
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .text_color(p.ink)
+                        .child(name.clone()),
+                )
+                .child(
+                    div()
+                        .h(px(18.0))
+                        .px(px(5.5))
+                        .rounded(px(4.5))
+                        .bg(p.chip)
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.text)
+                        .child(lim_tag.clone()),
+                )
+                .child(pro_svg("0 0 12 12", CHEV_DOWN_SVG, 12.0, p.muted));
+
+            div().relative().flex_none().child(
+                pro_tactile(
+                    pro_eid(&self.id, "agent-dropdown-btn"),
+                    format!("{name} ({lim_tag})"),
+                    8.0,
+                    card_bg,
+                    p.hover,
+                    p.line_strong,
+                    p.focus,
+                    is_open,
+                    btn_inner,
+                    cx,
+                    |this, _, cx| {
                         this.menu_open = !this.menu_open;
                         cx.notify();
-                    }))
-                    .child(mark)
-                    .child(div().text_size(px(12.5)).text_color(p.ink).child(name))
-                    .child(
-                        div()
-                            .h(px(18.0))
-                            .px(px(5.5))
-                            .rounded(px(4.5))
-                            .bg(p.chip)
-                            .flex()
-                            .items_center()
-                            .text_size(px(11.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.text)
-                            .child(lim_tag),
-                    )
-                    .child(pro_svg("0 0 12 12", CHEV_DOWN_SVG, 12.0, p.muted)),
+                    },
+                )
+                .aria_expanded(is_open)
+                .flex_none(),
             )
         });
 
@@ -1040,8 +1172,14 @@ impl Render for ContextMap {
             .iter()
             .any(|b| matches!(b.kind, ContextBlockKind::Chat | ContextBlockKind::Result));
 
+        let pill_fill: Hsla = if p.dark {
+            rgb(0x28282d).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+
         let header = div()
-            .mb(px(12.0))
+            .mb(px(8.0))
             .flex()
             .flex_wrap()
             .items_center()
@@ -1057,17 +1195,29 @@ impl Render for ContextMap {
             .when_some(agent_picker, |bar, pk| bar.child(pk))
             .when(has_compaction, |bar| {
                 let is_before = self.view == CompactionView::Before;
+                let ba_sensor = pro_selection_sensor();
+                let ba_key = if is_before { "before" } else { "after" };
                 bar.child(
                     div()
                         .id(pro_eid(&self.id, "before-after-switch"))
                         .role(Role::Group)
                         .aria_label(tr(cx, "Compare compaction", "对比压缩前后"))
+                        .relative()
                         .p(px(2.0))
                         .rounded(px(7.0))
                         .bg(p.chip)
                         .flex()
                         .items_center()
                         .gap(px(2.0))
+                        .child(pro_pill_indicator(
+                            pro_eid(&self.id, "ba-pill-ind"),
+                            ba_key,
+                            ba_sensor.clone(),
+                            5.0,
+                            pill_fill,
+                            Some(p.line_strong),
+                            true,
+                        ))
                         .child(
                             div()
                                 .id(pro_eid(&self.id, "view-before"))
@@ -1075,10 +1225,10 @@ impl Render for ContextMap {
                                 .aria_label(tr(cx, "Before compaction", "压缩前"))
                                 .aria_toggled(is_before.into())
                                 .tab_index(0)
+                                .relative()
                                 .h(px(22.0))
                                 .px(px(8.5))
                                 .rounded(px(5.0))
-                                .when(is_before, |d| d.bg(card_bg).shadow_sm())
                                 .cursor_pointer()
                                 .flex()
                                 .items_center()
@@ -1090,6 +1240,7 @@ impl Render for ContextMap {
                                     cx.emit(ContextMapEvent::ViewChanged(CompactionView::Before));
                                     cx.notify();
                                 }))
+                                .when(is_before, |d| d.child(pro_mark_selected(&ba_sensor)))
                                 .child(tr(cx, "Before", "压缩前")),
                         )
                         .child(
@@ -1099,10 +1250,10 @@ impl Render for ContextMap {
                                 .aria_label(tr(cx, "After compaction", "压缩后"))
                                 .aria_toggled((!is_before).into())
                                 .tab_index(0)
+                                .relative()
                                 .h(px(22.0))
                                 .px(px(8.5))
                                 .rounded(px(5.0))
-                                .when(!is_before, |d| d.bg(card_bg).shadow_sm())
                                 .cursor_pointer()
                                 .flex()
                                 .items_center()
@@ -1114,6 +1265,7 @@ impl Render for ContextMap {
                                     cx.emit(ContextMapEvent::ViewChanged(CompactionView::After));
                                     cx.notify();
                                 }))
+                                .when(!is_before, |d| d.child(pro_mark_selected(&ba_sensor)))
                                 .child(tr(cx, "After", "压缩后")),
                         ),
                 )
@@ -1189,10 +1341,16 @@ impl Render for ContextMap {
                             .bg(pct_bg)
                             .flex()
                             .items_center()
-                            .text_size(px(11.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(pct_fg)
-                            .child(format!("{}%", pct.round() as u32)),
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "map-pct-num"),
+                                pct,
+                                0,
+                                "",
+                                "%",
+                                11.5,
+                                FontWeight::MEDIUM,
+                                pct_fg,
+                            )),
                     ),
             );
 
@@ -1267,6 +1425,131 @@ impl Render for ContextMap {
             _ => self.blocks.clone(),
         };
 
+        // Category spotlight filter strip with liquid `pro_pill_indicator`
+        let kind_order = [
+            ContextBlockKind::System,
+            ContextBlockKind::Tools,
+            ContextBlockKind::Memory,
+            ContextBlockKind::File,
+            ContextBlockKind::Chat,
+            ContextBlockKind::Result,
+            ContextBlockKind::Summary,
+        ];
+        let present_kinds: Vec<ContextBlockKind> = kind_order
+            .into_iter()
+            .filter(|k| active_blocks.iter().any(|b| b.kind == *k))
+            .collect();
+        if let Some(fk) = self.filter_kind
+            && !present_kinds.contains(&fk)
+        {
+            self.filter_kind = None;
+        }
+        let kind_key_of = |k: Option<ContextBlockKind>| -> &'static str {
+            match k {
+                None => "all",
+                Some(ContextBlockKind::System) => "sys",
+                Some(ContextBlockKind::Tools) => "tools",
+                Some(ContextBlockKind::Memory) => "mem",
+                Some(ContextBlockKind::File) => "file",
+                Some(ContextBlockKind::Chat) => "chat",
+                Some(ContextBlockKind::Result) => "res",
+                Some(ContextBlockKind::Summary) => "sum",
+                Some(ContextBlockKind::Free) => "free",
+            }
+        };
+        let cat_sensor = pro_selection_sensor();
+        let active_cat_key = kind_key_of(self.filter_kind);
+        let all_sel = self.filter_kind.is_none();
+        let mut cat_strip = div()
+            .mb(px(8.0))
+            .relative()
+            .self_start()
+            .p(px(2.0))
+            .rounded(px(7.0))
+            .bg(p.chip)
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(2.0))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "cat-pill-ind"),
+                active_cat_key,
+                cat_sensor.clone(),
+                5.0,
+                pill_fill,
+                Some(p.line_strong),
+                true,
+            ))
+            .child(
+                div()
+                    .id(pro_eid(&self.id, "cat-all"))
+                    .role(Role::Button)
+                    .aria_label(tr(cx, "All categories", "全部分类"))
+                    .aria_toggled(all_sel.into())
+                    .tab_index(0)
+                    .relative()
+                    .h(px(22.0))
+                    .px(px(8.0))
+                    .rounded(px(5.0))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if all_sel { p.ink } else { p.muted })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.filter_kind = None;
+                        cx.notify();
+                    }))
+                    .when(all_sel, |d| d.child(pro_mark_selected(&cat_sensor)))
+                    .child(tr(cx, "All", "全部")),
+            );
+
+        for kind in &present_kinds {
+            let k = *kind;
+            let sel = self.filter_kind == Some(k);
+            let (_, k_edge, k_ink) = k.colors(&p);
+            let k_key = kind_key_of(Some(k));
+            let k_lbl = k.label(cx);
+            cat_strip = cat_strip.child(
+                div()
+                    .id(pro_eid(&self.id, format!("cat-{k_key}")))
+                    .role(Role::Button)
+                    .aria_label(k_lbl)
+                    .aria_toggled(sel.into())
+                    .tab_index(0)
+                    .relative()
+                    .h(px(22.0))
+                    .px(px(7.5))
+                    .rounded(px(5.0))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.0))
+                    .text_size(px(11.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if sel { p.ink } else { p.muted })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.filter_kind = if this.filter_kind == Some(k) {
+                            None
+                        } else {
+                            Some(k)
+                        };
+                        cx.notify();
+                    }))
+                    .when(sel, |d| d.child(pro_mark_selected(&cat_sensor)))
+                    .child(
+                        div()
+                            .size(px(6.5))
+                            .rounded(px(2.0))
+                            .bg(k_ink.opacity(0.65))
+                            .border_1()
+                            .border_color(k_edge),
+                    )
+                    .child(k_lbl),
+            );
+        }
+
         let free_tokens = self.limit.saturating_sub(used_tokens);
         let mut weighted: Vec<(SharedString, f32)> = active_blocks
             .iter()
@@ -1319,9 +1602,11 @@ impl Render for ContextMap {
                     kind: ContextBlockKind::Free,
                     fate: None,
                     label: SharedString::from(tr(cx, "Free space", "剩余可用")),
+                    tokens: free_tokens,
                     tokens_str: SharedString::from(fmt_tok(free_tokens)),
                     pinned: false,
-                    dimmed: inspect_id.is_some(),
+                    hovered: false,
+                    dimmed: inspect_id.is_some() || self.filter_kind.is_some(),
                     bg: transparent_black(),
                     edge: f_edge,
                     ink: f_ink,
@@ -1344,8 +1629,14 @@ impl Render for ContextMap {
             let bid = blk.id.clone();
             let (bg, edge, ink) = blk.kind.colors(&p);
             let is_pinned = self.pinned_id.as_ref() == Some(&bid);
+            let is_hovered = self.hovered_id.as_ref() == Some(&bid);
             let is_hot = inspect_id.as_ref() == Some(&bid);
-            let dimmed = inspect_id.is_some() && !is_hot;
+            let kind_dimmed = self.filter_kind.is_some_and(|fk| fk != blk.kind);
+            let dimmed = if inspect_id.is_some() {
+                !is_hot
+            } else {
+                kind_dimmed
+            };
 
             let fate = match (&self.compaction, self.view) {
                 (Some(rec), CompactionView::Before) => {
@@ -1371,8 +1662,10 @@ impl Render for ContextMap {
                 kind: blk.kind,
                 fate,
                 label: SharedString::from(blk.display_label(cx).to_string()),
+                tokens: blk.tokens,
                 tokens_str: SharedString::from(fmt_tok(blk.tokens)),
                 pinned: is_pinned,
+                hovered: is_hovered,
                 dimmed,
                 bg,
                 edge,
@@ -1399,220 +1692,364 @@ impl Render for ContextMap {
             });
         }
 
-        // Floating Tile Inspector Popover
-        if let Some(sel_id) = &inspect_id
-            && let Some(blk) = active_blocks.iter().find(|b| &b.id == sel_id)
-        {
-            let (sw_bg, sw_edge, _) = blk.kind.colors(&p);
+        // Bidirectional Floating Tile Inspector Popover
+        let live_blk = inspect_id
+            .as_ref()
+            .and_then(|sel_id| active_blocks.iter().find(|b| &b.id == sel_id).cloned());
+        if let Some(b) = &live_blk {
+            self.last_inspected_block = Some(b.clone());
+        }
+        let inspect_open = live_blk.is_some();
+        if let Some(blk) = live_blk.or_else(|| self.last_inspected_block.clone()) {
+            let (sw_bg, sw_edge, sw_ink) = blk.kind.colors(&p);
             let share = (blk.tokens as f64 / self.limit.max(1) as f64) * 100.0;
-            let mut pop = div()
-                .absolute()
-                .right(px(10.0))
-                .bottom(px(10.0))
-                .w(px(268.0))
-                .p(px(10.5))
-                .rounded(px(9.0))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_lg()
-                .flex()
-                .flex_col()
-                .gap(px(4.0))
-                .child(
-                    div()
+            let share_ratio = (share / 100.0).clamp(0.0, 1.0) as f32;
+            let blk_lbl = blk.display_label(cx).to_string();
+            let blk_kind_lbl = blk.kind.label(cx).to_string();
+            let blk_det = blk.display_detail(cx).map(str::to_string);
+            let blk_items = blk.items.clone();
+            let blk_id = blk.id.clone();
+            let tok_k = blk.tokens as f64 / 1_000.0;
+            let is_pinned_blk = self.pinned_id.as_ref() == Some(&blk_id);
+
+            let pop_tok_rn = pro_rolling_number(
+                pro_eid(&self.id, "insp-tok-rn"),
+                tok_k,
+                1,
+                "",
+                "K",
+                11.5,
+                FontWeight::MEDIUM,
+                p.ink,
+            );
+            let pop_share_rn = pro_rolling_number(
+                pro_eid(&self.id, "insp-share-rn"),
+                share,
+                1,
+                "(",
+                "%)",
+                11.5,
+                FontWeight::NORMAL,
+                p.muted,
+            );
+            let pop_bar = pro_spring_bar(
+                pro_eid(&self.id, "insp-share-bar"),
+                share_ratio,
+                4.0,
+                2.0,
+                p.chip,
+                sw_ink,
+            );
+            let pin_chk = pro_check_draw(
+                pro_eid(&self.id, "insp-pin-chk"),
+                is_pinned_blk,
+                12.0,
+                false,
+                sw_ink,
+            );
+            let vtx_id = pro_eid(&self.id, "tile-insp-vtx");
+            let p_pop = p;
+
+            let pop_pres = pro_popover_presence(
+                pro_eid(&self.id, "tile-insp-pop"),
+                inspect_open,
+                move || {
+                    let mut pop = div()
+                        .w(px(268.0))
+                        .p(px(10.5))
+                        .rounded(px(9.0))
+                        .bg(p_pop.card)
+                        .border_1()
+                        .border_color(p_pop.line_strong)
+                        .shadow_lg()
                         .flex()
-                        .items_center()
-                        .gap(px(7.0))
+                        .flex_col()
+                        .gap(px(5.0))
                         .child(
                             div()
-                                .size(px(9.0))
-                                .rounded(px(2.5))
-                                .bg(sw_bg)
-                                .border_1()
-                                .border_color(sw_edge),
+                                .flex()
+                                .items_center()
+                                .gap(px(7.0))
+                                .child(
+                                    div()
+                                        .size(px(9.0))
+                                        .rounded(px(2.5))
+                                        .bg(sw_bg)
+                                        .border_1()
+                                        .border_color(sw_edge),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(p_pop.ink)
+                                        .child(blk_lbl),
+                                )
+                                .when(is_pinned_blk, |r| r.child(pin_chk)),
                         )
                         .child(
                             div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(p.ink)
-                                .child(blk.display_label(cx).to_string()),
-                        ),
-                )
-                .child(div().text_size(px(11.5)).text_color(p.muted).child(format!(
-                    "{} · {} ({share:.1}%)",
-                    blk.kind.label(cx),
-                    fmt_tok(blk.tokens)
-                )));
+                                .flex()
+                                .items_center()
+                                .gap(px(4.5))
+                                .text_size(px(11.5))
+                                .text_color(p_pop.muted)
+                                .child(format!("{blk_kind_lbl} ·"))
+                                .child(pop_tok_rn)
+                                .child(pop_share_rn),
+                        )
+                        .child(pop_bar);
 
-            if let Some(det) = blk.display_detail(cx) {
-                pop = pop.child(
-                    div()
-                        .text_size(px(11.5))
-                        .line_height(px(17.0))
-                        .text_color(p.text)
-                        .child(det.to_string()),
-                );
-            }
-            if !blk.items.is_empty() {
-                let mut chips = div()
-                    .pt(px(5.0))
-                    .mt(px(3.0))
-                    .border_t_1()
-                    .border_color(p.line)
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(5.0));
-                for item in &blk.items {
-                    chips = chips.child(
-                        div()
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .rounded(px(4.5))
-                            .bg(p.subtle)
-                            .text_size(px(11.0))
-                            .text_color(p.text)
-                            .child(item.clone()),
-                    );
-                }
-                pop = pop.child(chips);
-            }
-            inner_stage = inner_stage.child(pop);
+                    if let Some(det) = blk_det {
+                        pop = pop.child(
+                            div()
+                                .text_size(px(11.5))
+                                .line_height(px(17.0))
+                                .text_color(p_pop.text)
+                                .child(det),
+                        );
+                    }
+                    if !blk_items.is_empty() {
+                        let mut chips = div()
+                            .pt(px(5.0))
+                            .mt(px(2.0))
+                            .border_t_1()
+                            .border_color(p_pop.line)
+                            .flex()
+                            .flex_wrap()
+                            .gap(px(5.0));
+                        for item in &blk_items {
+                            chips = chips.child(
+                                div()
+                                    .px(px(6.0))
+                                    .py(px(2.0))
+                                    .rounded(px(4.5))
+                                    .bg(p_pop.subtle)
+                                    .text_size(px(11.0))
+                                    .text_color(p_pop.text)
+                                    .child(item.clone()),
+                            );
+                        }
+                        pop = pop.child(chips);
+                    }
+                    pro_view_transition(vtx_id, blk_id, pop)
+                },
+            );
+
+            inner_stage = inner_stage.child(
+                div()
+                    .absolute()
+                    .right(px(10.0))
+                    .bottom(px(10.0))
+                    .child(pop_pres),
+            );
         }
 
         map_canvas = map_canvas.child(inner_stage);
 
-        // Agent dropdown menu overlay
-        let dropdown_menu = if self.menu_open {
-            let mut menu = div()
-                .absolute()
-                .top(px(34.0))
-                .left(px(74.0))
-                .w(px(244.0))
-                .p(px(4.0))
-                .rounded(px(10.0))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_lg()
+        // Agent dropdown menu overlay with bidirectional `pro_popover_presence`
+        let mut menu_box = div()
+            .w(px(244.0))
+            .p(px(4.0))
+            .rounded(px(10.0))
+            .bg(p.card)
+            .border_1()
+            .border_color(p.line_strong)
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .gap(px(2.0));
+        for (i, prof) in self.profiles.iter().enumerate() {
+            let active = i == self.active_profile_idx;
+            let mark = pro_app_tile(prof.provider.as_ref(), 22.0, cx);
+            let pname = prof.display_name(cx).to_string();
+            let mname = prof.model.clone();
+            let lim = fmt_tok(prof.limit).to_ascii_lowercase();
+            let row_inner = div()
+                .w_full()
+                .px(px(7.0))
+                .py(px(6.0))
                 .flex()
-                .flex_col()
-                .gap(px(2.0));
-            for (i, prof) in self.profiles.iter().enumerate() {
-                let active = i == self.active_profile_idx;
-                let mark = pro_app_tile(prof.provider.as_ref(), 22.0, cx);
-                let pname = prof.display_name(cx).to_string();
-                let mname = prof.model.clone();
-                let lim = fmt_tok(prof.limit).to_ascii_lowercase();
-                menu = menu.child(
+                .items_center()
+                .gap(px(8.0))
+                .child(mark)
+                .child(
                     div()
-                        .id(pro_eid(&self.id, format!("prof-opt-{i}")))
-                        .role(Role::Button)
-                        .aria_label(pname.clone())
-                        .tab_index(0)
-                        .px(px(7.0))
-                        .py(px(6.0))
-                        .rounded(px(7.0))
-                        .when(active, |d| d.bg(p.select))
-                        .hover(move |s| s.bg(p.hover))
-                        .cursor_pointer()
+                        .flex_1()
+                        .min_w_0()
                         .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select_profile(i, cx);
-                        }))
-                        .child(mark)
+                        .flex_col()
                         .child(
                             div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .truncate()
-                                        .text_size(px(12.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .child(pname),
-                                )
-                                .child(
-                                    div()
-                                        .truncate()
-                                        .text_size(px(11.0))
-                                        .text_color(p.muted)
-                                        .child(mname),
-                                ),
+                                .truncate()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .child(pname.clone()),
                         )
                         .child(
                             div()
-                                .px(px(5.5))
-                                .h(px(18.0))
-                                .rounded(px(4.5))
-                                .bg(p.chip)
-                                .flex()
-                                .items_center()
-                                .text_size(px(10.5))
-                                .text_color(p.text)
-                                .child(lim),
+                                .truncate()
+                                .text_size(px(11.0))
+                                .text_color(p.muted)
+                                .child(mname),
                         ),
+                )
+                .when(active, |r| {
+                    r.child(pro_check_draw(
+                        pro_eid(&self.id, format!("prof-chk-{i}")),
+                        true,
+                        12.0,
+                        false,
+                        p.green,
+                    ))
+                })
+                .child(
+                    div()
+                        .px(px(5.5))
+                        .h(px(18.0))
+                        .rounded(px(4.5))
+                        .bg(p.chip)
+                        .flex()
+                        .items_center()
+                        .text_size(px(10.5))
+                        .text_color(p.text)
+                        .child(lim),
                 );
-            }
-            Some(menu)
-        } else {
-            None
-        };
+
+            menu_box = menu_box.child(
+                pro_tactile(
+                    pro_eid(&self.id, format!("prof-opt-{i}")),
+                    pname,
+                    7.0,
+                    if active {
+                        p.select
+                    } else {
+                        transparent_black()
+                    },
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    active,
+                    row_inner,
+                    cx,
+                    move |this, _, cx| {
+                        this.select_profile(i, cx);
+                    },
+                )
+                .w_full(),
+            );
+        }
+        let dropdown_menu =
+            div()
+                .absolute()
+                .top(px(34.0))
+                .left(px(74.0))
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "prof-menu-pop"),
+                    self.menu_open,
+                    move || menu_box.into_any_element(),
+                ));
 
         // Bottom Compaction Fates Summary Line
-        let fates_line = match &self.compaction {
-            None => div()
-                .mt(px(8.0))
-                .text_size(px(12.0))
-                .text_color(p.faint)
-                .child(tr(
-                    cx,
-                    "Not compacted yet – click Compact to squeeze old turns into a summary and compare Before | After.",
-                    "尚未压缩 —— 点击“压缩”将历史对话与测试输出浓缩为摘要块，并对比压缩前后树图变化。",
-                )),
+        let fates_line: AnyElement = match &self.compaction {
+            None => pro_view_transition(
+                pro_eid(&self.id, "fates-vtx"),
+                "uncompacted",
+                div()
+                    .mt(px(8.0))
+                    .text_size(px(12.0))
+                    .text_color(p.faint)
+                    .child(tr(
+                        cx,
+                        "Not compacted yet – click Compact to squeeze old turns into a summary and compare Before | After.",
+                        "尚未压缩 —— 点击“压缩”将历史对话与测试输出浓缩为摘要块，并对比压缩前后树图变化。",
+                    )),
+            ),
             Some(rec) => {
                 let saved = rec.before_used.saturating_sub(rec.after_used);
                 let sum_n = rec.summarized_ids.len();
                 let drop_n = rec.dropped_ids.len();
-                div()
-                    .mt(px(8.0))
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(14.0))
-                    .text_size(px(12.0))
-                    .text_color(p.muted)
-                    .child(format!(
-                        "{}: {}",
-                        tr(cx, "Summarized", "归入摘要"),
-                        sum_n
-                    ))
-                    .child(format!(
-                        "{}: {}",
-                        tr(cx, "Dropped logs", "丢弃冗余输出"),
-                        drop_n
-                    ))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.green_ink)
-                            .child(format!(
-                                "{} {} ({} → {})",
-                                tr(cx, "Saved", "共释放"),
-                                fmt_tok(saved),
-                                fmt_tok(rec.before_used),
-                                fmt_tok(rec.after_used)
-                            )),
-                    )
+                pro_view_transition(
+                    pro_eid(&self.id, "fates-vtx"),
+                    "compacted",
+                    div()
+                        .mt(px(8.0))
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(14.0))
+                        .text_size(px(12.0))
+                        .text_color(p.muted)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .child(format!("{}:", tr(cx, "Summarized", "归入摘要")))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "fate-sum-rn"),
+                                    sum_n as f64,
+                                    0,
+                                    "",
+                                    "",
+                                    12.0,
+                                    FontWeight::MEDIUM,
+                                    p.ink,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .child(format!("{}:", tr(cx, "Dropped logs", "丢弃冗余输出")))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "fate-drop-rn"),
+                                    drop_n as f64,
+                                    0,
+                                    "",
+                                    "",
+                                    12.0,
+                                    FontWeight::MEDIUM,
+                                    p.ink,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.green_ink)
+                                .child(pro_check_draw(
+                                    pro_eid(&self.id, "fate-saved-chk"),
+                                    true,
+                                    12.0,
+                                    false,
+                                    p.green,
+                                ))
+                                .child(tr(cx, "Saved", "共释放"))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "fate-saved-rn"),
+                                    saved as f64 / 1_000.0,
+                                    1,
+                                    "",
+                                    "K",
+                                    12.0,
+                                    FontWeight::SEMIBOLD,
+                                    p.green_ink,
+                                ))
+                                .child(format!(
+                                    "({} → {})",
+                                    fmt_tok(rec.before_used),
+                                    fmt_tok(rec.after_used)
+                                )),
+                        ),
+                )
             }
         };
 
@@ -1628,9 +2065,10 @@ impl Render for ContextMap {
                     .flex()
                     .flex_col()
                     .child(header)
+                    .child(cat_strip)
                     .child(map_canvas)
                     .child(fates_line)
-                    .when_some(dropdown_menu, |d, m| d.child(m)),
+                    .child(dropdown_menu),
             )
             .into_any_element()
     }

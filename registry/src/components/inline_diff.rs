@@ -6,13 +6,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_presence, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
-        family::disabled_motion,
+        family::{PhaseClock, disabled_motion},
         pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
@@ -214,12 +216,30 @@ pub enum InlineDiffEvent {
 
 impl EventEmitter<InlineDiffEvent> for InlineDiff {}
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DiffViewFilter {
+    All,
+    Pending,
+    Accepted,
+}
+
+impl DiffViewFilter {
+    fn key(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Pending => "pending",
+            Self::Accepted => "accepted",
+        }
+    }
+}
+
 #[derive(Clone)]
 struct ChangeSlot {
     remove: SharedString,
     insert: SharedString,
     decision: DiffDecision,
     decided_at: Option<Instant>,
+    accept_clock: PhaseClock,
 }
 
 /// Inline AI prose edit reviewer with per-change popover, keyboard shortcuts, and undo stack.
@@ -232,6 +252,9 @@ pub struct InlineDiff {
     history: Vec<Vec<(usize, DiffDecision)>>,
     active_change: Option<usize>,
     done_at: Option<Instant>,
+    done_clock: PhaseClock,
+    view_filter: DiffViewFilter,
+    filter_sensor: ProSelectionSensor,
     card_origin: Rc<Cell<Point<Pixels>>>,
     #[allow(clippy::type_complexity)]
     active_anchor: Rc<Cell<Option<(Point<Pixels>, Size<Pixels>)>>>,
@@ -260,6 +283,9 @@ impl InlineDiff {
             history: Vec::new(),
             active_change,
             done_at: None,
+            done_clock: PhaseClock::default(),
+            view_filter: DiffViewFilter::All,
+            filter_sensor: pro_selection_sensor(),
             card_origin: Rc::new(Cell::new(point(px(0.), px(0.)))),
             active_anchor: Rc::new(Cell::new(None)),
             loading: false,
@@ -419,6 +445,9 @@ impl InlineDiff {
         let prev = slot.decision;
         slot.decision = decision;
         slot.decided_at = Some(Instant::now());
+        if decision == DiffDecision::Accepted {
+            slot.accept_clock.restart(cx);
+        }
         self.history.push(vec![(change_index, prev)]);
         self.active_change = self.next_pending_after(change_index);
         let text = self.current_text();
@@ -429,6 +458,7 @@ impl InlineDiff {
         });
         if self.pending_count() == 0 {
             self.done_at = Some(Instant::now());
+            self.done_clock.restart(cx);
             cx.emit(InlineDiffEvent::Done(text));
         }
         cx.notify();
@@ -452,6 +482,9 @@ impl InlineDiff {
                 batch.push((idx, DiffDecision::Pending));
                 slot.decision = verdict;
                 slot.decided_at = Some(now);
+                if verdict == DiffDecision::Accepted {
+                    slot.accept_clock.restart(cx);
+                }
             }
         }
         if batch.is_empty() {
@@ -460,6 +493,7 @@ impl InlineDiff {
         self.history.push(batch);
         self.active_change = None;
         self.done_at = Some(now);
+        self.done_clock.restart(cx);
         let text = self.current_text();
         cx.emit(InlineDiffEvent::BulkDecided {
             decision: verdict,
@@ -673,6 +707,12 @@ impl Render for InlineDiff {
 
                     match slot.decision {
                         DiffDecision::Pending => {
+                            if self.view_filter == DiffViewFilter::Accepted {
+                                for w_str in slot.remove.split_whitespace() {
+                                    flow = flow.child(w_str.to_owned());
+                                }
+                                continue;
+                            }
                             let mut chg_group = div()
                                 .id(pro_eid(&self.id, format!("chg-pill-{cur_i}")))
                                 .role(Role::Button)
@@ -753,6 +793,7 @@ impl Render for InlineDiff {
                             flow = flow.child(chg_group);
                         }
                         DiffDecision::Accepted => {
+                            let acc_drawn = reduced || slot.accept_clock.time(0.28, w, cx) > 0.012;
                             // Collapsing deleted span during first 380ms
                             let rem_alpha = (1.0 - settle_t).clamp(0.0, 1.0);
                             if rem_alpha > 0.04 && !slot.remove.is_empty() {
@@ -768,21 +809,34 @@ impl Render for InlineDiff {
                                         .child(slot.remove.clone()),
                                 );
                             }
-                            if !slot.insert.is_empty() {
-                                let fade_tint = (1.0 - settle_t).clamp(0.0, 1.0);
-                                if fade_tint > 0.02 {
-                                    flow = flow.child(
-                                        div()
-                                            .px(px(4.0 * fade_tint))
-                                            .rounded(px(4.))
-                                            .bg(add_bg.opacity(fade_tint))
-                                            .text_color(p.ink)
-                                            .child(slot.insert.clone()),
-                                    );
-                                } else {
-                                    for w_str in slot.insert.split_whitespace() {
-                                        flow = flow.child(w_str.to_owned());
-                                    }
+                            let show_accepted_badge = self.view_filter == DiffViewFilter::Accepted;
+                            let fade_tint = (1.0 - settle_t).clamp(0.0, 1.0);
+                            if show_accepted_badge || fade_tint > 0.02 {
+                                let chip_tint = if show_accepted_badge { 1.0 } else { fade_tint };
+                                flow = flow.child(
+                                    div()
+                                        .px(px((4.0 * chip_tint).max(2.0)))
+                                        .py(px(1.))
+                                        .rounded(px(4.))
+                                        .bg(add_bg.opacity(chip_tint))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(3.))
+                                        .text_color(p.ink)
+                                        .child(pro_check_draw(
+                                            pro_eid(&self.id, format!("acc-chk-{cur_i}")),
+                                            acc_drawn,
+                                            12.,
+                                            false,
+                                            p.green_ink,
+                                        ))
+                                        .when(!slot.insert.is_empty(), |d| {
+                                            d.child(slot.insert.clone())
+                                        }),
+                                );
+                            } else if !slot.insert.is_empty() {
+                                for w_str in slot.insert.split_whitespace() {
+                                    flow = flow.child(w_str.to_owned());
                                 }
                             }
                         }
@@ -851,116 +905,144 @@ impl Render for InlineDiff {
         let pop_x = pro_spring_f32(pro_eid(&self.id, "pop-x"), target_x, 0.20, w, cx);
         let pop_y = pro_spring_f32(pro_eid(&self.id, "pop-y"), target_y, 0.20, w, cx);
 
-        let popover_el = pro_presence(
-            pro_eid(&self.id, "diff-pop-pres"),
-            active_idx.is_some(),
-            0.18,
-            0.14,
-            {
-                let chosen_idx = active_idx.unwrap_or(0);
-                let base_id = self.id.clone();
-                let acc_lbl = tr(cx, "Accept", "接受").to_owned();
-                let rej_lbl = tr(cx, "Reject", "拒绝").to_owned();
-                let accept_btn = div()
-                    .id(pro_eid(&base_id, "pop-accept-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
-                    .h(px(28.))
-                    .pl(px(8.))
-                    .pr(px(6.))
-                    .rounded(px(6.))
-                    .bg(p.primary)
-                    .text_color(p.on_primary)
-                    .hover(|s| s.opacity(0.92))
+        let popover_el = {
+            let chosen_idx = active_idx.unwrap_or(0);
+            let base_id = self.id.clone();
+            let acc_lbl = tr(cx, "Accept", "接受").to_owned();
+            let rej_lbl = tr(cx, "Reject", "拒绝").to_owned();
+            let hunk_badge = pro_view_transition(
+                pro_eid(&base_id, "pop-hunk-tx"),
+                format!("hunk-{chosen_idx}"),
+                div()
+                    .px(px(5.))
+                    .h(px(20.))
+                    .rounded(px(5.))
+                    .bg(p.subtle)
                     .flex()
                     .items_center()
-                    .gap(px(5.))
-                    .cursor_pointer()
-                    .text_size(px(12.5))
+                    .text_size(px(11.))
                     .font_weight(FontWeight::MEDIUM)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.decide_change(chosen_idx, DiffDecision::Accepted, cx);
-                    }))
-                    .child(pro_icon(ProIcon::Check, 13., p.on_primary))
-                    .child(acc_lbl)
-                    .child(
-                        div()
-                            .min_w(px(16.))
-                            .h(px(16.))
-                            .px(px(4.))
-                            .rounded(px(4.))
-                            .bg(if p.dark {
-                                hsla(0., 0., 0., 0.14)
-                            } else {
-                                hsla(0., 0., 1., 0.18)
-                            })
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(10.))
-                            .child("Y"),
-                    );
+                    .text_color(p.muted)
+                    .child(format!("{}/{}", chosen_idx + 1, total_changes.max(1))),
+            );
 
-                let reject_btn = div()
-                    .id(pro_eid(&base_id, "pop-reject-btn"))
-                    .role(Role::Button)
-                    .tab_index(0)
-                    .h(px(28.))
-                    .pl(px(8.))
-                    .pr(px(6.))
-                    .rounded(px(6.))
-                    .bg(if p.dark { rgb(0x28282c).into() } else { p.card })
-                    .border_1()
-                    .border_color(p.line_strong)
-                    .hover(|s| s.bg(p.chip_hover))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .cursor_pointer()
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.decide_change(chosen_idx, DiffDecision::Rejected, cx);
-                    }))
-                    .child(pro_icon(ProIcon::Close, 13., p.muted))
-                    .child(rej_lbl)
-                    .child(
-                        div()
-                            .min_w(px(16.))
-                            .h(px(16.))
-                            .px(px(4.))
-                            .rounded(px(4.))
-                            .bg(p.chip)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(10.))
-                            .text_color(p.muted)
-                            .child("N"),
-                    );
-
-                move |amt| {
+            let accept_inner = div()
+                .h(px(28.))
+                .pl(px(8.))
+                .pr(px(6.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.on_primary)
+                .child(pro_icon(ProIcon::Check, 13., p.on_primary))
+                .child(acc_lbl.clone())
+                .child(
                     div()
-                        .absolute()
-                        .left(px(pop_x))
-                        .top(px(pop_y + 4.0 * (1.0 - amt)))
-                        .opacity(amt)
-                        .p(px(4.))
-                        .rounded(px(10.))
-                        .bg(if p.dark { rgb(0x222226).into() } else { p.card })
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
+                        .min_w(px(16.))
+                        .h(px(16.))
+                        .px(px(4.))
+                        .rounded(px(4.))
+                        .bg(if p.dark {
+                            hsla(0., 0., 0., 0.14)
+                        } else {
+                            hsla(0., 0., 1., 0.18)
+                        })
                         .flex()
                         .items_center()
-                        .gap(px(4.))
-                        .child(accept_btn)
-                        .child(reject_btn)
-                        .into_any_element()
-                }
-            },
-        );
+                        .justify_center()
+                        .text_size(px(10.))
+                        .child("Y"),
+                );
+
+            let accept_btn = pro_tactile(
+                pro_eid(&base_id, "pop-accept-btn"),
+                acc_lbl,
+                6.,
+                p.primary,
+                p.primary.opacity(0.90),
+                transparent_black(),
+                transparent_black(),
+                false,
+                accept_inner,
+                cx,
+                move |this, _, cx| {
+                    this.decide_change(chosen_idx, DiffDecision::Accepted, cx);
+                },
+            )
+            .flex_none();
+
+            let reject_rest = if p.dark { rgb(0x28282c).into() } else { p.card };
+            let reject_inner = div()
+                .h(px(28.))
+                .pl(px(8.))
+                .pr(px(6.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.strong)
+                .child(pro_icon(ProIcon::Close, 13., p.muted))
+                .child(rej_lbl.clone())
+                .child(
+                    div()
+                        .min_w(px(16.))
+                        .h(px(16.))
+                        .px(px(4.))
+                        .rounded(px(4.))
+                        .bg(p.chip)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(10.))
+                        .text_color(p.muted)
+                        .child("N"),
+                );
+
+            let reject_btn = pro_tactile(
+                pro_eid(&base_id, "pop-reject-btn"),
+                rej_lbl,
+                6.,
+                reject_rest,
+                p.chip_hover,
+                p.line_strong,
+                p.line_strong,
+                false,
+                reject_inner,
+                cx,
+                move |this, _, cx| {
+                    this.decide_change(chosen_idx, DiffDecision::Rejected, cx);
+                },
+            )
+            .flex_none();
+
+            div()
+                .absolute()
+                .left(px(pop_x))
+                .top(px(pop_y))
+                .child(pro_popover_presence(
+                    pro_eid(&self.id, "diff-pop-pres"),
+                    active_idx.is_some() && self.view_filter != DiffViewFilter::Accepted,
+                    move || {
+                        div()
+                            .p(px(4.))
+                            .rounded(px(10.))
+                            .bg(if p.dark { rgb(0x222226).into() } else { p.card })
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .shadow_lg()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(hunk_badge)
+                            .child(accept_btn)
+                            .child(reject_btn)
+                            .into_any_element()
+                    },
+                ))
+        };
 
         // Footer bar crossfading between Pending toolbar and "All changes reviewed"
         let has_undo = !self.history.is_empty();
@@ -1009,27 +1091,31 @@ impl Render for InlineDiff {
                             .when(!compact, |d| {
                                 d.child(div().text_size(px(13.)).text_color(p.text).child(word_lbl))
                             })
+                            .when_some(active_idx.filter(|_| !compact), |d, ai| {
+                                d.child(pro_view_transition(
+                                    pro_eid(&self.id, "foot-hunk-tx"),
+                                    format!("fhunk-{ai}"),
+                                    div().text_size(px(12.)).text_color(p.muted).child(format!(
+                                        "· #{}/{}",
+                                        ai + 1,
+                                        total_changes.max(1)
+                                    )),
+                                ))
+                            })
                             .when(has_undo, |d| {
-                                d.child(
-                                    div()
-                                        .id(pro_eid(&self.id, "inline-undo-icon"))
-                                        .role(Role::Button)
-                                        .aria_label(SharedString::from(tr(
-                                            cx,
-                                            "Undo last decision (⌘Z)",
-                                            "撤销上一步 (⌘Z)",
-                                        )))
-                                        .tab_index(0)
-                                        .size(px(26.))
-                                        .rounded(px(6.))
-                                        .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .on_click(cx.listener(|this, _, _, cx| this.undo(cx)))
-                                        .child(pro_icon(ProIcon::Undo, 13., p.muted)),
-                                )
+                                d.child(pro_icon_btn(
+                                    pro_eid(&self.id, "inline-undo-icon"),
+                                    SharedString::from(tr(
+                                        cx,
+                                        "Undo last decision (⌘Z)",
+                                        "撤销上一步 (⌘Z)",
+                                    )),
+                                    ProIcon::Undo,
+                                    26.,
+                                    false,
+                                    cx,
+                                    |this, _, cx| this.undo(cx),
+                                ))
                             }),
                     )
                     .child(
@@ -1043,135 +1129,63 @@ impl Render for InlineDiff {
                                         .flex()
                                         .items_center()
                                         .gap(px(2.))
-                                        .child(
-                                            div()
-                                                .id(pro_eid(&self.id, "nav-prev"))
-                                                .role(Role::Button)
-                                                .aria_label(SharedString::from(tr(
-                                                    cx,
-                                                    "Previous suggestion",
-                                                    "上一处修改",
-                                                )))
-                                                .tab_index(0)
-                                                .size(px(28.))
-                                                .rounded(px(6.))
-                                                .hover(|s| s.bg(p.hover))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.step_highlight(false, cx);
-                                                }))
-                                                .child(pro_icon(
-                                                    ProIcon::ChevronLeft,
-                                                    14.,
-                                                    p.muted,
-                                                )),
-                                        )
-                                        .child(
-                                            div()
-                                                .id(pro_eid(&self.id, "nav-next"))
-                                                .role(Role::Button)
-                                                .aria_label(SharedString::from(tr(
-                                                    cx,
-                                                    "Next suggestion",
-                                                    "下一处修改",
-                                                )))
-                                                .tab_index(0)
-                                                .size(px(28.))
-                                                .rounded(px(6.))
-                                                .hover(|s| s.bg(p.hover))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.step_highlight(true, cx);
-                                                }))
-                                                .child(pro_icon(
-                                                    ProIcon::ChevronRight,
-                                                    14.,
-                                                    p.muted,
-                                                )),
-                                        ),
+                                        .child(pro_icon_btn(
+                                            pro_eid(&self.id, "nav-prev"),
+                                            SharedString::from(tr(
+                                                cx,
+                                                "Previous suggestion",
+                                                "上一处修改",
+                                            )),
+                                            ProIcon::ChevronLeft,
+                                            28.,
+                                            false,
+                                            cx,
+                                            |this, _, cx| this.step_highlight(false, cx),
+                                        ))
+                                        .child(pro_icon_btn(
+                                            pro_eid(&self.id, "nav-next"),
+                                            SharedString::from(tr(
+                                                cx,
+                                                "Next suggestion",
+                                                "下一处修改",
+                                            )),
+                                            ProIcon::ChevronRight,
+                                            28.,
+                                            false,
+                                            cx,
+                                            |this, _, cx| this.step_highlight(true, cx),
+                                        )),
                                 )
                             })
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "btn-reject-all"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(10.))
-                                    .rounded(px(6.))
-                                    .bg(p.card)
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .hover(|s| s.bg(p.chip_hover))
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.strong)
-                                    .on_click(cx.listener(|this, _, _, cx| this.reject_all(cx)))
-                                    .child(tr(cx, "Reject all", "全部拒绝")),
-                            )
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "btn-accept-all"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(10.))
-                                    .rounded(px(6.))
-                                    .bg(p.primary)
-                                    .text_color(p.on_primary)
-                                    .hover(|s| s.opacity(0.9))
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .on_click(cx.listener(|this, _, _, cx| this.accept_all(cx)))
-                                    .child(tr(cx, "Accept all", "全部接受")),
-                            ),
+                            .child(pro_btn(
+                                pro_eid(&self.id, "btn-reject-all"),
+                                tr(cx, "Reject all", "全部拒绝"),
+                                None,
+                                ProBtnStyle::Secondary,
+                                true,
+                                cx,
+                                |this, _, cx| this.reject_all(cx),
+                            ))
+                            .child(pro_btn(
+                                pro_eid(&self.id, "btn-accept-all"),
+                                tr(cx, "Accept all", "全部接受"),
+                                Some(ProIcon::Check),
+                                ProBtnStyle::Primary,
+                                true,
+                                cx,
+                                |this, _, cx| this.accept_all(cx),
+                            )),
                     ),
             )
         } else {
-            let check_draw = match self.done_at {
-                Some(t0) if !reduced => {
-                    pro_ease((t0.elapsed().as_secs_f32() / 0.42).clamp(0.0, 1.0))
-                }
-                _ => 1.0,
-            };
-            let ok_col = p.green_ink;
-            let animated_check = canvas(
-                |_, _, _| (),
-                move |bounds, _, window, _| {
-                    let ox = f32::from(bounds.origin.x);
-                    let oy = f32::from(bounds.origin.y);
-                    let p0 = point(px(ox + 3.2), px(oy + 8.4));
-                    let p1 = point(px(ox + 6.4), px(oy + 11.4));
-                    let p2 = point(px(ox + 12.8), px(oy + 4.8));
-                    let mut pb = PathBuilder::stroke(px(1.6));
-                    pb.move_to(p0);
-                    if check_draw <= 0.42 {
-                        let u = (check_draw / 0.42).clamp(0.0, 1.0);
-                        pb.line_to(point(p0.x + (p1.x - p0.x) * u, p0.y + (p1.y - p0.y) * u));
-                    } else {
-                        pb.line_to(p1);
-                        let u = ((check_draw - 0.42) / 0.58).clamp(0.0, 1.0);
-                        pb.line_to(point(p1.x + (p2.x - p1.x) * u, p1.y + (p2.y - p1.y) * u));
-                    }
-                    if let Ok(path) = pb.build() {
-                        window.paint_path(path, ok_col);
-                    }
-                },
-            )
-            .size(px(16.))
-            .flex_none();
+            let done_checked = reduced || self.done_clock.time(0.28, w, cx) > 0.012;
+            let animated_check = pro_check_draw(
+                pro_eid(&self.id, "done-chk"),
+                done_checked,
+                16.,
+                false,
+                p.green_ink,
+            );
 
             pro_view_transition(
                 pro_eid(&self.id, "dfc-foot-tx"),
@@ -1199,51 +1213,103 @@ impl Render for InlineDiff {
                             .items_center()
                             .gap(px(6.))
                             .when(has_undo, |d| {
-                                d.child(
-                                    div()
-                                        .id(pro_eid(&self.id, "done-undo-btn"))
-                                        .role(Role::Button)
-                                        .tab_index(0)
-                                        .h(px(28.))
-                                        .pl(px(8.))
-                                        .pr(px(10.))
-                                        .rounded(px(6.))
-                                        .bg(p.card)
-                                        .border_1()
-                                        .border_color(p.line_strong)
-                                        .hover(|s| s.bg(p.chip_hover))
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(5.))
-                                        .cursor_pointer()
-                                        .text_size(px(13.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.strong)
-                                        .on_click(cx.listener(|this, _, _, cx| this.undo(cx)))
-                                        .child(pro_icon(ProIcon::Undo, 13., p.muted))
-                                        .child(tr(cx, "Undo", "撤销")),
-                                )
+                                d.child(pro_btn(
+                                    pro_eid(&self.id, "done-undo-btn"),
+                                    tr(cx, "Undo", "撤销"),
+                                    Some(ProIcon::Undo),
+                                    ProBtnStyle::Secondary,
+                                    true,
+                                    cx,
+                                    |this, _, cx| this.undo(cx),
+                                ))
                             })
-                            .child(
-                                div()
-                                    .id(pro_eid(&self.id, "done-reset-btn"))
-                                    .role(Role::Button)
-                                    .tab_index(0)
-                                    .h(px(28.))
-                                    .px(px(9.))
-                                    .rounded(px(6.))
-                                    .hover(|s| s.bg(p.hover).text_color(p.ink))
-                                    .flex()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_size(px(12.5))
-                                    .text_color(p.muted)
-                                    .on_click(cx.listener(|this, _, _, cx| this.reset(cx)))
-                                    .child(tr(cx, "Reset", "重置")),
-                            ),
+                            .child(pro_btn(
+                                pro_eid(&self.id, "done-reset-btn"),
+                                tr(cx, "Reset", "重置"),
+                                None,
+                                ProBtnStyle::Ghost,
+                                true,
+                                cx,
+                                |this, _, cx| this.reset(cx),
+                            )),
                     ),
             )
         };
+
+        // Liquid pill filter tabs (`All` / `Pending` / `Accepted`)
+        let accepted_cnt = self
+            .changes
+            .iter()
+            .filter(|c| c.decision == DiffDecision::Accepted)
+            .count();
+        let filter_bar = (total_changes > 0 && !compact).then(|| {
+            let tabs = [
+                (DiffViewFilter::All, tr(cx, "All", "全部"), total_changes),
+                (
+                    DiffViewFilter::Pending,
+                    tr(cx, "Pending", "待定"),
+                    pending_cnt,
+                ),
+                (
+                    DiffViewFilter::Accepted,
+                    tr(cx, "Accepted", "已采纳"),
+                    accepted_cnt,
+                ),
+            ];
+            let mut strip = div()
+                .relative()
+                .p(px(2.))
+                .rounded(px(7.))
+                .bg(p.subtle)
+                .flex()
+                .items_center()
+                .gap(px(2.))
+                .child(pro_pill_indicator(
+                    pro_eid(&self.id, "diff-flt-pill"),
+                    self.view_filter.key(),
+                    self.filter_sensor.clone(),
+                    5.,
+                    p.card,
+                    Some(p.line),
+                    true,
+                ));
+            for (flt, lbl, cnt) in tabs {
+                let sel = self.view_filter == flt;
+                strip = strip.child(
+                    div()
+                        .id(pro_eid(&self.id, format!("diff-flt-{}", flt.key())))
+                        .role(Role::Button)
+                        .tab_index(0)
+                        .relative()
+                        .h(px(22.))
+                        .px(px(7.))
+                        .rounded(px(5.))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .cursor_pointer()
+                        .text_size(px(11.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if sel { p.ink } else { p.muted })
+                        .hover(move |s| if sel { s } else { s.text_color(p.ink) })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.view_filter != flt {
+                                this.view_filter = flt;
+                                cx.notify();
+                            }
+                        }))
+                        .when(sel, |d| d.child(pro_mark_selected(&self.filter_sensor)))
+                        .child(lbl)
+                        .child(
+                            div()
+                                .text_size(px(10.5))
+                                .text_color(if sel { p.muted } else { p.faint })
+                                .child(format!("{cnt}")),
+                        ),
+                );
+            }
+            strip
+        });
 
         let card_origin_writer = self.card_origin.clone();
         let card = div()
@@ -1278,16 +1344,34 @@ impl Render for InlineDiff {
                             .flex()
                             .flex_col()
                             .gap(px(8.))
-                            .when_some(self.label.clone(), |d, lbl| {
+                            .when(self.label.is_some() || filter_bar.is_some(), |d| {
                                 d.child(
                                     div()
+                                        .w_full()
                                         .flex()
+                                        .flex_wrap()
                                         .items_center()
-                                        .gap(px(6.))
-                                        .text_size(px(12.))
-                                        .text_color(p.text)
-                                        .child(pro_svg("0 0 16 16", TWIN_SPARK_SVG, 15., p.blue))
-                                        .child(div().truncate().child(lbl)),
+                                        .justify_between()
+                                        .gap(px(8.))
+                                        .when_some(self.label.clone(), |hdr, lbl| {
+                                            hdr.child(
+                                                div()
+                                                    .min_w_0()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(6.))
+                                                    .text_size(px(12.))
+                                                    .text_color(p.text)
+                                                    .child(pro_svg(
+                                                        "0 0 16 16",
+                                                        TWIN_SPARK_SVG,
+                                                        15.,
+                                                        p.blue,
+                                                    ))
+                                                    .child(div().truncate().child(lbl)),
+                                            )
+                                        })
+                                        .when_some(filter_bar, |hdr, fb| hdr.child(fb)),
                                 )
                             })
                             .child(flow),
@@ -1350,6 +1434,7 @@ fn build_change_slots(segments: &[DiffSegment]) -> Vec<ChangeSlot> {
                 insert: insert.clone(),
                 decision: DiffDecision::Pending,
                 decided_at: None,
+                accept_clock: PhaseClock::default(),
             }),
             DiffSegment::Equal(_) => None,
         })

@@ -7,8 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_connector_pulse, pro_eid, pro_empty_state,
-        pro_skeleton_bar, pro_step_transition, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_connector_pulse,
+        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_popover_presence,
+        pro_skeleton_bar, pro_spring_f32, pro_step_transition, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -428,6 +430,7 @@ pub struct DecisionTree {
     other_editor: Option<Entity<Editor>>,
     other_focused: bool,
     active_flag_note: Option<(SharedString, Option<SharedString>)>,
+    last_flag_note: Option<(SharedString, Option<SharedString>)>,
     confirmed: Option<ConfirmedState>,
     allow_other: bool,
     boot_at: Instant,
@@ -457,6 +460,7 @@ impl DecisionTree {
             other_editor: None,
             other_focused: false,
             active_flag_note: None,
+            last_flag_note: None,
             confirmed: None,
             allow_other: true,
             boot_at: Instant::now(),
@@ -645,7 +649,9 @@ impl DecisionTree {
         for b in &dec.branches {
             for eff in &b.effects {
                 if let Some(note) = &eff.flag_note {
-                    self.active_flag_note = Some((note.clone(), eff.flag_source.clone()));
+                    let pair = (note.clone(), eff.flag_source.clone());
+                    self.active_flag_note = Some(pair.clone());
+                    self.last_flag_note = Some(pair);
                     cx.emit(DecisionTreeEvent::FlagNoteShown(Some(note.clone())));
                     cx.notify();
                     return;
@@ -653,7 +659,9 @@ impl DecisionTree {
             }
             for so in &b.sub_options {
                 if let Some(note) = &so.effect.flag_note {
-                    self.active_flag_note = Some((note.clone(), so.effect.flag_source.clone()));
+                    let pair = (note.clone(), so.effect.flag_source.clone());
+                    self.active_flag_note = Some(pair.clone());
+                    self.last_flag_note = Some(pair);
                     cx.emit(DecisionTreeEvent::FlagNoteShown(Some(note.clone())));
                     cx.notify();
                     return;
@@ -757,7 +765,9 @@ impl DecisionTree {
                             move |this, inside: &bool, _, cx| {
                                 if *inside {
                                     if let Some(n) = &note_opt {
-                                        this.active_flag_note = Some((n.clone(), src_opt.clone()));
+                                        let pair = (n.clone(), src_opt.clone());
+                                        this.active_flag_note = Some(pair.clone());
+                                        this.last_flag_note = Some(pair);
                                     }
                                 } else {
                                     this.active_flag_note = None;
@@ -767,7 +777,9 @@ impl DecisionTree {
                         }))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                             if let Some(n) = &note_opt {
-                                this.active_flag_note = Some((n.clone(), src_opt.clone()));
+                                let pair = (n.clone(), src_opt.clone());
+                                this.active_flag_note = Some(pair.clone());
+                                this.last_flag_note = Some(pair);
                                 cx.stop_propagation();
                                 cx.notify();
                             }
@@ -976,42 +988,28 @@ impl Render for DecisionTree {
                                 .flex()
                                 .items_center()
                                 .gap(px(2.0))
-                                .child(
-                                    div()
-                                        .id(pro_eid(&self.id, "dt-prev"))
-                                        .role(Role::Button)
-                                        .aria_label(prev_lbl)
-                                        .tab_index(0)
-                                        .size(px(22.0))
-                                        .rounded(px(5.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .hover(move |s| s.bg(fill_bg))
-                                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                            this.step_decision(-1, cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::ChevronLeft, 12.0, p.muted)),
-                                )
-                                .child(
-                                    div()
-                                        .id(pro_eid(&self.id, "dt-next"))
-                                        .role(Role::Button)
-                                        .aria_label(next_lbl)
-                                        .tab_index(0)
-                                        .size(px(22.0))
-                                        .rounded(px(5.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .hover(move |s| s.bg(fill_bg))
-                                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                            this.step_decision(1, cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::ChevronRight, 12.0, p.muted)),
-                                ),
+                                .child(pro_icon_btn(
+                                    pro_eid(&self.id, "dt-prev"),
+                                    prev_lbl,
+                                    ProIcon::ChevronLeft,
+                                    22.0,
+                                    false,
+                                    cx,
+                                    |this, _, cx| {
+                                        this.step_decision(-1, cx);
+                                    },
+                                ))
+                                .child(pro_icon_btn(
+                                    pro_eid(&self.id, "dt-next"),
+                                    next_lbl,
+                                    ProIcon::ChevronRight,
+                                    22.0,
+                                    false,
+                                    cx,
+                                    |this, _, cx| {
+                                        this.step_decision(1, cx);
+                                    },
+                                )),
                         ),
                 )
             });
@@ -1038,14 +1036,38 @@ impl Render for DecisionTree {
                 Some((elapsed_secs / 1.9).fract())
             };
 
+            let confirmed_idx = self.confirmed.as_ref().map(|c| c.branch_idx);
+            let mut row_weights = [(1.0_f32, 0.0_f32); 5];
+            for (ri, slot) in row_weights.iter_mut().enumerate().take(total_rows.min(5)) {
+                let row_dim = confirmed_idx.is_some_and(|ci| ci != ri)
+                    || (confirmed_idx.is_none() && hot_idx.is_some_and(|hi| hi != ri));
+                let row_hot = hot_idx == Some(ri);
+                let op = pro_spring_f32(
+                    pro_eid(&self.id, format!("dt-row-op-{}-{ri}", dec.id)),
+                    if row_dim { 0.32 } else { 1.0 },
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0.0, 1.0);
+                let hm = pro_spring_f32(
+                    pro_eid(&self.id, format!("dt-row-ht-{}-{ri}", dec.id)),
+                    if row_hot { 1.0 } else { 0.0 },
+                    0.22,
+                    w,
+                    cx,
+                )
+                .clamp(0.0, 1.0);
+                *slot = (op, hm);
+            }
+
             // Connector Canvas painted behind the nodes (only in wide left-to-right mode)
             let connector_layer = (!stacked).then(|| {
                 let bmap = bounds_map.clone();
-                let confirmed_idx = self.confirmed.as_ref().map(|c| c.branch_idx);
                 let link_idle = p.ink.opacity(0.16);
                 let link_pick = p.blue.opacity(0.46);
-                let link_hot = p.ink.opacity(0.42);
-                let link_pick_hot = p.blue.opacity(0.76);
+                let link_hot = p.ink.opacity(0.46);
+                let link_pick_hot = p.blue.opacity(0.82);
                 let ok_color = p.green;
                 let blue_pulse = p.blue;
 
@@ -1057,29 +1079,36 @@ impl Render for DecisionTree {
                         };
                         let _ = surface;
                         let p_root = point(root_b.right(), root_b.center().y);
-                        for i in 0..total_rows.min(5) {
+                        for (i, &(vis, hm)) in
+                            row_weights.iter().enumerate().take(total_rows.min(5))
+                        {
                             let Some(br_b) = bmap.branches[i].get() else {
                                 continue;
                             };
                             let p_br_in = point(br_b.left(), br_b.center().y);
                             let is_pick = pick_idx == Some(i);
                             let is_chosen = confirmed_idx == Some(i);
-                            let is_hot = hot_idx == Some(i);
-                            let dimmed = confirmed_idx.is_some_and(|ci| ci != i)
-                                || (confirmed_idx.is_none() && hot_idx.is_some_and(|hi| hi != i));
 
                             let (stroke_c, p_col, prog, sw) = if is_chosen {
-                                (ok_color.opacity(0.75), ok_color, pulse_prog, 1.6)
-                            } else if dimmed {
-                                (link_idle.opacity(0.08), blue_pulse, None, 1.0)
-                            } else if is_pick && is_hot {
-                                (link_pick_hot, blue_pulse, pulse_prog, 1.5)
-                            } else if is_pick {
-                                (link_pick, blue_pulse, pulse_prog, 1.35)
-                            } else if is_hot {
-                                (link_hot, blue_pulse, pulse_prog, 1.35)
+                                (ok_color.opacity(0.78), ok_color, pulse_prog, 1.65)
                             } else {
-                                (link_idle, blue_pulse, None, 1.0)
+                                let base_c = if is_pick {
+                                    pro_mix_color(link_pick, link_pick_hot, hm)
+                                } else {
+                                    pro_mix_color(link_idle, link_hot, hm)
+                                };
+                                let eff_c = base_c.opacity((base_c.a * vis).clamp(0.04, 0.92));
+                                let show_p = if vis > 0.55 && (is_pick || hm > 0.35) {
+                                    pulse_prog
+                                } else {
+                                    None
+                                };
+                                let w_px = if is_pick {
+                                    1.35 + 0.25 * hm
+                                } else {
+                                    1.05 + 0.40 * hm
+                                };
+                                (eff_c, blue_pulse, show_p, w_px)
                             };
 
                             pro_connector_pulse(
@@ -1230,8 +1259,7 @@ impl Render for DecisionTree {
 
             for (bi, branch) in dec.branches.iter().take(4).enumerate() {
                 let is_chosen = self.confirmed.as_ref().is_some_and(|c| c.branch_idx == bi);
-                let dimmed = self.confirmed.as_ref().is_some_and(|c| c.branch_idx != bi)
-                    || (self.confirmed.is_none() && self.hovered_branch.is_some_and(|hi| hi != bi));
+                let (row_op, _) = row_weights[bi];
                 let is_hot = self.hovered_branch == Some(bi) || is_chosen;
 
                 let br_border = if is_chosen {
@@ -1242,6 +1270,13 @@ impl Render for DecisionTree {
                     p.line_strong
                 } else {
                     p.line
+                };
+                let br_hov_border = if is_chosen {
+                    p.green
+                } else if branch.pick {
+                    p.blue.opacity(0.75)
+                } else {
+                    p.line_strong
                 };
 
                 let br_sensor = bounds_map.branches[bi].clone();
@@ -1257,74 +1292,78 @@ impl Render for DecisionTree {
                         }
                     })
                     .child(
-                        div()
-                            .id(pro_eid(&self.id, format!("dt-br-{bi}")))
-                            .role(Role::Button)
-                            .aria_label(branch.label.clone())
-                            .tab_index(0)
-                            .w_full()
-                            .px(px(12.0))
-                            .py(px(9.0))
-                            .rounded(px(8.0))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(br_border)
-                            .when(!p.dark, |d| d.shadow_xs())
-                            .flex()
-                            .items_start()
-                            .gap(px(8.0))
-                            .cursor_pointer()
-                            .focus_visible(move |s| s.border_color(p.focus))
-                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        pro_tactile(
+                            pro_eid(&self.id, format!("dt-br-{bi}")),
+                            branch.label.clone(),
+                            8.0,
+                            card_bg,
+                            pro_mix_color(card_bg, p.hover, 0.70),
+                            br_border,
+                            br_hov_border,
+                            is_chosen,
+                            div()
+                                .w_full()
+                                .px(px(12.0))
+                                .py(px(9.0))
+                                .flex()
+                                .items_start()
+                                .gap(px(8.0))
+                                .child(
+                                    div()
+                                        .size(px(17.0))
+                                        .mt(px(1.0))
+                                        .flex_none()
+                                        .rounded(px(4.5))
+                                        .bg(fill_bg)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.muted)
+                                        .child(format!("{}", bi + 1)),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(2.0))
+                                        .child(
+                                            div()
+                                                .text_size(px(13.0))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .line_height(px(18.0))
+                                                .text_color(p.ink)
+                                                .child(branch.label.clone()),
+                                        )
+                                        .when(branch.pick, |d| {
+                                            d.child(
+                                                div()
+                                                    .text_size(px(11.5))
+                                                    .text_color(p.blue)
+                                                    .child(pick_tag),
+                                            )
+                                        }),
+                                ),
+                            cx,
+                            move |this, _, cx| {
+                                this.choose_branch(bi, None, cx);
+                            },
+                        )
+                        .w_full()
+                        .when(!p.dark, |d| d.shadow_xs())
+                        .on_hover(cx.listener(
+                            move |this, inside: &bool, _, cx| {
                                 if *inside {
                                     this.hovered_branch = Some(bi);
                                 } else if this.hovered_branch == Some(bi) {
                                     this.hovered_branch = None;
                                 }
                                 cx.notify();
-                            }))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                this.choose_branch(bi, None, cx);
-                            }))
-                            .child(
-                                div()
-                                    .size(px(17.0))
-                                    .mt(px(1.0))
-                                    .flex_none()
-                                    .rounded(px(4.5))
-                                    .bg(fill_bg)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .child(format!("{}", bi + 1)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.0))
-                                    .child(
-                                        div()
-                                            .text_size(px(13.0))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .line_height(px(18.0))
-                                            .text_color(p.ink)
-                                            .child(branch.label.clone()),
-                                    )
-                                    .when(branch.pick, |d| {
-                                        d.child(
-                                            div()
-                                                .text_size(px(11.5))
-                                                .text_color(p.blue)
-                                                .child(pick_tag),
-                                        )
-                                    }),
-                            ),
+                            },
+                        )),
                     );
 
                 // Right-hand Leaf or Sub-choices or Confirmed Outcome Card
@@ -1334,57 +1373,54 @@ impl Render for DecisionTree {
                     } else {
                         tr(cx, "Done", "完成")
                     };
-                    div()
-                        .px(px(12.0))
-                        .py(px(9.0))
-                        .rounded(px(8.0))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.green.opacity(0.5))
-                        .flex()
-                        .flex_col()
-                        .gap(px(5.0))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.0))
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.green_ink)
-                                .child(pro_icon(ProIcon::Check, 13.0, p.green))
-                                .child(conf.summary.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(p.text)
-                                .child(conf.agent_reply.clone()),
-                        )
-                        .child(
-                            div()
-                                .id(pro_eid(&self.id, "dt-advance"))
-                                .role(Role::Button)
-                                .aria_label(next_lbl)
-                                .tab_index(0)
-                                .mt(px(2.0))
-                                .self_start()
-                                .h(px(24.0))
-                                .px(px(9.0))
-                                .rounded(px(6.0))
-                                .bg(p.primary)
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .cursor_pointer()
-                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    pro_view_transition(
+                        pro_eid(&self.id, format!("dt-conf-vtx-{bi}")),
+                        "confirmed",
+                        div()
+                            .px(px(12.0))
+                            .py(px(9.0))
+                            .rounded(px(8.0))
+                            .bg(card_bg)
+                            .border_1()
+                            .border_color(p.green.opacity(0.5))
+                            .flex()
+                            .flex_col()
+                            .gap(px(5.0))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0))
+                                    .text_size(px(12.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.green_ink)
+                                    .child(pro_check_draw(
+                                        pro_eid(&self.id, format!("dt-chk-conf-{bi}")),
+                                        true,
+                                        14.0,
+                                        false,
+                                        p.green,
+                                    ))
+                                    .child(conf.summary.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(p.text)
+                                    .child(conf.agent_reply.clone()),
+                            )
+                            .child(div().mt(px(2.0)).self_start().child(pro_btn(
+                                pro_eid(&self.id, "dt-advance"),
+                                next_lbl,
+                                None,
+                                ProBtnStyle::Primary,
+                                true,
+                                cx,
+                                |this, _, cx| {
                                     this.advance_after_confirm(cx);
-                                }))
-                                .child(next_lbl),
-                        )
-                        .into_any_element()
+                                },
+                            ))),
+                    )
                 } else if let Some(sub_q) = &branch.sub_question {
                     let mut sub_col = div().flex().flex_col().items_start().gap(px(6.0));
                     sub_col = sub_col.child(
@@ -1412,64 +1448,67 @@ impl Render for DecisionTree {
                             self.render_consequence_line(&so.effect, format!("s-{bi}-{si}"), cx);
                         let apps_el = render_app_cluster(&so.apps, card_bg, &p, cx);
                         sub_list = sub_list.child(
-                            div()
-                                .id(pro_eid(&self.id, format!("dt-sub-{bi}-{si}")))
-                                .role(Role::Button)
-                                .aria_label(so.label.clone())
-                                .tab_index(0)
-                                .px(px(10.0))
-                                .py(px(6.0))
-                                .rounded(px(8.0))
-                                .bg(card_bg)
-                                .border_1()
-                                .border_color(if so.pick {
+                            pro_tactile(
+                                pro_eid(&self.id, format!("dt-sub-{bi}-{si}")),
+                                so.label.clone(),
+                                8.0,
+                                card_bg,
+                                pro_mix_color(card_bg, p.hover, 0.70),
+                                if so.pick {
                                     p.blue.opacity(0.35)
                                 } else {
                                     p.line
-                                })
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.0))
-                                .cursor_pointer()
-                                .hover(move |s| s.border_color(p.line_strong))
-                                .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                                },
+                                if so.pick { p.blue } else { p.line_strong },
+                                false,
+                                div()
+                                    .px(px(10.0))
+                                    .py(px(6.0))
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.0))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(7.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.5))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(p.ink)
+                                                    .child(so.label.clone()),
+                                            )
+                                            .when(so.pick, |d| {
+                                                d.child(
+                                                    div()
+                                                        .text_size(px(11.0))
+                                                        .text_color(p.blue)
+                                                        .child(pick_tag),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(8.0))
+                                            .child(eff_el)
+                                            .when_some(apps_el, |d, a| d.child(a)),
+                                    ),
+                                cx,
+                                move |this, _, cx| {
+                                    this.choose_branch(bi, Some(si), cx);
+                                },
+                            )
+                            .on_hover(cx.listener(
+                                move |this, inside: &bool, _, cx| {
                                     if *inside {
                                         this.hovered_branch = Some(bi);
                                         cx.notify();
                                     }
-                                }))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    this.choose_branch(bi, Some(si), cx);
-                                }))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(7.0))
-                                        .child(
-                                            div()
-                                                .text_size(px(12.5))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.ink)
-                                                .child(so.label.clone()),
-                                        )
-                                        .when(so.pick, |d| {
-                                            d.child(
-                                                div()
-                                                    .text_size(px(11.0))
-                                                    .text_color(p.blue)
-                                                    .child(pick_tag),
-                                            )
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(8.0))
-                                        .child(eff_el)
-                                        .when_some(apps_el, |d, a| d.child(a)),
-                                ),
+                                },
+                            )),
                         );
                     }
                     sub_col.child(sub_list).into_any_element()
@@ -1501,7 +1540,7 @@ impl Render for DecisionTree {
                 branches_col = branches_col.child(
                     div()
                         .w_full()
-                        .opacity(if dimmed { 0.36 } else { 1.0 })
+                        .opacity(row_op)
                         .flex()
                         .when(stacked, |d| d.flex_col().items_start().gap(px(8.0)))
                         .when(!stacked, |d| d.items_center().gap(px(26.0)))
@@ -1525,56 +1564,47 @@ impl Render for DecisionTree {
             if self.allow_other {
                 let oi = branch_len;
                 let other_chosen = self.confirmed.as_ref().is_some_and(|c| c.branch_idx == oi);
-                let dimmed = self.confirmed.as_ref().is_some_and(|c| c.branch_idx != oi)
-                    || (self.confirmed.is_none()
-                        && !self.other_open
-                        && self.hovered_branch.is_some_and(|hi| hi != oi));
+                let (other_op, _) = row_weights[oi.min(4)];
                 let br_sensor = bounds_map.branches[oi].clone();
                 let lf_sensor = bounds_map.leaves[oi].clone();
                 let other_lbl = tr(cx, "Other…", "其他路径…");
 
-                let other_left = if self.other_open {
-                    let ed_view = self.other_editor.clone();
-                    let confirm_lbl = tr(cx, "Confirm", "确认发送");
-                    div()
-                        .w_full()
-                        .p(px(9.0))
-                        .rounded(px(8.0))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.focus)
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.0))
-                        .child(div().h(px(42.0)).when_some(ed_view, |d, ed| d.child(ed)))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .child(
-                                    div()
-                                        .text_size(px(11.0))
-                                        .text_color(p.muted)
-                                        .child("↵ / ⌘↵"),
-                                )
-                                .child(
-                                    div()
-                                        .id(pro_eid(&self.id, "dt-other-confirm"))
-                                        .role(Role::Button)
-                                        .aria_label(confirm_lbl)
-                                        .tab_index(0)
-                                        .h(px(24.0))
-                                        .px(px(9.0))
-                                        .rounded(px(6.0))
-                                        .bg(p.primary)
-                                        .flex()
-                                        .items_center()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.on_primary)
-                                        .cursor_pointer()
-                                        .on_click(cx.listener(|this, _: &ClickEvent, w, cx| {
+                let other_left = pro_view_transition(
+                    pro_eid(&self.id, "dt-other-vtx"),
+                    if self.other_open { "open" } else { "closed" },
+                    if self.other_open {
+                        let ed_view = self.other_editor.clone();
+                        let confirm_lbl = tr(cx, "Confirm", "确认发送");
+                        div()
+                            .w_full()
+                            .p(px(9.0))
+                            .rounded(px(8.0))
+                            .bg(card_bg)
+                            .border_1()
+                            .border_color(p.focus)
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.0))
+                            .child(div().h(px(42.0)).when_some(ed_view, |d, ed| d.child(ed)))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_size(px(11.0))
+                                            .text_color(p.muted)
+                                            .child("↵ / ⌘↵"),
+                                    )
+                                    .child(pro_btn(
+                                        pro_eid(&self.id, "dt-other-confirm"),
+                                        confirm_lbl,
+                                        Some(ProIcon::Check),
+                                        ProBtnStyle::Primary,
+                                        true,
+                                        cx,
+                                        |this, w, cx| {
                                             if let Some(ed) = &this.other_editor {
                                                 let val = ed.read(cx).value().trim().to_owned();
                                                 if !val.is_empty() {
@@ -1582,28 +1612,58 @@ impl Render for DecisionTree {
                                                     this.submit_custom(val.into(), cx);
                                                 }
                                             }
-                                        }))
-                                        .child(confirm_lbl),
+                                        },
+                                    )),
+                            )
+                            .into_any_element()
+                    } else {
+                        pro_tactile(
+                            pro_eid(&self.id, "dt-other-btn"),
+                            other_lbl,
+                            8.0,
+                            transparent_black(),
+                            card_bg,
+                            if other_chosen { p.green } else { p.line_strong },
+                            if other_chosen { p.green } else { p.blue },
+                            other_chosen,
+                            div()
+                                .w_full()
+                                .h(px(36.0))
+                                .px(px(12.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .child(
+                                    div()
+                                        .size(px(17.0))
+                                        .rounded(px(4.5))
+                                        .bg(fill_bg)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.muted)
+                                        .child(format!("{}", oi + 1)),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(13.0))
+                                        .text_color(p.muted)
+                                        .child(other_lbl),
                                 ),
+                            cx,
+                            |this, w, cx| {
+                                this.other_open = true;
+                                this.ensure_editor(w, cx);
+                                if let Some(ed) = &this.other_editor {
+                                    let fh = ed.read(cx).focus.clone();
+                                    fh.focus(w, cx);
+                                }
+                                cx.notify();
+                            },
                         )
-                        .into_any_element()
-                } else {
-                    div()
-                        .id(pro_eid(&self.id, "dt-other-btn"))
-                        .role(Role::Button)
-                        .aria_label(other_lbl)
-                        .tab_index(0)
                         .w_full()
-                        .h(px(36.0))
-                        .px(px(12.0))
-                        .rounded(px(8.0))
-                        .border_1()
-                        .border_color(if other_chosen { p.green } else { p.line_strong })
-                        .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(card_bg))
                         .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                             if *inside {
                                 this.hovered_branch = Some(oi);
@@ -1612,36 +1672,9 @@ impl Render for DecisionTree {
                             }
                             cx.notify();
                         }))
-                        .on_click(cx.listener(|this, _: &ClickEvent, w, cx| {
-                            this.other_open = true;
-                            this.ensure_editor(w, cx);
-                            if let Some(ed) = &this.other_editor {
-                                let fh = ed.read(cx).focus.clone();
-                                fh.focus(w, cx);
-                            }
-                            cx.notify();
-                        }))
-                        .child(
-                            div()
-                                .size(px(17.0))
-                                .rounded(px(4.5))
-                                .bg(fill_bg)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_size(px(10.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.muted)
-                                .child(format!("{}", oi + 1)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(13.0))
-                                .text_color(p.muted)
-                                .child(other_lbl),
-                        )
                         .into_any_element()
-                };
+                    },
+                );
 
                 let other_right = other_chosen.then(|| {
                     let conf = self.confirmed.as_ref();
@@ -1656,7 +1689,9 @@ impl Render for DecisionTree {
                                 lf_sensor.set(Some(*b));
                             }
                         })
-                        .child(
+                        .child(pro_view_transition(
+                            pro_eid(&self.id, "dt-other-conf-vtx"),
+                            "other-confirmed",
                             div()
                                 .px(px(12.0))
                                 .py(px(9.0))
@@ -1676,7 +1711,13 @@ impl Render for DecisionTree {
                                             .text_size(px(12.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.green_ink)
-                                            .child(pro_icon(ProIcon::Check, 13.0, p.green))
+                                            .child(pro_check_draw(
+                                                pro_eid(&self.id, "dt-chk-other"),
+                                                true,
+                                                14.0,
+                                                false,
+                                                p.green,
+                                            ))
                                             .child(c.summary.clone()),
                                     )
                                     .child(
@@ -1686,36 +1727,24 @@ impl Render for DecisionTree {
                                             .child(c.agent_reply.clone()),
                                     )
                                 })
-                                .child(
-                                    div()
-                                        .id(pro_eid(&self.id, "dt-other-adv"))
-                                        .role(Role::Button)
-                                        .aria_label(next_lbl)
-                                        .tab_index(0)
-                                        .mt(px(2.0))
-                                        .self_start()
-                                        .h(px(24.0))
-                                        .px(px(9.0))
-                                        .rounded(px(6.0))
-                                        .bg(p.primary)
-                                        .flex()
-                                        .items_center()
-                                        .text_size(px(11.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.on_primary)
-                                        .cursor_pointer()
-                                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                            this.advance_after_confirm(cx);
-                                        }))
-                                        .child(next_lbl),
-                                ),
-                        )
+                                .child(div().mt(px(2.0)).self_start().child(pro_btn(
+                                    pro_eid(&self.id, "dt-other-adv"),
+                                    next_lbl,
+                                    None,
+                                    ProBtnStyle::Primary,
+                                    true,
+                                    cx,
+                                    |this, _, cx| {
+                                        this.advance_after_confirm(cx);
+                                    },
+                                ))),
+                        ))
                 });
 
                 branches_col = branches_col.child(
                     div()
                         .w_full()
-                        .opacity(if dimmed { 0.38 } else { 1.0 })
+                        .opacity(other_op)
                         .flex()
                         .when(stacked, |d| d.flex_col().items_start().gap(px(8.0)))
                         .when(!stacked, |d| d.items_center().gap(px(26.0)))
@@ -1737,52 +1766,65 @@ impl Render for DecisionTree {
                 );
             }
 
-            // Flagged note callout banner (when hovered or toggled via `F`)
-            let flag_banner = self.active_flag_note.as_ref().map(|(note_txt, src_opt)| {
-                div()
-                    .w_full()
-                    .max_w(px(420.0))
-                    .p(px(10.0))
-                    .rounded(px(9.0))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.amber.opacity(0.45))
-                    .shadow_md()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(5.0))
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.amber_ink)
-                            .child(pro_icon(ProIcon::AlertTriangle, 12.0, p.amber_ink))
-                            .child(tr(cx, "AGENT RISK NOTE", "智能体风险注解")),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .line_height(px(18.0))
-                            .text_color(p.ink)
-                            .child(note_txt.clone()),
-                    )
-                    .when_some(src_opt.clone(), |d, src| {
-                        d.child(
+            // Flagged note callout banner with bidirectional spring presence
+            let flag_data = self
+                .active_flag_note
+                .clone()
+                .or_else(|| self.last_flag_note.clone());
+            let flag_open = self.active_flag_note.is_some();
+            let flag_banner = flag_data.map(|(note_txt, src_opt)| {
+                let hdr_txt = tr(cx, "AGENT RISK NOTE", "智能体风险注解").to_string();
+                let amber_bdr = p.amber.opacity(0.45);
+                let amber_ink = p.amber_ink;
+                let ink_c = p.ink;
+                let muted_c = p.muted;
+                pro_popover_presence(pro_eid(&self.id, "dt-flag-pop"), flag_open, move || {
+                    div()
+                        .w_full()
+                        .max_w(px(420.0))
+                        .p(px(10.0))
+                        .rounded(px(9.0))
+                        .bg(card_bg)
+                        .border_1()
+                        .border_color(amber_bdr)
+                        .shadow_md()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.0))
+                        .child(
                             div()
-                                .self_start()
-                                .px(px(6.0))
-                                .py(px(1.0))
-                                .rounded(px(4.0))
-                                .bg(fill_bg)
-                                .font_family("Menlo")
-                                .text_size(px(11.0))
-                                .text_color(p.muted)
-                                .child(src),
+                                .flex()
+                                .items_center()
+                                .gap(px(5.0))
+                                .text_size(px(10.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(amber_ink)
+                                .child(pro_icon(ProIcon::AlertTriangle, 12.0, amber_ink))
+                                .child(hdr_txt),
                         )
-                    })
+                        .child(
+                            div()
+                                .text_size(px(12.5))
+                                .line_height(px(18.0))
+                                .text_color(ink_c)
+                                .child(note_txt),
+                        )
+                        .when_some(src_opt, |d, src| {
+                            d.child(
+                                div()
+                                    .self_start()
+                                    .px(px(6.0))
+                                    .py(px(1.0))
+                                    .rounded(px(4.0))
+                                    .bg(fill_bg)
+                                    .font_family("Menlo")
+                                    .text_size(px(11.0))
+                                    .text_color(muted_c)
+                                    .child(src),
+                            )
+                        })
+                        .into_any_element()
+                })
             });
 
             // Footer keyboard hint bar
@@ -1885,7 +1927,13 @@ impl Render for DecisionTree {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_icon(ProIcon::Check, 18.0, p.green_ink)),
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, "dt-all-chk"),
+                            true,
+                            22.0,
+                            true,
+                            p.green,
+                        )),
                 )
                 .child(
                     div()
@@ -1903,33 +1951,17 @@ impl Render for DecisionTree {
                     "Incident, Billing, and Infra agents are executing your chosen paths.",
                     "故障处理、账单与基础设施智能体正沿你选定的分支执行。",
                 )))
-                .child(
-                    div()
-                        .id(pro_eid(&self.id, "dt-replay-all"))
-                        .role(Role::Button)
-                        .aria_label(replay_lbl)
-                        .tab_index(0)
-                        .mt(px(6.0))
-                        .h(px(30.0))
-                        .px(px(12.0))
-                        .rounded(px(7.0))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(fill_bg))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.reset(cx);
-                        }))
-                        .child(pro_icon(ProIcon::Refresh, 12.5, p.muted))
-                        .child(replay_lbl),
-                )
+                .child(div().mt(px(6.0)).child(pro_btn(
+                    pro_eid(&self.id, "dt-replay-all"),
+                    replay_lbl,
+                    Some(ProIcon::Refresh),
+                    ProBtnStyle::Secondary,
+                    false,
+                    cx,
+                    |this, _, cx| {
+                        this.reset(cx);
+                    },
+                )))
                 .into_any_element()
         };
 

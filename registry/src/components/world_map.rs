@@ -6,12 +6,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_presence, pro_selection_sensor, pro_skeleton_bar, tr,
+        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_presence, pro_selection_sensor, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
+        family::{Slide, disabled_motion},
         pro_icons::{ProIcon, pro_icon},
     },
 };
@@ -245,6 +247,55 @@ fn coastline_cache(continent: Continent) -> &'static CoastlineGeometry {
     &arr[continent.index()]
 }
 
+fn point_in_polygon(vx: f32, vy: f32, pts: &[(f32, f32)]) -> bool {
+    if pts.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let mut j = pts.len() - 1;
+    for i in 0..pts.len() {
+        let (xi, yi) = pts[i];
+        let (xj, yj) = pts[j];
+        let intersects = ((yi > vy) != (yj > vy))
+            && (vx < (xj - xi) * (vy - yi) / (yj - yi).copysign((yj - yi).abs().max(1e-5)) + xi);
+        if intersects {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Hit-test a `540 × 242` viewBox coordinate `(vx, vy)` against the 6 continents.
+fn hit_continent_vb(vx: f32, vy: f32) -> Option<Continent> {
+    if !(0.0..=MAP_VB_W).contains(&vx) || !(0.0..=MAP_VB_H).contains(&vy) {
+        return None;
+    }
+    for c in Continent::ALL {
+        if point_in_polygon(vx, vy, &coastline_cache(c).pts) {
+            return Some(c);
+        }
+    }
+    // Coastal / island proximity fallback (`<= 7.5` viewBox units)
+    let mut best: Option<(Continent, f32)> = None;
+    for c in Continent::ALL {
+        let pts = &coastline_cache(c).pts;
+        let min_d2 = pts
+            .iter()
+            .step_by(2)
+            .map(|&(px_x, px_y)| {
+                let dx = vx - px_x;
+                let dy = vy - px_y;
+                dx * dx + dy * dy
+            })
+            .fold(f32::INFINITY, f32::min);
+        if min_d2 <= 56.25 && best.is_none_or(|(_, b_d2)| min_d2 < b_d2) {
+            best = Some((c, min_d2));
+        }
+    }
+    best.map(|(c, _)| c)
+}
+
 /// Sample the diagonal pastel coastline shine (`(0,0) -> (540,242)`).
 fn coastline_pastel_color(ax: f32, ay: f32) -> Hsla {
     let denom = MAP_VB_W * MAP_VB_W + MAP_VB_H * MAP_VB_H;
@@ -400,13 +451,16 @@ pub struct WorldMap {
     show_switcher: bool,
     menu_open: bool,
     highlighted_idx: usize,
-    trigger_hovered: bool,
+    hovered_map_continent: Option<Continent>,
+    preview_slides: [Slide; 6],
+    map_press: Slide,
     label: Option<SharedString>,
     playing: bool,
     height: Option<Pixels>,
     loading: bool,
     empty: bool,
     measured_size: Rc<Cell<(f32, f32)>>,
+    map_bounds: Rc<Cell<Bounds<Pixels>>>,
 }
 
 impl WorldMap {
@@ -415,7 +469,7 @@ impl WorldMap {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         Self {
             id: id.into(),
             focus: cx.focus_handle().tab_stop(true),
@@ -427,13 +481,23 @@ impl WorldMap {
             show_switcher: true,
             menu_open: false,
             highlighted_idx: Continent::Europe.index(),
-            trigger_hovered: false,
+            hovered_map_continent: None,
+            preview_slides: [
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+                Slide::snappy(0.),
+            ],
+            map_press: Slide::snappy(0.),
             label: None,
             playing: true,
             height: None,
             loading: false,
             empty: false,
             measured_size: Rc::new(Cell::new((560.0, 251.0))),
+            map_bounds: Rc::new(Cell::new(Bounds::default())),
         }
     }
 
@@ -498,7 +562,7 @@ impl WorldMap {
             }
             return;
         }
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         self.prev_continent = Some((self.active_continent, now));
         self.active_continent = continent;
         self.highlighted_idx = continent.index();
@@ -511,6 +575,18 @@ impl WorldMap {
         }
         cx.emit(WorldMapEvent::ContinentChanged(continent));
         cx.notify();
+    }
+
+    fn hit_map_pos(&self, pos: Point<Pixels>) -> Option<Continent> {
+        let b = self.map_bounds.get();
+        let bw = f32::from(b.size.width);
+        let bh = f32::from(b.size.height);
+        if bw <= 4.0 || bh <= 4.0 {
+            return None;
+        }
+        let vx = (f32::from(pos.x - b.left()) / bw) * MAP_VB_W;
+        let vy = (f32::from(pos.y - b.top()) / bh) * MAP_VB_H;
+        hit_continent_vb(vx, vy)
     }
 
     /// Return whether the continent switcher menu is open.
@@ -560,8 +636,11 @@ impl WorldMap {
 impl Render for WorldMap {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = Theme::global(cx).reduced_motion;
-        let band_elapsed = self.band_started_at.elapsed().as_secs_f32();
+        let reduced = disabled_motion(cx);
+        let now = cx.background_executor().now();
+        let band_elapsed = now
+            .saturating_duration_since(self.band_started_at)
+            .as_secs_f32();
 
         if self.loading {
             let phase = (band_elapsed / 1.4).fract();
@@ -600,7 +679,7 @@ impl Render for WorldMap {
         let animate_band = self.playing && !reduced;
         let mut exit_state: Option<(Continent, f32)> = None;
         if let Some((prev_c, t0)) = self.prev_continent {
-            let age = t0.elapsed().as_secs_f32();
+            let age = now.saturating_duration_since(t0).as_secs_f32();
             if !reduced && age < 0.32 {
                 let u = (age / 0.32).clamp(0.0, 1.0);
                 exit_state = Some((prev_c, 1.0 - u * u));
@@ -609,7 +688,7 @@ impl Render for WorldMap {
             }
         }
 
-        let enter_age = self.entered_at.elapsed().as_secs_f32();
+        let enter_age = now.saturating_duration_since(self.entered_at).as_secs_f32();
         let enter_t = if self.initial_mount || reduced || enter_age >= 0.52 {
             1.0
         } else {
@@ -644,6 +723,20 @@ impl Render for WorldMap {
 
         let dark = p.dark;
         let active = self.active_continent;
+        let hi_idx = self.highlighted_idx.min(Continent::ALL.len() - 1);
+        let preview_target = if self.menu_open && Continent::ALL[hi_idx] != active {
+            Some(Continent::ALL[hi_idx])
+        } else {
+            self.hovered_map_continent.filter(|&c| c != active)
+        };
+        let mut preview_vals = [0.0f32; 6];
+        for c in Continent::ALL {
+            let ci = c.index();
+            let tgt = if preview_target == Some(c) { 1.0 } else { 0.0 };
+            self.preview_slides[ci].duration(tgt, 0.18, cx);
+            preview_vals[ci] = self.preview_slides[ci].get(w, cx).clamp(0., 1.);
+        }
+        let map_down = self.map_press.get(w, cx).clamp(0., 1.);
         let active_name = active.label(cx);
         let aria_label: SharedString = self.label.clone().unwrap_or_else(|| {
             if UiLanguage::current(cx) == UiLanguage::Chinese {
@@ -657,8 +750,8 @@ impl Render for WorldMap {
         let focus_img = continent_focus_svg(dark, active);
         let geo = coastline_cache(active);
 
-        // Subtle `0.94 -> 1.0` scale settle around the active continent's focal origin
-        let enter_scale = 0.94 + 0.06 * enter_t;
+        // Subtle `0.94 -> 1.0` scale settle around the active continent's focal origin (+ tactile press)
+        let enter_scale = (0.94 + 0.06 * enter_t) * (1.0 - 0.012 * map_down);
         let (orig_x, orig_y) = active.origin();
         let focus_w = map_w * enter_scale;
         let focus_h = map_h * enter_scale;
@@ -754,19 +847,66 @@ impl Render for WorldMap {
         .absolute()
         .inset_0();
 
+        let map_bounds_cell = self.map_bounds.clone();
+        let hovering_land = self.hovered_map_continent.is_some();
         let mut map_stage = div()
             .id(pro_eid(&self.id, "map-backdrop"))
             .relative()
             .w(px(map_w))
             .h(px(map_h))
             .flex_none()
+            .when(hovering_land, |d| d.cursor_pointer())
+            .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
+                let hit = this.hit_map_pos(ev.position);
+                if this.hovered_map_continent != hit {
+                    this.hovered_map_continent = hit;
+                    for c in Continent::ALL {
+                        let tgt = if hit == Some(c) && c != this.active_continent {
+                            1.0
+                        } else {
+                            0.0
+                        };
+                        this.preview_slides[c.index()].duration(tgt, 0.18, cx);
+                    }
+                    cx.notify();
+                }
+            }))
+            .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                if !*inside && this.hovered_map_continent.take().is_some() {
+                    this.map_press.duration(0., 0.14, cx);
+                    cx.notify();
+                }
+            }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    if this.menu_open {
+                cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                    this.map_press.duration(1., 0.08, cx);
+                    if let Some(hit) = this.hit_map_pos(ev.position) {
+                        this.set_continent(hit, cx);
+                    } else if this.menu_open {
                         this.set_menu_open(false, cx);
                     }
+                    cx.notify();
                 }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.map_press.duration(0., 0.14, cx);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.map_press.duration(0., 0.14, cx);
+                    cx.notify();
+                }),
+            )
+            .child(
+                canvas(move |b, _, _| map_bounds_cell.set(b), |_, _, _, _| ())
+                    .absolute()
+                    .inset_0(),
             )
             .child(
                 img(base_img)
@@ -776,6 +916,61 @@ impl Render for WorldMap {
                     .left_0()
                     .top_0(),
             );
+
+        // Smooth `Slide::snappy` hover preview silhouettes + subtle coastline shimmer for non-active continents
+        for c in Continent::ALL {
+            if c == active {
+                continue;
+            }
+            let pv = preview_vals[c.index()];
+            if pv > 0.01 {
+                let prev_svg = continent_focus_svg(dark, c);
+                let prev_geo = coastline_cache(c);
+                let pv_band = canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        let bw = f32::from(bounds.size.width);
+                        let bh = f32::from(bounds.size.height);
+                        if bw <= 4.0 || bh <= 4.0 {
+                            return;
+                        }
+                        let sx = bw / MAP_VB_W;
+                        let sy = bh / MAP_VB_H;
+                        let s = sx.min(sy);
+                        let x0 = f32::from(bounds.left());
+                        let y0 = f32::from(bounds.top());
+                        let map_pt = |ax: f32, ay: f32| point(px(x0 + ax * sx), px(y0 + ay * sy));
+                        paint_coastline_window(
+                            prev_geo,
+                            head_norm,
+                            180.0,
+                            (1.3 * s).max(1.0),
+                            0.45 * pv,
+                            true,
+                            &map_pt,
+                            window,
+                        );
+                    },
+                )
+                .absolute()
+                .inset_0();
+                map_stage = map_stage.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .opacity(pv * 0.68)
+                        .child(
+                            img(prev_svg)
+                                .w(px(map_w))
+                                .h(px(map_h))
+                                .absolute()
+                                .left_0()
+                                .top_0(),
+                        )
+                        .child(pv_band),
+                );
+            }
+        }
 
         if let Some((prev_c, exit_a)) = exit_state {
             let prev_img = continent_focus_svg(dark, prev_c);
@@ -846,54 +1041,43 @@ impl Render for WorldMap {
             };
 
             let trigger_pill = div()
-                .id(pro_eid(&self.id, "switcher-trigger"))
-                .role(Role::Button)
-                .aria_label(format!("{}: {active_name}", tr(cx, "Continent", "大洲")))
-                .tab_index(0)
-                .h(px(28.0))
-                .pl(px(12.0))
-                .pr(px(8.0))
-                .rounded_full()
-                .bg(if self.trigger_hovered {
-                    pro_mix_color(trig_bg, row_fill, 0.55)
-                } else {
-                    trig_bg
-                })
-                .border_1()
-                .border_color(trig_border)
-                .shadow_sm()
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .cursor_pointer()
-                .focus_visible(move |s| s.border_color(p.focus))
-                .on_hover(cx.listener(|this, inside: &bool, _, cx| {
-                    if this.trigger_hovered != *inside {
-                        this.trigger_hovered = *inside;
-                        cx.notify();
-                    }
-                }))
+                .flex_none()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| {
                     cx.stop_propagation();
                 })
-                .on_click(cx.listener(|this, _, w, cx| {
-                    let next = !this.menu_open;
-                    this.set_menu_open(next, cx);
-                    this.focus.focus(w, cx);
-                }))
-                .child(
+                .child(pro_tactile(
+                    pro_eid(&self.id, "switcher-trigger"),
+                    format!("{}: {active_name}", tr(cx, "Continent", "大洲")),
+                    9999.,
+                    trig_bg,
+                    pro_mix_color(trig_bg, row_fill, 0.58),
+                    trig_border,
+                    p.line_strong,
+                    self.menu_open,
                     div()
-                        .text_size(px(13.0))
-                        .line_height(px(14.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(trig_fg)
-                        .whitespace_nowrap()
-                        .child(active_name),
-                )
-                .child(pro_icon(chev_icon, 14.0, chev_col));
+                        .h(px(28.0))
+                        .pl(px(12.0))
+                        .pr(px(8.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, "trig-lbl"),
+                            active_name,
+                            13.0,
+                            FontWeight::MEDIUM,
+                            trig_fg,
+                        ))
+                        .child(pro_icon(chev_icon, 14.0, chev_col)),
+                    cx,
+                    |this, w, cx| {
+                        let next = !this.menu_open;
+                        this.set_menu_open(next, cx);
+                        this.focus.focus(w, cx);
+                    },
+                ));
 
             let sensor = pro_selection_sensor();
-            let hi_idx = self.highlighted_idx.min(Continent::ALL.len() - 1);
             let hi_key: SharedString = Continent::ALL[hi_idx].as_slug().into();
             let entity = cx.entity();
 
@@ -965,9 +1149,13 @@ impl Render for WorldMap {
                                 .text_color(trig_fg)
                                 .child(c_label),
                         )
-                        .when(is_selected, |d| {
-                            d.child(pro_icon(ProIcon::Check, 14.0, trig_fg))
-                        }),
+                        .child(div().size(px(15.0)).flex_none().child(pro_check_draw(
+                            pro_eid(&self.id, format!("chk-{}", c.as_slug())),
+                            is_selected,
+                            15.0,
+                            false,
+                            trig_fg,
+                        ))),
                 );
             }
 
@@ -1012,11 +1200,15 @@ impl Render for WorldMap {
         }
 
         let measure_sensor = canvas(
-            move |bounds, _, _| {
+            move |bounds, window, _| {
                 let bw = f32::from(bounds.size.width);
                 let bh = f32::from(bounds.size.height);
                 if bw > 16.0 && bh > 16.0 {
-                    size_cell.set((bw, bh));
+                    let prev = size_cell.get();
+                    if (bw - prev.0).abs() > 1.0 || (bh - prev.1).abs() > 1.0 {
+                        size_cell.set((bw, bh));
+                        window.request_animation_frame();
+                    }
                 }
             },
             |_, _, _, _| (),
@@ -1085,7 +1277,14 @@ impl Render for WorldMap {
 
 #[cfg(test)]
 mod tests {
-    use super::{Continent, coastline_cache, coastline_pastel_color, scan_svg_numbers};
+    use super::{
+        Continent, MAP_VB_H, MAP_VB_W, WorldMap, WorldMapEvent, coastline_cache,
+        coastline_pastel_color, hit_continent_vb, scan_svg_numbers,
+    };
+    use gpui::{
+        MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point, px, size,
+    };
+    use std::{cell::RefCell, rc::Rc, time::Duration};
 
     #[test]
     fn compact_svg_number_scanner_and_all_six_coastlines_parse_cleanly() {
@@ -1113,5 +1312,79 @@ mod tests {
         let se = coastline_pastel_color(500.0, 220.0);
         assert_ne!(nw, se);
         assert_eq!(Continent::default(), Continent::Europe);
+        assert_eq!(hit_continent_vb(100.0, 60.0), Some(Continent::NorthAmerica));
+        assert_eq!(hit_continent_vb(300.0, 125.0), Some(Continent::Africa));
+    }
+
+    #[gpui::test]
+    fn hovering_map_region_previews_continent_highlight_and_click_selects(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let exec = cx.executor();
+        let events: Rc<RefCell<Vec<WorldMapEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let ev_sink = events.clone();
+
+        let (view, vcx) = cx.add_window_view(|_, cx| {
+            let wm = WorldMap::new("wm-test", cx);
+            cx.subscribe_self(move |_, ev: &WorldMapEvent, _| {
+                ev_sink.borrow_mut().push(ev.clone());
+            })
+            .detach();
+            wm
+        });
+        vcx.simulate_resize(size(px(620.), px(320.)));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        // Map `(100, 60)` in `540 × 242` viewBox (heart of North America) into window coordinates
+        let na_pt = vcx.update(|_, app| {
+            let b = view.read(app).map_bounds.get();
+            point(
+                b.left() + b.size.width * (100.0 / MAP_VB_W),
+                b.top() + b.size.height * (60.0 / MAP_VB_H),
+            )
+        });
+
+        vcx.simulate_event(MouseMoveEvent {
+            position: na_pt,
+            pressed_button: None,
+            modifiers: Default::default(),
+        });
+        exec.advance_clock(Duration::from_millis(160));
+        vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.run_until_parked();
+
+        vcx.update(|_, app| {
+            let wm = view.read(app);
+            assert_eq!(wm.hovered_map_continent, Some(Continent::NorthAmerica));
+            assert!(
+                wm.preview_slides[Continent::NorthAmerica.index()].value(app) > 0.65,
+                "expected smooth Slide::snappy preview highlight on North America"
+            );
+        });
+
+        vcx.simulate_event(MouseDownEvent {
+            position: na_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        vcx.simulate_event(MouseUpEvent {
+            position: na_pt,
+            button: MouseButton::Left,
+            modifiers: Default::default(),
+            click_count: 1,
+        });
+        vcx.run_until_parked();
+
+        assert_eq!(
+            vcx.update(|_, app| view.read(app).continent()),
+            Continent::NorthAmerica
+        );
+        assert!(
+            events
+                .borrow()
+                .contains(&WorldMapEvent::ContinentChanged(Continent::NorthAmerica))
+        );
     }
 }

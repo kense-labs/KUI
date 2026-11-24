@@ -6,7 +6,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_presence, pro_rolling_number, pro_skeleton_bar,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
     primitives::{
@@ -491,6 +492,8 @@ pub struct BillingSchedule {
     duration: PhaseDuration,
     catalog: Vec<BillingCatalogItem>,
     lines: Vec<ScheduleLine>,
+    entering_ids: Vec<(SharedString, bool)>,
+    exiting_lines: Vec<(ScheduleLine, Instant)>,
     next_seq: usize,
     popover: Option<ActivePopover>,
     hovered_row: Option<SharedString>,
@@ -522,6 +525,8 @@ impl BillingSchedule {
             duration: PhaseDuration::Milestone,
             catalog: default_catalog(),
             lines: default_schedule_lines(),
+            entering_ids: Vec::new(),
+            exiting_lines: Vec::new(),
             next_seq: 10,
             popover: None,
             hovered_row: None,
@@ -728,6 +733,7 @@ impl BillingSchedule {
         .with_name_zh(item.name_zh);
         self.empty = false;
         self.popover = None;
+        self.entering_ids.push((line.id.clone(), false));
         self.lines.push(line.clone());
         cx.emit(BillingScheduleEvent::LineAdded(line));
         self.emit_changed(cx);
@@ -743,6 +749,7 @@ impl BillingSchedule {
         let line = ScheduleLine::discount(format!("disc-{}", self.next_seq), "ANNUAL15", 15.0);
         self.empty = false;
         self.popover = None;
+        self.entering_ids.push((line.id.clone(), false));
         self.lines.push(line.clone());
         cx.emit(BillingScheduleEvent::LineAdded(line));
         self.emit_changed(cx);
@@ -758,6 +765,7 @@ impl BillingSchedule {
         let line = ScheduleLine::minimum(format!("min-{}", self.next_seq), 10_000.0);
         self.empty = false;
         self.popover = None;
+        self.entering_ids.push((line.id.clone(), false));
         self.lines.push(line.clone());
         cx.emit(BillingScheduleEvent::LineAdded(line));
         self.emit_changed(cx);
@@ -766,12 +774,14 @@ impl BillingSchedule {
 
     /// Remove a line item by id.
     pub fn remove_line(&mut self, line_id: &str, cx: &mut Context<Self>) -> bool {
-        let before = self.lines.len();
-        self.lines.retain(|l| l.id.as_ref() != line_id);
-        self.line_editors.retain(|s| s.line_id.as_ref() != line_id);
-        if self.lines.len() == before {
+        let Some(pos) = self.lines.iter().position(|l| l.id.as_ref() == line_id) else {
             return false;
-        }
+        };
+        let removed = self.lines.remove(pos);
+        self.entering_ids.retain(|(id, _)| id.as_ref() != line_id);
+        self.exiting_lines.retain(|(l, _)| l.id.as_ref() != line_id);
+        self.exiting_lines.push((removed, Instant::now()));
+        self.line_editors.retain(|s| s.line_id.as_ref() != line_id);
         self.popover = None;
         cx.emit(BillingScheduleEvent::LineRemoved(SharedString::from(
             line_id.to_string(),
@@ -1267,498 +1277,537 @@ impl BillingSchedule {
         let slot = self.line_editors.iter().find(|s| s.line_id == lid);
         let currency = self.currency.clone();
 
-        let remove_btn = activate(
-            div()
-                .id(pro_eid(&self.id, format!("rm-{lid}")))
-                .role(Role::Button)
-                .aria_label(format!("{} {}", tr(cx, "Remove", "移除"), lid))
-                .tab_index(0)
-                .size(px(26.))
-                .flex_none()
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .opacity(if is_hovered || narrow { 1.0 } else { 0.45 })
-                .cursor_pointer()
-                .hover(move |s| s.opacity(1.0).bg(p.hover))
-                .focus_visible(move |s| s.opacity(1.0).border_1().border_color(p.focus))
-                .child(pro_icon(ProIcon::Close, 14., p.muted)),
-            cx,
-            {
-                let lid = lid.clone();
-                move |this, _, cx| {
-                    this.remove_line(&lid, cx);
-                }
-            },
-        );
+        let remove_btn = div()
+            .flex_none()
+            .opacity(if is_hovered || narrow { 1.0 } else { 0.48 })
+            .hover(|s| s.opacity(1.0))
+            .child(pro_icon_btn(
+                pro_eid(&self.id, format!("rm-{lid}")),
+                format!("{} {}", tr(cx, "Remove", "移除"), lid),
+                ProIcon::Close,
+                26.,
+                false,
+                cx,
+                {
+                    let lid = lid.clone();
+                    move |this, _, cx| {
+                        this.remove_line(&lid, cx);
+                    }
+                },
+            ));
 
-        let (name_cell, repeat_cell, price_cell): (AnyElement, AnyElement, AnyElement) =
-            match &line.kind {
-                ScheduleLineKind::Product {
-                    name,
-                    name_zh,
-                    repeat,
-                    timing,
-                    ..
-                } => {
-                    let display_name = tr(cx, name.as_ref(), name_zh.as_ref()).to_string();
-                    let repeat_open = self.popover == Some(ActivePopover::LineRepeat(lid.clone()));
-                    let timing_open = self.popover == Some(ActivePopover::LineTiming(lid.clone()));
-                    let rep_val = *repeat;
-                    let tim_val = *timing;
+        let (name_cell, repeat_cell, price_cell): (AnyElement, AnyElement, AnyElement) = match &line
+            .kind
+        {
+            ScheduleLineKind::Product {
+                name,
+                name_zh,
+                repeat,
+                timing,
+                price,
+            } => {
+                let display_name = tr(cx, name.as_ref(), name_zh.as_ref()).to_string();
+                let repeat_open = self.popover == Some(ActivePopover::LineRepeat(lid.clone()));
+                let timing_open = self.popover == Some(ActivePopover::LineTiming(lid.clone()));
+                let rep_val = *repeat;
+                let tim_val = *timing;
+                let occ = rep_val.occurrences(self.duration);
+                let safe_unit = if price.is_finite() {
+                    price.max(0.0)
+                } else {
+                    0.0
+                };
+                let line_subtotal = safe_unit * f64::from(occ);
 
-                    let name_el = div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .truncate()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(display_name),
-                        )
-                        .into_any_element();
-
-                    let repeat_btn = activate(
+                let name_el = div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(
                         div()
-                            .id(pro_eid(&self.id, format!("rep-btn-{lid}")))
-                            .role(Role::Button)
-                            .aria_label(format!(
-                                "{} {}",
-                                tr(cx, "Repeats:", "计费频率:"),
-                                rep_val.short_label(cx)
-                            ))
-                            .tab_index(0)
-                            .h(px(24.))
-                            .px(px(6.))
-                            .rounded(px(6.))
-                            .bg(if repeat_open {
-                                p.chip
-                            } else {
-                                transparent_black()
-                            })
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .text_size(px(12.5))
-                            .text_color(if repeat_open { p.ink } else { p.text })
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.chip).text_color(p.ink))
-                            .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .child(pro_svg("0 0 24 24", SVG_REPEAT, 13.5, p.muted))
-                            .child(rep_val.short_label(cx))
-                            .child(pro_icon(
-                                if repeat_open {
-                                    ProIcon::ChevronUp
-                                } else {
-                                    ProIcon::ChevronDown
-                                },
-                                12.,
-                                p.muted,
-                            )),
-                        cx,
-                        {
-                            let lid = lid.clone();
-                            move |this, _, cx| {
-                                let target = ActivePopover::LineRepeat(lid.clone());
-                                this.popover = if this.popover == Some(target.clone()) {
-                                    None
-                                } else {
-                                    Some(target)
-                                };
-                                cx.notify();
-                            }
-                        },
-                    );
-
-                    let mut repeat_menu = div()
-                        .w(px(180.))
-                        .p(px(4.))
-                        .rounded(px(9.))
-                        .bg(p.card)
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
-                        .flex()
-                        .flex_col()
-                        .gap(px(1.));
-                    for opt in RepeatCadence::ALL {
-                        let active = opt == rep_val;
-                        let lid_opt = lid.clone();
-                        repeat_menu = repeat_menu.child(activate(
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(display_name),
+                    )
+                    .when(occ > 1, |d| {
+                        d.child(
                             div()
-                                .id(pro_eid(
-                                    &self.id,
-                                    format!("rep-opt-{lid}-{}", opt.short_label(cx)),
-                                ))
-                                .role(Role::Button)
-                                .aria_label(opt.menu_label(cx))
-                                .tab_index(0)
-                                .h(px(28.))
-                                .px(px(8.))
-                                .rounded(px(6.))
                                 .flex()
                                 .items_center()
-                                .justify_between()
-                                .text_size(px(12.5))
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .child(opt.menu_label(cx))
-                                .when(active, |d| d.child(pro_icon(ProIcon::Check, 13., p.blue))),
-                            cx,
-                            move |this, _, cx| {
-                                this.set_line_repeat(&lid_opt, opt, cx);
-                            },
-                        ));
-                    }
+                                .gap(px(4.))
+                                .text_size(px(11.))
+                                .text_color(p.muted)
+                                .child(format!("{occ}× ·"))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, format!("roll-line-{lid}")),
+                                    line_subtotal,
+                                    2,
+                                    currency.clone(),
+                                    "",
+                                    11.,
+                                    FontWeight::MEDIUM,
+                                    p.text,
+                                )),
+                        )
+                    })
+                    .into_any_element();
 
-                    let repeat_wrap = div()
-                        .w(px(132.))
-                        .flex_none()
-                        .relative()
+                let repeat_btn = pro_tactile(
+                    pro_eid(&self.id, format!("rep-btn-{lid}")),
+                    format!(
+                        "{} {}",
+                        tr(cx, "Repeats:", "计费频率:"),
+                        rep_val.short_label(cx)
+                    ),
+                    6.,
+                    if repeat_open {
+                        p.chip
+                    } else {
+                        transparent_black()
+                    },
+                    p.chip,
+                    transparent_black(),
+                    transparent_black(),
+                    repeat_open,
+                    div()
+                        .h(px(24.))
+                        .px(px(6.))
                         .flex()
                         .items_center()
-                        .child(repeat_btn)
-                        .child(pro_presence(
-                            pro_eid(&self.id, format!("rep-pop-{lid}")),
-                            repeat_open,
-                            0.16,
-                            0.12,
-                            move |amt| {
+                        .gap(px(5.))
+                        .text_size(px(12.5))
+                        .text_color(if repeat_open { p.ink } else { p.text })
+                        .whitespace_nowrap()
+                        .child(pro_svg("0 0 24 24", SVG_REPEAT, 13.5, p.muted))
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, format!("rep-lbl-{lid}")),
+                            rep_val.short_label(cx),
+                            12.5,
+                            FontWeight::NORMAL,
+                            if repeat_open { p.ink } else { p.text },
+                        ))
+                        .child(pro_icon(
+                            if repeat_open {
+                                ProIcon::ChevronUp
+                            } else {
+                                ProIcon::ChevronDown
+                            },
+                            12.,
+                            p.muted,
+                        )),
+                    cx,
+                    {
+                        let lid = lid.clone();
+                        move |this, _, cx| {
+                            let target = ActivePopover::LineRepeat(lid.clone());
+                            this.popover = if this.popover == Some(target.clone()) {
+                                None
+                            } else {
+                                Some(target)
+                            };
+                            cx.notify();
+                        }
+                    },
+                )
+                .flex_none();
+
+                let mut repeat_menu = div()
+                    .w(px(180.))
+                    .p(px(4.))
+                    .rounded(px(9.))
+                    .bg(p.card)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_lg()
+                    .flex()
+                    .flex_col()
+                    .gap(px(1.));
+                for opt in RepeatCadence::ALL {
+                    let active = opt == rep_val;
+                    let lid_opt = lid.clone();
+                    repeat_menu = repeat_menu.child(activate(
+                        div()
+                            .id(pro_eid(
+                                &self.id,
+                                format!("rep-opt-{lid}-{}", opt.short_label(cx)),
+                            ))
+                            .role(Role::Button)
+                            .aria_label(opt.menu_label(cx))
+                            .tab_index(0)
+                            .h(px(28.))
+                            .px(px(8.))
+                            .rounded(px(6.))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .text_size(px(12.5))
+                            .text_color(p.ink)
+                            .cursor_pointer()
+                            .hover(move |s| s.bg(p.hover))
+                            .child(opt.menu_label(cx))
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("rep-chk-{lid}-{}", opt.short_label(cx))),
+                                active,
+                                13.,
+                                false,
+                                p.blue,
+                            )),
+                        cx,
+                        move |this, _, cx| {
+                            this.set_line_repeat(&lid_opt, opt, cx);
+                        },
+                    ));
+                }
+
+                let repeat_wrap = div()
+                    .w(px(132.))
+                    .flex_none()
+                    .relative()
+                    .flex()
+                    .items_center()
+                    .child(repeat_btn)
+                    .child(pro_popover_presence(
+                        pro_eid(&self.id, format!("rep-pop-{lid}")),
+                        repeat_open,
+                        move || {
+                            div()
+                                .occlude()
+                                .absolute()
+                                .top(px(28.))
+                                .left_0()
+                                .child(repeat_menu)
+                                .into_any_element()
+                        },
+                    ))
+                    .into_any_element();
+
+                let val_box = if let Some(s) = slot {
+                    div()
+                        .w(px(74.))
+                        .h(px(24.))
+                        .px(px(5.))
+                        .rounded(px(5.))
+                        .bg(p.subtle)
+                        .border_1()
+                        .border_color(p.line)
+                        .flex()
+                        .items_center()
+                        .child(s.value_editor.clone())
+                        .into_any_element()
+                } else {
+                    div().into_any_element()
+                };
+
+                let unit_sfx = rep_val.unit_suffix(cx);
+                let timing_btn = pro_tactile(
+                    pro_eid(&self.id, format!("tim-btn-{lid}")),
+                    tim_val.inline_label(cx),
+                    5.,
+                    if timing_open {
+                        p.chip
+                    } else {
+                        transparent_black()
+                    },
+                    p.chip,
+                    transparent_black(),
+                    transparent_black(),
+                    timing_open,
+                    div()
+                        .h(px(20.))
+                        .px(px(5.))
+                        .flex()
+                        .items_center()
+                        .gap(px(3.))
+                        .text_size(px(11.5))
+                        .text_color(if timing_open { p.ink } else { p.muted })
+                        .whitespace_nowrap()
+                        .child(pro_swap_label(
+                            pro_eid(&self.id, format!("tim-lbl-{lid}")),
+                            tim_val.inline_label(cx),
+                            11.5,
+                            FontWeight::NORMAL,
+                            if timing_open { p.ink } else { p.muted },
+                        ))
+                        .child(pro_icon(ProIcon::ChevronDown, 11., p.muted)),
+                    cx,
+                    {
+                        let lid = lid.clone();
+                        move |this, _, cx| {
+                            let target = ActivePopover::LineTiming(lid.clone());
+                            this.popover = if this.popover == Some(target.clone()) {
+                                None
+                            } else {
+                                Some(target)
+                            };
+                            cx.notify();
+                        }
+                    },
+                )
+                .flex_none();
+
+                let mut timing_menu = div()
+                    .w(px(176.))
+                    .p(px(4.))
+                    .rounded(px(9.))
+                    .bg(p.card)
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_lg()
+                    .flex()
+                    .flex_col()
+                    .gap(px(1.));
+                for opt in BillingTiming::ALL {
+                    let active = opt == tim_val;
+                    let lid_opt = lid.clone();
+                    timing_menu = timing_menu.child(activate(
+                        div()
+                            .id(pro_eid(
+                                &self.id,
+                                format!("tim-opt-{lid}-{}", opt.menu_label(cx)),
+                            ))
+                            .role(Role::Button)
+                            .aria_label(opt.menu_label(cx))
+                            .tab_index(0)
+                            .h(px(28.))
+                            .px(px(8.))
+                            .rounded(px(6.))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .text_size(px(12.5))
+                            .text_color(p.ink)
+                            .cursor_pointer()
+                            .hover(move |s| s.bg(p.hover))
+                            .child(opt.menu_label(cx))
+                            .child(pro_check_draw(
+                                pro_eid(&self.id, format!("tim-chk-{lid}-{}", opt.menu_label(cx))),
+                                active,
+                                13.,
+                                false,
+                                p.blue,
+                            )),
+                        cx,
+                        move |this, _, cx| {
+                            this.set_line_timing(&lid_opt, opt, cx);
+                        },
+                    ));
+                }
+
+                let price_el = div()
+                    .w(if narrow { px(220.) } else { px(214.) })
+                    .flex_none()
+                    .flex()
+                    .flex_col()
+                    .items_end()
+                    .gap(px(2.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.muted)
+                                    .child(currency),
+                            )
+                            .child(val_box)
+                            .when(!unit_sfx.is_empty(), |d| {
+                                d.child(
+                                    div().text_size(px(12.)).text_color(p.muted).child(unit_sfx),
+                                )
+                            })
+                            .child(remove_btn),
+                    )
+                    .child(div().pr(px(30.)).relative().child(timing_btn).child(
+                        pro_popover_presence(
+                            pro_eid(&self.id, format!("tim-pop-{lid}")),
+                            timing_open,
+                            move || {
                                 div()
                                     .occlude()
                                     .absolute()
-                                    .top(px(28. - 4. * (1. - amt)))
-                                    .left_0()
-                                    .opacity(amt)
-                                    .child(repeat_menu)
+                                    .top(px(24.))
+                                    .right_0()
+                                    .child(timing_menu)
                                     .into_any_element()
                             },
-                        ))
-                        .into_any_element();
+                        ),
+                    ))
+                    .into_any_element();
 
-                    let val_box = if let Some(s) = slot {
-                        div()
-                            .w(px(74.))
-                            .h(px(24.))
-                            .px(px(5.))
-                            .rounded(px(5.))
-                            .bg(p.subtle)
-                            .border_1()
-                            .border_color(p.line)
-                            .flex()
-                            .items_center()
-                            .child(s.value_editor.clone())
-                            .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    };
-
-                    let unit_sfx = rep_val.unit_suffix(cx);
-                    let timing_btn = activate(
-                        div()
-                            .id(pro_eid(&self.id, format!("tim-btn-{lid}")))
-                            .role(Role::Button)
-                            .aria_label(tim_val.inline_label(cx))
-                            .tab_index(0)
-                            .h(px(20.))
-                            .px(px(5.))
-                            .rounded(px(5.))
-                            .bg(if timing_open {
-                                p.chip
-                            } else {
-                                transparent_black()
-                            })
-                            .flex()
-                            .items_center()
-                            .gap(px(3.))
-                            .text_size(px(11.5))
-                            .text_color(if timing_open { p.ink } else { p.muted })
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(p.chip).text_color(p.ink))
-                            .child(tim_val.inline_label(cx))
-                            .child(pro_icon(ProIcon::ChevronDown, 11., p.muted)),
-                        cx,
-                        {
-                            let lid = lid.clone();
-                            move |this, _, cx| {
-                                let target = ActivePopover::LineTiming(lid.clone());
-                                this.popover = if this.popover == Some(target.clone()) {
-                                    None
-                                } else {
-                                    Some(target)
-                                };
-                                cx.notify();
-                            }
-                        },
-                    );
-
-                    let mut timing_menu = div()
-                        .w(px(176.))
-                        .p(px(4.))
-                        .rounded(px(9.))
-                        .bg(p.card)
+                (name_el, repeat_wrap, price_el)
+            }
+            ScheduleLineKind::Discount { .. } => {
+                let code_chip = if let Some(ced) = slot.and_then(|s| s.code_editor.clone()) {
+                    div()
+                        .w(px(78.))
+                        .h(px(21.))
+                        .px(px(5.))
+                        .rounded(px(5.))
+                        .bg(p.accent_soft)
                         .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
+                        .border_color(p.blue.opacity(0.32))
                         .flex()
-                        .flex_col()
-                        .gap(px(1.));
-                    for opt in BillingTiming::ALL {
-                        let active = opt == tim_val;
-                        let lid_opt = lid.clone();
-                        timing_menu = timing_menu.child(activate(
-                            div()
-                                .id(pro_eid(
-                                    &self.id,
-                                    format!("tim-opt-{lid}-{}", opt.menu_label(cx)),
-                                ))
-                                .role(Role::Button)
-                                .aria_label(opt.menu_label(cx))
-                                .tab_index(0)
-                                .h(px(28.))
-                                .px(px(8.))
-                                .rounded(px(6.))
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .text_size(px(12.5))
-                                .text_color(p.ink)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(p.hover))
-                                .child(opt.menu_label(cx))
-                                .when(active, |d| d.child(pro_icon(ProIcon::Check, 13., p.blue))),
-                            cx,
-                            move |this, _, cx| {
-                                this.set_line_timing(&lid_opt, opt, cx);
-                            },
-                        ));
-                    }
+                        .items_center()
+                        .text_color(p.blue)
+                        .child(ced)
+                        .into_any_element()
+                } else {
+                    div().into_any_element()
+                };
 
-                    let price_el =
+                let name_el = div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.))
+                    .child(
                         div()
-                            .w(if narrow { px(220.) } else { px(214.) })
+                            .size(px(20.))
                             .flex_none()
-                            .flex()
-                            .flex_col()
-                            .items_end()
-                            .gap(px(2.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(4.))
-                                    .child(
-                                        div()
-                                            .text_size(px(13.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.muted)
-                                            .child(currency),
-                                    )
-                                    .child(val_box)
-                                    .when(!unit_sfx.is_empty(), |d| {
-                                        d.child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .text_color(p.muted)
-                                                .child(unit_sfx),
-                                        )
-                                    })
-                                    .child(remove_btn),
-                            )
-                            .child(div().pr(px(30.)).relative().child(timing_btn).child(
-                                pro_presence(
-                                    pro_eid(&self.id, format!("tim-pop-{lid}")),
-                                    timing_open,
-                                    0.16,
-                                    0.12,
-                                    move |amt| {
-                                        div()
-                                            .occlude()
-                                            .absolute()
-                                            .top(px(24. - 4. * (1. - amt)))
-                                            .right_0()
-                                            .opacity(amt)
-                                            .child(timing_menu)
-                                            .into_any_element()
-                                    },
-                                ),
-                            ))
-                            .into_any_element();
-
-                    (name_el, repeat_wrap, price_el)
-                }
-                ScheduleLineKind::Discount { .. } => {
-                    let code_chip = if let Some(ced) = slot.and_then(|s| s.code_editor.clone()) {
-                        div()
-                            .w(px(78.))
-                            .h(px(21.))
-                            .px(px(5.))
                             .rounded(px(5.))
-                            .bg(p.accent_soft)
-                            .border_1()
-                            .border_color(p.blue.opacity(0.32))
+                            .bg(p.chip)
                             .flex()
                             .items_center()
-                            .text_color(p.blue)
-                            .child(ced)
-                            .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    };
+                            .justify_center()
+                            .child(pro_svg("0 0 24 24", SVG_DISCOUNT, 13.5, p.blue)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(tr(cx, "Discount", "优惠折扣")),
+                    )
+                    .child(code_chip)
+                    .into_any_element();
 
-                    let name_el = div()
-                        .flex_1()
-                        .min_w_0()
+                let rep_el = div()
+                    .w(px(132.))
+                    .flex_none()
+                    .text_size(px(12.))
+                    .text_color(p.muted)
+                    .child(tr(cx, "Entire phase", "整个阶段"))
+                    .into_any_element();
+
+                let val_box = if let Some(s) = slot {
+                    div()
+                        .w(px(48.))
+                        .h(px(24.))
+                        .px(px(5.))
+                        .rounded(px(5.))
+                        .bg(p.subtle)
+                        .border_1()
+                        .border_color(p.line)
                         .flex()
                         .items_center()
-                        .gap(px(7.))
-                        .child(
-                            div()
-                                .size(px(20.))
-                                .flex_none()
-                                .rounded(px(5.))
-                                .bg(p.chip)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(pro_svg("0 0 24 24", SVG_DISCOUNT, 13.5, p.blue)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(tr(cx, "Discount", "优惠折扣")),
-                        )
-                        .child(code_chip)
-                        .into_any_element();
+                        .child(s.value_editor.clone())
+                        .into_any_element()
+                } else {
+                    div().into_any_element()
+                };
 
-                    let rep_el = div()
-                        .w(px(132.))
-                        .flex_none()
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .child(tr(cx, "Entire phase", "整个阶段"))
-                        .into_any_element();
-
-                    let val_box = if let Some(s) = slot {
+                let price_el = div()
+                    .w(if narrow { px(190.) } else { px(214.) })
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(4.))
+                    .child(val_box)
+                    .child(
                         div()
-                            .w(px(48.))
-                            .h(px(24.))
-                            .px(px(5.))
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.muted)
+                            .child(tr(cx, "% off", "% 折扣")),
+                    )
+                    .child(remove_btn)
+                    .into_any_element();
+
+                (name_el, rep_el, price_el)
+            }
+            ScheduleLineKind::Minimum { .. } => {
+                let name_el = div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .size(px(20.))
+                            .flex_none()
                             .rounded(px(5.))
-                            .bg(p.subtle)
-                            .border_1()
-                            .border_color(p.line)
+                            .bg(p.chip)
                             .flex()
                             .items_center()
-                            .child(s.value_editor.clone())
-                            .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    };
-
-                    let price_el = div()
-                        .w(if narrow { px(190.) } else { px(214.) })
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .justify_end()
-                        .gap(px(4.))
-                        .child(val_box)
-                        .child(
-                            div()
-                                .text_size(px(12.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.muted)
-                                .child(tr(cx, "% off", "% 折扣")),
-                        )
-                        .child(remove_btn)
-                        .into_any_element();
-
-                    (name_el, rep_el, price_el)
-                }
-                ScheduleLineKind::Minimum { .. } => {
-                    let name_el = div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .size(px(20.))
-                                .flex_none()
-                                .rounded(px(5.))
-                                .bg(p.chip)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(pro_svg("0 0 24 24", SVG_MINIMUM, 13.5, p.muted)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .child(tr(cx, "Minimum spend", "最低消费承诺")),
-                        )
-                        .into_any_element();
-
-                    let rep_el = div()
-                        .w(px(132.))
-                        .flex_none()
-                        .text_size(px(12.))
-                        .text_color(p.muted)
-                        .child(tr(cx, "Phase floor", "阶段保底"))
-                        .into_any_element();
-
-                    let val_box = if let Some(s) = slot {
+                            .justify_center()
+                            .child(pro_svg("0 0 24 24", SVG_MINIMUM, 13.5, p.muted)),
+                    )
+                    .child(
                         div()
-                            .w(px(78.))
-                            .h(px(24.))
-                            .px(px(5.))
-                            .rounded(px(5.))
-                            .bg(p.subtle)
-                            .border_1()
-                            .border_color(p.line)
-                            .flex()
-                            .items_center()
-                            .child(s.value_editor.clone())
-                            .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    };
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(tr(cx, "Minimum spend", "最低消费承诺")),
+                    )
+                    .into_any_element();
 
-                    let price_el = div()
-                        .w(if narrow { px(190.) } else { px(214.) })
-                        .flex_none()
+                let rep_el = div()
+                    .w(px(132.))
+                    .flex_none()
+                    .text_size(px(12.))
+                    .text_color(p.muted)
+                    .child(tr(cx, "Phase floor", "阶段保底"))
+                    .into_any_element();
+
+                let val_box = if let Some(s) = slot {
+                    div()
+                        .w(px(78.))
+                        .h(px(24.))
+                        .px(px(5.))
+                        .rounded(px(5.))
+                        .bg(p.subtle)
+                        .border_1()
+                        .border_color(p.line)
                         .flex()
                         .items_center()
-                        .justify_end()
-                        .gap(px(4.))
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.muted)
-                                .child(currency),
-                        )
-                        .child(val_box)
-                        .child(remove_btn)
-                        .into_any_element();
+                        .child(s.value_editor.clone())
+                        .into_any_element()
+                } else {
+                    div().into_any_element()
+                };
 
-                    (name_el, rep_el, price_el)
-                }
-            };
+                let price_el = div()
+                    .w(if narrow { px(190.) } else { px(214.) })
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.muted)
+                            .child(currency),
+                    )
+                    .child(val_box)
+                    .child(remove_btn)
+                    .into_any_element();
+
+                (name_el, rep_el, price_el)
+            }
+        };
 
         let lid_hov = lid.clone();
         div()
@@ -1924,33 +1973,32 @@ impl Render for BillingSchedule {
                 "Start date",
                 "开始日期",
             )))
-            .child(activate(
+            .child(pro_tactile(
+                pro_eid(&self.id, "start-btn"),
+                format!("{}: {}", tr(cx, "Start date", "开始日期"), start_display),
+                8.,
+                p.card,
+                p.card,
+                if cal_open { p.line_strong } else { p.line },
+                p.line_strong,
+                cal_open,
                 div()
-                    .id(pro_eid(&self.id, "start-btn"))
-                    .role(Role::Button)
-                    .aria_label(format!(
-                        "{}: {}",
-                        tr(cx, "Start date", "开始日期"),
-                        start_display
-                    ))
-                    .tab_index(0)
                     .w_full()
                     .h(px(32.))
                     .pl(px(10.))
                     .pr(px(8.))
-                    .rounded(px(8.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(if cal_open { p.line_strong } else { p.line })
                     .flex()
                     .items_center()
                     .justify_between()
                     .text_size(px(13.))
                     .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(p.line_strong))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .child(start_display)
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "start-lbl"),
+                        start_display,
+                        13.,
+                        FontWeight::NORMAL,
+                        p.ink,
+                    ))
                     .child(pro_icon(ProIcon::Calendar, 15.5, p.muted)),
                 cx,
                 |this, _, cx| {
@@ -1965,18 +2013,15 @@ impl Render for BillingSchedule {
                     cx.notify();
                 },
             ))
-            .child(pro_presence(
+            .child(pro_popover_presence(
                 pro_eid(&self.id, "cal-pres"),
                 cal_open,
-                0.18,
-                0.14,
-                move |amt| {
+                move || {
                     div()
                         .occlude()
                         .absolute()
-                        .top(px(58. - 4. * (1. - amt)))
+                        .top(px(58.))
                         .left_0()
-                        .opacity(amt)
                         .child(cal_pop)
                         .into_any_element()
                 },
@@ -2030,9 +2075,13 @@ impl Render for BillingSchedule {
                                     .child(opt.hint(cx)),
                             ),
                     )
-                    .when(selected, |d| {
-                        d.child(pro_icon(ProIcon::Check, 13.5, p.blue))
-                    }),
+                    .child(pro_check_draw(
+                        pro_eid(&self.id, format!("dur-chk-{}", opt.key())),
+                        selected,
+                        13.5,
+                        false,
+                        p.blue,
+                    )),
                 cx,
                 move |this, _, cx| {
                     this.set_duration(opt, cx);
@@ -2040,6 +2089,18 @@ impl Render for BillingSchedule {
             ));
         }
 
+        let dur_rest_bg = if self.duration != PhaseDuration::Milestone {
+            p.accent_soft
+        } else {
+            p.card
+        };
+        let dur_rest_bdr: Hsla = if dur_open {
+            p.line_strong
+        } else if self.duration != PhaseDuration::Milestone {
+            p.blue.opacity(0.38)
+        } else {
+            p.line
+        };
         let dur_field = div()
             .flex_1()
             .min_w_0()
@@ -2052,39 +2113,32 @@ impl Render for BillingSchedule {
                 "Duration",
                 "持续周期",
             )))
-            .child(activate(
+            .child(pro_tactile(
+                pro_eid(&self.id, "dur-btn"),
+                format!("{}: {}", tr(cx, "Duration", "持续周期"), dur_label),
+                8.,
+                dur_rest_bg,
+                dur_rest_bg,
+                dur_rest_bdr,
+                p.line_strong,
+                dur_open,
                 div()
-                    .id(pro_eid(&self.id, "dur-btn"))
-                    .role(Role::Button)
-                    .aria_label(format!("{}: {}", tr(cx, "Duration", "持续周期"), dur_label))
-                    .tab_index(0)
                     .w_full()
                     .h(px(32.))
                     .pl(px(10.))
                     .pr(px(8.))
-                    .rounded(px(8.))
-                    .bg(if self.duration != PhaseDuration::Milestone {
-                        p.accent_soft
-                    } else {
-                        p.card
-                    })
-                    .border_1()
-                    .border_color(if dur_open {
-                        p.line_strong
-                    } else if self.duration != PhaseDuration::Milestone {
-                        p.blue.opacity(0.38)
-                    } else {
-                        p.line
-                    })
                     .flex()
                     .items_center()
                     .justify_between()
                     .text_size(px(13.))
                     .text_color(p.ink)
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(p.line_strong))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .child(dur_label)
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "dur-lbl"),
+                        dur_label,
+                        13.,
+                        FontWeight::NORMAL,
+                        p.ink,
+                    ))
                     .child(pro_icon(
                         if dur_open {
                             ProIcon::ChevronUp
@@ -2104,18 +2158,15 @@ impl Render for BillingSchedule {
                     cx.notify();
                 },
             ))
-            .child(pro_presence(
+            .child(pro_popover_presence(
                 pro_eid(&self.id, "dur-pres"),
                 dur_open,
-                0.18,
-                0.14,
-                move |amt| {
+                move || {
                     div()
                         .occlude()
                         .absolute()
-                        .top(px(58. - 4. * (1. - amt)))
+                        .top(px(58.))
                         .right_0()
-                        .opacity(amt)
                         .child(dur_menu)
                         .into_any_element()
                 },
@@ -2131,7 +2182,22 @@ impl Render for BillingSchedule {
             .child(start_field)
             .child(dur_field);
 
-        let table_section = if self.empty || self.lines.is_empty() {
+        let reduced = disabled_motion(cx);
+        if reduced {
+            self.entering_ids.clear();
+            self.exiting_lines.clear();
+        } else {
+            self.exiting_lines
+                .retain(|(_, t)| t.elapsed().as_secs_f32() < 0.28);
+            if !self.exiting_lines.is_empty() || self.entering_ids.iter().any(|(_, ready)| !*ready)
+            {
+                w.request_animation_frame();
+            }
+        }
+
+        let table_section = if self.empty
+            || (self.lines.is_empty() && self.exiting_lines.is_empty())
+        {
             div()
                 .w_full()
                 .border_t_1()
@@ -2189,9 +2255,42 @@ impl Render for BillingSchedule {
                 );
 
             let lines_snapshot = self.lines.clone();
+            let exiting_snapshot: Vec<ScheduleLine> =
+                self.exiting_lines.iter().map(|(l, _)| l.clone()).collect();
             let mut rows_col = div().w_full().flex().flex_col();
             for line in &lines_snapshot {
-                rows_col = rows_col.child(self.render_line_row(line, narrow, cx));
+                let lid = line.id.clone();
+                let fold_open =
+                    if let Some(entry) = self.entering_ids.iter_mut().find(|(id, _)| *id == lid) {
+                        if entry.1 {
+                            true
+                        } else {
+                            entry.1 = true;
+                            false
+                        }
+                    } else {
+                        true
+                    };
+                let row_el = self.render_line_row(line, narrow, cx);
+                rows_col = rows_col.child(pro_fold(
+                    pro_eid(&self.id, format!("line-fold-{lid}")),
+                    fold_open,
+                    56.,
+                    0.,
+                    move || row_el,
+                ));
+            }
+            self.entering_ids.retain(|(_, ready)| !*ready);
+            for line in &exiting_snapshot {
+                let lid = line.id.clone();
+                let row_el = self.render_line_row(line, narrow, cx);
+                rows_col = rows_col.child(pro_fold(
+                    pro_eid(&self.id, format!("line-fold-{lid}")),
+                    false,
+                    56.,
+                    0.,
+                    move || row_el,
+                ));
             }
             div()
                 .w_full()
@@ -2264,64 +2363,62 @@ impl Render for BillingSchedule {
 
         let add_product_wrap = div()
             .relative()
-            .child(activate(
-                div()
-                    .id(pro_eid(&self.id, "add-prod-btn"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "Add product", "添加产品"))
-                    .tab_index(0)
-                    .h(px(28.))
-                    .pl(px(8.))
-                    .pr(px(10.))
-                    .rounded(px(6.))
-                    .bg(p.card)
-                    .border_1()
-                    .border_color(if cat_open { p.line_strong } else { p.line })
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .cursor_pointer()
-                    .hover(move |s| s.border_color(p.line_strong).bg(p.hover))
-                    .focus_visible(move |s| s.border_color(p.focus))
-                    .child(pro_icon(ProIcon::Plus, 14., p.muted))
-                    .child(tr(cx, "Add product", "添加产品")),
-                cx,
-                |this, _, cx| {
-                    this.popover = if this.popover == Some(ActivePopover::Catalog) {
-                        None
-                    } else {
-                        Some(ActivePopover::Catalog)
-                    };
-                    cx.notify();
-                },
-            ))
-            .child(pro_presence(
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, "add-prod-btn"),
+                    tr(cx, "Add product", "添加产品"),
+                    6.,
+                    p.card,
+                    p.hover,
+                    if cat_open { p.line_strong } else { p.line },
+                    p.line_strong,
+                    cat_open,
+                    div()
+                        .h(px(28.))
+                        .pl(px(8.))
+                        .pr(px(10.))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.strong)
+                        .whitespace_nowrap()
+                        .child(pro_icon(ProIcon::Plus, 14., p.muted))
+                        .child(tr(cx, "Add product", "添加产品")),
+                    cx,
+                    |this, _, cx| {
+                        this.popover = if this.popover == Some(ActivePopover::Catalog) {
+                            None
+                        } else {
+                            Some(ActivePopover::Catalog)
+                        };
+                        cx.notify();
+                    },
+                )
+                .flex_none(),
+            )
+            .child(pro_popover_presence(
                 pro_eid(&self.id, "cat-pres"),
                 cat_open,
-                0.18,
-                0.14,
-                move |amt| {
+                move || {
                     div()
                         .occlude()
                         .absolute()
-                        .bottom(px(34. - 4. * (1. - amt)))
+                        .bottom(px(34.))
                         .left_0()
-                        .opacity(amt)
                         .child(cat_menu)
                         .into_any_element()
                 },
             ));
 
         let disc_disabled = self.has_discount();
-        let add_disc_btn = activate(
+        let add_disc_btn = if disc_disabled {
             div()
                 .id(pro_eid(&self.id, "add-disc-btn"))
                 .role(Role::Button)
                 .aria_label(tr(cx, "Add discount", "添加折扣"))
-                .tab_index(if disc_disabled { -1 } else { 0 })
+                .tab_index(-1)
                 .h(px(28.))
                 .pl(px(8.))
                 .pr(px(10.))
@@ -2329,32 +2426,55 @@ impl Render for BillingSchedule {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
-                .opacity(if disc_disabled { 0.42 } else { 1.0 })
+                .opacity(0.42)
                 .flex()
                 .items_center()
                 .gap(px(5.))
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.strong)
-                .when(!disc_disabled, move |d| {
-                    d.cursor_pointer()
-                        .hover(move |s| s.border_color(p.line_strong).bg(p.hover))
-                })
                 .child(pro_svg("0 0 24 24", SVG_DISCOUNT, 14., p.muted))
-                .child(tr(cx, "Add discount", "添加折扣")),
-            cx,
-            |this, _, cx| {
-                this.add_discount_line(cx);
-            },
-        );
+                .child(tr(cx, "Add discount", "添加折扣"))
+                .into_any_element()
+        } else {
+            pro_tactile(
+                pro_eid(&self.id, "add-disc-btn"),
+                tr(cx, "Add discount", "添加折扣"),
+                6.,
+                p.card,
+                p.hover,
+                p.line,
+                p.line_strong,
+                false,
+                div()
+                    .h(px(28.))
+                    .pl(px(8.))
+                    .pr(px(10.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .whitespace_nowrap()
+                    .child(pro_svg("0 0 24 24", SVG_DISCOUNT, 14., p.muted))
+                    .child(tr(cx, "Add discount", "添加折扣")),
+                cx,
+                |this, _, cx| {
+                    this.add_discount_line(cx);
+                },
+            )
+            .flex_none()
+            .into_any_element()
+        };
 
         let min_disabled = self.has_minimum();
-        let add_min_btn = activate(
+        let add_min_btn = if min_disabled {
             div()
                 .id(pro_eid(&self.id, "add-min-btn"))
                 .role(Role::Button)
                 .aria_label(tr(cx, "Add minimum", "添加保底"))
-                .tab_index(if min_disabled { -1 } else { 0 })
+                .tab_index(-1)
                 .h(px(28.))
                 .pl(px(8.))
                 .pr(px(10.))
@@ -2362,24 +2482,47 @@ impl Render for BillingSchedule {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
-                .opacity(if min_disabled { 0.42 } else { 1.0 })
+                .opacity(0.42)
                 .flex()
                 .items_center()
                 .gap(px(5.))
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.strong)
-                .when(!min_disabled, move |d| {
-                    d.cursor_pointer()
-                        .hover(move |s| s.border_color(p.line_strong).bg(p.hover))
-                })
                 .child(pro_svg("0 0 24 24", SVG_MINIMUM, 14., p.muted))
-                .child(tr(cx, "Add minimum", "添加保底")),
-            cx,
-            |this, _, cx| {
-                this.add_minimum_line(cx);
-            },
-        );
+                .child(tr(cx, "Add minimum", "添加保底"))
+                .into_any_element()
+        } else {
+            pro_tactile(
+                pro_eid(&self.id, "add-min-btn"),
+                tr(cx, "Add minimum", "添加保底"),
+                6.,
+                p.card,
+                p.hover,
+                p.line,
+                p.line_strong,
+                false,
+                div()
+                    .h(px(28.))
+                    .pl(px(8.))
+                    .pr(px(10.))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .whitespace_nowrap()
+                    .child(pro_svg("0 0 24 24", SVG_MINIMUM, 14., p.muted))
+                    .child(tr(cx, "Add minimum", "添加保底")),
+                cx,
+                |this, _, cx| {
+                    this.add_minimum_line(cx);
+                },
+            )
+            .flex_none()
+            .into_any_element()
+        };
 
         let actions_row = div()
             .w_full()
@@ -2398,6 +2541,7 @@ impl Render for BillingSchedule {
         let cur_sym = self.currency.clone();
         let show_disc_pill = totals.phase_discount > 0.005;
         let show_min_pill = totals.minimum_applied;
+        let show_subtotal = show_disc_pill || show_min_pill;
 
         let totals_bar = div()
             .w_full()
@@ -2432,13 +2576,36 @@ impl Render for BillingSchedule {
                         p.strong,
                     )),
             )
-            .when(show_disc_pill || show_min_pill, |d| {
+            .when(show_subtotal, |d| {
                 d.child(
                     div()
                         .flex()
                         .flex_wrap()
                         .items_center()
                         .gap(px(6.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .px(px(6.))
+                                .py(px(2.))
+                                .rounded(px(5.))
+                                .bg(p.chip)
+                                .text_size(px(11.))
+                                .text_color(p.muted)
+                                .child(tr(cx, "Subtotal", "阶段小计"))
+                                .child(pro_rolling_number(
+                                    pro_eid(&self.id, "roll-sub"),
+                                    totals.phase_subtotal,
+                                    2,
+                                    cur_sym.clone(),
+                                    "",
+                                    11.,
+                                    FontWeight::MEDIUM,
+                                    p.text,
+                                )),
+                        )
                         .when(show_disc_pill, |el| {
                             el.child(
                                 div()

@@ -1,24 +1,25 @@
 //! Compact live header/sidebar status pill and popover for active background agent tasks.
 //!
 //! Summarizes background work in one quiet pill (`"3 running · 1 needs you"`) with a twinkling
-//! ring and amber attention dot, expanding via [`pro_presence`] into a `348px` task popover with
+//! ring and amber attention dot, expanding via [`pro_popover_presence`] into a `348px` task popover with
 //! filling [`pro_progress_ring`] indicators, current step & expandable sub-steps, `Pause` /
 //! `Resume`, and `Open` on tasks waiting for human input.
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_presence, pro_progress_ring,
-        pro_rolling_number, pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_popover_presence, pro_progress_ring, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
-        family::disabled_motion,
+        family::{PhaseClock, disabled_motion},
         pro_icons::{ProIcon, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 /// Lifecycle state of an individual [`RunningTask`].
@@ -136,6 +137,7 @@ pub struct RunningNow {
     live_tick: bool,
     started_at: Instant,
     last_tick: Instant,
+    done_clocks: HashMap<SharedString, PhaseClock>,
     loading: bool,
     empty: bool,
     measured_width: Rc<Cell<f32>>,
@@ -163,6 +165,7 @@ impl RunningNow {
             live_tick: true,
             started_at: now,
             last_tick: now,
+            done_clocks: HashMap::new(),
             loading: false,
             empty: false,
             measured_width: Rc::new(Cell::new(720.0)),
@@ -301,7 +304,7 @@ impl RunningNow {
         cx.notify();
     }
 
-    fn advance_one_live_step(&mut self) {
+    fn advance_one_live_step(&mut self, cx: &mut Context<Self>) {
         // Advance the first running task smoothly through its sub_steps, wrapping cleanly
         let running_indices: Vec<usize> = self
             .tasks
@@ -325,6 +328,8 @@ impl RunningNow {
             task.done = task.total;
             task.state = RunningTaskState::Done;
             task.step = "Completed".into();
+            let done_id = task.id.clone();
+            self.done_clocks.entry(done_id).or_default().restart(cx);
         }
     }
 
@@ -404,7 +409,7 @@ impl Render for RunningNow {
             w.request_animation_frame();
             if self.live_tick && self.last_tick.elapsed().as_secs_f32() >= 4.2 {
                 self.last_tick = Instant::now();
-                self.advance_one_live_step();
+                self.advance_one_live_step(cx);
             }
         }
 
@@ -422,34 +427,57 @@ impl Render for RunningNow {
             1.0
         };
 
-        // Trigger pill content
+        // Pre-sample spring progress rings and completion check clocks for every task
+        let mut ring_pcts: Vec<f32> = Vec::with_capacity(self.tasks.len());
+        let mut done_draws: Vec<bool> = Vec::with_capacity(self.tasks.len());
+        for task in &self.tasks {
+            let sp_pct = pro_spring_f32(
+                pro_eid(&self.id, format!("rn-ring-{}", task.id)),
+                task.progress(),
+                0.34,
+                w,
+                cx,
+            );
+            ring_pcts.push(sp_pct);
+            let draw_ok = if task.state == RunningTaskState::Done {
+                if reduced {
+                    true
+                } else if let Some(clk) = self.done_clocks.get(&task.id) {
+                    clk.time(0.28, w, cx) > 0.012
+                } else {
+                    true
+                }
+            } else {
+                false
+            };
+            done_draws.push(draw_ok);
+        }
+
+        let stage_min_h = pro_spring_f32(
+            pro_eid(&self.id, "rn-stage-h"),
+            if self.open { 404.0 } else { 64.0 },
+            0.22,
+            w,
+            cx,
+        );
+
+        // Trigger pill content with KUI tactile spring physics
         let trigger_pill = {
+            let aria = SharedString::from(format!(
+                "{}: {running_cnt} {}, {needs_cnt} {}",
+                tr(cx, "Background tasks", "后台任务"),
+                tr(cx, "running", "运行中"),
+                tr(cx, "need you", "待确认"),
+            ));
             let mut pill = div()
-                .id(pro_eid(&self.id, "rn-trigger"))
-                .role(Role::Button)
-                .aria_label(SharedString::from(format!(
-                    "{}: {running_cnt} {}, {needs_cnt} {}",
-                    tr(cx, "Background tasks", "后台任务"),
-                    tr(cx, "running", "运行中"),
-                    tr(cx, "need you", "待确认"),
-                )))
-                .tab_index(0)
                 .h(px(28.))
                 .pl(px(10.))
                 .pr(px(8.))
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .shadow_xs()
-                .hover(|s| s.bg(p.chip_hover))
                 .flex()
                 .items_center()
                 .gap(px(7.))
-                .cursor_pointer()
                 .text_size(px(12.))
-                .text_color(p.text)
-                .on_click(cx.listener(|this, _, _, cx| this.set_open(!this.open, cx)));
+                .text_color(p.text);
 
             if active_tasks == 0 || (running_cnt == 0 && needs_cnt == 0 && paused_cnt == 0) {
                 pill = pill
@@ -545,7 +573,7 @@ impl Render for RunningNow {
                 }
             }
 
-            pill.child(pro_icon(
+            let pill_inner = pill.child(pro_icon(
                 if self.open {
                     ProIcon::ChevronUp
                 } else {
@@ -553,208 +581,199 @@ impl Render for RunningNow {
                 },
                 12.,
                 p.muted,
-            ))
+            ));
+
+            pro_tactile(
+                pro_eid(&self.id, "rn-trigger"),
+                aria,
+                6.,
+                p.card,
+                p.chip_hover,
+                p.line_strong,
+                p.line_strong,
+                self.open,
+                pill_inner,
+                cx,
+                |this, _, cx| this.set_open(!this.open, cx),
+            )
+            .flex_none()
+            .shadow_xs()
         };
 
-        // Popover panel via pro_presence
-        let popover = pro_presence(
-            pro_eid(&self.id, "rn-popover-pres"),
-            self.open,
-            0.20,
-            0.16,
-            {
-                let tasks_snap = if self.empty {
-                    Vec::new()
-                } else {
-                    self.tasks.clone()
-                };
-                let exp_id = self.expanded_task_id.clone();
-                let hi_row = self.highlighted_row;
-                let base_id = self.id.clone();
-                let pop_w = (width - 24.0).clamp(260.0, 348.0);
-                let head_lbl = tr(cx, "BACKGROUND TASKS", "后台智能体任务").to_owned();
-                let empty_copy = tr(
-                    cx,
-                    "No background tasks right now.",
-                    "当前没有后台运行中的任务。",
-                )
-                .to_owned();
-                let open_all_lbl = tr(cx, "Open Tasks", "打开全部任务").to_owned();
-                let reset_lbl = tr(cx, "Reset", "重置").to_owned();
-                let any_done = tasks_snap.iter().any(|t| t.state == RunningTaskState::Done);
+        // Popover panel via pro_popover_presence so opening/closing via header pill animates both ways
+        let popover = {
+            let tasks_snap = if self.empty {
+                Vec::new()
+            } else {
+                self.tasks.clone()
+            };
+            let exp_id = self.expanded_task_id.clone();
+            let hi_row = self.highlighted_row;
+            let base_id = self.id.clone();
+            let pop_w = (width - 24.0).clamp(260.0, 348.0);
+            let head_lbl = tr(cx, "BACKGROUND TASKS", "后台智能体任务").to_owned();
+            let empty_copy = tr(
+                cx,
+                "No background tasks right now.",
+                "当前没有后台运行中的任务。",
+            )
+            .to_owned();
+            let open_all_lbl = tr(cx, "Open Tasks", "打开全部任务").to_owned();
+            let reset_lbl = tr(cx, "Reset", "重置").to_owned();
+            let any_done = tasks_snap.iter().any(|t| t.state == RunningTaskState::Done);
 
-                let rows_els: Vec<AnyElement> = tasks_snap
-                    .iter()
-                    .enumerate()
-                    .map(|(r_idx, task)| {
-                        let pct = task.progress();
-                        let ring_color = match task.state {
-                            RunningTaskState::Done => p.blue,
-                            RunningTaskState::NeedsYou => p.amber,
-                            RunningTaskState::Paused => p.muted,
-                            RunningTaskState::Running => {
-                                if pct < 0.35 {
-                                    p.orange
-                                } else {
-                                    p.teal
-                                }
+            let rows_els: Vec<AnyElement> = tasks_snap
+                .iter()
+                .enumerate()
+                .map(|(r_idx, task)| {
+                    let pct = ring_pcts
+                        .get(r_idx)
+                        .copied()
+                        .unwrap_or_else(|| task.progress());
+                    let done_draw = done_draws.get(r_idx).copied().unwrap_or(true);
+                    let ring_color = match task.state {
+                        RunningTaskState::Done => p.blue,
+                        RunningTaskState::NeedsYou => p.amber,
+                        RunningTaskState::Paused => p.muted,
+                        RunningTaskState::Running => {
+                            if pct < 0.35 {
+                                p.orange
+                            } else {
+                                p.teal
                             }
-                        };
-                        let is_exp = exp_id.as_ref() == Some(&task.id);
-                        let is_hi = hi_row == Some(r_idx);
-                        let tid_main = task.id.clone();
-                        let tid_act = task.id.clone();
+                        }
+                    };
+                    let is_exp = exp_id.as_ref() == Some(&task.id);
+                    let is_hi = hi_row == Some(r_idx);
+                    let tid_main = task.id.clone();
+                    let tid_act = task.id.clone();
 
-                        let right_action: AnyElement = match task.state {
-                            RunningTaskState::Running => div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(p.muted)
-                                        .child(format!("{}/{}", task.done, task.total)),
-                                )
-                                .child(
-                                    div()
-                                        .id(pro_eid(&base_id, format!("rn-pause-{}", task.id)))
-                                        .role(Role::Button)
-                                        .aria_label(SharedString::from(format!(
-                                            "Pause {}",
-                                            task.title
-                                        )))
-                                        .tab_index(0)
-                                        .size(px(28.))
-                                        .rounded(px(6.))
-                                        .hover(|s| s.bg(p.chip_hover).text_color(p.ink))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.pause_task(&tid_act, cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::Pause, 13., p.muted)),
-                                )
-                                .into_any_element(),
-                            RunningTaskState::Paused => div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(div().text_size(px(12.)).text_color(p.muted).child(tr(
-                                    cx,
-                                    "Paused",
-                                    "已暂停",
-                                )))
-                                .child(
-                                    div()
-                                        .id(pro_eid(&base_id, format!("rn-resume-{}", task.id)))
-                                        .role(Role::Button)
-                                        .aria_label(SharedString::from(format!(
-                                            "Resume {}",
-                                            task.title
-                                        )))
-                                        .tab_index(0)
-                                        .size(px(28.))
-                                        .rounded(px(6.))
-                                        .hover(|s| s.bg(p.chip_hover).text_color(p.ink))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.resume_task(&tid_act, cx);
-                                        }))
-                                        .child(pro_icon(ProIcon::Play, 13., p.muted)),
-                                )
-                                .into_any_element(),
-                            RunningTaskState::NeedsYou => div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .h(px(18.))
-                                        .px(px(6.))
-                                        .rounded(px(5.))
-                                        .bg(p.amber_soft)
-                                        .flex()
-                                        .items_center()
-                                        .text_size(px(11.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.amber_ink)
-                                        .child(tr(cx, "Needs you", "待确认")),
-                                )
-                                .child(
-                                    div()
-                                        .id(pro_eid(&base_id, format!("rn-open-{}", task.id)))
-                                        .role(Role::Button)
-                                        .tab_index(0)
-                                        .h(px(26.))
-                                        .px(px(8.))
-                                        .rounded(px(6.))
-                                        .bg(p.card)
-                                        .border_1()
-                                        .border_color(p.line_strong)
-                                        .hover(|s| s.bg(p.chip_hover))
-                                        .flex()
-                                        .items_center()
-                                        .cursor_pointer()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.open_task(&tid_act, cx);
-                                        }))
-                                        .child(tr(cx, "Open", "打开")),
-                                )
-                                .into_any_element(),
-                            RunningTaskState::Done => div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(p.muted)
-                                        .child(format!("{}/{}", task.total, task.total)),
-                                )
-                                .child(
-                                    div()
-                                        .size(px(28.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(pro_icon(ProIcon::Check, 13., p.blue)),
-                                )
-                                .into_any_element(),
-                        };
-
-                        // Sub-steps disclosure via pro_fold
-                        let subs = task.sub_steps.clone();
-                        let done_n = task.done;
-                        let task_state = task.state;
-                        let sub_fold = pro_fold(
-                            pro_eid(&base_id, format!("rn-sub-fold-{}", task.id)),
-                            is_exp && !subs.is_empty(),
-                            72.,
-                            0.,
-                            move || {
-                                let mut col = div()
-                                    .pl(px(34.))
-                                    .pr(px(10.))
-                                    .pb(px(8.))
+                    let right_action: AnyElement = match task.state {
+                        RunningTaskState::Running => div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.muted)
+                                    .child(format!("{}/{}", task.done, task.total)),
+                            )
+                            .child(pro_icon_btn(
+                                pro_eid(&base_id, format!("rn-pause-{}", task.id)),
+                                SharedString::from(format!("Pause {}", task.title)),
+                                ProIcon::Pause,
+                                28.,
+                                false,
+                                cx,
+                                move |this, _, cx| this.pause_task(&tid_act, cx),
+                            ))
+                            .into_any_element(),
+                        RunningTaskState::Paused => div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(div().text_size(px(12.)).text_color(p.muted).child(tr(
+                                cx,
+                                "Paused",
+                                "已暂停",
+                            )))
+                            .child(pro_icon_btn(
+                                pro_eid(&base_id, format!("rn-resume-{}", task.id)),
+                                SharedString::from(format!("Resume {}", task.title)),
+                                ProIcon::Play,
+                                28.,
+                                false,
+                                cx,
+                                move |this, _, cx| this.resume_task(&tid_act, cx),
+                            ))
+                            .into_any_element(),
+                        RunningTaskState::NeedsYou => div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .h(px(18.))
+                                    .px(px(6.))
+                                    .rounded(px(5.))
+                                    .bg(p.amber_soft)
                                     .flex()
-                                    .flex_col()
-                                    .gap(px(4.));
-                                for (si, s_txt) in subs.into_iter().enumerate() {
-                                    let is_done =
-                                        task_state == RunningTaskState::Done || si < done_n;
-                                    let is_cur = !is_done && si == done_n;
-                                    let dot_c = if is_done {
-                                        p.teal
-                                    } else if is_cur {
+                                    .items_center()
+                                    .text_size(px(11.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.amber_ink)
+                                    .child(tr(cx, "Needs you", "待确认")),
+                            )
+                            .child(pro_btn(
+                                pro_eid(&base_id, format!("rn-open-{}", task.id)),
+                                tr(cx, "Open", "打开"),
+                                None,
+                                ProBtnStyle::Secondary,
+                                true,
+                                cx,
+                                move |this, _, cx| this.open_task(&tid_act, cx),
+                            ))
+                            .into_any_element(),
+                        RunningTaskState::Done => div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.muted)
+                                    .child(format!("{}/{}", task.total, task.total)),
+                            )
+                            .child(
+                                div()
+                                    .size(px(28.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(pro_check_draw(
+                                        pro_eid(&base_id, format!("rn-done-chk-{}", task.id)),
+                                        done_draw,
+                                        14.,
+                                        false,
+                                        p.blue,
+                                    )),
+                            )
+                            .into_any_element(),
+                    };
+
+                    // Sub-steps disclosure via pro_fold
+                    let subs = task.sub_steps.clone();
+                    let done_n = task.done;
+                    let task_state = task.state;
+                    let sub_base = base_id.clone();
+                    let sub_tid = task.id.clone();
+                    let sub_fold = pro_fold(
+                        pro_eid(&base_id, format!("rn-sub-fold-{}", task.id)),
+                        is_exp && !subs.is_empty(),
+                        78.,
+                        0.,
+                        move || {
+                            let mut col = div()
+                                .pl(px(34.))
+                                .pr(px(10.))
+                                .pb(px(8.))
+                                .flex()
+                                .flex_col()
+                                .gap(px(4.));
+                            for (si, s_txt) in subs.into_iter().enumerate() {
+                                let is_done = task_state == RunningTaskState::Done || si < done_n;
+                                let is_cur = !is_done && si == done_n;
+                                let lead_mark = if is_done {
+                                    pro_check_draw(
+                                        pro_eid(&sub_base, format!("rn-sub-chk-{sub_tid}-{si}")),
+                                        true,
+                                        12.,
+                                        false,
+                                        p.teal,
+                                    )
+                                } else {
+                                    let dot_c = if is_cur {
                                         if task_state == RunningTaskState::NeedsYou {
                                             p.amber
                                         } else {
@@ -763,229 +782,235 @@ impl Render for RunningNow {
                                     } else {
                                         p.faint
                                     };
-                                    col = col.child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(7.))
-                                            .text_size(px(11.5))
-                                            .text_color(if is_cur {
-                                                p.ink
-                                            } else if is_done {
-                                                p.muted
-                                            } else {
-                                                p.faint
-                                            })
-                                            .child(div().size(px(5.)).rounded_full().bg(dot_c))
-                                            .child(div().truncate().child(s_txt)),
-                                    );
-                                }
-                                col.into_any_element()
-                            },
+                                    div()
+                                        .size(px(12.))
+                                        .flex_none()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(div().size(px(5.)).rounded_full().bg(dot_c))
+                                        .into_any_element()
+                                };
+                                col = col.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .text_size(px(11.5))
+                                        .text_color(if is_cur {
+                                            p.ink
+                                        } else if is_done {
+                                            p.muted
+                                        } else {
+                                            p.faint
+                                        })
+                                        .child(lead_mark)
+                                        .child(div().truncate().child(s_txt)),
+                                );
+                            }
+                            col.into_any_element()
+                        },
+                    );
+
+                    let row_inner = div()
+                        .w_full()
+                        .h(px(52.))
+                        .pl(px(9.))
+                        .pr(px(4.))
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .child(pro_progress_ring(pct, 15., 2.2, ring_color, p.line_strong))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_size(px(13.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(if task.state == RunningTaskState::Done {
+                                            p.text
+                                        } else {
+                                            p.ink
+                                        })
+                                        .truncate()
+                                        .child(task.title.clone()),
+                                )
+                                .child(pro_view_transition(
+                                    pro_eid(&base_id, format!("rn-step-tx-{}", task.id)),
+                                    task.step.clone(),
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.muted)
+                                        .truncate()
+                                        .child(task.step.clone()),
+                                )),
                         );
 
-                        div()
-                            .w_full()
-                            .rounded(px(7.))
-                            .bg(if is_hi { p.hover } else { transparent_black() })
-                            .hover(|s| s.bg(p.hover))
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .w_full()
-                                    .h(px(52.))
-                                    .pl(px(9.))
-                                    .pr(px(6.))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(10.))
-                                    .child(
-                                        div()
-                                            .id(pro_eid(&base_id, format!("rn-row-{}", task.id)))
-                                            .role(Role::Button)
-                                            .tab_index(0)
-                                            .flex_1()
-                                            .min_w_0()
-                                            .h_full()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(10.))
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.open_task(&tid_main, cx);
-                                            }))
-                                            .child(pro_progress_ring(
-                                                pct,
-                                                15.,
-                                                2.2,
-                                                ring_color,
-                                                p.line_strong,
-                                            ))
-                                            .child(
-                                                div()
-                                                    .flex_1()
-                                                    .min_w_0()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(13.))
-                                                            .font_weight(FontWeight::MEDIUM)
-                                                            .text_color(
-                                                                if task.state
-                                                                    == RunningTaskState::Done
-                                                                {
-                                                                    p.text
-                                                                } else {
-                                                                    p.ink
-                                                                },
-                                                            )
-                                                            .truncate()
-                                                            .child(task.title.clone()),
-                                                    )
-                                                    .child(pro_view_transition(
-                                                        pro_eid(
-                                                            &base_id,
-                                                            format!("rn-step-tx-{}", task.id),
-                                                        ),
-                                                        task.step.clone(),
-                                                        div()
-                                                            .text_size(px(12.))
-                                                            .text_color(p.muted)
-                                                            .truncate()
-                                                            .child(task.step.clone()),
-                                                    )),
-                                            ),
-                                    )
-                                    .child(right_action),
-                            )
-                            .child(sub_fold)
-                            .into_any_element()
-                    })
-                    .collect();
+                    let row_tactile = pro_tactile(
+                        pro_eid(&base_id, format!("rn-row-{}", task.id)),
+                        SharedString::from(format!("{}: {}", task.title, task.step)),
+                        6.,
+                        transparent_black(),
+                        p.hover,
+                        transparent_black(),
+                        transparent_black(),
+                        is_exp || is_hi,
+                        row_inner,
+                        cx,
+                        move |this, _, cx| this.open_task(&tid_main, cx),
+                    )
+                    .flex_1()
+                    .min_w_0();
 
-                let count_num = tasks_snap.len();
-                let reset_pill = any_done.then(|| {
                     div()
-                        .id(pro_eid(&base_id, "rn-reset-btn"))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .ml_auto()
-                        .px(px(6.))
-                        .py(px(1.))
-                        .rounded(px(4.))
-                        .hover(|s| s.bg(p.hover).text_color(p.ink))
-                        .cursor_pointer()
-                        .text_size(px(11.))
-                        .text_color(p.muted)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.tasks = default_running_tasks();
-                            this.last_tick = Instant::now();
-                            cx.notify();
-                        }))
-                        .child(reset_lbl)
-                });
-
-                let open_all_btn = div()
-                    .id(pro_eid(&base_id, "rn-open-all"))
-                    .role(Role::Button)
-                    .tab_index(0)
-                    .w_full()
-                    .h(px(32.))
-                    .px(px(9.))
-                    .rounded(px(6.))
-                    .hover(|s| s.bg(p.hover))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .cursor_pointer()
-                    .text_size(px(13.))
-                    .text_color(p.ink)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toast = Some((
-                            tr(cx, "Opened Tasks workspace", "已跳转至全部任务视图").into(),
-                            Instant::now(),
-                        ));
-                        cx.emit(RunningNowEvent::OpenedAll);
-                        cx.notify();
-                    }))
-                    .child(pro_icon(ProIcon::Tasks, 14., p.muted))
-                    .child(div().flex_1().child(open_all_lbl))
-                    .child(pro_icon(ProIcon::ChevronRight, 12., p.muted));
-
-                move |amt| {
-                    div()
-                        .mt(px(6.0 - 4.0 * (1.0 - amt)))
-                        .opacity(amt)
-                        .w(px(pop_w))
-                        .p(px(4.))
-                        .rounded(px(10.))
-                        .bg(if p.dark { rgb(0x1c1c1f).into() } else { p.card })
-                        .border_1()
-                        .border_color(p.line_strong)
-                        .shadow_lg()
+                        .w_full()
+                        .rounded(px(7.))
+                        .bg(if is_hi { p.hover } else { transparent_black() })
                         .flex()
                         .flex_col()
                         .child(
                             div()
-                                .h(px(28.))
-                                .px(px(8.))
+                                .w_full()
+                                .pr(px(6.))
                                 .flex()
                                 .items_center()
                                 .gap(px(6.))
-                                .child(
-                                    div()
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.muted)
-                                        .child(head_lbl),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.faint)
-                                        .child(format!("{count_num}")),
-                                )
-                                .when_some(reset_pill, |d, rp| d.child(rp)),
+                                .child(row_tactile)
+                                .child(right_action),
                         )
-                        .child(if rows_els.is_empty() {
-                            div()
-                                .px(px(10.))
-                                .py(px(16.))
-                                .text_size(px(12.))
-                                .text_color(p.muted)
-                                .child(empty_copy)
-                                .into_any_element()
-                        } else {
-                            div()
-                                .id(pro_eid(&base_id, "rn-list-scroll"))
-                                .max_h(px(292.))
-                                .overflow_y_scroll()
-                                .flex()
-                                .flex_col()
-                                .children(rows_els)
-                                .into_any_element()
-                        })
-                        .child(
-                            div()
-                                .mt(px(4.))
-                                .pt(px(4.))
-                                .border_t_1()
-                                .border_color(p.line)
-                                .child(open_all_btn),
-                        )
+                        .child(sub_fold)
                         .into_any_element()
-                }
-            },
-        );
+                })
+                .collect();
+
+            let count_num = tasks_snap.len();
+            let reset_pill = any_done.then(|| {
+                pro_btn(
+                    pro_eid(&base_id, "rn-reset-btn"),
+                    reset_lbl,
+                    Some(ProIcon::Refresh),
+                    ProBtnStyle::Ghost,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.tasks = default_running_tasks();
+                        this.done_clocks.clear();
+                        this.last_tick = Instant::now();
+                        cx.notify();
+                    },
+                )
+                .ml_auto()
+            });
+
+            let open_all_inner = div()
+                .w_full()
+                .h(px(32.))
+                .px(px(9.))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .text_size(px(13.))
+                .text_color(p.ink)
+                .child(pro_icon(ProIcon::Tasks, 14., p.muted))
+                .child(div().flex_1().child(open_all_lbl.clone()))
+                .child(pro_icon(ProIcon::ChevronRight, 12., p.muted));
+
+            let open_all_btn = pro_tactile(
+                pro_eid(&base_id, "rn-open-all"),
+                open_all_lbl,
+                6.,
+                transparent_black(),
+                p.hover,
+                transparent_black(),
+                transparent_black(),
+                false,
+                open_all_inner,
+                cx,
+                |this, _, cx| {
+                    this.toast = Some((
+                        tr(cx, "Opened Tasks workspace", "已跳转至全部任务视图").into(),
+                        Instant::now(),
+                    ));
+                    cx.emit(RunningNowEvent::OpenedAll);
+                    cx.notify();
+                },
+            )
+            .w_full();
+
+            pro_popover_presence(pro_eid(&self.id, "rn-popover-pres"), self.open, move || {
+                div()
+                    .mt(px(6.))
+                    .w(px(pop_w))
+                    .p(px(4.))
+                    .rounded(px(10.))
+                    .bg(if p.dark { rgb(0x1c1c1f).into() } else { p.card })
+                    .border_1()
+                    .border_color(p.line_strong)
+                    .shadow_lg()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .h(px(28.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.muted)
+                                    .child(head_lbl),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.faint)
+                                    .child(format!("{count_num}")),
+                            )
+                            .when_some(reset_pill, |d, rp| d.child(rp)),
+                    )
+                    .child(if rows_els.is_empty() {
+                        div()
+                            .px(px(10.))
+                            .py(px(16.))
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .child(empty_copy)
+                            .into_any_element()
+                    } else {
+                        div()
+                            .id(pro_eid(&base_id, "rn-list-scroll"))
+                            .max_h(px(292.))
+                            .overflow_y_scroll()
+                            .flex()
+                            .flex_col()
+                            .children(rows_els)
+                            .into_any_element()
+                    })
+                    .child(
+                        div()
+                            .mt(px(4.))
+                            .pt(px(4.))
+                            .border_t_1()
+                            .border_color(p.line)
+                            .child(open_all_btn),
+                    )
+                    .into_any_element()
+            })
+        };
 
         let body = if self.header_chrome {
             div()
                 .w_full()
                 .max_w(px(720.))
-                .min_h(px(if self.open { 404. } else { 64. }))
+                .min_h(px(stage_min_h))
                 .flex()
                 .flex_col()
                 .child(

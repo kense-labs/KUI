@@ -7,10 +7,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_shimmer_text,
-        pro_skeleton_bar, pro_spring_f32, tr,
+        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
+    foundation::Theme,
     primitives::{
         control::activate,
         family::disabled_motion,
@@ -736,6 +737,7 @@ pub struct CostWaterfall {
     mode: CostMeasureMode,
     collapsed: HashSet<SharedString>,
     open_id: Option<SharedString>,
+    hovered_id: Option<SharedString>,
     focused_row: usize,
     max_height: Option<f32>,
     loading: bool,
@@ -769,6 +771,7 @@ impl CostWaterfall {
             mode: CostMeasureMode::Cost,
             collapsed: HashSet::new(),
             open_id: None,
+            hovered_id: None,
             focused_row: 0,
             max_height: None,
             loading: false,
@@ -975,7 +978,7 @@ impl CostWaterfall {
 impl Render for CostWaterfall {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed = self.started_at.elapsed().as_secs_f32();
         let card_bg: Hsla = if p.dark {
             rgb(0x1c1c1f).into()
@@ -1149,9 +1152,6 @@ impl Render for CostWaterfall {
                     .px(px(7.0))
                     .rounded(px(5.0))
                     .bg(pill_bg)
-                    .text_color(pill_fg)
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .items_center()
                     .gap(px(5.0))
@@ -1163,7 +1163,22 @@ impl Render for CostWaterfall {
                                 .bg(pill_fg.opacity(pulse_alpha)),
                         )
                     })
-                    .child(pill_lbl),
+                    .when(run_status == CostStepStatus::Done, |d| {
+                        d.child(pro_check_draw(
+                            pro_eid(&self.id, "cw-done-chk"),
+                            true,
+                            12.0,
+                            false,
+                            pill_fg,
+                        ))
+                    })
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "cw-status-lbl"),
+                        pill_lbl,
+                        12.0,
+                        FontWeight::MEDIUM,
+                        pill_fg,
+                    )),
             )
             .when_some(is_stack.then(|| self.task.clone()).flatten(), |d, t| {
                 d.child(
@@ -1197,21 +1212,11 @@ impl Render for CostWaterfall {
                 .text_color(p.ink)
                 .child("$0")
                 .into_any_element()
-        } else if is_live {
-            pro_shimmer_text(
-                pro_eid(&self.id, "live-cost"),
-                format_usd(summary.total_cost),
-                p.ink,
-                p.strong,
-                15.0,
-                FontWeight::MEDIUM,
-                true,
-            )
         } else {
             pro_rolling_number(
                 pro_eid(&self.id, "roll-cost"),
                 summary.total_cost,
-                3,
+                if summary.total_cost < 1.0 { 3 } else { 2 },
                 "$",
                 "",
                 15.0,
@@ -1220,26 +1225,54 @@ impl Render for CostWaterfall {
             )
         };
 
+        let tok_stat_val: AnyElement = if total_tokens == 0 {
+            div()
+                .text_size(px(15.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.ink)
+                .child("0")
+                .into_any_element()
+        } else if total_tokens < 1_000 {
+            pro_rolling_number(
+                pro_eid(&self.id, "roll-tokens"),
+                total_tokens as f64,
+                0,
+                "",
+                "",
+                15.0,
+                FontWeight::MEDIUM,
+                p.ink,
+            )
+        } else {
+            pro_rolling_number(
+                pro_eid(&self.id, "roll-tokens"),
+                total_tokens as f64 / 1_000.0,
+                1,
+                "",
+                "k",
+                15.0,
+                FontWeight::MEDIUM,
+                p.ink,
+            )
+        };
+
         let top_stat_content: AnyElement = if let Some((tid, tname, tval)) = top_entry {
-            let hover_bg = p.chip;
-            let focus_c = p.focus;
-            activate(
+            pro_tactile(
+                pro_eid(&self.id, "most-expensive-btn"),
+                format!("{tname} ({tval})"),
+                6.0,
+                transparent_black(),
+                p.chip,
+                transparent_black(),
+                p.line_strong,
+                false,
                 div()
-                    .id(pro_eid(&self.id, "most-expensive-btn"))
-                    .role(Role::Button)
-                    .aria_label(format!("{tname} ({tval})"))
-                    .tab_index(0)
-                    .mx(px(-6.0))
                     .px(px(6.0))
                     .py(px(1.0))
-                    .rounded(px(6.0))
                     .flex()
                     .items_baseline()
                     .gap(px(8.0))
                     .min_w_0()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(hover_bg))
-                    .focus_visible(move |s| s.border_1().border_color(focus_c))
                     .child(
                         div()
                             .text_size(px(15.0))
@@ -1258,6 +1291,8 @@ impl Render for CostWaterfall {
                 cx,
                 move |this, _, cx| this.jump_to_top_step(tid.clone(), cx),
             )
+            .mx(px(-6.0))
+            .w_auto()
             .into_any_element()
         } else {
             div()
@@ -1320,13 +1355,7 @@ impl Render for CostWaterfall {
                             .items_baseline()
                             .gap(px(8.0))
                             .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(15.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .child(format_tokens(total_tokens)),
-                            )
+                            .child(tok_stat_val)
                             .when(!is_stack, |d| {
                                 d.child(
                                     div()
@@ -1545,19 +1574,99 @@ impl Render for CostWaterfall {
                 0.45 + 0.55 * (0.5 + 0.5 * ((elapsed / 1.1) * std::f32::consts::TAU).sin())
             };
 
-            let mut rows_col = div().relative().w_full().flex().flex_col();
+            struct BranchMeta {
+                id: SharedString,
+                level: usize,
+                has_children: bool,
+                folded: bool,
+            }
+
+            fn pack_branch_rows(
+                cursor: &mut usize,
+                min_level: usize,
+                items: &mut [Option<AnyElement>],
+                metas: &[BranchMeta],
+                base_id: &ElementId,
+            ) -> Vec<AnyElement> {
+                let mut out = Vec::new();
+                while *cursor < metas.len() && metas[*cursor].level >= min_level {
+                    let idx = *cursor;
+                    *cursor += 1;
+                    let row_el = items[idx]
+                        .take()
+                        .unwrap_or_else(|| div().into_any_element());
+                    if metas[idx].has_children
+                        && *cursor < metas.len()
+                        && metas[*cursor].level > metas[idx].level
+                    {
+                        let child_els =
+                            pack_branch_rows(cursor, metas[idx].level + 1, items, metas, base_id);
+                        let est_h = (child_els.len() as f32 * 32.0).max(32.0);
+                        let is_expanded = !metas[idx].folded;
+                        let fold_id = pro_eid(base_id, format!("branch-fold-{}", metas[idx].id));
+                        let mut children_wrap = Some(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .children(child_els)
+                                .into_any_element(),
+                        );
+                        let branch_fold = pro_fold(fold_id, is_expanded, est_h, 0.0, move || {
+                            children_wrap
+                                .take()
+                                .unwrap_or_else(|| div().into_any_element())
+                        });
+                        out.push(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .child(row_el)
+                                .child(branch_fold)
+                                .into_any_element(),
+                        );
+                    } else {
+                        out.push(row_el);
+                    }
+                }
+                out
+            }
+
+            let any_hov = pro_spring_f32(
+                pro_eid(&self.id, "cw-any-hov"),
+                if self.hovered_id.is_some() { 1.0 } else { 0.0 },
+                0.20,
+                window,
+                cx,
+            );
+
+            let mut row_items: Vec<Option<AnyElement>> = Vec::with_capacity(summary.rows.len());
+            let mut row_metas: Vec<BranchMeta> = Vec::with_capacity(summary.rows.len());
             let mut vis_index = 0usize;
 
             for row in &summary.rows {
-                if !row.visible {
-                    continue;
-                }
-                let my_vis_idx = vis_index;
-                vis_index += 1;
+                let my_vis_opt = if row.visible {
+                    let v = vis_index;
+                    vis_index += 1;
+                    Some(v)
+                } else {
+                    None
+                };
 
                 let row_id = row.id.clone();
                 let is_open = self.open_id.as_ref() == Some(&row_id);
+                let is_hov = self.hovered_id.as_ref() == Some(&row_id);
                 let is_top = top_flag_id.as_ref() == Some(&row_id);
+
+                let hov_amt = pro_spring_f32(
+                    pro_eid(&self.id, format!("cw-hov-{row_id}")),
+                    if is_hov || is_open { 1.0 } else { 0.0 },
+                    0.20,
+                    window,
+                    cx,
+                );
+                let row_dim = 1.0 - 0.28 * any_hov * (1.0 - hov_amt);
 
                 // Resolve bar palette by kind & error status.
                 let (bar_bg, bar_out, bar_edge, mark_c) = if row.status == CostStepStatus::Failed {
@@ -1644,10 +1753,11 @@ impl Render for CostWaterfall {
                 )
                 .clamp(0.0, 1.0);
 
-                let bar_h = if is_stack { 10.0 } else { 14.0 };
+                let base_bar_h = if is_stack { 10.0 } else { 14.0 };
+                let bar_h = base_bar_h + 1.5 * hov_amt;
                 let is_running = row.status == CostStepStatus::Running;
                 let is_credit = row.is_credit && cur_mode == CostMeasureMode::Cost;
-                let bar_border = if is_open { mark_c } else { bar_edge };
+                let bar_border = pro_mix_color(bar_edge, mark_c, hov_amt);
 
                 let waterfall_track = canvas(
                     |_, _, _| (),
@@ -1668,9 +1778,9 @@ impl Render for CostWaterfall {
                         window.paint_quad(quad(
                             bar_rect,
                             Corners::all(r),
-                            bar_bg,
+                            bar_bg.opacity(bar_bg.a * row_dim),
                             Edges::all(px(1.0)),
-                            bar_border,
+                            bar_border.opacity(bar_border.a * row_dim),
                             BorderStyle::Solid,
                         ));
 
@@ -1688,7 +1798,7 @@ impl Render for CostWaterfall {
                                     bar_rect.top() + px(1.0),
                                 ));
                                 if let Ok(hp) = hatch.build() {
-                                    window.paint_path(hp, bar_edge);
+                                    window.paint_path(hp, bar_edge.opacity(bar_edge.a * row_dim));
                                 }
                                 x_str += 6.0;
                             }
@@ -1698,7 +1808,10 @@ impl Render for CostWaterfall {
                                 point(bar_rect.right() - px(ow), bar_rect.top() + px(1.0)),
                                 size(px(ow), px((bar_h - 2.0).max(1.0))),
                             );
-                            window.paint_quad(fill(out_rect, bar_out).corner_radii(px(2.5)));
+                            window.paint_quad(
+                                fill(out_rect, bar_out.opacity(bar_out.a * row_dim))
+                                    .corner_radii(px(2.5)),
+                            );
                         }
 
                         if is_running && !reduced {
@@ -1818,9 +1931,16 @@ impl Render for CostWaterfall {
                     .justify_center()
                     .child(icon_inner);
 
+                let primary_metric_str =
+                    if (is_stack || hide_in_out) && cur_mode == CostMeasureMode::Tokens {
+                        format_tokens(row.tokens_in + row.tokens_out)
+                    } else {
+                        format_usd(row.cost)
+                    };
+
                 let name_cell = div()
                     .when(!is_stack, |d| d.w(px(name_w)).flex_none().h(px(32.0)))
-                    .when(is_stack, |d| d.flex_1().min_w_0().h(px(28.0)))
+                    .when(is_stack, |d| d.w_full().flex_none().min_w_0().h(px(28.0)))
                     .flex()
                     .items_center()
                     .min_w_0()
@@ -1900,19 +2020,35 @@ impl Render for CostWaterfall {
                             13.0,
                             p.red_ink,
                         )))
+                    })
+                    .when(is_stack, |d| {
+                        d.child(
+                            div()
+                                .ml(px(8.0))
+                                .w(px(cost_w))
+                                .flex_none()
+                                .text_right()
+                                .text_size(px(12.0))
+                                .text_color(p.ink)
+                                .child(primary_metric_str.clone()),
+                        )
+                        .child(
+                            div()
+                                .ml(px(8.0))
+                                .w(px(time_w))
+                                .flex_none()
+                                .text_right()
+                                .text_size(px(12.0))
+                                .text_color(p.text)
+                                .child(format_duration_ms(row.duration_ms)),
+                        )
                     });
-
-                let primary_metric_str =
-                    if (is_stack || hide_in_out) && cur_mode == CostMeasureMode::Tokens {
-                        format_tokens(row.tokens_in + row.tokens_out)
-                    } else {
-                        format_usd(row.cost)
-                    };
 
                 let hover_row_bg = p.hover;
                 let open_row_bg = pro_mix_color(card_bg, p.ink, if p.dark { 0.04 } else { 0.03 });
                 let focus_c = p.focus;
                 let click_id = row_id.clone();
+                let hov_id = row_id.clone();
                 let aria = format!(
                     "{}, {}, {}, {} tokens, {}",
                     row.name,
@@ -1932,7 +2068,7 @@ impl Render for CostWaterfall {
                         .role(Role::ListBoxOption)
                         .aria_label(aria)
                         .aria_expanded(is_open)
-                        .tab_index(if my_vis_idx == self.focused_row {
+                        .tab_index(if my_vis_opt == Some(self.focused_row) {
                             0
                         } else {
                             -1
@@ -1943,6 +2079,15 @@ impl Render for CostWaterfall {
                         .when(is_open, |d| d.bg(open_row_bg))
                         .hover(move |s| s.bg(hover_row_bg))
                         .focus_visible(move |s| s.border_1().border_color(focus_c))
+                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                            if *inside {
+                                this.hovered_id = Some(hov_id.clone());
+                                cx.notify();
+                            } else if this.hovered_id.as_ref() == Some(&hov_id) {
+                                this.hovered_id = None;
+                                cx.notify();
+                            }
+                        }))
                         .cursor_pointer()
                         .map(|d| {
                             if !is_stack {
@@ -2004,43 +2149,20 @@ impl Render for CostWaterfall {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.0))
-                                    .child(
-                                        div()
-                                            .w_full()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.0))
-                                            .child(name_cell)
-                                            .child(
-                                                div()
-                                                    .w(px(cost_w))
-                                                    .flex_none()
-                                                    .text_right()
-                                                    .text_size(px(12.0))
-                                                    .text_color(p.ink)
-                                                    .child(primary_metric_str),
-                                            )
-                                            .child(
-                                                div()
-                                                    .w(px(time_w))
-                                                    .flex_none()
-                                                    .text_right()
-                                                    .text_size(px(12.0))
-                                                    .text_color(p.text)
-                                                    .child(format_duration_ms(row.duration_ms)),
-                                            ),
-                                    )
+                                    .child(name_cell)
                                     .child(waterfall_track)
                             }
                         }),
                     cx,
                     move |this, _, cx| {
-                        this.focused_row = my_vis_idx;
+                        if let Some(v) = my_vis_opt {
+                            this.focused_row = v;
+                        }
                         this.toggle_open(click_id.clone(), cx);
                     },
                 );
 
-                // Step inspector drawer (`pro_fold`) showing Prompt/Response or Input/Output + Error.
+                // Step inspector drawer (`pro_fold` + `pro_popover_presence`) showing Prompt/Response or Input/Output + Error.
                 let (in_title, out_title) = match row.kind {
                     CostStepKind::Llm => {
                         (tr(cx, "PROMPT", "提示词"), tr(cx, "RESPONSE", "模型回复"))
@@ -2063,10 +2185,13 @@ impl Render for CostWaterfall {
                 let red_fg = p.red_ink;
                 let in_hdr: SharedString = in_title.into();
                 let out_hdr: SharedString = out_title.into();
+                let detail_open =
+                    is_open && (in_txt.is_some() || out_txt.is_some() || err_txt.is_some());
+                let pop_id = pro_eid(&self.id, format!("detail-pop-{row_id}"));
 
                 let fold_el = pro_fold(
                     pro_eid(&self.id, format!("detail-{row_id}")),
-                    is_open && (in_txt.is_some() || out_txt.is_some() || err_txt.is_some()),
+                    detail_open,
                     96.0,
                     0.0,
                     move || {
@@ -2134,20 +2259,11 @@ impl Render for CostWaterfall {
                             );
                         }
 
-                        let mut wrap = div()
-                            .w_full()
-                            .pl(px(indent_px))
-                            .pr(px(pad_r))
-                            .pt(px(4.0))
-                            .pb(px(10.0))
-                            .bg(detail_bg)
-                            .flex()
-                            .flex_col()
-                            .gap(px(8.0))
-                            .child(io_grid);
+                        let mut inner_card =
+                            div().w_full().flex().flex_col().gap(px(8.0)).child(io_grid);
 
                         if let Some(err) = err_txt {
-                            wrap = wrap.child(
+                            inner_card = inner_card.child(
                                 div()
                                     .p(px(9.0))
                                     .rounded(px(8.0))
@@ -2161,19 +2277,46 @@ impl Render for CostWaterfall {
                                     .child(div().flex_1().min_w_0().child(err)),
                             );
                         }
-                        wrap.into_any_element()
+                        let mut cell = Some(inner_card.into_any_element());
+                        div()
+                            .w_full()
+                            .pl(px(indent_px))
+                            .pr(px(pad_r))
+                            .pt(px(4.0))
+                            .pb(px(10.0))
+                            .bg(detail_bg)
+                            .child(pro_popover_presence(pop_id, detail_open, move || {
+                                cell.take().unwrap_or_else(|| div().into_any_element())
+                            }))
+                            .into_any_element()
                     },
                 );
 
-                rows_col = rows_col.child(
+                row_metas.push(BranchMeta {
+                    id: row_id,
+                    level: row.level,
+                    has_children: row.has_children,
+                    folded: row.folded,
+                });
+                row_items.push(Some(
                     div()
                         .w_full()
                         .flex()
                         .flex_col()
                         .child(row_button)
-                        .child(fold_el),
-                );
+                        .child(fold_el)
+                        .into_any_element(),
+                ));
             }
+
+            let mut cur = 0usize;
+            let tree_els = pack_branch_rows(&mut cur, 0, &mut row_items, &row_metas, &self.id);
+            let rows_col = div()
+                .relative()
+                .w_full()
+                .flex()
+                .flex_col()
+                .children(tree_els);
 
             if let Some(mh) = self.max_height {
                 div()

@@ -5,13 +5,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_connector_pulse, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar,
-        pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_rolling_number,
+        pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
-        control::activate,
         family::{PhaseClock, Slide},
         pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
@@ -261,6 +261,7 @@ pub struct AgentFleet {
     open_sub_id: Option<SharedString>,
     focused_lead_idx: usize,
     hovered_lead_id: Option<SharedString>,
+    hovered_sub_id: Option<SharedString>,
     dim_slides: Vec<Slide>,
     branch_clock: PhaseClock,
     toast: Option<(SharedString, Instant)>,
@@ -296,6 +297,7 @@ impl AgentFleet {
             open_sub_id: None,
             focused_lead_idx: 0,
             hovered_lead_id: None,
+            hovered_sub_id: None,
             dim_slides,
             branch_clock,
             toast: None,
@@ -389,6 +391,7 @@ impl AgentFleet {
         }
         self.open_lead_id = valid.clone();
         self.open_sub_id = None;
+        self.hovered_sub_id = None;
         self.branch_clock.restart(cx);
         self.retarget_dim_slides(cx);
         cx.emit(AgentFleetEvent::OpenChanged { open_id: valid });
@@ -597,7 +600,7 @@ impl AgentFleet {
         };
 
         let (pie_ratio, summary_phrase, summary_tone) = summarize_sub_agents(lead, p, cx);
-        let status_pill = render_status_pill(lead.status, p, cx);
+        let status_pill = render_status_pill(&self.id, &lead.id, lead.status, p, cx);
         let provider_key = infer_provider_key(&lead.model);
         let avatar_el = if let Some(art) = pro_app_artwork(provider_key, 13., cx) {
             div()
@@ -654,150 +657,163 @@ impl AgentFleet {
         );
 
         let border_c = if is_open { p.line_strong } else { p.line };
-        let hover_border = p.line_strong;
-        let focus_c = p.focus;
         let click_id = lid.clone();
         let hover_id = lid.clone();
+        let aria = format!("{disp_name}: {}", lead.status.label(cx));
 
-        let card = activate(
-            div()
-                .id(pro_eid(&self.id, format!("lead-{idx}")))
-                .role(Role::Button)
-                .aria_label(format!("{disp_name}: {}", lead.status.label(cx)))
-                .tab_index(0)
-                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                    let next = if *hovered {
-                        Some(hover_id.clone())
-                    } else if this.hovered_lead_id.as_ref() == Some(&hover_id) {
-                        None
-                    } else {
-                        this.hovered_lead_id.clone()
-                    };
-                    if this.hovered_lead_id != next {
-                        this.hovered_lead_id = next;
-                        this.retarget_dim_slides(cx);
-                        cx.notify();
-                    }
-                }))
-                .when(wide, |d| d.w(px(288.)))
-                .when(!wide, |d| d.w_full())
-                .relative()
-                .opacity(opacity)
-                .rounded(px(10.))
-                .bg(p.card)
-                .border_1()
-                .border_color(border_c)
-                .p(px(10.))
-                .pb(px(8.))
-                .flex()
-                .flex_col()
-                .gap(px(6.))
-                .cursor_pointer()
-                .hover(move |s| s.border_color(hover_border))
-                .focus_visible(move |s| s.border_color(focus_c))
-                .child(
-                    canvas(
-                        move |bounds, _, _| {
-                            sensor.set(Some(bounds));
-                        },
-                        |_, _, _, _| (),
-                    )
-                    .absolute()
-                    .inset_0(),
+        let card_body = div()
+            .w_full()
+            .relative()
+            .p(px(10.))
+            .pb(px(8.))
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .child(
+                canvas(
+                    move |bounds, _, _| {
+                        sensor.set(Some(bounds));
+                    },
+                    |_, _, _, _| (),
                 )
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .min_w_0()
-                        .child(avatar_el)
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .text_size(px(13.))
-                                        .line_height(px(16.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.strong)
-                                        .truncate()
-                                        .child(disp_name),
-                                )
-                                .when(!lead.model.is_empty(), |d| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(11.))
-                                            .line_height(px(14.))
-                                            .text_color(p.muted)
-                                            .truncate()
-                                            .child(lead.model.clone()),
-                                    )
-                                }),
-                        )
-                        .child(status_pill),
-                )
-                .child(task_row)
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(20.))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(5.))
-                                .min_w_0()
-                                .child(render_pie_ring(pie_ratio, summary_tone))
-                                .child(
+                .absolute()
+                .inset_0(),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .min_w_0()
+                    .child(avatar_el)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .line_height(px(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .truncate()
+                                    .child(disp_name),
+                            )
+                            .when(!lead.model.is_empty(), |d| {
+                                d.child(
                                     div()
                                         .text_size(px(11.))
-                                        .line_height(px(16.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(summary_tone)
-                                        .truncate()
-                                        .child(summary_phrase),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .gap(px(3.))
-                                .child(pro_rolling_number(
-                                    pro_eid(&self.id, format!("lcost-{}", lead.id)),
-                                    total_cost,
-                                    2,
-                                    "$",
-                                    "",
-                                    11.,
-                                    FontWeight::MEDIUM,
-                                    p.ink,
-                                ))
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
+                                        .line_height(px(14.))
                                         .text_color(p.muted)
-                                        .child(format!("· {}", format_duration_secs(elapsed))),
-                                ),
-                        ),
-                ),
+                                        .truncate()
+                                        .child(lead.model.clone()),
+                                )
+                            }),
+                    )
+                    .child(status_pill),
+            )
+            .child(task_row)
+            .child(pro_spring_bar(
+                pro_eid(&self.id, format!("lprog-{}", lead.id)),
+                pie_ratio,
+                2.5,
+                1.5,
+                p.chip,
+                if lead.status == FleetStatus::Done {
+                    p.green
+                } else {
+                    p.blue
+                },
+            ))
+            .child(
+                div()
+                    .w_full()
+                    .h(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .min_w_0()
+                            .child(render_pie_ring(
+                                pro_eid(&self.id, format!("pie-{}", lead.id)),
+                                pie_ratio,
+                                summary_tone,
+                            ))
+                            .child(pro_swap_label(
+                                pro_eid(&self.id, format!("lsum-{}", lead.id)),
+                                summary_phrase,
+                                11.,
+                                FontWeight::MEDIUM,
+                                summary_tone,
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap(px(3.))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("lcost-{}", lead.id)),
+                                total_cost,
+                                2,
+                                "$",
+                                "",
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(p.muted)
+                                    .child(format!("· {}", format_duration_secs(elapsed))),
+                            ),
+                    ),
+            );
+
+        pro_tactile(
+            pro_eid(&self.id, format!("lead-{idx}")),
+            aria,
+            10.,
+            p.card,
+            p.subtle,
+            border_c,
+            p.line_strong,
+            is_open,
+            card_body,
             cx,
             move |this, _, cx| {
                 this.toggle_lead(click_id.clone(), cx);
             },
-        );
-
-        card.into_any_element()
+        )
+        .when(wide, |d| d.w(px(288.)))
+        .when(!wide, |d| d.w_full())
+        .relative()
+        .opacity(opacity)
+        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+            let next = if *hovered {
+                Some(hover_id.clone())
+            } else if this.hovered_lead_id.as_ref() == Some(&hover_id) {
+                None
+            } else {
+                this.hovered_lead_id.clone()
+            };
+            if this.hovered_lead_id != next {
+                this.hovered_lead_id = next;
+                this.retarget_dim_slides(cx);
+                cx.notify();
+            }
+        }))
+        .into_any_element()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -829,7 +845,7 @@ impl AgentFleet {
             sub.elapsed_secs
         };
         let muted = sub.status.is_muted();
-        let status_pill = render_status_pill(sub.status, p, cx);
+        let status_pill = render_status_pill(&self.id, &sub.id, sub.status, p, cx);
 
         let needs_decision = sub.status == FleetStatus::Waiting && sub.ask.is_some();
         let needs_resolve = sub.status == FleetStatus::Failed && sub.error.is_some();
@@ -844,133 +860,161 @@ impl AgentFleet {
         };
 
         let border_c = if is_popped { p.line_strong } else { p.line };
-        let hover_border = p.line_strong;
-        let focus_c = p.focus;
         let click_id = sid.clone();
+        let hover_id = sid.clone();
 
         let dx = if wide { -8.0 * (1.0 - enter_t) } else { 0.0 };
         let base_alpha = if muted { 0.62 } else { 1.0 } * enter_t.clamp(0.0, 1.0);
 
-        let card_box = activate(
-            div()
-                .id(pro_eid(&self.id, format!("sub-{}", sub.id)))
-                .role(Role::TreeItem)
-                .aria_label(format!("{disp_name}: {}", sub.status.label(cx)))
-                .tab_index(0)
-                .when(wide, |d| d.w(px(240.)))
-                .when(!wide, |d| d.w_full())
-                .relative()
-                .left(px(dx))
-                .opacity(base_alpha)
-                .rounded(px(8.))
-                .bg(p.card)
-                .border_1()
-                .border_color(border_c)
-                .p(px(10.))
-                .pb(px(8.))
-                .flex()
-                .flex_col()
-                .gap(px(6.))
-                .cursor_pointer()
-                .hover(move |s| s.border_color(hover_border))
-                .focus_visible(move |s| s.border_color(focus_c))
-                .child(
-                    canvas(
-                        move |bounds, _, _| {
-                            sensor.set(Some(bounds));
+        let step_ratio = if sub.steps.is_empty() {
+            None
+        } else {
+            let done_n = sub
+                .steps
+                .iter()
+                .filter(|s| s.status == FleetStatus::Done)
+                .count();
+            Some((done_n as f32) / (sub.steps.len() as f32))
+        };
+
+        let sub_body = div()
+            .w_full()
+            .relative()
+            .p(px(10.))
+            .pb(px(8.))
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .child(
+                canvas(
+                    move |bounds, _, _| {
+                        sensor.set(Some(bounds));
+                    },
+                    |_, _, _, _| (),
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .min_w_0()
+                    .child(pro_agent_avatar(
+                        &sub.id,
+                        if sub.status == FleetStatus::Waiting {
+                            p.amber
+                        } else if sub.status == FleetStatus::Failed {
+                            p.red
+                        } else {
+                            p.blue
                         },
-                        |_, _, _, _| (),
+                        22.,
+                        sub.status == FleetStatus::Running,
+                        (live_tick_secs as f32) * 1000.0,
+                        cx,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.5))
+                            .line_height(px(16.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .truncate()
+                            .child(disp_name.clone()),
                     )
-                    .absolute()
-                    .inset_0(),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .min_w_0()
-                        .child(pro_agent_avatar(
-                            &sub.id,
-                            if sub.status == FleetStatus::Waiting {
-                                p.amber
-                            } else if sub.status == FleetStatus::Failed {
-                                p.red
-                            } else {
-                                p.blue
-                            },
-                            22.,
-                            sub.status == FleetStatus::Running,
-                            (live_tick_secs as f32) * 1000.0,
-                            cx,
-                        ))
-                        .child(
+                    .child(status_pill),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .text_size(px(12.))
+                    .line_height(px(16.))
+                    .text_color(p.text)
+                    .truncate()
+                    .child(disp_task),
+            )
+            .when_some(step_ratio, |d, sr| {
+                d.child(pro_spring_bar(
+                    pro_eid(&self.id, format!("sprog-{}", sub.id)),
+                    sr,
+                    2.5,
+                    1.5,
+                    p.chip,
+                    if sub.status == FleetStatus::Failed {
+                        p.red
+                    } else if sub.status == FleetStatus::Waiting {
+                        p.amber
+                    } else if sub.status == FleetStatus::Done {
+                        p.green
+                    } else {
+                        p.blue
+                    },
+                ))
+            })
+            .child(
+                div()
+                    .w_full()
+                    .h(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(3.))
+                            .text_size(px(11.))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, format!("scost-{}", sub.id)),
+                                sub.cost,
+                                2,
+                                "$",
+                                "",
+                                11.,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
+                            .child(
+                                div()
+                                    .text_color(p.muted)
+                                    .child(format!("· {}", format_duration_secs(elapsed))),
+                            ),
+                    )
+                    .when_some(action_pill_label, |d, lbl| {
+                        d.child(
                             div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(12.5))
-                                .line_height(px(16.))
+                                .h(px(20.))
+                                .px(px(7.))
+                                .rounded(px(5.))
+                                .bg(if is_popped { p.chip_hover } else { p.chip })
+                                .border_1()
+                                .border_color(p.line)
+                                .text_size(px(11.))
                                 .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .truncate()
-                                .child(disp_name),
-                        )
-                        .child(status_pill),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(p.text)
-                        .truncate()
-                        .child(disp_task),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(20.))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(6.))
-                        .child(
-                            div()
+                                .text_color(p.ink)
                                 .flex()
                                 .items_center()
-                                .gap(px(3.))
-                                .text_size(px(11.))
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .child(format!("${:.2}", sub.cost)),
-                                )
-                                .child(
-                                    div()
-                                        .text_color(p.muted)
-                                        .child(format!("· {}", format_duration_secs(elapsed))),
-                                ),
+                                .child(lbl),
                         )
-                        .when_some(action_pill_label, |d, lbl| {
-                            d.child(
-                                div()
-                                    .h(px(20.))
-                                    .px(px(7.))
-                                    .rounded(px(5.))
-                                    .bg(if is_popped { p.chip_hover } else { p.chip })
-                                    .border_1()
-                                    .border_color(p.line)
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
-                                    .flex()
-                                    .items_center()
-                                    .child(lbl),
-                            )
-                        }),
-                ),
+                    }),
+            );
+
+        let card_box = pro_tactile(
+            pro_eid(&self.id, format!("sub-{}", sub.id)),
+            format!("{disp_name}: {}", sub.status.label(cx)),
+            8.,
+            p.card,
+            p.subtle,
+            border_c,
+            p.line_strong,
+            is_popped,
+            sub_body,
             cx,
             move |this, _, cx| {
                 let target = click_id.clone();
@@ -982,20 +1026,34 @@ impl AgentFleet {
                 }
                 cx.notify();
             },
-        );
+        )
+        .role(Role::TreeItem)
+        .when(wide, |d| d.w(px(240.)))
+        .when(!wide, |d| d.w_full())
+        .relative()
+        .left(px(dx))
+        .opacity(base_alpha)
+        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+            let next = if *hovered {
+                Some(hover_id.clone())
+            } else if this.hovered_sub_id.as_ref() == Some(&hover_id) {
+                None
+            } else {
+                this.hovered_sub_id.clone()
+            };
+            if this.hovered_sub_id != next {
+                this.hovered_sub_id = next;
+                cx.notify();
+            }
+        }));
 
-        let sub_clone = sub.clone();
-        let p_copy = *p;
+        let drawer_el = render_sub_tasks_drawer(&self.id, sub, p, cx);
         let fold_panel = pro_fold(
             pro_eid(&self.id, format!("sub-pop-{}", sub.id)),
             is_popped,
             150.,
             0.,
-            {
-                let view_entity = cx.entity();
-                let root_id = self.id.clone();
-                move || render_sub_tasks_drawer(&root_id, &sub_clone, &p_copy, view_entity)
-            },
+            move || drawer_el,
         );
 
         div()
@@ -1208,7 +1266,20 @@ impl Render for AgentFleet {
             HashMap::new();
         let mut sub_sensors: HashMap<SharedString, Rc<Cell<Option<Bounds<Pixels>>>>> =
             HashMap::new();
-        let mut connector_edges: Vec<(SharedString, SharedString, bool, bool)> = Vec::new();
+        let mut connector_edges: Vec<(SharedString, SharedString, bool, bool, f32)> = Vec::new();
+
+        let focus_sub = self
+            .hovered_sub_id
+            .clone()
+            .or_else(|| self.open_sub_id.clone());
+        let any_sub_spot = pro_spring_f32(
+            pro_eid(&self.id, "f-any-spot"),
+            if focus_sub.is_some() { 1.0 } else { 0.0 },
+            0.22,
+            w,
+            cx,
+        )
+        .clamp(0., 1.);
 
         let agents_snapshot = self.agents.clone();
         let mut left_col = div()
@@ -1225,7 +1296,8 @@ impl Render for AgentFleet {
             let card_el =
                 self.render_lead_card(idx, lead, wide, l_op, l_sensor, elapsed_secs, &p, cx);
 
-            if !wide && self.open_lead_id.as_ref() == Some(&lead.id) && !lead.children.is_empty() {
+            if !wide && !lead.children.is_empty() {
+                let is_mob_open = self.open_lead_id.as_ref() == Some(&lead.id);
                 let mut mobile_branch = div()
                     .w_full()
                     .pl(px(24.))
@@ -1252,6 +1324,13 @@ impl Render for AgentFleet {
                         ));
                     }
                 }
+                let mob_fold = pro_fold(
+                    pro_eid(&self.id, format!("mob-branch-{}", lead.id)),
+                    is_mob_open,
+                    220.,
+                    6.,
+                    move || mobile_branch.into_any_element(),
+                );
                 left_col = left_col.child(
                     div()
                         .w_full()
@@ -1259,7 +1338,7 @@ impl Render for AgentFleet {
                         .flex_col()
                         .gap(px(6.))
                         .child(card_el)
-                        .child(mobile_branch),
+                        .child(mob_fold),
                 );
             } else {
                 left_col = left_col.child(card_el);
@@ -1306,11 +1385,23 @@ impl Render for AgentFleet {
                         };
                         let s_sensor = Rc::new(Cell::new(None));
                         sub_sensors.insert(sub.id.clone(), s_sensor.clone());
+                        let lit1 = focus_sub.as_ref().is_some_and(|fid| {
+                            fid == &sub.id || sub.children.iter().any(|g| &g.id == fid)
+                        }) || self.hovered_lead_id.as_ref() == Some(&open_lead.id);
+                        let spot1 = pro_spring_f32(
+                            pro_eid(&self.id, format!("f-edge-{}-{}", open_lead.id, sub.id)),
+                            if lit1 { 1.0 } else { 0.0 },
+                            0.22,
+                            w,
+                            cx,
+                        )
+                        .clamp(0., 1.);
                         connector_edges.push((
                             open_lead.id.clone(),
                             sub.id.clone(),
                             true,
                             sub.status.is_muted(),
+                            spot1,
                         ));
 
                         let sub_el = self.render_sub_card(
@@ -1330,11 +1421,23 @@ impl Render for AgentFleet {
                             for grand in &sub.children {
                                 let g_sensor = Rc::new(Cell::new(None));
                                 sub_sensors.insert(grand.id.clone(), g_sensor.clone());
+                                let lit2 = focus_sub
+                                    .as_ref()
+                                    .is_some_and(|fid| fid == &sub.id || fid == &grand.id);
+                                let spot2 = pro_spring_f32(
+                                    pro_eid(&self.id, format!("f-edge-{}-{}", sub.id, grand.id)),
+                                    if lit2 { 1.0 } else { 0.0 },
+                                    0.22,
+                                    w,
+                                    cx,
+                                )
+                                .clamp(0., 1.);
                                 connector_edges.push((
                                     sub.id.clone(),
                                     grand.id.clone(),
                                     false,
                                     grand.status.is_muted(),
+                                    spot2,
                                 ));
                                 grand_col = grand_col.child(self.render_sub_card(
                                     grand,
@@ -1382,8 +1485,8 @@ impl Render for AgentFleet {
         let links_canvas = canvas(
             |_, _, _| (),
             move |_, _, window, _| {
-                let mut anchors: Vec<Point<Pixels>> = Vec::new();
-                for (from_id, to_id, horizontal_bridge, is_muted) in &connector_edges {
+                let mut anchors: Vec<(Point<Pixels>, f32)> = Vec::new();
+                for (from_id, to_id, horizontal_bridge, is_muted, spot) in &connector_edges {
                     let b0_opt = lead_sensors
                         .get(from_id)
                         .and_then(|c| c.get())
@@ -1392,35 +1495,54 @@ impl Render for AgentFleet {
                     let (Some(b0), Some(b1)) = (b0_opt, b1_opt) else {
                         continue;
                     };
-                    let stroke_col = if *is_muted {
+                    let dim_factor = 1.0 - 0.36 * any_sub_spot * (1.0 - *spot);
+                    let base_col = if *is_muted {
                         link_muted
                     } else {
                         link_blue.opacity(if p.dark { 0.72 } else { 0.92 } * enter_base)
                     };
+                    let stroke_col = if *spot > 0.01 {
+                        pulse_blue.opacity((0.55 + 0.43 * *spot) * enter_base)
+                    } else {
+                        base_col.opacity((base_col.a * dim_factor).clamp(0.16, 1.0))
+                    };
+                    let stroke_w = 1.5 + 0.85 * *spot;
                     if *horizontal_bridge {
                         let p0 = point(b0.right(), (b0.top() + b0.bottom()) * 0.5);
                         let p1 = point(b1.left(), (b1.top() + b1.bottom()) * 0.5);
-                        let prog = if *is_muted { None } else { pulse_t };
+                        let prog = if *is_muted && *spot < 0.1 {
+                            None
+                        } else {
+                            pulse_t
+                        };
                         pro_connector_pulse(
-                            p0, p1, 8.0, false, stroke_col, pulse_blue, prog, 1.5, window,
+                            p0, p1, 8.0, false, stroke_col, pulse_blue, prog, stroke_w, window,
                         );
-                        if !anchors
-                            .iter()
-                            .any(|a| (a.x - p0.x).abs() < px(1.) && (a.y - p0.y).abs() < px(1.))
-                        {
-                            anchors.push(p0);
+                        if let Some(existing) = anchors.iter_mut().find(|(a, _)| {
+                            (a.x - p0.x).abs() < px(1.) && (a.y - p0.y).abs() < px(1.)
+                        }) {
+                            existing.1 = existing.1.max(*spot);
+                        } else {
+                            anchors.push((p0, *spot));
                         }
                     } else {
                         let x0 = f32::from(b0.left()) + 16.0;
                         let y0 = f32::from(b0.bottom());
                         let x1 = f32::from(b1.left());
                         let y1 = (f32::from(b1.top()) + f32::from(b1.bottom())) * 0.5;
-                        paint_sub_elbow(x0, y0, x1, y1, 5.5, stroke_col, 1.5, window);
-                        anchors.push(point(px(x0), px(y0)));
+                        paint_sub_elbow(x0, y0, x1, y1, 5.5, stroke_col, stroke_w, window);
+                        anchors.push((point(px(x0), px(y0)), *spot));
                     }
                 }
-                for pt in anchors {
-                    paint_ring_dot(pt, 3.25, card_bg, link_blue, 1.5, window);
+                for (pt, spot) in anchors {
+                    paint_ring_dot(
+                        pt,
+                        3.25 + 0.5 * spot,
+                        card_bg,
+                        if spot > 0.05 { pulse_blue } else { link_blue },
+                        1.5 + 0.4 * spot,
+                        window,
+                    );
                 }
             },
         )
@@ -1474,10 +1596,12 @@ fn render_sub_tasks_drawer(
     root_id: &ElementId,
     sub: &FleetAgent,
     p: &ProPalette,
-    view: Entity<AgentFleet>,
+    cx: &mut Context<AgentFleet>,
 ) -> AnyElement {
     let sid = sub.id.clone();
     let mut box_el = div()
+        .id(pro_eid(root_id, format!("drawer-{sid}")))
+        .on_click(|_, _, cx| cx.stop_propagation())
         .w_full()
         .rounded(px(9.))
         .bg(p.panel)
@@ -1494,8 +1618,6 @@ fn render_sub_tasks_drawer(
     {
         let s_rej = sid.clone();
         let s_app = sid.clone();
-        let v_rej = view.clone();
-        let v_app = view.clone();
         box_el = box_el.child(
             div()
                 .w_full()
@@ -1510,7 +1632,7 @@ fn render_sub_tasks_drawer(
                         .text_size(px(11.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.amber_ink)
-                        .child("Needs your decision"),
+                        .child(tr(cx, "Needs your decision", "需要你的确认")),
                 )
                 .child(
                     div()
@@ -1525,62 +1647,36 @@ fn render_sub_tasks_drawer(
                         .flex()
                         .justify_end()
                         .gap(px(6.))
-                        .child(
-                            div()
-                                .id(pro_eid(root_id, format!("rej-{sid}")))
-                                .role(Role::Button)
-                                .h(px(24.))
-                                .px(px(9.))
-                                .rounded(px(5.))
-                                .bg(p.chip)
-                                .border_1()
-                                .border_color(p.line)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .flex()
-                                .items_center()
-                                .cursor_pointer()
-                                .on_click(move |_, _, cx| {
-                                    cx.stop_propagation();
-                                    let target = s_rej.clone();
-                                    v_rej.update(cx, |this, cx| {
-                                        this.resolve_sub_agent(
-                                            target,
-                                            FleetResolveAction::Reject,
-                                            cx,
-                                        );
-                                    });
-                                })
-                                .child("Reject"),
-                        )
-                        .child(
-                            div()
-                                .id(pro_eid(root_id, format!("app-{sid}")))
-                                .role(Role::Button)
-                                .h(px(24.))
-                                .px(px(9.))
-                                .rounded(px(5.))
-                                .bg(p.primary)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .flex()
-                                .items_center()
-                                .cursor_pointer()
-                                .on_click(move |_, _, cx| {
-                                    cx.stop_propagation();
-                                    let target = s_app.clone();
-                                    v_app.update(cx, |this, cx| {
-                                        this.resolve_sub_agent(
-                                            target,
-                                            FleetResolveAction::Approve,
-                                            cx,
-                                        );
-                                    });
-                                })
-                                .child("Approve"),
-                        ),
+                        .child(pro_btn(
+                            pro_eid(root_id, format!("rej-{sid}")),
+                            tr(cx, "Reject", "拒绝"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_sub_agent(
+                                    s_rej.clone(),
+                                    FleetResolveAction::Reject,
+                                    cx,
+                                );
+                            },
+                        ))
+                        .child(pro_btn(
+                            pro_eid(root_id, format!("app-{sid}")),
+                            tr(cx, "Approve", "批准"),
+                            Some(ProIcon::Check),
+                            ProBtnStyle::Primary,
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_sub_agent(
+                                    s_app.clone(),
+                                    FleetResolveAction::Approve,
+                                    cx,
+                                );
+                            },
+                        )),
                 ),
         );
     }
@@ -1590,8 +1686,6 @@ fn render_sub_tasks_drawer(
     {
         let s_dis = sid.clone();
         let s_ret = sid.clone();
-        let v_dis = view.clone();
-        let v_ret = view;
         box_el = box_el.child(
             div()
                 .w_full()
@@ -1606,7 +1700,7 @@ fn render_sub_tasks_drawer(
                         .text_size(px(11.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.red_ink)
-                        .child("Execution failed"),
+                        .child(tr(cx, "Execution failed", "执行失败")),
                 )
                 .child(
                     div()
@@ -1621,62 +1715,36 @@ fn render_sub_tasks_drawer(
                         .flex()
                         .justify_end()
                         .gap(px(6.))
-                        .child(
-                            div()
-                                .id(pro_eid(root_id, format!("dis-{sid}")))
-                                .role(Role::Button)
-                                .h(px(24.))
-                                .px(px(9.))
-                                .rounded(px(5.))
-                                .bg(p.chip)
-                                .border_1()
-                                .border_color(p.line)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.ink)
-                                .flex()
-                                .items_center()
-                                .cursor_pointer()
-                                .on_click(move |_, _, cx| {
-                                    cx.stop_propagation();
-                                    let target = s_dis.clone();
-                                    v_dis.update(cx, |this, cx| {
-                                        this.resolve_sub_agent(
-                                            target,
-                                            FleetResolveAction::Dismiss,
-                                            cx,
-                                        );
-                                    });
-                                })
-                                .child("Dismiss"),
-                        )
-                        .child(
-                            div()
-                                .id(pro_eid(root_id, format!("ret-{sid}")))
-                                .role(Role::Button)
-                                .h(px(24.))
-                                .px(px(9.))
-                                .rounded(px(5.))
-                                .bg(p.primary)
-                                .text_size(px(11.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.on_primary)
-                                .flex()
-                                .items_center()
-                                .cursor_pointer()
-                                .on_click(move |_, _, cx| {
-                                    cx.stop_propagation();
-                                    let target = s_ret.clone();
-                                    v_ret.update(cx, |this, cx| {
-                                        this.resolve_sub_agent(
-                                            target,
-                                            FleetResolveAction::Retry,
-                                            cx,
-                                        );
-                                    });
-                                })
-                                .child("Retry"),
-                        ),
+                        .child(pro_btn(
+                            pro_eid(root_id, format!("dis-{sid}")),
+                            tr(cx, "Dismiss", "忽略"),
+                            None,
+                            ProBtnStyle::Secondary,
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_sub_agent(
+                                    s_dis.clone(),
+                                    FleetResolveAction::Dismiss,
+                                    cx,
+                                );
+                            },
+                        ))
+                        .child(pro_btn(
+                            pro_eid(root_id, format!("ret-{sid}")),
+                            tr(cx, "Retry", "重试"),
+                            Some(ProIcon::Refresh),
+                            ProBtnStyle::Primary,
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_sub_agent(
+                                    s_ret.clone(),
+                                    FleetResolveAction::Retry,
+                                    cx,
+                                );
+                            },
+                        )),
                 ),
         );
     }
@@ -1687,25 +1755,40 @@ fn render_sub_tasks_drawer(
             .iter()
             .filter(|s| s.status == FleetStatus::Done)
             .count();
-        box_el = box_el.child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_between()
-                .text_size(px(11.5))
-                .child(
-                    div()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.ink)
-                        .child("Tasks"),
-                )
-                .child(
-                    div()
-                        .text_color(p.muted)
-                        .child(format!("{done_steps}/{}", sub.steps.len())),
-                ),
-        );
+        let total_steps = sub.steps.len();
+        box_el = box_el
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .text_size(px(11.5))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(tr(cx, "Tasks", "任务步骤")),
+                    )
+                    .child(pro_rolling_number(
+                        pro_eid(root_id, format!("drw-cnt-{sid}")),
+                        done_steps as f64,
+                        0,
+                        "",
+                        format!("/{total_steps}"),
+                        11.5,
+                        FontWeight::NORMAL,
+                        p.muted,
+                    )),
+            )
+            .child(pro_spring_bar(
+                pro_eid(root_id, format!("drw-bar-{sid}")),
+                (done_steps as f32) / (total_steps.max(1) as f32),
+                3.0,
+                1.5,
+                p.chip,
+                p.green,
+            ));
 
         let mut list = div().w_full().flex().flex_col().gap(px(4.));
         for (idx, st) in sub.steps.iter().enumerate() {
@@ -1717,7 +1800,7 @@ fn render_sub_tasks_drawer(
                     .into_any_element(),
                 FleetStatus::Running => pro_shimmer_text(
                     pro_eid(root_id, format!("st-shim-{sid}-{idx}")),
-                    "Running",
+                    tr(cx, "Running", "运行中"),
                     p.blue,
                     p.strong,
                     11.,
@@ -1728,18 +1811,18 @@ fn render_sub_tasks_drawer(
                     .text_size(px(11.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.amber_ink)
-                    .child("Needs you")
+                    .child(tr(cx, "Needs you", "待确认"))
                     .into_any_element(),
                 FleetStatus::Failed => div()
                     .text_size(px(11.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.red_ink)
-                    .child("Failed")
+                    .child(tr(cx, "Failed", "失败"))
                     .into_any_element(),
                 FleetStatus::Queued | FleetStatus::Stopped => div()
                     .text_size(px(11.))
                     .text_color(p.faint)
-                    .child("Queued")
+                    .child(tr(cx, "Queued", "排队中"))
                     .into_any_element(),
             };
 
@@ -1766,10 +1849,25 @@ fn render_sub_tasks_drawer(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(12.))
-                            .text_color(title_col)
-                            .truncate()
-                            .child(st.title.clone()),
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(pro_check_draw(
+                                pro_eid(root_id, format!("st-chk-{sid}-{idx}")),
+                                st.status == FleetStatus::Done,
+                                13.,
+                                false,
+                                p.green,
+                            ))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .text_size(px(12.))
+                                    .text_color(title_col)
+                                    .truncate()
+                                    .child(st.title.clone()),
+                            ),
                     )
                     .child(right_el),
             );
@@ -1780,7 +1878,13 @@ fn render_sub_tasks_drawer(
     box_el.into_any_element()
 }
 
-fn render_status_pill(status: FleetStatus, p: &ProPalette, cx: &App) -> Div {
+fn render_status_pill(
+    root_id: &ElementId,
+    agent_id: &str,
+    status: FleetStatus,
+    p: &ProPalette,
+    cx: &App,
+) -> Div {
     let (bg, fg) = match status {
         FleetStatus::Running => (p.accent_soft, p.blue),
         FleetStatus::Waiting => (p.amber_soft, p.amber_ink),
@@ -1804,7 +1908,13 @@ fn render_status_pill(status: FleetStatus, p: &ProPalette, cx: &App) -> Div {
             d.child(pro_svg("0 0 24 24", SPIN_ARC_SVG, 11.5, fg))
         })
         .when(status == FleetStatus::Done, |d| {
-            d.child(pro_icon(ProIcon::Check, 11., fg))
+            d.child(pro_check_draw(
+                pro_eid(root_id, format!("f-done-{agent_id}")),
+                true,
+                12.,
+                false,
+                p.green,
+            ))
         })
         .when(status == FleetStatus::Waiting, |d| {
             d.child(pro_icon(ProIcon::Clock, 11., fg))
@@ -1812,14 +1922,21 @@ fn render_status_pill(status: FleetStatus, p: &ProPalette, cx: &App) -> Div {
         .when(status == FleetStatus::Failed, |d| {
             d.child(pro_icon(ProIcon::AlertTriangle, 11., fg))
         })
-        .child(status.label(cx))
+        .child(pro_swap_label(
+            pro_eid(root_id, format!("f-stlbl-{agent_id}")),
+            status.label(cx),
+            11.,
+            FontWeight::MEDIUM,
+            fg,
+        ))
 }
 
-fn render_pie_ring(ratio: f32, color: Hsla) -> AnyElement {
-    let r_clamped = ratio.clamp(0.0, 1.0);
+fn render_pie_ring(id: ElementId, ratio: f32, color: Hsla) -> AnyElement {
+    let r_target = ratio.clamp(0.0, 1.0);
     canvas(
         |_, _, _| (),
-        move |bounds, _, window, _| {
+        move |bounds, _, window, cx| {
+            let r_clamped = pro_spring_f32(id.clone(), r_target, 0.32, window, cx).clamp(0.0, 1.0);
             let cx_pt = (bounds.left() + bounds.right()) * 0.5;
             let cy_pt = (bounds.top() + bounds.bottom()) * 0.5;
             let x0 = f32::from(cx_pt);

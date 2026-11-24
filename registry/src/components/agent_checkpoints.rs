@@ -7,8 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_ease, pro_eid, pro_empty_state, pro_mix_color,
-        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, tr,
+        ProPalette, pro_app_tile, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32,
+        pro_tactile, tr,
     },
     primitives::{
         family::disabled_motion,
@@ -360,6 +361,7 @@ pub struct AgentCheckpoints {
     mounted_at: Instant,
     hovered_idx: Option<usize>,
     focused_idx: Option<usize>,
+    expanded_id: Option<SharedString>,
     rewind_seq: usize,
     last_added: Option<(SharedString, Instant)>,
     loading: bool,
@@ -384,6 +386,7 @@ impl AgentCheckpoints {
             mounted_at: Instant::now(),
             hovered_idx: None,
             focused_idx: None,
+            expanded_id: None,
             rewind_seq: 0,
             last_added: None,
             loading: false,
@@ -667,11 +670,10 @@ impl Render for AgentCheckpoints {
             self.checkpoints.iter().filter_map(|c| c.cost).sum()
         };
 
-        let count_label = if count == 1 {
-            tr(cx, "1 checkpoint", "1 个检查点").to_string()
+        let count_suffix = if count == 1 {
+            tr(cx, "checkpoint", "个检查点")
         } else {
-            let suffix = tr(cx, "checkpoints", "个检查点");
-            format!("{count} {suffix}")
+            tr(cx, "checkpoints", "个检查点")
         };
 
         let header = div()
@@ -721,7 +723,17 @@ impl Render for AgentCheckpoints {
                     .text_size(px(12.))
                     .line_height(px(16.))
                     .text_color(p.muted)
-                    .child(count_label)
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, "cp-cnt"),
+                        count as f64,
+                        0,
+                        "",
+                        "",
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.ink,
+                    ))
+                    .child(count_suffix)
                     .child("·")
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "total-cost"),
@@ -1095,40 +1107,88 @@ impl Render for AgentCheckpoints {
             });
 
             let files_el: Option<AnyElement> = cp.files.map(|n| {
-                let label = if tr(cx, "en", "zh") == "zh" {
-                    format!("{n} 个文件")
+                let suffix = if tr(cx, "en", "zh") == "zh" {
+                    " 个文件"
                 } else if n == 1 {
-                    "1 file".to_string()
+                    " file"
                 } else {
-                    format!("{n} files")
+                    " files"
                 };
-                div()
-                    .w(px(60.))
-                    .flex_none()
+                let exp_id = cp_id.clone();
+                let is_exp = self.expanded_id.as_ref() == Some(&cp_id);
+                let inner = div()
+                    .h(px(20.))
+                    .px(px(5.))
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(p.faint)
-                    .child(pro_svg("0 0 12 12", FOLDER_META_SVG, 12., p.muted))
-                    .child(label)
-                    .into_any_element()
+                    .gap(px(3.))
+                    .child(pro_svg("0 0 12 12", FOLDER_META_SVG, 11.5, p.muted))
+                    .child(pro_rolling_number(
+                        pro_eid(&self.id, format!("files-n-{cp_id}")),
+                        n as f64,
+                        0,
+                        "",
+                        suffix,
+                        11.5,
+                        FontWeight::NORMAL,
+                        if is_exp { p.ink } else { p.faint },
+                    ));
+                pro_tactile(
+                    pro_eid(&self.id, format!("files-btn-{cp_id}")),
+                    SharedString::from(format!("{n}{suffix}")),
+                    5.,
+                    if is_exp { p.chip } else { transparent_black() },
+                    p.hover,
+                    transparent_black(),
+                    transparent_black(),
+                    is_exp,
+                    inner,
+                    cx,
+                    move |this, _, cx| {
+                        this.expanded_id = if this.expanded_id.as_ref() == Some(&exp_id) {
+                            None
+                        } else {
+                            Some(exp_id.clone())
+                        };
+                        cx.notify();
+                    },
+                )
+                .flex_none()
+                .into_any_element()
             });
 
             let time_el: Option<AnyElement> = cp.at_ms.map(|ms| {
-                div()
-                    .min_w(px(32.))
-                    .flex_none()
-                    .text_right()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(p.muted)
-                    .child(format_checkpoint_ms(ms))
-                    .into_any_element()
+                if ms < 60_000 {
+                    div()
+                        .min_w(px(32.))
+                        .flex_none()
+                        .flex()
+                        .justify_end()
+                        .child(pro_rolling_number(
+                            pro_eid(&self.id, format!("time-s-{cp_id}")),
+                            (ms / 1_000) as f64,
+                            0,
+                            "0:",
+                            "",
+                            12.,
+                            FontWeight::NORMAL,
+                            p.muted,
+                        ))
+                        .into_any_element()
+                } else {
+                    div()
+                        .min_w(px(32.))
+                        .flex_none()
+                        .text_right()
+                        .text_size(px(12.))
+                        .line_height(px(16.))
+                        .text_color(p.muted)
+                        .child(format_checkpoint_ms(ms))
+                        .into_any_element()
+                }
             });
 
-            let row_bg = if is_hovered || is_focused {
+            let row_bg = if is_hovered || is_focused || self.expanded_id.as_ref() == Some(&cp_id) {
                 p.hover
             } else {
                 transparent_black()
@@ -1145,9 +1205,18 @@ impl Render for AgentCheckpoints {
                 .min_w_0()
                 .flex()
                 .items_center()
-                .gap(px(7.))
+                .gap(px(6.))
                 .opacity(content_opacity * rise_t);
 
+            if cp.status == CheckpointStatus::Done {
+                left_content = left_content.child(pro_check_draw(
+                    pro_eid(&self.id, format!("cp-chk-{cp_id}")),
+                    true,
+                    12.5,
+                    false,
+                    if node.is_live { head_dot } else { p.muted },
+                ));
+            }
             if let Some(icon_key) = &cp.icon {
                 left_content = left_content.child(pro_app_tile(icon_key.as_ref(), 18., cx));
             }
@@ -1164,7 +1233,7 @@ impl Render for AgentCheckpoints {
                 .ml_auto()
                 .flex()
                 .items_center()
-                .gap(px(10.))
+                .gap(px(8.))
                 .opacity(if show_rewind {
                     0.0
                 } else {
@@ -1174,33 +1243,38 @@ impl Render for AgentCheckpoints {
                 .when_some(time_el, |d, el| d.child(el));
 
             let rewind_target = cp_id.clone();
-            let rewind_btn = div()
-                .id(pro_eid(&self.id, format!("rw-btn-{cp_id}")))
-                .role(Role::Button)
-                .aria_label(format!("{} {}", tr(cx, "Rewind to", "回退至"), title_str))
+            let rw_aria =
+                SharedString::from(format!("{} {}", tr(cx, "Rewind to", "回退至"), title_str));
+            let rw_inner = div()
                 .h(px(22.))
                 .pl(px(7.))
                 .pr(px(9.))
-                .rounded(px(6.))
-                .bg(card_bg)
-                .border_1()
-                .border_color(p.line_strong)
-                .when(!p.dark, |d| d.shadow_xs())
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .cursor_pointer()
                 .text_size(px(12.))
                 .line_height(px(16.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.ink)
-                .hover(move |s| s.bg(pro_mix_color(card_bg, p.ink, 0.05)))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.rewind_to(rewind_target.as_ref(), cx);
-                }))
                 .child(pro_svg("0 0 12 12", REWIND_ICON_SVG, 11.5, p.muted))
                 .child(tr(cx, "Rewind", "回退"));
+            let rewind_btn = pro_tactile(
+                pro_eid(&self.id, format!("rw-btn-{cp_id}")),
+                rw_aria,
+                6.,
+                card_bg,
+                p.chip_hover,
+                p.line_strong,
+                p.line_strong,
+                false,
+                rw_inner,
+                cx,
+                move |this, _, cx| {
+                    this.rewind_to(rewind_target.as_ref(), cx);
+                },
+            )
+            .flex_none()
+            .when(!p.dark, |d| d.shadow_xs());
 
             let row_click_id = cp_id.clone();
             let is_head = node.is_head;
@@ -1217,7 +1291,7 @@ impl Render for AgentCheckpoints {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .when(!is_head, |d| d.cursor_pointer())
+                .cursor_pointer()
                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                     let next = if *inside { Some(idx) } else { None };
                     if this.hovered_idx != next {
@@ -1230,6 +1304,11 @@ impl Render for AgentCheckpoints {
                     if !is_head {
                         this.rewind_to(row_click_id.as_ref(), cx);
                     } else {
+                        this.expanded_id = if this.expanded_id.as_ref() == Some(&row_click_id) {
+                            None
+                        } else {
+                            Some(row_click_id.clone())
+                        };
                         cx.notify();
                     }
                 }))
@@ -1320,6 +1399,107 @@ impl Render for AgentCheckpoints {
             }))
             .child(rows_wrap);
 
+        // Smooth pro_fold file/cost snapshot disclosure when inspecting a checkpoint
+        let inspected_cp = self
+            .expanded_id
+            .as_ref()
+            .and_then(|eid| self.checkpoints.iter().find(|c| &c.id == eid))
+            .cloned();
+        let inspector_open = inspected_cp.is_some();
+        let close_btn = inspector_open.then(|| {
+            pro_icon_btn(
+                pro_eid(&self.id, "close-cp-insp"),
+                SharedString::from(tr(cx, "Close checkpoint details", "关闭检查点详情")),
+                ProIcon::Close,
+                22.,
+                false,
+                cx,
+                |this, _, cx| {
+                    this.expanded_id = None;
+                    cx.notify();
+                },
+            )
+        });
+        let insp_base_id = self.id.clone();
+        let inspector_fold = pro_fold(
+            pro_eid(&self.id, "cp-inspector-fold"),
+            inspector_open,
+            62.0,
+            0.0,
+            move || {
+                let Some(cp) = inspected_cp else {
+                    return div().into_any_element();
+                };
+                let files_n = cp.files.unwrap_or(1);
+                let cost_v = cp.cost.unwrap_or(0.0);
+                let sample_files: [&str; 4] = [
+                    "src/pricing/page.tsx",
+                    "src/pricing/tiers.ts",
+                    "src/pricing/faq.md",
+                    "tests/pricing.spec.ts",
+                ];
+                let mut chips = div().flex().flex_wrap().items_center().gap(px(5.));
+                for f_path in sample_files.into_iter().take(files_n.clamp(1, 4) as usize) {
+                    chips = chips.child(
+                        div()
+                            .h(px(20.))
+                            .px(px(6.))
+                            .rounded(px(5.))
+                            .bg(p.chip)
+                            .font_family("Menlo")
+                            .text_size(px(11.))
+                            .text_color(p.text)
+                            .flex()
+                            .items_center()
+                            .child(f_path),
+                    );
+                }
+                div()
+                    .w_full()
+                    .px(px(14.))
+                    .py(px(9.))
+                    .border_t_1()
+                    .border_color(card_border)
+                    .bg(p.subtle)
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .text_size(px(11.5))
+                            .text_color(p.muted)
+                            .child(
+                                div()
+                                    .font_family("Menlo")
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(format!("#{}", cp.id)),
+                            )
+                            .child("·")
+                            .child(pro_rolling_number(
+                                pro_eid(&insp_base_id, "insp-cost"),
+                                cost_v,
+                                2,
+                                "+$",
+                                "",
+                                11.5,
+                                FontWeight::MEDIUM,
+                                p.ink,
+                            ))
+                            .when_some(cp.at_ms, |d, ms| {
+                                d.child("·").child(format_checkpoint_ms(ms))
+                            })
+                            .when_some(close_btn, |d, cb| d.child(div().ml_auto().child(cb))),
+                    )
+                    .child(chips)
+                    .into_any_element()
+            },
+        );
+
         div()
             .id(self.id.clone())
             .w_full()
@@ -1333,11 +1513,13 @@ impl Render for AgentCheckpoints {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
+                    .overflow_hidden()
                     .when(!p.dark, |d| d.shadow_sm())
                     .flex()
                     .flex_col()
                     .child(header)
-                    .child(list_container),
+                    .child(list_container)
+                    .child(inspector_fold),
             )
             .into_any_element()
     }
