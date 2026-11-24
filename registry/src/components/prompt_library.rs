@@ -1157,7 +1157,7 @@ impl Render for PromptLibrary {
                 .child(
                     div()
                         .mt(px(14.))
-                        .text_size(px(10.))
+                        .text_size(px(10.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .child(tr(cx, "PREVIEW", "实时预览")),

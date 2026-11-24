@@ -1858,7 +1858,7 @@ impl PromptExplorerScreen {
                 .flex()
                 .items_center()
                 .gap(px(16.))
-                .text_size(px(10.))
+                .text_size(px(10.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.muted)
                 .child(div().flex_1().min_w_0().child(tr(cx, "PROMPT", "提问")))

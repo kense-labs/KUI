@@ -15,7 +15,7 @@ use crate::{
         control::UiLanguage,
         family::{Slide, disabled_motion},
         kense_mark,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon},
+        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_raw_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -117,16 +117,6 @@ enum TechTool {
 }
 
 impl TechTool {
-    const fn index(self) -> usize {
-        match self {
-            Self::Slack => 0,
-            Self::Gmail => 1,
-            Self::Figma => 2,
-            Self::Framer => 3,
-            Self::ClickUp => 4,
-        }
-    }
-
     fn glow_color(self, dark: bool) -> Hsla {
         match (self, dark) {
             (Self::Slack, false) => hsla(0.833, 0.58, 0.19, 0.34),
@@ -163,38 +153,31 @@ impl TechTool {
     }
 }
 
-fn tech_tool_svg(tool: TechTool) -> Arc<Image> {
-    static CACHE: [OnceLock<Arc<Image>>; 5] = [const { OnceLock::new() }; 5];
-    CACHE[tool.index()]
-        .get_or_init(|| {
-            let svg_markup = match tool {
-                TechTool::Slack => r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#4B144B"/><g transform="translate(12, 12.3)"><g transform="translate(0, 0)"><path d="M10.849 6.192C9.145 6.192 7.753 4.8 7.753 3.096C7.753 1.392 9.145 0 10.849 0C12.553 0 13.945 1.392 13.945 3.096V6.192H10.849Z" fill="#36C5F0"/><path d="M10.848 7.752C12.552 7.752 13.944 9.144 13.944 10.848C13.944 12.552 12.552 13.944 10.848 13.944H3.096C1.392 13.944 0 12.552 0 10.848C0 9.144 1.392 7.752 3.096 7.752H10.848Z" fill="#36C5F0"/></g><g transform="translate(15.53, 0)"><path d="M7.744 10.848C7.744 9.144 9.136 7.752 10.84 7.752C12.544 7.752 13.936 9.144 13.936 10.848C13.936 12.552 12.544 13.944 10.84 13.944H7.744V10.848Z" fill="#2EB67D"/><path d="M6.192 10.848C6.192 12.552 4.8 13.944 3.096 13.944C1.392 13.944 0 12.552 0 10.848V3.096C0 1.392 1.392 0 3.096 0C4.8 0 6.192 1.392 6.192 3.096V10.848Z" fill="#2EB67D"/></g><g transform="translate(0, 15.53)"><path d="M6.192 3.096C6.192 4.8 4.8 6.192 3.096 6.192C1.392 6.192 0 4.8 0 3.096C0 1.392 1.392 0 3.096 0H6.192V3.096Z" fill="#E01E5A"/><path d="M7.753 3.096C7.753 1.392 9.145 0 10.849 0C12.553 0 13.945 1.392 13.945 3.096V10.848C13.945 12.552 12.553 13.944 10.849 13.944C9.145 13.944 7.753 12.552 7.753 10.848V3.096Z" fill="#E01E5A"/></g><g transform="translate(15.53, 15.53)"><path d="M3.096 7.752C4.8 7.752 6.192 9.144 6.192 10.848C6.192 12.552 4.8 13.944 3.096 13.944C1.392 13.944 0 12.552 0 10.848V7.752H3.096Z" fill="#ECB22E"/><path d="M3.096 6.192C1.392 6.192 0 4.8 0 3.096C0 1.392 1.392 0 3.096 0H10.848C12.552 0 13.944 1.392 13.944 3.096C13.944 4.8 12.552 6.192 10.848 6.192H3.096Z" fill="#ECB22E"/></g></g></svg>"##,
-                TechTool::Gmail => r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#FFFFFF"/><g transform="translate(11.5, 14.7)"><path d="M24.181 3.154H30.84V22.429C30.84 23.59 29.898 24.532 28.737 24.532H25.232C24.651 24.532 24.181 24.061 24.181 23.48V3.154Z" fill="url(#gm0)"/><path d="M6.659 3.154H0V22.429C0 23.59 0.941 24.532 2.103 24.532H5.607C6.188 24.532 6.659 24.061 6.659 23.48V3.154Z" fill="#FC413D"/><path d="M5.472 0.781C4.064 -0.402 1.964 -0.22 0.781 1.187C-0.402 2.595 -0.22 4.695 1.187 5.878L14.518 17.084C15.04 17.522 15.8 17.522 16.322 17.084L29.653 5.878C31.06 4.695 31.242 2.595 30.059 1.187C28.876 -0.22 26.776 -0.402 25.368 0.781L15.42 9.143L5.472 0.781Z" fill="url(#gm1)"/></g><defs><linearGradient id="gm0" x1="27.51" y1="3.154" x2="27.51" y2="24.532" gradientUnits="userSpaceOnUse"><stop stop-color="#60D673"/><stop offset="0.39" stop-color="#0EBC5F"/><stop offset="0.62" stop-color="#00A9BB"/><stop offset="1" stop-color="#3186FF"/></linearGradient><linearGradient id="gm1" x1="0" y1="3.527" x2="30.84" y2="3.527" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#FF63A0"/><stop offset="0.5" stop-color="#FC413D"/><stop offset="0.72" stop-color="#FC5C30"/><stop offset="0.96" stop-color="#FFDB0F"/></linearGradient></defs></svg>"##,
-                TechTool::Figma => r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="url(#fgbg)"/><g transform="translate(15.5, 9.8)"><path d="M11.41 17.118C11.41 13.998 13.939 11.47 17.058 11.47C20.177 11.47 22.706 13.998 22.706 17.118C22.706 20.237 20.177 22.765 17.058 22.765C13.939 22.765 11.41 20.237 11.41 17.118Z" fill="#1ABCFE"/><path d="M0.115 28.413C0.115 25.294 2.644 22.765 5.763 22.765H11.411V28.413C11.411 31.532 8.882 34.061 5.763 34.061C2.644 34.061 0.115 31.532 0.115 28.413Z" fill="#0ACF83"/><path d="M11.41 0.174V11.47H17.058C20.177 11.47 22.706 8.941 22.706 5.822C22.706 2.703 20.177 0.174 17.058 0.174H11.41Z" fill="#FF7262"/><path d="M0.115 5.822C0.115 8.941 2.644 11.47 5.763 11.47H11.411V0.174H5.763C2.644 0.174 0.115 2.703 0.115 5.822Z" fill="#F24E1E"/><path d="M0.115 17.118C0.115 20.237 2.644 22.765 5.763 22.765H11.411V11.47H5.763C2.644 11.47 0.115 13.998 0.115 17.118Z" fill="#A259FF"/></g><defs><linearGradient id="fgbg" x1="27" y1="0" x2="27" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#292C2E"/><stop offset="1" stop-color="#050505"/></linearGradient></defs></svg>"##,
-                TechTool::Framer => r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="url(#frbg)"/><path d="M16 11.5H38V22H27L16 11.5ZM16 22H27L38 32.5H16V22ZM16 32.5H27V43L16 32.5Z" fill="#FFFFFF"/><defs><linearGradient id="frbg" x1="27" y1="0" x2="27" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#23CFFD"/><stop offset="0.52" stop-color="#147CEB"/><stop offset="1" stop-color="#204ED7"/></linearGradient></defs></svg>"##,
-                TechTool::ClickUp => r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#FFFFFF"/><g transform="translate(13.5, 11)"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 24.608L4.976 20.815C7.637 24.219 10.445 25.824 13.549 25.824C16.653 25.824 19.412 24.268 21.925 20.863L27 24.559C23.354 29.422 18.821 32 13.549 32C8.327 32 3.745 29.422 0 24.608Z" fill="url(#cu0)"/><path fill-rule="evenodd" clip-rule="evenodd" d="M13.549 8.219L4.681 15.757L0.591 11.04L13.599 0L26.507 11.04L22.369 15.708L13.549 8.219Z" fill="url(#cu1)"/></g><defs><linearGradient id="cu0" x1="0" y1="26.413" x2="27.022" y2="26.413" gradientUnits="userSpaceOnUse"><stop stop-color="#8930FD"/><stop offset="1" stop-color="#49CCF9"/></linearGradient><linearGradient id="cu1" x1="0.589" y1="7.876" x2="26.48" y2="7.876" gradientUnits="userSpaceOnUse"><stop stop-color="#FF02F0"/><stop offset="1" stop-color="#FFC800"/></linearGradient></defs></svg>"##,
-            };
-            Arc::new(Image::from_bytes(ImageFormat::Svg, svg_markup.as_bytes().to_vec()))
-        })
-        .clone()
+fn tech_tool_svg(tool: TechTool, side: f32) -> AnyElement {
+    let svg_markup = match tool {
+        TechTool::Slack => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#4B144B"/><g transform="translate(12, 12.3)"><g transform="translate(0, 0)"><path d="M10.849 6.192C9.145 6.192 7.753 4.8 7.753 3.096C7.753 1.392 9.145 0 10.849 0C12.553 0 13.945 1.392 13.945 3.096V6.192H10.849Z" fill="#36C5F0"/><path d="M10.848 7.752C12.552 7.752 13.944 9.144 13.944 10.848C13.944 12.552 12.552 13.944 10.848 13.944H3.096C1.392 13.944 0 12.552 0 10.848C0 9.144 1.392 7.752 3.096 7.752H10.848Z" fill="#36C5F0"/></g><g transform="translate(15.53, 0)"><path d="M7.744 10.848C7.744 9.144 9.136 7.752 10.84 7.752C12.544 7.752 13.936 9.144 13.936 10.848C13.936 12.552 12.544 13.944 10.84 13.944H7.744V10.848Z" fill="#2EB67D"/><path d="M6.192 10.848C6.192 12.552 4.8 13.944 3.096 13.944C1.392 13.944 0 12.552 0 10.848V3.096C0 1.392 1.392 0 3.096 0C4.8 0 6.192 1.392 6.192 3.096V10.848Z" fill="#2EB67D"/></g><g transform="translate(0, 15.53)"><path d="M6.192 3.096C6.192 4.8 4.8 6.192 3.096 6.192C1.392 6.192 0 4.8 0 3.096C0 1.392 1.392 0 3.096 0H6.192V3.096Z" fill="#E01E5A"/><path d="M7.753 3.096C7.753 1.392 9.145 0 10.849 0C12.553 0 13.945 1.392 13.945 3.096V10.848C13.945 12.552 12.553 13.944 10.849 13.944C9.145 13.944 7.753 12.552 7.753 10.848V3.096Z" fill="#E01E5A"/></g><g transform="translate(15.53, 15.53)"><path d="M3.096 7.752C4.8 7.752 6.192 9.144 6.192 10.848C6.192 12.552 4.8 13.944 3.096 13.944C1.392 13.944 0 12.552 0 10.848V7.752H3.096Z" fill="#ECB22E"/><path d="M3.096 6.192C1.392 6.192 0 4.8 0 3.096C0 1.392 1.392 0 3.096 0H10.848C12.552 0 13.944 1.392 13.944 3.096C13.944 4.8 12.552 6.192 10.848 6.192H3.096Z" fill="#ECB22E"/></g></g></svg>"##
+        }
+        TechTool::Gmail => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#FFFFFF"/><g transform="translate(11.5, 14.7)"><path d="M24.181 3.154H30.84V22.429C30.84 23.59 29.898 24.532 28.737 24.532H25.232C24.651 24.532 24.181 24.061 24.181 23.48V3.154Z" fill="url(#gm0)"/><path d="M6.659 3.154H0V22.429C0 23.59 0.941 24.532 2.103 24.532H5.607C6.188 24.532 6.659 23.48 6.659 23.48V3.154Z" fill="#FC413D"/><path d="M5.472 0.781C4.064 -0.402 1.964 -0.22 0.781 1.187C-0.402 2.595 -0.22 4.695 1.187 5.878L14.518 17.084C15.04 17.522 15.8 17.522 16.322 17.084L29.653 5.878C31.06 4.695 31.242 2.595 30.059 1.187C28.876 -0.22 26.776 -0.402 25.368 0.781L15.42 9.143L5.472 0.781Z" fill="url(#gm1)"/></g><defs><linearGradient id="gm0" x1="27.51" y1="3.154" x2="27.51" y2="24.532" gradientUnits="userSpaceOnUse"><stop stop-color="#60D673"/><stop offset="0.39" stop-color="#0EBC5F"/><stop offset="0.62" stop-color="#00A9BB"/><stop offset="1" stop-color="#3186FF"/></linearGradient><linearGradient id="gm1" x1="0" y1="3.527" x2="30.84" y2="3.527" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#FF63A0"/><stop offset="0.5" stop-color="#FC413D"/><stop offset="0.72" stop-color="#FC5C30"/><stop offset="0.96" stop-color="#FFDB0F"/></linearGradient></defs></svg>"##
+        }
+        TechTool::Figma => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="url(#fgbg)"/><g transform="translate(15.5, 9.8)"><path d="M11.41 17.118C11.41 13.998 13.939 11.47 17.058 11.47C20.177 11.47 22.706 13.998 22.706 17.118C22.706 20.237 20.177 22.765 17.058 22.765C13.939 22.765 11.41 20.237 11.41 17.118Z" fill="#1ABCFE"/><path d="M0.115 28.413C0.115 25.294 2.644 22.765 5.763 22.765H11.411V28.413C11.411 31.532 8.882 34.061 5.763 34.061C2.644 34.061 0.115 31.532 0.115 28.413Z" fill="#0ACF83"/><path d="M11.41 0.174V11.47H17.058C20.177 11.47 22.706 8.941 22.706 5.822C22.706 2.703 20.177 0.174 17.058 0.174H11.41Z" fill="#FF7262"/><path d="M0.115 5.822C0.115 8.941 2.644 11.47 5.763 11.47H11.411V0.174H5.763C2.644 0.174 0.115 2.703 0.115 5.822Z" fill="#F24E1E"/><path d="M0.115 17.118C0.115 20.237 2.644 22.765 5.763 22.765H11.411V11.47H5.763C2.644 11.47 0.115 13.998 0.115 17.118Z" fill="#A259FF"/></g><defs><linearGradient id="fgbg" x1="27" y1="0" x2="27" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#292C2E"/><stop offset="1" stop-color="#050505"/></linearGradient></defs></svg>"##
+        }
+        TechTool::Framer => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="url(#frbg)"/><path d="M16 11.5H38V22H27L16 11.5ZM16 22H27L38 32.5H16V22ZM16 32.5H27V43L16 32.5Z" fill="#FFFFFF"/><defs><linearGradient id="frbg" x1="27" y1="0" x2="27" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#23CFFD"/><stop offset="0.52" stop-color="#147CEB"/><stop offset="1" stop-color="#204ED7"/></linearGradient></defs></svg>"##
+        }
+        TechTool::ClickUp => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#FFFFFF"/><g transform="translate(13.5, 11)"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 24.608L4.976 20.815C7.637 24.219 10.445 25.824 13.549 25.824C16.653 25.824 19.412 24.268 21.925 20.863L27 24.559C23.354 29.422 18.821 32 13.549 32C8.327 32 3.745 29.422 0 24.608Z" fill="url(#cu0)"/><path fill-rule="evenodd" clip-rule="evenodd" d="M13.549 8.219L4.681 15.757L0.591 11.04L13.599 0L26.507 11.04L22.369 15.708L13.549 8.219Z" fill="url(#cu1)"/></g><defs><linearGradient id="cu0" x1="0" y1="26.413" x2="27.022" y2="26.413" gradientUnits="userSpaceOnUse"><stop stop-color="#8930FD"/><stop offset="1" stop-color="#49CCF9"/></linearGradient><linearGradient id="cu1" x1="0.589" y1="7.876" x2="26.48" y2="7.876" gradientUnits="userSpaceOnUse"><stop stop-color="#FF02F0"/><stop offset="1" stop-color="#FFC800"/></linearGradient></defs></svg>"##
+        }
+    };
+    pro_raw_svg(svg_markup, side, side)
 }
 
-fn hand_cursor_svg(open: bool) -> Arc<Image> {
-    static GRAB: OnceLock<Arc<Image>> = OnceLock::new();
-    static OPEN: OnceLock<Arc<Image>> = OnceLock::new();
-    if open {
-        OPEN.get_or_init(|| {
-            let s = r##"<svg xmlns="http://www.w3.org/2000/svg" width="174" height="174" viewBox="0 0 32 32" fill="none"><path fill="#FFFFFF" stroke="#000000" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round" d="M12.6 16.6c-0.1-0.4-0.2-0.8-0.4-1.6c-0.2-0.6-0.3-0.9-0.5-1.2c-0.2-0.5-0.3-0.7-0.5-1.2c-0.1-0.3-0.4-1-0.5-1.4c-0.1-0.5 0-0.9 0.2-1.2c0.3-0.3 1-0.5 1.4-0.4c0.4 0.1 0.7 0.5 0.9 0.8c0.3 0.5 0.4 0.6 0.7 1.5c0.4 1 0.6 1.9 0.6 2.2l0.1 0.5c0 0 0-1.1 0-1.2c0-1-0.1-1.8 0-2.9c0-0.1 0.1-0.6 0.1-0.7c0.1-0.5 0.3-0.8 0.7-1c0.4-0.2 0.9-0.2 1.4 0c0.4 0.2 0.6 0.5 0.7 1c0 0.1 0.1 1 0.1 1.1c0 1 0 1.6 0 2.2c0 0.2 0 1.6 0 1.5c0.1-0.7 0.1-3.2 0.3-3.9c0.1-0.4 0.4-0.7 0.8-0.9c0.4-0.2 1.1-0.1 1.4 0.2c0.3 0.3 0.4 0.7 0.5 1.2c0 0.4 0 0.9 0 1.2c0 0.9 0 1.3 0 2.1c0 0 0 0.3 0 0.2c0.1-0.3 0.2-0.5 0.3-0.7c0-0.1 0.2-0.6 0.4-0.9c0.1-0.2 0.2-0.4 0.4-0.7c0.2-0.3 0.4-0.4 0.7-0.6c0.5-0.2 1.1 0.1 1.3 0.6c0.1 0.2 0 0.7 0 1.1c-0.1 0.6-0.3 1.3-0.4 1.6c-0.1 0.4-0.3 1.2-0.3 1.6c-0.1 0.4-0.2 1.4-0.4 1.8c-0.1 0.3-0.4 1-0.7 1.4c0 0-1.1 1.2-1.2 1.8c-0.1 0.6-0.1 0.6-0.1 1c0 0.4 0.1 0.9 0.1 0.9s-0.8 0.1-1.2 0c-0.4-0.1-0.9-0.8-1-1.1c-0.2-0.3-0.5-0.3-0.7 0c-0.2 0.4-0.7 1.1-1.1 1.1c-0.7 0.1-2.1 0-3.1 0c0 0 0.2-1-0.2-1.4c-0.3-0.3-0.8-0.8-1.1-1.1l-0.8-0.9c-0.3-0.4-0.6-1.1-1.2-2c-0.3-0.5-1-1.1-1.3-1.6c-0.2-0.4-0.3-1-0.2-1.3c0.2-0.6 0.7-0.9 1.4-0.8c0.5 0 0.8 0.2 1.2 0.5c0.2 0.2 0.6 0.5 0.8 0.7c0.2 0.2 0.2 0.3 0.4 0.5C12.6 16.8 12.6 16.9 12.6 16.6z"/><line stroke="#000000" stroke-width="0.75" stroke-linecap="round" x1="19.6" y1="20.7" x2="19.6" y2="17.3"/><line stroke="#000000" stroke-width="0.75" stroke-linecap="round" x1="17.6" y1="20.7" x2="17.5" y2="17.3"/><line stroke="#000000" stroke-width="0.75" stroke-linecap="round" x1="15.6" y1="17.3" x2="15.6" y2="20.7"/></svg>"##;
-            Arc::new(Image::from_bytes(ImageFormat::Svg, s.as_bytes().to_vec()))
-        })
-        .clone()
-    } else {
-        GRAB.get_or_init(|| {
-            let s = r##"<svg xmlns="http://www.w3.org/2000/svg" width="167" height="167" viewBox="0 0 167 167" fill="none"><path d="M65.756 67.844C68.365 66.8 73.062 67.322 74.627 70.454C75.671 73.063 76.715 76.716 76.715 76.194C76.715 74.107 76.715 69.932 77.237 67.844C77.759 66.279 78.802 64.713 80.89 64.191C82.456 63.669 84.021 63.669 85.587 63.669C87.152 64.191 88.718 65.235 89.762 66.279C91.849 69.41 91.849 76.194 91.849 75.672C92.371 74.107 92.371 69.41 93.415 67.322C93.937 66.279 96.024 65.235 97.068 64.713C98.634 64.191 100.721 64.191 102.287 64.713C103.331 64.713 105.418 66.279 105.94 67.322C106.984 68.888 107.506 74.107 108.027 76.194C108.027 76.716 108.549 74.107 109.593 72.541C111.681 69.41 118.987 68.366 119.509 75.672C119.509 79.325 119.509 78.804 119.509 81.413C119.509 84.022 119.509 85.588 119.509 87.675C119.509 89.763 118.987 94.46 118.465 96.547C117.943 98.113 116.377 101.766 114.812 103.853C114.812 103.853 109.071 110.116 108.549 113.247C108.027 116.378 108.027 116.378 108.027 118.466C108.027 120.553 108.549 123.163 108.549 123.163C108.549 123.163 104.374 123.685 102.287 123.163C100.199 122.641 97.59 118.988 97.068 117.422C96.024 115.857 94.459 115.857 93.415 117.422C92.371 119.51 89.762 123.163 88.196 123.163C84.543 123.685 77.237 123.163 72.018 123.163C72.018 123.163 73.062 117.944 70.974 115.857C69.409 114.291 66.799 111.682 65.234 110.116L61.059 105.419C59.493 103.332 55.84 100.722 54.796 94.982C53.752 90.285 53.752 87.675 54.796 85.588C55.84 83.5 58.449 82.457 59.493 82.457C60.537 82.457 63.146 82.457 64.19 82.979C65.234 83.5 65.756 84.022 66.799 85.066C67.843 86.632 68.365 87.675 67.843 85.588C67.321 84.022 66.277 82.457 65.756 80.369C65.234 78.282 63.668 75.672 63.668 72.541C61.059 72.541 61.581 69.41 65.756 67.844Z" fill="#FFFFFF" stroke="#000000" stroke-width="3.914" stroke-linejoin="round"/><path d="M102.287 108.028V90.284M91.85 108.028L91.328 90.284M81.412 90.284V108.028" stroke="#000000" stroke-width="3.914" stroke-linecap="round"/></svg>"##;
-            Arc::new(Image::from_bytes(ImageFormat::Svg, s.as_bytes().to_vec()))
-        })
-        .clone()
-    }
+fn hand_cursor_svg(open: bool, side: f32) -> AnyElement {
+    const OPEN: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="174" height="174" viewBox="0 0 32 32" fill="none"><path fill="#FFFFFF" stroke="#000000" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round" d="M12.6 16.6c-0.1-0.4-0.2-0.8-0.4-1.6c-0.2-0.6-0.3-0.9-0.5-1.2c-0.2-0.5-0.3-0.7-0.5-1.2c-0.1-0.3-0.4-1-0.5-1.4c-0.1-0.5 0-0.9 0.2-1.2c0.3-0.3 1-0.5 1.4-0.4c0.4 0.1 0.7 0.5 0.9 0.8c0.3 0.5 0.4 0.6 0.7 1.5c0.4 1 0.6 1.9 0.6 2.2l0.1 0.5c0 0 0-1.1 0-1.2c0-1-0.1-1.8 0-2.9c0-0.1 0.1-0.6 0.1-0.7c0.1-0.5 0.3-0.8 0.7-1c0.4-0.2 0.9-0.2 1.4 0c0.4 0.2 0.6 0.5 0.7 1c0 0.1 0.1 1 0.1 1.1c0 1 0 1.6 0 2.2c0 0.2 0 1.6 0 1.5c0.1-0.7 0.1-3.2 0.3-3.9c0.1-0.4 0.4-0.7 0.8-0.9c0.4-0.2 1.1-0.1 1.4 0.2c0.3 0.3 0.4 0.7 0.5 1.2c0 0.4 0 0.9 0 1.2c0 0.9 0 1.3 0 2.1c0 0 0 0.3 0 0.2c0.1-0.3 0.2-0.5 0.3-0.7c0-0.1 0.2-0.6 0.4-0.9c0.1-0.2 0.2-0.4 0.4-0.7c0.2-0.3 0.4-0.4 0.7-0.6c0.5-0.2 1.1 0.1 1.3 0.6c0.1 0.2 0 0.7 0 1.1c-0.1 0.6-0.3 1.3-0.4 1.6c-0.1 0.4-0.3 1.2-0.3 1.6c-0.1 0.4-0.2 1.4-0.4 1.8c-0.1 0.3-0.4 1-0.7 1.4c0 0-1.1 1.2-1.2 1.8c-0.1 0.6-0.1 0.6-0.1 1c0 0.4 0.1 0.9 0.1 0.9s-0.8 0.1-1.2 0c-0.4-0.1-0.9-0.8-1-1.1c-0.2-0.3-0.5-0.3-0.7 0c-0.2 0.4-0.7 1.1-1.1 1.1c-0.7 0.1-2.1 0-3.1 0c0 0 0.2-1-0.2-1.4c-0.3-0.3-0.8-0.8-1.1-1.1l-0.8-0.9c-0.3-0.4-0.6-1.1-1.2-2c-0.3-0.5-1-1.1-1.3-1.6c-0.2-0.4-0.3-1-0.2-1.3c0.2-0.6 0.7-0.9 1.4-0.8c0.5 0 0.8 0.2 1.2 0.5c0.2 0.2 0.6 0.5 0.8 0.7c0.2 0.2 0.2 0.3 0.4 0.5C12.6 16.8 12.6 16.9 12.6 16.6z"/><line stroke="#000000" stroke-width="0.75" stroke-linecap="round" x1="19.6" y1="20.7" x2="19.6" y2="17.3"/><line stroke="#000000" stroke-width="0.75" stroke-linecap="round" x1="17.6" y1="20.7" x2="17.5" y2="17.3"/><line stroke="#000000" stroke-width="0.75" stroke-linecap="round" x1="15.6" y1="17.3" x2="15.6" y2="20.7"/></svg>"##;
+    const GRAB: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="167" height="167" viewBox="0 0 167 167" fill="none"><path d="M65.756 67.844C68.365 66.8 73.062 67.322 74.627 70.454C75.671 73.063 76.715 76.716 76.715 76.194C76.715 74.107 76.715 69.932 77.237 67.844C77.759 66.279 78.802 64.713 80.89 64.191C82.456 63.669 84.021 63.669 85.587 63.669C87.152 64.191 88.718 65.235 89.762 66.279C91.849 69.41 91.849 76.194 91.849 75.672C92.371 74.107 92.371 69.41 93.415 67.322C93.937 66.279 96.024 65.235 97.068 64.713C98.634 64.191 100.721 64.191 102.287 64.713C103.331 64.713 105.418 66.279 105.94 67.322C106.984 68.888 107.506 74.107 108.027 76.194C108.027 76.716 108.549 74.107 109.593 72.541C111.681 69.41 118.987 68.366 119.509 75.672C119.509 79.325 119.509 78.804 119.509 81.413C119.509 84.022 119.509 85.588 119.509 87.675C119.509 89.763 118.987 94.46 118.465 96.547C117.943 98.113 116.377 101.766 114.812 103.853C114.812 103.853 109.071 110.116 108.549 113.247C108.027 116.378 108.027 116.378 108.027 118.466C108.027 120.553 108.549 123.163 108.549 123.163C108.549 123.163 104.374 123.685 102.287 123.163C100.199 122.641 97.59 118.988 97.068 117.422C96.024 115.857 94.459 115.857 93.415 117.422C92.371 119.51 89.762 123.163 88.196 123.163C84.543 123.685 77.237 123.163 72.018 123.163C72.018 123.163 73.062 117.944 70.974 115.857C69.409 114.291 66.799 111.682 65.234 110.116L61.059 105.419C59.493 103.332 55.84 100.722 54.796 94.982C53.752 90.285 53.752 87.675 54.796 85.588C55.84 83.5 58.449 82.457 59.493 82.457C60.537 82.457 63.146 82.457 64.19 82.979C65.234 83.5 65.756 84.022 66.799 85.066C67.843 86.632 68.365 87.675 67.843 85.588C67.321 84.022 66.277 82.457 65.756 80.369C65.234 78.282 63.668 75.672 63.668 72.541C61.059 72.541 61.581 69.41 65.756 67.844Z" fill="#FFFFFF" stroke="#000000" stroke-width="3.914" stroke-linejoin="round"/><path d="M102.287 108.028V90.284M91.85 108.028L91.328 90.284M81.412 90.284V108.028" stroke="#000000" stroke-width="3.914" stroke-linecap="round"/></svg>"##;
+    pro_raw_svg(if open { OPEN } else { GRAB }, side, side)
 }
 
 fn kense_client_mark(dark: bool) -> Arc<Image> {
@@ -981,7 +964,7 @@ fn render_tech_stack_row(tools: &[TechTool], s: f32, dark: bool, cx: &App) -> An
 
     let mut icons_row = div().flex().items_center().gap(px(icon_gap.max(3.0)));
     for &tool in tools {
-        let img_arc = tech_tool_svg(tool);
+        let icon_el = tech_tool_svg(tool, tile_sz);
         icons_row = icons_row.child(
             div()
                 .relative()
@@ -1016,7 +999,7 @@ fn render_tech_stack_row(tools: &[TechTool], s: f32, dark: bool, cx: &App) -> An
                         .rounded(px((12.7 * s).max(3.5)))
                         .overflow_hidden()
                         .shadow_xs()
-                        .child(img(img_arc).size(px(tile_sz))),
+                        .child(icon_el),
                 ),
         );
     }
@@ -2023,7 +2006,7 @@ impl Render for ProjectFlow {
                     .top(px((762.73 + intro.hand_dy) * s))
                     .size(px(hand_sz))
                     .opacity(intro.hand_alpha)
-                    .child(img(hand_cursor_svg(intro.hand_open)).size(px(hand_sz))),
+                    .child(hand_cursor_svg(intro.hand_open, hand_sz)),
             );
         }
 

@@ -1087,7 +1087,7 @@ impl Render for ParallelAttempts {
                         .py(px(1.5))
                         .rounded(px(4.))
                         .bg(bg)
-                        .font_family("Menlo")
+                        .font_family(crate::components::pro_chrome::pro_mono_name())
                         .text_size(px(11.5))
                         .line_height(px(16.5))
                         .text_color(fg)
@@ -1147,7 +1147,7 @@ impl Render for ParallelAttempts {
                         .child(pro_icon(ProIcon::Code, 13.5, p.muted))
                         .child(
                             div()
-                                .font_family("Menlo")
+                                .font_family(crate::components::pro_chrome::pro_mono_name())
                                 .text_size(px(12.))
                                 .text_color(p.ink)
                                 .child(file),

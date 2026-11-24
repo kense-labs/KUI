@@ -116,6 +116,41 @@ pub struct ProPalette {
     pub teal: Hsla,
     pub cyan: Hsla,
     pub logo_tile: Hsla,
+    pub mono: &'static str,
+}
+
+static NATIVE_MONO: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+
+/// Resolve the best available monospace font family on the current host.
+pub fn pro_mono_font(cx: &App) -> &'static str {
+    if cfg!(target_family = "wasm") {
+        return "Fira Code";
+    }
+    NATIVE_MONO.get_or_init(|| {
+        let names = cx.text_system().all_font_names();
+        for candidate in [
+            "Fira Code",
+            "SF Mono",
+            "Menlo",
+            "Consolas",
+            "Liberation Mono",
+            "DejaVu Sans Mono",
+        ] {
+            if names.iter().any(|n| n.eq_ignore_ascii_case(candidate)) {
+                return candidate;
+            }
+        }
+        "monospace"
+    })
+}
+
+/// Return the resolved host monospace font family name (`"Fira Code"` on Web/Story).
+pub fn pro_mono_name() -> &'static str {
+    if cfg!(target_family = "wasm") {
+        "Fira Code"
+    } else {
+        NATIVE_MONO.get().copied().unwrap_or("Menlo")
+    }
 }
 
 impl ProPalette {
@@ -124,6 +159,7 @@ impl ProPalette {
         let theme = Theme::global(cx);
         let dark = theme.mode == ThemeMode::Dark;
         let tint = theme.accent.for_mode(theme.mode);
+        let mono = pro_mono_font(cx);
         let mut p = if dark {
             Self {
                 dark: true,
@@ -166,6 +202,7 @@ impl ProPalette {
                 teal: rgb(0x4fc3b4).into(),
                 cyan: rgb(0x5cc6ee).into(),
                 logo_tile: rgb(0xffffff).into(),
+                mono,
             }
         } else {
             Self {
@@ -209,6 +246,7 @@ impl ProPalette {
                 teal: rgb(0x13b3a0).into(),
                 cyan: rgb(0x14b3f0).into(),
                 logo_tile: rgb(0xffffff).into(),
+                mono,
             }
         };
         if !tint.is_transparent() {

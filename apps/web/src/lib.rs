@@ -312,15 +312,17 @@ mod web {
         gpui_platform::application().run(move |cx: &mut App| {
             // The web text system starts empty and cannot enumerate OS fonts.
             cx.text_system()
-                .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
-                    "../www/fonts/NotoSans-Regular.ttf"
-                ))])
-                .expect("load bundled gallery font");
-            cx.text_system()
-                .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
-                    "../www/fonts/KUIStorySans.ttf"
-                ))])
-                .expect("load bilingual preview font");
+                .add_fonts(vec![
+                    std::borrow::Cow::Borrowed(include_bytes!("../www/fonts/NotoSans-Regular.ttf")),
+                    std::borrow::Cow::Borrowed(include_bytes!("../www/fonts/KUIStorySans.ttf")),
+                    std::borrow::Cow::Borrowed(include_bytes!(
+                        "../www/fonts/KUIStorySans-Medium.ttf"
+                    )),
+                    std::borrow::Cow::Borrowed(include_bytes!(
+                        "../www/fonts/KUIStorySans-SemiBold.ttf"
+                    )),
+                ])
+                .expect("load bundled multi-weight preview fonts");
             cx.set_global(if chinese {
                 UiLanguage::Chinese
             } else {

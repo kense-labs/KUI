@@ -1108,7 +1108,7 @@ impl Render for DiffTimeline {
                     .overflow_hidden()
                     .flex()
                     .flex_col()
-                    .font_family("Menlo")
+                    .font_family(crate::components::pro_chrome::pro_mono_name())
                     .text_size(px(10.5))
                     .line_height(px(17.));
 

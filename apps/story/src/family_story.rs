@@ -1179,9 +1179,6 @@ impl Render for FamilyStory {
             .when(
                 cx.try_global::<crate::InputFontLoaded>().is_some(),
                 |mut s| {
-                    if UiLanguage::current(cx) == UiLanguage::Chinese {
-                        s = s.font_family("KUI Input Sans");
-                    }
                     s.text_style().font_fallbacks =
                         Some(FontFallbacks::from_fonts(vec!["KUI Input Sans".into()]));
                     s

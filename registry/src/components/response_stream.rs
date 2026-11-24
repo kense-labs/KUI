@@ -1153,7 +1153,7 @@ impl Render for ResponseStream {
                             })
                             .child(
                                 div()
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(12.))
                                     .line_height(px(18.))
                                     .text_color(p.ink)

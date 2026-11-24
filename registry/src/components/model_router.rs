@@ -934,15 +934,21 @@ impl Render for ModelRouter {
                         window.paint_path(path, col.opacity((0.16 + 0.08 * hov) * fade));
                     }
 
-                    // 2) Crisp centerline
+                    // 2) Crisp centerline with soft AA feather underlay
+                    let mut line_aa = PathBuilder::stroke(px(2.6 + 0.55 * hov));
                     let mut line = PathBuilder::stroke(px(1.25 + 0.55 * hov));
                     for (k, &(px_x, px_y)) in pts.iter().enumerate() {
                         let pt = point(px(ox + px_x), px(oy + px_y));
                         if k == 0 {
+                            line_aa.move_to(pt);
                             line.move_to(pt);
                         } else {
+                            line_aa.line_to(pt);
                             line.line_to(pt);
                         }
+                    }
+                    if let Ok(path_aa) = line_aa.build() {
+                        window.paint_path(path_aa, col.opacity((0.14 + 0.10 * hov) * fade));
                     }
                     if let Ok(path) = line.build() {
                         window.paint_path(path, col.opacity((0.42 + 0.28 * hov) * fade));

@@ -1267,7 +1267,7 @@ impl Render for TraceWaterfall {
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(10.0))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.muted)
                             .truncate()
@@ -1371,7 +1371,7 @@ impl Render for TraceWaterfall {
             .border_color(p.line)
             .flex()
             .items_center()
-            .text_size(px(10.0))
+            .text_size(px(10.5))
             .font_weight(FontWeight::MEDIUM)
             .text_color(p.muted)
             .when(!is_stack, |d| d.child(tr(cx, "SPAN", "调用阶段")));
@@ -1666,7 +1666,7 @@ impl Render for TraceWaterfall {
                         .px(px(5.0))
                         .rounded(px(4.0))
                         .bg(p.amber_soft)
-                        .text_size(px(10.0))
+                        .text_size(px(10.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.amber_ink)
                         .flex()
@@ -2166,7 +2166,7 @@ impl Render for TraceWaterfall {
                                             .flex_col()
                                             .child(
                                                 div()
-                                                    .text_size(px(10.0))
+                                                    .text_size(px(10.5))
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(muted_c)
                                                     .child(dur_hdr),
@@ -2187,7 +2187,7 @@ impl Render for TraceWaterfall {
                                             .flex_col()
                                             .child(
                                                 div()
-                                                    .text_size(px(10.0))
+                                                    .text_size(px(10.5))
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(muted_c)
                                                     .child(cost_hdr),
@@ -2208,7 +2208,7 @@ impl Render for TraceWaterfall {
                                             .flex_col()
                                             .child(
                                                 div()
-                                                    .text_size(px(10.0))
+                                                    .text_size(px(10.5))
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(muted_c)
                                                     .child(tok_hdr),
@@ -2255,7 +2255,7 @@ impl Render for TraceWaterfall {
                                         .gap(px(2.0))
                                         .child(
                                             div()
-                                                .text_size(px(10.0))
+                                                .text_size(px(10.5))
                                                 .font_weight(FontWeight::MEDIUM)
                                                 .text_color(muted_c)
                                                 .child(in_lbl),
@@ -2279,7 +2279,7 @@ impl Render for TraceWaterfall {
                                         .gap(px(2.0))
                                         .child(
                                             div()
-                                                .text_size(px(10.0))
+                                                .text_size(px(10.5))
                                                 .font_weight(FontWeight::MEDIUM)
                                                 .text_color(muted_c)
                                                 .child(out_lbl),

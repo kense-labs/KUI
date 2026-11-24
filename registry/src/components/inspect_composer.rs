@@ -27,6 +27,9 @@ use web_time::Instant;
 
 const STAGE_W: usize = 436;
 const STAGE_H: usize = 356;
+const RASTER_SCALE: usize = 2;
+const TEX_W: usize = STAGE_W * RASTER_SCALE;
+const TEX_H: usize = STAGE_H * RASTER_SCALE;
 const COMP_W: f32 = 320.0;
 const WRITE_H: f32 = 106.0;
 const BODY_H: f32 = 142.0;
@@ -456,6 +459,7 @@ fn paint_composer_shell(
     mut c: [f32; 4],
     u: f32,
     v: f32,
+    px_u: f32,
     fade: f32,
     tray_rgb: [f32; 3],
     card_rgb: [f32; 3],
@@ -464,27 +468,27 @@ fn paint_composer_shell(
     send_fill_a: f32,
 ) -> [f32; 4] {
     let d_body = sd_round_rect(u, v, 0.0, 0.0, COMP_W, BODY_H, 16.0);
-    let cov_body = (0.5 - d_body).clamp(0., 1.) * fade;
+    let cov_body = (0.5 - d_body / px_u).clamp(0., 1.) * fade;
     if cov_body > 0.0 {
         c = blend_over(c, tray_rgb, cov_body);
-        let b_cov = (1. - d_body.abs()).clamp(0., 1.) * fade;
+        let b_cov = (0.5 - ((d_body + 0.5).abs() - 0.5) / px_u).clamp(0., 1.) * fade;
         if b_cov > 0.0 {
             c = blend_over(c, border_rgb, b_cov * border_a);
         }
     }
 
     let d_write = sd_round_rect(u, v, 0.0, 0.0, COMP_W, WRITE_H, 16.0);
-    let cov_write = (0.5 - d_write).clamp(0., 1.) * fade;
+    let cov_write = (0.5 - d_write / px_u).clamp(0., 1.) * fade;
     if cov_write > 0.0 {
         c = blend_over(c, card_rgb, cov_write);
-        let b_cov = (1. - d_write.abs()).clamp(0., 1.) * fade;
+        let b_cov = (0.5 - ((d_write + 0.5).abs() - 0.5) / px_u).clamp(0., 1.) * fade;
         if b_cov > 0.0 {
             c = blend_over(c, border_rgb, b_cov * border_a);
         }
 
         // Circular send button background (`28x28` centered at `(296, 82)`)
         let d_send = (u - 296.0).hypot(v - 82.0) - 14.0;
-        let cov_send = (0.5 - d_send).clamp(0., 1.) * fade;
+        let cov_send = (0.5 - d_send / px_u).clamp(0., 1.) * fade;
         if cov_send > 0.0 {
             c = blend_over(c, border_rgb, cov_send * send_fill_a);
         }
@@ -536,14 +540,16 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
         };
     let red_rgb = [1.0, 59. / 255., 48. / 255.];
 
-    let mut raw = vec![0u8; STAGE_W * STAGE_H * 4];
+    const BAYER4: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    let px_u = 1.0 / RASTER_SCALE as f32;
+    let mut raw = vec![0u8; TEX_W * TEX_H * 4];
     let above_u_off = if key.mirror { 16.0 } else { -16.0 };
     let above_v_off = -(BODY_H + 14.0);
 
-    for py in 0..STAGE_H {
-        let sy = py as f32 + 0.5;
-        for px_i in 0..STAGE_W {
-            let sx = px_i as f32 + 0.5;
+    for py in 0..TEX_H {
+        let sy = (py as f32 + 0.5) * px_u;
+        for px_i in 0..TEX_W {
+            let sx = (px_i as f32 + 0.5) * px_u;
             let mask = stage_mask_alpha(sx, sy, key.mirror);
             if mask <= 0.002 {
                 continue;
@@ -559,7 +565,8 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
                 let above_fade = smoothstep(8.0, BODY_H - 6.0, av);
                 if above_fade > 0.005 {
                     c = paint_composer_shell(
-                        c, au, av, above_fade, tray_rgb, card_rgb, border_rgb, border_a, send_a,
+                        c, au, av, px_u, above_fade, tray_rgb, card_rgb, border_rgb, border_a,
+                        send_a,
                     );
                 }
             }
@@ -573,10 +580,10 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
 
             // Foreground composer tray + write surface + send pill
             c = paint_composer_shell(
-                c, u, v, 1.0, tray_rgb, card_rgb, border_rgb, border_a, send_a,
+                c, u, v, px_u, 1.0, tray_rgb, card_rgb, border_rgb, border_a, send_a,
             );
 
-            // `#0190fe` selection box + diagonal padding hatch + inner dashed contour
+            // `#0190fe` selection box + anti-aliased diagonal padding hatch + inner dashed contour
             if box_alpha > 0.005 {
                 let fr = fx + fw;
                 let fb = fy + fh;
@@ -587,19 +594,27 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
 
                     if in_outer && !in_inner {
                         let stripe = ((u + v) * 0.85).rem_euclid(3.8);
-                        if stripe < 0.85 {
-                            c = blend_over(c, blue_rgb, hatch_a * box_alpha);
+                        let stripe_d = (stripe - 0.45).abs();
+                        let stripe_cov = (0.5 - (stripe_d - 0.40) / (0.85 * px_u)).clamp(0., 1.);
+                        if stripe_cov > 0.0 {
+                            c = blend_over(c, blue_rgb, stripe_cov * hatch_a * box_alpha);
                         }
                     }
 
                     let d_in = sd_round_rect(u, v, fx + pad, fy + pad, fr - pad, fb - pad, 3.0);
-                    if d_in.abs() < 0.75 && (u + v).rem_euclid(5.0) < 2.8 {
-                        c = blend_over(c, blue_rgb, (1. - d_in.abs() / 0.75) * 0.82 * box_alpha);
+                    let in_line = (0.5 - (d_in.abs() - 0.42) / px_u).clamp(0., 1.);
+                    if in_line > 0.0 {
+                        let along = (u + v).rem_euclid(5.0);
+                        let dash_cov = (0.5 - ((along - 1.4).abs() - 1.35) / px_u).clamp(0., 1.);
+                        if dash_cov > 0.0 {
+                            c = blend_over(c, blue_rgb, in_line * dash_cov * 0.86 * box_alpha);
+                        }
                     }
 
                     let d_out = sd_round_rect(u, v, fx, fy, fr, fb, 0.5);
-                    if d_out.abs() < 0.95 {
-                        c = blend_over(c, blue_rgb, (1. - d_out.abs() / 0.95) * box_alpha);
+                    let out_line = (0.5 - (d_out.abs() - 0.55) / px_u).clamp(0., 1.);
+                    if out_line > 0.0 {
+                        c = blend_over(c, blue_rgb, out_line * box_alpha);
                     }
                 }
             }
@@ -609,12 +624,13 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
                 let fr = fx + fw;
                 let fb = fy + fh;
                 for (hx, hy) in [(fx, fy), (fr, fy), (fr, fb), (fx, fb)] {
-                    let dx = (u - hx).abs();
-                    let dy = (v - hy).abs();
-                    if dx <= 2.7 && dy <= 2.7 {
-                        c = blend_over(c, handle_fill, handle_alpha);
-                        if dx >= 1.6 || dy >= 1.6 {
-                            c = blend_over(c, blue_rgb, handle_alpha);
+                    let cheb = (u - hx).abs().max((v - hy).abs());
+                    let outer_cov = (0.5 - (cheb - 2.55) / px_u).clamp(0., 1.);
+                    if outer_cov > 0.0 {
+                        let inner_cov = (0.5 - (cheb - 1.55) / px_u).clamp(0., 1.);
+                        c = blend_over(c, blue_rgb, outer_cov * handle_alpha);
+                        if inner_cov > 0.0 {
+                            c = blend_over(c, handle_fill, inner_cov * handle_alpha);
                         }
                     }
                 }
@@ -623,24 +639,34 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
             // Red vertical spacing guide (`#ff3b30` dashed line + T-caps)
             if guide_alpha > 0.005 && gy1 > gy0 {
                 let g_end = gy0 + (gy1 - gy0) * guide_alpha;
-                if (v >= gy0 - 0.8 && v <= g_end + 0.8) && (u - gx).abs() <= 4.0 {
-                    if (u - gx).abs() <= 0.85 && (v - gy0).rem_euclid(5.0) < 3.0 {
-                        c = blend_over(c, red_rgb, guide_alpha);
+                if (v >= gy0 - 1.0 && v <= g_end + 1.0) && (u - gx).abs() <= 4.2 {
+                    let stem_cov = (0.5 - ((u - gx).abs() - 0.55) / px_u).clamp(0., 1.);
+                    if stem_cov > 0.0 && v >= gy0 && v <= g_end {
+                        let dash_a = (v - gy0).rem_euclid(5.0);
+                        let d_cov = ((1.5 - (dash_a - 1.5).abs()) / (0.45 * px_u)).clamp(0., 1.);
+                        if d_cov > 0.0 {
+                            c = blend_over(c, red_rgb, stem_cov * d_cov * guide_alpha);
+                        }
                     }
-                    let cap_top = (v - gy0).abs() <= 0.85 && (u - gx).abs() <= 3.5;
-                    let cap_bot = (v - g_end).abs() <= 0.85 && (u - gx).abs() <= 3.5;
-                    if cap_top || cap_bot {
-                        c = blend_over(c, red_rgb, guide_alpha);
+                    let cap_x = (0.5 - ((u - gx).abs() - 3.5) / px_u).clamp(0., 1.);
+                    if cap_x > 0.0 {
+                        let cap_t = (0.5 - ((v - gy0).abs() - 0.55) / px_u).clamp(0., 1.);
+                        let cap_b = (0.5 - ((v - g_end).abs() - 0.55) / px_u).clamp(0., 1.);
+                        let cap_cov = cap_t.max(cap_b) * cap_x;
+                        if cap_cov > 0.0 {
+                            c = blend_over(c, red_rgb, cap_cov * guide_alpha);
+                        }
                     }
                 }
             }
 
             let out_a = (c[3] * mask).clamp(0., 1.);
             if out_a > 1e-4 {
-                let r = (c[0] / c[3].max(1e-4)).clamp(0., 1.);
-                let g = (c[1] / c[3].max(1e-4)).clamp(0., 1.);
-                let b = (c[2] / c[3].max(1e-4)).clamp(0., 1.);
-                let dst = (py * STAGE_W + px_i) * 4;
+                let dither = (f32::from(BAYER4[(py & 3) * 4 + (px_i & 3)]) / 16.0 - 0.5) / 255.0;
+                let r = (c[0] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let g = (c[1] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let b = (c[2] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let dst = (py * TEX_W + px_i) * 4;
                 raw[dst] = (b * 255.).round() as u8;
                 raw[dst + 1] = (g * 255.).round() as u8;
                 raw[dst + 2] = (r * 255.).round() as u8;
@@ -649,8 +675,42 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
         }
     }
 
-    let buf = RgbaImage::from_raw(STAGE_W as u32, STAGE_H as u32, raw)
-        .expect("STAGE_W * STAGE_H * 4 matches raw buffer length");
+    for y in 1..TEX_H - 1 {
+        let row = y * TEX_W;
+        for x in 1..TEX_W - 1 {
+            let idx = (row + x) * 4;
+            if raw[idx + 3] != 0 {
+                continue;
+            }
+            let mut best_a = 0u8;
+            let mut best_bgr = [0u8; 3];
+            for (dx, dy) in [
+                (-1isize, 0isize),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (1, 1),
+            ] {
+                let n = (((y as isize + dy) as usize) * TEX_W + (x as isize + dx) as usize) * 4;
+                let na = raw[n + 3];
+                if na > best_a {
+                    best_a = na;
+                    best_bgr = [raw[n], raw[n + 1], raw[n + 2]];
+                }
+            }
+            if best_a > 0 {
+                raw[idx] = best_bgr[0];
+                raw[idx + 1] = best_bgr[1];
+                raw[idx + 2] = best_bgr[2];
+            }
+        }
+    }
+
+    let buf = RgbaImage::from_raw(TEX_W as u32, TEX_H as u32, raw)
+        .expect("TEX_W * TEX_H * 4 matches raw buffer length");
     RenderImage::new(vec![Frame::new(buf)])
 }
 
@@ -1643,8 +1703,8 @@ impl Render for InspectComposer {
 #[cfg(test)]
 mod tests {
     use super::{
-        COMP_W, ComposerPlateKey, ComposerTilt, InspectComposer, InspectComposerRegion, STAGE_W,
-        rasterize_composer_plate, region_box, step_composer_timeline,
+        COMP_W, ComposerPlateKey, ComposerTilt, InspectComposer, InspectComposerRegion,
+        RASTER_SCALE, TEX_W, rasterize_composer_plate, region_box, step_composer_timeline,
     };
     use gpui::{MouseButton, MouseDownEvent, MouseMoveEvent, TestAppContext, point, px, size};
     use std::time::Duration;
@@ -1694,9 +1754,9 @@ mod tests {
         });
         let bytes = img.as_bytes(0).expect("BGRA plate");
         // Sample across the 1px subpixel-AA top selection frame (`x = 58 + 180, y = 207..=209`)
-        let max_blue = (207..=209)
+        let max_blue = (207 * RASTER_SCALE..=209 * RASTER_SCALE + 1)
             .map(|y| {
-                let p = (y * STAGE_W + (58 + 180)) * 4;
+                let p = (y * TEX_W + (58 + 180) * RASTER_SCALE) * 4;
                 bytes[p].saturating_sub(bytes[p + 2])
             })
             .max()
@@ -1707,9 +1767,9 @@ mod tests {
         );
 
         // Sample across the top T-cap of `#ff3b30` spacing guide (`x = 58 + 14, y = 203..=205`)
-        let max_red = (203..=205)
+        let max_red = (203 * RASTER_SCALE..=205 * RASTER_SCALE + 1)
             .map(|y| {
-                let p = (y * STAGE_W + (58 + 14)) * 4;
+                let p = (y * TEX_W + (58 + 14) * RASTER_SCALE) * 4;
                 bytes[p + 2].saturating_sub(bytes[p])
             })
             .max()

@@ -913,13 +913,13 @@ impl Render for FanOutGrid {
                     let stroke_c = if is_active || is_pinned {
                         sc.ink.opacity(alpha)
                     } else {
-                        sc.edge.opacity(alpha)
+                        sc.edge.opacity(alpha * 0.85)
                     };
                     window.paint_quad(quad(
                         rect,
                         Corners::all(px(3.0 * scale.min(1.15))),
                         sc.bg.opacity(alpha),
-                        Edges::all(px(if is_active || is_pinned { 1.0 } else { 0.75 })),
+                        Edges::all(px(1.0)),
                         stroke_c,
                         BorderStyle::Solid,
                     ));

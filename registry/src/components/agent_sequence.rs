@@ -2076,7 +2076,7 @@ impl Render for AgentSequence {
                                     .py(px(6.))
                                     .rounded(px(6.))
                                     .bg(p_hover)
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(10.5))
                                     .line_height(px(15.5))
                                     .text_color(p_ink)

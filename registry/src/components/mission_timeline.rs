@@ -1567,7 +1567,7 @@ impl MissionTimelineBlock {
                             .bg(p.accent_soft)
                             .flex()
                             .items_center()
-                            .text_size(px(10.))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.blue)
                             .child(tr(cx, "now", "现在")),
@@ -1663,7 +1663,7 @@ impl MissionTimelineBlock {
                                                         .px(px(4.))
                                                         .rounded(px(4.))
                                                         .bg(p.amber_soft)
-                                                        .text_size(px(10.))
+                                                        .text_size(px(10.5))
                                                         .font_weight(FontWeight::MEDIUM)
                                                         .text_color(p.amber_ink)
                                                         .child("Ask"),
@@ -1675,7 +1675,7 @@ impl MissionTimelineBlock {
                                                         .px(px(4.))
                                                         .rounded(px(4.))
                                                         .bg(p.red_soft)
-                                                        .text_size(px(10.))
+                                                        .text_size(px(10.5))
                                                         .font_weight(FontWeight::MEDIUM)
                                                         .text_color(p.red_ink)
                                                         .child("!"),

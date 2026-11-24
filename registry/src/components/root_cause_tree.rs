@@ -1651,7 +1651,7 @@ impl Render for RootCauseTree {
                     .child(pro_svg("0 0 24 24", FILE_CHIP_SVG, 11., p.muted))
                     .child(
                         div()
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(11.))
                             .text_color(p.text)
                             .child(fpath.clone()),
@@ -1701,7 +1701,7 @@ impl Render for RootCauseTree {
                                 .py(px(1.))
                                 .rounded(px(4.))
                                 .bg(l_bg)
-                                .font_family("Menlo")
+                                .font_family(crate::components::pro_chrome::pro_mono_name())
                                 .text_size(px(11.5))
                                 .line_height(px(17.))
                                 .text_color(l_fg)
@@ -1731,7 +1731,9 @@ impl Render for RootCauseTree {
                                 .when_some(ev.source.as_ref(), |d, src| {
                                     d.child(
                                         div()
-                                            .font_family("Menlo")
+                                            .font_family(
+                                                crate::components::pro_chrome::pro_mono_name(),
+                                            )
                                             .text_color(p_faint)
                                             .child(src.clone()),
                                     )

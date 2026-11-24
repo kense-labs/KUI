@@ -246,7 +246,7 @@ fn render_strikethrough_label(
                             .absolute()
                             .left_0()
                             .top(px(10.))
-                            .h(px(1.1))
+                            .h(px(1.0))
                             .w(relative(strike_t))
                             .bg(done_fg),
                     )

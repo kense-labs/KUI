@@ -1320,7 +1320,7 @@ impl Render for CostWaterfall {
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(10.0))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.muted)
                             .child(tr(cx, "TOTAL COST", "总费用")),
@@ -1344,7 +1344,7 @@ impl Render for CostWaterfall {
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(10.0))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.muted)
                             .child(tr(cx, "TOTAL TOKENS", "总 TOKEN")),
@@ -1386,7 +1386,7 @@ impl Render for CostWaterfall {
                     .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(10.0))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.muted)
                             .child(match cur_mode {
@@ -1505,7 +1505,7 @@ impl Render for CostWaterfall {
             .flex()
             .items_center()
             .gap(px(col_gap))
-            .text_size(px(10.0))
+            .text_size(px(10.5))
             .font_weight(FontWeight::MEDIUM)
             .text_color(p.muted)
             .when(!is_stack, |d| {
@@ -2006,7 +2006,7 @@ impl Render for CostWaterfall {
                                 .flex_none()
                                 .rounded(px(4.0))
                                 .bg(p.amber_soft)
-                                .text_size(px(10.0))
+                                .text_size(px(10.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.amber_ink)
                                 .flex()
@@ -2215,7 +2215,7 @@ impl Render for CostWaterfall {
                                     .gap(px(4.0))
                                     .child(
                                         div()
-                                            .text_size(px(10.0))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(muted_c)
                                             .child(in_hdr),
@@ -2244,7 +2244,7 @@ impl Render for CostWaterfall {
                                     .gap(px(4.0))
                                     .child(
                                         div()
-                                            .text_size(px(10.0))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(muted_c)
                                             .child(out_hdr),

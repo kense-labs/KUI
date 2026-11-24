@@ -16,6 +16,7 @@ pub struct StoryHost {
 }
 impl StoryHost {
     fn select(id: &str, w: &mut Window, cx: &mut Context<Self>) -> Option<gpui::AnyView> {
+        crate::ensure_story_fonts(cx);
         let id = THEME_VARIANTS
             .iter()
             .find(|(name, _)| *name == id)
@@ -48,6 +49,7 @@ impl StoryHost {
     }
 
     pub fn new(id: Option<&str>, w: &mut Window, cx: &mut Context<Self>) -> Self {
+        crate::ensure_story_fonts(cx);
         let selected = id.and_then(|id| Self::select(id, w, cx));
         Self {
             gallery: cx.new(|_| ButtonGallery::new()),

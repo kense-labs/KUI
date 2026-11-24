@@ -13,7 +13,7 @@ use crate::{
     primitives::{
         control::UiLanguage,
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_app_artwork},
+        pro_icons::{ProIcon, pro_app_artwork, pro_raw_svg, pro_svg_doc},
     },
 };
 use gpui::{prelude::*, *};
@@ -397,10 +397,8 @@ fn ambient_pastel_glow_svg() -> Arc<Image> {
 }
 
 fn outreach_channel_mark(channel_id: &str, width: f32, dark: bool, cx: &App) -> AnyElement {
-    static GMAIL_SVG: OnceLock<Arc<Image>> = OnceLock::new();
-    static SLACK_SVG: OnceLock<Arc<Image>> = OnceLock::new();
-    static NOTION_LIGHT_SVG: OnceLock<Arc<Image>> = OnceLock::new();
-    static NOTION_DARK_SVG: OnceLock<Arc<Image>> = OnceLock::new();
+    static NOTION_LIGHT_SVG: OnceLock<Arc<[u8]>> = OnceLock::new();
+    static NOTION_DARK_SVG: OnceLock<Arc<[u8]>> = OnceLock::new();
 
     const GMAIL_MARKUP: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="76" viewBox="0 0 56.4108 44.8722" fill="none"><path d="M44.2255 5.76727H56.4051V41.0239C56.4051 43.148 54.683 44.8701 52.5589 44.8701H46.1486C45.8961 44.8701 45.646 44.8204 45.4127 44.7237C45.1794 44.6271 44.9674 44.4854 44.7888 44.3069C44.6102 44.1283 44.4686 43.9163 44.3719 43.683C44.2753 43.4497 44.2255 43.1996 44.2255 42.947V5.76727Z" fill="url(#obgm0)"/><path d="M12.1796 5.76727H0V41.0239C0 43.148 1.72213 44.8701 3.84618 44.8701H10.2565C10.509 44.8701 10.7591 44.8204 10.9924 44.7237C11.2257 44.6271 11.4377 44.4854 11.6163 44.3069C11.7949 44.1283 11.9365 43.9163 12.0332 43.683C12.1298 43.4497 12.1796 43.1996 12.1796 42.947V5.76727Z" fill="#FC413D"/><path d="M10.0085 1.42778C7.43377 -0.736342 3.5924 -0.403647 1.42828 2.17105C-0.735843 4.74543 -0.403148 8.58681 2.17155 10.7512L26.5557 31.2479C27.0178 31.6362 27.602 31.8492 28.2056 31.8492C28.8091 31.8492 29.3934 31.6362 29.8554 31.2479L54.2396 10.7509C56.814 8.58681 57.1467 4.74543 54.9825 2.17073C52.8184 -0.403648 48.977 -0.736342 46.4027 1.42778L28.2054 16.724L10.0085 1.42778Z" fill="url(#obgm1)"/><defs><linearGradient id="obgm0" x1="50.3153" y1="5.76727" x2="50.3153" y2="44.8701" gradientUnits="userSpaceOnUse"><stop stop-color="#60D673"/><stop offset="0.17" stop-color="#42C868"/><stop offset="0.39" stop-color="#0EBC5F"/><stop offset="0.62" stop-color="#00A9BB"/><stop offset="0.86" stop-color="#3C90FF"/><stop offset="1" stop-color="#3186FF"/></linearGradient><linearGradient id="obgm1" x1="0" y1="6.45153" x2="56.4107" y2="6.45153" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#FF63A0"/><stop offset="0.3" stop-color="#FC413D"/><stop offset="0.65" stop-color="#FC413D"/><stop offset="0.72" stop-color="#FC5C30"/><stop offset="0.86" stop-color="#FEB10C"/><stop offset="0.91" stop-color="#FEC700"/><stop offset="0.96" stop-color="#FFDB0F"/></linearGradient></defs></svg>"##;
 
@@ -411,40 +409,15 @@ fn outreach_channel_mark(channel_id: &str, width: f32, dark: bool, cx: &App) -> 
 
     let lower = channel_id.trim().to_ascii_lowercase();
     match lower.as_str() {
-        "gmail" | "google mail" => {
-            let image = GMAIL_SVG
-                .get_or_init(|| {
-                    Arc::new(Image::from_bytes(
-                        ImageFormat::Svg,
-                        GMAIL_MARKUP.as_bytes().to_vec(),
-                    ))
-                })
-                .clone();
-            let h = width * (44.8722 / 56.4108);
-            img(image)
-                .w(px(width))
-                .h(px(h))
-                .flex_none()
-                .into_any_element()
-        }
-        "slack" => {
-            let image = SLACK_SVG
-                .get_or_init(|| {
-                    Arc::new(Image::from_bytes(
-                        ImageFormat::Svg,
-                        SLACK_MARKUP.as_bytes().to_vec(),
-                    ))
-                })
-                .clone();
-            img(image).size(px(width)).flex_none().into_any_element()
-        }
+        "gmail" | "google mail" => pro_raw_svg(GMAIL_MARKUP, width, width * (44.8722 / 56.4108)),
+        "slack" => pro_raw_svg(SLACK_MARKUP, width, width),
         "notion" => {
             let cache = if dark {
                 &NOTION_DARK_SVG
             } else {
                 &NOTION_LIGHT_SVG
             };
-            let image = cache
+            let bytes = cache
                 .get_or_init(|| {
                     let (page, mark) = if dark {
                         ("#191919", "#ededed")
@@ -454,15 +427,11 @@ fn outreach_channel_mark(channel_id: &str, width: f32, dark: bool, cx: &App) -> 
                     let doc = format!(
                         r#"<svg xmlns="http://www.w3.org/2000/svg" width="92" height="96" viewBox="0 0 70.808 74.12" fill="none"><path fill="{page}" d="{NOTION_PAGE}"/><path fill="{mark}" fill-rule="evenodd" clip-rule="evenodd" d="{NOTION_BODY}"/></svg>"#
                     );
-                    Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
+                    Arc::from(doc.into_bytes())
                 })
                 .clone();
-            let h = width * (74.12 / 70.808);
-            img(image)
-                .w(px(width))
-                .h(px(h))
-                .flex_none()
-                .into_any_element()
+            let key = 0x4e4f_5449_4f4e_0000u64 | u64::from(dark);
+            pro_svg_doc(key, bytes, width, width * (74.12 / 70.808))
         }
         _ => {
             if let Some(mark) = pro_app_artwork(channel_id, width, cx) {

@@ -1397,13 +1397,19 @@ impl Render for AgentGraph {
                     };
                     let edge_col = pro_mix_color(rest_col, spot_col, spot * 0.65);
 
+                    let mut feather_b = PathBuilder::stroke(px(stroke_w + 1.4));
                     let mut path_b = PathBuilder::stroke(px(stroke_w));
                     for (i, &(x, y)) in pts.iter().enumerate() {
                         if i == 0 {
+                            feather_b.move_to(point(px(x), px(y)));
                             path_b.move_to(point(px(x), px(y)));
                         } else {
+                            feather_b.line_to(point(px(x), px(y)));
                             path_b.line_to(point(px(x), px(y)));
                         }
+                    }
+                    if let Ok(feather) = feather_b.build() {
+                        window.paint_path(feather, edge_col.opacity(edge_col.a * 0.22));
                     }
                     if let Ok(built) = path_b.build() {
                         window.paint_path(built, edge_col);

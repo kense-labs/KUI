@@ -946,7 +946,7 @@ impl Render for ApprovalGates {
                             .gap(px(1.0))
                             .child(
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "WAITING ON YOU", "待你处理")),
@@ -974,7 +974,7 @@ impl Render for ApprovalGates {
                             .gap(px(1.0))
                             .child(
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "DECIDED", "已决定")),
@@ -1001,7 +1001,7 @@ impl Render for ApprovalGates {
                             .gap(px(1.0))
                             .child(
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "RUN", "运行状态")),
@@ -1080,7 +1080,7 @@ impl Render for ApprovalGates {
                         .pt(px(2.0))
                         .child(
                             div()
-                                .text_size(px(10.0))
+                                .text_size(px(10.5))
                                 .text_color(p.muted)
                                 .truncate()
                                 .child(behind_action),
@@ -1204,7 +1204,7 @@ impl Render for ApprovalGates {
                                 .flex()
                                 .items_center()
                                 .gap(px(6.0))
-                                .font_family("Menlo")
+                                .font_family(crate::components::pro_chrome::pro_mono_name())
                                 .text_size(px(11.5))
                                 .line_height(px(18.0))
                                 .text_color(row_fg)
@@ -1221,7 +1221,7 @@ impl Render for ApprovalGates {
                             .child(
                                 div()
                                     .px(px(10.0))
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(11.0))
                                     .text_color(p.muted)
                                     .child(file_diff.file.clone()),
@@ -1243,7 +1243,7 @@ impl Render for ApprovalGates {
                         .bg(well_bg)
                         .border_1()
                         .border_color(p.line)
-                        .font_family("Menlo")
+                        .font_family(crate::components::pro_chrome::pro_mono_name())
                         .text_size(px(11.5))
                         .line_height(px(18.0))
                         .text_color(p.ink)
@@ -1961,7 +1961,9 @@ impl Render for ApprovalGates {
                                             .py(px(6.0))
                                             .rounded(px(6.0))
                                             .bg(well_bg)
-                                            .font_family("Menlo")
+                                            .font_family(
+                                                crate::components::pro_chrome::pro_mono_name(),
+                                            )
                                             .text_size(px(11.0))
                                             .text_color(p.muted)
                                             .truncate()
@@ -2001,7 +2003,7 @@ impl Render for ApprovalGates {
                 .gap(px(6.0))
                 .child(
                     div()
-                        .text_size(px(10.0))
+                        .text_size(px(10.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .child(tr(cx, "DECIDED", "已决定记录")),

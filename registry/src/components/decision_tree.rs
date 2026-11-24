@@ -1817,7 +1817,7 @@ impl Render for DecisionTree {
                                     .py(px(1.0))
                                     .rounded(px(4.0))
                                     .bg(fill_bg)
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(11.0))
                                     .text_color(muted_c)
                                     .child(src),

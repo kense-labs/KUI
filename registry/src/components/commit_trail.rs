@@ -798,7 +798,7 @@ impl CommitTrail {
                             .flex()
                             .items_center()
                             .gap(px(3.))
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(chip_fs))
                             .text_color(p.text)
                             .hover(move |s| s.bg(hover_bg))
@@ -955,7 +955,7 @@ impl CommitTrail {
                     .text_color(muted_c)
                     .child(
                         div()
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_color(text_c)
                             .child(short_hash),
                     )
@@ -1193,7 +1193,7 @@ impl Render for CommitTrail {
                     ))
                     .child(
                         div()
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .font_weight(FontWeight::MEDIUM)
                             .child(rname.clone()),
                     )

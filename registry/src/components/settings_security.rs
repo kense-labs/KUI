@@ -1740,7 +1740,7 @@ impl SettingsSecurityScreen {
                                     .py(px(1.))
                                     .rounded(px(5.))
                                     .bg(p.chip)
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(11.5))
                                     .text_color(p.ink)
                                     .child(token),
@@ -2515,7 +2515,9 @@ impl SettingsSecurityScreen {
                                     )
                                     .child(
                                         div()
-                                            .font_family("Menlo")
+                                            .font_family(
+                                                crate::components::pro_chrome::pro_mono_name(),
+                                            )
                                             .text_size(px(12.5))
                                             .text_color(p.strong)
                                             .child(cidr_label),

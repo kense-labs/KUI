@@ -1176,7 +1176,7 @@ impl AgentQueue {
             .child(
                 div()
                     .truncate()
-                    .text_size(px(10.0))
+                    .text_size(px(10.5))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(p.muted)
                     .child(label.to_string()),
@@ -1360,7 +1360,7 @@ impl AgentQueue {
                             .gap(px(6.0))
                             .child(
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.muted)
                                     .child(tr(cx, "QUEUE", "待处理队列")),
@@ -1480,7 +1480,7 @@ impl AgentQueue {
                             .gap(px(6.0))
                             .child(
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.muted)
                                     .child(tr(cx, "WORKERS", "并发工作槽")),
@@ -1716,7 +1716,7 @@ impl AgentQueue {
                         .child(lead_badge)
                         .child(
                             div()
-                                .text_size(px(10.0))
+                                .text_size(px(10.5))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(icon_fg)
                                 .child(label.to_string()),
@@ -2255,7 +2255,7 @@ impl AgentQueue {
                     .justify_between()
                     .child(
                         div()
-                            .text_size(px(10.0))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(p.muted)
                             .child(tr(cx, "QUEUE DEPTH", "队列积压深度")),

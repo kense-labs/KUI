@@ -2562,7 +2562,7 @@ impl BrandRegionsScreen {
             .flex()
             .items_center()
             .justify_between()
-            .text_size(px(10.))
+            .text_size(px(10.5))
             .font_weight(FontWeight::MEDIUM)
             .text_color(p.muted)
             .child(tr(cx, "REGION", "国家 / 地区"))

@@ -1018,7 +1018,7 @@ impl Render for AgentLedger {
                             .top(relative(0.52))
                             .left_0()
                             .w(relative(strike_amt))
-                            .h(px(1.2))
+                            .h(px(1.0))
                             .rounded(px(1.0))
                             .bg(strike_c),
                     )

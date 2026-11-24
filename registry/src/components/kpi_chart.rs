@@ -1045,13 +1045,19 @@ impl Render for KpiChart {
 
                     let is_spot = spot_for_paint.as_ref() == Some(&s.id);
                     let stroke_w = if is_spot { 2.15 } else { 1.65 };
+                    let mut stroke_aa = PathBuilder::stroke(px(stroke_w + 1.5));
                     let mut stroke = PathBuilder::stroke(px(stroke_w));
                     for (pi, &pt) in smooth.iter().take(vis_len).enumerate() {
                         if pi == 0 {
+                            stroke_aa.move_to(pt);
                             stroke.move_to(pt);
                         } else {
+                            stroke_aa.line_to(pt);
                             stroke.line_to(pt);
                         }
+                    }
+                    if let Ok(path_aa) = stroke_aa.build() {
+                        window.paint_path(path_aa, s.color.opacity(alpha * 0.22));
                     }
                     if let Ok(path) = stroke.build() {
                         window.paint_path(path, s.color.opacity(alpha));

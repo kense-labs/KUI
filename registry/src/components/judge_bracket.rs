@@ -1695,7 +1695,7 @@ impl Render for JudgeBracket {
                             .bg(card_bg)
                             .border_1()
                             .border_color(p.line)
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(11.5))
                             .line_height(px(17.))
                             .text_color(p.text)

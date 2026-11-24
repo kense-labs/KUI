@@ -23,6 +23,9 @@ use web_time::Instant;
 
 const SCENE_W: usize = 384;
 const SCENE_H: usize = 340;
+const RASTER_SCALE: usize = 2;
+const TEX_W: usize = SCENE_W * RASTER_SCALE;
+const TEX_H: usize = SCENE_H * RASTER_SCALE;
 const CARD_LEFT: f32 = 40.0;
 const CARD_TOP: f32 = 34.0;
 const CARD_W: f32 = 340.0;
@@ -221,11 +224,13 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
             )
         };
 
-    let mut raw = vec![0u8; SCENE_W * SCENE_H * 4];
-    for py in 0..SCENE_H {
-        let sy = py as f32 + 0.5;
-        for px_i in 0..SCENE_W {
-            let sx = px_i as f32 + 0.5;
+    const BAYER4: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    let px_u = 1.0 / RASTER_SCALE as f32;
+    let mut raw = vec![0u8; TEX_W * TEX_H * 4];
+    for py in 0..TEX_H {
+        let sy = (py as f32 + 0.5) * px_u;
+        for px_i in 0..TEX_W {
+            let sx = (px_i as f32 + 0.5) * px_u;
             let mask = scene_mask_alpha(sx, sy);
             if mask <= 0.002 {
                 continue;
@@ -247,7 +252,7 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
             let mut c = blend_over([0.0; 4], [0.0, 0.0, 0.0], (s1 + s2).clamp(0., 0.55));
 
             let d_card = sd_round_rect(sx, sy, card_x0, card_y0, card_x1, card_y1, CARD_R);
-            let cov_card = (0.5 - d_card).clamp(0., 1.);
+            let cov_card = (0.5 - d_card / px_u).clamp(0., 1.);
             if cov_card > 0.0 {
                 c = blend_over(c, card_rgb, cov_card);
 
@@ -262,8 +267,8 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
                             let t = (u - 0.60) / 0.25;
                             pick_a60 * (1. - t)
                         };
-                        let v_cov = (sy - (band_top - 0.5)).clamp(0., 1.)
-                            * ((band_bot + 0.5) - sy).clamp(0., 1.);
+                        let v_cov = ((sy - (band_top - 0.5 * px_u)) / px_u).clamp(0., 1.)
+                            * (((band_bot + 0.5 * px_u) - sy) / px_u).clamp(0., 1.);
                         c = blend_over(c, pick_rgb, fill_a * v_cov * cov_card);
 
                         let line_fade = if u <= 0.62 {
@@ -271,8 +276,10 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
                         } else {
                             1.0 - (u - 0.62) / 0.23
                         };
-                        let top_line = (1. - (sy - (band_top + 0.5)).abs()).clamp(0., 1.);
-                        let bot_line = (1. - (sy - (band_bot - 0.5)).abs()).clamp(0., 1.);
+                        let top_line =
+                            (0.5 - ((sy - (band_top + 0.5)).abs() - 0.45) / px_u).clamp(0., 1.);
+                        let bot_line =
+                            (0.5 - ((sy - (band_bot - 0.5)).abs() - 0.45) / px_u).clamp(0., 1.);
                         let line_cov = top_line.max(bot_line);
                         if line_cov > 0.0 {
                             c = blend_over(
@@ -284,8 +291,8 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
                     }
                 }
 
-                // Crisp 1px outer card hairline
-                let border_cov = (1. - d_card.abs()).clamp(0., 1.);
+                // Crisp 1px Retina outer card hairline
+                let border_cov = (0.5 - ((d_card + 0.5).abs() - 0.5) / px_u).clamp(0., 1.);
                 if border_cov > 0.0 {
                     c = blend_over(c, border_rgb, border_cov * border_a);
                 }
@@ -293,10 +300,11 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
 
             let out_a = (c[3] * mask).clamp(0., 1.);
             if out_a > 1e-4 {
-                let r = (c[0] / c[3].max(1e-4)).clamp(0., 1.);
-                let g = (c[1] / c[3].max(1e-4)).clamp(0., 1.);
-                let b = (c[2] / c[3].max(1e-4)).clamp(0., 1.);
-                let dst = (py * SCENE_W + px_i) * 4;
+                let dither = (f32::from(BAYER4[(py & 3) * 4 + (px_i & 3)]) / 16.0 - 0.5) / 255.0;
+                let r = (c[0] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let g = (c[1] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let b = (c[2] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let dst = (py * TEX_W + px_i) * 4;
                 raw[dst] = (b * 255.).round() as u8;
                 raw[dst + 1] = (g * 255.).round() as u8;
                 raw[dst + 2] = (r * 255.).round() as u8;
@@ -305,8 +313,42 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
         }
     }
 
-    let buf = RgbaImage::from_raw(SCENE_W as u32, SCENE_H as u32, raw)
-        .expect("SCENE_W * SCENE_H * 4 matches raw buffer length");
+    for y in 1..TEX_H - 1 {
+        let row = y * TEX_W;
+        for x in 1..TEX_W - 1 {
+            let idx = (row + x) * 4;
+            if raw[idx + 3] != 0 {
+                continue;
+            }
+            let mut best_a = 0u8;
+            let mut best_bgr = [0u8; 3];
+            for (dx, dy) in [
+                (-1isize, 0isize),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (1, 1),
+            ] {
+                let n = (((y as isize + dy) as usize) * TEX_W + (x as isize + dx) as usize) * 4;
+                let na = raw[n + 3];
+                if na > best_a {
+                    best_a = na;
+                    best_bgr = [raw[n], raw[n + 1], raw[n + 2]];
+                }
+            }
+            if best_a > 0 {
+                raw[idx] = best_bgr[0];
+                raw[idx + 1] = best_bgr[1];
+                raw[idx + 2] = best_bgr[2];
+            }
+        }
+    }
+
+    let buf = RgbaImage::from_raw(TEX_W as u32, TEX_H as u32, raw)
+        .expect("TEX_W * TEX_H * 4 matches raw buffer length");
     RenderImage::new(vec![Frame::new(buf)])
 }
 
@@ -963,8 +1005,9 @@ impl Render for ModelMenu {
 #[cfg(test)]
 mod tests {
     use super::{
-        CARD_LEFT, CARD_TOP, CardPlateKey, ModelMenu, ModelMenuEvent, ROW_H, SCENE_H, SCENE_W,
-        active_walk_index, default_menu_models, rasterize_card_plate, scene_mask_alpha,
+        CARD_LEFT, CARD_TOP, CardPlateKey, ModelMenu, ModelMenuEvent, RASTER_SCALE, ROW_H, SCENE_H,
+        SCENE_W, TEX_W, active_walk_index, default_menu_models, rasterize_card_plate,
+        scene_mask_alpha,
     };
     use gpui::{
         MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, TestAppContext, point, px, size,
@@ -1001,14 +1044,14 @@ mod tests {
         });
         let bytes = img.as_bytes(0).expect("BGRA plate bytes");
         // Row 0 ("DeepSeek") is pure white card (`R ~ G ~ B ~ 255`)
-        let r0_y = (CARD_TOP + 32. + 16.) as usize;
-        let r0_x = (CARD_LEFT + 30.) as usize;
-        let p0 = (r0_y * SCENE_W + r0_x) * 4;
+        let r0_y = (CARD_TOP + 32. + 16.) as usize * RASTER_SCALE;
+        let r0_x = (CARD_LEFT + 30.) as usize * RASTER_SCALE;
+        let p0 = (r0_y * TEX_W + r0_x) * 4;
         assert!(bytes[p0] > 245 && bytes[p0 + 1] > 245 && bytes[p0 + 2] > 245);
 
         // Row 1 ("GPT") has the warm pink band (`R > G` because rose tint reduces green on white)
-        let r1_y = (CARD_TOP + 32. + ROW_H + 16.) as usize;
-        let p1 = (r1_y * SCENE_W + r0_x) * 4;
+        let r1_y = (CARD_TOP + 32. + ROW_H + 16.) as usize * RASTER_SCALE;
+        let p1 = (r1_y * TEX_W + r0_x) * 4;
         assert!(
             bytes[p1 + 2] > bytes[p1 + 1] + 12,
             "expected warm rose tint on row 1, got R={} G={}",
@@ -1017,7 +1060,7 @@ mod tests {
         );
 
         // Far right edge of card is faded out (`alpha < 15`)
-        let right_edge = (r1_y * SCENE_W + (SCENE_W - 3)) * 4;
+        let right_edge = (r1_y * TEX_W + (TEX_W - 6)) * 4;
         assert!(bytes[right_edge + 3] < 15);
     }
 

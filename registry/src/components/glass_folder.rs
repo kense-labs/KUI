@@ -22,8 +22,8 @@ use std::{
 };
 use web_time::Instant;
 
-const TEX_W: usize = 360;
-const TEX_H: usize = 288;
+const TEX_W: usize = 720;
+const TEX_H: usize = 576;
 const DOC_LINES: [(f32, f32); 7] = [
     (87., 78.),
     (115., 180.),
@@ -639,19 +639,58 @@ fn rasterize_glass_folder(
         }
     }
 
-    // Un-premultiply into straight BGRA bytes for GPUI's RenderImage atlas.
+    // Un-premultiply into straight BGRA bytes for GPUI's RenderImage atlas (+ Bayer micro-dithering + edge dilation).
+    const BAYER4: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
     let mut raw = vec![0u8; TEX_W * TEX_H * 4];
-    for (i, &[pr, pg, pb, pa]) in scene_buf.iter().enumerate().take(TEX_W * TEX_H) {
-        let a = pa.clamp(0., 1.);
-        let dst = i * 4;
-        if a > 1e-4 {
-            let r = (pr / a).clamp(0., 1.);
-            let g = (pg / a).clamp(0., 1.);
-            let b = (pb / a).clamp(0., 1.);
-            raw[dst] = (b * 255.).round() as u8;
-            raw[dst + 1] = (g * 255.).round() as u8;
-            raw[dst + 2] = (r * 255.).round() as u8;
-            raw[dst + 3] = (a * 255.).round() as u8;
+    for y in 0..TEX_H {
+        let row = y * TEX_W;
+        for x in 0..TEX_W {
+            let [pr, pg, pb, pa] = scene_buf[row + x];
+            let a = pa.clamp(0., 1.);
+            let dst = (row + x) * 4;
+            if a > 1e-4 {
+                let dither = (f32::from(BAYER4[(y & 3) * 4 + (x & 3)]) / 16.0 - 0.5) / 255.0;
+                let r = (pr / a + dither).clamp(0., 1.);
+                let g = (pg / a + dither).clamp(0., 1.);
+                let b = (pb / a + dither).clamp(0., 1.);
+                raw[dst] = (b * 255.).round() as u8;
+                raw[dst + 1] = (g * 255.).round() as u8;
+                raw[dst + 2] = (r * 255.).round() as u8;
+                raw[dst + 3] = (a * 255.).round() as u8;
+            }
+        }
+    }
+    for y in 1..TEX_H - 1 {
+        let row = y * TEX_W;
+        for x in 1..TEX_W - 1 {
+            let idx = (row + x) * 4;
+            if raw[idx + 3] != 0 {
+                continue;
+            }
+            let mut best_a = 0u8;
+            let mut best_bgr = [0u8; 3];
+            for (dx, dy) in [
+                (-1isize, 0isize),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (1, 1),
+            ] {
+                let n = (((y as isize + dy) as usize) * TEX_W + (x as isize + dx) as usize) * 4;
+                let na = raw[n + 3];
+                if na > best_a {
+                    best_a = na;
+                    best_bgr = [raw[n], raw[n + 1], raw[n + 2]];
+                }
+            }
+            if best_a > 0 {
+                raw[idx] = best_bgr[0];
+                raw[idx + 1] = best_bgr[1];
+                raw[idx + 2] = best_bgr[2];
+            }
         }
     }
 

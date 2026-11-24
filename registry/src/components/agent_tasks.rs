@@ -2418,7 +2418,7 @@ impl AgentTasksScreen {
                         .p(px(12.))
                         .rounded(px(10.))
                         .bg(p.chip)
-                        .font_family("Menlo")
+                        .font_family(crate::components::pro_chrome::pro_mono_name())
                         .text_size(px(12.))
                         .line_height(px(19.))
                         .text_color(p.ink)

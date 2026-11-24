@@ -309,6 +309,14 @@ impl Render for EmbeddedStory {
                 cfg!(target_family = "wasm") && UiLanguage::current(cx) == UiLanguage::Chinese,
                 |e| e.font_family("KUI Story Sans"),
             )
+            .when(
+                cx.try_global::<crate::InputFontLoaded>().is_some(),
+                |mut s| {
+                    s.text_style().font_fallbacks =
+                        Some(FontFallbacks::from_fonts(vec!["KUI Input Sans".into()]));
+                    s
+                },
+            )
             .on_key_down(cx.listener(|v, e: &KeyDownEvent, w, cx| {
                 if e.keystroke.key == "tab" {
                     let back = e.keystroke.modifiers.shift;

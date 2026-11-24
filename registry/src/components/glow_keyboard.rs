@@ -1037,6 +1037,7 @@ fn rasterize_glow_floor(
         122.74 * px_per_uy,
     );
 
+    const BAYER4: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
     let bg = bg_rgb.map(|v| f32::from(v) / 255.);
     let mut raw = vec![0u8; TEX_W * TEX_H * 4];
     for y in 0..TEX_H {
@@ -1045,9 +1046,10 @@ fn rasterize_glow_floor(
             let [pr, pg, pb, ca] = color_buf[src];
             let ca = ca.clamp(0., 1.);
             let la = light_buf[src][0].clamp(0., 1.);
-            let r = (bg[0] * (1. - ca) + pr + la).clamp(0., 1.);
-            let g = (bg[1] * (1. - ca) + pg + la).clamp(0., 1.);
-            let b = (bg[2] * (1. - ca) + pb + la).clamp(0., 1.);
+            let dither = (f32::from(BAYER4[(y & 3) * 4 + (x & 3)]) / 16.0 - 0.5) / 255.0;
+            let r = (bg[0] * (1. - ca) + pr + la + dither).clamp(0., 1.);
+            let g = (bg[1] * (1. - ca) + pg + la + dither).clamp(0., 1.);
+            let b = (bg[2] * (1. - ca) + pb + la + dither).clamp(0., 1.);
             let dst = (y * TEX_W + x) * 4;
             raw[dst] = (b * 255.).round() as u8;
             raw[dst + 1] = (g * 255.).round() as u8;

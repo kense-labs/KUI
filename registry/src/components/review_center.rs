@@ -1513,7 +1513,8 @@ impl ReviewCenter {
                     .line_height(px(21.))
                     .text_color(p.ink);
                 if item.format == ReviewFormat::Code {
-                    text_flow = text_flow.font_family("Menlo");
+                    text_flow =
+                        text_flow.font_family(crate::components::pro_chrome::pro_mono_name());
                 }
                 for sp in &item.body {
                     if interactive {
@@ -1600,7 +1601,7 @@ impl ReviewCenter {
                         .py(px(6.))
                         .border_t_1()
                         .border_color(p.line)
-                        .font_family("Menlo")
+                        .font_family(crate::components::pro_chrome::pro_mono_name())
                         .text_size(px(12.))
                         .line_height(px(20.))
                         .flex()
@@ -1746,7 +1747,7 @@ impl ReviewCenter {
                                                     .py(px(1.))
                                                     .rounded(px(4.))
                                                     .bg(p.chip)
-                                                    .font_family("Menlo")
+                                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                                     .text_size(px(11.))
                                                     .text_color(p.muted)
                                                     .child(tl),
@@ -1914,7 +1915,7 @@ impl ReviewCenter {
                                         .py(px(1.))
                                         .rounded(px(4.))
                                         .bg(p_note.amber_soft)
-                                        .font_family("Menlo")
+                                        .font_family(crate::components::pro_chrome::pro_mono_name())
                                         .text_size(px(11.))
                                         .text_color(p_note.amber_ink)
                                         .truncate()

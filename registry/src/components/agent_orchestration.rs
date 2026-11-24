@@ -2459,7 +2459,7 @@ impl AgentOrchestrationScreen {
                     .cursor_pointer()
                     .child(
                         div()
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(12.))
                             .text_color(p.ink)
                             .child(self.run_id.clone()),
@@ -2473,7 +2473,7 @@ impl AgentOrchestrationScreen {
                                 .bg(p.chip)
                                 .flex()
                                 .items_center()
-                                .text_size(px(10.))
+                                .text_size(px(10.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.muted)
                                 .child(env_badge),
@@ -2837,7 +2837,7 @@ impl AgentOrchestrationScreen {
                             .cursor_pointer()
                             .child(
                                 div()
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(12.))
                                     .text_color(p.ink)
                                     .child(rid),
@@ -3260,7 +3260,7 @@ impl AgentOrchestrationScreen {
                                     .gap(px(2.))
                                     .child(
                                         div()
-                                            .text_size(px(10.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.muted)
                                             .child(tr(cx, "DURATION", "耗时")),
@@ -3283,7 +3283,7 @@ impl AgentOrchestrationScreen {
                                     .gap(px(2.))
                                     .child(
                                         div()
-                                            .text_size(px(10.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.muted)
                                             .child(tr(cx, "TOKENS", "TOKEN")),
@@ -3312,7 +3312,7 @@ impl AgentOrchestrationScreen {
                                     .gap(px(2.))
                                     .child(
                                         div()
-                                            .text_size(px(10.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.muted)
                                             .child(tr(cx, "OWN COST", "自身费用")),
@@ -3339,7 +3339,7 @@ impl AgentOrchestrationScreen {
                                     .gap(px(2.))
                                     .child(
                                         div()
-                                            .text_size(px(10.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.muted)
                                             .child(tr(cx, "BRANCH COST", "分支总计")),
@@ -3485,7 +3485,7 @@ impl AgentOrchestrationScreen {
                         .child(
                             div().flex().items_center().justify_between().child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(format!(
@@ -3520,7 +3520,7 @@ impl AgentOrchestrationScreen {
                             .gap(px(4.))
                             .child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "STARTED BY", "上级智能体")),
@@ -3618,7 +3618,7 @@ impl AgentOrchestrationScreen {
                             .gap(px(4.))
                             .child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "SUB-AGENTS SPAWNED", "派生的子智能体")),
@@ -3663,7 +3663,7 @@ impl AgentOrchestrationScreen {
                         .gap(px(4.))
                         .child(
                             div()
-                                .text_size(px(10.))
+                                .text_size(px(10.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.muted)
                                 .child(tr(cx, "CONTEXT & ARTIFACTS", "上下文与产物")),
@@ -3716,7 +3716,7 @@ impl AgentOrchestrationScreen {
                                     .justify_between()
                                     .child(
                                         div()
-                                            .text_size(px(10.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.muted)
                                             .child(heading.to_string()),
@@ -3761,7 +3761,7 @@ impl AgentOrchestrationScreen {
                                     .py(px(10.))
                                     .rounded(px(8.))
                                     .bg(well_bg)
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(11.5))
                                     .line_height(px(17.5))
                                     .text_color(p.text)
@@ -3787,7 +3787,7 @@ impl AgentOrchestrationScreen {
                             .gap(px(6.))
                             .child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "BOUND TOOLS", "关联工具")),
@@ -4300,7 +4300,7 @@ impl AgentOrchestrationScreen {
                     .w(px(name_w))
                     .flex_none()
                     .pl(px(6.))
-                    .text_size(px(10.))
+                    .text_size(px(10.5))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.muted)
                     .child(tr(cx, "AGENT · CALL", "智能体 · 调用")),
@@ -4727,7 +4727,7 @@ impl AgentOrchestrationScreen {
             .flex()
             .items_center()
             .gap(px(8.))
-            .text_size(px(10.))
+            .text_size(px(10.5))
             .font_weight(FontWeight::MEDIUM)
             .text_color(p.muted)
             .child(div().flex_1().min_w_0().child(tr(cx, "AGENT", "智能体")))

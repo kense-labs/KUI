@@ -1701,7 +1701,7 @@ impl Render for RepoMap {
                                         .flex_1()
                                         .min_w_0()
                                         .truncate()
-                                        .font_family("Menlo")
+                                        .font_family(crate::components::pro_chrome::pro_mono_name())
                                         .text_size(px(11.5))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p_tip.strong)

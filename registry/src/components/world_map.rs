@@ -401,7 +401,7 @@ fn world_base_svg(dark: bool) -> Arc<Image> {
             paths.push_str(r#""/>"#);
         }
         let doc = format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="484" viewBox="0 0 540 242" fill="none"><g fill="{fill_hex}" stroke="{fill_hex}" stroke-width="0.5" stroke-linejoin="round">{paths}</g></svg>"#
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="540" height="242" viewBox="0 0 540 242" fill="none"><g fill="{fill_hex}" stroke="{fill_hex}" stroke-width="0.5" stroke-linejoin="round">{paths}</g></svg>"#
         );
         Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
     })
@@ -421,7 +421,7 @@ fn continent_focus_svg(dark: bool, continent: Continent) -> Arc<Image> {
             };
             let d = continent.svg_path();
             let doc = format!(
-                r##"<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="484" viewBox="0 0 540 242" fill="none"><defs><filter id="wms" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/><feOffset in="blur" dx="0" dy="2" result="off"/><feFlood flood-color="{drop_hex}" flood-opacity="{drop_op}" result="col"/><feComposite in="col" in2="off" operator="in" result="sh"/><feMerge><feMergeNode in="sh"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="{d}" filter="url(#wms)" fill="{fill_hex}" stroke="{stroke_hex}" stroke-opacity="{stroke_op}" stroke-width="0.5" stroke-linejoin="round"/></svg>"##
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="540" height="242" viewBox="0 0 540 242" fill="none"><defs><filter id="wms" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/><feOffset in="blur" dx="0" dy="2" result="off"/><feFlood flood-color="{drop_hex}" flood-opacity="{drop_op}" result="col"/><feComposite in="col" in2="off" operator="in" result="sh"/><feMerge><feMergeNode in="sh"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="{d}" filter="url(#wms)" fill="{fill_hex}" stroke="{stroke_hex}" stroke-opacity="{stroke_op}" stroke-width="0.5" stroke-linejoin="round"/></svg>"##
             );
             Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
         })

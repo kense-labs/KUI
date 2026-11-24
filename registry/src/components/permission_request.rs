@@ -853,7 +853,7 @@ impl Render for PermissionRequest {
                     d.child(
                         div()
                             .flex_none()
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(11.5))
                             .text_color(p.muted)
                             .child(meta),
@@ -922,7 +922,7 @@ impl Render for PermissionRequest {
                                     .flex()
                                     .items_center()
                                     .gap(px(5.0))
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .text_size(px(10.5))
                                     .line_height(px(15.0))
                                     .text_color(col)

@@ -1186,7 +1186,7 @@ impl AgentRunScreen {
                         .child(
                             div()
                                 .flex_none()
-                                .font_family("monospace")
+                                .font_family(crate::components::pro_chrome::pro_mono_name())
                                 .text_size(px(12.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.strong)
@@ -1269,7 +1269,7 @@ impl AgentRunScreen {
                             .justify_between()
                             .child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "ARGUMENTS", "调用参数")),
@@ -1299,7 +1299,7 @@ impl AgentRunScreen {
                             .bg(code_bg)
                             .border_1()
                             .border_color(p.line)
-                            .font_family("monospace")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(11.5))
                             .line_height(px(18.))
                             .text_color(p.text)
@@ -1319,7 +1319,7 @@ impl AgentRunScreen {
                             .justify_between()
                             .child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(tr(cx, "RESULT", "返回结果")),
@@ -1349,7 +1349,7 @@ impl AgentRunScreen {
                             .bg(code_bg)
                             .border_1()
                             .border_color(p.line)
-                            .font_family("monospace")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(11.5))
                             .line_height(px(18.))
                             .text_color(p.text)
@@ -1491,7 +1491,7 @@ impl AgentRunScreen {
                                 div()
                                     .w(px(36.))
                                     .text_color(p.muted)
-                                    .font_family("monospace")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .child(format!("{col_letter}{}", sel_r + 1)),
                             )
                             .child(div().text_color(p.faint).child("fx"))
@@ -2324,7 +2324,9 @@ impl AgentRunScreen {
                                             .px(px(5.))
                                             .rounded(px(5.))
                                             .bg(p.chip)
-                                            .font_family("monospace")
+                                            .font_family(
+                                                crate::components::pro_chrome::pro_mono_name(),
+                                            )
                                             .text_size(px(11.))
                                             .line_height(px(18.))
                                             .text_color(p.text)
@@ -3268,7 +3270,9 @@ impl AgentRunScreen {
                                                 .px(px(5.))
                                                 .rounded(px(5.))
                                                 .bg(p.chip)
-                                                .font_family("monospace")
+                                                .font_family(
+                                                    crate::components::pro_chrome::pro_mono_name(),
+                                                )
                                                 .text_size(px(11.))
                                                 .line_height(px(16.))
                                                 .text_color(p.text)
@@ -3463,7 +3467,7 @@ impl AgentRunScreen {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(10.))
+                            .text_size(px(10.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(if step_done { p.ink } else { p.muted })
                             .child((si + 1).to_string()),

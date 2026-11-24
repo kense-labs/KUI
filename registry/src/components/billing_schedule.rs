@@ -2233,7 +2233,7 @@ impl Render for BillingSchedule {
                 .flex()
                 .items_center()
                 .gap(px(10.))
-                .text_size(px(10.))
+                .text_size(px(10.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.muted)
                 .child(div().flex_1().child(tr(cx, "NAME", "计费项目")))

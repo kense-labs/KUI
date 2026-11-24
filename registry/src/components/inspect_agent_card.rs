@@ -28,6 +28,9 @@ use web_time::Instant;
 
 const STAGE_W: usize = 436;
 const STAGE_H: usize = 356;
+const RASTER_SCALE: usize = 2;
+const TEX_W: usize = STAGE_W * RASTER_SCALE;
+const TEX_H: usize = STAGE_H * RASTER_SCALE;
 const CARD_W: f32 = 320.0;
 const MAIN_H: f32 = 176.0;
 const ABOVE_H: f32 = 112.0;
@@ -550,15 +553,17 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
     };
     let red_rgb = [1.0, 59. / 255., 48. / 255.];
 
-    let mut raw = vec![0u8; STAGE_W * STAGE_H * 4];
+    const BAYER4: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    let px_u = 1.0 / RASTER_SCALE as f32;
+    let mut raw = vec![0u8; TEX_W * TEX_H * 4];
     let above_u_off = if key.mirror { 16.0 } else { -16.0 };
     let above_y0 = -(ABOVE_H + 16.0);
     let above_y1 = -16.0;
 
-    for py in 0..STAGE_H {
-        let sy = py as f32 + 0.5;
-        for px_i in 0..STAGE_W {
-            let sx = px_i as f32 + 0.5;
+    for py in 0..TEX_H {
+        let sy = (py as f32 + 0.5) * px_u;
+        for px_i in 0..TEX_W {
+            let sx = (px_i as f32 + 0.5) * px_u;
             let mask = stage_mask_alpha(sx, sy, key.mirror);
             if mask <= 0.002 {
                 continue;
@@ -573,10 +578,11 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
                 let above_fade = smoothstep(above_y0 + 8.0, above_y1 - 8.0, v);
                 if above_fade > 0.005 {
                     let d_above = sd_round_rect(au, v, 0.0, above_y0, CARD_W, above_y1, 8.0);
-                    let cov_ab = (0.5 - d_above).clamp(0., 1.) * above_fade;
+                    let cov_ab = (0.5 - d_above / px_u).clamp(0., 1.) * above_fade;
                     if cov_ab > 0.0 {
                         c = blend_over(c, card_rgb, cov_ab);
-                        let b_cov = (1. - d_above.abs()).clamp(0., 1.) * above_fade;
+                        let b_cov =
+                            (0.5 - ((d_above + 0.5).abs() - 0.5) / px_u).clamp(0., 1.) * above_fade;
                         if b_cov > 0.0 {
                             c = blend_over(c, border_rgb, b_cov * border_a);
                         }
@@ -591,18 +597,18 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
                 c = blend_over(c, [0.0, 0.0, 0.0], s_cov);
             }
 
-            // Main agent card surface + 1px border
+            // Main agent card surface + 1px Retina border
             let d_main = sd_round_rect(u, v, 0.0, 0.0, CARD_W, MAIN_H, 8.0);
-            let cov_main = (0.5 - d_main).clamp(0., 1.);
+            let cov_main = (0.5 - d_main / px_u).clamp(0., 1.);
             if cov_main > 0.0 {
                 c = blend_over(c, card_rgb, cov_main);
-                let b_cov = (1. - d_main.abs()).clamp(0., 1.);
+                let b_cov = (0.5 - ((d_main + 0.5).abs() - 0.5) / px_u).clamp(0., 1.);
                 if b_cov > 0.0 {
                     c = blend_over(c, border_rgb, b_cov * border_a);
                 }
             }
 
-            // Figma-style `#0190fe` selection frame, diagonal padding hatch, and inner dashed box
+            // Figma-style `#0190fe` selection frame, anti-aliased diagonal padding hatch, and inner dashed box
             if box_alpha > 0.005 {
                 let fr = fx + fw;
                 let fb = ft + fh;
@@ -613,41 +619,43 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
 
                     if in_outer && !in_inner {
                         let stripe = ((u + v) * 0.85).rem_euclid(3.8);
-                        if stripe < 0.85 {
-                            c = blend_over(c, blue_rgb, hatch_a * box_alpha);
+                        let stripe_d = (stripe - 0.45).abs();
+                        let stripe_cov = (0.5 - (stripe_d - 0.40) / (0.85 * px_u)).clamp(0., 1.);
+                        if stripe_cov > 0.0 {
+                            c = blend_over(c, blue_rgb, stripe_cov * hatch_a * box_alpha);
                         }
                     }
 
                     let d_in = sd_round_rect(u, v, fx + pad, ft + pad, fr - pad, fb - pad, 3.0);
-                    if d_in.abs() < 0.75 {
+                    let in_line = (0.5 - (d_in.abs() - 0.42) / px_u).clamp(0., 1.);
+                    if in_line > 0.0 {
                         let along = (u + v).rem_euclid(5.0);
-                        if along < 2.8 {
-                            c = blend_over(
-                                c,
-                                blue_rgb,
-                                (1. - d_in.abs() / 0.75) * 0.82 * box_alpha,
-                            );
+                        let dash_cov = (0.5 - ((along - 1.4).abs() - 1.35) / px_u).clamp(0., 1.);
+                        if dash_cov > 0.0 {
+                            c = blend_over(c, blue_rgb, in_line * dash_cov * 0.86 * box_alpha);
                         }
                     }
 
                     let d_out = sd_round_rect(u, v, fx, ft, fr, fb, 0.5);
-                    if d_out.abs() < 0.95 {
-                        c = blend_over(c, blue_rgb, (1. - d_out.abs() / 0.95) * box_alpha);
+                    let out_line = (0.5 - (d_out.abs() - 0.55) / px_u).clamp(0., 1.);
+                    if out_line > 0.0 {
+                        c = blend_over(c, blue_rgb, out_line * box_alpha);
                     }
                 }
             }
 
-            // 4 corner resize handles (`5x5` squares on TL, TR, BR, BL)
+            // 4 corner resize handles (`5x5` crisp anti-aliased squares on TL, TR, BR, BL)
             if handle_alpha > 0.005 {
                 let fr = fx + fw;
                 let fb = ft + fh;
                 for (hx, hy) in [(fx, ft), (fr, ft), (fr, fb), (fx, fb)] {
-                    let dx = (u - hx).abs();
-                    let dy = (v - hy).abs();
-                    if dx <= 2.7 && dy <= 2.7 {
-                        c = blend_over(c, handle_fill, handle_alpha);
-                        if dx >= 1.6 || dy >= 1.6 {
-                            c = blend_over(c, blue_rgb, handle_alpha);
+                    let cheb = (u - hx).abs().max((v - hy).abs());
+                    let outer_cov = (0.5 - (cheb - 2.55) / px_u).clamp(0., 1.);
+                    if outer_cov > 0.0 {
+                        let inner_cov = (0.5 - (cheb - 1.55) / px_u).clamp(0., 1.);
+                        c = blend_over(c, blue_rgb, outer_cov * handle_alpha);
+                        if inner_cov > 0.0 {
+                            c = blend_over(c, handle_fill, inner_cov * handle_alpha);
                         }
                     }
                 }
@@ -656,24 +664,34 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
             // Red vertical spacing guide (`#ff3b30` dashed line + 7px top & bottom T-bars)
             if guide_alpha > 0.005 && gy1 > gy0 {
                 let g_end = gy0 + (gy1 - gy0) * guide_alpha;
-                if (v >= gy0 - 0.8 && v <= g_end + 0.8) && (u - gx).abs() <= 4.0 {
-                    if (u - gx).abs() <= 0.85 && (v - gy0).rem_euclid(5.0) < 3.0 {
-                        c = blend_over(c, red_rgb, guide_alpha);
+                if (v >= gy0 - 1.0 && v <= g_end + 1.0) && (u - gx).abs() <= 4.2 {
+                    let stem_cov = (0.5 - ((u - gx).abs() - 0.55) / px_u).clamp(0., 1.);
+                    if stem_cov > 0.0 && v >= gy0 && v <= g_end {
+                        let dash_a = (v - gy0).rem_euclid(5.0);
+                        let d_cov = ((1.5 - (dash_a - 1.5).abs()) / (0.45 * px_u)).clamp(0., 1.);
+                        if d_cov > 0.0 {
+                            c = blend_over(c, red_rgb, stem_cov * d_cov * guide_alpha);
+                        }
                     }
-                    let cap_top = (v - gy0).abs() <= 0.85 && (u - gx).abs() <= 3.5;
-                    let cap_bot = (v - g_end).abs() <= 0.85 && (u - gx).abs() <= 3.5;
-                    if cap_top || cap_bot {
-                        c = blend_over(c, red_rgb, guide_alpha);
+                    let cap_x = (0.5 - ((u - gx).abs() - 3.5) / px_u).clamp(0., 1.);
+                    if cap_x > 0.0 {
+                        let cap_t = (0.5 - ((v - gy0).abs() - 0.55) / px_u).clamp(0., 1.);
+                        let cap_b = (0.5 - ((v - g_end).abs() - 0.55) / px_u).clamp(0., 1.);
+                        let cap_cov = cap_t.max(cap_b) * cap_x;
+                        if cap_cov > 0.0 {
+                            c = blend_over(c, red_rgb, cap_cov * guide_alpha);
+                        }
                     }
                 }
             }
 
             let out_a = (c[3] * mask).clamp(0., 1.);
             if out_a > 1e-4 {
-                let r = (c[0] / c[3].max(1e-4)).clamp(0., 1.);
-                let g = (c[1] / c[3].max(1e-4)).clamp(0., 1.);
-                let b = (c[2] / c[3].max(1e-4)).clamp(0., 1.);
-                let dst = (py * STAGE_W + px_i) * 4;
+                let dither = (f32::from(BAYER4[(py & 3) * 4 + (px_i & 3)]) / 16.0 - 0.5) / 255.0;
+                let r = (c[0] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let g = (c[1] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let b = (c[2] / c[3].max(1e-4) + dither).clamp(0., 1.);
+                let dst = (py * TEX_W + px_i) * 4;
                 raw[dst] = (b * 255.).round() as u8;
                 raw[dst + 1] = (g * 255.).round() as u8;
                 raw[dst + 2] = (r * 255.).round() as u8;
@@ -682,8 +700,42 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
         }
     }
 
-    let buf = RgbaImage::from_raw(STAGE_W as u32, STAGE_H as u32, raw)
-        .expect("STAGE_W * STAGE_H * 4 matches raw buffer length");
+    for y in 1..TEX_H - 1 {
+        let row = y * TEX_W;
+        for x in 1..TEX_W - 1 {
+            let idx = (row + x) * 4;
+            if raw[idx + 3] != 0 {
+                continue;
+            }
+            let mut best_a = 0u8;
+            let mut best_bgr = [0u8; 3];
+            for (dx, dy) in [
+                (-1isize, 0isize),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (1, 1),
+            ] {
+                let n = (((y as isize + dy) as usize) * TEX_W + (x as isize + dx) as usize) * 4;
+                let na = raw[n + 3];
+                if na > best_a {
+                    best_a = na;
+                    best_bgr = [raw[n], raw[n + 1], raw[n + 2]];
+                }
+            }
+            if best_a > 0 {
+                raw[idx] = best_bgr[0];
+                raw[idx + 1] = best_bgr[1];
+                raw[idx + 2] = best_bgr[2];
+            }
+        }
+    }
+
+    let buf = RgbaImage::from_raw(TEX_W as u32, TEX_H as u32, raw)
+        .expect("TEX_W * TEX_H * 4 matches raw buffer length");
     RenderImage::new(vec![Frame::new(buf)])
 }
 
@@ -1765,7 +1817,7 @@ impl Render for InspectAgentCard {
 #[cfg(test)]
 mod tests {
     use super::{
-        CARD_W, InspectAgentCard, InspectAgentRow, InspectPlateKey, STAGE_H, STAGE_W,
+        CARD_W, InspectAgentCard, InspectAgentRow, InspectPlateKey, RASTER_SCALE, STAGE_H, TEX_W,
         TiltTransform, agent_target_box, default_above_agent, default_main_agent,
         rasterize_inspect_plate, row_metrics, step_timeline,
     };
@@ -1823,7 +1875,7 @@ mod tests {
         });
         let bytes = img.as_bytes(0).expect("BGRA plate");
         // Sample right on the top `#0190fe` selection border (`x = 58 + 120, y = 134`)
-        let idx = (134 * STAGE_W + (58 + 120)) * 4;
+        let idx = ((134 * RASTER_SCALE) * TEX_W + (58 + 120) * RASTER_SCALE) * 4;
         assert!(
             bytes[idx] > 200
                 && bytes[idx + 2] < 120

@@ -1917,7 +1917,7 @@ impl Render for ToolAccessMap {
                                         .flex_1()
                                         .min_w_0()
                                         .truncate()
-                                        .font_family("Menlo")
+                                        .font_family(crate::components::pro_chrome::pro_mono_name())
                                         .text_size(px(11.5))
                                         .text_color(p.ink)
                                         .child(compact_in),
@@ -1930,7 +1930,7 @@ impl Render for ToolAccessMap {
                                             .rounded(px(4.))
                                             .bg(brand_bg)
                                             .text_color(brand_fg)
-                                            .text_size(px(10.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .flex()
                                             .items_center()
@@ -1998,7 +1998,7 @@ impl Render for ToolAccessMap {
                         } else {
                             p.line
                         })
-                        .font_family("Menlo")
+                        .font_family(crate::components::pro_chrome::pro_mono_name())
                         .text_size(px(11.5))
                         .line_height(px(17.))
                         .text_color(if sc.status == AccessRunStatus::Failed {
@@ -2036,7 +2036,7 @@ impl Render for ToolAccessMap {
                         .justify_between()
                         .child(
                             div()
-                                .text_size(px(10.))
+                                .text_size(px(10.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.muted)
                                 .child(tr(cx, "INPUT (EDITABLE)", "输入参数（可编辑）")),
@@ -2059,12 +2059,12 @@ impl Render for ToolAccessMap {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line_strong)
-                        .font_family("Menlo")
+                        .font_family(crate::components::pro_chrome::pro_mono_name())
                         .child(input_ed),
                 )
                 .child(
                     div()
-                        .text_size(px(10.))
+                        .text_size(px(10.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .child(out_header),

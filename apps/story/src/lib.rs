@@ -35,13 +35,15 @@ pub struct InputFontLoaded;
 impl gpui::Global for InputFontLoaded {}
 pub use family_story::LIBRARY_IDS;
 
-fn ensure_story_fonts(cx: &mut gpui::App) {
+pub(crate) fn ensure_story_fonts(cx: &mut gpui::App) {
     struct StoryFonts;
     impl gpui::Global for StoryFonts {}
     if !cx.has_global::<StoryFonts>() {
         let _ = cx.text_system().add_fonts(vec![
             std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinRegular.ttf")),
             std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinMedium.ttf")),
+            std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinSemiBold.ttf")),
+            std::borrow::Cow::Borrowed(include_bytes!("../assets/LatinBold.ttf")),
             std::borrow::Cow::Borrowed(include_bytes!("../assets/FiraCode-Regular.ttf")),
         ]);
         cx.set_global(StoryFonts);

@@ -5,7 +5,10 @@ use crate::{
     primitives::kense_mark,
 };
 use gpui::{prelude::*, *};
-use std::sync::{Arc, OnceLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock, Mutex, OnceLock},
+};
 
 #[derive(Clone, Copy)]
 #[repr(usize)]
@@ -84,34 +87,176 @@ fn identify(name: &str) -> Option<Mark> {
     Some(mark)
 }
 
+#[inline]
+fn round_half_toward_zero(value: f32) -> f32 {
+    (value.abs() - 0.5).ceil().copysign(value)
+}
+
+#[inline]
+fn snapped_square_bounds(bounds: Bounds<Pixels>, scale_factor: f32) -> (Bounds<Pixels>, i32) {
+    let sf = scale_factor.max(0.5);
+    let left = round_half_toward_zero(f32::from(bounds.left()) * sf);
+    let top = round_half_toward_zero(f32::from(bounds.top()) * sf);
+    let dev_side = (f32::from(bounds.size.width) * sf).round().clamp(1., 4096.) as i32;
+    let snapped = Bounds::new(
+        point(px(left / sf), px(top / sf)),
+        size(px(dev_side as f32 / sf), px(dev_side as f32 / sf)),
+    );
+    (snapped, dev_side)
+}
+
+fn single_color_tint(mark: Mark, dark: bool) -> Option<Hsla> {
+    let ink: Hsla = if dark {
+        rgb(0xf1f1f1).into()
+    } else {
+        rgb(0x171717).into()
+    };
+    let color: Hsla = match mark {
+        Mark::Kense | Mark::Gemini | Mark::Mistral | Mark::Meta => return None,
+        Mark::Zendesk
+        | Mark::Intercom
+        | Mark::OpenAi
+        | Mark::XAi
+        | Mark::GitHub
+        | Mark::Notion
+        | Mark::Vercel
+        | Mark::Aws
+        | Mark::Retool => ink,
+        Mark::Claude => rgb(0xd97757).into(),
+        Mark::DeepSeek => rgb(0x4d6bfe).into(),
+        Mark::Qwen => rgb(0x082dff).into(),
+        Mark::Linear => rgb(0x5e6ad2).into(),
+        Mark::Postgres => rgb(0x4169e1).into(),
+        Mark::Meet => rgb(0x00897b).into(),
+        Mark::Zoom => rgb(0x0b5cff).into(),
+        Mark::Slack => rgb(0xcf4377).into(),
+        Mark::Figma => rgb(0xa259ff).into(),
+        Mark::Stripe => rgb(0x635bff).into(),
+        Mark::Supabase => rgb(0x3ecf8e).into(),
+        Mark::Raycast => rgb(0xff6363).into(),
+        Mark::Jira => rgb(0x1d7afc).into(),
+        Mark::Gmail => rgb(0xea4335).into(),
+        Mark::Drive => rgb(0x0f9d58).into(),
+    };
+    Some(color)
+}
+
 pub(crate) fn brand_mark(name: &str, side: f32, cx: &App) -> Option<AnyElement> {
     let mark = identify(name)?;
     const COUNT: usize = Mark::Zendesk as usize + 1;
-    static LIGHT: [OnceLock<Arc<Image>>; COUNT] = [const { OnceLock::new() }; COUNT];
-    static DARK: [OnceLock<Arc<Image>>; COUNT] = [const { OnceLock::new() }; COUNT];
     let dark = Theme::global(cx).mode == ThemeMode::Dark;
-    let cache = if dark { &DARK } else { &LIGHT };
-    let image = cache[mark as usize].get_or_init(|| {
-        if matches!(mark, Mark::Kense) {
-            let bytes = if dark {
-                kense_mark::DARK
-            } else {
-                kense_mark::LIGHT
-            };
-            Arc::new(Image::from_bytes(ImageFormat::Png, bytes.to_vec()))
-        } else {
-            let ink = if dark { "#f1f1f1" } else { "#171717" };
-            Arc::new(Image::from_bytes(
-                ImageFormat::Svg,
-                svg(mark).replace("currentColor", ink).into_bytes(),
-            ))
-        }
-    });
-    Some(
-        img(image.clone())
+
+    if matches!(mark, Mark::Kense) {
+        static KENSE_LIGHT: OnceLock<Arc<Image>> = OnceLock::new();
+        static KENSE_DARK: OnceLock<Arc<Image>> = OnceLock::new();
+        let slot = if dark { &KENSE_DARK } else { &KENSE_LIGHT };
+        let image = slot
+            .get_or_init(|| {
+                let bytes = if dark {
+                    kense_mark::DARK
+                } else {
+                    kense_mark::LIGHT
+                };
+                Arc::new(Image::from_bytes(ImageFormat::Png, bytes.to_vec()))
+            })
+            .clone();
+        return Some(img(image).size(px(side)).flex_none().into_any_element());
+    }
+
+    if let Some(tint) = single_color_tint(mark, dark) {
+        static MONO_DOCS: [OnceLock<(SharedString, Arc<[u8]>)>; COUNT] =
+            [const { OnceLock::new() }; COUNT];
+        let idx = mark as usize;
+        let (path, bytes) = MONO_DOCS[idx]
+            .get_or_init(|| {
+                let doc = svg(mark).replace("currentColor", "#000000");
+                (
+                    SharedString::from(format!("__kui_brand_mono_{idx}")),
+                    Arc::from(doc.into_bytes()),
+                )
+            })
+            .clone();
+        return Some(
+            canvas(
+                |_, _, _| (),
+                move |bounds, (), window, cx| {
+                    if f32::from(bounds.size.width) <= 0. || f32::from(bounds.size.height) <= 0. {
+                        return;
+                    }
+                    let (paint_bounds, _) = snapped_square_bounds(bounds, window.scale_factor());
+                    let _ = window.paint_svg(
+                        paint_bounds,
+                        path.clone(),
+                        Some(bytes.as_ref()),
+                        TransformationMatrix::default(),
+                        tint,
+                        cx,
+                    );
+                },
+            )
             .size(px(side))
             .flex_none()
             .into_any_element(),
+        );
+    }
+
+    type RasterBrandMap = HashMap<(usize, i32), Arc<RenderImage>>;
+    static PARSED_COLOR: [OnceLock<Arc<ParsedSvg>>; COUNT] = [const { OnceLock::new() }; COUNT];
+    static RASTER_COLOR: LazyLock<Mutex<RasterBrandMap>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    let idx = mark as usize;
+    let markup = svg(mark);
+    Some(
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, cx| {
+                if f32::from(bounds.size.width) <= 0. || f32::from(bounds.size.height) <= 0. {
+                    return;
+                }
+                let (paint_bounds, dev_side) = snapped_square_bounds(bounds, window.scale_factor());
+                let cached = {
+                    let guard = RASTER_COLOR.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.get(&(idx, dev_side)).cloned()
+                };
+                let image = if let Some(found) = cached {
+                    found
+                } else {
+                    let parsed = PARSED_COLOR[idx].get_or_init(|| {
+                        Arc::new(
+                            cx.svg_renderer()
+                                .parse_svg(markup.as_bytes())
+                                .expect("static brand mark SVG is valid"),
+                        )
+                    });
+                    let Ok(rendered) = cx.svg_renderer().render_parsed(
+                        parsed,
+                        SvgSize::ExactSize(Size::new(
+                            DevicePixels(dev_side),
+                            DevicePixels(dev_side),
+                        )),
+                    ) else {
+                        return;
+                    };
+                    let mut guard = RASTER_COLOR.lock().unwrap_or_else(|e| e.into_inner());
+                    if guard.len() >= 128 {
+                        guard.clear();
+                    }
+                    guard.insert((idx, dev_side), rendered.clone());
+                    rendered
+                };
+                let _ = window.paint_image(
+                    paint_bounds,
+                    paint_bounds,
+                    Corners::default(),
+                    image,
+                    0,
+                    false,
+                );
+            },
+        )
+        .size(px(side))
+        .flex_none()
+        .into_any_element(),
     )
 }
 

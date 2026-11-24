@@ -913,7 +913,7 @@ impl Render for PlanVsActual {
                 div()
                     .w(px(NAME_COL_W))
                     .flex_none()
-                    .text_size(px(10.))
+                    .text_size(px(10.5))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.muted)
                     .child(tr(cx, "STEP", "执行步骤")),

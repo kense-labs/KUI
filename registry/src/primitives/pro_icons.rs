@@ -3,7 +3,11 @@
 //! Line icon geometry from Hugeicons Free (MIT); provider marks documented in `docs/BRAND-MARKS.md`.
 
 use crate::primitives::brand_mark::brand_mark;
-use gpui::{AnyElement, App, Hsla, Image, ImageFormat, Rgba, img, prelude::*, px};
+use gpui::{
+    AnyElement, App, Bounds, Corners, DevicePixels, Hsla, ParsedSvg, RenderImage, Rgba,
+    SharedString, Size, SvgSize, TransformationMatrix, canvas, div, point, prelude::*, px, rgb,
+    size,
+};
 use std::{
     collections::HashMap,
     sync::{Arc, LazyLock, Mutex, OnceLock},
@@ -319,127 +323,330 @@ fn color_key(color: Hsla) -> (u32, String, f32) {
     )
 }
 
-type IconCacheMap = HashMap<(u16, u32), Arc<Image>>;
-type RawCacheMap = HashMap<(usize, u32), Arc<Image>>;
-
-static ICON_CACHE: LazyLock<Mutex<IconCacheMap>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
-static RAW_CACHE: LazyLock<Mutex<RawCacheMap>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Render a cached 24x24 [`ProIcon`] tinted with `color`.
-pub fn pro_icon(icon: ProIcon, side: f32, color: Hsla) -> AnyElement {
-    let (rgb_key, hex, alpha) = color_key(color);
-    let image = {
-        let mut guard = ICON_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        guard
-            .entry((icon as u16, rgb_key))
-            .or_insert_with(|| {
-                let body = icon.inner_svg().replace("currentColor", &hex);
-                let doc = format!(
-                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"#
-                );
-                Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
-            })
-            .clone()
-    };
-    img(image)
-        .size(px(side))
-        .flex_none()
-        .opacity(alpha)
-        .into_any_element()
+#[inline]
+fn round_half_toward_zero(value: f32) -> f32 {
+    (value.abs() - 0.5).ceil().copysign(value)
 }
 
-/// Render any static SVG fragment with `currentColor` substitution and caching.
+#[inline]
+fn snapped_device_bounds(
+    bounds: Bounds<gpui::Pixels>,
+    scale_factor: f32,
+) -> (Bounds<gpui::Pixels>, i32, i32) {
+    let sf = scale_factor.max(0.5);
+    let left = round_half_toward_zero(f32::from(bounds.left()) * sf);
+    let top = round_half_toward_zero(f32::from(bounds.top()) * sf);
+    let dev_w = (f32::from(bounds.size.width) * sf).round().clamp(1., 4096.) as i32;
+    let dev_h = (f32::from(bounds.size.height) * sf)
+        .round()
+        .clamp(1., 4096.) as i32;
+    let snapped = Bounds::new(
+        point(px(left / sf), px(top / sf)),
+        size(px(dev_w as f32 / sf), px(dev_h as f32 / sf)),
+    );
+    (snapped, dev_w, dev_h)
+}
+
+#[inline]
+fn is_pure_current_color_svg(inner: &str) -> bool {
+    !inner.contains('#')
+        && !inner.contains("url(")
+        && !inner.contains("rgb")
+        && !inner.contains("hsl")
+        && !inner.contains("white")
+        && !inner.contains("black")
+        && !inner.contains("gold")
+}
+
+fn monochrome_svg_element(
+    cache_path: SharedString,
+    bytes: Arc<[u8]>,
+    width: f32,
+    height: f32,
+    color: Hsla,
+) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, (), window, cx| {
+            if f32::from(bounds.size.width) <= 0.
+                || f32::from(bounds.size.height) <= 0.
+                || color.a <= 0.
+            {
+                return;
+            }
+            let (paint_bounds, _, _) = snapped_device_bounds(bounds, window.scale_factor());
+            let _ = window.paint_svg(
+                paint_bounds,
+                cache_path.clone(),
+                Some(bytes.as_ref()),
+                TransformationMatrix::default(),
+                color,
+                cx,
+            );
+        },
+    )
+    .w(px(width))
+    .h(px(height))
+    .flex_none()
+    .into_any_element()
+}
+
+type ParsedSvgMap = HashMap<u64, Arc<ParsedSvg>>;
+type RasterSvgMap = HashMap<(u64, i32, i32), Arc<RenderImage>>;
+
+static PARSED_SVG_CACHE: LazyLock<Mutex<ParsedSvgMap>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static RASTER_SVG_CACHE: LazyLock<Mutex<RasterSvgMap>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn rasterize_exact_svg(
+    doc_key: u64,
+    bytes: &[u8],
+    dev_w: i32,
+    dev_h: i32,
+    cx: &App,
+) -> Option<Arc<RenderImage>> {
+    {
+        let guard = RASTER_SVG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(found) = guard.get(&(doc_key, dev_w, dev_h)) {
+            return Some(found.clone());
+        }
+    }
+    let parsed = {
+        let mut guard = PARSED_SVG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(found) = guard.get(&doc_key) {
+            found.clone()
+        } else {
+            let parsed = Arc::new(cx.svg_renderer().parse_svg(bytes).ok()?);
+            if guard.len() >= 512 {
+                guard.clear();
+            }
+            guard.insert(doc_key, parsed.clone());
+            parsed
+        }
+    };
+    let rendered = cx
+        .svg_renderer()
+        .render_parsed(
+            &parsed,
+            SvgSize::ExactSize(Size::new(DevicePixels(dev_w), DevicePixels(dev_h))),
+        )
+        .ok()?;
+    let mut guard = RASTER_SVG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.len() >= 1024 {
+        guard.clear();
+    }
+    guard.insert((doc_key, dev_w, dev_h), rendered.clone());
+    Some(rendered)
+}
+
+fn crisp_color_svg_element(
+    doc_key: u64,
+    bytes: Arc<[u8]>,
+    width: f32,
+    height: f32,
+    opacity: f32,
+    corner_radius: f32,
+) -> AnyElement {
+    let painter = canvas(
+        |_, _, _| (),
+        move |bounds, (), window, cx| {
+            if f32::from(bounds.size.width) <= 0. || f32::from(bounds.size.height) <= 0. {
+                return;
+            }
+            let (paint_bounds, dev_w, dev_h) = snapped_device_bounds(bounds, window.scale_factor());
+            let Some(image) = rasterize_exact_svg(doc_key, bytes.as_ref(), dev_w, dev_h, cx) else {
+                return;
+            };
+            let radii = if corner_radius > 0. {
+                Corners::all(px(corner_radius))
+            } else {
+                Corners::default()
+            };
+            let _ = window.paint_image(paint_bounds, paint_bounds, radii, image, 0, false);
+        },
+    );
+    if opacity < 0.999 {
+        div()
+            .w(px(width))
+            .h(px(height))
+            .flex_none()
+            .opacity(opacity)
+            .child(painter.size_full())
+            .into_any_element()
+    } else {
+        painter
+            .w(px(width))
+            .h(px(height))
+            .flex_none()
+            .into_any_element()
+    }
+}
+
+const PRO_ICON_COUNT: usize = ProIcon::Download as usize + 1;
+static PRO_ICON_DOCS: [OnceLock<(SharedString, Arc<[u8]>)>; PRO_ICON_COUNT] =
+    [const { OnceLock::new() }; PRO_ICON_COUNT];
+
+type MonoFragMap = HashMap<(usize, usize), (SharedString, Arc<[u8]>)>;
+type ColorFragMap = HashMap<(usize, usize, u32), (u64, Arc<[u8]>)>;
+type StaticDocMap = HashMap<usize, Arc<[u8]>>;
+
+static MONO_FRAG_CACHE: LazyLock<Mutex<MonoFragMap>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static COLOR_FRAG_CACHE: LazyLock<Mutex<ColorFragMap>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static STATIC_DOC_CACHE: LazyLock<Mutex<StaticDocMap>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[inline]
+fn mix_u64(mut x: u64) -> u64 {
+    x ^= x >> 30;
+    x = x.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    x ^= x >> 27;
+    x = x.wrapping_mul(0x94d0_49bb_1331_11eb);
+    x ^ (x >> 31)
+}
+
+/// Render a cached 24x24 [`ProIcon`] tinted with `color` at device-pixel supersampled crispness.
+pub fn pro_icon(icon: ProIcon, side: f32, color: Hsla) -> AnyElement {
+    let idx = icon as usize;
+    let (path, bytes) = PRO_ICON_DOCS[idx]
+        .get_or_init(|| {
+            let body = icon.inner_svg().replace("currentColor", "#000000");
+            let doc = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"#
+            );
+            (
+                SharedString::from(format!("__kui_pro_icon_{idx}")),
+                Arc::from(doc.into_bytes()),
+            )
+        })
+        .clone();
+    monochrome_svg_element(path, bytes, side, side, color)
+}
+
+/// Render any static SVG fragment with `currentColor` substitution and device-pixel caching.
 pub fn pro_svg(view_box: &'static str, inner: &'static str, side: f32, color: Hsla) -> AnyElement {
+    let vb_ptr = view_box.as_ptr() as usize;
+    let in_ptr = inner.as_ptr() as usize;
+    if is_pure_current_color_svg(inner) {
+        let (path, bytes) = {
+            let mut guard = MONO_FRAG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            guard
+                .entry((vb_ptr, in_ptr))
+                .or_insert_with(|| {
+                    let body = inner.replace("currentColor", "#000000");
+                    let doc = format!(
+                        r#"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="{view_box}" fill="none">{body}</svg>"#
+                    );
+                    (
+                        SharedString::from(format!("__kui_mono_svg_{vb_ptr:x}_{in_ptr:x}")),
+                        Arc::from(doc.into_bytes()),
+                    )
+                })
+                .clone()
+        };
+        return monochrome_svg_element(path, bytes, side, side, color);
+    }
+
     let (rgb_key, hex, alpha) = color_key(color);
-    let ptr = inner.as_ptr() as usize;
-    let image = {
-        let mut guard = RAW_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let (doc_key, bytes) = {
+        let mut guard = COLOR_FRAG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         guard
-            .entry((ptr, rgb_key))
+            .entry((vb_ptr, in_ptr, rgb_key))
             .or_insert_with(|| {
                 let body = inner.replace("currentColor", &hex);
                 let doc = format!(
                     r#"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="{view_box}" fill="none">{body}</svg>"#
                 );
-                Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
+                let key = mix_u64((in_ptr as u64) ^ ((vb_ptr as u64).rotate_left(17)) ^ u64::from(rgb_key));
+                (key, Arc::from(doc.into_bytes()))
             })
             .clone()
     };
-    img(image)
-        .size(px(side))
-        .flex_none()
-        .opacity(alpha)
-        .into_any_element()
+    crisp_color_svg_element(doc_key, bytes, side, side, alpha, 0.)
 }
 
-/// Render a static full multicolor `<svg ...>...</svg>` document cached by static pointer.
+/// Render a static full multicolor `<svg ...>...</svg>` document at exact `DevicePixels`.
 pub fn pro_raw_svg(markup: &'static str, width: f32, height: f32) -> AnyElement {
+    pro_raw_svg_rounded(markup, width, height, 0.)
+}
+
+/// Render a static full multicolor `<svg ...>...</svg>` document with optional corner rounding.
+pub fn pro_raw_svg_rounded(
+    markup: &'static str,
+    width: f32,
+    height: f32,
+    corner_radius: f32,
+) -> AnyElement {
     let ptr = markup.as_ptr() as usize;
-    let image = {
-        let mut guard = RAW_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let bytes = {
+        let mut guard = STATIC_DOC_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         guard
-            .entry((ptr, u32::MAX))
-            .or_insert_with(|| {
-                Arc::new(Image::from_bytes(
-                    ImageFormat::Svg,
-                    markup.as_bytes().to_vec(),
-                ))
-            })
+            .entry(ptr)
+            .or_insert_with(|| Arc::from(markup.as_bytes()))
             .clone()
     };
-    img(image)
-        .w(px(width))
-        .h(px(height))
-        .flex_none()
-        .into_any_element()
+    let doc_key = mix_u64((ptr as u64) ^ 0x517c_c1b7_2722_0a95);
+    crisp_color_svg_element(doc_key, bytes, width, height, 1., corner_radius)
+}
+
+/// Render a pre-built multicolor `<svg ...>` byte buffer keyed by `cache_key` at exact `DevicePixels`.
+pub fn pro_svg_doc(cache_key: u64, bytes: Arc<[u8]>, width: f32, height: f32) -> AnyElement {
+    crisp_color_svg_element(
+        mix_u64(cache_key ^ 0x9e37_79b9_7f4a_7c15),
+        bytes,
+        width,
+        height,
+        1.,
+        0.,
+    )
 }
 
 /// Multicolor app and model artwork lookup for Pro screen rows and cards.
 pub fn pro_app_artwork(name: &str, side: f32, cx: &App) -> Option<AnyElement> {
-    static COLOR_MARKS: [OnceLock<Arc<Image>>; 7] = [const { OnceLock::new() }; 7];
+    static HUBSPOT_DOC: OnceLock<(SharedString, Arc<[u8]>)> = OnceLock::new();
     let lower = name.trim().to_ascii_lowercase();
-    let special = match lower.as_str() {
-        "gmail" | "google mail" => Some((
-            0,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="52 42 88 66" width="48" height="48"><path fill="#4285F4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"></path><path fill="#34A853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"></path><path fill="#FBBC04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"></path><path fill="#EA4335" d="M72 74V48l24 18 24-18v26L96 92"></path><path fill="#C5221F" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"></path></svg>"##,
-        )),
-        "google calendar" | "calendar" | "gcal" => Some((
-            1,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="48" height="48"><g transform="translate(3.75 3.75)"><path fill="#FFFFFF" d="M148.882 43.618l-47.368-5.263-57.895 5.263-5.264 52.632 5.263 52.632 52.632 6.579 52.632-6.579 5.263-53.947z"></path><path fill="#1A73E8" d="M65.211 125.276c-3.934-2.658-6.658-6.539-8.145-11.671l9.132-3.763c.829 3.158 2.276 5.605 4.342 7.342 2.053 1.737 4.553 2.592 7.474 2.592 2.987 0 5.553-.908 7.697-2.724s3.224-4.132 3.224-6.934c0-2.868-1.132-5.211-3.395-7.026s-5.105-2.724-8.5-2.724h-5.276v-9.039H76.5c2.921 0 5.382-.789 7.382-2.368 2-1.579 3-3.737 3-6.487 0-2.447-.895-4.395-2.684-5.855s-4.053-2.197-6.803-2.197c-2.684 0-4.816.711-6.395 2.145s-2.724 3.197-3.447 5.276l-9.039-3.763c1.197-3.395 3.395-6.395 6.618-8.987 3.224-2.592 7.342-3.895 12.342-3.895 3.697 0 7.026.711 9.974 2.145 2.947 1.434 5.263 3.421 6.934 5.947 1.671 2.539 2.5 5.382 2.5 8.539 0 3.224-.776 5.947-2.329 8.184-1.553 2.237-3.461 3.947-5.724 5.145v.539c2.987 1.25 5.421 3.158 7.342 5.724 1.908 2.566 2.868 5.632 2.868 9.211s-.908 6.776-2.724 9.579c-1.816 2.803-4.329 5.013-7.513 6.618-3.197 1.605-6.789 2.421-10.776 2.421-4.618.013-8.881-1.316-12.815-3.974z"></path><path fill="#1A73E8" d="M121.25 79.961l-9.974 7.25-5.013-7.605 17.987-12.974h6.895v61.197h-9.895z"></path><path fill="#EA4335" d="M148.882 196.25l47.368-47.368-23.684-10.526-23.684 10.526-10.526 23.684z"></path><path fill="#34A853" d="M33.092 172.566l10.526 23.684h105.263v-47.368H43.618z"></path><path fill="#4285F4" d="M11.974-3.75C3.25-3.75-3.75 3.25-3.75 11.974v136.908l23.684 10.526 23.684-10.526V43.618h105.263l10.526-23.684L148.882-3.75z"></path><path fill="#188038" d="M-3.75 148.882v31.579c0 8.724 7.066 15.789 15.789 15.789h31.579v-47.368z"></path><path fill="#FBBC04" d="M148.882 43.618v105.263h47.368V43.618l-23.684-10.526z"></path><path fill="#1967D2" d="M196.25 43.618V11.974c0-8.724-7.066-15.789-15.789-15.789h-31.579v47.368z"></path></g></svg>"##,
-        )),
-        "google drive" | "drive" => Some((
-            2,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 87.3 78" width="48" height="48"><path fill="#0066DA" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"></path><path fill="#00AC47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z"></path><path fill="#EA4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"></path><path fill="#00832D" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"></path><path fill="#2684FC" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"></path><path fill="#FFBA00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"></path></svg>"##,
-        )),
-        "slack" => Some((
-            3,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path fill="#E01E5A" d="M5.04 15.17a2.53 2.53 0 0 1-2.52 2.52A2.53 2.53 0 0 1 0 15.17a2.53 2.53 0 0 1 2.52-2.53h2.52zm1.27 0a2.53 2.53 0 0 1 2.53-2.53 2.53 2.53 0 0 1 2.52 2.53v6.31A2.53 2.53 0 0 1 8.84 24a2.53 2.53 0 0 1-2.53-2.52z"></path><path fill="#36C5F0" d="M8.84 5.04a2.53 2.53 0 0 1-2.53-2.52A2.53 2.53 0 0 1 8.84 0a2.53 2.53 0 0 1 2.52 2.52v2.52zm0 1.27a2.53 2.53 0 0 1 2.52 2.53 2.53 2.53 0 0 1-2.52 2.52H2.52A2.53 2.53 0 0 1 0 8.84a2.53 2.53 0 0 1 2.52-2.53z"></path><path fill="#2EB67D" d="M18.96 8.84a2.53 2.53 0 0 1 2.52-2.53A2.53 2.53 0 0 1 24 8.84a2.53 2.53 0 0 1-2.52 2.52h-2.52zm-1.27 0a2.53 2.53 0 0 1-2.53 2.52 2.53 2.53 0 0 1-2.52-2.52V2.52A2.53 2.53 0 0 1 15.16 0a2.53 2.53 0 0 1 2.53 2.52z"></path><path fill="#ECB22E" d="M15.16 18.96a2.53 2.53 0 0 1 2.53 2.52A2.53 2.53 0 0 1 15.16 24a2.53 2.53 0 0 1-2.52-2.52v-2.52zm0-1.27a2.53 2.53 0 0 1-2.52-2.53 2.53 2.53 0 0 1 2.52-2.52h6.32A2.53 2.53 0 0 1 24 15.16a2.53 2.53 0 0 1-2.52 2.53z"></path></svg>"##,
-        )),
-        "stripe" => Some((
-            4,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><rect width="24" height="24" rx="6" fill="#635BFF"></rect><path fill="#fff" transform="translate(5 5) scale(0.5833)" d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z"></path></svg>"##,
-        )),
-        "hubspot" => Some((
-            5,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="#FF7A59"><path d="M18.164 7.93V5.084a2.198 2.198 0 001.267-1.978v-.067A2.2 2.2 0 0017.238.845h-.067a2.2 2.2 0 00-2.193 2.193v.067a2.196 2.196 0 001.252 1.973l.013.006v2.852a6.22 6.22 0 00-2.969 1.31l.012-.01-7.828-6.095A2.497 2.497 0 104.3 4.656l-.012.006 7.697 5.991a6.176 6.176 0 00-1.038 3.446c0 1.343.425 2.588 1.147 3.607l-.013-.02-2.342 2.343a1.968 1.968 0 00-.58-.095h-.002a2.033 2.033 0 102.033 2.033 1.978 1.978 0 00-.1-.595l.005.014 2.317-2.317a6.247 6.247 0 104.782-11.134l-.036-.005zm-.964 9.378a3.206 3.206 0 113.215-3.207v.002a3.206 3.206 0 01-3.207 3.207z"></path></svg>"##,
-        )),
-        "figma" => Some((
-            6,
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 38 57" width="48" height="48"><path fill="#1ABCFE" d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z"></path><path fill="#0ACF83" d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 1 1-19 0z"></path><path fill="#FF7262" d="M19 0v19h9.5a9.5 9.5 0 1 0 0-19H19z"></path><path fill="#F24E1E" d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z"></path><path fill="#A259FF" d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z"></path></svg>"##,
-        )),
-        _ => None,
-    };
-    if let Some((slot, markup)) = special {
-        let image = COLOR_MARKS[slot]
+    if lower == "hubspot" {
+        const HUBSPOT_MONO: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="#000000"><path d="M18.164 7.93V5.084a2.198 2.198 0 001.267-1.978v-.067A2.2 2.2 0 0017.238.845h-.067a2.2 2.2 0 00-2.193 2.193v.067a2.196 2.196 0 001.252 1.973l.013.006v2.852a6.22 6.22 0 00-2.969 1.31l.012-.01-7.828-6.095A2.497 2.497 0 104.3 4.656l-.012.006 7.697 5.991a6.176 6.176 0 00-1.038 3.446c0 1.343.425 2.588 1.147 3.607l-.013-.02-2.342 2.343a1.968 1.968 0 00-.58-.095h-.002a2.033 2.033 0 102.033 2.033 1.978 1.978 0 00-.1-.595l.005.014 2.317-2.317a6.247 6.247 0 104.782-11.134l-.036-.005zm-.964 9.378a3.206 3.206 0 113.215-3.207v.002a3.206 3.206 0 01-3.207 3.207z"></path></svg>"##;
+        let (path, bytes) = HUBSPOT_DOC
             .get_or_init(|| {
-                Arc::new(Image::from_bytes(
-                    ImageFormat::Svg,
-                    markup.as_bytes().to_vec(),
-                ))
+                (
+                    SharedString::from("__kui_app_hubspot"),
+                    Arc::from(HUBSPOT_MONO.as_bytes()),
+                )
             })
             .clone();
-        return Some(img(image).size(px(side)).flex_none().into_any_element());
+        return Some(monochrome_svg_element(
+            path,
+            bytes,
+            side,
+            side,
+            rgb(0xff7a59).into(),
+        ));
+    }
+    let special = match lower.as_str() {
+        "gmail" | "google mail" => Some(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="52 42 88 66" width="48" height="48"><path fill="#4285F4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"></path><path fill="#34A853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"></path><path fill="#FBBC04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"></path><path fill="#EA4335" d="M72 74V48l24 18 24-18v26L96 92"></path><path fill="#C5221F" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"></path></svg>"##,
+        ),
+        "google calendar" | "calendar" | "gcal" => Some(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="48" height="48"><g transform="translate(3.75 3.75)"><path fill="#FFFFFF" d="M148.882 43.618l-47.368-5.263-57.895 5.263-5.264 52.632 5.263 52.632 52.632 6.579 52.632-6.579 5.263-53.947z"></path><path fill="#1A73E8" d="M65.211 125.276c-3.934-2.658-6.658-6.539-8.145-11.671l9.132-3.763c.829 3.158 2.276 5.605 4.342 7.342 2.053 1.737 4.553 2.592 7.474 2.592 2.987 0 5.553-.908 7.697-2.724s3.224-4.132 3.224-6.934c0-2.868-1.132-5.211-3.395-7.026s-5.105-2.724-8.5-2.724h-5.276v-9.039H76.5c2.921 0 5.382-.789 7.382-2.368 2-1.579 3-3.737 3-6.487 0-2.447-.895-4.395-2.684-5.855s-4.053-2.197-6.803-2.197c-2.684 0-4.816.711-6.395 2.145s-2.724 3.197-3.447 5.276l-9.039-3.763c1.197-3.395 3.395-6.395 6.618-8.987 3.224-2.592 7.342-3.895 12.342-3.895 3.697 0 7.026.711 9.974 2.145 2.947 1.434 5.263 3.421 6.934 5.947 1.671 2.539 2.5 5.382 2.5 8.539 0 3.224-.776 5.947-2.329 8.184-1.553 2.237-3.461 3.947-5.724 5.145v.539c2.987 1.25 5.421 3.158 7.342 5.724 1.908 2.566 2.868 5.632 2.868 9.211s-.908 6.776-2.724 9.579c-1.816 2.803-4.329 5.013-7.513 6.618-3.197 1.605-6.789 2.421-10.776 2.421-4.618.013-8.881-1.316-12.815-3.974z"></path><path fill="#1A73E8" d="M121.25 79.961l-9.974 7.25-5.013-7.605 17.987-12.974h6.895v61.197h-9.895z"></path><path fill="#EA4335" d="M148.882 196.25l47.368-47.368-23.684-10.526-23.684 10.526-10.526 23.684z"></path><path fill="#34A853" d="M33.092 172.566l10.526 23.684h105.263v-47.368H43.618z"></path><path fill="#4285F4" d="M11.974-3.75C3.25-3.75-3.75 3.25-3.75 11.974v136.908l23.684 10.526 23.684-10.526V43.618h105.263l10.526-23.684L148.882-3.75z"></path><path fill="#188038" d="M-3.75 148.882v31.579c0 8.724 7.066 15.789 15.789 15.789h31.579v-47.368z"></path><path fill="#FBBC04" d="M148.882 43.618v105.263h47.368V43.618l-23.684-10.526z"></path><path fill="#1967D2" d="M196.25 43.618V11.974c0-8.724-7.066-15.789-15.789-15.789h-31.579v47.368z"></path></g></svg>"##,
+        ),
+        "google drive" | "drive" => Some(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 87.3 78" width="48" height="48"><path fill="#0066DA" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"></path><path fill="#00AC47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z"></path><path fill="#EA4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"></path><path fill="#00832D" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"></path><path fill="#2684FC" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"></path><path fill="#FFBA00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"></path></svg>"##,
+        ),
+        "slack" => Some(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path fill="#E01E5A" d="M5.04 15.17a2.53 2.53 0 0 1-2.52 2.52A2.53 2.53 0 0 1 0 15.17a2.53 2.53 0 0 1 2.52-2.53h2.52zm1.27 0a2.53 2.53 0 0 1 2.53-2.53 2.53 2.53 0 0 1 2.52 2.53v6.31A2.53 2.53 0 0 1 8.84 24a2.53 2.53 0 0 1-2.53-2.52z"></path><path fill="#36C5F0" d="M8.84 5.04a2.53 2.53 0 0 1-2.53-2.52A2.53 2.53 0 0 1 8.84 0a2.53 2.53 0 0 1 2.52 2.52v2.52zm0 1.27a2.53 2.53 0 0 1 2.52 2.53 2.53 2.53 0 0 1-2.52 2.52H2.52A2.53 2.53 0 0 1 0 8.84a2.53 2.53 0 0 1 2.52-2.53z"></path><path fill="#2EB67D" d="M18.96 8.84a2.53 2.53 0 0 1 2.52-2.53A2.53 2.53 0 0 1 24 8.84a2.53 2.53 0 0 1-2.52 2.52h-2.52zm-1.27 0a2.53 2.53 0 0 1-2.53 2.52 2.53 2.53 0 0 1-2.52-2.52V2.52A2.53 2.53 0 0 1 15.16 0a2.53 2.53 0 0 1 2.53 2.52z"></path><path fill="#ECB22E" d="M15.16 18.96a2.53 2.53 0 0 1 2.53 2.52A2.53 2.53 0 0 1 15.16 24a2.53 2.53 0 0 1-2.52-2.52v-2.52zm0-1.27a2.53 2.53 0 0 1-2.52-2.53 2.53 2.53 0 0 1 2.52-2.52h6.32A2.53 2.53 0 0 1 24 15.16a2.53 2.53 0 0 1-2.52 2.53z"></path></svg>"##,
+        ),
+        "stripe" => Some(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><rect width="24" height="24" rx="6" fill="#635BFF"></rect><path fill="#fff" transform="translate(5 5) scale(0.5833)" d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z"></path></svg>"##,
+        ),
+        "figma" => Some(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 38 57" width="48" height="48"><path fill="#1ABCFE" d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z"></path><path fill="#0ACF83" d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 1 1-19 0z"></path><path fill="#FF7262" d="M19 0v19h9.5a9.5 9.5 0 1 0 0-19H19z"></path><path fill="#F24E1E" d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z"></path><path fill="#A259FF" d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z"></path></svg>"##,
+        ),
+        _ => None,
+    };
+    if let Some(markup) = special {
+        return Some(pro_raw_svg(markup, side, side));
     }
     brand_mark(name, side, cx)
 }

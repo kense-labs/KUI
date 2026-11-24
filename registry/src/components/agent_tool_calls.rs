@@ -19,15 +19,11 @@ use crate::{
         clipboard,
         control::activate,
         editor::{EditEvent, Editor, InputMode},
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_raw_svg, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::{
-    cell::Cell,
-    rc::Rc,
-    sync::{Arc as StdArc, OnceLock},
-};
+use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
 const SVG_WRENCH: &str = r#"<path d="M13 11L18 6" stroke="currentColor" stroke-width="1.9"></path><path d="M19 7L17 5L19.5 3.5L20.5 4.5L19 7Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.9"></path><path d="M4.02513 8.97487C3.01416 7.96391 2.75095 6.48836 3.23548 5.23548L4.65748 6.65748H6.65748V4.65748L5.23548 3.23548C6.48836 2.75095 7.96391 3.01416 8.97487 4.02513C9.98621 5.03647 10.2493 6.51274 9.76398 7.76593L16.2341 14.236C17.4873 13.7507 18.9635 14.0138 19.9749 15.0251C20.9858 16.0361 21.2491 17.5116 20.7645 18.7645L19.3425 17.3425L17.3425 17.3425V19.3425L18.7645 20.7645C17.5116 21.2491 16.0361 20.9858 15.0251 19.9749C14.0145 18.9643 13.7511 17.4895 14.2349 16.2369L7.76312 9.76507C6.51053 10.2489 5.03571 9.98546 4.02513 8.97487Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.9"></path><path d="M12.203 14.5L6.59897 20.1041C6.07115 20.6319 5.2154 20.6319 4.68758 20.1041L3.89586 19.3124C3.36805 18.7846 3.36805 17.9288 3.89586 17.401L9.49994 11.7969" stroke="currentColor" stroke-linejoin="round" stroke-width="1.9"></path>"#;
@@ -361,14 +357,13 @@ fn format_tokens_compact(tokens: u32) -> String {
 }
 
 fn render_tool_tile(app: &str, side: f32, cx: &App) -> AnyElement {
-    static SPECIAL: [OnceLock<StdArc<Image>>; 2] = [const { OnceLock::new() }; 2];
     let lower = app.trim().to_ascii_lowercase();
     let special = match lower.as_str() {
-        "web" | "chrome" | "browser" => Some((0, CHROME_MARK_SVG)),
-        "files" | "finder" | "folder" => Some((1, MACOS_FOLDER_SVG)),
+        "web" | "chrome" | "browser" => Some(CHROME_MARK_SVG),
+        "files" | "finder" | "folder" => Some(MACOS_FOLDER_SVG),
         _ => None,
     };
-    if let Some((slot, svg_doc)) = special {
+    if let Some(svg_doc) = special {
         let p = ProPalette::get(cx);
         let radius = (side * 0.27).clamp(5., 8.);
         let mark_side = (side * 0.56).round();
@@ -377,14 +372,6 @@ fn render_tool_tile(app: &str, side: f32, cx: &App) -> AnyElement {
         } else {
             rgb(0xffffff).into()
         };
-        let image = SPECIAL[slot]
-            .get_or_init(|| {
-                StdArc::new(Image::from_bytes(
-                    ImageFormat::Svg,
-                    svg_doc.as_bytes().to_vec(),
-                ))
-            })
-            .clone();
         return div()
             .size(px(side))
             .flex_none()
@@ -395,7 +382,7 @@ fn render_tool_tile(app: &str, side: f32, cx: &App) -> AnyElement {
             .flex()
             .items_center()
             .justify_center()
-            .child(img(image).size(px(mark_side)).flex_none())
+            .child(pro_raw_svg(svg_doc, mark_side, mark_side))
             .into_any_element();
     }
     pro_app_tile(app, side, cx)

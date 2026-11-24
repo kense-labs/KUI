@@ -702,7 +702,7 @@ impl Render for ModelPicker {
                 .items_center()
                 .justify_between()
                 .gap(px(8.))
-                .text_size(px(10.))
+                .text_size(px(10.5))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(p.muted)
                 .child(tr(cx, "MODEL", "模型"))

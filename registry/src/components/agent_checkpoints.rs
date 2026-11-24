@@ -1446,7 +1446,7 @@ impl Render for AgentCheckpoints {
                             .px(px(6.))
                             .rounded(px(5.))
                             .bg(p.chip)
-                            .font_family("Menlo")
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .text_size(px(11.))
                             .text_color(p.text)
                             .flex()
@@ -1474,7 +1474,7 @@ impl Render for AgentCheckpoints {
                             .text_color(p.muted)
                             .child(
                                 div()
-                                    .font_family("Menlo")
+                                    .font_family(crate::components::pro_chrome::pro_mono_name())
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.ink)
                                     .child(format!("#{}", cp.id)),
