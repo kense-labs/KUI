@@ -339,6 +339,18 @@
     "en": "Surfaces",
     "zh": "光效背景"
   },
+  "sidebar.group.illustrations": {
+    "en": "Illustrations",
+    "zh": "动态插画"
+  },
+  "sidebar.group.blocks": {
+    "en": "Blocks",
+    "zh": "业务区块"
+  },
+  "sidebar.group.agent-systems": {
+    "en": "Agent systems",
+    "zh": "智能体组件"
+  },
   "sidebar.group.pro-shells": {
     "en": "App shells",
     "zh": "应用壳层"
@@ -350,6 +362,10 @@
   "sidebar.group.pro-chat": {
     "en": "AI chat",
     "zh": "AI 对话"
+  },
+  "sidebar.group.pro-search": {
+    "en": "AI search",
+    "zh": "AI 搜索"
   },
   "sidebar.group.pro-onboarding": {
     "en": "Onboarding",

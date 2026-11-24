@@ -43,6 +43,7 @@ mod web {
             if let Some(preview) = preview {
                 preview.app.update(|cx| {
                     Theme::global_mut(cx).set_accent(palette);
+                    cx.refresh_windows();
                 });
                 preview.app.update(|cx| {
                     let _ = preview.window.update(cx, |_, w, cx| w.bounds_changed(cx));
@@ -104,6 +105,7 @@ mod web {
         let theme = Theme::global_mut(cx);
         theme.set_mode(mode);
         theme.reduced_motion = reduced;
+        cx.refresh_windows();
         true
     }
     #[wasm_bindgen]

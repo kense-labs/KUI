@@ -1,0 +1,1081 @@
+//! Three-stop agent autonomy selector with gliding action groups and padlock overrides.
+//!
+//! Lets people configure how much an agent may do without asking (`Always ask`, `If risky`,
+//! `Full auto`) while real workspace actions smoothly glide between `"Runs on its own"` and
+//! `"Asks you first"`, with per-action padlocks and non-negotiable red-line locks.
+
+use crate::{
+    components::pro_chrome::{
+        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_toast_banner, tr,
+    },
+    foundation::Theme,
+    primitives::{
+        control::UiLanguage,
+        family::{PhaseClock, disabled_motion},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+    },
+};
+use gpui::{prelude::*, *};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
+use web_time::Instant;
+
+const SPARK_HEADER_SVG: &str = r#"<path d="M7 1.2c.4 2.9 1.9 4.4 4.8 4.8-2.9.4-4.4 1.9-4.8 4.8C6.6 7.9 5.1 6.4 2.2 6 5.1 5.6 6.6 4.1 7 1.2Z" fill="currentColor"></path><circle cx="11.6" cy="11.4" r="1.1" fill="currentColor" opacity="0.55"></circle>"#;
+const WARN_TRIANGLE_SVG: &str = r#"<path d="M13.92 21H10.08C5.44 21 3.13 21 2.28 19.49C1.42 17.99 2.61 15.99 4.98 12L6.9 8.75C9.18 4.92 10.31 3 12 3C13.69 3 14.82 4.92 17.1 8.75L19.02 12C21.39 15.99 22.58 17.99 21.72 19.49C20.87 21 18.56 21 13.92 21Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 9V13" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="16.7" r="1" fill="currentColor"></circle>"#;
+const DANGER_DIAMOND_SVG: &str = r#"<path d="M5.92 5.92C8.16 3.68 9.28 2.56 10.59 2.2C11.51 1.93 12.49 1.93 13.41 2.2C14.72 2.56 15.84 3.68 18.08 5.92C20.32 8.16 21.44 9.28 21.8 10.59C22.07 11.51 22.07 12.49 21.8 13.41C21.44 14.72 20.32 15.84 18.08 18.08C15.84 20.32 14.72 21.44 13.41 21.8C12.49 22.07 11.51 22.07 10.59 21.8C9.28 21.44 8.16 20.32 5.92 18.08C3.68 15.84 2.56 14.72 2.2 13.41C1.93 12.49 1.93 11.51 2.2 10.59C2.56 9.28 3.68 8.16 5.92 5.92Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 8V12.2" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="15.8" r="1" fill="currentColor"></circle>"#;
+const LOCK_CLOSED_SVG: &str = r#"<path d="M12 14.5V17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><circle cx="12" cy="14.3" r="1" fill="currentColor"></circle><path d="M16.5 9V6.5C16.5 4.01 14.49 2 12 2C9.51 2 7.5 4.01 7.5 6.5V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><rect x="4" y="9" width="16" height="13" rx="4.2" stroke="currentColor" stroke-width="1.6"></rect>"#;
+const LOCK_OPEN_SVG: &str = r#"<path d="M12 14.5V17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><circle cx="12" cy="14.3" r="1" fill="currentColor"></circle><path d="M7.5 9V6.5C7.5 4.01 9.51 2 12 2C13.96 2 15.65 3.18 16.3 4.85" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><rect x="4" y="9" width="16" height="13" rx="4.2" stroke="currentColor" stroke-width="1.6"></rect>"#;
+
+/// Three-stop autonomy tier for [`AutonomyDial`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AutonomyLevel {
+    /// Every action asks the user before running (`0`).
+    AlwaysAsk,
+    /// Safe actions run automatically; risky and destructive actions ask first (`1`).
+    #[default]
+    IfRisky,
+    /// Every action runs automatically unless locked (`2`).
+    FullAuto,
+}
+
+impl AutonomyLevel {
+    const ALL: [Self; 3] = [Self::AlwaysAsk, Self::IfRisky, Self::FullAuto];
+
+    fn key(self) -> &'static str {
+        match self {
+            Self::AlwaysAsk => "always-ask",
+            Self::IfRisky => "if-risky",
+            Self::FullAuto => "full-auto",
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Self::AlwaysAsk => 0,
+            Self::IfRisky => 1,
+            Self::FullAuto => 2,
+        }
+    }
+
+    fn label(self, cx: &App) -> &'static str {
+        match self {
+            Self::AlwaysAsk => tr(cx, "Always ask", "每次询问"),
+            Self::IfRisky => tr(cx, "If risky", "有风险时询问"),
+            Self::FullAuto => tr(cx, "Full auto", "全自动"),
+        }
+    }
+}
+
+/// Risk classification of an [`AutonomyAction`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AutonomyActionRisk {
+    /// Read-only or draft action that stays quiet without a warning pill.
+    #[default]
+    Safe,
+    /// External write or outbound communication (`Risky` amber pill).
+    Risky,
+    /// Irreversible deletion, production mutation, or spend (`Destructive` red pill).
+    Destructive,
+}
+
+/// Workspace action governed by [`AutonomyDial`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AutonomyAction {
+    /// Stable action identifier (for example `"spend"`).
+    pub id: SharedString,
+    /// Human-readable action title (for example `"Spend money"`).
+    pub label: SharedString,
+    /// Optional detail subtitle (for example `"Up to $500"`).
+    pub detail: Option<SharedString>,
+    /// Inherent risk tier (`Safe`, `Risky`, `Destructive`).
+    pub risk: AutonomyActionRisk,
+    /// App or provider mark key (such as `"notion"`, `"gmail"`, `"hubspot"`, `"drive"`, `"stripe"`).
+    pub app: Option<SharedString>,
+    /// Fallback icon when `app` is `None`.
+    pub icon: ProIcon,
+    /// Non-negotiable policy red-line that always asks first and cannot be unlocked.
+    pub red_line: bool,
+}
+
+impl AutonomyAction {
+    /// Construct an [`AutonomyAction`] with `id`, `label`, and `risk`.
+    pub fn new(
+        id: impl Into<SharedString>,
+        label: impl Into<SharedString>,
+        risk: AutonomyActionRisk,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            detail: None,
+            risk,
+            app: None,
+            icon: ProIcon::Bolt,
+            red_line: false,
+        }
+    }
+
+    /// Attach a secondary detail string.
+    pub fn with_detail(mut self, detail: impl Into<SharedString>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    /// Attach a multicolor app brand mark (`"notion"`, `"gmail"`, `"hubspot"`, `"drive"`, `"stripe"`, `"slack"`).
+    pub fn with_app(mut self, app: impl Into<SharedString>) -> Self {
+        self.app = Some(app.into());
+        self
+    }
+
+    /// Set a fallback [`ProIcon`] when no app brand mark is configured.
+    pub fn with_icon(mut self, icon: ProIcon) -> Self {
+        self.icon = icon;
+        self
+    }
+
+    /// Mark this action as a non-negotiable red-line policy that always asks first.
+    pub fn with_red_line(mut self, red_line: bool) -> Self {
+        self.red_line = red_line;
+        self
+    }
+}
+
+/// Evaluate whether `action` must ask the user first under `level` and `pinned` locks.
+///
+/// Mirrors the runtime rule so UI settings and agent execution stay in lockstep:
+/// - `action.red_line` or `pinned.contains(&action.id)` -> always asks first.
+/// - [`AutonomyLevel::AlwaysAsk`] -> asks for every action.
+/// - [`AutonomyLevel::IfRisky`] -> runs [`AutonomyActionRisk::Safe`] actions on its own; asks for risky/destructive.
+/// - [`AutonomyLevel::FullAuto`] -> runs everything that is not pinned or red-lined.
+pub fn asks_first(
+    action: &AutonomyAction,
+    level: AutonomyLevel,
+    pinned: &HashSet<SharedString>,
+) -> bool {
+    if action.red_line || pinned.contains(&action.id) {
+        return true;
+    }
+    match level {
+        AutonomyLevel::AlwaysAsk => true,
+        AutonomyLevel::IfRisky => action.risk != AutonomyActionRisk::Safe,
+        AutonomyLevel::FullAuto => false,
+    }
+}
+
+/// Events emitted by [`AutonomyDial`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AutonomyDialEvent {
+    /// User switched the three-stop autonomy level.
+    LevelChanged(AutonomyLevel),
+    /// User locked or unlocked an individual action (`pinned` is the updated lock set).
+    PinnedChanged {
+        /// Action identifier that was toggled.
+        action_id: SharedString,
+        /// Whether the action is now locked to `"Asks you first"`.
+        locked: bool,
+        /// Sorted list of all currently pinned action ids.
+        pinned: Vec<SharedString>,
+    },
+}
+
+impl EventEmitter<AutonomyDialEvent> for AutonomyDial {}
+
+fn default_actions() -> Vec<AutonomyAction> {
+    vec![
+        AutonomyAction::new("read", "Read files and docs", AutonomyActionRisk::Safe)
+            .with_app("notion"),
+        AutonomyAction::new("draft", "Draft emails", AutonomyActionRisk::Safe).with_app("gmail"),
+        AutonomyAction::new("crm", "Update CRM records", AutonomyActionRisk::Risky)
+            .with_app("hubspot"),
+        AutonomyAction::new("send", "Send emails", AutonomyActionRisk::Risky).with_app("gmail"),
+        AutonomyAction::new("delete", "Delete files", AutonomyActionRisk::Destructive)
+            .with_app("google drive"),
+        AutonomyAction::new("spend", "Spend money", AutonomyActionRisk::Destructive)
+            .with_app("stripe")
+            .with_red_line(false),
+    ]
+}
+
+/// Three-stop agent autonomy dial with gliding action lists and per-action padlock overrides.
+pub struct AutonomyDial {
+    id: ElementId,
+    focus: FocusHandle,
+    title: SharedString,
+    subtitle: SharedString,
+    level: AutonomyLevel,
+    actions: Vec<AutonomyAction>,
+    pinned: HashSet<SharedString>,
+    hovered_row: Option<SharedString>,
+    row_moves: HashMap<SharedString, (f32, PhaseClock)>,
+    measured_width: Rc<Cell<f32>>,
+    toast: Option<(SharedString, Instant)>,
+    loading: bool,
+    empty: bool,
+}
+
+impl AutonomyDial {
+    /// Create an [`AutonomyDial`] preloaded with the Sales agent permission suite (`Spend money` locked).
+    pub fn new(id: impl Into<ElementId>, cx: &mut Context<Self>) -> Self {
+        cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
+        cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
+            .detach();
+        let mut pinned = HashSet::new();
+        pinned.insert("spend".into());
+        Self {
+            id: id.into(),
+            focus: cx.focus_handle(),
+            title: "Sales agent".into(),
+            subtitle: "What it may do without asking you".into(),
+            level: AutonomyLevel::FullAuto,
+            actions: default_actions(),
+            pinned,
+            hovered_row: None,
+            row_moves: HashMap::new(),
+            measured_width: Rc::new(Cell::new(400.0)),
+            toast: None,
+            loading: false,
+            empty: false,
+        }
+    }
+
+    /// Set the card heading (for example `"Sales agent"`).
+    pub fn with_title(mut self, title: impl Into<SharedString>) -> Self {
+        self.title = title.into();
+        self
+    }
+
+    /// Set the descriptive subtitle under the heading.
+    pub fn with_subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
+        self.subtitle = subtitle.into();
+        self
+    }
+
+    /// Set the starting [`AutonomyLevel`].
+    pub fn with_level(mut self, level: AutonomyLevel) -> Self {
+        self.level = level;
+        self
+    }
+
+    /// Replace the governed [`AutonomyAction`] list.
+    pub fn with_actions(mut self, actions: Vec<AutonomyAction>) -> Self {
+        self.actions = actions;
+        self
+    }
+
+    /// Set the starting set of pinned action ids that always ask first.
+    pub fn with_pinned<I, S>(mut self, pinned: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<SharedString>,
+    {
+        self.pinned = pinned.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Toggle skeleton loading state.
+    pub fn with_loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
+    /// Toggle empty state.
+    pub fn with_empty(mut self, empty: bool) -> Self {
+        self.empty = empty;
+        self
+    }
+
+    /// Current [`AutonomyLevel`].
+    pub fn level(&self) -> AutonomyLevel {
+        self.level
+    }
+
+    /// Whether `action_id` is currently pinned with a padlock.
+    pub fn is_pinned(&self, action_id: &str) -> bool {
+        self.pinned.contains(action_id)
+    }
+
+    /// Count of `(runs_on_its_own, asks_you_first)` under the current level and locks.
+    pub fn partition_counts(&self) -> (usize, usize) {
+        let mut auto_n = 0usize;
+        let mut ask_n = 0usize;
+        for act in &self.actions {
+            if asks_first(act, self.level, &self.pinned) {
+                ask_n += 1;
+            } else {
+                auto_n += 1;
+            }
+        }
+        (auto_n, ask_n)
+    }
+
+    /// Set the active [`AutonomyLevel`] and animate any actions crossing between groups.
+    pub fn set_level(&mut self, next: AutonomyLevel, cx: &mut Context<Self>) {
+        if self.level == next {
+            return;
+        }
+        let prev = self.level;
+        self.level = next;
+        for act in &self.actions {
+            let was_ask = asks_first(act, prev, &self.pinned);
+            let now_ask = asks_first(act, next, &self.pinned);
+            if was_ask != now_ask {
+                let mut clock = PhaseClock::default();
+                clock.restart(cx);
+                let dir = if now_ask { -12.0 } else { 12.0 };
+                self.row_moves.insert(act.id.clone(), (dir, clock));
+            }
+        }
+        cx.emit(AutonomyDialEvent::LevelChanged(next));
+        cx.notify();
+    }
+
+    /// Toggle the padlock override on `action_id` (unless marked `red_line`).
+    pub fn toggle_pin(&mut self, action_id: &str, cx: &mut Context<Self>) {
+        let Some(act) = self.actions.iter().find(|a| a.id.as_ref() == action_id) else {
+            return;
+        };
+        if act.red_line {
+            let msg: SharedString = tr(
+                cx,
+                "Red-line policy: this action always asks first",
+                "红线安全策略：此操作必须始终询问确认",
+            )
+            .into();
+            self.toast = Some((msg, Instant::now()));
+            cx.notify();
+            return;
+        }
+        let was_ask = asks_first(act, self.level, &self.pinned);
+        let id_ss = act.id.clone();
+        let locked = if self.pinned.contains(&id_ss) {
+            self.pinned.remove(&id_ss);
+            false
+        } else {
+            self.pinned.insert(id_ss.clone());
+            true
+        };
+        let act_ref = self.actions.iter().find(|a| a.id == id_ss);
+        if let Some(a) = act_ref {
+            let now_ask = asks_first(a, self.level, &self.pinned);
+            if was_ask != now_ask {
+                let mut clock = PhaseClock::default();
+                clock.restart(cx);
+                let dir = if now_ask { -12.0 } else { 12.0 };
+                self.row_moves.insert(id_ss.clone(), (dir, clock));
+            }
+        }
+        let mut sorted: Vec<SharedString> = self.pinned.iter().cloned().collect();
+        sorted.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        cx.emit(AutonomyDialEvent::PinnedChanged {
+            action_id: id_ss,
+            locked,
+            pinned: sorted,
+        });
+        cx.notify();
+    }
+
+    fn render_action_row(
+        &self,
+        act: &AutonomyAction,
+        in_ask_group: bool,
+        narrow: bool,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let p = ProPalette::get(cx);
+        let is_locked = act.red_line || self.pinned.contains(&act.id);
+        let is_hovered = self.hovered_row.as_ref() == Some(&act.id);
+
+        let dy_offset = if disabled_motion(cx) {
+            0.0
+        } else if let Some((dir, clock)) = self.row_moves.get(&act.id) {
+            let age = clock.time(0.26, w, cx);
+            let t = pro_ease((age / 0.26).clamp(0.0, 1.0));
+            *dir * (1.0 - t)
+        } else {
+            0.0
+        };
+
+        let icon_el = if let Some(app_name) = &act.app
+            && let Some(mark) = pro_app_artwork(app_name.as_ref(), 16.5, cx)
+        {
+            div()
+                .size(px(17.0))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(mark)
+                .into_any_element()
+        } else {
+            div()
+                .size(px(17.0))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_icon(act.icon, 15.0, p.muted))
+                .into_any_element()
+        };
+
+        let label_localized: SharedString = match act.label.as_ref() {
+            "Read files and docs" => tr(cx, "Read files and docs", "读取文档与知识库").into(),
+            "Draft emails" => tr(cx, "Draft emails", "起草邮件草稿").into(),
+            "Update CRM records" => tr(cx, "Update CRM records", "更新 CRM 客户记录").into(),
+            "Send emails" => tr(cx, "Send emails", "对外发送邮件").into(),
+            "Delete files" => tr(cx, "Delete files", "删除云端文件").into(),
+            "Spend money" => tr(cx, "Spend money", "执行资金扣款").into(),
+            _ => act.label.clone(),
+        };
+
+        let risk_pill = match act.risk {
+            AutonomyActionRisk::Safe => None,
+            AutonomyActionRisk::Risky => {
+                let (bg, fg): (Hsla, Hsla) = if p.dark {
+                    (hsla(26.0 / 360.0, 0.96, 0.49, 0.16), rgb(0xffb35c).into())
+                } else {
+                    (hsla(37.0 / 360.0, 1.0, 0.50, 0.16), rgb(0xb25e00).into())
+                };
+                Some(
+                    div()
+                        .h(px(18.0))
+                        .pl(px(4.5))
+                        .pr(px(6.0))
+                        .flex_none()
+                        .rounded(px(4.0))
+                        .bg(bg)
+                        .text_color(fg)
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .flex()
+                        .items_center()
+                        .gap(px(3.0))
+                        .child(pro_svg("0 0 24 24", WARN_TRIANGLE_SVG, 12.0, fg))
+                        .child(tr(cx, "Risky", "有风险")),
+                )
+            }
+            AutonomyActionRisk::Destructive => {
+                let (bg, fg): (Hsla, Hsla) = if p.dark {
+                    (hsla(5.0 / 360.0, 1.0, 0.57, 0.17), rgb(0xff8a7a).into())
+                } else {
+                    (hsla(10.0 / 360.0, 0.96, 0.48, 0.10), rgb(0xc4320a).into())
+                };
+                Some(
+                    div()
+                        .h(px(18.0))
+                        .pl(px(4.5))
+                        .pr(px(6.0))
+                        .flex_none()
+                        .rounded(px(4.0))
+                        .bg(bg)
+                        .text_color(fg)
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .flex()
+                        .items_center()
+                        .gap(px(3.0))
+                        .child(pro_svg("0 0 24 24", DANGER_DIAMOND_SVG, 12.0, fg))
+                        .child(tr(cx, "Destructive", "破坏性")),
+                )
+            }
+        };
+
+        let show_pin = is_locked || is_hovered;
+        let pin_color = if act.red_line {
+            p.red_ink
+        } else if is_locked {
+            p.muted
+        } else {
+            p.faint
+        };
+        let pin_aria: SharedString = if is_locked {
+            format!(
+                "{}: {}",
+                act.label,
+                tr(cx, "always asks — unlock", "始终询问 — 点击解锁")
+            )
+            .into()
+        } else {
+            format!(
+                "{}: {}",
+                tr(cx, "Always ask before", "设为始终询问"),
+                act.label
+            )
+            .into()
+        };
+
+        let act_id_hover = act.id.clone();
+        let act_id_pin = act.id.clone();
+        let group_tag = if in_ask_group { "ask" } else { "auto" };
+        let wash_bg: Hsla = if p.dark {
+            hsla(0.0, 0.0, 1.0, 0.04)
+        } else {
+            hsla(0.0, 0.0, 0.0, 0.03)
+        };
+
+        div()
+            .id(pro_eid(&self.id, format!("row-{group_tag}-{}", act.id)))
+            .relative()
+            .top(px(dy_offset))
+            .w_full()
+            .min_h(px(32.0))
+            .pl(px(6.0))
+            .pr(px(4.0))
+            .rounded(px(6.0))
+            .bg(if is_hovered {
+                wash_bg
+            } else {
+                transparent_black()
+            })
+            .flex()
+            .items_center()
+            .gap(px(11.0))
+            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                if *inside {
+                    this.hovered_row = Some(act_id_hover.clone());
+                } else if this.hovered_row.as_ref() == Some(&act_id_hover) {
+                    this.hovered_row = None;
+                }
+                cx.notify();
+            }))
+            .child(icon_el)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(7.0))
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_size(px(13.0))
+                                    .text_color(p.ink)
+                                    .truncate()
+                                    .child(label_localized),
+                            )
+                            .when_some(risk_pill, |d, pill| d.child(pill)),
+                    )
+                    .when(!narrow, |d| {
+                        d.when_some(act.detail.clone(), |d, det| {
+                            d.child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .line_height(px(15.0))
+                                    .text_color(p.muted)
+                                    .truncate()
+                                    .child(det),
+                            )
+                        })
+                    }),
+            )
+            .child(
+                div()
+                    .id(pro_eid(&self.id, format!("pin-{group_tag}-{}", act.id)))
+                    .role(Role::Button)
+                    .aria_label(pin_aria)
+                    .tab_index(0)
+                    .size(px(28.0))
+                    .flex_none()
+                    .rounded(px(6.0))
+                    .opacity(if show_pin { 1.0 } else { 0.0 })
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(move |s| s.opacity(1.0).bg(p.chip))
+                    .focus_visible(move |s| s.opacity(1.0).border_1().border_color(p.focus))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.toggle_pin(act_id_pin.as_ref(), cx);
+                    }))
+                    .child(pro_svg(
+                        "0 0 24 24",
+                        if is_locked {
+                            LOCK_CLOSED_SVG
+                        } else {
+                            LOCK_OPEN_SVG
+                        },
+                        16.0,
+                        pin_color,
+                    )),
+            )
+            .into_any_element()
+    }
+}
+
+impl Render for AutonomyDial {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+
+        if self.loading {
+            let phase = (Instant::now().elapsed().as_secs_f32() * 0.5).fract();
+            return div()
+                .id(self.id.clone())
+                .w_full()
+                .py(px(24.0))
+                .px(px(16.0))
+                .flex()
+                .justify_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(400.0))
+                        .p(px(16.0))
+                        .rounded(px(12.0))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .flex()
+                        .flex_col()
+                        .gap(px(12.0))
+                        .child(pro_skeleton_bar(160.0, 16.0, 5.0, phase, cx))
+                        .child(pro_skeleton_bar(360.0, 28.0, 6.0, phase, cx))
+                        .child(pro_skeleton_bar(360.0, 160.0, 8.0, phase, cx)),
+                )
+                .into_any_element();
+        }
+
+        if self.empty || self.actions.is_empty() {
+            return div()
+                .id(self.id.clone())
+                .w_full()
+                .child(pro_empty_state(
+                    ProIcon::Sliders,
+                    tr(cx, "No agent actions configured", "暂未配置智能体动作"),
+                    tr(
+                        cx,
+                        "Provide actions to preview which operations run automatically at each autonomy level.",
+                        "传入智能体可执行动作列表，以实时预览不同自主等级下的审批边界。",
+                    ),
+                    None,
+                    cx,
+                ))
+                .into_any_element();
+        }
+
+        let cw = self.measured_width.get();
+        let narrow = cw < 340.0;
+
+        let card_bg: Hsla = if p.dark {
+            rgb(0x1c1c1f).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let seg_unselected_bg: Hsla = if p.dark {
+            hsla(0.0, 0.0, 1.0, 0.08)
+        } else {
+            hsla(0.0, 0.0, 0.0, 0.055)
+        };
+        let seg_hover_bg: Hsla = if p.dark {
+            hsla(0.0, 0.0, 1.0, 0.11)
+        } else {
+            hsla(0.0, 0.0, 0.0, 0.08)
+        };
+
+        let title_str: SharedString = if self.title.as_ref() == "Sales agent" {
+            tr(cx, "Sales agent", "销售智能体").into()
+        } else {
+            self.title.clone()
+        };
+        let sub_str: SharedString = if self.subtitle.as_ref() == "What it may do without asking you"
+        {
+            tr(
+                cx,
+                "What it may do without asking you",
+                "无需提前询问即可自主执行的操作范围",
+            )
+            .into()
+        } else {
+            self.subtitle.clone()
+        };
+
+        // Three-stop segmented selector with gliding raised pill (`pro_pill_indicator`)
+        let sensor = pro_selection_sensor();
+        let cur_level = self.level;
+        let mut seg_strip = div()
+            .relative()
+            .w_full()
+            .flex()
+            .items_center()
+            .gap(px(if narrow { 4.0 } else { 8.0 }))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "dial-pill"),
+                cur_level.key(),
+                sensor.clone(),
+                6.0,
+                card_bg,
+                Some(p.line_strong),
+                true,
+            ));
+
+        for lv in AutonomyLevel::ALL {
+            let selected = lv == cur_level;
+            let lbl = lv.label(cx);
+            seg_strip = seg_strip.child(
+                div()
+                    .id(pro_eid(&self.id, format!("lvl-{}", lv.key())))
+                    .role(Role::RadioButton)
+                    .aria_label(lbl)
+                    .aria_toggled(selected.into())
+                    .tab_index(if selected { 0 } else { -1 })
+                    .relative()
+                    .flex_1()
+                    .h(px(27.0))
+                    .px(px(if narrow { 6.0 } else { 8.0 }))
+                    .rounded(px(6.0))
+                    .bg(if selected {
+                        transparent_black()
+                    } else {
+                        seg_unselected_bg
+                    })
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if selected { p.strong } else { p.text })
+                    .cursor_pointer()
+                    .hover(move |s| {
+                        if selected {
+                            s
+                        } else {
+                            s.bg(seg_hover_bg).text_color(p.ink)
+                        }
+                    })
+                    .focus_visible(move |s| s.border_1().border_color(p.focus))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.set_level(lv, cx);
+                    }))
+                    .when(selected, |d| d.child(pro_mark_selected(&sensor)))
+                    .child(div().relative().child(lbl)),
+            );
+        }
+
+        let (auto_count, ask_count) = self.partition_counts();
+        let actions_snapshot = self.actions.clone();
+
+        // Build `"Runs on its own"` list with smooth per-action `pro_fold` so rows glide across groups
+        let mut auto_list = div().w_full().flex().flex_col();
+        for act in &actions_snapshot {
+            let in_auto = !asks_first(act, self.level, &self.pinned);
+            let row_el = self.render_action_row(act, false, narrow, w, cx);
+            auto_list = auto_list.child(pro_fold(
+                pro_eid(&self.id, format!("auto-f-{}", act.id)),
+                in_auto,
+                32.0,
+                0.0,
+                move || row_el,
+            ));
+        }
+        let empty_auto_txt: SharedString = tr(
+            cx,
+            "Nothing runs without asking",
+            "所有操作均需先征得你同意",
+        )
+        .into();
+        auto_list = auto_list.child(pro_fold(
+            pro_eid(&self.id, "auto-empty"),
+            auto_count == 0,
+            32.0,
+            0.0,
+            move || {
+                div()
+                    .w_full()
+                    .min_h(px(30.0))
+                    .my(px(2.0))
+                    .px(px(10.0))
+                    .rounded(px(6.0))
+                    .bg(p.chip)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(p.muted)
+                    .child(empty_auto_txt)
+                    .into_any_element()
+            },
+        ));
+
+        // Build `"Asks you first"` list with smooth per-action `pro_fold`
+        let mut ask_list = div().w_full().flex().flex_col();
+        for act in &actions_snapshot {
+            let in_ask = asks_first(act, self.level, &self.pinned);
+            let row_el = self.render_action_row(act, true, narrow, w, cx);
+            ask_list = ask_list.child(pro_fold(
+                pro_eid(&self.id, format!("ask-f-{}", act.id)),
+                in_ask,
+                32.0,
+                0.0,
+                move || row_el,
+            ));
+        }
+        let empty_ask_txt: SharedString =
+            tr(cx, "Everything runs automatically", "全部动作均自动执行").into();
+        ask_list = ask_list.child(pro_fold(
+            pro_eid(&self.id, "ask-empty"),
+            ask_count == 0,
+            32.0,
+            0.0,
+            move || {
+                div()
+                    .w_full()
+                    .min_h(px(30.0))
+                    .my(px(2.0))
+                    .px(px(10.0))
+                    .rounded(px(6.0))
+                    .bg(p.chip)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(p.muted)
+                    .child(empty_ask_txt)
+                    .into_any_element()
+            },
+        ));
+
+        let count_pill = |id_suffix: &'static str, n: usize| {
+            div()
+                .min_w(px(17.0))
+                .h(px(17.0))
+                .px(px(4.5))
+                .rounded(px(4.0))
+                .bg(card_bg)
+                .border_1()
+                .border_color(p.line_strong)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_rolling_number(
+                    pro_eid(&self.id, id_suffix),
+                    n as f64,
+                    0,
+                    "",
+                    "",
+                    10.5,
+                    FontWeight::MEDIUM,
+                    p.text,
+                ))
+        };
+
+        let card = div()
+            .w_full()
+            .max_w(px(408.0))
+            .rounded(px(12.0))
+            .bg(card_bg)
+            .border_1()
+            .border_color(p.line)
+            .when(!p.dark, |d| d.shadow_xs())
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(16.0))
+                    .pt(px(16.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .child(pro_svg("0 0 14 14", SPARK_HEADER_SVG, 15.0, p.blue))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.0))
+                            .child(
+                                div()
+                                    .text_size(px(13.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .line_height(px(19.0))
+                                    .text_color(p.strong)
+                                    .truncate()
+                                    .child(title_str),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .line_height(px(16.0))
+                                    .text_color(p.muted)
+                                    .truncate()
+                                    .child(sub_str),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .px(px(16.0))
+                    .pt(px(15.0))
+                    .pb(px(17.0))
+                    .child(seg_strip),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .px(px(10.0))
+                    .pt(px(14.0))
+                    .pb(px(12.0))
+                    .border_t_1()
+                    .border_color(p.line)
+                    .flex()
+                    .flex_col()
+                    .gap(px(14.0))
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .px(px(6.0))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0))
+                                    .child(div().text_size(px(12.0)).text_color(p.muted).child(tr(
+                                        cx,
+                                        "Runs on its own",
+                                        "自主运行",
+                                    )))
+                                    .child(count_pill("cnt-auto", auto_count)),
+                            )
+                            .child(auto_list),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .px(px(6.0))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0))
+                                    .child(div().text_size(px(12.0)).text_color(p.muted).child(tr(
+                                        cx,
+                                        "Asks you first",
+                                        "先询问你",
+                                    )))
+                                    .child(count_pill("cnt-ask", ask_count)),
+                            )
+                            .child(ask_list),
+                    ),
+            );
+
+        let width_sensor = self.measured_width.clone();
+        let a11y_label = tr(
+            cx,
+            "Agent autonomy level and action locks",
+            "智能体自主等级与动作锁定设置",
+        );
+        let focus_ring = p.focus;
+
+        div()
+            .id(self.id.clone())
+            .role(Role::Group)
+            .aria_label(a11y_label)
+            .track_focus(&self.focus)
+            .tab_index(0)
+            .relative()
+            .w_full()
+            .py(px(24.0))
+            .px(px(16.0))
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |s| s.rounded(px(14.0)).border_color(focus_ring))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                let idx = this.level.index();
+                match ev.keystroke.key.as_str() {
+                    "left" | "up" => {
+                        let next = AutonomyLevel::ALL[idx.saturating_sub(1)];
+                        this.set_level(next, cx);
+                        cx.stop_propagation();
+                    }
+                    "right" | "down" => {
+                        let next = AutonomyLevel::ALL[(idx + 1).min(2)];
+                        this.set_level(next, cx);
+                        cx.stop_propagation();
+                    }
+                    _ => {}
+                }
+            }))
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(408.0))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(b) = bounds.first() {
+                            let w_px = f32::from(b.size.width);
+                            if w_px > 20.0 {
+                                width_sensor.set(w_px);
+                            }
+                        }
+                    })
+                    .child(card),
+            )
+            .child(pro_toast_banner(self.toast.clone()))
+            .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AutonomyAction, AutonomyActionRisk, AutonomyDial, AutonomyLevel, asks_first};
+    use gpui::{AppContext, TestAppContext};
+    use std::collections::HashSet;
+
+    #[test]
+    fn asks_first_obeys_levels_pins_and_red_lines() {
+        let safe = AutonomyAction::new("read", "Read docs", AutonomyActionRisk::Safe);
+        let risky = AutonomyAction::new("send", "Send email", AutonomyActionRisk::Risky);
+        let red_line = AutonomyAction::new("drop", "Drop table", AutonomyActionRisk::Destructive)
+            .with_red_line(true);
+        let empty = HashSet::new();
+
+        assert!(asks_first(&safe, AutonomyLevel::AlwaysAsk, &empty));
+        assert!(!asks_first(&safe, AutonomyLevel::IfRisky, &empty));
+        assert!(asks_first(&risky, AutonomyLevel::IfRisky, &empty));
+        assert!(!asks_first(&risky, AutonomyLevel::FullAuto, &empty));
+        assert!(asks_first(&red_line, AutonomyLevel::FullAuto, &empty));
+    }
+
+    #[gpui::test]
+    fn autonomy_dial_partitions_and_toggles_locks(cx: &mut TestAppContext) {
+        let dial = cx.new(|cx| AutonomyDial::new("test-autonomy-dial", cx));
+
+        dial.update(cx, |d, cx| {
+            // Default is FullAuto with "spend" pinned -> (5 auto, 1 ask)
+            assert_eq!(d.level(), AutonomyLevel::FullAuto);
+            assert_eq!(d.partition_counts(), (5, 1));
+
+            d.set_level(AutonomyLevel::IfRisky, cx);
+            assert_eq!(d.partition_counts(), (2, 4));
+
+            d.set_level(AutonomyLevel::AlwaysAsk, cx);
+            assert_eq!(d.partition_counts(), (0, 6));
+
+            d.set_level(AutonomyLevel::FullAuto, cx);
+            d.toggle_pin("spend", cx);
+            assert!(!d.is_pinned("spend"));
+            assert_eq!(d.partition_counts(), (6, 0));
+        });
+    }
+}

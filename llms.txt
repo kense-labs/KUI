@@ -302,6 +302,121 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [step-console](./md/step-console.md): StepConsole
 - [log-stream](./md/log-stream.md): LogStream
 - [packet-dissector](./md/packet-dissector.md): PacketDissector
+- [brand-regions](./md/brand-regions.md): BrandRegionsScreen
+- [prompt-explorer](./md/prompt-explorer.md): PromptExplorerScreen
+- [blur-crossfade](./md/blur-crossfade.md): BlurCrossfade
+- [gradient-text](./md/gradient-text.md): GradientText
+- [tilt-card](./md/tilt-card.md): TiltCard
+- [glass-folder](./md/glass-folder.md): GlassFolder
+- [glow-keyboard](./md/glow-keyboard.md): GlowKeyboard
+- [inspect-agent-card](./md/inspect-agent-card.md): InspectAgentCard
+- [inspect-composer](./md/inspect-composer.md): InspectComposer
+- [integration-flow](./md/integration-flow.md): IntegrationFlow
+- [model-menu](./md/model-menu.md): ModelMenu
+- [outreach-branches](./md/outreach-branches.md): OutreachBranches
+- [progress-pill](./md/progress-pill.md): ProgressPill
+- [project-flow](./md/project-flow.md): ProjectFlow
+- [voice-capture](./md/voice-capture.md): VoiceCapture
+- [world-map](./md/world-map.md): WorldMap
+- [agent-gallery](./md/agent-gallery.md): AgentGalleryBlock
+- [app-directory](./md/app-directory.md): AppDirectoryBlock
+- [client-context](./md/client-context.md): ClientContextBlock
+- [invoice-credit](./md/invoice-credit.md): InvoiceCreditBlock
+- [kpi-board](./md/kpi-board.md): KpiBoardBlock
+- [live-session](./md/live-session.md): LiveSessionBlock
+- [metrics-dashboard](./md/metrics-dashboard.md): MetricsDashboardBlock
+- [mission-control](./md/mission-control.md): MissionControlBlock
+- [mission-timeline](./md/mission-timeline.md): MissionTimelineBlock
+- [pricing-plans](./md/pricing-plans.md): PricingPlansBlock
+- [revenue-chat](./md/revenue-chat.md): RevenueChatBlock
+- [run-inspector](./md/run-inspector.md): RunInspectorBlock
+- [task-board](./md/task-board.md): TaskBoardBlock
+- [ai-answer](./md/ai-answer.md): AiAnswer
+- [chat-composer](./md/chat-composer.md): ChatComposer
+- [cited-answer](./md/cited-answer.md): CitedAnswer
+- [model-picker](./md/model-picker.md): ModelPicker
+- [thinking-state](./md/thinking-state.md): ThinkingState
+- [writing-assistant](./md/writing-assistant.md): WritingAssistant
+- [command-menu](./md/command-menu.md): CommandMenu
+- [integration-picker](./md/integration-picker.md): IntegrationPicker
+- [billing-schedule](./md/billing-schedule.md): BillingSchedule
+- [integration-settings](./md/integration-settings.md): IntegrationSettings
+- [prompt-library](./md/prompt-library.md): PromptLibrary
+- [stepper-form](./md/stepper-form.md): StepperForm
+- [dropzone](./md/dropzone.md): Dropzone
+- [breakdown-chart](./md/breakdown-chart.md): BreakdownChart
+- [compact-breakdown](./md/compact-breakdown.md): CompactBreakdown
+- [experiment-card](./md/experiment-card.md): ExperimentCard
+- [kpi-chart](./md/kpi-chart.md): KpiChart
+- [metering-chart](./md/metering-chart.md): MeteringChart
+- [model-usage](./md/model-usage.md): ModelUsage
+- [trend-chart](./md/trend-chart.md): TrendChart
+- [data-table](./md/data-table.md): DataTable
+- [project-card](./md/project-card.md): ProjectCard
+- [stat-card](./md/stat-card.md): StatCard
+- [setup-guide](./md/setup-guide.md): SetupGuide
+- [toaster](./md/toaster.md): Toaster
+- [comments-panel](./md/comments-panel.md): CommentsPanel
+- [agent-checkpoints](./md/agent-checkpoints.md): AgentCheckpoints
+- [agent-crew](./md/agent-crew.md): AgentCrew
+- [agent-cursors](./md/agent-cursors.md): AgentCursors
+- [agent-findings](./md/agent-findings.md): AgentFindings
+- [agent-fleet](./md/agent-fleet.md): AgentFleet
+- [agent-graph](./md/agent-graph.md): AgentGraph
+- [agent-inbox](./md/agent-inbox.md): AgentInbox
+- [agent-lanes](./md/agent-lanes.md): AgentLanes
+- [agent-ledger](./md/agent-ledger.md): AgentLedger
+- [agent-metro-map](./md/agent-metro-map.md): AgentMetroMap
+- [agent-monitor](./md/agent-monitor.md): AgentMonitor
+- [agent-overlap-map](./md/agent-overlap-map.md): AgentOverlapMap
+- [agent-queue](./md/agent-queue.md): AgentQueue
+- [agent-recap](./md/agent-recap.md): AgentRecap
+- [agent-router](./md/agent-router.md): AgentRouter
+- [agent-sequence](./md/agent-sequence.md): AgentSequence
+- [agent-state-machine](./md/agent-state-machine.md): AgentStateMachine
+- [agent-steering](./md/agent-steering.md): AgentSteering
+- [agent-timing](./md/agent-timing.md): AgentTiming
+- [agent-trail](./md/agent-trail.md): AgentTrail
+- [agent-tree](./md/agent-tree.md): AgentTree
+- [agent-workbench](./md/agent-workbench.md): AgentWorkbench
+- [approval-card](./md/approval-card.md): ApprovalCard
+- [approval-gates](./md/approval-gates.md): ApprovalGates
+- [autonomy-dial](./md/autonomy-dial.md): AutonomyDial
+- [away-summary](./md/away-summary.md): AwaySummary
+- [collaboration-stream](./md/collaboration-stream.md): CollaborationStream
+- [commit-trail](./md/commit-trail.md): CommitTrail
+- [conflict-radar](./md/conflict-radar.md): ConflictRadar
+- [context-compaction](./md/context-compaction.md): ContextCompaction
+- [context-map](./md/context-map.md): ContextMap
+- [cost-waterfall](./md/cost-waterfall.md): CostWaterfall
+- [decision-card](./md/decision-card.md): DecisionCard
+- [decision-tree](./md/decision-tree.md): DecisionTree
+- [delegate-board](./md/delegate-board.md): DelegateBoard
+- [diff-timeline](./md/diff-timeline.md): DiffTimeline
+- [fallback-chain](./md/fallback-chain.md): FallbackChain
+- [fan-out-grid](./md/fan-out-grid.md): FanOutGrid
+- [flow-builder](./md/flow-builder.md): FlowBuilder
+- [handoff-swimlanes](./md/handoff-swimlanes.md): HandoffSwimlanes
+- [inline-diff](./md/inline-diff.md): InlineDiff
+- [judge-bracket](./md/judge-bracket.md): JudgeBracket
+- [memory-graph](./md/memory-graph.md): MemoryGraph
+- [memory-panel](./md/memory-panel.md): MemoryPanel
+- [model-router](./md/model-router.md): ModelRouter
+- [parallel-attempts](./md/parallel-attempts.md): ParallelAttempts
+- [permission-request](./md/permission-request.md): PermissionRequest
+- [plan-vs-actual](./md/plan-vs-actual.md): PlanVsActual
+- [rate-limit-planner](./md/rate-limit-planner.md): RateLimitPlanner
+- [reasoning-summary](./md/reasoning-summary.md): ReasoningSummary
+- [repo-map](./md/repo-map.md): RepoMap
+- [response-stream](./md/response-stream.md): ResponseStream
+- [review-center](./md/review-center.md): ReviewCenter
+- [root-cause-tree](./md/root-cause-tree.md): RootCauseTree
+- [run-controls](./md/run-controls.md): RunControls
+- [running-now](./md/running-now.md): RunningNow
+- [scheduled-runs](./md/scheduled-runs.md): ScheduledRuns
+- [tool-access-map](./md/tool-access-map.md): ToolAccessMap
+- [trace-waterfall](./md/trace-waterfall.md): TraceWaterfall
+- [voice-session](./md/voice-session.md): VoiceSession
 
 ## Registry JSON
 
@@ -588,3 +703,118 @@ Theme: pure black `#000000` / white `#ffffff` by default. Brand ink `#171717` on
 - [step-console](./r/step-console.json)
 - [log-stream](./r/log-stream.json)
 - [packet-dissector](./r/packet-dissector.json)
+- [brand-regions](./r/brand-regions.json)
+- [prompt-explorer](./r/prompt-explorer.json)
+- [blur-crossfade](./r/blur-crossfade.json)
+- [gradient-text](./r/gradient-text.json)
+- [tilt-card](./r/tilt-card.json)
+- [glass-folder](./r/glass-folder.json)
+- [glow-keyboard](./r/glow-keyboard.json)
+- [inspect-agent-card](./r/inspect-agent-card.json)
+- [inspect-composer](./r/inspect-composer.json)
+- [integration-flow](./r/integration-flow.json)
+- [model-menu](./r/model-menu.json)
+- [outreach-branches](./r/outreach-branches.json)
+- [progress-pill](./r/progress-pill.json)
+- [project-flow](./r/project-flow.json)
+- [voice-capture](./r/voice-capture.json)
+- [world-map](./r/world-map.json)
+- [agent-gallery](./r/agent-gallery.json)
+- [app-directory](./r/app-directory.json)
+- [client-context](./r/client-context.json)
+- [invoice-credit](./r/invoice-credit.json)
+- [kpi-board](./r/kpi-board.json)
+- [live-session](./r/live-session.json)
+- [metrics-dashboard](./r/metrics-dashboard.json)
+- [mission-control](./r/mission-control.json)
+- [mission-timeline](./r/mission-timeline.json)
+- [pricing-plans](./r/pricing-plans.json)
+- [revenue-chat](./r/revenue-chat.json)
+- [run-inspector](./r/run-inspector.json)
+- [task-board](./r/task-board.json)
+- [ai-answer](./r/ai-answer.json)
+- [chat-composer](./r/chat-composer.json)
+- [cited-answer](./r/cited-answer.json)
+- [model-picker](./r/model-picker.json)
+- [thinking-state](./r/thinking-state.json)
+- [writing-assistant](./r/writing-assistant.json)
+- [command-menu](./r/command-menu.json)
+- [integration-picker](./r/integration-picker.json)
+- [billing-schedule](./r/billing-schedule.json)
+- [integration-settings](./r/integration-settings.json)
+- [prompt-library](./r/prompt-library.json)
+- [stepper-form](./r/stepper-form.json)
+- [dropzone](./r/dropzone.json)
+- [breakdown-chart](./r/breakdown-chart.json)
+- [compact-breakdown](./r/compact-breakdown.json)
+- [experiment-card](./r/experiment-card.json)
+- [kpi-chart](./r/kpi-chart.json)
+- [metering-chart](./r/metering-chart.json)
+- [model-usage](./r/model-usage.json)
+- [trend-chart](./r/trend-chart.json)
+- [data-table](./r/data-table.json)
+- [project-card](./r/project-card.json)
+- [stat-card](./r/stat-card.json)
+- [setup-guide](./r/setup-guide.json)
+- [toaster](./r/toaster.json)
+- [comments-panel](./r/comments-panel.json)
+- [agent-checkpoints](./r/agent-checkpoints.json)
+- [agent-crew](./r/agent-crew.json)
+- [agent-cursors](./r/agent-cursors.json)
+- [agent-findings](./r/agent-findings.json)
+- [agent-fleet](./r/agent-fleet.json)
+- [agent-graph](./r/agent-graph.json)
+- [agent-inbox](./r/agent-inbox.json)
+- [agent-lanes](./r/agent-lanes.json)
+- [agent-ledger](./r/agent-ledger.json)
+- [agent-metro-map](./r/agent-metro-map.json)
+- [agent-monitor](./r/agent-monitor.json)
+- [agent-overlap-map](./r/agent-overlap-map.json)
+- [agent-queue](./r/agent-queue.json)
+- [agent-recap](./r/agent-recap.json)
+- [agent-router](./r/agent-router.json)
+- [agent-sequence](./r/agent-sequence.json)
+- [agent-state-machine](./r/agent-state-machine.json)
+- [agent-steering](./r/agent-steering.json)
+- [agent-timing](./r/agent-timing.json)
+- [agent-trail](./r/agent-trail.json)
+- [agent-tree](./r/agent-tree.json)
+- [agent-workbench](./r/agent-workbench.json)
+- [approval-card](./r/approval-card.json)
+- [approval-gates](./r/approval-gates.json)
+- [autonomy-dial](./r/autonomy-dial.json)
+- [away-summary](./r/away-summary.json)
+- [collaboration-stream](./r/collaboration-stream.json)
+- [commit-trail](./r/commit-trail.json)
+- [conflict-radar](./r/conflict-radar.json)
+- [context-compaction](./r/context-compaction.json)
+- [context-map](./r/context-map.json)
+- [cost-waterfall](./r/cost-waterfall.json)
+- [decision-card](./r/decision-card.json)
+- [decision-tree](./r/decision-tree.json)
+- [delegate-board](./r/delegate-board.json)
+- [diff-timeline](./r/diff-timeline.json)
+- [fallback-chain](./r/fallback-chain.json)
+- [fan-out-grid](./r/fan-out-grid.json)
+- [flow-builder](./r/flow-builder.json)
+- [handoff-swimlanes](./r/handoff-swimlanes.json)
+- [inline-diff](./r/inline-diff.json)
+- [judge-bracket](./r/judge-bracket.json)
+- [memory-graph](./r/memory-graph.json)
+- [memory-panel](./r/memory-panel.json)
+- [model-router](./r/model-router.json)
+- [parallel-attempts](./r/parallel-attempts.json)
+- [permission-request](./r/permission-request.json)
+- [plan-vs-actual](./r/plan-vs-actual.json)
+- [rate-limit-planner](./r/rate-limit-planner.json)
+- [reasoning-summary](./r/reasoning-summary.json)
+- [repo-map](./r/repo-map.json)
+- [response-stream](./r/response-stream.json)
+- [review-center](./r/review-center.json)
+- [root-cause-tree](./r/root-cause-tree.json)
+- [run-controls](./r/run-controls.json)
+- [running-now](./r/running-now.json)
+- [scheduled-runs](./r/scheduled-runs.json)
+- [tool-access-map](./r/tool-access-map.json)
+- [trace-waterfall](./r/trace-waterfall.json)
+- [voice-session](./r/voice-session.json)

@@ -1,5 +1,6 @@
 //! Additional interactive examples and their embedding bridge.
 mod action_morph;
+mod affect_pro;
 mod agent_cursor;
 mod agent_handoff;
 mod agent_loop;
@@ -135,7 +136,8 @@ pub fn story(id: &str, window: &mut Window, cx: &mut Context<crate::StoryHost>) 
         .or_else(|| orbit_logos::story(id, window, cx))
         .or_else(|| live_visitors::story(id, window, cx))
         .or_else(|| observability::story(id, window, cx))
-        .or_else(|| pro_screens::story(id, window, cx))?;
+        .or_else(|| pro_screens::story(id, window, cx))
+        .or_else(|| affect_pro::story(id, window, cx))?;
     let full_bleed = pro_screens::IDS.contains(&id);
     let min_height = if pro_screens::SCREEN_IDS.contains(&id) {
         pro_screens::PREVIEW_HEIGHT
@@ -157,69 +159,73 @@ pub fn story(id: &str, window: &mut Window, cx: &mut Context<crate::StoryHost>) 
 }
 
 pub fn ids() -> impl Iterator<Item = &'static str> {
-    inputs::IDS
-        .iter()
-        .chain(date_reel::IDS)
-        .chain(share_sheet::IDS)
-        .chain(booking_pill::IDS)
-        .chain(payment_flow::IDS)
-        .chain(dns_resolution::IDS)
-        .chain(dot_grid::IDS)
-        .chain(branch_graph::IDS)
-        .chain(time_dial::IDS)
-        .chain(charge_session::IDS)
-        .chain(charts::IDS)
-        .chain(media::IDS)
-        .chain(audio::IDS)
-        .chain(speech::IDS)
-        .chain(provider::IDS)
-        .chain(ghost::IDS)
-        .chain(feedback::IDS)
-        .chain(agent_loop::IDS)
-        .chain(reasoning_tree::IDS)
-        .chain(image_generation::IDS)
-        .chain(speculative::IDS)
-        .chain(image_reveal::IDS)
-        .chain(prompt_cache::IDS)
-        .chain(meeting_summary::IDS)
-        .chain(ai_workflow::IDS)
-        .chain(training_run::IDS)
-        .chain(mixture_of_experts::IDS)
-        .chain(agent_handoff::IDS)
-        .chain(llm_cost_calculator::IDS)
-        .chain(agent_cursor::IDS)
-        .chain(link_unfurl::IDS)
-        .chain(tone_tuner::IDS)
-        .chain(ai_mascot::IDS)
-        .chain(install_snippet::IDS)
-        .chain(upgrade_prompt::IDS)
-        .chain(referral_card::IDS)
-        .chain(trial_banner::IDS)
-        .chain(keycap_keyboard::IDS)
-        .chain(typewriter_terminal::IDS)
-        .chain(morph_nav::IDS)
-        .chain(dock::IDS)
-        .chain(liquid_tabs::IDS)
-        .chain(orbit_photo::IDS)
-        .chain(glass_card::IDS)
-        .chain(glass_tabs::IDS)
-        .chain(action_morph::IDS)
-        .chain(wallet_stack::IDS)
-        .chain(control_center::IDS)
-        .chain(holo_card::IDS)
-        .chain(card_to_article::IDS)
-        .chain(photo_grid::IDS)
-        .chain(cover_flow::IDS)
-        .chain(observability::IDS)
-        .chain(orbit_logos::IDS)
-        .chain(ticket_tear::IDS)
-        .chain(live_visitors::IDS)
-        .chain(stretch_refresh::IDS)
-        .chain(skeleton_morph::IDS)
-        .chain(social_proof_toast::IDS)
-        .chain(pro_screens::IDS)
-        .chain(["morph-loader", "ai-spark"].iter())
-        .copied()
+    [
+        inputs::IDS,
+        date_reel::IDS,
+        share_sheet::IDS,
+        booking_pill::IDS,
+        payment_flow::IDS,
+        dns_resolution::IDS,
+        dot_grid::IDS,
+        branch_graph::IDS,
+        time_dial::IDS,
+        charge_session::IDS,
+        charts::IDS,
+        media::IDS,
+        audio::IDS,
+        speech::IDS,
+        provider::IDS,
+        ghost::IDS,
+        feedback::IDS,
+        agent_loop::IDS,
+        reasoning_tree::IDS,
+        image_generation::IDS,
+        speculative::IDS,
+        image_reveal::IDS,
+        prompt_cache::IDS,
+        meeting_summary::IDS,
+        ai_workflow::IDS,
+        training_run::IDS,
+        mixture_of_experts::IDS,
+        agent_handoff::IDS,
+        llm_cost_calculator::IDS,
+        agent_cursor::IDS,
+        link_unfurl::IDS,
+        tone_tuner::IDS,
+        ai_mascot::IDS,
+        install_snippet::IDS,
+        upgrade_prompt::IDS,
+        referral_card::IDS,
+        trial_banner::IDS,
+        keycap_keyboard::IDS,
+        typewriter_terminal::IDS,
+        morph_nav::IDS,
+        dock::IDS,
+        liquid_tabs::IDS,
+        orbit_photo::IDS,
+        glass_card::IDS,
+        glass_tabs::IDS,
+        action_morph::IDS,
+        wallet_stack::IDS,
+        control_center::IDS,
+        holo_card::IDS,
+        card_to_article::IDS,
+        photo_grid::IDS,
+        cover_flow::IDS,
+        observability::IDS,
+        orbit_logos::IDS,
+        ticket_tear::IDS,
+        live_visitors::IDS,
+        stretch_refresh::IDS,
+        skeleton_morph::IDS,
+        social_proof_toast::IDS,
+        pro_screens::IDS,
+        affect_pro::IDS,
+        &["morph-loader", "ai-spark"],
+    ]
+    .into_iter()
+    .flatten()
+    .copied()
 }
 
 struct EmbeddedStory {

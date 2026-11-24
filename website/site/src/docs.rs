@@ -30,11 +30,15 @@ const GROUPS: &[&str] = &[
     "tables",
     "activity",
     "intelligence",
+    "agent-systems",
     "workspace",
+    "blocks",
+    "illustrations",
     "pro-motion",
     "pro-shells",
     "pro-agents",
     "pro-chat",
+    "pro-search",
     "pro-onboarding",
     "pro-settings",
     "pro-workspace",
@@ -43,6 +47,7 @@ const SCREEN_GROUPS: &[&str] = &[
     "pro-shells",
     "pro-agents",
     "pro-chat",
+    "pro-search",
     "pro-onboarding",
     "pro-settings",
     "pro-workspace",
@@ -68,6 +73,10 @@ struct Entry {
     id: String,
     title: Localized,
     group: Option<String>,
+    #[serde(default)]
+    wide_stage: bool,
+    #[serde(default)]
+    mobile_disabled: bool,
     rust_type: String,
     usage_rust: String,
     lead: Localized,
@@ -239,6 +248,7 @@ static ENTRIES: LazyLock<Vec<Entry>> = LazyLock::new(|| {
         include_str!("../docs/glass-extra.json"),
         include_str!("../docs/pro-screens-extra.json"),
         include_str!("../docs/observability-extra.json"),
+        include_str!("../docs/affect-pro-extra.json"),
     ] {
         entries.extend(
             serde_json::from_str::<Vec<Entry>>(file)
@@ -388,6 +398,9 @@ fn render_groups(group_ids: &[&str], current: &str, en: bool) -> (String, usize)
                 en,
             ));
             count += 1;
+        }
+        if count == 0 {
+            continue;
         }
         total += count;
         let head = controls::button(
@@ -550,15 +563,24 @@ fn stage(doc: &Entry, en: bool, revision: &str, example: &str) -> String {
     }
     let theme_class = if id == "theme-switch" || id.starts_with("theme-switch-") {
         " theme-preview"
-    } else if doc.group().starts_with("pro-") && id != "gradient-floor" {
+    } else if doc.is_screen() {
         " screen-story"
     } else if id == "gradient-floor" {
         " pro-motion-story"
+    } else if doc.wide_stage
+        || matches!(
+            doc.group(),
+            "pro-motion" | "illustrations" | "blocks" | "agent-systems"
+        )
+    {
+        " pro-stage-story"
     } else {
         ""
     };
     let url = preview_url(id, en, revision);
-    let mobile_disabled = doc.group().starts_with("pro-");
+    let mobile_disabled = doc.mobile_disabled
+        || doc.is_screen()
+        || matches!(doc.group(), "pro-motion" | "illustrations" | "blocks");
     let fit = pick(en, "Fit preview", "自适应预览");
     let mobile = if mobile_disabled {
         pick(en, "Mobile preview unavailable", "无手机版预览")

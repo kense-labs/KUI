@@ -1,0 +1,2295 @@
+//! Unified multi-agent mission control block with event-peak recap curve, hierarchy tree, and action inbox.
+//!
+//! Combines a `"Since you looked"` event-peak curve (`7:08 … 7:53`), a hierarchical `"Agents"`
+//! fleet card with live `pro_connector_pulse` links, and a `"NEEDS YOU"` action queue governed
+//! by one status filter (`All | Running | Needs you | Failed`).
+
+use crate::{
+    components::pro_chrome::{
+        ProPalette, pro_agent_avatar, pro_app_tile, pro_connector_pulse, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_pill_indicator, pro_progress_ring, pro_selection_sensor,
+        pro_skeleton_bar, pro_toast_banner, pro_view_transition, tr,
+    },
+    foundation::Theme,
+    primitives::{
+        control::{UiLanguage, activate},
+        family::disabled_motion,
+        pro_icons::{ProIcon, pro_icon, pro_svg},
+    },
+};
+use gpui::{prelude::*, *};
+use std::{cell::Cell, rc::Rc};
+use web_time::Instant;
+
+const RECAP_DONE_SVG: &str = r#"<circle cx="8" cy="8" r="5.75" stroke="currentColor" stroke-width="1.4"></circle><path d="m5.6 8.2 1.6 1.6 3.2-3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const RECAP_NEEDS_SVG: &str = r#"<circle cx="8" cy="5.25" r="2.5" stroke="currentColor" stroke-width="1.4"></circle><path d="M3.25 13.25c.6-2.35 2.45-3.75 4.75-3.75s4.15 1.4 4.75 3.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
+const RECAP_FAIL_SVG: &str = r#"<path d="M7.13 2.75a1 1 0 0 1 1.74 0l5.2 9.25a1 1 0 0 1-.87 1.5H2.8a1 1 0 0 1-.87-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M8 6.5v2.75M8 11.25v.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
+
+/// Unified status filter across the recap curve, agent hierarchy, and inbox in [`MissionControlBlock`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum MissionFilter {
+    /// Show all agents and recap events.
+    #[default]
+    All,
+    /// Show actively running agents.
+    Running,
+    /// Show agents waiting on user input plus failed agents requiring intervention.
+    NeedsYou,
+    /// Show failed agents only.
+    Failed,
+}
+
+impl MissionFilter {
+    const ALL: [Self; 4] = [Self::All, Self::Running, Self::NeedsYou, Self::Failed];
+
+    fn slug(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Running => "running",
+            Self::NeedsYou => "needs",
+            Self::Failed => "failed",
+        }
+    }
+
+    fn label(self, cx: &App) -> &'static str {
+        match self {
+            Self::All => tr(cx, "All", "全部"),
+            Self::Running => tr(cx, "Running", "运行中"),
+            Self::NeedsYou => tr(cx, "Needs you", "待处理"),
+            Self::Failed => tr(cx, "Failed", "失败"),
+        }
+    }
+
+    fn next(self) -> Self {
+        match self {
+            Self::All => Self::Running,
+            Self::Running => Self::NeedsYou,
+            Self::NeedsYou => Self::Failed,
+            Self::Failed => Self::All,
+        }
+    }
+
+    fn prev(self) -> Self {
+        match self {
+            Self::All => Self::Failed,
+            Self::Running => Self::All,
+            Self::NeedsYou => Self::Running,
+            Self::Failed => Self::NeedsYou,
+        }
+    }
+}
+
+/// Live operational status of a [`MissionAgent`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MissionAgentStatus {
+    /// Actively executing tools or coordinating sub-agents.
+    #[default]
+    Running,
+    /// Blocked waiting for user approval or an answer.
+    Waiting,
+    /// Halted due to an upstream error.
+    Failed,
+    /// Completed cleanly.
+    Done,
+}
+
+impl MissionAgentStatus {
+    /// Check whether this status matches `filter` (`NeedsYou` includes both `Waiting` and `Failed`).
+    pub fn matches(self, filter: MissionFilter) -> bool {
+        match filter {
+            MissionFilter::All => true,
+            MissionFilter::Running => self == Self::Running,
+            MissionFilter::NeedsYou => matches!(self, Self::Waiting | Self::Failed),
+            MissionFilter::Failed => self == Self::Failed,
+        }
+    }
+}
+
+/// Prompt or approval request surfaced when a [`MissionAgent`] enters [`MissionAgentStatus::Waiting`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MissionAgentAsk {
+    /// Short title shown in the `"NEEDS YOU"` card.
+    pub title: SharedString,
+    /// Plain-language context explaining why human input is needed.
+    pub detail: SharedString,
+    /// Optional quick-answer options (if empty, renders `Reject` / `Approve`).
+    pub choices: Vec<SharedString>,
+    /// Label for the primary approval action (default `"Approve"`).
+    pub approve_label: SharedString,
+    /// Label for the secondary rejection action (default `"Reject"`).
+    pub reject_label: SharedString,
+}
+
+impl MissionAgentAsk {
+    /// Construct an approval prompt (`Reject` + `Approve`).
+    pub fn approval(title: impl Into<SharedString>, detail: impl Into<SharedString>) -> Self {
+        Self {
+            title: title.into(),
+            detail: detail.into(),
+            choices: Vec::new(),
+            approve_label: "Approve".into(),
+            reject_label: "Reject".into(),
+        }
+    }
+
+    /// Construct a multi-choice question prompt (`Answer` options).
+    pub fn question(
+        title: impl Into<SharedString>,
+        detail: impl Into<SharedString>,
+        choices: Vec<SharedString>,
+    ) -> Self {
+        Self {
+            title: title.into(),
+            detail: detail.into(),
+            choices,
+            approve_label: "Answer".into(),
+            reject_label: "Dismiss".into(),
+        }
+    }
+}
+
+/// Lead or sub-agent node in [`MissionControlBlock`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct MissionAgent {
+    /// Stable agent identifier.
+    pub id: SharedString,
+    /// Display name (such as `"Launch lead"` or `"Writer"`).
+    pub name: SharedString,
+    /// Model label (such as `"Opus 5.5"` or `"Sonnet 5.5"`).
+    pub model: SharedString,
+    /// Current operational state.
+    pub status: MissionAgentStatus,
+    /// Assigned goal or task summary.
+    pub task: SharedString,
+    /// Optional waiting prompt when `status == Waiting`.
+    pub ask: Option<MissionAgentAsk>,
+    /// Optional failure reason when `status == Failed`.
+    pub error: Option<SharedString>,
+    /// Accumulated run spend in USD.
+    pub cost_usd: f64,
+    /// Formatted elapsed duration (`"26m 31s"`).
+    pub elapsed: SharedString,
+    /// Connected tool/app names (`"Linear"`, `"Notion"`, `"Stripe"`).
+    pub tools: Vec<SharedString>,
+    /// Sub-agents supervised by this agent.
+    pub children: Vec<MissionAgent>,
+}
+
+impl MissionAgent {
+    /// Check whether this agent or any of its sub-agents match `filter`.
+    pub fn matches_tree(&self, filter: MissionFilter) -> bool {
+        self.status.matches(filter) || self.children.iter().any(|c| c.matches_tree(filter))
+    }
+}
+
+/// Kind of milestone plotted along the `"Since you looked"` curve.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MissionEventKind {
+    /// Completed step or batch.
+    #[default]
+    Done,
+    /// Step waiting for user approval or answer.
+    NeedsYou,
+    /// Step that encountered an error.
+    Failed,
+}
+
+/// Event plotted on the `"Since you looked"` curve in [`MissionControlBlock`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct MissionRecapEvent {
+    /// Stable event identifier.
+    pub id: SharedString,
+    /// Owning agent identifier.
+    pub agent_id: SharedString,
+    /// Clock timestamp (`"7:39"`).
+    pub at_label: SharedString,
+    /// Normalized position along `[0.0, 1.0]` between `since` and `now`.
+    pub position: f32,
+    /// Peak amplitude (`0.35..=1.0`).
+    pub weight: f32,
+    /// Event category (`Done`, `NeedsYou`, `Failed`).
+    pub kind: MissionEventKind,
+    /// Short headline shown in the hover tooltip.
+    pub title: SharedString,
+}
+
+/// Events emitted by [`MissionControlBlock`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MissionControlEvent {
+    /// User switched the unified status filter.
+    FilterChanged(MissionFilter),
+    /// User selected a lead agent in the fleet hierarchy.
+    LeadSelected(SharedString),
+    /// User approved a waiting agent (`agent_id`).
+    Approved(SharedString),
+    /// User rejected a waiting agent (`agent_id`).
+    Rejected(SharedString),
+    /// User answered a waiting agent's multi-choice prompt.
+    Answered {
+        /// Agent identifier.
+        agent_id: SharedString,
+        /// Picked answer option.
+        choice: SharedString,
+    },
+    /// User retried a failed agent (`agent_id`).
+    Retried(SharedString),
+    /// User dismissed a failed agent (`agent_id`).
+    Dismissed(SharedString),
+    /// User hovered or cleared an event dot on the recap curve.
+    EventHovered(Option<SharedString>),
+}
+
+fn flatten_agents<'a>(roots: &'a [MissionAgent], out: &mut Vec<&'a MissionAgent>) {
+    for ag in roots {
+        out.push(ag);
+        flatten_agents(&ag.children, out);
+    }
+}
+
+/// Count agents matching `filter` across all leads and sub-agents.
+pub fn count_mission_agents(roots: &[MissionAgent], filter: MissionFilter) -> usize {
+    let mut all = Vec::new();
+    flatten_agents(roots, &mut all);
+    all.into_iter().filter(|a| a.status.matches(filter)).count()
+}
+
+fn find_agent_status(roots: &[MissionAgent], agent_id: &str) -> Option<MissionAgentStatus> {
+    for ag in roots {
+        if ag.id.as_ref() == agent_id {
+            return Some(ag.status);
+        }
+        if let Some(st) = find_agent_status(&ag.children, agent_id) {
+            return Some(st);
+        }
+    }
+    None
+}
+
+fn find_lead_for_agent(roots: &[MissionAgent], agent_id: &str) -> Option<SharedString> {
+    for lead in roots {
+        if lead.id.as_ref() == agent_id || lead.children.iter().any(|c| c.id.as_ref() == agent_id) {
+            return Some(lead.id.clone());
+        }
+    }
+    None
+}
+
+fn mutate_agent(
+    roots: &mut [MissionAgent],
+    agent_id: &str,
+    f: impl FnOnce(&mut MissionAgent),
+) -> bool {
+    for ag in roots {
+        if ag.id.as_ref() == agent_id {
+            f(ag);
+            return true;
+        }
+        for ch in &mut ag.children {
+            if ch.id.as_ref() == agent_id {
+                f(ch);
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn agent_hue(id: &str, p: &ProPalette) -> Hsla {
+    match id {
+        "launch" => p.blue,
+        "research" => p.purple,
+        "writer" => p.teal,
+        "release" => p.cyan,
+        "support" => p.green,
+        "billing" => p.red,
+        "ops" => p.orange,
+        _ => p.blue,
+    }
+}
+
+fn default_mission_agents() -> Vec<MissionAgent> {
+    // 7 agents total: 3 Running (Launch lead, Support lead, Ops), 1 Done (Researcher),
+    // 2 Waiting (Writer, Release), 1 Failed (Billing) => All 7 | Running 3 | Needs you 3 | Failed 1
+    vec![
+        MissionAgent {
+            id: "launch".into(),
+            name: "Launch lead".into(),
+            model: "Opus 5.5".into(),
+            status: MissionAgentStatus::Running,
+            task: "Launch the new pricing page by Friday".into(),
+            ask: None,
+            error: None,
+            cost_usd: 2.15,
+            elapsed: "26m 31s".into(),
+            tools: vec!["Linear".into(), "Notion".into()],
+            children: vec![
+                MissionAgent {
+                    id: "research".into(),
+                    name: "Researcher".into(),
+                    model: "Sonnet 5.5".into(),
+                    status: MissionAgentStatus::Done,
+                    task: "Compare Linear, Notion & Figma seat pricing".into(),
+                    ask: None,
+                    error: None,
+                    cost_usd: 0.48,
+                    elapsed: "8m 12s".into(),
+                    tools: vec!["Notion".into(), "Figma".into()],
+                    children: Vec::new(),
+                },
+                MissionAgent {
+                    id: "writer".into(),
+                    name: "Writer".into(),
+                    model: "Opus 5.5".into(),
+                    status: MissionAgentStatus::Waiting,
+                    task: "Draft the copy for Free, Pro and Team".into(),
+                    ask: Some(MissionAgentAsk::question(
+                        "Pick the Team plan seat price",
+                        "Copy for Free ($0) and Pro ($12) is ready · choose Team pricing",
+                        vec!["$20 / seat".into(), "$24 / seat".into()],
+                    )),
+                    error: None,
+                    cost_usd: 0.92,
+                    elapsed: "14m 05s".into(),
+                    tools: vec!["Notion".into()],
+                    children: Vec::new(),
+                },
+                MissionAgent {
+                    id: "release".into(),
+                    name: "Release".into(),
+                    model: "Sonnet 5.5".into(),
+                    status: MissionAgentStatus::Waiting,
+                    task: "Merge & deploy pricing page PR #482".into(),
+                    ask: Some(MissionAgentAsk::approval(
+                        "Deploy pricing page PR #482",
+                        "All 212 staging checks passed · waiting on production sign-off",
+                    )),
+                    error: None,
+                    cost_usd: 0.75,
+                    elapsed: "4m 14s".into(),
+                    tools: vec!["GitHub".into(), "Vercel".into()],
+                    children: Vec::new(),
+                },
+            ],
+        },
+        MissionAgent {
+            id: "support".into(),
+            name: "Support lead".into(),
+            model: "Sonnet 5.5".into(),
+            status: MissionAgentStatus::Running,
+            task: "Answer the open tickets in the queue".into(),
+            ask: None,
+            error: None,
+            cost_usd: 1.02,
+            elapsed: "29m 31s".into(),
+            tools: vec!["Slack".into(), "Gmail".into()],
+            children: vec![MissionAgent {
+                id: "billing".into(),
+                name: "Billing".into(),
+                model: "Haiku 4.5".into(),
+                status: MissionAgentStatus::Failed,
+                task: "Refund $240 to Acme Corp".into(),
+                ask: None,
+                error: Some("Stripe live refund token expired (HTTP 401)".into()),
+                cost_usd: 0.19,
+                elapsed: "3m 08s".into(),
+                tools: vec!["Stripe".into()],
+                children: Vec::new(),
+            }],
+        },
+        MissionAgent {
+            id: "ops".into(),
+            name: "Ops".into(),
+            model: "GPT-5.4".into(),
+            status: MissionAgentStatus::Running,
+            task: "Sync CRM contacts & rotate webhook keys".into(),
+            ask: None,
+            error: None,
+            cost_usd: 0.64,
+            elapsed: "18m 10s".into(),
+            tools: vec!["HubSpot".into(), "GitHub".into()],
+            children: Vec::new(),
+        },
+    ]
+}
+
+fn default_recap_events() -> Vec<MissionRecapEvent> {
+    vec![
+        MissionRecapEvent {
+            id: "ev-1".into(),
+            agent_id: "research".into(),
+            at_label: "7:12".into(),
+            position: 0.10,
+            weight: 0.62,
+            kind: MissionEventKind::Done,
+            title: "Compared seat prices across Linear, Notion & Figma".into(),
+        },
+        MissionRecapEvent {
+            id: "ev-2".into(),
+            agent_id: "ops".into(),
+            at_label: "7:18".into(),
+            position: 0.22,
+            weight: 0.46,
+            kind: MissionEventKind::Done,
+            title: "Synced 1,240 CRM contacts to HubSpot".into(),
+        },
+        MissionRecapEvent {
+            id: "ev-3".into(),
+            agent_id: "support".into(),
+            at_label: "7:29".into(),
+            position: 0.46,
+            weight: 0.84,
+            kind: MissionEventKind::Done,
+            title: "Answered 24 support tickets in #help".into(),
+        },
+        MissionRecapEvent {
+            id: "ev-4".into(),
+            agent_id: "billing".into(),
+            at_label: "7:36".into(),
+            position: 0.61,
+            weight: 0.56,
+            kind: MissionEventKind::Failed,
+            title: "Refund $240 to Acme Corp failed (token expired)".into(),
+        },
+        MissionRecapEvent {
+            id: "ev-5".into(),
+            agent_id: "writer".into(),
+            at_label: "7:40".into(),
+            position: 0.70,
+            weight: 0.58,
+            kind: MissionEventKind::NeedsYou,
+            title: "Writer asks: Team plan $20 or $24 per seat?".into(),
+        },
+        MissionRecapEvent {
+            id: "ev-6".into(),
+            agent_id: "release".into(),
+            at_label: "7:45".into(),
+            position: 0.79,
+            weight: 0.64,
+            kind: MissionEventKind::NeedsYou,
+            title: "Release asks: Approve PR #482 deploy".into(),
+        },
+        MissionRecapEvent {
+            id: "ev-7".into(),
+            agent_id: "launch".into(),
+            at_label: "7:49".into(),
+            position: 0.88,
+            weight: 0.44,
+            kind: MissionEventKind::Done,
+            title: "Verified Stripe webhook signatures on staging".into(),
+        },
+    ]
+}
+
+fn eval_peak_curve(u: f32, peaks: &[(f32, f32)]) -> f32 {
+    let mut acc = 0.0_f32;
+    for &(pos, weight) in peaks {
+        let d = (u - pos) / 0.048;
+        acc += weight * (-d * d).exp();
+    }
+    acc.clamp(0.0, 0.92)
+}
+
+/// Multi-agent command center block uniting an event-peak recap curve, agent hierarchy, and action queue.
+pub struct MissionControlBlock {
+    id: ElementId,
+    focus: FocusHandle,
+    title: SharedString,
+    since_label: SharedString,
+    now_label: SharedString,
+    filter: MissionFilter,
+    agents: Vec<MissionAgent>,
+    events: Vec<MissionRecapEvent>,
+    open_lead: SharedString,
+    hovered_event: Option<SharedString>,
+    loading: bool,
+    empty: bool,
+    measured_width: Rc<Cell<f32>>,
+    toast: Option<(SharedString, Instant)>,
+    boot_at: Instant,
+}
+
+impl EventEmitter<MissionControlEvent> for MissionControlBlock {}
+
+impl MissionControlBlock {
+    /// Create a new [`MissionControlBlock`] with 7 active/waiting/failed agents and recap peaks.
+    pub fn new(id: impl Into<ElementId>, cx: &mut Context<Self>) -> Self {
+        cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
+        cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
+            .detach();
+        Self {
+            id: id.into(),
+            focus: cx.focus_handle(),
+            title: "Mission control".into(),
+            since_label: "7:08".into(),
+            now_label: "7:53".into(),
+            filter: MissionFilter::All,
+            agents: default_mission_agents(),
+            events: default_recap_events(),
+            open_lead: "launch".into(),
+            hovered_event: None,
+            loading: false,
+            empty: false,
+            measured_width: Rc::new(Cell::new(894.)),
+            toast: None,
+            boot_at: Instant::now(),
+        }
+    }
+
+    /// Set the top-left heading (default `"Mission control"`).
+    pub fn with_title(mut self, title: impl Into<SharedString>) -> Self {
+        self.title = title.into();
+        self
+    }
+
+    /// Set the initial [`MissionFilter`].
+    pub fn with_filter(mut self, filter: MissionFilter) -> Self {
+        self.filter = filter;
+        self
+    }
+
+    /// Alias matching `defaultFilter` in the reference specification.
+    pub fn with_default_filter(self, filter: MissionFilter) -> Self {
+        self.with_filter(filter)
+    }
+
+    /// Supply custom lead and sub-agent trees.
+    pub fn with_agents(mut self, agents: Vec<MissionAgent>) -> Self {
+        if let Some(first) = agents.first() {
+            self.open_lead = first.id.clone();
+        }
+        self.agents = agents;
+        self
+    }
+
+    /// Supply custom `"Since you looked"` recap events.
+    pub fn with_events(mut self, events: Vec<MissionRecapEvent>) -> Self {
+        self.events = events;
+        self
+    }
+
+    /// Customize the start and end clock labels (`"7:08"` … `"7:53"`).
+    pub fn with_window_labels(
+        mut self,
+        since_label: impl Into<SharedString>,
+        now_label: impl Into<SharedString>,
+    ) -> Self {
+        self.since_label = since_label.into();
+        self.now_label = now_label.into();
+        self
+    }
+
+    /// Toggle loading skeleton placeholders.
+    pub fn with_loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
+    /// Toggle empty state.
+    pub fn with_empty(mut self, empty: bool) -> Self {
+        self.empty = empty;
+        self
+    }
+
+    /// Return the active [`MissionFilter`].
+    pub fn filter(&self) -> MissionFilter {
+        self.filter
+    }
+
+    /// Set the unified [`MissionFilter`] and emit [`MissionControlEvent::FilterChanged`].
+    pub fn set_filter(&mut self, filter: MissionFilter, cx: &mut Context<Self>) {
+        if self.filter != filter {
+            self.filter = filter;
+            // Ensure an applicable lead is open when filtering
+            if !self
+                .agents
+                .iter()
+                .any(|a| a.id == self.open_lead && a.matches_tree(filter))
+                && let Some(next_lead) = self.agents.iter().find(|a| a.matches_tree(filter))
+            {
+                self.open_lead = next_lead.id.clone();
+            }
+            cx.emit(MissionControlEvent::FilterChanged(filter));
+            cx.notify();
+        }
+    }
+
+    fn resolve_approve(
+        &mut self,
+        agent_id: &str,
+        choice: Option<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        let changed = mutate_agent(&mut self.agents, agent_id, |ag| {
+            ag.status = MissionAgentStatus::Running;
+            ag.ask = None;
+            ag.error = None;
+        });
+        if changed {
+            for ev in &mut self.events {
+                if ev.agent_id.as_ref() == agent_id && ev.kind == MissionEventKind::NeedsYou {
+                    ev.kind = MissionEventKind::Done;
+                }
+            }
+            let id_shared = SharedString::from(agent_id.to_owned());
+            if let Some(ch) = choice {
+                self.toast = Some((
+                    format!("{}: {ch}", tr(cx, "Sent answer", "已发送回复")).into(),
+                    Instant::now(),
+                ));
+                cx.emit(MissionControlEvent::Answered {
+                    agent_id: id_shared,
+                    choice: ch,
+                });
+            } else {
+                self.toast = Some((
+                    tr(cx, "Approved agent action", "已批准智能体操作").into(),
+                    Instant::now(),
+                ));
+                cx.emit(MissionControlEvent::Approved(id_shared));
+            }
+            cx.notify();
+        }
+    }
+
+    fn resolve_reject_or_dismiss(
+        &mut self,
+        agent_id: &str,
+        was_failed: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let changed = mutate_agent(&mut self.agents, agent_id, |ag| {
+            ag.status = MissionAgentStatus::Done;
+            ag.ask = None;
+            ag.error = None;
+        });
+        if changed {
+            for ev in &mut self.events {
+                if ev.agent_id.as_ref() == agent_id {
+                    ev.kind = MissionEventKind::Done;
+                }
+            }
+            let id_shared = SharedString::from(agent_id.to_owned());
+            if was_failed {
+                self.toast = Some((
+                    tr(cx, "Dismissed failed run", "已忽略失败任务").into(),
+                    Instant::now(),
+                ));
+                cx.emit(MissionControlEvent::Dismissed(id_shared));
+            } else {
+                self.toast = Some((
+                    tr(cx, "Rejected pending request", "已拒绝待审批请求").into(),
+                    Instant::now(),
+                ));
+                cx.emit(MissionControlEvent::Rejected(id_shared));
+            }
+            cx.notify();
+        }
+    }
+
+    fn resolve_retry(&mut self, agent_id: &str, cx: &mut Context<Self>) {
+        let changed = mutate_agent(&mut self.agents, agent_id, |ag| {
+            ag.status = MissionAgentStatus::Running;
+            ag.error = None;
+        });
+        if changed {
+            for ev in &mut self.events {
+                if ev.agent_id.as_ref() == agent_id && ev.kind == MissionEventKind::Failed {
+                    ev.kind = MissionEventKind::Done;
+                }
+            }
+            self.toast = Some((
+                tr(cx, "Retrying agent step", "正在重试失败步骤").into(),
+                Instant::now(),
+            ));
+            cx.emit(MissionControlEvent::Retried(SharedString::from(
+                agent_id.to_owned(),
+            )));
+            cx.notify();
+        }
+    }
+
+    fn highlighted_agent_from_hover(&self) -> Option<&SharedString> {
+        let hid = self.hovered_event.as_ref()?;
+        self.events
+            .iter()
+            .find(|e| &e.id == hid)
+            .map(|e| &e.agent_id)
+    }
+
+    fn visible_events(&self) -> Vec<&MissionRecapEvent> {
+        self.events
+            .iter()
+            .filter(|ev| match self.filter {
+                MissionFilter::All => true,
+                other => find_agent_status(&self.agents, &ev.agent_id)
+                    .is_some_and(|st| st.matches(other)),
+            })
+            .collect()
+    }
+
+    fn handle_key_down(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if ev.keystroke.modifiers.platform || ev.keystroke.modifiers.control {
+            return;
+        }
+        match ev.keystroke.key.as_str() {
+            "left" => {
+                self.set_filter(self.filter.prev(), cx);
+                cx.stop_propagation();
+            }
+            "right" => {
+                self.set_filter(self.filter.next(), cx);
+                cx.stop_propagation();
+            }
+            "home" => {
+                self.set_filter(MissionFilter::All, cx);
+                cx.stop_propagation();
+            }
+            "end" => {
+                self.set_filter(MissionFilter::Failed, cx);
+                cx.stop_propagation();
+            }
+            "escape" if self.hovered_event.take().is_some() => {
+                cx.emit(MissionControlEvent::EventHovered(None));
+                cx.stop_propagation();
+                cx.notify();
+            }
+            _ => {}
+        }
+    }
+
+    fn render_recap_section(&self, cx: &mut Context<Self>) -> Div {
+        let p = ProPalette::get(cx);
+        let vis = self.visible_events();
+        let done_n = vis
+            .iter()
+            .filter(|e| e.kind == MissionEventKind::Done)
+            .count();
+        let needs_n = vis
+            .iter()
+            .filter(|e| e.kind == MissionEventKind::NeedsYou)
+            .count();
+        let fail_n = vis
+            .iter()
+            .filter(|e| e.kind == MissionEventKind::Failed)
+            .count();
+
+        let peaks: Vec<(f32, f32)> = vis.iter().map(|e| (e.position, e.weight)).collect();
+        let dots_meta: Vec<(SharedString, f32, MissionEventKind, bool)> = vis
+            .iter()
+            .map(|e| {
+                let hot = self.hovered_event.as_ref() == Some(&e.id);
+                (e.id.clone(), e.position, e.kind, hot)
+            })
+            .collect();
+
+        let hovered_info = self
+            .hovered_event
+            .as_ref()
+            .and_then(|hid| vis.iter().copied().find(|e| &e.id == hid));
+
+        let stroke_col = p.ink.opacity(0.46);
+        let fill_col = p.ink.opacity(0.08);
+        let grid_col = p.line_soft;
+        let card_bg = p.card;
+        let done_dot = p.ink.opacity(0.62);
+        let needs_dot = p.orange;
+        let fail_dot = p.red;
+        let cursor_col = p.line_strong;
+
+        let curve_canvas = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 8. || bh <= 8. {
+                    return;
+                }
+                let top_pad = 8.0_f32;
+                let base_y = bh - 4.0_f32;
+                let usable_h = (base_y - top_pad).max(12.0);
+
+                // Subtle frame & vertical/horizontal gridlines
+                for r in 0..=2usize {
+                    let gy = bounds.top() + px((r as f32 / 2.0) * bh);
+                    let mut gp = PathBuilder::stroke(px(1.));
+                    gp.move_to(point(bounds.left(), gy));
+                    gp.line_to(point(bounds.right(), gy));
+                    if let Ok(path) = gp.build() {
+                        window.paint_path(path, grid_col);
+                    }
+                }
+                for c in 1..8usize {
+                    let gx = bounds.left() + px((c as f32 / 8.0) * bw);
+                    let mut vp = PathBuilder::stroke(px(1.));
+                    vp.move_to(point(gx, bounds.top()));
+                    vp.line_to(point(gx, bounds.bottom()));
+                    if let Ok(path) = vp.build() {
+                        window.paint_path(path, grid_col.opacity(grid_col.a * 0.65));
+                    }
+                }
+
+                let samples = 112usize;
+                let pt_at = |u: f32| -> Point<Pixels> {
+                    let y_norm = eval_peak_curve(u, &peaks);
+                    point(
+                        bounds.left() + px(u * bw),
+                        bounds.top() + px(base_y - y_norm * usable_h),
+                    )
+                };
+
+                // Soft gradient area under peak curve
+                if !peaks.is_empty() {
+                    let mut area = PathBuilder::fill();
+                    let floor = bounds.top() + px(base_y);
+                    area.move_to(point(bounds.left(), floor));
+                    for i in 0..=samples {
+                        let u = i as f32 / samples as f32;
+                        area.line_to(pt_at(u));
+                    }
+                    area.line_to(point(bounds.right(), floor));
+                    area.close();
+                    if let Ok(path) = area.build() {
+                        window.paint_path(
+                            path,
+                            linear_gradient(
+                                180.,
+                                linear_color_stop(fill_col, 0.),
+                                linear_color_stop(fill_col.opacity(0.0), 1.),
+                            ),
+                        );
+                    }
+                }
+
+                // Smooth curve stroke
+                let mut stroke = PathBuilder::stroke(px(1.5));
+                for i in 0..=samples {
+                    let u = i as f32 / samples as f32;
+                    let pt = pt_at(u);
+                    if i == 0 {
+                        stroke.move_to(pt);
+                    } else {
+                        stroke.line_to(pt);
+                    }
+                }
+                if let Ok(path) = stroke.build() {
+                    window.paint_path(path, stroke_col);
+                }
+
+                // Event dots perched on peaks
+                for (_, pos, kind, hot) in &dots_meta {
+                    let pt = pt_at(*pos);
+                    if *hot {
+                        let mut cur = PathBuilder::stroke(px(1.));
+                        cur.move_to(point(pt.x, bounds.top()));
+                        cur.line_to(point(pt.x, bounds.bottom()));
+                        if let Ok(path) = cur.build() {
+                            window.paint_path(path, cursor_col);
+                        }
+                    }
+                    let dot_c = match kind {
+                        MissionEventKind::Done => done_dot,
+                        MissionEventKind::NeedsYou => needs_dot,
+                        MissionEventKind::Failed => fail_dot,
+                    };
+                    let ri = px(if *hot { 4.2 } else { 2.8 });
+                    let ro = ri + px(1.6);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(pt - point(ro, ro), size(ro * 2., ro * 2.)),
+                            card_bg,
+                        )
+                        .corner_radii(ro),
+                    );
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(pt - point(ri, ri), size(ri * 2., ri * 2.)),
+                            dot_c,
+                        )
+                        .corner_radii(ri),
+                    );
+                }
+            },
+        )
+        .w_full()
+        .h(px(78.));
+
+        // Interactive hover hit targets positioned at each event peak
+        let mut hit_layer = div().absolute().inset_0();
+        for ev in &vis {
+            let eid = ev.id.clone();
+            let agent_id = ev.agent_id.clone();
+            let left_frac = (ev.position - 0.045).clamp(0.0, 0.91);
+            hit_layer = hit_layer.child(
+                div()
+                    .id(pro_eid(&self.id, format!("rcp-hit-{eid}")))
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left(relative(left_frac))
+                    .w(relative(0.09))
+                    .cursor_pointer()
+                    .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                        if *inside {
+                            this.hovered_event = Some(eid.clone());
+                            if let Some(lead_id) = find_lead_for_agent(&this.agents, &agent_id) {
+                                this.open_lead = lead_id;
+                            }
+                            cx.emit(MissionControlEvent::EventHovered(Some(eid.clone())));
+                        } else if this.hovered_event.as_ref() == Some(&eid) {
+                            this.hovered_event = None;
+                            cx.emit(MissionControlEvent::EventHovered(None));
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+
+        let tip_el = hovered_info.map(|ev| {
+            let tip_bg: Hsla = if p.dark {
+                rgb(0xf4f4f5).into()
+            } else {
+                rgb(0x18181b).into()
+            };
+            let tip_fg: Hsla = if p.dark {
+                rgb(0x111113).into()
+            } else {
+                rgb(0xfafafa).into()
+            };
+            let on_right = ev.position > 0.55;
+            let mut tip = div()
+                .absolute()
+                .top(px(4.))
+                .max_w(px(300.))
+                .px(px(8.))
+                .py(px(3.))
+                .rounded(px(6.))
+                .bg(tip_bg)
+                .text_color(tip_fg)
+                .text_size(px(11.5))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(div().opacity(0.68).child(ev.at_label.clone()))
+                .child(div().min_w_0().truncate().child(ev.title.clone()));
+            if on_right {
+                tip = tip.left(px(8.));
+            } else {
+                tip = tip.right(px(8.));
+            }
+            tip
+        });
+
+        div()
+            .w_full()
+            .rounded(px(14.))
+            .bg(p.card)
+            .border_1()
+            .border_color(p.line)
+            .px(px(16.))
+            .pt(px(14.))
+            .pb(px(10.))
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_wrap()
+                    .items_start()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(tr(cx, "Since you looked", "自上次查看以来")),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_size(px(12.))
+                                    .text_color(p.muted)
+                                    .child(format!(
+                                        "{} {}",
+                                        tr(cx, "Since", "始于"),
+                                        self.since_label
+                                    ))
+                                    .child(
+                                        div()
+                                            .h(px(18.))
+                                            .px(px(6.))
+                                            .rounded(px(5.))
+                                            .bg(p.chip)
+                                            .flex()
+                                            .items_center()
+                                            .text_size(px(11.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.text)
+                                            .child("45m"),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .pt(px(2.))
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .child(pro_svg("0 0 16 16", RECAP_DONE_SVG, 13., p.muted))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(done_n.to_string()),
+                                    )
+                                    .child(tr(cx, "done", "已完成")),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .child(pro_svg("0 0 16 16", RECAP_NEEDS_SVG, 13., p.orange))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(needs_n.to_string()),
+                                    )
+                                    .child(tr(cx, "need you", "待你确认")),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .child(pro_svg("0 0 16 16", RECAP_FAIL_SVG, 13., p.red))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(fail_n.to_string()),
+                                    )
+                                    .child(tr(cx, "failed", "失败")),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .relative()
+                    .w_full()
+                    .h(px(78.))
+                    .child(curve_canvas)
+                    .when_some(tip_el, |d, t| d.child(t))
+                    .child(hit_layer),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .text_size(px(10.5))
+                    .text_color(p.faint)
+                    .child(self.since_label.clone())
+                    .child(self.now_label.clone()),
+            )
+    }
+
+    fn render_status_pill(&self, status: MissionAgentStatus, cx: &App) -> Div {
+        let p = ProPalette::get(cx);
+        let (bg, fg, label) = match status {
+            MissionAgentStatus::Running => (p.accent_soft, p.blue, tr(cx, "Running", "运行中")),
+            MissionAgentStatus::Waiting => {
+                (p.amber_soft, p.amber_ink, tr(cx, "Needs you", "待确认"))
+            }
+            MissionAgentStatus::Failed => (p.red_soft, p.red_ink, tr(cx, "Failed", "失败")),
+            MissionAgentStatus::Done => (p.green_soft, p.green_ink, tr(cx, "Done", "已完成")),
+        };
+        div()
+            .h(px(18.))
+            .px(px(6.))
+            .rounded(px(4.))
+            .bg(bg)
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .text_size(px(11.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(fg)
+            .child(div().size(px(5.)).rounded_full().bg(fg))
+            .child(label)
+    }
+
+    fn render_fleet_card(
+        &self,
+        wide_tree: bool,
+        elapsed_ms: f32,
+        pulse_t: f32,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let p = ProPalette::get(cx);
+        let highlighted_agent = self.highlighted_agent_from_hover().cloned();
+
+        let mut flat = Vec::new();
+        flatten_agents(&self.agents, &mut flat);
+        let running_count = flat
+            .iter()
+            .filter(|a| a.status == MissionAgentStatus::Running)
+            .count();
+        let total_cost: f64 = flat.iter().map(|a| a.cost_usd).sum();
+
+        let visible_leads: Vec<&MissionAgent> = self
+            .agents
+            .iter()
+            .filter(|lead| lead.matches_tree(self.filter))
+            .collect();
+
+        type AnchorSlot = Rc<Cell<Option<Point<Pixels>>>>;
+        let lead_anchor: AnchorSlot = Rc::new(Cell::new(None));
+        let mut sub_anchors: Vec<(AnchorSlot, bool)> = Vec::new();
+
+        let build_tools_strip = |tools: &[SharedString], cx: &App| -> Div {
+            let mut strip = div().flex_none().flex().items_center().gap(px(3.));
+            for tool in tools.iter().take(3) {
+                strip = strip.child(pro_app_tile(tool, 16., cx));
+            }
+            strip
+        };
+
+        let mut leads_col = div()
+            .when(wide_tree, |d| d.w(px(236.)).flex_none())
+            .when(!wide_tree, |d| d.w_full())
+            .flex()
+            .flex_col()
+            .gap(px(8.));
+
+        let mut open_children: Vec<MissionAgent> = Vec::new();
+
+        for lead in &visible_leads {
+            let is_open = lead.id == self.open_lead && !lead.children.is_empty();
+            let matching_children: Vec<MissionAgent> = lead
+                .children
+                .iter()
+                .filter(|c| c.status.matches(self.filter))
+                .cloned()
+                .collect();
+            if is_open {
+                open_children = matching_children.clone();
+            }
+
+            let faded = highlighted_agent
+                .as_ref()
+                .is_some_and(|hid| &lead.id != hid && !lead.children.iter().any(|c| &c.id == hid));
+
+            let child_summary = if lead.children.is_empty() {
+                tr(cx, "Direct agent", "独立执行").to_owned()
+            } else {
+                let wait_c = lead
+                    .children
+                    .iter()
+                    .filter(|c| c.status == MissionAgentStatus::Waiting)
+                    .count();
+                let fail_c = lead
+                    .children
+                    .iter()
+                    .filter(|c| c.status == MissionAgentStatus::Failed)
+                    .count();
+                let done_c = lead
+                    .children
+                    .iter()
+                    .filter(|c| c.status == MissionAgentStatus::Done)
+                    .count();
+                if fail_c > 0 {
+                    format!("{fail_c} {}", tr(cx, "failed", "项失败"))
+                } else if wait_c > 0 {
+                    format!("{wait_c} {}", tr(cx, "need you", "项待确认"))
+                } else {
+                    format!(
+                        "{done_c}/{} {}",
+                        lead.children.len(),
+                        tr(cx, "done", "已完成")
+                    )
+                }
+            };
+
+            let progress_frac = if lead.children.is_empty() {
+                if lead.status == MissionAgentStatus::Done {
+                    1.0
+                } else {
+                    0.65
+                }
+            } else {
+                let done_c = lead
+                    .children
+                    .iter()
+                    .filter(|c| c.status == MissionAgentStatus::Done)
+                    .count();
+                (done_c as f32 / lead.children.len() as f32).max(0.25)
+            };
+
+            let lead_id = lead.id.clone();
+            let col = agent_hue(&lead_id, &p);
+            let anchor_cell = lead_anchor.clone();
+
+            let lead_card = activate(
+                div()
+                    .id(pro_eid(&self.id, format!("fleet-lead-{lead_id}")))
+                    .role(Role::Button)
+                    .aria_label(lead.name.clone())
+                    .tab_index(0)
+                    .relative()
+                    .w_full()
+                    .rounded(px(10.))
+                    .bg(p.card)
+                    .border_1()
+                    .border_color(if is_open { p.line_strong } else { p.line })
+                    .p(px(10.))
+                    .opacity(if faded { 0.42 } else { 1.0 })
+                    .hover(move |s| s.border_color(p.line_strong))
+                    .focus_visible(move |s| s.border_color(p.focus))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .cursor_pointer()
+                    .when(is_open && wide_tree, |d| {
+                        d.child(
+                            canvas(
+                                move |b, _, _| {
+                                    anchor_cell.set(Some(point(b.right(), b.center().y)));
+                                },
+                                |_, _, _, _| (),
+                            )
+                            .absolute()
+                            .inset_0(),
+                        )
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(pro_agent_avatar(
+                                &lead_id,
+                                col,
+                                22.,
+                                lead.status == MissionAgentStatus::Running,
+                                elapsed_ms,
+                                cx,
+                            ))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .text_size(px(12.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.strong)
+                                            .truncate()
+                                            .child(lead.name.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11.))
+                                            .text_color(p.muted)
+                                            .truncate()
+                                            .child(lead.model.clone()),
+                                    ),
+                            )
+                            .child(self.render_status_pill(lead.status, cx)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .text_size(px(12.))
+                                    .text_color(p.text)
+                                    .truncate()
+                                    .child(lead.task.clone()),
+                            )
+                            .child(build_tools_strip(&lead.tools, cx)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(8.))
+                            .text_size(px(11.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .text_color(p.muted)
+                                    .child(pro_progress_ring(
+                                        progress_frac,
+                                        11.,
+                                        1.6,
+                                        col,
+                                        p.line_strong,
+                                    ))
+                                    .child(child_summary),
+                            )
+                            .child(
+                                div()
+                                    .text_color(p.ink)
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(format!("${:.2} · {}", lead.cost_usd, lead.elapsed)),
+                            ),
+                    ),
+                cx,
+                move |this, _, cx| {
+                    this.open_lead = lead_id.clone();
+                    cx.emit(MissionControlEvent::LeadSelected(lead_id.clone()));
+                    cx.notify();
+                },
+            );
+
+            leads_col = leads_col.child(lead_card);
+
+            // On narrow screens (< 580px), stack open children directly under their lead
+            if is_open && !wide_tree && !matching_children.is_empty() {
+                let mut indent_col = div()
+                    .pl(px(20.))
+                    .ml(px(8.))
+                    .border_l_1()
+                    .border_color(p.blue.opacity(0.35))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.));
+                for sub in &matching_children {
+                    indent_col = indent_col.child(self.render_sub_agent_card(
+                        sub,
+                        None,
+                        &highlighted_agent,
+                        elapsed_ms,
+                        cx,
+                    ));
+                }
+                leads_col = leads_col.child(indent_col);
+            }
+        }
+
+        let body = if visible_leads.is_empty() {
+            div()
+                .w_full()
+                .py(px(28.))
+                .text_center()
+                .text_size(px(12.5))
+                .text_color(p.muted)
+                .child(tr(
+                    cx,
+                    "No agents match this filter.",
+                    "当前筛选下暂无智能体。",
+                ))
+        } else if wide_tree {
+            let mut subs_col = div().flex_1().min_w_0().flex().flex_col().gap(px(8.));
+            for sub in &open_children {
+                let scell: Rc<Cell<Option<Point<Pixels>>>> = Rc::new(Cell::new(None));
+                let live_branch = matches!(
+                    sub.status,
+                    MissionAgentStatus::Running | MissionAgentStatus::Waiting
+                );
+                sub_anchors.push((scell.clone(), live_branch));
+                subs_col = subs_col.child(self.render_sub_agent_card(
+                    sub,
+                    Some(scell),
+                    &highlighted_agent,
+                    elapsed_ms,
+                    cx,
+                ));
+            }
+
+            // Paint orthogonal rounded connectors with traveling light pulse via pro_connector_pulse
+            let base_link = p.blue.opacity(0.36);
+            let pulse_link = p.blue;
+            let card_bg = p.card;
+            let reduced = disabled_motion(cx);
+            let connector_layer = canvas(
+                |_, _, _| (),
+                move |_, _, window, _| {
+                    let Some(p0) = lead_anchor.get() else {
+                        return;
+                    };
+                    for (idx, (cell, live)) in sub_anchors.iter().enumerate() {
+                        let Some(p1) = cell.get() else {
+                            continue;
+                        };
+                        let prog = if *live && !reduced {
+                            Some((pulse_t + idx as f32 * 0.28).fract())
+                        } else {
+                            None
+                        };
+                        pro_connector_pulse(
+                            p0, p1, 8.0, false, base_link, pulse_link, prog, 1.5, window,
+                        );
+                    }
+                    if !sub_anchors.is_empty() {
+                        let r_out = px(3.8);
+                        let r_in = px(2.4);
+                        window.paint_quad(
+                            fill(
+                                Bounds::new(p0 - point(r_out, r_out), size(r_out * 2., r_out * 2.)),
+                                pulse_link,
+                            )
+                            .corner_radii(r_out),
+                        );
+                        window.paint_quad(
+                            fill(
+                                Bounds::new(p0 - point(r_in, r_in), size(r_in * 2., r_in * 2.)),
+                                card_bg,
+                            )
+                            .corner_radii(r_in),
+                        );
+                    }
+                },
+            )
+            .absolute()
+            .inset_0();
+
+            div()
+                .relative()
+                .w_full()
+                .flex()
+                .items_start()
+                .gap(px(40.))
+                .child(leads_col)
+                .child(subs_col)
+                .child(connector_layer)
+        } else {
+            leads_col
+        };
+
+        div()
+            .w_full()
+            .h_full()
+            .rounded(px(10.))
+            .bg(p.card)
+            .border_1()
+            .border_color(p.line)
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .px(px(16.))
+                    .py(px(12.))
+                    .border_b_1()
+                    .border_color(p.line)
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(pro_icon(ProIcon::Sparkles, 15., p.blue))
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(tr(cx, "Agents", "智能体编队")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .child(format!("{running_count} {}", tr(cx, "running", "运行中")))
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(format!("${total_cost:.2}")),
+                            ),
+                    ),
+            )
+            .child(div().p(px(14.)).child(body))
+    }
+
+    fn render_sub_agent_card(
+        &self,
+        sub: &MissionAgent,
+        anchor_cell: Option<Rc<Cell<Option<Point<Pixels>>>>>,
+        highlighted_agent: &Option<SharedString>,
+        elapsed_ms: f32,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let p = ProPalette::get(cx);
+        let faded = highlighted_agent.as_ref().is_some_and(|hid| hid != &sub.id);
+        let col = agent_hue(&sub.id, &p);
+        let sub_id = sub.id.clone();
+
+        let quick_action = match sub.status {
+            MissionAgentStatus::Waiting => {
+                let aid = sub_id.clone();
+                let first_choice = sub.ask.as_ref().and_then(|a| a.choices.first().cloned());
+                let btn_label = if first_choice.is_some() {
+                    tr(cx, "Answer", "回答")
+                } else {
+                    tr(cx, "Approve", "批准")
+                };
+                Some(activate(
+                    div()
+                        .id(pro_eid(&self.id, format!("sub-act-{aid}")))
+                        .h(px(20.))
+                        .px(px(7.))
+                        .rounded(px(5.))
+                        .bg(p.subtle)
+                        .border_1()
+                        .border_color(p.line_strong)
+                        .hover(move |s| s.bg(p.hover))
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.strong)
+                        .cursor_pointer()
+                        .child(btn_label),
+                    cx,
+                    move |this, _, cx| {
+                        this.resolve_approve(&aid, first_choice.clone(), cx);
+                    },
+                ))
+            }
+            MissionAgentStatus::Failed => {
+                let aid = sub_id.clone();
+                Some(activate(
+                    div()
+                        .id(pro_eid(&self.id, format!("sub-retry-{aid}")))
+                        .h(px(20.))
+                        .px(px(7.))
+                        .rounded(px(5.))
+                        .bg(p.subtle)
+                        .border_1()
+                        .border_color(p.line_strong)
+                        .hover(move |s| s.bg(p.hover))
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.strong)
+                        .cursor_pointer()
+                        .child(tr(cx, "Retry", "重试")),
+                    cx,
+                    move |this, _, cx| {
+                        this.resolve_retry(&aid, cx);
+                    },
+                ))
+            }
+            _ => None,
+        };
+
+        div()
+            .relative()
+            .w_full()
+            .min_w_0()
+            .rounded(px(9.))
+            .bg(p.subtle)
+            .border_1()
+            .border_color(p.line)
+            .p(px(9.))
+            .opacity(if faded { 0.42 } else { 1.0 })
+            .flex()
+            .flex_col()
+            .gap(px(5.))
+            .when_some(anchor_cell, |d, cell| {
+                d.child(
+                    canvas(
+                        move |b, _, _| {
+                            cell.set(Some(point(b.left(), b.center().y)));
+                        },
+                        |_, _, _, _| (),
+                    )
+                    .absolute()
+                    .inset_0(),
+                )
+            })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.))
+                    .child(pro_agent_avatar(
+                        &sub.id,
+                        col,
+                        20.,
+                        sub.status == MissionAgentStatus::Running,
+                        elapsed_ms,
+                        cx,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.strong)
+                            .truncate()
+                            .child(sub.name.clone()),
+                    )
+                    .child(self.render_status_pill(sub.status, cx)),
+            )
+            .child(
+                div()
+                    .text_size(px(11.5))
+                    .text_color(p.text)
+                    .truncate()
+                    .child(sub.task.clone()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(6.))
+                    .text_size(px(11.))
+                    .text_color(p.muted)
+                    .child(format!("${:.2} · {}", sub.cost_usd, sub.elapsed))
+                    .when_some(quick_action, |d, btn| d.child(btn)),
+            )
+    }
+
+    fn render_inbox_queue(&self, cx: &mut Context<Self>) -> Div {
+        let p = ProPalette::get(cx);
+        let highlighted_agent = self.highlighted_agent_from_hover().cloned();
+
+        let mut flat = Vec::new();
+        flatten_agents(&self.agents, &mut flat);
+        let actionable: Vec<&MissionAgent> = flat
+            .into_iter()
+            .filter(|a| {
+                matches!(
+                    a.status,
+                    MissionAgentStatus::Waiting | MissionAgentStatus::Failed
+                ) && a.status.matches(self.filter)
+            })
+            .collect();
+
+        let lane_bg: Hsla = if p.dark {
+            rgb(0x161618).into()
+        } else {
+            rgb(0xf4f4f5).into()
+        };
+
+        let mut cards_col = div().w_full().flex().flex_col().gap(px(6.));
+        if actionable.is_empty() {
+            cards_col = cards_col.child(
+                div()
+                    .w_full()
+                    .py(px(36.))
+                    .px(px(12.))
+                    .text_center()
+                    .text_size(px(12.5))
+                    .text_color(p.muted)
+                    .child(tr(cx, "Nothing waiting on you", "暂无待你处理的请求")),
+            );
+        } else {
+            for ag in &actionable {
+                let aid = ag.id.clone();
+                let faded = highlighted_agent.as_ref().is_some_and(|hid| hid != &aid);
+                let is_failed = ag.status == MissionAgentStatus::Failed;
+
+                let (headline, desc, desc_col) = if is_failed {
+                    (
+                        ag.task.clone(),
+                        ag.error
+                            .clone()
+                            .unwrap_or_else(|| SharedString::from("Execution failed")),
+                        p.red_ink,
+                    )
+                } else if let Some(ask) = &ag.ask {
+                    (ask.title.clone(), ask.detail.clone(), p.text)
+                } else {
+                    (
+                        ag.task.clone(),
+                        "Waiting on your confirmation".into(),
+                        p.text,
+                    )
+                };
+
+                let actions_row = if is_failed {
+                    let aid_dis = aid.clone();
+                    let aid_ret = aid.clone();
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .gap(px(6.))
+                        .child(activate(
+                            div()
+                                .id(pro_eid(&self.id, format!("inb-dismiss-{aid}")))
+                                .role(Role::Button)
+                                .aria_label(tr(cx, "Dismiss", "忽略"))
+                                .tab_index(0)
+                                .h(px(26.))
+                                .px(px(10.))
+                                .rounded(px(6.))
+                                .bg(p.card)
+                                .border_1()
+                                .border_color(p.line_strong)
+                                .hover(move |s| s.bg(p.hover))
+                                .flex()
+                                .items_center()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .cursor_pointer()
+                                .child(tr(cx, "Dismiss", "忽略")),
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_reject_or_dismiss(&aid_dis, true, cx);
+                            },
+                        ))
+                        .child(activate(
+                            div()
+                                .id(pro_eid(&self.id, format!("inb-retry-{aid}")))
+                                .role(Role::Button)
+                                .aria_label(tr(cx, "Retry", "重试"))
+                                .tab_index(0)
+                                .h(px(26.))
+                                .px(px(11.))
+                                .rounded(px(6.))
+                                .bg(p.primary)
+                                .flex()
+                                .items_center()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.on_primary)
+                                .cursor_pointer()
+                                .child(tr(cx, "Retry", "重试")),
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_retry(&aid_ret, cx);
+                            },
+                        ))
+                } else if let Some(ask) = &ag.ask
+                    && !ask.choices.is_empty()
+                {
+                    let mut row = div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .justify_end()
+                        .gap(px(6.));
+                    for (ci, choice) in ask.choices.iter().enumerate() {
+                        let aid_ch = aid.clone();
+                        let ch_val = choice.clone();
+                        let is_primary = ci + 1 == ask.choices.len();
+                        row = row.child(activate(
+                            div()
+                                .id(pro_eid(&self.id, format!("inb-ans-{aid}-{ci}")))
+                                .role(Role::Button)
+                                .aria_label(ch_val.clone())
+                                .tab_index(0)
+                                .h(px(26.))
+                                .px(px(9.))
+                                .rounded(px(6.))
+                                .bg(if is_primary { p.primary } else { p.card })
+                                .when(!is_primary, |d| {
+                                    d.border_1()
+                                        .border_color(p.line_strong)
+                                        .hover(move |s| s.bg(p.hover))
+                                })
+                                .flex()
+                                .items_center()
+                                .text_size(px(11.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if is_primary { p.on_primary } else { p.ink })
+                                .cursor_pointer()
+                                .child(ch_val.clone()),
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_approve(&aid_ch, Some(ch_val.clone()), cx);
+                            },
+                        ));
+                    }
+                    row
+                } else {
+                    let aid_rej = aid.clone();
+                    let aid_app = aid.clone();
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .gap(px(6.))
+                        .child(activate(
+                            div()
+                                .id(pro_eid(&self.id, format!("inb-rej-{aid}")))
+                                .role(Role::Button)
+                                .aria_label(tr(cx, "Reject", "拒绝"))
+                                .tab_index(0)
+                                .h(px(26.))
+                                .px(px(10.))
+                                .rounded(px(6.))
+                                .bg(p.card)
+                                .border_1()
+                                .border_color(p.line_strong)
+                                .hover(move |s| s.bg(p.hover))
+                                .flex()
+                                .items_center()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.ink)
+                                .cursor_pointer()
+                                .child(tr(cx, "Reject", "拒绝")),
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_reject_or_dismiss(&aid_rej, false, cx);
+                            },
+                        ))
+                        .child(activate(
+                            div()
+                                .id(pro_eid(&self.id, format!("inb-app-{aid}")))
+                                .role(Role::Button)
+                                .aria_label(tr(cx, "Approve", "批准"))
+                                .tab_index(0)
+                                .h(px(26.))
+                                .px(px(11.))
+                                .rounded(px(6.))
+                                .bg(p.primary)
+                                .flex()
+                                .items_center()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.on_primary)
+                                .cursor_pointer()
+                                .child(tr(cx, "Approve", "批准")),
+                            cx,
+                            move |this, _, cx| {
+                                this.resolve_approve(&aid_app, None, cx);
+                            },
+                        ))
+                };
+
+                cards_col = cards_col.child(
+                    div()
+                        .w_full()
+                        .rounded(px(10.))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .p(px(11.))
+                        .opacity(if faded { 0.42 } else { 1.0 })
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .gap(px(8.))
+                                .child(div().mt(px(2.)).child(pro_icon(
+                                    if is_failed {
+                                        ProIcon::AlertTriangle
+                                    } else {
+                                        ProIcon::Sparkles
+                                    },
+                                    14.,
+                                    if is_failed { p.red } else { p.amber },
+                                )))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(2.))
+                                        .child(
+                                            div()
+                                                .text_size(px(13.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.strong)
+                                                .child(headline),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(12.))
+                                                .line_height(px(17.))
+                                                .text_color(desc_col)
+                                                .child(desc),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .pt(px(4.))
+                                .px(px(8.))
+                                .py(px(5.))
+                                .rounded(px(7.))
+                                .bg(p.subtle)
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(p.muted)
+                                        .child(format!("{} · {}", ag.name, ag.elapsed)),
+                                )
+                                .child(actions_row),
+                        ),
+                );
+            }
+        }
+
+        div()
+            .w_full()
+            .min_h(px(290.))
+            .rounded(px(12.))
+            .bg(lane_bg)
+            .border_1()
+            .border_color(p.line)
+            .p(px(6.))
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .child(
+                div()
+                    .h(px(30.))
+                    .px(px(8.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(pro_icon(ProIcon::Sparkles, 13., p.blue))
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.muted)
+                                    .child(tr(cx, "NEEDS YOU", "待你处理")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .min_w(px(20.))
+                            .h(px(18.))
+                            .px(px(5.))
+                            .rounded(px(5.))
+                            .bg(p.chip_hover)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(actionable.len().to_string()),
+                    ),
+            )
+            .child(cards_col)
+    }
+}
+
+impl Render for MissionControlBlock {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = ProPalette::get(cx);
+        let reduced = disabled_motion(cx);
+        let has_running = count_mission_agents(&self.agents, MissionFilter::Running) > 0;
+        if (has_running || self.loading) && !reduced {
+            w.request_animation_frame();
+        }
+
+        let elapsed_secs = self.boot_at.elapsed().as_secs_f32();
+        let elapsed_ms = elapsed_secs * 1000.0;
+        let pulse_t = (elapsed_secs / 2.2).fract();
+
+        let width = self.measured_width.get();
+        let stack_columns = width < 840.;
+        let wide_fleet_tree = if stack_columns {
+            width >= 560.
+        } else {
+            width >= 840.
+        };
+        let compact = width < 480.;
+        let measure_cell = self.measured_width.clone();
+
+        // Top Bar: "Mission control" + Unified Filter (All 7 | Running 3 | Needs you 3 | Failed 1)
+        let heading = if self.title.as_ref() == "Mission control" {
+            tr(cx, "Mission control", "任务指挥台").to_owned()
+        } else {
+            self.title.to_string()
+        };
+
+        let filter_sensor = pro_selection_sensor();
+        let thumb_bg: Hsla = if p.dark {
+            rgb(0x2a2a2e).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let mut filter_bar = div()
+            .relative()
+            .p(px(2.))
+            .rounded(px(9.))
+            .bg(p.chip)
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(2.))
+            .child(pro_pill_indicator(
+                pro_eid(&self.id, "mc-filter-pill"),
+                self.filter.slug(),
+                filter_sensor.clone(),
+                7.,
+                thumb_bg,
+                Some(p.line),
+                true,
+            ));
+
+        for f in MissionFilter::ALL {
+            let sel = self.filter == f;
+            let count = count_mission_agents(&self.agents, f);
+            filter_bar = filter_bar.child(activate(
+                div()
+                    .id(pro_eid(&self.id, format!("mc-filter-{}", f.slug())))
+                    .role(Role::RadioButton)
+                    .aria_label(format!("{} {count}", f.label(cx)))
+                    .tab_index(0)
+                    .relative()
+                    .h(px(26.))
+                    .px(px(9.))
+                    .rounded(px(7.))
+                    .when(sel, |d| d.child(pro_mark_selected(&filter_sensor)))
+                    .focus_visible(move |s| s.border_1().border_color(p.focus))
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_size(px(12.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if sel { p.strong } else { p.text })
+                    .cursor_pointer()
+                    .child(f.label(cx))
+                    .child(div().text_color(p.muted).child(count.to_string())),
+                cx,
+                move |this, _, cx| {
+                    this.set_filter(f, cx);
+                },
+            ));
+        }
+
+        let top_bar = div()
+            .w_full()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap(px(10.))
+            .child(
+                div()
+                    .text_size(px(15.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .child(heading),
+            )
+            .child(filter_bar);
+
+        if self.loading {
+            let phase = (elapsed_secs * 0.9).fract();
+            return div()
+                .id(self.id.clone())
+                .w_full()
+                .p(px(16.))
+                .bg(p.page)
+                .flex()
+                .flex_col()
+                .gap(px(14.))
+                .child(top_bar)
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(148.))
+                        .rounded(px(14.))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .p(px(16.))
+                        .child(pro_skeleton_bar(240., 84., 8., phase, cx)),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(280.))
+                        .rounded(px(10.))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .p(px(16.))
+                        .child(pro_skeleton_bar(260., 180., 8., phase + 0.2, cx)),
+                );
+        }
+
+        if self.empty || self.agents.is_empty() {
+            return div()
+                .id(self.id.clone())
+                .w_full()
+                .p(px(16.))
+                .bg(p.page)
+                .flex()
+                .flex_col()
+                .gap(px(14.))
+                .child(top_bar)
+                .child(
+                    div()
+                        .w_full()
+                        .rounded(px(12.))
+                        .bg(p.card)
+                        .border_1()
+                        .border_color(p.line)
+                        .child(pro_empty_state(
+                            ProIcon::Sparkles,
+                            tr(cx, "All quiet in Mission Control", "任务指挥台当前空闲"),
+                            tr(
+                                cx,
+                                "Active agents, sub-agent trees, recap peaks, and approval requests appear here.",
+                                "启动智能体后，此处将汇总事件曲线、主从编队树与待审批事项。",
+                            ),
+                            None,
+                            cx,
+                        )),
+                );
+        }
+
+        let recap_card = self.render_recap_section(cx);
+        let fleet_card = self.render_fleet_card(wide_fleet_tree, elapsed_ms, pulse_t, cx);
+        let inbox_queue = self.render_inbox_queue(cx);
+
+        let lower_grid = div()
+            .w_full()
+            .flex()
+            .when(stack_columns, |d| d.flex_col())
+            .items_start()
+            .gap(px(14.))
+            .child(div().flex_1().min_w_0().w_full().child(fleet_card))
+            .child(
+                div()
+                    .when(!stack_columns, |d| d.w(px(304.)).flex_none())
+                    .when(stack_columns, |d| d.w_full())
+                    .child(inbox_queue),
+            );
+
+        div()
+            .id(self.id.clone())
+            .role(Role::Region)
+            .aria_label(self.title.clone())
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::handle_key_down))
+            .relative()
+            .w_full()
+            .min_w_0()
+            .px(px(if compact { 16. } else { 32. }))
+            .py(px(if compact { 20. } else { 28. }))
+            .bg(p.page)
+            .flex()
+            .flex_col()
+            .gap(px(14.))
+            .child(
+                canvas(
+                    move |b, window, _| {
+                        let nw = f32::from(b.size.width);
+                        if nw > 10. && (measure_cell.get() - nw).abs() > 1.0 {
+                            measure_cell.set(nw);
+                            window.request_animation_frame();
+                        }
+                    },
+                    |_, _, _, _| (),
+                )
+                .w_full()
+                .h(px(0.)),
+            )
+            .child(top_bar)
+            .child(pro_view_transition(
+                pro_eid(&self.id, "mc-body-vtx"),
+                SharedString::from("mc-ready"),
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(14.))
+                    .child(recap_card)
+                    .child(lower_grid),
+            ))
+            .child(pro_toast_banner(self.toast.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        MissionAgentStatus, MissionFilter, count_mission_agents, default_mission_agents,
+        default_recap_events, eval_peak_curve, mutate_agent,
+    };
+
+    #[test]
+    fn default_fleet_counts_match_reference_7_3_3_1_distribution() {
+        let agents = default_mission_agents();
+        let events = default_recap_events();
+
+        assert_eq!(count_mission_agents(&agents, MissionFilter::All), 7);
+        assert_eq!(count_mission_agents(&agents, MissionFilter::Running), 3);
+        assert_eq!(count_mission_agents(&agents, MissionFilter::NeedsYou), 3);
+        assert_eq!(count_mission_agents(&agents, MissionFilter::Failed), 1);
+        assert_eq!(events.len(), 7);
+    }
+
+    #[test]
+    fn approving_and_retrying_updates_unified_filter_counts() {
+        let mut agents = default_mission_agents();
+        assert!(mutate_agent(&mut agents, "release", |ag| {
+            ag.status = MissionAgentStatus::Running;
+            ag.ask = None;
+        }));
+        assert_eq!(count_mission_agents(&agents, MissionFilter::Running), 4);
+        assert_eq!(count_mission_agents(&agents, MissionFilter::NeedsYou), 2);
+
+        assert!(mutate_agent(&mut agents, "billing", |ag| {
+            ag.status = MissionAgentStatus::Running;
+            ag.error = None;
+        }));
+        assert_eq!(count_mission_agents(&agents, MissionFilter::Failed), 0);
+        assert_eq!(count_mission_agents(&agents, MissionFilter::NeedsYou), 1);
+
+        let peak = eval_peak_curve(0.50, &[(0.50, 0.80)]);
+        let far = eval_peak_curve(0.05, &[(0.50, 0.80)]);
+        assert!(peak > 0.75);
+        assert!(far < 0.01);
+    }
+}

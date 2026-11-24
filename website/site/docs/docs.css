@@ -1136,12 +1136,14 @@ html[data-theme="dark"],
 
 @media (min-width: 1200px) {
   .docs-pad:has(.doc .screen-story),
-  .docs-pad:has(.doc .pro-motion-story) {
+  .docs-pad:has(.doc .pro-motion-story),
+  .docs-pad:has(.doc .pro-stage-story) {
     width: min(894px, calc(100% - 2rem));
   }
 }
 .doc [data-preview-slot]:has(.screen-story),
-.doc [data-preview-slot]:has(.pro-motion-story) {
+.doc [data-preview-slot]:has(.pro-motion-story),
+.doc [data-preview-slot]:has(.pro-stage-story) {
   --preview-max-width: 894px;
 }
 .doc [data-preview-size="fit"] [data-preview-screen]:has(> iframe.screen-story) {

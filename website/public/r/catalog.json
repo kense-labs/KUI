@@ -2254,5 +2254,925 @@
     "kind": "component",
     "name": "packet-dissector",
     "title": "PacketDissector"
+  },
+  {
+    "categories": [
+      "pro-search"
+    ],
+    "kind": "component",
+    "name": "brand-regions",
+    "title": "BrandRegionsScreen"
+  },
+  {
+    "categories": [
+      "pro-search"
+    ],
+    "kind": "component",
+    "name": "prompt-explorer",
+    "title": "PromptExplorerScreen"
+  },
+  {
+    "categories": [
+      "pro-motion"
+    ],
+    "kind": "component",
+    "name": "blur-crossfade",
+    "title": "BlurCrossfade"
+  },
+  {
+    "categories": [
+      "pro-motion"
+    ],
+    "kind": "component",
+    "name": "gradient-text",
+    "title": "GradientText"
+  },
+  {
+    "categories": [
+      "pro-motion"
+    ],
+    "kind": "component",
+    "name": "tilt-card",
+    "title": "TiltCard"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "glass-folder",
+    "title": "GlassFolder"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "glow-keyboard",
+    "title": "GlowKeyboard"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "inspect-agent-card",
+    "title": "InspectAgentCard"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "inspect-composer",
+    "title": "InspectComposer"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "integration-flow",
+    "title": "IntegrationFlow"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "model-menu",
+    "title": "ModelMenu"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "outreach-branches",
+    "title": "OutreachBranches"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "progress-pill",
+    "title": "ProgressPill"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "project-flow",
+    "title": "ProjectFlow"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "voice-capture",
+    "title": "VoiceCapture"
+  },
+  {
+    "categories": [
+      "illustrations"
+    ],
+    "kind": "component",
+    "name": "world-map",
+    "title": "WorldMap"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "agent-gallery",
+    "title": "AgentGalleryBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "app-directory",
+    "title": "AppDirectoryBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "client-context",
+    "title": "ClientContextBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "invoice-credit",
+    "title": "InvoiceCreditBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "kpi-board",
+    "title": "KpiBoardBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "live-session",
+    "title": "LiveSessionBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "metrics-dashboard",
+    "title": "MetricsDashboardBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "mission-control",
+    "title": "MissionControlBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "mission-timeline",
+    "title": "MissionTimelineBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "pricing-plans",
+    "title": "PricingPlansBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "revenue-chat",
+    "title": "RevenueChatBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "run-inspector",
+    "title": "RunInspectorBlock"
+  },
+  {
+    "categories": [
+      "blocks"
+    ],
+    "kind": "component",
+    "name": "task-board",
+    "title": "TaskBoardBlock"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "ai-answer",
+    "title": "AiAnswer"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "chat-composer",
+    "title": "ChatComposer"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "cited-answer",
+    "title": "CitedAnswer"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "model-picker",
+    "title": "ModelPicker"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "thinking-state",
+    "title": "ThinkingState"
+  },
+  {
+    "categories": [
+      "intelligence"
+    ],
+    "kind": "component",
+    "name": "writing-assistant",
+    "title": "WritingAssistant"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "command-menu",
+    "title": "CommandMenu"
+  },
+  {
+    "categories": [
+      "navigation"
+    ],
+    "kind": "component",
+    "name": "integration-picker",
+    "title": "IntegrationPicker"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "billing-schedule",
+    "title": "BillingSchedule"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "integration-settings",
+    "title": "IntegrationSettings"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "prompt-library",
+    "title": "PromptLibrary"
+  },
+  {
+    "categories": [
+      "special-inputs"
+    ],
+    "kind": "component",
+    "name": "stepper-form",
+    "title": "StepperForm"
+  },
+  {
+    "categories": [
+      "editors"
+    ],
+    "kind": "component",
+    "name": "dropzone",
+    "title": "Dropzone"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "breakdown-chart",
+    "title": "BreakdownChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "compact-breakdown",
+    "title": "CompactBreakdown"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "experiment-card",
+    "title": "ExperimentCard"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "kpi-chart",
+    "title": "KpiChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "metering-chart",
+    "title": "MeteringChart"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "model-usage",
+    "title": "ModelUsage"
+  },
+  {
+    "categories": [
+      "charts"
+    ],
+    "kind": "component",
+    "name": "trend-chart",
+    "title": "TrendChart"
+  },
+  {
+    "categories": [
+      "tables"
+    ],
+    "kind": "component",
+    "name": "data-table",
+    "title": "DataTable"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "project-card",
+    "title": "ProjectCard"
+  },
+  {
+    "categories": [
+      "cards"
+    ],
+    "kind": "component",
+    "name": "stat-card",
+    "title": "StatCard"
+  },
+  {
+    "categories": [
+      "progress"
+    ],
+    "kind": "component",
+    "name": "setup-guide",
+    "title": "SetupGuide"
+  },
+  {
+    "categories": [
+      "messages"
+    ],
+    "kind": "component",
+    "name": "toaster",
+    "title": "Toaster"
+  },
+  {
+    "categories": [
+      "activity"
+    ],
+    "kind": "component",
+    "name": "comments-panel",
+    "title": "CommentsPanel"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-checkpoints",
+    "title": "AgentCheckpoints"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-crew",
+    "title": "AgentCrew"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-cursors",
+    "title": "AgentCursors"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-findings",
+    "title": "AgentFindings"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-fleet",
+    "title": "AgentFleet"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-graph",
+    "title": "AgentGraph"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-inbox",
+    "title": "AgentInbox"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-lanes",
+    "title": "AgentLanes"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-ledger",
+    "title": "AgentLedger"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-metro-map",
+    "title": "AgentMetroMap"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-monitor",
+    "title": "AgentMonitor"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-overlap-map",
+    "title": "AgentOverlapMap"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-queue",
+    "title": "AgentQueue"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-recap",
+    "title": "AgentRecap"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-router",
+    "title": "AgentRouter"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-sequence",
+    "title": "AgentSequence"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-state-machine",
+    "title": "AgentStateMachine"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-steering",
+    "title": "AgentSteering"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-timing",
+    "title": "AgentTiming"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-trail",
+    "title": "AgentTrail"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-tree",
+    "title": "AgentTree"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "agent-workbench",
+    "title": "AgentWorkbench"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "approval-card",
+    "title": "ApprovalCard"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "approval-gates",
+    "title": "ApprovalGates"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "autonomy-dial",
+    "title": "AutonomyDial"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "away-summary",
+    "title": "AwaySummary"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "collaboration-stream",
+    "title": "CollaborationStream"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "commit-trail",
+    "title": "CommitTrail"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "conflict-radar",
+    "title": "ConflictRadar"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "context-compaction",
+    "title": "ContextCompaction"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "context-map",
+    "title": "ContextMap"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "cost-waterfall",
+    "title": "CostWaterfall"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "decision-card",
+    "title": "DecisionCard"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "decision-tree",
+    "title": "DecisionTree"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "delegate-board",
+    "title": "DelegateBoard"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "diff-timeline",
+    "title": "DiffTimeline"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "fallback-chain",
+    "title": "FallbackChain"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "fan-out-grid",
+    "title": "FanOutGrid"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "flow-builder",
+    "title": "FlowBuilder"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "handoff-swimlanes",
+    "title": "HandoffSwimlanes"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "inline-diff",
+    "title": "InlineDiff"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "judge-bracket",
+    "title": "JudgeBracket"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "memory-graph",
+    "title": "MemoryGraph"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "memory-panel",
+    "title": "MemoryPanel"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "model-router",
+    "title": "ModelRouter"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "parallel-attempts",
+    "title": "ParallelAttempts"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "permission-request",
+    "title": "PermissionRequest"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "plan-vs-actual",
+    "title": "PlanVsActual"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "rate-limit-planner",
+    "title": "RateLimitPlanner"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "reasoning-summary",
+    "title": "ReasoningSummary"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "repo-map",
+    "title": "RepoMap"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "response-stream",
+    "title": "ResponseStream"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "review-center",
+    "title": "ReviewCenter"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "root-cause-tree",
+    "title": "RootCauseTree"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "run-controls",
+    "title": "RunControls"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "running-now",
+    "title": "RunningNow"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "scheduled-runs",
+    "title": "ScheduledRuns"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "tool-access-map",
+    "title": "ToolAccessMap"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "trace-waterfall",
+    "title": "TraceWaterfall"
+  },
+  {
+    "categories": [
+      "agent-systems"
+    ],
+    "kind": "component",
+    "name": "voice-session",
+    "title": "VoiceSession"
   }
 ]

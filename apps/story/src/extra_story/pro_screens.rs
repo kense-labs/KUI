@@ -53,6 +53,8 @@ pub const IDS: &[&str] = &[
     "integrations",
     "kanban",
     "workflow-builder",
+    "prompt-explorer",
+    "brand-regions",
 ];
 
 pub const SCREEN_IDS: &[&str] = &[
@@ -102,6 +104,8 @@ pub const SCREEN_IDS: &[&str] = &[
     "integrations",
     "kanban",
     "workflow-builder",
+    "prompt-explorer",
+    "brand-regions",
 ];
 
 struct GradientFloorStory {
@@ -441,6 +445,18 @@ pub fn story(
                     "workflow-builder",
                     cx,
                 )
+            })
+            .into(),
+        ),
+        "prompt-explorer" => Some(
+            cx.new(|cx| {
+                kui::components::prompt_explorer::PromptExplorerScreen::new("prompt-explorer", cx)
+            })
+            .into(),
+        ),
+        "brand-regions" => Some(
+            cx.new(|cx| {
+                kui::components::brand_regions::BrandRegionsScreen::new("brand-regions", cx)
             })
             .into(),
         ),

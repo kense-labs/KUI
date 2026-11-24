@@ -2186,6 +2186,343 @@ pub fn pro_toast_banner(toast: Option<(SharedString, Instant)>) -> AnyElement {
     ProToastBanner { toast }.into_any_element()
 }
 
+#[derive(IntoElement)]
+struct ProShimmerText {
+    id: ElementId,
+    text: SharedString,
+    base_color: Hsla,
+    highlight_color: Hsla,
+    font_size: f32,
+    weight: FontWeight,
+    active: bool,
+}
+
+impl RenderOnce for ProShimmerText {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let reduced = disabled_motion(cx);
+        if !self.active || reduced {
+            return div()
+                .text_size(px(self.font_size))
+                .font_weight(self.weight)
+                .text_color(self.base_color)
+                .child(self.text)
+                .into_any_element();
+        }
+        let st = w.use_keyed_state(pro_eid(&self.id, "shim"), cx, |_, _| Instant::now());
+        let started = *st.read(cx);
+        w.request_animation_frame();
+        let phase = (started.elapsed().as_secs_f32() / 1.65).fract();
+        let chars: Vec<char> = self.text.chars().collect();
+        let n = chars.len().max(1) as f32;
+        let center = -0.25 + phase * 1.50;
+        let mut row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .min_w_0()
+            .text_size(px(self.font_size))
+            .font_weight(self.weight);
+        let char_color = |idx: usize| {
+            let u = idx as f32 / n;
+            let dist = ((u - center) / 0.22).abs();
+            let glint = (1. - dist).clamp(0., 1.);
+            let glint = glint * glint * (3. - 2. * glint);
+            pro_mix_color(self.base_color, self.highlight_color, glint)
+        };
+        let mut idx = 0usize;
+        while idx < chars.len() {
+            let ch = chars[idx];
+            if ch == ' ' {
+                row = row.child(div().w(px(self.font_size * 0.27)).h(px(self.font_size)));
+                idx += 1;
+            } else if ch > '\u{2e7f}' {
+                let col = char_color(idx);
+                row = row.child(div().text_color(col).child(ch.to_string()));
+                idx += 1;
+            } else {
+                let mut word = div().flex().items_center();
+                while idx < chars.len() && chars[idx] != ' ' && chars[idx] <= '\u{2e7f}' {
+                    let col = char_color(idx);
+                    word = word.child(div().text_color(col).child(chars[idx].to_string()));
+                    idx += 1;
+                }
+                row = row.child(word);
+            }
+        }
+        row.into_any_element()
+    }
+}
+
+/// Render a single-line status label with a sweeping highlight sheen while `active` is true.
+pub fn pro_shimmer_text(
+    id: impl Into<ElementId>,
+    text: impl Into<SharedString>,
+    base_color: Hsla,
+    highlight_color: Hsla,
+    font_size: f32,
+    weight: FontWeight,
+    active: bool,
+) -> AnyElement {
+    ProShimmerText {
+        id: id.into(),
+        text: text.into(),
+        base_color,
+        highlight_color,
+        font_size,
+        weight,
+        active,
+    }
+    .into_any_element()
+}
+
+struct ProRollNumState {
+    target: f64,
+    from: f64,
+    dir: f32,
+    clock: PhaseClock,
+}
+
+#[derive(IntoElement)]
+struct ProRollingNumber {
+    id: ElementId,
+    value: f64,
+    decimals: usize,
+    prefix: SharedString,
+    suffix: SharedString,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+}
+
+impl RenderOnce for ProRollingNumber {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let val = if self.value.is_finite() {
+            self.value
+        } else {
+            0.0
+        };
+        let st = w.use_keyed_state(pro_eid(&self.id, "rnum"), cx, |_, _| ProRollNumState {
+            target: val,
+            from: val,
+            dir: 1.,
+            clock: PhaseClock::default(),
+        });
+        let (shown, dy) = st.update(cx, |s, cx| {
+            let age_cur = s.clock.time(0.28, w, cx);
+            let cur_t = pro_ease((age_cur / 0.28).clamp(0., 1.)) as f64;
+            if (s.target - val).abs() > 1e-6 {
+                s.from = s.from + (s.target - s.from) * cur_t;
+                s.dir = if val >= s.target { 1. } else { -1. };
+                s.target = val;
+                s.clock.restart(cx);
+            }
+            let age = s.clock.time(0.28, w, cx);
+            let t = pro_ease((age / 0.28).clamp(0., 1.));
+            let v = s.from + (s.target - s.from) * (t as f64);
+            let offset = if t >= 0.999 || disabled_motion(cx) {
+                0.
+            } else {
+                2.5 * s.dir * (1. - t)
+            };
+            (v, offset)
+        });
+        let formatted = format!("{}{:.*}{}", self.prefix, self.decimals, shown, self.suffix);
+        div()
+            .relative()
+            .top(px(dy))
+            .text_size(px(self.font_size))
+            .font_weight(self.weight)
+            .text_color(self.color)
+            .child(formatted)
+            .into_any_element()
+    }
+}
+
+/// Tabular numeric readout that smoothly interpolates and micro-rolls when `value` changes.
+#[allow(clippy::too_many_arguments)]
+pub fn pro_rolling_number(
+    id: impl Into<ElementId>,
+    value: f64,
+    decimals: usize,
+    prefix: impl Into<SharedString>,
+    suffix: impl Into<SharedString>,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+) -> AnyElement {
+    ProRollingNumber {
+        id: id.into(),
+        value,
+        decimals,
+        prefix: prefix.into(),
+        suffix: suffix.into(),
+        font_size,
+        weight,
+        color,
+    }
+    .into_any_element()
+}
+
+/// Paint an orthogonal rounded connector (`p0 -> elbow -> p1` or S-bend) with an optional traveling light pulse (`progress` in `0.0..=1.0`).
+#[allow(clippy::too_many_arguments)]
+pub fn pro_connector_pulse(
+    p0: Point<Pixels>,
+    p1: Point<Pixels>,
+    radius: f32,
+    vertical_first: bool,
+    base_color: Hsla,
+    pulse_color: Hsla,
+    progress: Option<f32>,
+    stroke_w: f32,
+    window: &mut Window,
+) {
+    let x0 = f32::from(p0.x);
+    let y0 = f32::from(p0.y);
+    let x1 = f32::from(p1.x);
+    let y1 = f32::from(p1.y);
+    let steps = 40usize;
+    let mut pts = Vec::with_capacity(steps + 1);
+    if vertical_first {
+        let ym = (y0 + y1) * 0.5;
+        let dx = x1 - x0;
+        let dy1 = ym - y0;
+        let dy2 = y1 - ym;
+        let r = radius
+            .min(dx.abs() * 0.5)
+            .min(dy1.abs())
+            .min(dy2.abs())
+            .max(0.);
+        if r < 1.0 || dx.abs() < 1.0 {
+            for i in 0..=steps {
+                let t = i as f32 / steps as f32;
+                pts.push(point(px(x0 + dx * t), px(y0 + (y1 - y0) * t)));
+            }
+        } else {
+            let sx = dx.signum();
+            let sy1 = dy1.signum();
+            let sy2 = dy2.signum();
+            let a = (x0, y0);
+            let b = (x0, ym - sy1 * r);
+            let c1 = (x0, ym);
+            let d = (x0 + sx * r, ym);
+            let e = (x1 - sx * r, ym);
+            let c2 = (x1, ym);
+            let f = (x1, ym + sy2 * r);
+            let g = (x1, y1);
+            pts.push(point(px(a.0), px(a.1)));
+            pts.push(point(px(b.0), px(b.1)));
+            for k in 1..=8 {
+                let u = k as f32 / 8.;
+                let inv = 1. - u;
+                pts.push(point(
+                    px(inv * inv * b.0 + 2. * inv * u * c1.0 + u * u * d.0),
+                    px(inv * inv * b.1 + 2. * inv * u * c1.1 + u * u * d.1),
+                ));
+            }
+            for k in 1..=10 {
+                let u = k as f32 / 10.;
+                pts.push(point(px(d.0 + (e.0 - d.0) * u), px(ym)));
+            }
+            for k in 1..=8 {
+                let u = k as f32 / 8.;
+                let inv = 1. - u;
+                pts.push(point(
+                    px(inv * inv * e.0 + 2. * inv * u * c2.0 + u * u * f.0),
+                    px(inv * inv * e.1 + 2. * inv * u * c2.1 + u * u * f.1),
+                ));
+            }
+            pts.push(point(px(g.0), px(g.1)));
+        }
+    } else {
+        let xm = (x0 + x1) * 0.5;
+        let dy = y1 - y0;
+        let dx1 = xm - x0;
+        let dx2 = x1 - xm;
+        let r = radius
+            .min(dy.abs() * 0.5)
+            .min(dx1.abs())
+            .min(dx2.abs())
+            .max(0.);
+        if r < 1.0 || dy.abs() < 1.0 {
+            for i in 0..=steps {
+                let t = i as f32 / steps as f32;
+                pts.push(point(px(x0 + (x1 - x0) * t), px(y0 + dy * t)));
+            }
+        } else {
+            let sy = dy.signum();
+            let sx1 = dx1.signum();
+            let sx2 = dx2.signum();
+            let a = (x0, y0);
+            let b = (xm - sx1 * r, y0);
+            let c1 = (xm, y0);
+            let d = (xm, y0 + sy * r);
+            let e = (xm, y1 - sy * r);
+            let c2 = (xm, y1);
+            let f = (xm + sx2 * r, y1);
+            let g = (x1, y1);
+            pts.push(point(px(a.0), px(a.1)));
+            pts.push(point(px(b.0), px(b.1)));
+            for k in 1..=8 {
+                let u = k as f32 / 8.;
+                let inv = 1. - u;
+                pts.push(point(
+                    px(inv * inv * b.0 + 2. * inv * u * c1.0 + u * u * d.0),
+                    px(inv * inv * b.1 + 2. * inv * u * c1.1 + u * u * d.1),
+                ));
+            }
+            for k in 1..=10 {
+                let u = k as f32 / 10.;
+                pts.push(point(px(xm), px(d.1 + (e.1 - d.1) * u)));
+            }
+            for k in 1..=8 {
+                let u = k as f32 / 8.;
+                let inv = 1. - u;
+                pts.push(point(
+                    px(inv * inv * e.0 + 2. * inv * u * c2.0 + u * u * f.0),
+                    px(inv * inv * e.1 + 2. * inv * u * c2.1 + u * u * f.1),
+                ));
+            }
+            pts.push(point(px(g.0), px(g.1)));
+        }
+    }
+
+    if pts.len() < 2 {
+        return;
+    }
+    let mut base = PathBuilder::stroke(px(stroke_w));
+    for (i, &pt) in pts.iter().enumerate() {
+        if i == 0 {
+            base.move_to(pt);
+        } else {
+            base.line_to(pt);
+        }
+    }
+    if let Ok(path) = base.build() {
+        window.paint_path(path, base_color);
+    }
+
+    if let Some(prog) = progress {
+        let prog = prog.clamp(0., 1.);
+        let total = (pts.len() - 1) as f32;
+        let head = prog * total;
+        let span = (total * 0.24).max(3.);
+        for i in 0..(pts.len() - 1) {
+            let mid = i as f32 + 0.5;
+            let dist = (mid - head).abs();
+            if dist <= span {
+                let falloff = (1. - dist / span).clamp(0., 1.);
+                let alpha = falloff * falloff;
+                let mut seg = PathBuilder::stroke(px(stroke_w + 0.6 * alpha));
+                seg.move_to(pts[i]);
+                seg.line_to(pts[i + 1]);
+                if let Ok(p) = seg.build() {
+                    window.paint_path(p, pulse_color.opacity(alpha));
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{pro_ease, pro_mix_color};
