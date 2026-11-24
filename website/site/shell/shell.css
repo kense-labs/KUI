@@ -885,7 +885,8 @@ html[data-theme="dark"] .kense-mega-panel {
   }
 }
 
-.topbar .brand {
+.topbar .brand,
+.topbar .brand-split {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -896,6 +897,17 @@ html[data-theme="dark"] .kense-mega-panel {
 }
 .topbar .brand:hover {
   opacity: 1;
+}
+.topbar .brand-product {
+  color: var(--ink);
+  text-decoration: none;
+  line-height: 1;
+}
+.topbar .brand-split > a {
+  transition: opacity 0.15s ease;
+}
+.topbar .brand-split > a:hover {
+  opacity: 0.72;
 }
 .topbar .mark {
   display: grid;

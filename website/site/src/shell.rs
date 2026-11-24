@@ -419,10 +419,12 @@ fn header(en: bool, company: bool, landing: bool) -> String {
         "product"
     };
     let home_href = format!("{prefix}/");
-    let home_label = tr(en, "KUI · Back to Kense home", "KUI · 返回 Kense 首页");
+    let home_label = tr(en, "Kense home", "返回 Kense 首页");
+    let kui_href = format!("{prefix}/kui/");
+    let kui_label = tr(en, "KUI home", "返回 KUI 首页");
     let github = "https://github.com/kense-labs/KUI";
     format!(
-        r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar {class}" data-kense-topbar><div class="inner"><div class="company-brand-group"><a class="brand" href="{home_href}" aria-label="{home_label}">{}<span class="wordmark">KUI</span></a></div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link company-nav-extra" href="{prefix}/#experience">{}</a><a class="company-nav-link company-nav-extra" href="{prefix}/#architecture">{}</a><a class="company-nav-link" data-nav="components" href="{prefix}/kui/components/button/">{}</a><a class="company-nav-link" data-nav="docs" href="{prefix}/kui/docs/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="{github}" target="_blank" rel="noreferrer" aria-label="GitHub">{}<span>GitHub</span></a></div></div></header>"#,
+        r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar {class}" data-kense-topbar><div class="inner"><div class="company-brand-group"><div class="brand-split"><a class="brand" href="{home_href}" aria-label="{home_label}" title="{home_label}">{}</a><a class="brand-product wordmark" href="{kui_href}" aria-label="{kui_label}" title="{kui_label}">KUI</a></div></div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link company-nav-extra" href="{prefix}/#experience">{}</a><a class="company-nav-link company-nav-extra" href="{prefix}/#architecture">{}</a><a class="company-nav-link" data-nav="components" href="{prefix}/kui/components/button/">{}</a><a class="company-nav-link" data-nav="docs" href="{prefix}/kui/docs/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="{github}" target="_blank" rel="noreferrer" aria-label="GitHub">{}<span>GitHub</span></a></div></div></header>"#,
         mark(),
         tr(en, "Primary navigation", "主导航"),
         tr(en, "Live Demo", "体验"),

@@ -171,7 +171,10 @@ fn arm_kui_intro() -> Result<(), JsValue> {
             return;
         }
         let cur = win.location().pathname().unwrap_or_default();
-        if cur.trim_end_matches('/') == dest.trim_end_matches('/') {
+        if cur.trim_end_matches('/') == dest.trim_end_matches('/')
+            || cur.starts_with("/kui/")
+            || cur.starts_with("/en/kui/")
+        {
             return;
         }
         if let Ok(Some(storage)) = win.session_storage() {
