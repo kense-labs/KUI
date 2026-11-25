@@ -5,15 +5,12 @@
 //! band glides from model to model or follows pointer hover and keyboard input.
 
 use crate::{
-    components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, tr,
-    },
+    components::pro_chrome::{ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, tr},
     foundation::{Theme, ThemeMode},
     primitives::{
         control::UiLanguage,
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_app_artwork, pro_svg},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -30,7 +27,7 @@ const CARD_LEFT: f32 = 40.0;
 const CARD_TOP: f32 = 34.0;
 const CARD_W: f32 = 340.0;
 const CARD_R: f32 = 12.0;
-const ROW_H: f32 = 32.0;
+const ROW_H: f32 = 35.0;
 
 const QWEN_SVG: &str = r#"<path fill="currentColor" d="M23.919 14.545 20.817 9.17l1.47-2.544a.56.56 0 0 0 0-.566l-1.633-2.83a.57.57 0 0 0-.49-.283h-6.207L12.487.402a.57.57 0 0 0-.49-.284H8.732a.56.56 0 0 0-.49.284L5.139 5.775h-2.94a.56.56 0 0 0-.49.284L.077 8.887a.56.56 0 0 0 0 .567L3.18 14.83l-1.47 2.545a.56.56 0 0 0 0 .566l1.634 2.83a.57.57 0 0 0 .49.283h6.205l1.47 2.545a.57.57 0 0 0 .49.284h3.266a.57.57 0 0 0 .49-.284l3.104-5.375h2.94a.57.57 0 0 0 .49-.283l1.634-2.828a.55.55 0 0 0-.004-.568M8.733.686l1.634 2.828-1.634 2.828H21.8L20.164 9.17H7.425L5.63 6.06Zm1.306 19.801-6.205-.002 1.634-2.83h3.265L2.201 6.344h3.267q3.182 5.517 6.367 11.032zm10.124-5.66L18.53 12l-6.532 11.315-1.634-2.83c2.129-3.673 4.25-7.351 6.373-11.028h3.592l3.102 5.374z"></path>"#;
 
@@ -197,32 +194,44 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
     let band_top = rows_top + (key.band_y_q as f32 / 20.0);
     let band_bot = band_top + ROW_H;
 
-    let (card_rgb, border_rgb, border_a, sh_a1, sh_a2, pick_rgb, pick_a0, pick_a60, pick_line_a) =
-        if key.dark {
-            (
-                [20. / 255., 20. / 255., 20. / 255.],
-                [1.0, 1.0, 1.0],
-                0.12,
-                0.42,
-                0.24,
-                [244. / 255., 114. / 255., 182. / 255.],
-                0.16,
-                0.04,
-                0.24,
-            )
-        } else {
-            (
-                [1.0, 1.0, 1.0],
-                [0.0, 0.0, 0.0],
-                0.085,
-                0.10,
-                0.055,
-                [221. / 255., 6. / 255., 116. / 255.],
-                0.11,
-                0.03,
-                0.16,
-            )
-        };
+    let (
+        card_rgb,
+        border_rgb,
+        border_a,
+        sh_a1,
+        sh_a2,
+        pick_rgb,
+        pick_line_rgb,
+        pick_a0,
+        pick_a60,
+        pick_line_a,
+    ) = if key.dark {
+        (
+            [20. / 255., 20. / 255., 22. / 255.],
+            [1.0, 1.0, 1.0],
+            0.09,
+            0.42,
+            0.24,
+            [204. / 255., 90. / 255., 142. / 255.],
+            [236. / 255., 124. / 255., 176. / 255.],
+            0.20,
+            0.065,
+            0.28,
+        )
+    } else {
+        (
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0],
+            0.08,
+            0.10,
+            0.055,
+            [232. / 255., 54. / 255., 140. / 255.],
+            [226. / 255., 46. / 255., 134. / 255.],
+            0.11,
+            0.035,
+            0.20,
+        )
+    };
 
     const BAYER4: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
     let px_u = 1.0 / RASTER_SCALE as f32;
@@ -256,25 +265,25 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
             if cov_card > 0.0 {
                 c = blend_over(c, card_rgb, cov_card);
 
-                // Warm pink/rose highlight band with horizontal fade (0% -> 60% -> 85%)
+                // Subtle warm plum-rose wash + crisp 1px top/bottom gradient hairlines (0% -> 62% -> 92%)
                 if sy >= band_top - 0.6 && sy <= band_bot + 0.6 {
                     let u = ((sx - card_x0) / CARD_W).clamp(0., 1.);
-                    if u < 0.85 {
-                        let fill_a = if u <= 0.60 {
-                            let t = u / 0.60;
+                    if u < 0.92 {
+                        let fill_a = if u <= 0.62 {
+                            let t = u / 0.62;
                             pick_a0 + (pick_a60 - pick_a0) * t
                         } else {
-                            let t = (u - 0.60) / 0.25;
+                            let t = (u - 0.62) / 0.30;
                             pick_a60 * (1. - t)
                         };
                         let v_cov = ((sy - (band_top - 0.5 * px_u)) / px_u).clamp(0., 1.)
                             * (((band_bot + 0.5 * px_u) - sy) / px_u).clamp(0., 1.);
                         c = blend_over(c, pick_rgb, fill_a * v_cov * cov_card);
 
-                        let line_fade = if u <= 0.62 {
-                            1.0
+                        let line_fade = if u <= 0.58 {
+                            1.0 - 0.25 * (u / 0.58)
                         } else {
-                            1.0 - (u - 0.62) / 0.23
+                            0.75 * (1.0 - (u - 0.58) / 0.34).clamp(0., 1.)
                         };
                         let top_line =
                             (0.5 - ((sy - (band_top + 0.5)).abs() - 0.45) / px_u).clamp(0., 1.);
@@ -284,7 +293,7 @@ fn rasterize_card_plate(key: CardPlateKey) -> RenderImage {
                         if line_cov > 0.0 {
                             c = blend_over(
                                 c,
-                                pick_rgb,
+                                pick_line_rgb,
                                 line_cov * pick_line_a * line_fade * cov_card,
                             );
                         }
@@ -388,9 +397,9 @@ fn render_model_mark(model: &MenuModel, dark: bool, w: &mut Window, cx: &mut App
         } else {
             rgb(0x7c6cf0).into()
         };
-        return pro_svg("0 0 24 24", QWEN_SVG, 16., qwen_color);
+        return pro_svg("0 0 24 24", QWEN_SVG, 18., qwen_color);
     }
-    if let Some(art) = pro_app_artwork(&key, 16., cx) {
+    if let Some(art) = pro_app_artwork(&key, 18., cx) {
         return art;
     }
     let fallback: Hsla = if dark {
@@ -399,13 +408,13 @@ fn render_model_mark(model: &MenuModel, dark: bool, w: &mut Window, cx: &mut App
         hsla(0., 0., 0., 0.82)
     };
     div()
-        .size(px(16.))
-        .rounded(px(4.))
+        .size(px(18.))
+        .rounded(px(4.5))
         .bg(fallback.opacity(0.12))
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px(10.))
+        .text_size(px(10.5))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(fallback)
         .child(
@@ -772,12 +781,12 @@ impl Render for ModelMenu {
             scene = scene.child(
                 div()
                     .absolute()
-                    .left(px(CARD_LEFT + 14.))
-                    .top(px(CARD_TOP + 12.))
+                    .left(px(CARD_LEFT + 16.))
+                    .top(px(CARD_TOP + 11.))
                     .h(px(16.))
                     .flex()
                     .items_center()
-                    .text_size(px(11.))
+                    .text_size(px(12.))
                     .line_height(px(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(muted_c)
@@ -786,48 +795,24 @@ impl Render for ModelMenu {
             );
         }
 
-        // 4-edge liquid `pro_pill_indicator` + `pro_check_draw` active model checkmark + tactile row press inset
-        let rose_pill_fill: Hsla = if dark {
-            hsla(330. / 360., 0.86, 0.70, 0.085)
+        let check_ink: Hsla = if dark {
+            rgb(0xf4f4f5).into()
         } else {
-            hsla(330. / 360., 0.94, 0.45, 0.055)
+            rgb(0x18181b).into()
         };
-        let rose_pill_bdr: Hsla = if dark {
-            hsla(330. / 360., 0.86, 0.72, 0.20)
-        } else {
-            hsla(330. / 360., 0.94, 0.45, 0.14)
-        };
-        let rose_check: Hsla = if dark {
-            rgb(0xf472b6).into()
-        } else {
-            rgb(0xdd0674).into()
-        };
-        let _ = strong_c;
 
         let mut row_downs = [0.0f32; 9];
         for (i, d) in row_downs.iter_mut().enumerate().take(row_count) {
             *d = self.row_press[i].get(w, cx).clamp(0., 1.);
         }
 
-        let sensor = pro_selection_sensor();
-        let target_key: SharedString = format!("row-{target_row}").into();
-        let pill_alpha = scene_mask_alpha(CARD_LEFT + 80., rows_top + band_y + ROW_H * 0.5);
         let mut rows_stack = div()
             .absolute()
             .left(px(CARD_LEFT + 6.))
             .top(px(rows_top))
-            .w(px(254.))
+            .w(px(264.))
             .flex()
-            .flex_col()
-            .child(div().opacity(pill_alpha).child(pro_pill_indicator(
-                pro_eid(&self.id, "liquid-pill"),
-                target_key,
-                sensor.clone(),
-                8.0,
-                rose_pill_fill,
-                Some(rose_pill_bdr),
-                false,
-            )));
+            .flex_col();
 
         let visible_models: Vec<MenuModel> = self.models.iter().take(row_count).cloned().collect();
         let active_sel = self.selected.min(row_count - 1);
@@ -838,10 +823,17 @@ impl Render for ModelMenu {
             let down = row_downs[idx];
             let row_top = rows_top + idx as f32 * ROW_H;
             let row_alpha = scene_mask_alpha(CARD_LEFT + 40., row_top + ROW_H * 0.5);
-            let check_alpha = scene_mask_alpha(CARD_LEFT + 236., row_top + ROW_H * 0.5);
+            let check_alpha = scene_mask_alpha(CARD_LEFT + 244., row_top + ROW_H * 0.5);
             let mark_el = render_model_mark(model, dark, w, cx);
             let model_name = model.name.clone();
             let emit_name = model.name.clone();
+            let name_col = if is_last {
+                faint_c
+            } else if is_target || is_checked {
+                strong_c
+            } else {
+                ink_c
+            };
 
             rows_stack = rows_stack.child(
                 div()
@@ -850,18 +842,17 @@ impl Render for ModelMenu {
                     .aria_label(model_name.clone())
                     .aria_selected(is_checked)
                     .relative()
-                    .w(px(254.))
+                    .w(px(264.))
                     .h(px(ROW_H))
-                    .pl(px(8. + 2.2 * down))
-                    .pr(px(10. + 1.5 * down))
+                    .pl(px(10. + 2.2 * down))
+                    .pr(px(12. + 1.5 * down))
                     .top(px(0.6 * down))
                     .rounded(px(8.))
                     .flex()
                     .items_center()
-                    .gap(px(9.))
+                    .gap(px(10.))
                     .cursor_pointer()
                     .opacity(row_alpha)
-                    .when(is_target, |d| d.child(pro_mark_selected(&sensor)))
                     .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                         let next = if *hovered { Some(idx) } else { None };
                         if this.hovered_row != next {
@@ -906,7 +897,7 @@ impl Render for ModelMenu {
                     }))
                     .child(
                         div()
-                            .size(px(16.))
+                            .size(px(18.))
                             .flex_none()
                             .flex()
                             .items_center()
@@ -921,21 +912,24 @@ impl Render for ModelMenu {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_ellipsis()
-                            .text_size(px(13.))
+                            .text_size(px(14.5))
                             .line_height(px(20.))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(if is_last { faint_c } else { ink_c })
+                            .text_color(name_col)
                             .child(model_name),
                     )
-                    .child(div().size(px(15.)).flex_none().opacity(check_alpha).child(
-                        pro_check_draw(
-                            pro_eid(&self.id, format!("chk-{idx}")),
-                            is_checked,
-                            15.,
-                            false,
-                            rose_check,
-                        ),
-                    )),
+                    .when(is_checked, |d| {
+                        d.child(
+                            div()
+                                .size(px(14.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .opacity(check_alpha)
+                                .child(pro_icon(ProIcon::Check, 14., check_ink)),
+                        )
+                    }),
             );
         }
         scene = scene.child(rows_stack);

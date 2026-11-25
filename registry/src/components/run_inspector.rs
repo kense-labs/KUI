@@ -7,11 +7,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_connector_pulse,
-        pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
-        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -909,14 +909,30 @@ impl RunInspectorBlock {
             ))
     }
 
-    fn call_icon(call: &RunSpan, color: Hsla) -> AnyElement {
+    fn call_icon(call: &RunSpan, color: Hsla, cx: &App) -> AnyElement {
         if call.kind == RunSpanKind::Llm {
             return pro_icon(ProIcon::Sparkles, 11.5, color);
         }
-        let icon = match call.tool.as_deref().unwrap_or("") {
-            "web_search" => ProIcon::Globe,
+        let lower_name = call.name.to_ascii_lowercase();
+        let tool_slug = call.tool.as_deref().unwrap_or("");
+        if lower_name.contains("notion") || tool_slug == "docs_read" {
+            return pro_app_tile("Notion", 14., cx);
+        }
+        if lower_name.contains("stripe") {
+            return pro_app_tile("Stripe", 14., cx);
+        }
+        if lower_name.contains("github") {
+            return pro_app_tile("GitHub", 14., cx);
+        }
+        if lower_name.contains("figma") {
+            return pro_app_tile("Figma", 14., cx);
+        }
+        if lower_name.contains("slack") {
+            return pro_app_tile("Slack", 14., cx);
+        }
+        let icon = match tool_slug {
+            "web_search" => ProIcon::Search,
             "sql_query" => ProIcon::Database,
-            "docs_read" => ProIcon::PageDoc,
             "policy_guard" | "secret_scan" => ProIcon::Shield,
             "run_tests" => ProIcon::Terminal,
             _ => ProIcon::Bolt,
@@ -1034,17 +1050,7 @@ impl RunInspectorBlock {
             .items_center()
             .gap(px(5.))
             .text_size(px(12.))
-            .child(if is_done {
-                pro_check_draw(
-                    pro_eid(&self.id, format!("ri-cchk-{}", call.id)),
-                    true,
-                    12.,
-                    false,
-                    p.green,
-                )
-            } else {
-                Self::call_icon(call, icon_col)
-            })
+            .child(Self::call_icon(call, icon_col, cx))
             .child(
                 div()
                     .flex_1()
@@ -1374,6 +1380,11 @@ impl RunInspectorBlock {
             p.line
         };
 
+        let avatar_seed = match &agent.model {
+            Some(m) => format!("{} {m}", agent.name),
+            None => agent.name.to_string(),
+        };
+
         let head_content = div()
             .p(px(2.))
             .flex()
@@ -1385,7 +1396,7 @@ impl RunInspectorBlock {
                     .items_center()
                     .gap(px(8.))
                     .child(pro_agent_avatar(
-                        &agent.name,
+                        &avatar_seed,
                         avatar_tint,
                         24.,
                         agent.status == RunSpanStatus::Running,
@@ -1445,7 +1456,7 @@ impl RunInspectorBlock {
             .bg(p.card)
             .border_1()
             .border_color(border_col)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .opacity(card_op)
             .flex()
             .flex_col()
@@ -1794,7 +1805,7 @@ impl RunInspectorBlock {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .gap(px(10.))
@@ -2369,7 +2380,6 @@ impl Render for RunInspectorBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .bg(p.page)
             .px(px(if narrow { 16. } else { 36. }))
             .py(px(if narrow { 20. } else { 32. }))
             .child(

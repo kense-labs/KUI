@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_eid, pro_empty_state, pro_fold,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
         pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
@@ -16,18 +16,130 @@ use crate::{
     primitives::{
         control::UiLanguage,
         family::Slide,
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, person_initials, pro_app_artwork, pro_svg_doc},
     },
 };
 use gpui::{prelude::*, *};
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::HashMap,
+    rc::Rc,
+    sync::{Arc, LazyLock, Mutex},
+};
 use web_time::Instant;
 
-const SVG_EYE_LIMIT: &str = r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"></circle>"#;
-const SVG_USERS_LIMIT: &str = r#"<circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"></circle><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.9 2.6 2.6 3 5.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const SVG_FOLDER_LIMIT: &str = r#"<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const SVG_DASH_SM: &str =
-    r#"<path d="M3.5 8h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>"#;
+const SVG_EYE_LIMIT: &str = r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.85"></circle>"#;
+const SVG_USERS_LIMIT: &str = r#"<circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.85"></circle><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.9 2.6 2.6 3 5.2" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_FOLDER_LIMIT: &str = r#"<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_CHECK_SM: &str = r#"<path d="M2.6 8.6 6.1 12.1 13.4 4.3" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_DASH_SM: &str = r#"<path d="M3.5 8h9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"></path>"#;
+const SVG_CHEVRON_UP: &str = r#"<path d="m18 15-6-6-6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_CHEVRON_DOWN: &str = r#"<path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+
+type PricingSvgCache = HashMap<u64, Arc<[u8]>>;
+static PRICING_SVG_CACHE: LazyLock<Mutex<PricingSvgCache>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn render_crisp_stroke_svg(
+    tag_id: u32,
+    view_box: &str,
+    inner_template: &str,
+    side: f32,
+    color: Hsla,
+) -> AnyElement {
+    let rgba: Rgba = color.into();
+    let r = (rgba.r.clamp(0., 1.) * 255.).round() as u32;
+    let g = (rgba.g.clamp(0., 1.) * 255.).round() as u32;
+    let b = (rgba.b.clamp(0., 1.) * 255.).round() as u32;
+    let alpha = rgba.a.clamp(0., 1.);
+    let cache_key = (u64::from(tag_id) << 32) | u64::from((r << 16) | (g << 8) | b);
+
+    let bytes = {
+        let mut guard = PRICING_SVG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(found) = guard.get(&cache_key) {
+            found.clone()
+        } else {
+            let hex = format!("#{r:02x}{g:02x}{b:02x}");
+            let body = inner_template.replace("currentColor", &hex);
+            let doc = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="{view_box}" fill="none">{body}</svg>"#
+            );
+            let arc: Arc<[u8]> = Arc::from(doc.into_bytes());
+            if guard.len() >= 128 {
+                guard.clear();
+            }
+            guard.insert(cache_key, arc.clone());
+            arc
+        }
+    };
+
+    let el = pro_svg_doc(cache_key, bytes, side, side);
+    if alpha < 0.999 {
+        div()
+            .size(px(side))
+            .flex_none()
+            .opacity(alpha)
+            .child(el)
+            .into_any_element()
+    } else {
+        el
+    }
+}
+
+fn render_sync_app_tile(app: &str, side: f32, cx: &App) -> AnyElement {
+    let p = ProPalette::get(cx);
+    let lower = app.trim().to_ascii_lowercase();
+    let radius = (side * 0.25).clamp(5., 7.);
+    if lower == "stripe"
+        && let Some(mark) = pro_app_artwork("stripe", side, cx)
+    {
+        return div()
+            .size(px(side))
+            .flex_none()
+            .rounded(px(radius))
+            .overflow_hidden()
+            .child(mark)
+            .into_any_element();
+    }
+    let mark_side = (side * 0.58).round();
+    let content = if let Some(mark) = pro_app_artwork(app, mark_side, cx) {
+        mark
+    } else {
+        let initial = person_initials(app);
+        div()
+            .text_size(px((side * 0.40).max(9.)))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(p.ink)
+            .child(if initial.is_empty() {
+                "A".to_string()
+            } else {
+                initial.chars().take(1).collect()
+            })
+            .into_any_element()
+    };
+    let tile_bg: Hsla = if p.dark {
+        rgb(0x27272b).into()
+    } else {
+        rgb(0xffffff).into()
+    };
+    let bdr: Hsla = if p.dark {
+        hsla(0., 0., 1., 0.09)
+    } else {
+        hsla(0., 0., 0., 0.065)
+    };
+    div()
+        .size(px(side))
+        .flex_none()
+        .rounded(px(radius))
+        .bg(tile_bg)
+        .border_1()
+        .border_color(bdr)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(content)
+        .into_any_element()
+}
 
 /// Billing cycle selected on [`PricingPlansBlock`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -361,8 +473,16 @@ impl RenderOnce for PricingCardSurface {
         let st = w.use_keyed_state(pro_eid(&self.id, "pcard-hov"), cx, |_, _| Slide::snappy(0.));
         let hov = st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.));
         let border = pro_mix_color(self.border_col, self.hover_border, hov);
-        let bg = pro_mix_color(p.card, pro_mix_color(p.card, p.ink, 0.014), hov);
-        let dark = p.dark;
+        let rest_card: Hsla = if p.dark {
+            if self.featured {
+                rgb(0x202024).into()
+            } else {
+                rgb(0x1a1a1d).into()
+            }
+        } else {
+            rgb(0xffffff).into()
+        };
+        let bg = pro_mix_color(rest_card, pro_mix_color(rest_card, p.ink, 0.016), hov);
         let featured = self.featured;
 
         let paint_face = canvas(
@@ -372,24 +492,6 @@ impl RenderOnce for PricingCardSurface {
                     return;
                 }
                 let r = px(12.);
-                let base_sh = if featured { 0.04 } else { 0.015 };
-                let sh = if dark {
-                    0.22 * hov
-                } else {
-                    base_sh + 0.045 * hov
-                };
-                if sh > 0.005 {
-                    window.paint_quad(
-                        fill(
-                            Bounds::new(
-                                point(bounds.origin.x, bounds.origin.y + px(1. + 1.5 * hov)),
-                                bounds.size,
-                            ),
-                            black().opacity(sh),
-                        )
-                        .corner_radii(r),
-                    );
-                }
                 window.paint_quad(quad(
                     bounds,
                     Corners::all(r),
@@ -406,8 +508,10 @@ impl RenderOnce for PricingCardSurface {
         div()
             .id(self.id)
             .relative()
+            .h_full()
             .p(px(20.))
             .rounded(px(12.))
+            .when(featured || !p.dark, |d| d.shadow(pro_card_shadow(p.dark)))
             .flex()
             .flex_col()
             .min_w_0()
@@ -624,12 +728,12 @@ impl PricingPlansBlock {
     }
 
     fn render_limit_icon(kind: PricingLimitIcon, color: Hsla) -> AnyElement {
-        let svg = match kind {
-            PricingLimitIcon::Events => SVG_EYE_LIMIT,
-            PricingLimitIcon::Members => SVG_USERS_LIMIT,
-            PricingLimitIcon::Workspaces => SVG_FOLDER_LIMIT,
+        let (tag, svg) = match kind {
+            PricingLimitIcon::Events => (1, SVG_EYE_LIMIT),
+            PricingLimitIcon::Members => (2, SVG_USERS_LIMIT),
+            PricingLimitIcon::Workspaces => (3, SVG_FOLDER_LIMIT),
         };
-        pro_svg("0 0 24 24", svg, 13.5, color)
+        render_crisp_stroke_svg(tag, "0 0 24 24", svg, 13.5, color)
     }
 
     fn render_billing_capsule(
@@ -748,12 +852,24 @@ impl PricingPlansBlock {
         let border_col = if is_selected {
             p.blue
         } else if is_featured {
-            p.blue.opacity(if p.dark { 0.45 } else { 0.34 })
+            if p.dark {
+                hsla(0., 0., 1., 0.14)
+            } else {
+                hsla(0., 0., 0., 0.10)
+            }
+        } else if p.dark {
+            hsla(0., 0., 1., 0.06)
         } else {
             p.line
         };
-        let hover_border = if is_selected || is_featured {
-            p.blue.opacity(if p.dark { 0.72 } else { 0.60 })
+        let hover_border = if is_selected {
+            p.blue.opacity(if p.dark { 0.75 } else { 0.65 })
+        } else if is_featured {
+            if p.dark {
+                hsla(0., 0., 1., 0.22)
+            } else {
+                hsla(0., 0., 0., 0.16)
+            }
         } else {
             p.line_strong
         };
@@ -809,6 +925,11 @@ impl PricingPlansBlock {
             ProBtnStyle::Secondary
         };
 
+        let limit_icon_col = if p.dark {
+            hsla(0., 0., 1., 0.58)
+        } else {
+            hsla(0., 0., 0., 0.48)
+        };
         let limits_list = div()
             .mt(px(18.))
             .pt(px(14.))
@@ -831,7 +952,7 @@ impl PricingPlansBlock {
                             .items_center()
                             .gap(px(8.))
                             .text_color(p.text)
-                            .child(Self::render_limit_icon(lim.icon, p.muted))
+                            .child(Self::render_limit_icon(lim.icon, limit_icon_col))
                             .child(div().truncate().child(lim.label.clone())),
                     )
                     .child(
@@ -848,6 +969,11 @@ impl PricingPlansBlock {
             tr(cx, "Hide details", "收起详情")
         } else {
             tr(cx, "Show details", "展开详情")
+        };
+        let chev_col = if p.dark {
+            hsla(0., 0., 1., 0.52)
+        } else {
+            hsla(0., 0., 0., 0.46)
         };
         let toggle_btn = pro_tactile(
             pro_eid(&self.id, format!("toggle-det-{}", plan.id)),
@@ -873,14 +999,16 @@ impl PricingPlansBlock {
                     FontWeight::MEDIUM,
                     p.muted,
                 ))
-                .child(pro_icon(
+                .child(render_crisp_stroke_svg(
+                    if details_open { 6 } else { 7 },
+                    "0 0 24 24",
                     if details_open {
-                        ProIcon::ChevronUp
+                        SVG_CHEVRON_UP
                     } else {
-                        ProIcon::ChevronDown
+                        SVG_CHEVRON_DOWN
                     },
                     12.,
-                    p.muted,
+                    chev_col,
                 )),
             cx,
             |this, _, cx| {
@@ -898,12 +1026,10 @@ impl PricingPlansBlock {
         let sync_tiles: Vec<AnyElement> = sync_apps
             .iter()
             .take(7)
-            .map(|app| pro_app_tile(app, 20., cx))
+            .map(|app| render_sync_app_tile(app, 20., cx))
             .collect();
         let eyebrow_txt: SharedString = tr(cx, "INTEGRATIONS", "应用连接").into();
         let syncs_txt: SharedString = tr(cx, "Syncs with", "支持同步").into();
-        let plan_id_fold = plan.id.clone();
-        let base_id_fold = self.id.clone();
 
         let fold_el = pro_fold(
             pro_eid(&self.id, format!("card-fold-{}", plan.id)),
@@ -911,6 +1037,16 @@ impl PricingPlansBlock {
             210.,
             0.,
             move || {
+                let check_ink = if p_copy.dark {
+                    hsla(0., 0., 1., 0.88)
+                } else {
+                    hsla(0., 0., 0., 0.84)
+                };
+                let dash_ink = if p_copy.dark {
+                    hsla(0., 0., 1., 0.36)
+                } else {
+                    hsla(0., 0., 0., 0.32)
+                };
                 div()
                     .mt(px(12.))
                     .pt(px(14.))
@@ -966,18 +1102,18 @@ impl PricingPlansBlock {
                         )
                     })
                     .child(div().mt(px(16.)).flex().flex_col().gap(px(8.)).children(
-                        features.into_iter().enumerate().map(|(fi, feat)| {
+                        features.into_iter().map(|feat| {
                             let inc = feat.included;
                             let lead = if inc {
-                                pro_check_draw(
-                                    pro_eid(&base_id_fold, format!("feat-chk-{plan_id_fold}-{fi}")),
-                                    true,
+                                render_crisp_stroke_svg(
+                                    4,
+                                    "0 0 16 16",
+                                    SVG_CHECK_SM,
                                     13.,
-                                    false,
-                                    p_copy.blue,
+                                    check_ink,
                                 )
                             } else {
-                                pro_svg("0 0 16 16", SVG_DASH_SM, 12., p_copy.faint)
+                                render_crisp_stroke_svg(5, "0 0 16 16", SVG_DASH_SM, 12.5, dash_ink)
                             };
                             div()
                                 .flex()
@@ -1085,6 +1221,11 @@ impl PricingPlansBlock {
             tr(cx, "Compare all features", "展开完整功能对比表")
         };
 
+        let chev_col = if p.dark {
+            hsla(0., 0., 1., 0.54)
+        } else {
+            hsla(0., 0., 0., 0.48)
+        };
         let trigger = pro_tactile(
             pro_eid(&self.id, "compare-matrix-toggle"),
             btn_lbl,
@@ -1109,14 +1250,16 @@ impl PricingPlansBlock {
                     FontWeight::MEDIUM,
                     p.ink,
                 ))
-                .child(pro_icon(
+                .child(render_crisp_stroke_svg(
+                    if open { 6 } else { 7 },
+                    "0 0 24 24",
                     if open {
-                        ProIcon::ChevronUp
+                        SVG_CHEVRON_UP
                     } else {
-                        ProIcon::ChevronDown
+                        SVG_CHEVRON_DOWN
                     },
                     13.,
-                    p.muted,
+                    chev_col,
                 )),
             cx,
             |this, _, cx| {
@@ -1144,6 +1287,16 @@ impl PricingPlansBlock {
             340.,
             0.,
             move || {
+                let cmp_chk_ink = if p_copy.dark {
+                    hsla(0., 0., 1., 0.88)
+                } else {
+                    hsla(0., 0., 0., 0.84)
+                };
+                let cmp_dash_ink = if p_copy.dark {
+                    hsla(0., 0., 1., 0.36)
+                } else {
+                    hsla(0., 0., 0., 0.32)
+                };
                 let mut table = div()
                     .id(pro_eid(&base_id, "compare-table"))
                     .mt(px(14.))
@@ -1152,6 +1305,7 @@ impl PricingPlansBlock {
                     .bg(p_copy.card)
                     .border_1()
                     .border_color(p_copy.line)
+                    .shadow(pro_card_shadow(p_copy.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col();
@@ -1206,7 +1360,6 @@ impl PricingPlansBlock {
                                 .child(row.category),
                         );
                     }
-                    let base_row_id = base_id.clone();
                     let line = div()
                         .id(pro_eid(&base_id, format!("compare-row-{ri}")))
                         .role(Role::Row)
@@ -1231,18 +1384,24 @@ impl PricingPlansBlock {
                                 "yes" => div()
                                     .flex()
                                     .justify_center()
-                                    .child(pro_check_draw(
-                                        pro_eid(&base_row_id, format!("cmp-chk-{ri}-{ci}")),
-                                        true,
-                                        14.,
-                                        false,
-                                        p_copy.blue,
+                                    .child(render_crisp_stroke_svg(
+                                        4,
+                                        "0 0 16 16",
+                                        SVG_CHECK_SM,
+                                        13.5,
+                                        cmp_chk_ink,
                                     ))
                                     .into_any_element(),
                                 "no" => div()
                                     .flex()
                                     .justify_center()
-                                    .child(pro_svg("0 0 16 16", SVG_DASH_SM, 12., p_copy.faint))
+                                    .child(render_crisp_stroke_svg(
+                                        5,
+                                        "0 0 16 16",
+                                        SVG_DASH_SM,
+                                        12.5,
+                                        cmp_dash_ink,
+                                    ))
                                     .into_any_element(),
                                 txt => div()
                                     .text_center()
@@ -1436,16 +1595,29 @@ impl Render for PricingPlansBlock {
                             .children(second_pair),
                     )
             } else {
+                let tray_bg: Hsla = if p.dark {
+                    rgb(0x161619).into()
+                } else {
+                    rgb(0xf3f3f6).into()
+                };
                 div()
                     .mt(px(26.))
                     .w_full()
+                    .p(px(4.))
+                    .rounded(px(15.))
+                    .bg(tray_bg)
+                    .border_1()
+                    .border_color(p.line)
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
-                    .items_start()
-                    .gap(px(12.))
+                    .items_stretch()
+                    .gap(px(4.))
                     .children(plans_snapshot.iter().map(|pl| {
                         div()
                             .flex_1()
                             .min_w_0()
+                            .flex()
+                            .flex_col()
                             .child(self.render_plan_card(pl, &prefix, &p, cx))
                     }))
             };
@@ -1503,7 +1675,6 @@ impl Render for PricingPlansBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .bg(p.page)
             .px(px(if narrow { 16. } else { 36. }))
             .py(px(if narrow { 24. } else { 36. }))
             .child(

@@ -193,7 +193,7 @@ fn main() -> Result<()> {
         )?;
         write(
             "kui",
-            cover::page(en),
+            cover::page(en, rev),
             "KUI",
             if en {
                 "Build native and web interfaces with the KUI component library for Rust and GPUI."
@@ -203,6 +203,7 @@ fn main() -> Result<()> {
             false,
         )?;
         for (route, section) in [
+            ("kui/library", "library"),
             ("kui/docs", "docs"),
             ("kui/docs/installation", "installation"),
             ("kui/ai", "ai"),
@@ -227,7 +228,8 @@ fn main() -> Result<()> {
         let prefix = if en { "/en" } else { "" };
         for (from, to) in [
             ("docs/installation", "kui/docs/installation"),
-            ("components", "kui/components/button"),
+            ("library", "kui/library"),
+            ("components", "kui/library"),
             ("components/button", "kui/components/button"),
             ("ai", "kui/ai"),
         ] {

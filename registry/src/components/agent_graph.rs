@@ -5,9 +5,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
-        pro_icon_btn, pro_mix_color, pro_presence, pro_rolling_number, pro_skeleton_bar,
-        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
@@ -17,6 +18,7 @@ use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
 const NETWORK_MARK_SVG: &str = r#"<path d="M8 8.4 3.2 4M8 8.4l5-4.2M8 8.4l4.4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/><circle cx="8" cy="8.4" r="2.4" fill="currentColor"/><circle cx="3.2" cy="4" r="1.6" fill="currentColor"/><circle cx="13" cy="4.2" r="1.6" fill="currentColor"/><circle cx="12.4" cy="12.4" r="1.6" fill="currentColor"/>"#;
+const OPERATOR_MARK_SVG: &str = r#"<rect x="9.2" y="4.2" width="5.4" height="5.4" rx="1.1" fill="currentColor"/><rect x="4.8" y="8.8" width="5.6" height="5.6" rx="1.1" stroke="currentColor" stroke-width="1.7"/>"#;
 
 /// Category of a node inside [`AgentGraph`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1228,10 +1230,10 @@ impl Render for AgentGraph {
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap(px(10.))
+                    .gap(px(12.))
                     .text_size(px(12.))
                     .text_color(p.muted)
-                    .child(pro_btn(
+                    .child(div().flex_none().child(pro_btn(
                         pro_eid(&self.id, "g-burst-btn"),
                         tr(cx, "Send burst", "发送调用簇"),
                         Some(ProIcon::Bolt),
@@ -1241,19 +1243,50 @@ impl Render for AgentGraph {
                         |this, _, cx| {
                             this.trigger_call_burst(cx);
                         },
-                    ))
-                    .child(format!("{agent_cnt} {}", tr(cx, "agents", "个智能体")))
-                    .child(format!("{tool_cnt} {}", tr(cx, "tools", "个工具")))
-                    .child(pro_rolling_number(
-                        pro_eid(&self.id, "g-cpm"),
-                        cpm as f64,
-                        0,
-                        "",
-                        format!(" {}", tr(cx, "calls/min", "次调用/分")),
-                        12.,
-                        FontWeight::NORMAL,
-                        p.muted,
-                    ))
+                    )))
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(px(3.5))
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(format!("{agent_cnt}")),
+                            )
+                            .child(tr(cx, "agents", "个智能体")),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(px(3.5))
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(format!("{tool_cnt}")),
+                            )
+                            .child(tr(cx, "tools", "个工具")),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(px(3.5))
+                            .child(pro_rolling_number(
+                                pro_eid(&self.id, "g-cpm"),
+                                cpm as f64,
+                                0,
+                                "",
+                                "",
+                                12.,
+                                FontWeight::MEDIUM,
+                                p.strong,
+                            ))
+                            .child(tr(cx, "calls/min", "次调用/分")),
+                    )
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "g-total-cost"),
                         total_cost,
@@ -1262,7 +1295,7 @@ impl Render for AgentGraph {
                         "",
                         12.,
                         FontWeight::MEDIUM,
-                        p.ink,
+                        p.strong,
                     )),
             );
 
@@ -1329,6 +1362,43 @@ impl Render for AgentGraph {
             .collect();
         let p_canvas = p;
         let elapsed_s = self.boot.elapsed().as_secs_f32();
+        let breathe = if reduced {
+            0.5
+        } else {
+            0.5 + 0.5 * (elapsed_s * 2.2).sin()
+        };
+
+        // Smooth Gaussian ambient glow behind the lead hub (zero discrete stepped rings!)
+        let lead_pos = self
+            .nodes
+            .iter()
+            .find(|n| n.lead)
+            .and_then(|n| coords.get(&n.id).copied())
+            .unwrap_or((0.50, 0.50));
+        let ambient_glow = div()
+            .absolute()
+            .left(relative(lead_pos.0))
+            .top(relative(lead_pos.1))
+            .ml(px(-2.0))
+            .mt(px(-2.0))
+            .size(px(4.0))
+            .rounded_full()
+            .shadow(vec![
+                BoxShadow::new(
+                    px(0.),
+                    px(0.),
+                    p.blue.opacity(if p.dark { 0.15 } else { 0.12 }),
+                )
+                .blur_radius(px(76.))
+                .spread_radius(px(36.)),
+                BoxShadow::new(
+                    px(0.),
+                    px(0.),
+                    p.blue.opacity(if p.dark { 0.08 } else { 0.065 }),
+                )
+                .blur_radius(px(136.))
+                .spread_radius(px(58.)),
+            ]);
 
         let network_canvas = canvas(
             |_, _, _| (),
@@ -1338,24 +1408,6 @@ impl Render for AgentGraph {
                 let bw = f32::from(bounds.size.width).max(100.0);
                 let bh = f32::from(bounds.size.height).max(100.0);
                 let to_px = |(nx, ny): (f32, f32)| -> (f32, f32) { (ox + nx * bw, oy + ny * bh) };
-
-                // Soft center radial glow behind lead hub
-                let (hx, hy) = to_px((0.50, 0.50));
-                for (rx, ry, alpha) in [
-                    (135.0, 78.0, if p_canvas.dark { 0.055 } else { 0.045 }),
-                    (82.0, 48.0, if p_canvas.dark { 0.08 } else { 0.06 }),
-                ] {
-                    window.paint_quad(
-                        fill(
-                            Bounds::new(
-                                point(px(hx - rx), px(hy - ry)),
-                                size(px(rx * 2.0), px(ry * 2.0)),
-                            ),
-                            p_canvas.blue.opacity(alpha),
-                        )
-                        .corner_radii(px(ry)),
-                    );
-                }
 
                 // Paint rounded circuit edges with dynamic heat stroke-width & smooth spotlight
                 for (a, b) in &edges_paint {
@@ -1369,7 +1421,7 @@ impl Render for AgentGraph {
                     let key = canonical_edge_key(a, b);
                     let heat = heat_paint.get(&key).map(|(h, _)| *h).unwrap_or(0.0);
                     let (vis, spot) = edge_focus_weights.get(&key).copied().unwrap_or((1.0, 0.0));
-                    let stroke_w = (1.35 + heat * 0.62 + 0.50 * spot).clamp(1.35, 4.1);
+                    let stroke_w = (1.25 + heat * 0.54 + 0.48 * spot).clamp(1.25, 3.6);
 
                     let a_st = nodes_status.get(a).copied().unwrap_or_default();
                     let b_st = nodes_status.get(b).copied().unwrap_or_default();
@@ -1378,26 +1430,26 @@ impl Render for AgentGraph {
                     let is_err = a_st == GraphNodeStatus::Error || b_st == GraphNodeStatus::Error;
 
                     let rest_col = if is_err {
-                        p_canvas.red.opacity(0.80 * vis)
+                        p_canvas.red.opacity(0.76 * vis)
                     } else if is_ask {
-                        p_canvas.amber.opacity(0.72 * vis)
+                        p_canvas.amber.opacity(0.66 * vis)
                     } else if heat > 0.3 {
                         p_canvas
                             .blue
-                            .opacity(((0.24 + heat * 0.12).clamp(0.24, 0.68)) * vis)
+                            .opacity(((0.22 + heat * 0.11).clamp(0.22, 0.62)) * vis)
                     } else {
-                        p_canvas.line_strong.opacity(0.95 * vis)
+                        p_canvas.line_strong.opacity(0.92 * vis)
                     };
                     let spot_col = if is_err {
-                        p_canvas.red.opacity(0.92)
+                        p_canvas.red.opacity(0.90)
                     } else if is_ask {
-                        p_canvas.amber.opacity(0.88)
+                        p_canvas.amber.opacity(0.86)
                     } else {
-                        p_canvas.blue.opacity(0.82)
+                        p_canvas.blue.opacity(0.80)
                     };
                     let edge_col = pro_mix_color(rest_col, spot_col, spot * 0.65);
 
-                    let mut feather_b = PathBuilder::stroke(px(stroke_w + 1.4));
+                    let mut feather_b = PathBuilder::stroke(px(stroke_w + 1.2));
                     let mut path_b = PathBuilder::stroke(px(stroke_w));
                     for (i, &(x, y)) in pts.iter().enumerate() {
                         if i == 0 {
@@ -1409,7 +1461,7 @@ impl Render for AgentGraph {
                         }
                     }
                     if let Ok(feather) = feather_b.build() {
-                        window.paint_path(feather, edge_col.opacity(edge_col.a * 0.22));
+                        window.paint_path(feather, edge_col.opacity(edge_col.a * 0.20));
                     }
                     if let Ok(built) = path_b.build() {
                         window.paint_path(built, edge_col);
@@ -1451,8 +1503,8 @@ impl Render for AgentGraph {
                     if let Some(&pn) = coords_paint.get(&rp.node_id) {
                         let (cx_px, cy_px) = to_px(pn);
                         let t = (rp.started.elapsed().as_secs_f32() / 0.60).clamp(0.0, 1.0);
-                        let side = 36.0 + 26.0 * pro_ease(t);
-                        let alpha = (1.0 - t) * 0.55;
+                        let side = 38.0 + 24.0 * pro_ease(t);
+                        let alpha = (1.0 - t) * 0.45;
                         let rcol = match rp.kind {
                             PulseKind::Call => p_canvas.blue,
                             PulseKind::Answer => p_canvas.green,
@@ -1466,63 +1518,37 @@ impl Render for AgentGraph {
                             ),
                             Corners::all(px(side * 0.34)),
                             transparent_black(),
-                            Edges::all(px(1.4)),
+                            Edges::all(px(1.2)),
                             rcol.opacity(alpha),
                             BorderStyle::Solid,
                         ));
                     }
-                }
-
-                // Breathing rings around working & waiting agents
-                let breathe = 0.5 + 0.5 * (elapsed_s * 2.4).sin();
-                for (nid, st) in &nodes_status {
-                    if !matches!(st, GraphNodeStatus::Working | GraphNodeStatus::Waiting) {
-                        continue;
-                    }
-                    let Some(&pn) = coords_paint.get(nid) else {
-                        continue;
-                    };
-                    let (cx_px, cy_px) = to_px(pn);
-                    let base = if nid.as_ref() == "lead" { 48.0 } else { 38.0 };
-                    let ring_side = base + 6.0 + 7.0 * breathe;
-                    let rcol = if *st == GraphNodeStatus::Waiting {
-                        p_canvas.amber.opacity(0.28 + 0.22 * breathe)
-                    } else {
-                        p_canvas.blue.opacity(0.14 + 0.14 * breathe)
-                    };
-                    window.paint_quad(quad(
-                        Bounds::new(
-                            point(px(cx_px - ring_side * 0.5), px(cy_px - ring_side * 0.5)),
-                            size(px(ring_side), px(ring_side)),
-                        ),
-                        Corners::all(px(ring_side * 0.36)),
-                        rcol.opacity(0.18),
-                        Edges::all(px(1.2)),
-                        rcol,
-                        BorderStyle::Solid,
-                    ));
                 }
             },
         )
         .absolute()
         .inset_0();
 
-        // Render interactive node discs positioned over the stage
+        // Render interactive node tiles positioned at exact relative(nx)/relative(ny) coordinates
         let nodes_snapshot = self.nodes.clone();
         let mut node_elements: Vec<AnyElement> = Vec::with_capacity(nodes_snapshot.len());
+        let dark_tile: Hsla = rgb(0x242428).into();
+        let light_tile: Hsla = rgb(0xffffff).into();
 
         for node in &nodes_snapshot {
             let Some(&(nx, ny)) = coords.get(&node.id) else {
                 continue;
             };
             let side: f32 = if node.lead {
-                if narrow { 42.0 } else { 48.0 }
+                if narrow { 42.0 } else { 46.0 }
             } else if node.kind == GraphNodeKind::Agent {
                 if narrow { 34.0 } else { 38.0 }
+            } else if node.kind == GraphNodeKind::User {
+                if narrow { 32.0 } else { 36.0 }
             } else if narrow {
                 28.0
             } else {
-                32.0
+                34.0
             };
 
             let dimmed = focus_node.is_some() && !neighbors.contains(&node.id);
@@ -1542,25 +1568,32 @@ impl Render for AgentGraph {
                 tr_graph_name(&node.id, &node.name, cx).into()
             };
 
+            let base_tile_bg = if p.dark { dark_tile } else { light_tile };
+            let base_tile_border: Hsla = if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                hsla(0., 0., 0., 0.07)
+            };
+
             let (disc_bg, disc_border) = match (node.kind, node.status) {
                 (GraphNodeKind::User, _) => (p.primary, p.primary),
                 (_, GraphNodeStatus::Waiting) => (
                     if p.dark {
-                        rgb(0x332714).into()
+                        rgb(0x2b2419).into()
                     } else {
-                        rgb(0xfff6e5).into()
+                        rgb(0xfff9ee).into()
                     },
-                    p.amber,
+                    p.amber.opacity(0.65),
                 ),
                 (_, GraphNodeStatus::Error) => (
                     if p.dark {
-                        rgb(0x331918).into()
+                        rgb(0x2d1b1b).into()
                     } else {
                         rgb(0xffefed).into()
                     },
-                    p.red,
+                    p.red.opacity(0.65),
                 ),
-                _ => (p.card, p.line_strong),
+                _ => (base_tile_bg, base_tile_border),
             };
 
             let badge = match node.status {
@@ -1634,11 +1667,12 @@ impl Render for AgentGraph {
             };
             let disc_hov_bg = pro_mix_color(disc_bg, p.chip_hover, 0.45);
             let is_sel = self.selected_id.as_ref() == Some(&node.id);
+            let tile_radius = (side * 0.30).clamp(9.0, 14.0).round();
 
             let disc_btn = pro_tactile(
                 pro_eid(&self.id, format!("gnode-{}", node.id)),
                 format!("{disp_name}, {}", node.status.label(cx)),
-                (side * 0.34).round(),
+                tile_radius,
                 disc_bg,
                 disc_hov_bg,
                 disc_border,
@@ -1650,7 +1684,7 @@ impl Render for AgentGraph {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(render_node_glyph(node, (side * 0.46).round(), &p, cx))
+                    .child(render_node_glyph(node, (side * 0.47).round(), &p, cx))
                     .children(badge),
                 cx,
                 move |this, _, cx| {
@@ -1659,7 +1693,7 @@ impl Render for AgentGraph {
             )
             .w(px(side))
             .h(px(side))
-            .shadow_sm()
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 let next = if *hovered {
                     Some(nid_hov.clone())
@@ -1674,12 +1708,64 @@ impl Render for AgentGraph {
                 }
             }));
 
+            // Delicate frosted outer rounded-square halo for the 5 Agent nodes
+            let (node_tile_el, outer_side): (AnyElement, f32) = if node.kind == GraphNodeKind::Agent
+            {
+                let halo_pad = 5.0_f32;
+                let total_side = side + halo_pad * 2.0;
+                let halo_radius = tile_radius + 4.5;
+                let (halo_bg, halo_bdr) = match node.status {
+                    GraphNodeStatus::Waiting => (
+                        p.amber.opacity(if p.dark {
+                            0.08 + 0.04 * breathe
+                        } else {
+                            0.07 + 0.04 * breathe
+                        }),
+                        p.amber.opacity(if p.dark {
+                            0.24 + 0.10 * breathe
+                        } else {
+                            0.22 + 0.08 * breathe
+                        }),
+                    ),
+                    GraphNodeStatus::Error => (p.red.opacity(0.09), p.red.opacity(0.24)),
+                    _ => (
+                        p.blue.opacity(if p.dark {
+                            0.08 + 0.03 * breathe
+                        } else {
+                            0.07 + 0.03 * breathe
+                        }),
+                        p.blue.opacity(if p.dark {
+                            0.17 + 0.06 * breathe
+                        } else {
+                            0.15 + 0.05 * breathe
+                        }),
+                    ),
+                };
+                (
+                    div()
+                        .size(px(total_side))
+                        .p(px(halo_pad))
+                        .rounded(px(halo_radius))
+                        .bg(halo_bg)
+                        .border_1()
+                        .border_color(halo_bdr)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(disc_btn)
+                        .into_any_element(),
+                    total_side,
+                )
+            } else {
+                (disc_btn.into_any_element(), side)
+            };
+
             let label_above = ny < 0.23;
             let label_box = div()
                 .px(px(5.))
                 .py(px(1.))
                 .rounded(px(5.))
-                .bg(p.panel.opacity(0.92))
+                .bg(p.panel.opacity(0.88))
                 .flex()
                 .flex_col()
                 .items_center()
@@ -1714,21 +1800,20 @@ impl Render for AgentGraph {
                     )
                 });
 
-            let px_x = nx * container_w;
-            let px_y = ny * stage_h;
-            let box_w = 128.0_f32;
-            let left_pos = (px_x - box_w * 0.5).clamp(2.0, (container_w - box_w - 2.0).max(2.0));
-            let top_pos = if label_above {
-                (px_y - side * 0.5 - 22.0).max(4.0)
+            let box_w = 132.0_f32;
+            let mt_offset = if label_above {
+                -(20.0 + outer_side * 0.5)
             } else {
-                (px_y - side * 0.5).max(4.0)
+                -(outer_side * 0.5)
             };
 
             node_elements.push(
                 div()
                     .absolute()
-                    .left(px(left_pos))
-                    .top(px(top_pos))
+                    .left(relative(nx))
+                    .top(relative(ny))
+                    .ml(px(-box_w * 0.5))
+                    .mt(px(mt_offset))
                     .w(px(box_w))
                     .opacity(node_op)
                     .flex()
@@ -1737,9 +1822,9 @@ impl Render for AgentGraph {
                     .gap(px(3.))
                     .map(|d| {
                         if label_above {
-                            d.child(label_box).child(disc_btn)
+                            d.child(label_box).child(node_tile_el)
                         } else {
-                            d.child(disc_btn).child(label_box)
+                            d.child(node_tile_el).child(label_box)
                         }
                     })
                     .into_any_element(),
@@ -1787,15 +1872,15 @@ impl Render for AgentGraph {
             .relative()
             .flex()
             .flex_col()
-            .child(width_sensor)
             .child(header)
             .child(
                 div()
                     .w_full()
-                    .rounded(px(10.))
+                    .rounded(px(12.))
                     .bg(p.panel)
                     .border_1()
                     .border_color(p.line)
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -1804,6 +1889,8 @@ impl Render for AgentGraph {
                             .w_full()
                             .h(px(stage_h))
                             .relative()
+                            .child(width_sensor)
+                            .child(ambient_glow)
                             .child(network_canvas)
                             .children(node_elements),
                     )
@@ -1836,7 +1923,7 @@ fn legend_streak_item(label: &str, color: Hsla) -> Div {
 
 fn render_node_glyph(node: &GraphNode, side: f32, p: &ProPalette, cx: &App) -> AnyElement {
     match node.kind {
-        GraphNodeKind::User => pro_icon(ProIcon::User, side, p.on_primary),
+        GraphNodeKind::User => pro_svg("0 0 20 20", OPERATOR_MARK_SVG, side, p.on_primary),
         GraphNodeKind::Agent => {
             let key = infer_provider_key(&node.detail);
             if let Some(art) = pro_app_artwork(key, side, cx) {
@@ -1847,13 +1934,14 @@ fn render_node_glyph(node: &GraphNode, side: f32, p: &ProPalette, cx: &App) -> A
         }
         GraphNodeKind::Tool => {
             let lower = node.name.to_ascii_lowercase();
-            if lower.contains("search") || lower.contains("web") {
-                pro_icon(ProIcon::Search, side, p.ink)
+            if lower.contains("search") || lower.contains("web") || node.id.as_ref() == "web" {
+                pro_icon(ProIcon::Search, side, p.blue)
             } else if lower.contains("database")
                 || lower.contains("postgres")
                 || lower.contains("db")
+                || node.id.as_ref() == "db"
             {
-                pro_icon(ProIcon::Database, side, p.ink)
+                pro_icon(ProIcon::Database, side, p.teal)
             } else if let Some(art) = pro_app_artwork(&node.name, side, cx) {
                 art
             } else {

@@ -303,9 +303,10 @@ fn product_intro() -> &'static str {
 }
 
 /// Renders the complete cover inside the shared site shell.
-pub fn page(en: bool) -> String {
+pub fn page(en: bool, revision: &str) -> String {
     let i = usize::from(en);
     let base = if en { "/en" } else { "" };
+    let locale = if en { "en" } else { "zh" };
     let count = kui_catalog::items()
         .filter(|(id, _, _)| *id != "kui-foundation")
         .count();
@@ -334,6 +335,32 @@ pub fn page(en: bool) -> String {
         ),
         r#"<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path class="pause-mark" d="M4 3h3v10H4zm5 0h3v10H9z"/><path class="play-mark" d="M4.5 2.8 13 8l-8.5 5.2z"/></svg>"#,
     );
+    let live_url = format!(
+        "/stories/v/{}/?story=mission-control&amp;lang={locale}",
+        esc(revision)
+    );
+    let showcase_tabs: String = [
+        ("mission-control", ["任务指挥台", "Mission Control"]),
+        ("agent-graph", ["智能体拓扑", "Agent Graph"]),
+        ("approval-card", ["审批卡片", "Approval Card"]),
+        ("cost-waterfall", ["成本瀑布流", "Cost Waterfall"]),
+        ("glow-keyboard", ["流光键盘", "Glow Keyboard"]),
+        ("agent-tree", ["智能体树", "Agent Tree"]),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(idx, (sid, names))| {
+        let active = idx == 0;
+        let href = format!("{base}/kui/components/{sid}/");
+        let story_src = format!("/stories/v/{}/?story={sid}&amp;lang={locale}", esc(revision));
+        button(
+            &format!(
+                r#"class="live-tab" data-cover-story="{sid}" data-cover-href="{href}" data-cover-src="{story_src}" aria-pressed="{active}""#
+            ),
+            names[i],
+        )
+    })
+    .collect();
     format!(
         include_str!("../cover/page.html"),
         product_intro = product_intro(),
@@ -343,6 +370,27 @@ pub fn page(en: bool) -> String {
         cards = cards,
         guide = guide(en, base, count),
         transport = transport,
+        showcase_tabs = showcase_tabs,
+        live_url = live_url,
+        live_locale = locale,
+        live_heading = label(
+            en,
+            "旗舰工作流，实时运行",
+            "Flagship workflows, running live"
+        ),
+        live_note = label(
+            en,
+            "与安装到你应用中的 Rust 组件完全同一份源码。直接点击切换指挥台、拓扑图、审批卡、瀑布流或流光键盘。",
+            "The exact Rust components you install into your app. Switch live between Mission Control, Agent Graph, Approval Card, Cost Waterfall, and Glow Keyboard."
+        ),
+        live_badge = label(en, "真实 GPUI 预览", "Live Rust + GPUI"),
+        live_open = label(en, "打开完整组件", "Open full component"),
+        live_interactions = label(
+            en,
+            "实时 GPUI 渲染 · 支持鼠标悬停、键盘与弹簧交互",
+            "Live GPUI WebAssembly · full pointer, keyboard, and spring physics"
+        ),
+        live_source = label(en, "查看 API 与源码", "View API & source"),
         title = label(
             en,
             "用 Rust 构建桌面和 Web 应用",

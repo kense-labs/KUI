@@ -23,7 +23,6 @@ use std::{cell::Cell, collections::HashSet, rc::Rc};
 use web_time::Instant;
 
 const SPARK_SVG: &str = r#"<path d="M7 1.2c.4 2.9 1.9 4.4 4.8 4.8-2.9.4-4.4 1.9-4.8 4.8C6.6 7.9 5.1 6.4 2.2 6 5.1 5.6 6.6 4.1 7 1.2Z" fill="currentColor"></path><circle cx="11.6" cy="11.4" r="1.1" fill="currentColor" opacity="0.55"></circle>"#;
-const SPIN_ARC_SVG: &str = r#"<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.5"></circle><path d="M12 3.5A8.5 8.5 0 0 1 20.5 12" stroke="currentColor" stroke-linecap="round" stroke-width="2.5"></path>"#;
 
 /// Category of a [`TraceSpan`] determining bar tint and inspector metadata.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -292,15 +291,119 @@ fn infer_span_artwork(span: &TraceSpan) -> Option<SharedString> {
         }
     }
     let nl = span.name.to_ascii_lowercase();
-    if nl.contains("stripe") {
-        Some("stripe".into())
-    } else if nl.contains("github") {
-        Some("github".into())
-    } else if nl.contains("slack") {
-        Some("slack".into())
-    } else {
-        None
+    let dl = span
+        .detail
+        .as_ref()
+        .map(|d| d.to_ascii_lowercase())
+        .unwrap_or_default();
+    if nl.contains("stripe") || dl == "stripe" {
+        return Some("stripe".into());
     }
+    if nl.contains("github") || dl == "github" {
+        return Some("github".into());
+    }
+    if nl.contains("slack") || dl == "slack" {
+        return Some("slack".into());
+    }
+    if nl.contains("notion") || dl == "notion" {
+        return Some("notion".into());
+    }
+    if matches!(span.kind, TraceSpanKind::Agent | TraceSpanKind::SubAgent) {
+        for child in &span.children {
+            if child.kind == TraceSpanKind::Llm
+                && let Some(art) = infer_span_artwork(child)
+            {
+                return Some(art);
+            }
+        }
+    }
+    None
+}
+
+fn infer_trace_tool_icon(name: &str, detail: Option<&str>) -> ProIcon {
+    let nl = name.to_ascii_lowercase();
+    let dl = detail.map(str::to_ascii_lowercase).unwrap_or_default();
+    if nl.contains("db")
+        || nl.contains("sql")
+        || nl.contains("postgres")
+        || nl.contains("usage")
+        || dl.contains("postgres")
+        || dl.contains("sql")
+    {
+        ProIcon::Database
+    } else if nl.contains("search") || nl.contains("find") || nl.contains("query") {
+        ProIcon::Search
+    } else if nl.contains("fetch")
+        || nl.contains("http")
+        || nl.contains("web")
+        || nl.contains("url")
+        || nl.contains("review")
+        || nl.contains("page")
+    {
+        ProIcon::Globe
+    } else if nl.contains("verify")
+        || nl.contains("check")
+        || nl.contains("valid")
+        || nl.contains("cit")
+    {
+        ProIcon::Check
+    } else if nl.contains("read") || nl.contains("file") || nl.contains("doc") {
+        ProIcon::PageDoc
+    } else if nl.contains("hook") || nl.contains("link") {
+        ProIcon::Link
+    } else {
+        ProIcon::Terminal
+    }
+}
+
+fn render_trace_running_spinner(elapsed_secs: f32, reduced: bool, color: Hsla) -> AnyElement {
+    let angle = if reduced {
+        -std::f32::consts::FRAC_PI_2
+    } else {
+        (elapsed_secs / 0.85).fract() * std::f32::consts::TAU
+    };
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let center = bounds.center();
+            let r = (f32::from(bounds.size.width).min(f32::from(bounds.size.height)) - 2.0) * 0.5;
+            if r <= 1.0 {
+                return;
+            }
+            let steps = 28usize;
+            let mut track = PathBuilder::stroke(px(1.65));
+            for i in 0..=steps {
+                let a = (i as f32 / steps as f32) * std::f32::consts::TAU;
+                let pt = center + point(px(r * a.cos()), px(r * a.sin()));
+                if i == 0 {
+                    track.move_to(pt);
+                } else {
+                    track.line_to(pt);
+                }
+            }
+            if let Ok(path) = track.build() {
+                window.paint_path(path, color.opacity(0.22));
+            }
+            let arc_steps = 20usize;
+            let sweep = std::f32::consts::TAU * 0.70;
+            let mut arc = PathBuilder::stroke(px(1.65));
+            for i in 0..=arc_steps {
+                let a = angle + (i as f32 / arc_steps as f32) * sweep;
+                let pt = center + point(px(r * a.cos()), px(r * a.sin()));
+                if i == 0 {
+                    arc.move_to(pt);
+                } else {
+                    arc.line_to(pt);
+                }
+            }
+            if let Ok(path) = arc.build() {
+                window.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(12.5))
+    .flex_none()
+    .into_any_element()
 }
 
 fn nice_time_axis_ms(max_ms: u64, min_range_ms: u64) -> u64 {
@@ -1281,7 +1384,7 @@ impl Render for TraceWaterfall {
         let pad_l = 10.0_f32;
         let pad_r = if is_stack { 12.0 } else { 16.0 };
         let col_gap = 14.0_f32;
-        let name_w = 232.0_f32;
+        let name_w = (width_px * 0.35).clamp(256.0, 282.0).round();
         let axis_ms = summary.axis_range_ms.max(1_000) as f32;
         let step_ms = (summary.axis_range_ms / 5).max(500);
 
@@ -1786,24 +1889,96 @@ impl Render for TraceWaterfall {
                 div().w(px(16.0)).mr(px(4.0)).flex_none().into_any_element()
             };
 
-            let icon_inner: AnyElement = if let Some(key) = &row.artwork_key
+            let icon_tile: AnyElement = if let Some(key) = &row.artwork_key
+                && key.as_ref() == "stripe"
+                && let Some(art) = pro_app_artwork("stripe", 20.0, cx)
+            {
+                div()
+                    .size(px(20.0))
+                    .mr(px(8.0))
+                    .flex_none()
+                    .rounded(px(6.0))
+                    .overflow_hidden()
+                    .child(art)
+                    .into_any_element()
+            } else if let Some(key) = &row.artwork_key
                 && let Some(art) = pro_app_artwork(key, 12.0, cx)
             {
-                art
-            } else {
+                let tile_bg: Hsla = if p.dark {
+                    rgb(0x232327).into()
+                } else {
+                    rgb(0xffffff).into()
+                };
                 div()
-                    .size(px(8.0))
-                    .rounded(px(2.0))
-                    .bg(mark_c)
+                    .size(px(20.0))
+                    .mr(px(8.0))
+                    .flex_none()
+                    .rounded(px(6.0))
+                    .bg(tile_bg)
+                    .border_1()
+                    .border_color(p.line)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(art)
+                    .into_any_element()
+            } else {
+                let (sq_bg, sq_bdr, ic, ic_col): (Hsla, Hsla, ProIcon, Hsla) = match row.kind {
+                    TraceSpanKind::Tool => (
+                        if p.dark {
+                            rgb(0x1d2a30).into()
+                        } else {
+                            rgb(0xeef6fa).into()
+                        },
+                        p.cyan.opacity(if p.dark { 0.24 } else { 0.22 }),
+                        infer_trace_tool_icon(row.name.as_ref(), row.detail.as_deref()),
+                        p.cyan,
+                    ),
+                    TraceSpanKind::Llm => (
+                        if p.dark {
+                            rgb(0x262030).into()
+                        } else {
+                            rgb(0xf5f0fc).into()
+                        },
+                        p.purple.opacity(0.22),
+                        ProIcon::Sparkles,
+                        p.purple,
+                    ),
+                    TraceSpanKind::Agent | TraceSpanKind::SubAgent => (
+                        if p.dark {
+                            rgb(0x202630).into()
+                        } else {
+                            rgb(0xeef4fb).into()
+                        },
+                        p.blue.opacity(0.22),
+                        ProIcon::Sparkles,
+                        p.blue,
+                    ),
+                };
+                div()
+                    .size(px(20.0))
+                    .mr(px(8.0))
+                    .flex_none()
+                    .rounded(px(6.0))
+                    .bg(sq_bg)
+                    .border_1()
+                    .border_color(sq_bdr)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(pro_icon(ic, 11.5, ic_col))
                     .into_any_element()
             };
 
             let state_icon: Option<AnyElement> = match row.status {
-                TraceSpanStatus::Running => Some(pro_svg("0 0 24 24", SPIN_ARC_SVG, 12.0, p.blue)),
+                TraceSpanStatus::Running => {
+                    Some(render_trace_running_spinner(elapsed, reduced, p.blue))
+                }
                 TraceSpanStatus::Failed => Some(pro_icon(ProIcon::AlertTriangle, 12.5, p.red_ink)),
                 TraceSpanStatus::Done => None,
             };
 
+            let max_title_w = (name_w - (depth as f32 * 14.0) - 56.0).max(118.0);
             let name_cell = div()
                 .when(!is_stack, |d| d.w(px(name_w)).flex_none().h(px(30.0)))
                 .when(is_stack, |d| d.w_full().flex_none().min_w_0().h(px(28.0)))
@@ -1812,20 +1987,7 @@ impl Render for TraceWaterfall {
                 .min_w_0()
                 .child(guides)
                 .child(chev_el)
-                .child(
-                    div()
-                        .size(px(20.0))
-                        .mr(px(8.0))
-                        .flex_none()
-                        .rounded(px(5.0))
-                        .bg(card_bg)
-                        .border_1()
-                        .border_color(p.line)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(icon_inner),
-                )
+                .child(icon_tile)
                 .child(
                     div()
                         .flex_1()
@@ -1836,12 +1998,10 @@ impl Render for TraceWaterfall {
                         .overflow_hidden()
                         .child(
                             div()
+                                .flex_shrink_0()
+                                .max_w(px(max_title_w))
                                 .text_size(px(13.0))
-                                .font_weight(if row.has_children {
-                                    FontWeight::MEDIUM
-                                } else {
-                                    FontWeight::NORMAL
-                                })
+                                .font_weight(FontWeight::MEDIUM)
                                 .text_color(if row.has_children { p.strong } else { p.ink })
                                 .truncate()
                                 .child(row.name.clone()),
@@ -1851,6 +2011,8 @@ impl Render for TraceWaterfall {
                             |d, det| {
                                 d.child(
                                     div()
+                                        .flex_1()
+                                        .min_w_0()
                                         .text_size(px(12.0))
                                         .text_color(p.muted)
                                         .truncate()

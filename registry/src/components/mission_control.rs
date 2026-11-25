@@ -6,7 +6,7 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
+        ProPalette, pro_agent_avatar, pro_app_tile, pro_card_shadow, pro_check_draw,
         pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color,
         pro_pill_indicator, pro_progress_ring, pro_rolling_number, pro_selection_sensor,
         pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
@@ -357,7 +357,7 @@ fn default_mission_agents() -> Vec<MissionAgent> {
                 MissionAgent {
                     id: "release".into(),
                     name: "Release".into(),
-                    model: "Sonnet 5.5".into(),
+                    model: "GPT-5.4".into(),
                     status: MissionAgentStatus::Waiting,
                     task: "Merge & deploy pricing page PR #482".into(),
                     ask: Some(MissionAgentAsk::approval(
@@ -400,7 +400,7 @@ fn default_mission_agents() -> Vec<MissionAgent> {
         MissionAgent {
             id: "ops".into(),
             name: "Ops".into(),
-            model: "GPT-5.4".into(),
+            model: "Gemini 3.0 Flash".into(),
             status: MissionAgentStatus::Running,
             task: "Sync CRM contacts & rotate webhook keys".into(),
             ask: None,
@@ -1025,10 +1025,11 @@ impl MissionControlBlock {
 
         div()
             .w_full()
-            .rounded(px(14.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .px(px(16.))
             .pt(px(14.))
             .pb(px(10.))
@@ -1331,6 +1332,7 @@ impl MissionControlBlock {
             };
 
             let lead_id = lead.id.clone();
+            let lead_seed = format!("{} {}", lead.name, lead.model);
             let col = agent_hue(&lead_id, &p);
             let anchor_cell = lead_anchor.clone();
 
@@ -1347,7 +1349,7 @@ impl MissionControlBlock {
                         .items_center()
                         .gap(px(8.))
                         .child(pro_agent_avatar(
-                            &lead_id,
+                            &lead_seed,
                             col,
                             22.,
                             lead.status == MissionAgentStatus::Running,
@@ -1595,13 +1597,21 @@ impl MissionControlBlock {
             leads_col
         };
 
+        let lead_total = self.agents.len();
+        let sub_total = flat.len().saturating_sub(lead_total);
+        let waiting_count = flat
+            .iter()
+            .filter(|a| a.status == MissionAgentStatus::Waiting)
+            .count();
+
         div()
             .w_full()
             .h_full()
-            .rounded(px(10.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(
@@ -1611,6 +1621,7 @@ impl MissionControlBlock {
                     .border_b_1()
                     .border_color(p.line)
                     .flex()
+                    .flex_wrap()
                     .items_center()
                     .justify_between()
                     .gap(px(10.))
@@ -1619,7 +1630,7 @@ impl MissionControlBlock {
                             .flex()
                             .items_center()
                             .gap(px(8.))
-                            .child(pro_icon(ProIcon::Sparkles, 15., p.blue))
+                            .child(pro_icon(ProIcon::Sparkles, 14., p.blue))
                             .child(
                                 div()
                                     .text_size(px(13.))
@@ -1631,17 +1642,29 @@ impl MissionControlBlock {
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .items_center()
                             .gap(px(10.))
-                            .text_size(px(12.))
+                            .text_size(px(11.5))
                             .text_color(p.muted)
+                            .child(format!(
+                                "{lead_total} {} / {sub_total} {}",
+                                tr(cx, "agents", "主智能体"),
+                                tr(cx, "sub-agents", "子智能体")
+                            ))
                             .child(pro_swap_label(
                                 pro_eid(&self.id, "mc-fleet-run-lbl"),
                                 format!("{running_count} {}", tr(cx, "running", "运行中")),
-                                12.,
+                                11.5,
                                 FontWeight::NORMAL,
                                 p.muted,
                             ))
+                            .when(waiting_count > 0, |d| {
+                                d.child(format!(
+                                    "{waiting_count} {}",
+                                    tr(cx, "needs you", "待确认")
+                                ))
+                            })
                             .child(pro_rolling_number(
                                 pro_eid(&self.id, "mc-fleet-cost"),
                                 total_cost,
@@ -1677,6 +1700,7 @@ impl MissionControlBlock {
         );
         let col = agent_hue(&sub.id, &p);
         let sub_id = sub.id.clone();
+        let sub_seed = format!("{} {}", sub.name, sub.model);
 
         let quick_action = match sub.status {
             MissionAgentStatus::Waiting => {
@@ -1692,8 +1716,8 @@ impl MissionControlBlock {
                         pro_eid(&self.id, format!("sub-act-{aid}")),
                         btn_label,
                         5.,
-                        p.subtle,
-                        p.hover,
+                        p.chip,
+                        p.chip_hover,
                         p.line_strong,
                         p.line_strong,
                         false,
@@ -1705,7 +1729,7 @@ impl MissionControlBlock {
                             .whitespace_nowrap()
                             .text_size(px(11.))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
+                            .text_color(p.ink)
                             .child(btn_label),
                         cx,
                         move |this, _, cx| {
@@ -1723,8 +1747,8 @@ impl MissionControlBlock {
                         pro_eid(&self.id, format!("sub-retry-{aid}")),
                         retry_lbl,
                         5.,
-                        p.subtle,
-                        p.hover,
+                        p.chip,
+                        p.chip_hover,
                         p.line_strong,
                         p.line_strong,
                         false,
@@ -1736,7 +1760,7 @@ impl MissionControlBlock {
                             .whitespace_nowrap()
                             .text_size(px(11.))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
+                            .text_color(p.ink)
                             .child(retry_lbl),
                         cx,
                         move |this, _, cx| {
@@ -1748,6 +1772,8 @@ impl MissionControlBlock {
             }
             _ => None,
         };
+
+        let lead_tool = sub.tools.first().map(|t| pro_app_tile(t, 15., cx));
 
         div()
             .relative()
@@ -1780,7 +1806,7 @@ impl MissionControlBlock {
                     .items_center()
                     .gap(px(7.))
                     .child(pro_agent_avatar(
-                        &sub.id,
+                        &sub_seed,
                         col,
                         20.,
                         sub.status == MissionAgentStatus::Running,
@@ -1791,20 +1817,44 @@ impl MissionControlBlock {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .truncate()
-                            .child(sub.name.clone()),
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .line_height(px(15.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .truncate()
+                                    .child(sub.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.5))
+                                    .line_height(px(13.))
+                                    .text_color(p.muted)
+                                    .truncate()
+                                    .child(sub.model.clone()),
+                            ),
                     )
                     .child(self.render_status_pill(&sub.id, sub.status, cx)),
             )
             .child(
                 div()
-                    .text_size(px(11.5))
-                    .text_color(p.text)
-                    .truncate()
-                    .child(sub.task.clone()),
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .min_w_0()
+                    .when_some(lead_tool, |d, tile| d.child(tile))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(11.5))
+                            .text_color(p.text)
+                            .truncate()
+                            .child(sub.task.clone()),
+                    ),
             )
             .child(
                 div()
@@ -1836,13 +1886,70 @@ impl MissionControlBlock {
             .cloned()
             .collect();
 
-        let lane_bg: Hsla = if p.dark {
-            rgb(0x161618).into()
+        let item_bg: Hsla = if p.dark {
+            rgb(0x202024).into()
         } else {
-            rgb(0xf4f4f5).into()
+            p.subtle
         };
 
-        let mut cards_col = div().w_full().flex().flex_col().gap(px(6.));
+        type InboxPillAction =
+            Rc<dyn Fn(&mut MissionControlBlock, &mut Window, &mut Context<MissionControlBlock>)>;
+
+        let quiet_pill = |id: ElementId,
+                          label: SharedString,
+                          emphasized: bool,
+                          hov_t: f32,
+                          cx: &mut Context<Self>,
+                          on_press: InboxPillAction|
+         -> Stateful<Div> {
+            let rest_bg = if emphasized {
+                pro_mix_color(p.chip, p.chip_hover, hov_t * 0.85)
+            } else {
+                transparent_black()
+            };
+            let hover_bg = if emphasized {
+                pro_mix_color(p.chip_hover, p.ink.opacity(0.16), 0.5)
+            } else {
+                p.chip
+            };
+            let rest_bdr = if emphasized {
+                pro_mix_color(p.line, p.line_strong, 0.5 + 0.5 * hov_t)
+            } else {
+                pro_mix_color(transparent_black(), p.line, hov_t)
+            };
+            let fg = if emphasized {
+                pro_mix_color(p.text, p.strong, 0.55 + 0.45 * hov_t)
+            } else {
+                pro_mix_color(p.muted, p.text, hov_t)
+            };
+            pro_tactile(
+                id,
+                label.clone(),
+                5.,
+                rest_bg,
+                hover_bg,
+                rest_bdr,
+                p.line_strong,
+                false,
+                div()
+                    .h(px(20.))
+                    .px(px(6.5))
+                    .flex()
+                    .items_center()
+                    .whitespace_nowrap()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(fg)
+                    .child(label),
+                cx,
+                move |this, win, app_cx| {
+                    (on_press)(this, win, app_cx);
+                },
+            )
+            .flex_none()
+        };
+
+        let mut cards_col = div().w_full().flex().flex_col().gap(px(7.));
         if actionable.is_empty() {
             cards_col = cards_col.child(
                 div()
@@ -1876,24 +1983,25 @@ impl MissionControlBlock {
                     w,
                     cx,
                 );
+                let hov_st = w.use_keyed_state(
+                    pro_eid(&self.id, format!("mc-inb-hov-{aid}")),
+                    cx,
+                    |_, _| Slide::snappy(0.),
+                );
+                let hov_t = hov_st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.));
                 let is_failed = ag.status == MissionAgentStatus::Failed;
 
-                let (headline, desc, desc_col) = if is_failed {
+                let (headline, desc) = if is_failed {
                     (
                         ag.task.clone(),
                         ag.error
                             .clone()
                             .unwrap_or_else(|| SharedString::from("Execution failed")),
-                        p.red_ink,
                     )
                 } else if let Some(ask) = &ag.ask {
-                    (ask.title.clone(), ask.detail.clone(), p.text)
+                    (ask.title.clone(), ask.detail.clone())
                 } else {
-                    (
-                        ag.task.clone(),
-                        "Waiting on your confirmation".into(),
-                        p.text,
-                    )
+                    (ag.task.clone(), "Waiting on your confirmation".into())
                 };
 
                 let actions_row = if is_failed {
@@ -1903,28 +2011,26 @@ impl MissionControlBlock {
                         .flex()
                         .items_center()
                         .justify_end()
-                        .gap(px(6.))
-                        .child(pro_btn(
+                        .gap(px(4.))
+                        .child(quiet_pill(
                             pro_eid(&self.id, format!("inb-dismiss-{aid}")),
-                            tr(cx, "Dismiss", "忽略"),
-                            None,
-                            ProBtnStyle::Secondary,
-                            true,
+                            tr(cx, "Dismiss", "忽略").into(),
+                            false,
+                            hov_t,
                             cx,
-                            move |this, _, cx| {
+                            Rc::new(move |this, _, cx| {
                                 this.resolve_reject_or_dismiss(&aid_dis, true, cx);
-                            },
+                            }),
                         ))
-                        .child(pro_btn(
+                        .child(quiet_pill(
                             pro_eid(&self.id, format!("inb-retry-{aid}")),
-                            tr(cx, "Retry", "重试"),
-                            None,
-                            ProBtnStyle::Primary,
+                            tr(cx, "Retry", "重试").into(),
                             true,
+                            hov_t,
                             cx,
-                            move |this, _, cx| {
+                            Rc::new(move |this, _, cx| {
                                 this.resolve_retry(&aid_ret, cx);
-                            },
+                            }),
                         ))
                 } else if let Some(ask) = &ag.ask
                     && !ask.choices.is_empty()
@@ -1934,25 +2040,20 @@ impl MissionControlBlock {
                         .flex_wrap()
                         .items_center()
                         .justify_end()
-                        .gap(px(6.));
+                        .gap(px(4.));
                     for (ci, choice) in ask.choices.iter().enumerate() {
                         let aid_ch = aid.clone();
                         let ch_val = choice.clone();
                         let is_primary = ci + 1 == ask.choices.len();
-                        row = row.child(pro_btn(
+                        row = row.child(quiet_pill(
                             pro_eid(&self.id, format!("inb-ans-{aid}-{ci}")),
                             ch_val.clone(),
-                            None,
-                            if is_primary {
-                                ProBtnStyle::Primary
-                            } else {
-                                ProBtnStyle::Secondary
-                            },
-                            true,
+                            is_primary,
+                            hov_t,
                             cx,
-                            move |this, _, cx| {
+                            Rc::new(move |this, _, cx| {
                                 this.resolve_approve(&aid_ch, Some(ch_val.clone()), cx);
-                            },
+                            }),
                         ));
                     }
                     row
@@ -1963,98 +2064,119 @@ impl MissionControlBlock {
                         .flex()
                         .items_center()
                         .justify_end()
-                        .gap(px(6.))
-                        .child(pro_btn(
+                        .gap(px(4.))
+                        .child(quiet_pill(
                             pro_eid(&self.id, format!("inb-rej-{aid}")),
-                            tr(cx, "Reject", "拒绝"),
-                            None,
-                            ProBtnStyle::Secondary,
-                            true,
+                            tr(cx, "Reject", "拒绝").into(),
+                            false,
+                            hov_t,
                             cx,
-                            move |this, _, cx| {
+                            Rc::new(move |this, _, cx| {
                                 this.resolve_reject_or_dismiss(&aid_rej, false, cx);
-                            },
+                            }),
                         ))
-                        .child(pro_btn(
+                        .child(quiet_pill(
                             pro_eid(&self.id, format!("inb-app-{aid}")),
-                            tr(cx, "Approve", "批准"),
-                            None,
-                            ProBtnStyle::Primary,
+                            tr(cx, "Approve", "批准").into(),
                             true,
+                            hov_t,
                             cx,
-                            move |this, _, cx| {
+                            Rc::new(move |this, _, cx| {
                                 this.resolve_approve(&aid_app, None, cx);
-                            },
+                            }),
                         ))
                 };
 
+                let status_meta = if is_failed {
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .text_size(px(11.))
+                        .child(div().size(px(6.)).rounded_full().bg(p.red))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_color(p.red_ink)
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(format!("{} · {}", tr(cx, "Failed", "失败"), ag.elapsed)),
+                        )
+                } else {
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .text_size(px(11.))
+                        .child(pro_svg("0 0 16 16", RECAP_FAIL_SVG, 11., p.amber))
+                        .child(div().truncate().text_color(p.muted).child(format!(
+                            "{} · {}",
+                            tr(cx, "Waiting for you", "等待你确认"),
+                            ag.elapsed
+                        )))
+                };
+
+                let card_border = pro_mix_color(p.line, p.line_strong, hov_t);
                 cards_col = cards_col.child(
                     div()
+                        .id(pro_eid(&self.id, format!("inb-card-{aid}")))
                         .w_full()
-                        .rounded(px(10.))
-                        .bg(p.card)
+                        .rounded(px(9.))
+                        .bg(item_bg)
                         .border_1()
-                        .border_color(p.line)
-                        .p(px(11.))
+                        .border_color(card_border)
+                        .px(px(11.))
+                        .py(px(9.))
                         .opacity(inb_op)
                         .flex()
                         .flex_col()
-                        .gap(px(6.))
+                        .gap(px(4.))
+                        .on_hover({
+                            let hov_st = hov_st.clone();
+                            move |inside, w, cx| {
+                                hov_st.update(cx, |s, cx| {
+                                    s.set(if *inside { 1. } else { 0. }, cx);
+                                    cx.notify();
+                                });
+                                w.refresh();
+                            }
+                        })
                         .child(
                             div()
                                 .flex()
-                                .items_start()
-                                .gap(px(8.))
-                                .child(div().mt(px(2.)).child(pro_icon(
-                                    if is_failed {
-                                        ProIcon::AlertTriangle
-                                    } else {
-                                        ProIcon::Sparkles
-                                    },
-                                    14.,
-                                    if is_failed { p.red } else { p.amber },
-                                )))
+                                .items_center()
+                                .gap(px(6.))
+                                .child(pro_icon(ProIcon::Sparkles, 12., p.amber))
                                 .child(
                                     div()
                                         .flex_1()
                                         .min_w_0()
-                                        .flex()
-                                        .flex_col()
-                                        .gap(px(2.))
-                                        .child(
-                                            div()
-                                                .text_size(px(13.))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.strong)
-                                                .child(headline),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .line_height(px(17.))
-                                                .text_color(desc_col)
-                                                .child(desc),
-                                        ),
+                                        .truncate()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.strong)
+                                        .child(headline),
                                 ),
                         )
                         .child(
                             div()
-                                .pt(px(4.))
-                                .px(px(8.))
-                                .py(px(5.))
-                                .rounded(px(7.))
-                                .bg(p.subtle)
+                                .pl(px(18.))
+                                .text_size(px(11.5))
+                                .line_height(px(16.))
+                                .text_color(p.muted)
+                                .child(desc),
+                        )
+                        .child(
+                            div()
+                                .pl(px(18.))
+                                .pt(px(1.))
                                 .flex()
                                 .flex_wrap()
                                 .items_center()
                                 .justify_between()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .text_color(p.muted)
-                                        .child(format!("{} · {}", ag.name, ag.elapsed)),
-                                )
+                                .gap(px(6.))
+                                .child(status_meta)
                                 .child(actions_row),
                         ),
                 );
@@ -2063,52 +2185,46 @@ impl MissionControlBlock {
 
         div()
             .w_full()
-            .min_h(px(290.))
             .rounded(px(12.))
-            .bg(lane_bg)
+            .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .p(px(6.))
+            .shadow(pro_card_shadow(p.dark))
+            .p(px(10.))
             .flex()
             .flex_col()
-            .gap(px(4.))
+            .gap(px(8.))
             .child(
                 div()
-                    .h(px(30.))
-                    .px(px(8.))
+                    .h(px(24.))
+                    .px(px(4.))
                     .flex()
                     .items_center()
-                    .justify_between()
+                    .gap(px(6.))
+                    .child(pro_icon(ProIcon::Sparkles, 12.5, p.blue))
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .child(pro_icon(ProIcon::Sparkles, 13., p.blue))
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .child(tr(cx, "NEEDS YOU", "待你处理")),
-                            ),
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.muted)
+                            .child(tr(cx, "NEEDS YOU", "待你处理")),
                     )
                     .child(
                         div()
-                            .min_w(px(20.))
-                            .h(px(18.))
+                            .min_w(px(18.))
+                            .h(px(17.))
                             .px(px(5.))
-                            .rounded(px(5.))
-                            .bg(p.chip_hover)
+                            .rounded(px(4.))
+                            .bg(p.chip)
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(pro_swap_label(
                                 pro_eid(&self.id, "mc-inb-cnt"),
                                 actionable.len().to_string(),
-                                11.,
+                                10.5,
                                 FontWeight::MEDIUM,
-                                p.ink,
+                                p.text,
                             )),
                     ),
             )
@@ -2244,11 +2360,11 @@ impl Render for MissionControlBlock {
         let pulse_t = (elapsed_secs / 2.2).fract();
 
         let width = self.measured_width.get();
-        let stack_columns = width < 840.;
+        let stack_columns = width < 720.;
         let wide_fleet_tree = if stack_columns {
-            width >= 560.
+            width >= 540.
         } else {
-            width >= 840.
+            width >= 720.
         };
         let compact = width < 480.;
         let measure_cell = self.measured_width.clone();
@@ -2351,7 +2467,6 @@ impl Render for MissionControlBlock {
                 .id(self.id.clone())
                 .w_full()
                 .p(px(16.))
-                .bg(p.page)
                 .flex()
                 .flex_col()
                 .gap(px(14.))
@@ -2360,10 +2475,11 @@ impl Render for MissionControlBlock {
                     div()
                         .w_full()
                         .h(px(148.))
-                        .rounded(px(14.))
+                        .rounded(px(12.))
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .p(px(16.))
                         .child(pro_skeleton_bar(240., 84., 8., phase, cx)),
                 )
@@ -2371,10 +2487,11 @@ impl Render for MissionControlBlock {
                     div()
                         .w_full()
                         .h(px(280.))
-                        .rounded(px(10.))
+                        .rounded(px(12.))
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .p(px(16.))
                         .child(pro_skeleton_bar(260., 180., 8., phase + 0.2, cx)),
                 );
@@ -2385,7 +2502,6 @@ impl Render for MissionControlBlock {
                 .id(self.id.clone())
                 .w_full()
                 .p(px(16.))
-                .bg(p.page)
                 .flex()
                 .flex_col()
                 .gap(px(14.))
@@ -2397,6 +2513,7 @@ impl Render for MissionControlBlock {
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .child(pro_empty_state(
                             ProIcon::Sparkles,
                             tr(cx, "All quiet in Mission Control", "任务指挥台当前空闲"),
@@ -2438,9 +2555,8 @@ impl Render for MissionControlBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .px(px(if compact { 16. } else { 32. }))
-            .py(px(if compact { 20. } else { 28. }))
-            .bg(p.page)
+            .px(px(if compact { 12. } else { 18. }))
+            .py(px(if compact { 16. } else { 22. }))
             .flex()
             .flex_col()
             .gap(px(14.))

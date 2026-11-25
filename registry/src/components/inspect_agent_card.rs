@@ -26,14 +26,15 @@ use std::{
 };
 use web_time::Instant;
 
-const STAGE_W: usize = 436;
-const STAGE_H: usize = 356;
+const STAGE_W: usize = 504;
+const STAGE_H: usize = 404;
 const RASTER_SCALE: usize = 2;
 const TEX_W: usize = STAGE_W * RASTER_SCALE;
 const TEX_H: usize = STAGE_H * RASTER_SCALE;
 const CARD_W: f32 = 320.0;
 const MAIN_H: f32 = 176.0;
 const ABOVE_H: f32 = 112.0;
+const PERSP_SCALE: f32 = 1.15;
 
 const LAYER_TAG_SVG: &str = r#"<rect x="1.5" y="2" width="9" height="3" rx="1" fill="currentColor"></rect><rect x="1.5" y="7" width="6" height="3" rx="1" fill="currentColor"></rect>"#;
 
@@ -207,30 +208,32 @@ struct RowMetrics {
     gap_label: &'static str,
 }
 
+const ABOVE_GAP: f32 = 22.0;
+
 fn row_metrics(row: InspectAgentRow) -> RowMetrics {
     match row {
         InspectAgentRow::Header => RowMetrics {
             frame_top: 0.0,
-            frame_h: 52.0,
-            content_w: 236.0,
+            frame_h: 46.0,
+            content_w: 242.0,
             guide_y0: -16.0,
             guide_y1: 0.0,
             gap_label: "16px",
         },
         InspectAgentRow::Task => RowMetrics {
-            frame_top: 44.0,
-            frame_h: 56.0,
-            content_w: 236.0,
-            guide_y0: 42.0,
-            guide_y1: 54.0,
+            frame_top: 50.0,
+            frame_h: 54.0,
+            content_w: 242.0,
+            guide_y0: 38.0,
+            guide_y1: 50.0,
             gap_label: "12px",
         },
         InspectAgentRow::Meta => RowMetrics {
-            frame_top: 88.0,
-            frame_h: 40.0,
-            content_w: 236.0,
-            guide_y0: 90.0,
-            guide_y1: 98.0,
+            frame_top: 106.0,
+            frame_h: 38.0,
+            content_w: 242.0,
+            guide_y0: 98.0,
+            guide_y1: 106.0,
             gap_label: "8px",
         },
     }
@@ -264,7 +267,7 @@ impl AgentTargetBox {
 }
 
 fn agent_target_box(target_idx: usize, mirror: bool) -> AgentTargetBox {
-    let gx_edge = if mirror { CARD_W - 14.0 } else { 14.0 };
+    let gx_open = if mirror { 96.0 } else { 218.0 };
     match target_idx {
         0..=2 => {
             let row = InspectAgentRow::from_index(target_idx);
@@ -275,7 +278,7 @@ fn agent_target_box(target_idx: usize, mirror: bool) -> AgentTargetBox {
                 fw: CARD_W,
                 fh: m.frame_h,
                 pad: 10.0,
-                gx: gx_edge,
+                gx: gx_open,
                 gy0: m.guide_y0,
                 gy1: m.guide_y1,
                 gap_label: m.gap_label,
@@ -291,7 +294,7 @@ fn agent_target_box(target_idx: usize, mirror: bool) -> AgentTargetBox {
             fw: 158.0,
             fh: 34.0,
             pad: 4.0,
-            gx: 42.0,
+            gx: 142.0,
             gy0: 0.0,
             gy1: 6.0,
             gap_label: "8px",
@@ -306,7 +309,7 @@ fn agent_target_box(target_idx: usize, mirror: bool) -> AgentTargetBox {
             fw: 68.0,
             fh: 26.0,
             pad: 4.0,
-            gx: 218.0,
+            gx: 242.0,
             gy0: 0.0,
             gy1: 6.0,
             gap_label: "6px",
@@ -317,28 +320,28 @@ fn agent_target_box(target_idx: usize, mirror: bool) -> AgentTargetBox {
         },
         5 => AgentTargetBox {
             fx: 6.0,
-            fy: 49.0,
-            fw: 42.0,
+            fy: 53.0,
+            fw: 44.0,
             fh: 24.0,
             pad: 4.0,
-            gx: 27.0,
-            gy0: 40.0,
-            gy1: 49.0,
+            gx: 142.0,
+            gy0: 44.0,
+            gy1: 53.0,
             gap_label: "6px",
             dim_prefix: "W Hug",
-            dim_w: 34.0,
+            dim_w: 36.0,
             sub_tag: Some(("Tool Chips", "工具图标")),
             row: InspectAgentRow::Task,
         },
         _ => AgentTargetBox {
             fx: 6.0,
-            fy: 93.0,
+            fy: 109.0,
             fw: 104.0,
             fh: 28.0,
             pad: 4.0,
-            gx: 56.0,
-            gy0: 84.0,
-            gy1: 93.0,
+            gx: 148.0,
+            gy0: 100.0,
+            gy1: 109.0,
             gap_label: "8px",
             dim_prefix: "W Hug",
             dim_w: 96.0,
@@ -362,9 +365,9 @@ impl TiltTransform {
         let (ox, oy) = if flat {
             (58.0, 134.0)
         } else if mirror {
-            (46.0, 138.0)
+            (46.0, 150.0)
         } else {
-            (76.0, 138.0)
+            (96.0, 150.0)
         };
         Self {
             flat,
@@ -374,21 +377,29 @@ impl TiltTransform {
         }
     }
 
+    fn scale(self) -> f32 {
+        if self.flat { 1.0 } else { PERSP_SCALE }
+    }
+
     fn project(self, u: f32, v: f32) -> (f32, f32) {
         if self.flat {
             return (self.ox + u, self.oy + v);
         }
+        let s = PERSP_SCALE;
         if self.mirror {
             let u_rel = u - CARD_W;
             let xp = 0.963_063 * u_rel + 0.118_249 * v;
             let yp = 0.014_517 * u_rel + 0.874_312 * v;
             let wp = (1.0 + 0.000_244 * u_rel - 0.000_428 * v).max(0.25);
-            (self.ox + CARD_W + xp / wp, self.oy + yp / wp)
+            (
+                self.ox + CARD_W * s + (xp / wp) * s,
+                self.oy + (yp / wp) * s,
+            )
         } else {
             let xp = 0.963_063 * u - 0.118_249 * v;
             let yp = -0.014_517 * u + 0.874_312 * v;
             let wp = (1.0 - 0.000_244 * u - 0.000_428 * v).max(0.25);
-            (self.ox + xp / wp, self.oy + yp / wp)
+            (self.ox + (xp / wp) * s, self.oy + (yp / wp) * s)
         }
     }
 
@@ -396,9 +407,10 @@ impl TiltTransform {
         if self.flat {
             return (sx - self.ox, sy - self.oy);
         }
+        let s = PERSP_SCALE;
         if self.mirror {
-            let dx = sx - (self.ox + CARD_W);
-            let dy = sy - self.oy;
+            let dx = (sx - (self.ox + CARD_W * s)) / s;
+            let dy = (sy - self.oy) / s;
             let a11 = 0.963_063 - 0.000_244 * dx;
             let a12 = 0.118_249 + 0.000_428 * dx;
             let a21 = 0.014_517 - 0.000_244 * dy;
@@ -411,8 +423,8 @@ impl TiltTransform {
             let v = (a11 * dy - a21 * dx) / det;
             (u_rel + CARD_W, v)
         } else {
-            let dx = sx - self.ox;
-            let dy = sy - self.oy;
+            let dx = (sx - self.ox) / s;
+            let dy = (sy - self.oy) / s;
             let a11 = 0.963_063 + 0.000_244 * dx;
             let a12 = -0.118_249 + 0.000_428 * dx;
             let a21 = -0.014_517 + 0.000_244 * dy;
@@ -436,12 +448,12 @@ fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
 /// Scene-wide CSS `mask-image` alpha fading right (or left if `mirror`) and bottom/top edges.
 fn stage_mask_alpha(sx: f32, sy: f32, mirror: bool) -> f32 {
     let mx = if mirror {
-        smoothstep(4.0, STAGE_W as f32 * 0.26, sx)
+        smoothstep(8.0, STAGE_W as f32 * 0.28, sx)
     } else {
-        1. - smoothstep(STAGE_W as f32 * 0.72, STAGE_W as f32 - 4.0, sx)
+        1. - smoothstep(STAGE_W as f32 * 0.65, STAGE_W as f32 * 0.94, sx)
     };
-    let my_bot = 1. - smoothstep(STAGE_H as f32 * 0.64, STAGE_H as f32 * 0.96, sy);
-    let my_top = smoothstep(4.0, 56.0, sy);
+    let my_bot = 1. - smoothstep(STAGE_H as f32 * 0.62, STAGE_H as f32 * 0.84, sy);
+    let my_top = smoothstep(14.0, STAGE_H as f32 * 0.25, sy);
     (mx * my_bot * my_top).clamp(0., 1.)
 }
 
@@ -557,8 +569,8 @@ fn rasterize_inspect_plate(key: InspectPlateKey) -> RenderImage {
     let px_u = 1.0 / RASTER_SCALE as f32;
     let mut raw = vec![0u8; TEX_W * TEX_H * 4];
     let above_u_off = if key.mirror { 16.0 } else { -16.0 };
-    let above_y0 = -(ABOVE_H + 16.0);
-    let above_y1 = -16.0;
+    let above_y0 = -(ABOVE_H + ABOVE_GAP);
+    let above_y1 = -ABOVE_GAP;
 
     for py in 0..TEX_H {
         let sy = (py as f32 + 0.5) * px_u;
@@ -768,7 +780,12 @@ fn step_timeline(
     (InspectAgentRow::from_index(row_idx), reveal)
 }
 
-fn render_status_pill(status: InspectAgentStatus, spin_turn: f32, dark: bool) -> AnyElement {
+fn render_status_pill(
+    status: InspectAgentStatus,
+    spin_turn: f32,
+    s_ui: f32,
+    dark: bool,
+) -> AnyElement {
     match status {
         InspectAgentStatus::Running => {
             let bg: Hsla = if dark {
@@ -782,24 +799,24 @@ fn render_status_pill(status: InspectAgentStatus, spin_turn: f32, dark: bool) ->
                 rgb(0x006dcb).into()
             };
             let turn = spin_turn;
+            let rad = 4.3 * s_ui;
             div()
-                .h(px(18.))
-                .pl(px(5.))
-                .pr(px(6.))
-                .rounded(px(4.))
+                .h(px(19. * s_ui))
+                .pl(px(5.5 * s_ui))
+                .pr(px(6.5 * s_ui))
+                .rounded(px(4.5 * s_ui))
                 .bg(bg)
                 .flex_none()
                 .flex()
                 .items_center()
-                .gap(px(4.))
+                .gap(px(4. * s_ui))
                 .child(
                     canvas(
                         |_, _, _| (),
                         move |b, _, window, _| {
                             let cx_p = b.origin.x + b.size.width * 0.5;
                             let cy_p = b.origin.y + b.size.height * 0.5;
-                            let rad = 4.2f32;
-                            let mut ring = PathBuilder::stroke(px(1.5));
+                            let mut ring = PathBuilder::stroke(px(1.5 * s_ui));
                             for i in 0..=16 {
                                 let a = (i as f32 / 16.) * TAU;
                                 let pt = point(cx_p + px(a.cos() * rad), cy_p + px(a.sin() * rad));
@@ -812,7 +829,7 @@ fn render_status_pill(status: InspectAgentStatus, spin_turn: f32, dark: bool) ->
                             if let Ok(path) = ring.build() {
                                 window.paint_path(path, fg.opacity(0.26));
                             }
-                            let mut arc = PathBuilder::stroke(px(1.6));
+                            let mut arc = PathBuilder::stroke(px(1.6 * s_ui));
                             for i in 0..=8 {
                                 let a = (turn + i as f32 / 24.) * TAU;
                                 let pt = point(cx_p + px(a.cos() * rad), cy_p + px(a.sin() * rad));
@@ -827,13 +844,13 @@ fn render_status_pill(status: InspectAgentStatus, spin_turn: f32, dark: bool) ->
                             }
                         },
                     )
-                    .size(px(12.))
+                    .size(px(12. * s_ui))
                     .flex_none(),
                 )
                 .child(
                     div()
-                        .text_size(px(11.))
-                        .line_height(px(16.))
+                        .text_size(px(11. * s_ui))
+                        .line_height(px(16. * s_ui))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(fg)
                         .child("Running"),
@@ -852,20 +869,20 @@ fn render_status_pill(status: InspectAgentStatus, spin_turn: f32, dark: bool) ->
                 rgb(0x007d2e).into()
             };
             div()
-                .h(px(18.))
-                .pl(px(4.))
-                .pr(px(6.))
-                .rounded(px(4.))
+                .h(px(19. * s_ui))
+                .pl(px(4.5 * s_ui))
+                .pr(px(6.5 * s_ui))
+                .rounded(px(4.5 * s_ui))
                 .bg(bg)
                 .flex_none()
                 .flex()
                 .items_center()
-                .gap(px(3.))
-                .child(pro_svg("0 0 24 24", CHECK_DONE_SVG, 11., fg))
+                .gap(px(3.5 * s_ui))
+                .child(pro_svg("0 0 24 24", CHECK_DONE_SVG, 11. * s_ui, fg))
                 .child(
                     div()
-                        .text_size(px(11.))
-                        .line_height(px(16.))
+                        .text_size(px(11. * s_ui))
+                        .line_height(px(16. * s_ui))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(fg)
                         .child("Done"),
@@ -888,6 +905,7 @@ fn render_card_rows(
     cx: &App,
 ) -> Vec<AnyElement> {
     let mut out = Vec::with_capacity(3);
+    let s_ui = tf.scale();
     let strong_c: Hsla = if dark {
         rgb(0xffffff).into()
     } else {
@@ -909,49 +927,50 @@ fn render_card_rows(
         hsla(0., 0., 0., 0.45)
     };
     let tile_bg: Hsla = if dark {
-        rgb(0x1c1c1f).into()
+        rgb(0x27272b).into()
     } else {
         rgb(0xffffff).into()
     };
     let tile_bdr: Hsla = if dark {
-        hsla(0., 0., 1., 0.11)
+        hsla(0., 0., 1., 0.10)
     } else {
         hsla(0., 0., 0., 0.08)
     };
 
-    // Row 0: Header (`u = 10..246, v = 10`)
-    let (hx, hy) = tf.project(10.0 + u_offset, 10.0 + v_offset);
-    let h_alpha = stage_mask_alpha(hx + 80., hy + 14., mirror) * extra_fade;
+    // Row 0: Header (`u = 10..252, v = 9`)
+    let (hx, hy) = tf.project(10.0 + u_offset, 9.0 + v_offset);
+    let h_alpha = stage_mask_alpha(hx + 80. * s_ui, hy + 14. * s_ui, mirror) * extra_fade;
     if h_alpha > 0.02 {
-        let av_mark = pro_app_artwork(&agent.avatar, 13., cx).unwrap_or_else(|| {
-            div()
-                .text_size(px(10.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(ink_c)
-                .child(
-                    agent
-                        .name
-                        .chars()
-                        .next()
-                        .map(|c| c.to_string())
-                        .unwrap_or_else(|| "A".to_string()),
-                )
-                .into_any_element()
-        });
+        let av_mark =
+            pro_app_artwork(&agent.avatar, (13.5 * s_ui).round(), cx).unwrap_or_else(|| {
+                div()
+                    .text_size(px(10. * s_ui))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(ink_c)
+                    .child(
+                        agent
+                            .name
+                            .chars()
+                            .next()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| "A".to_string()),
+                    )
+                    .into_any_element()
+            });
         out.push(
             div()
                 .absolute()
                 .left(px(hx))
                 .top(px(hy))
-                .w(px(236.))
+                .w(px(242. * s_ui))
                 .flex()
                 .items_center()
-                .gap(px(8.))
+                .gap(px(8.5 * s_ui))
                 .opacity(h_alpha)
                 .child(
                     div()
-                        .size(px(22.))
-                        .rounded(px(6.))
+                        .size(px(23. * s_ui))
+                        .rounded(px(6. * s_ui))
                         .bg(tile_bg)
                         .border_1()
                         .border_color(tile_bdr)
@@ -969,8 +988,8 @@ fn render_card_rows(
                         .flex_col()
                         .child(
                             div()
-                                .text_size(px(13.))
-                                .line_height(px(16.))
+                                .text_size(px(13. * s_ui))
+                                .line_height(px(16. * s_ui))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(strong_c)
                                 .overflow_hidden()
@@ -980,8 +999,8 @@ fn render_card_rows(
                         )
                         .child(
                             div()
-                                .text_size(px(11.))
-                                .line_height(px(14.))
+                                .text_size(px(11. * s_ui))
+                                .line_height(px(14. * s_ui))
                                 .text_color(muted_c)
                                 .overflow_hidden()
                                 .whitespace_nowrap()
@@ -989,45 +1008,64 @@ fn render_card_rows(
                                 .child(agent.model.clone()),
                         ),
                 )
-                .child(render_status_pill(agent.status, spin_turn, dark))
+                .child(render_status_pill(agent.status, spin_turn, s_ui, dark))
                 .into_any_element(),
         );
     }
 
-    // Row 1: Task (`u = 10..246, v = 54` on main, `v = 48` on compact above card)
-    let task_v = if v_offset < 0.0 { 46.0 } else { 54.0 };
+    // Row 1: Task (`u = 10..252, v = 56` on main, `v = 45` on compact above card)
+    let task_v = if v_offset < 0.0 { 45.0 } else { 56.0 };
     let (tx, ty) = tf.project(10.0 + u_offset, task_v + v_offset);
-    let t_alpha = stage_mask_alpha(tx + 80., ty + 14., mirror) * extra_fade;
+    let t_alpha = stage_mask_alpha(tx + 80. * s_ui, ty + 14. * s_ui, mirror) * extra_fade;
     if t_alpha > 0.02 {
-        let mut tool_strip = div().flex().items_center().mr(px(6.)).flex_none();
-        for (ti, tool_key) in agent.tools.iter().enumerate() {
-            let t_art = pro_app_artwork(tool_key, 10., cx).unwrap_or_else(|| {
+        let chip_sz = 16.5 * s_ui;
+        let mut tool_strip = div()
+            .flex()
+            .items_center()
+            .gap(px(3.5 * s_ui))
+            .mr(px(6.5 * s_ui))
+            .flex_none();
+        for tool_key in &agent.tools {
+            let lower = tool_key.trim().to_ascii_lowercase();
+            let chip_el = if lower == "stripe"
+                && let Some(full_mark) = pro_app_artwork("stripe", chip_sz, cx)
+            {
                 div()
-                    .text_size(px(8.))
-                    .text_color(ink_c)
-                    .child("•")
+                    .size(px(chip_sz))
+                    .rounded(px(4.2 * s_ui))
+                    .overflow_hidden()
+                    .flex_none()
+                    .child(full_mark)
                     .into_any_element()
-            });
-            tool_strip = tool_strip.child(
+            } else {
+                let t_art =
+                    pro_app_artwork(tool_key, (10.5 * s_ui).round(), cx).unwrap_or_else(|| {
+                        div()
+                            .text_size(px(8. * s_ui))
+                            .text_color(ink_c)
+                            .child("•")
+                            .into_any_element()
+                    });
                 div()
-                    .when(ti > 0, |d| d.ml(px(-3.)))
-                    .size(px(16.))
-                    .rounded(px(4.))
+                    .size(px(chip_sz))
+                    .rounded(px(4.2 * s_ui))
                     .bg(tile_bg)
                     .border_1()
                     .border_color(tile_bdr)
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(t_art),
-            );
+                    .child(t_art)
+                    .into_any_element()
+            };
+            tool_strip = tool_strip.child(chip_el);
         }
         out.push(
             div()
                 .absolute()
                 .left(px(tx))
                 .top(px(ty))
-                .w(px(236.))
+                .w(px(236. * s_ui))
                 .flex()
                 .items_start()
                 .opacity(t_alpha)
@@ -1036,8 +1074,8 @@ fn render_card_rows(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
+                        .text_size(px(12. * s_ui))
+                        .line_height(px(16.5 * s_ui))
                         .text_color(text_c)
                         .child(agent.task.clone()),
                 )
@@ -1045,34 +1083,34 @@ fn render_card_rows(
         );
     }
 
-    // Row 2: Meta (`u = 10..246, v = 98` on main, `v = 84` on compact above card)
-    let meta_v = if v_offset < 0.0 { 84.0 } else { 98.0 };
+    // Row 2: Meta (`u = 10..252, v = 113` on main, `v = 84` on compact above card)
+    let meta_v = if v_offset < 0.0 { 84.0 } else { 113.0 };
     let (mx, my) = tf.project(10.0 + u_offset, meta_v + v_offset);
-    let m_alpha = stage_mask_alpha(mx + 40., my + 8., mirror) * extra_fade;
+    let m_alpha = stage_mask_alpha(mx + 40. * s_ui, my + 8. * s_ui, mirror) * extra_fade;
     if m_alpha > 0.02 {
         out.push(
             div()
                 .absolute()
                 .left(px(mx))
                 .top(px(my))
-                .w(px(236.))
-                .h(px(20.))
+                .w(px(236. * s_ui))
+                .h(px(20. * s_ui))
                 .flex()
                 .items_center()
-                .gap(px(4.))
+                .gap(px(4. * s_ui))
                 .opacity(m_alpha)
                 .child(
                     div()
-                        .text_size(px(11.))
-                        .line_height(px(16.))
+                        .text_size(px(11.5 * s_ui))
+                        .line_height(px(16. * s_ui))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(ink_c)
                         .child(agent.cost.clone()),
                 )
                 .child(
                     div()
-                        .text_size(px(11.))
-                        .line_height(px(16.))
+                        .text_size(px(11.5 * s_ui))
+                        .line_height(px(16. * s_ui))
                         .text_color(muted_c)
                         .child(format!("· {}", agent.time)),
                 )
@@ -1287,15 +1325,15 @@ impl InspectAgentCard {
         } else if (6.0..=168.0).contains(&u) && (4.0..=40.0).contains(&v) {
             Some(3)
         } else if !self.agent.tools.is_empty()
-            && (6.0..=50.0).contains(&u)
-            && (48.0..=76.0).contains(&v)
+            && (6.0..=52.0).contains(&u)
+            && (48.0..=80.0).contains(&v)
         {
             Some(5)
-        } else if (6.0..=114.0).contains(&u) && (92.0..=124.0).contains(&v) {
+        } else if (6.0..=114.0).contains(&u) && (104.0..=140.0).contains(&v) {
             Some(6)
-        } else if v < 46.0 {
+        } else if v < 48.0 {
             Some(0)
-        } else if v < 92.0 {
+        } else if v < 104.0 {
             Some(1)
         } else {
             Some(2)
@@ -1529,7 +1567,7 @@ impl Render for InspectAgentCard {
                 above_agent,
                 tf,
                 u_off,
-                -(ABOVE_H + 16.0),
+                -(ABOVE_H + ABOVE_GAP),
                 spin_turn,
                 dark,
                 self.mirror,
@@ -1554,7 +1592,7 @@ impl Render for InspectAgentCard {
             scene = scene.child(el);
         }
 
-        // Figma inspection pills: layer tag, top & side blue padding badges, red spacing pill, dimension callout, and hand cursor
+        // Figma inspection pills: layer tag, top & outer-margin padding badges, red spacing pill, dimension callout, and hand cursor
         let blue_pill: Hsla = if dark {
             rgb(0x3b82f6).into()
         } else {
@@ -1568,13 +1606,17 @@ impl Render for InspectAgentCard {
         let dim_a = pro_ease(((reveal - 0.48) / 0.45).clamp(0., 1.));
         let cur_a = pro_ease((reveal / 0.38).clamp(0., 1.));
 
-        // Layer tag pill (`Header` / `Agent · Model` / `Status Pill` / `Tool Chips` / etc.)
+        // Layer tag pill cleanly ABOVE-LEFT of the selection frame (`cur_ft - 18.0`)
         let tag_u = if self.mirror {
-            (cur_fx + cur_fw - 68.0).max(cur_fx)
+            (cur_fx + 42.0).min(cur_fx + cur_fw - 68.0).max(cur_fx)
+        } else if cur_ft > 12.0 {
+            cur_fx - 16.0
         } else {
             cur_fx
         };
-        let (tag_x, tag_y) = tf.project(tag_u, cur_ft - 17.0 + press_t * 1.0);
+        let (_, tag_top_y) = tf.project(tag_u, cur_ft);
+        let (tag_x, _) = tf.project(tag_u, cur_ft - 18.0);
+        let tag_y = tag_top_y - 18.0 + press_t * 1.0;
         let is_pinned = self.pinned_target.is_some() || self.pinned_row.is_some();
         let tag_text = if is_pinned {
             format!("{} •", tb.tag_label(cx))
@@ -1593,7 +1635,7 @@ impl Render for InspectAgentCard {
                 .flex()
                 .items_center()
                 .gap(px(3.))
-                .opacity(tag_a * stage_mask_alpha(tag_x + 20., tag_y + 7., self.mirror))
+                .opacity(tag_a * stage_mask_alpha(tag_x + 24., tag_y + 7., self.mirror))
                 .child(pro_svg("0 0 12 12", LAYER_TAG_SVG, 9., white_ink))
                 .child(pro_swap_label(
                     pro_eid(&self.id, "layer-tag"),
@@ -1604,37 +1646,41 @@ impl Render for InspectAgentCard {
                 )),
         );
 
-        // Top blue padding badge (`10` or `4`)
         let pad_label = format!("{:.0}", cur_pad.round());
-        let pad_top_u = cur_fx + cur_fw * 0.62;
-        let (pt_x, pt_y) = tf.project(pad_top_u, cur_ft - 2.0);
-        scene = scene.child(
-            div()
-                .absolute()
-                .left(px(pt_x))
-                .top(px(pt_y))
-                .h(px(13.))
-                .px(px(3.5))
-                .rounded(px(3.))
-                .bg(blue_pill)
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(8.5))
-                .line_height(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(white_ink)
-                .opacity(pad_a * stage_mask_alpha(pt_x, pt_y, self.mirror))
-                .child(pad_label.clone()),
-        );
+        // Top blue padding badge centered cleanly along the top edge when wide enough
+        if cur_fw >= 90.0 {
+            let pad_top_u = cur_fx + cur_fw * 0.46;
+            let (pt_x, pt_edge_y) = tf.project(pad_top_u, cur_ft);
+            let pt_y = pt_edge_y - 6.5;
+            scene = scene.child(
+                div()
+                    .absolute()
+                    .left(px(pt_x))
+                    .top(px(pt_y))
+                    .h(px(13.))
+                    .px(px(3.5))
+                    .rounded(px(3.))
+                    .bg(blue_pill)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(8.5))
+                    .line_height(px(13.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(white_ink)
+                    .opacity(pad_a * stage_mask_alpha(pt_x, pt_y + 6., self.mirror))
+                    .child(pad_label.clone()),
+            );
+        }
 
-        // Side blue padding badge
+        // Side blue padding badge in the outer margin (never covering avatars or tool chips)
         let pad_side_u = if self.mirror {
-            cur_fx + cur_fw - 14.0
+            cur_fx + cur_fw + 5.0
         } else {
-            cur_fx - 2.0
+            cur_fx - 20.0
         };
-        let (ps_x, ps_y) = tf.project(pad_side_u, cur_ft + cur_fh * 0.5 - 6.5);
+        let (ps_x, ps_mid_y) = tf.project(pad_side_u, cur_ft + cur_fh * 0.5);
+        let ps_y = ps_mid_y - 6.5;
         scene = scene.child(
             div()
                 .absolute()
@@ -1651,18 +1697,18 @@ impl Render for InspectAgentCard {
                 .line_height(px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(white_ink)
-                .opacity(pad_a * stage_mask_alpha(ps_x, ps_y, self.mirror))
+                .opacity(pad_a * stage_mask_alpha(ps_x + 12., ps_y + 6., self.mirror))
                 .child(pad_label),
         );
 
-        // Red spacing guide badge (`16px` / `12px` / `8px` / `6px`) beside the red dashed guide
+        // Red spacing guide badge (`16px` / `12px` / `8px` / `6px`) cleanly in the open gap beside `cur_gx`
         let red_u = if self.mirror {
-            (cur_gx - 32.0).max(12.0)
+            (cur_gx - 34.0).max(16.0)
         } else {
             cur_gx + 6.0
         };
-        let red_v = (cur_gy0 + cur_gy1) * 0.5 - 6.5;
-        let (rx, ry) = tf.project(red_u, red_v);
+        let (rx, r_mid_y) = tf.project(red_u, (cur_gy0 + cur_gy1) * 0.5);
+        let ry = r_mid_y - 6.5;
         scene = scene.child(
             div()
                 .absolute()
@@ -1675,7 +1721,7 @@ impl Render for InspectAgentCard {
                 .flex()
                 .items_center()
                 .justify_center()
-                .opacity(dim_a * stage_mask_alpha(rx, ry, self.mirror))
+                .opacity(dim_a * stage_mask_alpha(rx, ry + 6., self.mirror))
                 .child(pro_swap_label(
                     pro_eid(&self.id, "gap-tag"),
                     tb.gap_label,
@@ -1685,13 +1731,14 @@ impl Render for InspectAgentCard {
                 )),
         );
 
-        // Dimension callout (`W Fill 236 px` / `W Hug 60 px`) below the frame
+        // Dimension callout (`W Fill 242 × 54 px` / `W Hug 60 × 26 px`) cleanly below the frame
         let size_u = if self.mirror {
-            (cur_fx + cur_fw - 88.0).max(cur_fx)
+            (cur_fx + 44.0).min(cur_fx + cur_fw - 96.0).max(cur_fx)
         } else {
-            cur_fx + (cur_fw - 88.0).max(0.0)
+            cur_fx + (cur_fw - 106.0).max(0.0)
         };
-        let (sz_x, sz_y) = tf.project(size_u, cur_ft + cur_fh + 7.0);
+        let (sz_x, sz_bot_y) = tf.project(size_u, cur_ft + cur_fh);
+        let sz_y = sz_bot_y + 6.0;
         let dim_px_text = format!(
             "{:.0} × {:.0} px",
             (cur_fw - cur_pad * 2.0)

@@ -290,6 +290,11 @@ fn rasterize_coral_backdrop(key: CoralBgKey) -> RenderImage {
     RenderImage::new(vec![Frame::new(buf)])
 }
 
+fn smooth_taper(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0., 1.);
+    t * t * (3. - 2. * t)
+}
+
 /// Evaluate orbit slot `(dx, dy, opacity)` in `1800 x 1117.5` artboard coordinates for continuous slot offset `s` in `-3.0..=3.0`.
 /// At `s = 0.0`, the pill sits at the active center slot `(1020, 479.4)`.
 fn orbit_pill_offset(s: f32) -> (f32, f32, f32) {
@@ -297,10 +302,11 @@ fn orbit_pill_offset(s: f32) -> (f32, f32, f32) {
     let ratio = (dy / 776.625).clamp(-0.98, 0.98);
     let x_on_ellipse = 757.5 * (1.0 - ratio * ratio).sqrt();
     let dx = (757.5 - x_on_ellipse) * 1.48;
-    let opacity = if s.abs() <= 2.0 {
+    let a = s.abs();
+    let opacity = if a <= 1.15 {
         1.0
     } else {
-        (3.0 - s.abs()).clamp(0., 1.)
+        1.0 - smooth_taper(1.15, 2.35, a)
     };
     (dx, dy, opacity)
 }
@@ -402,6 +408,7 @@ pub struct IntegrationFlow {
     empty: bool,
     clock: Instant,
     measured_w: Rc<Cell<f32>>,
+    measured_h: Rc<Cell<f32>>,
     bg_cache: Rc<RefCell<CoralBgCache>>,
 }
 
@@ -444,6 +451,7 @@ impl IntegrationFlow {
             empty: false,
             clock: cx.background_executor().now(),
             measured_w: Rc::new(Cell::new(760.)),
+            measured_h: Rc::new(Cell::new(0.)),
             bg_cache: Rc::new(RefCell::new(CoralBgCache::new())),
         }
     }
@@ -622,16 +630,18 @@ impl Render for IntegrationFlow {
         let elapsed_s = if animate { total_elapsed } else { 0.45 };
 
         let measured_cell = self.measured_w.clone();
+        let measured_h_cell = self.measured_h.clone();
         let stage_w = measured_cell.get().max(320.);
-        let stage_h = self
-            .height
-            .map(f32::from)
-            .unwrap_or_else(|| (stage_w * (1490.0 / 2400.0)).round().max(200.));
+        let auto_h = (stage_w * (1490.0 / 2400.0)).round().max(200.);
+        let stage_h = self.height.map(f32::from).unwrap_or_else(|| {
+            let mh = measured_h_cell.get();
+            if mh > 40.0 { mh } else { auto_h }
+        });
         let scale = stage_w / ART_W;
         let y_art_shift = (stage_h - ART_H * scale) * 0.5;
 
         let default_bg: Hsla = if dark {
-            rgb(0x1f1f21).into()
+            rgb(0x1f1f22).into()
         } else {
             rgb(0xffffff).into()
         };
@@ -701,13 +711,19 @@ impl Render for IntegrationFlow {
         let any_packets = !active_packets.is_empty();
         let bg_cache = self.bg_cache.clone();
 
-        // Layer 0 + Layer 1: Coral breathing radial backdrop + dashed orbit arc + curved inward beams & light pulses
+        // Layer 0 + Layer 1: Full-bleed coral breathing radial backdrop + dashed orbit arc + curved inward beams
         let stage_canvas = canvas(
             move |bounds, window, _| {
                 let bw = f32::from(bounds.size.width);
-                if bw > 40. && (bw - measured_cell.get()).abs() > 1.0 {
-                    measured_cell.set(bw);
-                    window.request_animation_frame();
+                let bh = f32::from(bounds.size.height);
+                if bw > 40. && bh > 40. {
+                    let changed = (bw - measured_cell.get()).abs() > 1.0
+                        || (bh - measured_h_cell.get()).abs() > 1.0;
+                    if changed {
+                        measured_cell.set(bw);
+                        measured_h_cell.set(bh);
+                        window.request_animation_frame();
+                    }
                 }
             },
             move |bounds, _, window, _| {
@@ -725,9 +741,9 @@ impl Render for IntegrationFlow {
                     )
                 };
 
-                // 1) Paint breathing coral/peach backdrop + bottom fade
+                // 1) Paint full-bleed breathing coral/peach backdrop + bottom fade (zero corner clipping)
                 let bg_img = bg_cache.borrow_mut().render(bg_key, window);
-                let _ = window.paint_image(bounds, bounds, Corners::all(px(18.)), bg_img, 0, false);
+                let _ = window.paint_image(bounds, bounds, Corners::default(), bg_img, 0, false);
 
                 // 2) Paint dashed elliptical orbit arc (`cx = 1860, cy = 559, rx = 757.5, ry = 776.6`)
                 let orbit_c: Hsla = if dark {
@@ -740,10 +756,16 @@ impl Render for IntegrationFlow {
                     let a0 = std::f32::consts::PI * (0.64 + 0.72 * (i as f32 / dash_count as f32));
                     let a1 = std::f32::consts::PI
                         * (0.64 + 0.72 * ((i as f32 + 0.52) / dash_count as f32));
+                    let y_screen = y_off + (559.0 + 776.625 * a0.sin()) * sc;
+                    let ny = (y_screen / bh).clamp(-0.2, 1.2);
+                    let top_f = smooth_taper(0.0, 0.10, ny);
+                    let bot_f = 1.0 - smooth_taper(0.60, 0.94, ny);
+                    let edge_fade = (top_f * bot_f).clamp(0., 1.);
+                    if edge_fade <= 0.01 {
+                        continue;
+                    }
                     let p0 = at(1860.0 + 757.5 * a0.cos(), 559.0 + 776.625 * a0.sin());
                     let p1 = at(1860.0 + 757.5 * a1.cos(), 559.0 + 776.625 * a1.sin());
-                    let v_norm = ((559.0 + 776.625 * a0.sin()) / ART_H).clamp(0., 1.);
-                    let edge_fade = (1.0 - ((v_norm - 0.45) / 0.50).max(0.)).clamp(0.08, 1.0);
                     let mut seg = PathBuilder::stroke(px((4.2 * sc).max(1.2)));
                     seg.move_to(p0);
                     seg.line_to(p1);
@@ -845,48 +867,48 @@ impl Render for IntegrationFlow {
 
         // Card surface palettes matching `light.png` and `dark.png`
         let light_card_top: Hsla = if dark {
-            hsla(240. / 360., 0.04, 0.155, 0.88)
+            hsla(240. / 360., 0.05, 0.145, 0.92)
         } else {
-            hsla(0., 0., 1., 0.84)
+            hsla(0., 0., 1., 0.86)
         };
         let light_card_bot: Hsla = if dark {
-            hsla(240. / 360., 0.04, 0.145, 0.68)
+            hsla(240. / 360., 0.05, 0.12, 0.84)
         } else {
-            hsla(0., 0., 1., 0.52)
+            hsla(0., 0., 1., 0.56)
         };
         let light_card_bdr: Hsla = if dark {
-            hsla(0., 0., 1., 0.10)
+            hsla(0., 0., 1., 0.13)
         } else {
-            hsla(0., 0., 1., 0.48)
+            hsla(0., 0., 1., 0.50)
         };
         let ghost_top: Hsla = if dark {
-            hsla(0., 0., 1., 0.10)
+            hsla(0., 0., 1., 0.11)
         } else {
             hsla(0., 0., 1., 0.20)
         };
         let ghost_bot: Hsla = if dark {
-            hsla(0., 0., 1., 0.04)
+            hsla(0., 0., 1., 0.05)
         } else {
             hsla(0., 0., 1., 0.10)
         };
         let ghost_bdr: Hsla = if dark {
-            hsla(0., 0., 1., 0.08)
+            hsla(0., 0., 1., 0.09)
         } else {
             hsla(0., 0., 1., 0.20)
         };
 
         let active_title_c: Hsla = if dark {
-            hsla(0., 0., 1., 0.92)
+            hsla(0., 0., 1., 0.93)
         } else {
-            hsla(0., 0., 0., 0.82)
+            hsla(0., 0., 0., 0.84)
         };
         let active_sub_c: Hsla = if dark {
-            hsla(0., 0., 1., 0.50)
+            hsla(0., 0., 1., 0.64)
         } else {
-            hsla(0., 0., 0., 0.42)
+            hsla(0., 0., 0., 0.45)
         };
-        let ghost_title_c: Hsla = hsla(0., 0., 1., 0.82);
-        let ghost_sub_c: Hsla = hsla(0., 0., 1., 0.46);
+        let ghost_title_c: Hsla = hsla(0., 0., 1., 0.86);
+        let ghost_sub_c: Hsla = hsla(0., 0., 1., 0.54);
 
         // Central Kense `Data Analysis` hub (`left = 137, top = 479.4, w = 642.6, h = 158.6` in artboard)
         let hub_x = 137.0 * scale;
@@ -916,14 +938,24 @@ impl Render for IntegrationFlow {
             .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, kense_logo_px, active_title_c));
 
         let badge_bg: Hsla = if dark {
-            hsla(0., 0., 1., 0.10)
+            rgb(0x27272b).into()
         } else {
             rgb(0xffffff).into()
         };
         let badge_bdr: Hsla = if dark {
-            hsla(0., 0., 1., 0.14)
+            hsla(0., 0., 1., 0.11)
         } else {
             hsla(0., 0., 0., 0.05)
+        };
+        let ghost_badge_bg: Hsla = if dark {
+            hsla(240. / 360., 0.05, 0.17, 0.52)
+        } else {
+            hsla(0., 0., 1., 0.16)
+        };
+        let ghost_badge_bdr: Hsla = if dark {
+            hsla(0., 0., 1., 0.12)
+        } else {
+            hsla(0., 0., 1., 0.18)
         };
 
         let total_hub_glow = (charge_glow + manual_hub_glow).clamp(0., 1.);
@@ -1011,6 +1043,7 @@ impl Render for IntegrationFlow {
                             .text_ellipsis()
                             .text_size(px(title_fs))
                             .line_height(px(title_fs * 1.15))
+                            .font_weight(FontWeight::MEDIUM)
                             .text_color(active_title_c)
                             .child(hub_title_str),
                     )
@@ -1054,14 +1087,15 @@ impl Render for IntegrationFlow {
             .track_focus(&self.focus)
             .tab_index(0)
             .relative()
-            .w_full()
-            .h(px(stage_h))
-            .rounded(px(18.))
+            .w_full();
+        root = match self.height {
+            Some(explicit_h) => root.h(explicit_h),
+            None => root.flex_1().h_full().min_h(px(auto_h)),
+        };
+        root = root
             .overflow_hidden()
             .cursor_pointer()
-            .border_1()
-            .border_color(transparent_black())
-            .focus_visible(move |s| s.border_color(p.focus))
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
             .on_click(cx.listener(|this, _, _, cx| {
                 this.paused = !this.paused;
                 cx.emit(IntegrationFlowEvent::PausedChanged(this.paused));
@@ -1091,28 +1125,29 @@ impl Render for IntegrationFlow {
 
             let s_f = slot as f32 - shift_frac;
             let (dx, dy, slot_op) = orbit_pill_offset(s_f);
-            // Attenuate bottom pill into the stage bottom fade (`ny > 0.62`)
-            let pill_cy_art = 559.0 + dy;
-            let bottom_fade =
-                (1.0 - ((pill_cy_art / ART_H - 0.62) / 0.34).max(0.)).clamp(0.08, 1.0);
-            let final_op = (slot_op * bottom_fade).clamp(0., 1.);
-            if final_op <= 0.02 {
-                continue;
-            }
-
             let center_weight = (1.0 - s_f.abs()).clamp(0., 1.);
             let illum = slot_illums[si];
             let down = slot_downs[si];
             let active_mix = center_weight.max(illum);
             let is_center = active_mix > 0.52;
 
-            let mark_px = (badge_d * 0.54 * (1.0 - 0.06 * down)).round().max(13.);
-            let icon_el = render_integration_mark(item, is_center, dark, mark_px, w, cx);
             let press_ix = 2.6 * down * scale * 2.2;
             let press_iy = 1.8 * down * scale * 2.2;
             let hover_lift = -2.2 * illum * (1.0 - down);
             let pill_x = (1020.0 + dx) * scale + press_ix;
             let pill_y = y_art_shift + (479.4 + dy) * scale + hover_lift + press_iy;
+
+            // Smoothly taper satellite pill opacity to 0.0 near both top and bottom vertical stage edges
+            let pill_mid_ny = ((pill_y + pill_h * 0.5) / stage_h.max(1.0)).clamp(-0.3, 1.3);
+            let top_fade = smooth_taper(-0.02, 0.18, pill_mid_ny);
+            let bottom_fade = 1.0 - smooth_taper(0.65, 0.90, pill_mid_ny);
+            let final_op = (slot_op * top_fade * bottom_fade).clamp(0., 1.);
+            if final_op <= 0.015 {
+                continue;
+            }
+
+            let mark_px = (badge_d * 0.54 * (1.0 - 0.06 * down)).round().max(13.);
+            let icon_el = render_integration_mark(item, is_center, dark, mark_px, w, cx);
             let cap_title = item
                 .title
                 .clone()
@@ -1129,8 +1164,8 @@ impl Render for IntegrationFlow {
             );
             let t_col = pro_mix_color(ghost_title_c, active_title_c, active_mix);
             let s_col = pro_mix_color(ghost_sub_c, active_sub_c, active_mix);
-            let b_bg = pro_mix_color(hsla(0., 0., 1., 0.14), badge_bg, active_mix);
-            let b_bdr = pro_mix_color(hsla(0., 0., 1., 0.18), badge_bdr, active_mix);
+            let b_bg = pro_mix_color(ghost_badge_bg, badge_bg, active_mix);
+            let b_bdr = pro_mix_color(ghost_badge_bdr, badge_bdr, active_mix);
 
             let mut pill_el = div()
                 .id(pro_eid(&self.id, format!("pill-slot-{}", slot + 3)))
@@ -1228,6 +1263,7 @@ impl Render for IntegrationFlow {
                                 .text_ellipsis()
                                 .text_size(px(title_fs))
                                 .line_height(px(title_fs * 1.15))
+                                .font_weight(FontWeight::MEDIUM)
                                 .text_color(t_col)
                                 .child(cap_title),
                         )
@@ -1353,12 +1389,18 @@ mod tests {
         });
         vcx.simulate_resize(size(px(800.), px(520.)));
         vcx.update(|w, app| w.simulate_next_frame(app));
+        vcx.update(|w, app| w.simulate_next_frame(app));
         vcx.run_until_parked();
 
         // Compute upper satellite (`slot = -1`, Snowflake) center in stage coordinates
         let sat_pt = vcx.update(|_, app| {
             let sw = view.read(app).measured_w.get();
-            let sh = (sw * (1490.0 / 2400.0)).round().max(200.);
+            let mh = view.read(app).measured_h.get();
+            let sh = if mh > 40.0 {
+                mh
+            } else {
+                (sw * (1490.0 / 2400.0)).round().max(200.)
+            };
             let sc = sw / 1800.0;
             let y_off = (sh - 1117.5 * sc) * 0.5;
             let (dx, dy, _) = orbit_pill_offset(-1.0);

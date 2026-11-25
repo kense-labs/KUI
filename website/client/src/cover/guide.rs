@@ -47,6 +47,7 @@ struct Guide {
     trail_nodes: VecDeque<TrailNode>,
     trail_dirty: bool,
     docks: Vec<HtmlElement>,
+    live: Option<HtmlElement>,
     library: HtmlElement,
     install: HtmlElement,
     header: Option<Element>,
@@ -288,7 +289,25 @@ impl Guide {
             let end = (install.top() + scroll - vh * 0.54)
                 .min(max)
                 .max(arrival + 1.0);
-            if scroll < arrival {
+            if let Some(live_el) = &self.live {
+                let live_rect = live_el.get_bounding_client_rect();
+                let live_arrival =
+                    (live_rect.top() + scroll - vh * 0.62).clamp(64.0, (arrival - 40.0).max(65.0));
+                let live_depart = (library.top() + scroll - vh * 0.88)
+                    .clamp(live_arrival, (arrival - 1.0).max(live_arrival));
+                if scroll < live_arrival {
+                    home.blend(beside(&live_rect), scroll / live_arrival)
+                } else if scroll <= live_depart {
+                    beside(&live_rect)
+                } else if scroll < arrival {
+                    beside(&live_rect).blend(
+                        beside(&library),
+                        (scroll - live_depart) / (arrival - live_depart).max(1.0),
+                    )
+                } else {
+                    beside(&library).blend(beside(&install), (scroll - arrival) / (end - arrival))
+                }
+            } else if scroll < arrival {
                 home.blend(beside(&library), scroll / arrival)
             } else {
                 beside(&library).blend(beside(&install), (scroll - arrival) / (end - arrival))
@@ -671,6 +690,7 @@ pub(super) fn init(
         trail_nodes: VecDeque::with_capacity(32),
         trail_dirty: false,
         docks,
+        live: element(root, "#live-heading").ok(),
         library: element(root, "#collection-heading")?,
         install: element(root, "#start-heading")?,
         header: page.query_selector("header.topbar,header")?,

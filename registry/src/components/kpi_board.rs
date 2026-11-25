@@ -6,9 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_ease, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -464,8 +465,13 @@ impl RenderOnce for KpiInteractiveSeries {
                     min_v = 0.;
                     max_v = 1.;
                 }
+                let raw_span = (max_v - min_v).max(1e-3);
                 if show_grid {
-                    min_v = min_v.min(0.0);
+                    min_v = (min_v - raw_span * 0.42).max(0.0);
+                    max_v += raw_span * 0.12;
+                } else {
+                    min_v -= raw_span * 0.24;
+                    max_v += raw_span * 0.08;
                 }
                 let span = (max_v - min_v).max(1e-3);
 
@@ -495,6 +501,13 @@ impl RenderOnce for KpiInteractiveSeries {
                         if let Ok(path) = gp.build() {
                             window.paint_path(path, grid_color);
                         }
+                    }
+                } else {
+                    let mut bp = PathBuilder::stroke(px(1.));
+                    bp.move_to(point(bounds.left(), bounds.bottom() - px(0.5)));
+                    bp.line_to(point(bounds.right(), bounds.bottom() - px(0.5)));
+                    if let Ok(path) = bp.build() {
+                        window.paint_path(path, grid_color);
                     }
                 }
 
@@ -791,31 +804,44 @@ fn build_dates(prefix: &str, start: usize, count: usize, step: usize) -> Vec<Sha
 fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
     let mut map = HashMap::new();
 
-    // 7d dataset (7 daily points)
+    // 7d dataset (14 half-day organic points across Nov 18 .. Nov 24)
     let dates_7d: Vec<SharedString> = vec![
-        "Nov 18".into(),
-        "Nov 19".into(),
-        "Nov 20".into(),
-        "Nov 21".into(),
-        "Nov 22".into(),
-        "Nov 23".into(),
-        "Nov 24".into(),
+        "Nov 18 AM".into(),
+        "Nov 18 PM".into(),
+        "Nov 19 AM".into(),
+        "Nov 19 PM".into(),
+        "Nov 20 AM".into(),
+        "Nov 20 PM".into(),
+        "Nov 21 AM".into(),
+        "Nov 21 PM".into(),
+        "Nov 22 AM".into(),
+        "Nov 22 PM".into(),
+        "Nov 23 AM".into(),
+        "Nov 23 PM".into(),
+        "Nov 24 AM".into(),
+        "Nov 24 PM".into(),
     ];
-    let ov_cur_7d = vec![4120., 4480., 4390., 4860., 5120., 5340., 5690.];
-    let ov_prev_7d = vec![3620., 3780., 3910., 4020., 4180., 4290., 4410.];
+    let ov_cur_7d: Vec<f64> = vec![
+        1980., 2140., 2060., 2420., 2110., 2280., 2490., 2370., 2610., 2510., 2740., 2600., 2810.,
+        2880.,
+    ];
+    let ov_prev_7d: Vec<f64> = vec![
+        1840., 1780., 1920., 1860., 2010., 1900., 1960., 2060., 2140., 2040., 2180., 2110., 2230.,
+        2180.,
+    ];
     let mut seg_7d = HashMap::new();
     seg_7d.insert(
         SharedString::from("pro"),
         (
-            vec![2380., 2610., 2540., 2840., 2990., 3120., 3340.],
-            vec![2040., 2120., 2210., 2290., 2380., 2440., 2510.],
+            ov_cur_7d.iter().map(|v| (v * 0.58).round()).collect(),
+            ov_prev_7d.iter().map(|v| (v * 0.56).round()).collect(),
         ),
     );
     seg_7d.insert(
         SharedString::from("team"),
         (
-            vec![1740., 1870., 1850., 2020., 2130., 2220., 2350.],
-            vec![1580., 1660., 1700., 1730., 1800., 1850., 1900.],
+            ov_cur_7d.iter().map(|v| (v * 0.42).round()).collect(),
+            ov_prev_7d.iter().map(|v| (v * 0.44).round()).collect(),
         ),
     );
     map.insert(
@@ -826,7 +852,10 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     id: "mrr".into(),
                     label: "Net revenue".into(),
                     dates: dates_7d.clone(),
-                    series: vec![1620., 1780., 1710., 1890., 2040., 2160., 2310.],
+                    series: vec![
+                        780., 840., 810., 970., 830., 880., 990., 900., 1060., 980., 1120., 1040.,
+                        1130., 1180.,
+                    ],
                     previous_total: 11_640.,
                     average_mode: false,
                     display_divisor: 1000.0,
@@ -839,7 +868,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     id: "signups".into(),
                     label: "New customers".into(),
                     dates: dates_7d.clone(),
-                    series: vec![42., 46., 44., 51., 55., 58., 62.],
+                    series: vec![
+                        19., 23., 21., 25., 20., 24., 27., 24., 29., 26., 31., 27., 30., 32.,
+                    ],
                     previous_total: 318.,
                     average_mode: false,
                     display_divisor: 1.0,
@@ -852,7 +883,10 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     id: "churn".into(),
                     label: "Churn rate".into(),
                     dates: dates_7d.clone(),
-                    series: vec![1.92, 1.88, 1.85, 1.80, 1.78, 1.74, 1.72],
+                    series: vec![
+                        1.98, 1.86, 1.94, 1.82, 1.89, 1.79, 1.85, 1.76, 1.83, 1.74, 1.80, 1.71,
+                        1.76, 1.69,
+                    ],
                     previous_total: 2.04,
                     average_mode: true,
                     display_divisor: 1.0,
@@ -876,37 +910,54 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                 unit_singular: "license".into(),
                 unit_plural: "licenses".into(),
                 dates: dates_7d,
-                current: vec![11., 13., 12., 15., 16., 18., 19.],
-                previous: vec![9., 10., 11., 12., 13., 14., 15.],
+                current: vec![5., 6., 6., 7., 5., 7., 8., 7., 9., 7., 10., 8., 9., 10.],
+                previous: vec![4., 5., 5., 5., 6., 5., 6., 6., 7., 6., 7., 7., 7., 8.],
             },
         },
     );
 
-    // 30d dataset (15 bi-daily points Oct 26 .. Nov 24)
+    // 30d dataset (30 full daily points Oct 26 .. Nov 24 with realistic micro-fluctuations)
     let dates_30d: Vec<SharedString> = vec![
         "Oct 26".into(),
+        "Oct 27".into(),
         "Oct 28".into(),
+        "Oct 29".into(),
         "Oct 30".into(),
+        "Oct 31".into(),
         "Nov 1".into(),
+        "Nov 2".into(),
         "Nov 3".into(),
+        "Nov 4".into(),
         "Nov 5".into(),
+        "Nov 6".into(),
         "Nov 7".into(),
+        "Nov 8".into(),
+        "Nov 9".into(),
         "Nov 10".into(),
+        "Nov 11".into(),
         "Nov 12".into(),
+        "Nov 13".into(),
         "Nov 14".into(),
+        "Nov 15".into(),
         "Nov 16".into(),
+        "Nov 17".into(),
         "Nov 18".into(),
+        "Nov 19".into(),
         "Nov 20".into(),
+        "Nov 21".into(),
         "Nov 22".into(),
+        "Nov 23".into(),
         "Nov 24".into(),
     ];
     let ov_cur_30d: Vec<f64> = vec![
-        7820., 8190., 8040., 8640., 8920., 9180., 9640., 9420., 9980., 10340., 10820., 10690.,
-        11280., 11890., 12460.,
+        3820., 4060., 3910., 4280., 4190., 4020., 4390., 4560., 4380., 4720., 4610., 4490., 4840.,
+        5020., 4790., 5140., 4980., 5290., 5110., 5420., 5260., 5580., 5410., 5720., 5590., 5860.,
+        5680., 5940., 6080., 6210.,
     ];
     let ov_prev_30d: Vec<f64> = vec![
-        7120., 7040., 7280., 7390., 7520., 7680., 7810., 7940., 8120., 8060., 8290., 8410., 8620.,
-        8780., 8960.,
+        3540., 3480., 3690., 3610., 3780., 3920., 3740., 3660., 3890., 4040., 3880., 3790., 4010.,
+        4180., 3960., 3880., 4120., 4290., 4080., 3990., 4240., 4380., 4190., 4110., 4340., 4490.,
+        4310., 4260., 4480., 4590.,
     ];
     let mut seg_30d = HashMap::new();
     seg_30d.insert(
@@ -932,8 +983,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "Net revenue".into(),
                     dates: dates_30d.clone(),
                     series: vec![
-                        2640., 2890., 2760., 2980., 3120., 3050., 3340., 3280., 3510., 3690.,
-                        3840., 3790., 4020., 4210., 4420.,
+                        1280., 1540., 1360., 1490., 1680., 1390., 1310., 1620., 1790., 1530.,
+                        1840., 1690., 1460., 1410., 1760., 1920., 1670., 1990., 1810., 1580.,
+                        1520., 1890., 2080., 1780., 2140., 1930., 1710., 1840., 2180., 2330.,
                     ],
                     previous_total: 43_520.,
                     average_mode: false,
@@ -948,8 +1000,8 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "New customers".into(),
                     dates: dates_30d.clone(),
                     series: vec![
-                        68., 72., 70., 76., 81., 79., 86., 84., 91., 94., 98., 96., 102., 108.,
-                        114.,
+                        31., 39., 34., 46., 38., 33., 29., 44., 51., 41., 48., 43., 36., 35., 49.,
+                        42., 53., 45., 40., 37., 52., 46., 56., 44., 54., 47., 41., 55., 51., 59.,
                     ],
                     previous_total: 1_186.,
                     average_mode: false,
@@ -964,8 +1016,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "Churn rate".into(),
                     dates: dates_30d.clone(),
                     series: vec![
-                        2.12, 2.08, 2.05, 1.98, 1.96, 1.94, 1.90, 1.88, 1.86, 1.84, 1.81, 1.79,
-                        1.77, 1.75, 1.72,
+                        2.16, 1.98, 2.24, 1.91, 2.09, 2.02, 1.86, 2.18, 1.94, 1.81, 2.08, 2.22,
+                        1.88, 1.76, 1.99, 1.84, 2.05, 1.75, 1.92, 1.86, 1.70, 1.95, 1.79, 1.87,
+                        1.72, 1.89, 1.74, 1.82, 1.69, 1.77,
                     ],
                     previous_total: 2.18,
                     average_mode: true,
@@ -991,24 +1044,28 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                 unit_plural: "licenses".into(),
                 dates: dates_30d,
                 current: vec![
-                    16., 15., 18., 19., 21., 20., 23., 24., 26., 25., 28., 29., 31., 33., 35.,
+                    8., 10., 9., 12., 10., 8., 11., 13., 10., 12., 11., 9., 13., 11., 14., 12.,
+                    10., 13., 12., 15., 13., 11., 14., 13., 16., 14., 15., 17., 16., 18.,
                 ],
                 previous: vec![
-                    14., 15., 15., 16., 17., 18., 19., 19., 21., 22., 22., 24., 25., 26., 28.,
+                    7., 8., 7., 9., 8., 7., 9., 10., 8., 9., 9., 8., 10., 9., 11., 10., 9., 11.,
+                    10., 12., 11., 9., 12., 11., 13., 12., 12., 13., 13., 14.,
                 ],
             },
         },
     );
 
-    // 90d dataset (13 weekly buckets)
-    let dates_90d = build_dates("Wk", 1, 13, 1);
+    // 90d dataset (26 half-week organic buckets)
+    let dates_90d = build_dates("Day", 1, 26, 3);
     let ov_cur_90d: Vec<f64> = vec![
-        26400., 27800., 28900., 29400., 31200., 32600., 33900., 35100., 36800., 38200., 39600.,
-        41400., 43800.,
+        12800., 13600., 13100., 14300., 13900., 14800., 14200., 15400., 14900., 16100., 15600.,
+        16900., 16300., 17600., 17100., 18400., 17800., 19200., 18600., 19900., 19400., 20800.,
+        20100., 21600., 21200., 22400.,
     ];
     let ov_prev_90d: Vec<f64> = vec![
-        22800., 23400., 24100., 24900., 25600., 26200., 27100., 27800., 28600., 29400., 30200.,
-        31100., 32000.,
+        11400., 11100., 11900., 11600., 12300., 12800., 12100., 12600., 13200., 12900., 13600.,
+        13300., 14100., 13800., 14500., 14200., 14900., 14600., 15300., 14900., 15700., 15400.,
+        16100., 15800., 16400., 16700.,
     ];
     let mut seg_90d = HashMap::new();
     seg_90d.insert(
@@ -1034,8 +1091,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "Net revenue".into(),
                     dates: dates_90d.clone(),
                     series: vec![
-                        9800., 10200., 10600., 11100., 11500., 11900., 12400., 12900., 13400.,
-                        14100., 14600., 15200., 15900.,
+                        4600., 5100., 4800., 5400., 5050., 5650., 5300., 5900., 5550., 6200.,
+                        5800., 6450., 6100., 6750., 6350., 7050., 6600., 7300., 6900., 7600.,
+                        7150., 7850., 7450., 8100., 7800., 8400.,
                     ],
                     previous_total: 136_400.,
                     average_mode: false,
@@ -1050,8 +1108,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "New customers".into(),
                     dates: dates_90d.clone(),
                     series: vec![
-                        240., 252., 264., 278., 290., 302., 318., 326., 342., 356., 372., 388.,
-                        406.,
+                        114., 128., 119., 136., 124., 142., 131., 151., 138., 158., 144., 165.,
+                        152., 174., 159., 182., 168., 191., 176., 198., 184., 206., 192., 214.,
+                        202., 222.,
                     ],
                     previous_total: 3_520.,
                     average_mode: false,
@@ -1066,8 +1125,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "Churn rate".into(),
                     dates: dates_90d.clone(),
                     series: vec![
-                        2.30, 2.24, 2.18, 2.14, 2.08, 2.04, 1.98, 1.95, 1.91, 1.88, 1.84, 1.80,
-                        1.76,
+                        2.34, 2.18, 2.29, 2.12, 2.22, 2.08, 2.16, 2.01, 2.11, 1.96, 2.05, 1.91,
+                        2.02, 1.88, 1.97, 1.84, 1.93, 1.81, 1.90, 1.78, 1.86, 1.75, 1.83, 1.72,
+                        1.79, 1.71,
                     ],
                     previous_total: 2.34,
                     average_mode: true,
@@ -1093,37 +1153,53 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                 unit_plural: "licenses".into(),
                 dates: dates_90d,
                 current: vec![
-                    64., 68., 72., 75., 79., 83., 88., 92., 96., 101., 106., 112., 118.,
+                    30., 34., 31., 37., 34., 39., 36., 42., 38., 45., 41., 47., 43., 49., 45., 52.,
+                    48., 54., 50., 56., 53., 59., 55., 61., 58., 64.,
                 ],
                 previous: vec![
-                    56., 58., 61., 64., 66., 70., 73., 76., 79., 82., 86., 89., 94.,
+                    27., 29., 28., 31., 30., 33., 31., 35., 33., 37., 35., 39., 36., 41., 38., 43.,
+                    40., 44., 42., 46., 43., 48., 45., 49., 47., 51.,
                 ],
             },
         },
     );
 
-    // 12m dataset (12 monthly points Dec .. Nov)
+    // 12m dataset (24 half-month organic points Dec .. Nov)
     let dates_12m: Vec<SharedString> = vec![
-        "Dec".into(),
-        "Jan".into(),
-        "Feb".into(),
-        "Mar".into(),
-        "Apr".into(),
-        "May".into(),
-        "Jun".into(),
-        "Jul".into(),
-        "Aug".into(),
-        "Sep".into(),
-        "Oct".into(),
-        "Nov".into(),
+        "Dec 1".into(),
+        "Dec 15".into(),
+        "Jan 1".into(),
+        "Jan 15".into(),
+        "Feb 1".into(),
+        "Feb 15".into(),
+        "Mar 1".into(),
+        "Mar 15".into(),
+        "Apr 1".into(),
+        "Apr 15".into(),
+        "May 1".into(),
+        "May 15".into(),
+        "Jun 1".into(),
+        "Jun 15".into(),
+        "Jul 1".into(),
+        "Jul 15".into(),
+        "Aug 1".into(),
+        "Aug 15".into(),
+        "Sep 1".into(),
+        "Sep 15".into(),
+        "Oct 1".into(),
+        "Oct 15".into(),
+        "Nov 1".into(),
+        "Nov 15".into(),
     ];
     let ov_cur_12m: Vec<f64> = vec![
-        94_000., 98_500., 104_200., 111_800., 118_400., 124_900., 131_600., 138_200., 146_500.,
-        154_800., 163_900., 174_200.,
+        45_200., 48_800., 47_100., 51_400., 49_800., 54_400., 53_200., 58_600., 56_900., 61_500.,
+        59_800., 65_100., 63_400., 68_200., 66_500., 71_700., 70_200., 76_300., 74_600., 80_200.,
+        78_900., 85_000., 83_600., 90_600.,
     ];
     let ov_prev_12m: Vec<f64> = vec![
-        76_000., 79_200., 82_400., 86_100., 89_800., 94_200., 98_600., 103_400., 108_900.,
-        114_200., 119_800., 126_400.,
+        37_400., 38_600., 39_900., 39_300., 41_500., 40_900., 43_400., 42_700., 45_200., 44_600.,
+        47_500., 46_700., 49_800., 48_800., 52_100., 51_300., 54_900., 54_000., 57_600., 56_600.,
+        60_400., 59_400., 63_100., 63_300.,
     ];
     let mut seg_12m = HashMap::new();
     seg_12m.insert(
@@ -1149,8 +1225,9 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "Net revenue".into(),
                     dates: dates_12m.clone(),
                     series: vec![
-                        34_200., 36_100., 38_400., 40_900., 43_200., 45_800., 48_600., 51_400.,
-                        54_200., 57_600., 61_200., 65_400.,
+                        16_400., 17_800., 17_100., 19_000., 18_300., 20_100., 19_500., 21_400.,
+                        20_800., 22_400., 21_700., 24_100., 23_300., 25_300., 24_600., 26_800.,
+                        26_100., 28_100., 27_400., 30_200., 29_300., 31_900., 31_100., 34_300.,
                     ],
                     previous_total: 468_000.,
                     average_mode: false,
@@ -1165,8 +1242,8 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "New customers".into(),
                     dates: dates_12m.clone(),
                     series: vec![
-                        890., 940., 980., 1040., 1110., 1180., 1240., 1310., 1390., 1460., 1540.,
-                        1640.,
+                        420., 470., 445., 495., 465., 515., 490., 550., 525., 585., 560., 620.,
+                        590., 650., 625., 685., 660., 730., 700., 760., 735., 805., 780., 860.,
                     ],
                     previous_total: 11_980.,
                     average_mode: false,
@@ -1181,7 +1258,8 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                     label: "Churn rate".into(),
                     dates: dates_12m.clone(),
                     series: vec![
-                        2.48, 2.41, 2.36, 2.29, 2.22, 2.16, 2.10, 2.04, 1.98, 1.92, 1.86, 1.78,
+                        2.52, 2.38, 2.46, 2.32, 2.41, 2.28, 2.35, 2.21, 2.29, 2.15, 2.22, 2.09,
+                        2.16, 2.03, 2.11, 1.97, 2.04, 1.91, 1.98, 1.86, 1.92, 1.80, 1.85, 1.73,
                     ],
                     previous_total: 2.52,
                     average_mode: true,
@@ -1207,10 +1285,12 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
                 unit_plural: "licenses".into(),
                 dates: dates_12m,
                 current: vec![
-                    220., 234., 248., 262., 279., 296., 312., 328., 346., 368., 392., 418.,
+                    104., 116., 110., 124., 118., 130., 125., 137., 132., 147., 141., 155., 149.,
+                    163., 157., 171., 166., 180., 175., 193., 187., 205., 199., 219.,
                 ],
                 previous: vec![
-                    185., 192., 204., 215., 228., 239., 251., 264., 278., 292., 308., 324.,
+                    89., 96., 93., 99., 98., 106., 103., 112., 110., 118., 115., 124., 121., 130.,
+                    127., 137., 134., 144., 141., 151., 149., 159., 156., 168.,
                 ],
             },
         },
@@ -1700,6 +1780,9 @@ impl KpiBoardBlock {
                     }),
             );
 
+        let stat_first_date = spec.dates.first().cloned().unwrap_or_default();
+        let stat_last_date = spec.dates.last().cloned().unwrap_or_default();
+
         div()
             .flex_1()
             .min_w_0()
@@ -1707,12 +1790,12 @@ impl KpiBoardBlock {
             .bg(p.card)
             .border_1()
             .border_color(card_border)
+            .shadow(pro_card_shadow(p.dark))
             .opacity(card_alpha)
-            .when(sel_mix > 0.1, |d| d.shadow_sm())
             .p(px(9.))
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(4.))
             .child(
                 pro_tactile(
                     pro_eid(&self.id, format!("stat-card-{}", spec.id)),
@@ -1737,27 +1820,44 @@ impl KpiBoardBlock {
                 .w_full(),
             )
             .child(
-                div().px(px(6.)).pb(px(6.)).child(
-                    div()
-                        .relative()
-                        .w_full()
-                        .h(px(46.))
-                        .child(KpiInteractiveSeries {
-                            id: pro_eid(&self.id, format!("stat-spark-{}", spec.id)),
-                            current: pts_f32,
-                            previous: None,
-                            accent: p.blue,
-                            card_bg: p.card,
-                            grid_color: p.line_soft,
-                            guide_color: p.line_strong,
-                            show_grid: false,
-                            fill_alpha: 0.16,
-                            height: 46.,
-                            hover_idx: hover_day,
-                        })
-                        .child(floating_overlay)
-                        .child(hit_slices),
-                ),
+                div()
+                    .px(px(6.))
+                    .pb(px(4.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(5.))
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .h(px(48.))
+                            .child(KpiInteractiveSeries {
+                                id: pro_eid(&self.id, format!("stat-spark-{}", spec.id)),
+                                current: pts_f32,
+                                previous: None,
+                                accent: p.blue,
+                                card_bg: p.card,
+                                grid_color: p.line_soft,
+                                guide_color: p.line_strong,
+                                show_grid: false,
+                                fill_alpha: if p.dark { 0.22 } else { 0.16 },
+                                height: 48.,
+                                hover_idx: hover_day,
+                            })
+                            .child(floating_overlay)
+                            .child(hit_slices),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .text_size(px(10.5))
+                            .text_color(p.muted)
+                            .child(stat_first_date)
+                            .child(stat_last_date),
+                    ),
             )
     }
 
@@ -1996,6 +2096,7 @@ impl KpiBoardBlock {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .p(px(16.))
             .flex()
             .flex_col()
@@ -2100,7 +2201,7 @@ impl KpiBoardBlock {
                                 grid_color: p.line_soft,
                                 guide_color: p.line_strong,
                                 show_grid: true,
-                                fill_alpha: 0.18,
+                                fill_alpha: if p.dark { 0.24 } else { 0.18 },
                                 height: 152.,
                                 hover_idx: hover_di,
                             })
@@ -2295,6 +2396,7 @@ impl KpiBoardBlock {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .p(px(16.))
             .flex()
             .flex_col()
@@ -2405,7 +2507,7 @@ impl KpiBoardBlock {
                                 grid_color: p.line_soft,
                                 guide_color: p.line_strong,
                                 show_grid: false,
-                                fill_alpha: 0.16,
+                                fill_alpha: if p.dark { 0.22 } else { 0.16 },
                                 height: 58.,
                                 hover_idx: hover_di,
                             })
@@ -2471,6 +2573,7 @@ impl KpiBoardBlock {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .p(px(16.))
                 .flex()
                 .flex_col()
@@ -2616,6 +2719,7 @@ impl Render for KpiBoardBlock {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::UsageChart,
                     tr(cx, "No KPI metrics yet", "暂无关键指标数据"),
@@ -2679,7 +2783,6 @@ impl Render for KpiBoardBlock {
             .min_w_0()
             .px(px(if stack_stats { 16. } else { 32. }))
             .py(px(if stack_stats { 20. } else { 28. }))
-            .bg(p.page)
             .flex()
             .flex_col()
             .gap(px(12.))

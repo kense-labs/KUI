@@ -3301,7 +3301,6 @@ impl Render for RevenueChatBlock {
         self.ensure_editors(w, cx);
         self.advance_animations(w, cx);
 
-        let p = ProPalette::get(cx);
         let reduced = Theme::global(cx).reduced_motion;
         let elapsed_ms = self.boot_at.elapsed().as_secs_f32() * 1000.0;
         let width = self.measured_width.get();
@@ -3399,7 +3398,6 @@ impl Render for RevenueChatBlock {
             .relative()
             .size_full()
             .min_h(px(560.))
-            .bg(p.page)
             .flex()
             .flex_col()
             .child(

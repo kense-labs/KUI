@@ -424,13 +424,13 @@ fn header(en: bool, company: bool, landing: bool) -> String {
     let kui_label = tr(en, "KUI home", "返回 KUI 首页");
     let github = "https://github.com/kense-labs/KUI";
     format!(
-        r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar {class}" data-kense-topbar><div class="inner"><div class="company-brand-group"><div class="brand-split"><a class="brand" href="{home_href}" aria-label="{home_label}" title="{home_label}">{}</a><a class="brand-product wordmark" href="{kui_href}" aria-label="{kui_label}" title="{kui_label}">KUI</a></div></div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link company-nav-extra" href="{prefix}/#experience">{}</a><a class="company-nav-link company-nav-extra" href="{prefix}/#architecture">{}</a><a class="company-nav-link" data-nav="components" href="{prefix}/kui/components/button/">{}</a><a class="company-nav-link" data-nav="docs" href="{prefix}/kui/docs/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="{github}" target="_blank" rel="noreferrer" aria-label="GitHub">{}<span>GitHub</span></a></div></div></header>"#,
+        r#"<div class="kense-nav-veil" data-kense-nav-veil aria-hidden="true"></div><header class="topbar {class}" data-kense-topbar><div class="inner"><div class="company-brand-group"><div class="brand-split"><a class="brand" href="{home_href}" aria-label="{home_label}" title="{home_label}">{}</a><a class="brand-product wordmark" href="{kui_href}" aria-label="{kui_label}" title="{kui_label}">KUI</a></div></div><nav class="nav company-nav" data-kense-nav-cluster aria-label="{}">{prod_btn}{dev_btn}<a class="company-nav-link" data-nav="library" href="{prefix}/kui/library/">{}</a><a class="company-nav-link" data-nav="components" href="{prefix}/kui/components/button/">{}</a><a class="company-nav-link" data-nav="docs" href="{prefix}/kui/docs/">{}</a><a class="company-nav-link" href="{prefix}/kui/ai/">{}</a>{menus}</nav><div class="actions">{}<a class="cta" href="{github}" target="_blank" rel="noreferrer" aria-label="GitHub">{}<span>GitHub</span></a></div></div></header>"#,
         mark(),
         tr(en, "Primary navigation", "主导航"),
-        tr(en, "Live Demo", "体验"),
-        tr(en, "Architecture", "架构"),
+        tr(en, "Library", "组件总览"),
         tr(en, "Components", "组件"),
         tr(en, "Docs", "文档"),
+        tr(en, "AI guide", "AI 接入"),
         toolbar(en),
         icon("github", 15)
     )

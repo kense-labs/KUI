@@ -27,8 +27,12 @@ use web_time::Instant;
 
 const MAP_VB_W: f32 = 540.0;
 const MAP_VB_H: f32 = 242.0;
+const VB_PAD: f32 = 28.0;
+const VB_FULL_W: f32 = MAP_VB_W + VB_PAD * 2.0;
+const VB_FULL_H: f32 = MAP_VB_H + VB_PAD * 2.0;
 const BAND_LOOP_SECS: f32 = 14.0;
-const INITIAL_BAND_PHASE: f32 = 0.26;
+const INITIAL_BAND_PHASE: f32 = 0.04;
+const BAND_STEPS: usize = 160;
 
 const NORTH_AMERICA_PATH: &str = "M90.1 18.6l 2.3-.5 3.3-.6 .9 0-1.1 .6 2.3 0 .3-.8-.6-.4 .1-.5-.2-.5-.8-.4 1.5-.5 1.9-.1 2.1-.4 1.1-.5 1.9-.5 1.2-.1 2.7-.5 .8 .1 2.4-.5 1.2 .2 0 .4 .8-.2 1.6 .1-.4 .2 1.2 .2 1.2-.1 1.7 .3 1.8 .1 .6 .1 1.6-.1 1.1 .3 .9 .1 1.5 .3 .9 .5 1 .1 1.5-.5 1.7-.3 1.3 .1 2.2-.4 2-.3 .1 .4 1.1-.2 .9-.5 .6 .1 .5 .9 2.3-.7-.9 .8 1.5-.1 .7-.3 1.2 0 1 .5 1.9 .3 1.3 .2 1 0 .8 .5-2.1 .5 1.6 .3 3-.2 1.1-.1 .4 .6 1.7-.5-.5-.5 1.1-.4 1.3 0 .9-.1 .6 .2 .4 .6 1.3-.1 1.3 .5 1.8-.2 1.5 .1 .6-.7 1.1-.2 1.2 .4-1 1 1.5-.9 .8 .1 1.5-1.1-.4-.7-.8-.4 1.2-1.1 1.9-.7 1.2 .2 .6 .4 .3 1.1-1.4 .5 1.7 .2-1.1 1.1 2.2-.8 .6 .7-1 .8 .3 .7 1.8-.8 1.6-.9 1.1-1.2 1.4 .1 1.4 .2 .9 .5-.4 .5-1.2 .6 .2 .6-.6 .5-2.7 .8-1.6 .2-.8-.4-.8 .6-1.9 1-.7 .5-2 .9-1.6 0-1.3 .6-.7 .8-1.4 .1-2.3 1.1-2.4 1.4-1.2 1.1-1.3 1.6 1.5 .2-.5 1.3-.2 1.1 1.8-.3 1.8 .6 .8 .6 .3 .6 1.3 .4 .8 .7 1.9 0 1.2 .2-.9 1.3-.5 1.5-.1 1.7 1 1.4 1.2-.5 1.5-1.5 .7-2.4-.4-.8 2.3-.7 2-1 1.2-1 .5-1-.1-1.2-.7-1 2.2-1.5 .3-1.2 1-2 1-.3 1.7 .4 1 .1 1.2-.4 .7 .5 .9 .7 0 .5 2 .1-.7 1.1-.6 1.8 .9 .2 .4 .8 2.1-.8 1.9-1.5 1.1-.6 .2 1.2 .6 1.8 .5 1.7-.9 .9 1.2 .8 .7 .8 1.7 .4 .6 .5-.1 1.2 .9 .2 .2 .6-.5 1.7-1.2 .6-1 .5-2.3 .6-2 1.3-2.2 .2-2.5-.3-1.9 0-1.3 .1-1.6 1.1-1.8 .7-2.8 2.2-2.1 1.5 1.2-.3 3-2.1 3.1-1.4 2-.1 .8 .7-1.6 1.1-.3 1.8-.1 1.2 1.4 .9 2.2-.3 1.9-1.8-.3 1.2 .6 .6-1.9 1-3.2 1-1.6 .7-1.8 1.2-1-.1 .5-1.4 2.7-1.4-2.1 .1-1.5 .2 .1 .5-1.7 .8-1.6 .6-1.5 .5-1.1 1-.4 .4-.3 .9 .1 .9 .5 .1 .1-.7 .3 .4-.3 .5-1 .3-.6 0-1.1 .3-.6 0-.8 .1-1.3 .5 2.1-.3 .2 .3-2 .6-.9 0 .2-.3-.6 .5 .3 .1-.7 1.3-1.4 1.3 0-.4-.2-.1-.3-.5-.1 1 .2 .3-.2 .7-.6 .7-1.3 1.4-.1-.1 .9-1.2-.5-.7 .4-1.4-.6 .7-.1 1.1-.8-.2 .8 .5-.6 1.7 .4 .2-.1 .6-.3 1.8-1.3 1.4-1.6 .5-1.3 1.1-.7 .1-.9 .7-.4 .6-1.9 1.2-1 .9-1 1.1-.6 1.3-.1 1.3 0 1.6 .3 1.3-.2 .9 .1 2.2-.3 1.3-.3 .7-.6 1.2-.5 .2-.6-.2-.1-.9-.4-.4-.4-1.6-.3-1.5 0-.7 .6-1.3-.1-1-.6-1.6-.5-.3-1.7 .8-.2-.1-.4-.8-.8-.5-1.6 .2-1.2-.2-1.1 .2-.7 .3 .1 .5-.3 .7 .2 .4-.3 .2-.5-.2-.6 .3-1 0-.8-1-1.3 .2-.8-.4-1 .1-1.3 .4-1.7 1.4-1.7 .9-1 .9-.6 .8-.4 1.3-.2 .9 .1 .7-1.1 1.7-.6 1.4-.8 2.6-.3 .9 0 1.1 .2 .9-.1 1.5 .7 1.5 .1 1.1 .4 1 1.4 .5 .5 .9 1.4-.6 1.1-.2 1.2-.4 1-.3 1.1-.8 .6-1.1 .4-1.7 .4-.6 1.1-.5 1.6-.4 1.3 0 .9-.1 .3 .4-.3 .9-1 1.2-.6 1.2 .2 .3-.3 .9-.7 1.5-.3-.5-.3 0 0 .3 .3 0-.2 .6-.4 .8 .1 .3-.3 .8 .1 .1-.3 1-.4 .6-.3 0-.4 .7 .4 .4 .2-.3 .4 .2 .2 .1 .3-.3 .5-.1 .1 .2 .2-.1 .7 .2 .7-.1 .5-.2 .2-.2 .4 .1 .4 .1 .4 0 .3-.2 .6 .3 .3 0 .4 .4 .3 .4 .5 .4 .3 .5-.1 .2-.2 .4 .1 .8-.4 .6-.3 .8-.2 .9 .1 .5-.1 .9-.3 .2-.2 .9 .1 .5-.4 .5 0 .6 .2 .3 .3 1.1 .5 .8 .6 .9 .5 .7-.1 .4 .6 .1 .2-.1 .3 .4 .8-.1 .7-.5 .9-.4 .6-.6 .8 .1-.1 .2 .8 .1 .7 .3 .4 .6 .5 .6-.2 .3 .3 1.2-.3 .6-.5-.2-.2 1-.5-.6-.3-1.1 .5-.5-.4-.1-.2-.7-.8-.6-.6 .2-.4 .7-.6 .5-.3 0-.2 .5 .6 1.1-.4 .2-.2 .3-.8 .1-.1-1.2-.2 .3-.5-.1-.3-.8-.6-.1-.4-.3-.6 .1-.1 .4-.1-.3-.8-.5-.3-.4 .2-.3 0-.5-.4-.5-.5-.4-.5-.2-.1-.6-.3-.4 0 .6-.3 .5-.3-.6-.5-.2-.1-.4 0-.6 .3-.6-.4-.3 .4-.4-.5-.6-.6-.8-.2-.7-.6-.6-.6-.9 .2-.3 .2 .3 .1-.2-.2-.6-.4-.2-.2 .5-.9 0-.5-.2-.6-.4-.8-.2-.3-.4-.7-.3-1-.1-.6-.4-.7-.8-1.3-2.1-.7-.7-1.1-.5-.8 .1-1.4 .8-.7 .2-1-.5-1-.4-1.2-.9-1.1-.3-1.5-.9-1.1-1-.2-.5-.8-.1-1.4-.6-.4-.9-1.3-1.2-.5-1.2-.1-1 .5-.1 0-.6 .5-.5 .1-.7-.2-.9 0-.7-.2-1-.7-1.9-1.1-1.6-.3-1.2-1-.7-.1-.5 .6-1.2-.6-.4-.5-1 .1-1.3-.7-.2-.5-1-.3-.9 .1-.6-.2-1.4 .1-1.4 .3-.7-.7-.8-.5 .1-.6-.5-.6 .7-.1 .9-.4 1.5 .2 .7 .5 1.3 .1 .5 .2 .1-.1 .7 .3-.1-.2 1.3 .3 .4 0 .7 .6 1-.1 1.8 .2 .8 .1 .9-.2 1 .6 .1 .4 .9 .2 .8-.1 .4-.8 .7-.3 0 0-1.2-.6-1.1-.8-.9-.6-.5 .5-1.4 .1-1.1-.5-.6-.7-.8-.2 .2-.2-.5-.7-.4-.5-1.1 .2-.2 .5 .1 .8-.7 .4-.8-.6-1.4-.7-.5 0-1.2 0-1.2-.1-1.5 .2-1.7 .2-.9-.4-1.1-.6-.2 .1-.5-.7-.1-.3-.5-1.2-.2-.2-.3 .3-1-.4-1.8 .2-2.5 .3-.4-.3-.6-.2-1.5 .6-1.4-.1-1 1.2-1.4 .8-1.5 .4-1.3 1.6-1.6 1.2-1.6 1.2-1.5 1.3-2.2 .7-1.4 .2-.8 .3-.3 1.5 .6-.5 1.5 .6-.4 .8-1.3 .6-1.4-.2 0-1.2-1.5-.3-.7-1.7-.7 .4-1.3 1-1-.9-.6 .8-1.3-.4-1 .7-.8-.1-.6-.6-.4 .9-1.3-.3-1.1 .8-1.4-1.1-.1-1.7 0-1-.4-.7-1.4-.8-.3-1.4-.5-1.7 .1-1.5-.6-.6-.5-1.6 .2-1 1-.7 .1-1.7 .2-1.5 .5-1.7 .3 .9-.8 2.2-1.3 1.7-.4 .1-.4-2.4 .8-1.9 .9-2.9 .9 0 .7-2.3 1-2 .6-1.6 .4-1.1 .6-2.7 .8-1.2 .7-2.1 .6-.7-.1-1.6 .4-1.8 .5-1.6 .5-2.5 .4 .1-.3 2.1-.7 1.7-.4 2.2-.8 1.7-.2 1.3-.6 2.7-.8 .6-.3 1.5-.5 1.5-1.1 1.6-.8-1.8 .4-.1-.2-1.3 .5 .2-.7-1 .5 .5-.7-1.9 .6-.7 0 1-.9 .9-.5-.1-.4-1.8 .2-.1-.6-.3-.3 1-.8 0-.5 1.5-.8 1.9-.7 1.4-.7 1 0 .5 .2 1.7-.6 .7 .1 1.4-.4 .6-.6-.3-.2 1.5-.5-.6 0-1.6 .3-.7 .3-.5-.3-1.7 .1-1.1-.2 .3-.5zm-8.4 2.7l .8-.4 .3 .2 .9-.1 .4 .3 .8 .2-.3 .1-1.2 .3-.4-.3-.1-.2-1.1 0zm-1.3 4.2l 1.5-.3 .7 .2-.6 .5-1 .2-.4-.3zm-42.6 65.1l .1-.2 .3-.2 .4 .1-.2 .4-.2 .2zm1.8 .9l .5-.3 .1 .2 .2 .6-.1 .1-.1 0-.5-.1 0-.4zm1.1 .9l .2-.2 .7 .1-.1 .2zm.8 .4l .2-.2 .4 .2 .3 .3-.2 .2-.5 .2-.1-.4-.2-.2zm.1 2.4l .1-.2 .4-.4 0-.3 .2-.2 .1 0 .4 .3 .2 .2 .1 .3 .2 .7-.1 .1-.7 .4-.6 .3-.3 .3-.3-.3 .3-.5zm48.5-66l 1.7-.5 .9-.2 .6 .1 0 .5-1.8 .6-1.8 .6-.2-.4zm19.7 5.3l .5-.5 .4 .2 1.3-.1-2 1.7 0 1.2-.5 0-.1-.7 .2-.7-.2-.4zm1.3 5.1l .5-.4 1 .4 .5 .2 1.1 .2-.1 .5 .1 .8 .7 .6-.2 .9-.8 .2-1.5-.7 .1-.6-.7-.5 .2-.5-1.1-.2zm32.7-27.6l 1-.4 1.6-.7 1.7-.6-.2-.5 3.5-.1 1.1 .1 2.4 .1 .7 .2 .5 .4-1.5 .2-3.3 .7-2.1 .6-.5 .4-3.3 .5 0-.4zm8.2-3.7l 2.4-.5 2.6-.5 1.5 0 1.4-.1-.9 .6-1.1 .2-.9 0-2.3 .4-1.7 .1zm-2 4l 1.7-.7 1.2-.4 3.4-.6 .8 .2-1.1 .4 2.6-.2 .8 .4 1.7-.4 .5 .3-.3 .9 1-.4 .4-1 1.1-.1 .8 .2 .6 .3-.4 .9-.4 .7 1.1 .5 1.3 .5-.6 .4-1.7 .1 .2 .4-.8 .4-1.7-.2-1.4-.2-1.3 0-2.3 .4-2.9 .1-1.9 .1 0-.5-1.1-.2-1 .1-.3-.9 .8-.1 1.8-.1 1.4 0 1.6-.2-1.7-.2-2.3 .1-1.4 0-.1-.4 2.9-.4-1.6 0zm6-3.3l 2.3-.7 1.2-.3 2.4 .3 1.1 .5 1.6 0-.4-.7 1.2-.3 .9 .1-.2 .4 .1 .2 1-.1 .9 0-.3 .4-1 .4-3.5 .1-2.9 .4-1.5 0 .2-.3 2.5-.3-4.5 .1zm6.5-1.8l 1.1-.3 1.4 0 1.2 .1-.6 .2-2 .2zm1.6-.5l .1-.1 1.2-.2 .5 0 1 .2-1.3 .1zm.5 3.8l .5-.1 1.3 0 .5 .1-1.5 .6zm6.8-4.4l 1.8 .1 2.2 .2 .3 .4 .1 .2-1.5 0-1.3-.3-2 0 1.1-.2-.9-.1zm.3 2.1l 1 0 1.7-.3 1.3 .1 .2-.1 .3 .3-.4 .4-1.1 .6-1.7 .1-.9-.1 .6-.5-1.7 .1zm-3.7 3.2l .3-.3 1.9 .1-.4-.6 1.6-.4 1 .2 1.9-.2 0 .3-1.4 .4 1 .4-1 .9-2.1 .3-.9 0-.3-.4zm-.6 3l 1.2-.3 1.2-.4 .8 .3 .4 .1 .1 .2 .2 .4-1 .4-1.1-.3-.9 .1zm10.1-8l 1.2 0 .5 .1 .9 .2-.6 .2-1.5 .2-.6-.2-.1-.2zm-.3 1.4l .7-.2 2 0 .8 .2 1.8 0 .6 .3-.5 .3 .9 .1 .4 .2 1.3 0 1.3 .1 1.7-.2 2.1 0 1.5 0 .7 .3-.1 .4-.8 .2-1.6 .2-1.2-.1-2.9 .1-2 0-1.5-.1-2.3-.3 .2-.4 .3-.4-.6-.3-1.9-.1zm-1.3 1.5l .9-.4 1.7-.2 .5 .3 .1 .2-.9 .3-1.3 0zm4.3-3.7l 1-.2 .8-.2 1 0-.3-.1 2.2-.1 .9 .3 1.4 .1 1.4 .1 .3 .4 .9 .2-1.4 .2-2.3 .5-1.7 0-1.9-.1-.7-.2 .3-.2 .9-.2-1.7 0-.8-.2zm-1.4 1.5l 1.9 0 .5 .1-.2 .1-.5 0-1.7 0zm-4 3.9l .5-.5 .9-.3 1.3-.3 2 .1 1.6 .2-2.3 .7-1.3 .2-1.8 .7-1.1 0zm11.2-6.3l 1.5-.1 1.1 0 1.8 0 1.6-.2 1.1 0 .8 .1 1-.2 1.2-.1 1.7 0 2.8 0 .5 0 2.6 0 2 0 1.9 0 2.4 0 2 .1 1.5 .1-.1 .1-2.4 .2-2.3 .1-.9 .1 2 0-2.4 .3-1.7 .2-2 .4-2 .1-.7 .2-2.9 0 1.3 .1-.8 .1 .5 .3-1.1 .2-1.6 .2-.7 .3-1.6 .2 0 .2 1.7-.1-.2 .2-2.9 .5-2.4-.2-2.9 .1-1.3-.1-1.8 0 .3-.4 1.9-.2 .1-.5 .6 0 2.2 .3-.8-.5-1.4-.1 1-.2 1.8-.2 .5-.2-1.1-.2 0-.3 2.5 0 .6 .1 1.7-.2-2-.1-3.3 0-1.4-.1-.6-.3-.9-.1zm-6.1 6.9l 1.6-.8 1.4-.4 2.8-.2-1.3 .6 .2 .5 1.6-.7 2.9-.3 .8 .9-.7 .6 2.3-.3 1.2-.4 1.8 .5 1 .5-.2 .4 2.1-.2 .5 .6 2.2 .4 .6 .4 .3 1-2.3 .4 2 .8 1.5 .2 .8 1 1.6 .1-.8 .8-2.7 1.4-1-.5-1-1.2-1.4 .2-.6 .7 .7 .6 1.1 .6 .2 .3 0 1.2-.9 .9-1.2-.3-2.1-1 .9 1.1 .7 .7-.1 .5-2.7-.5-1.9-.8-1-.6 .6-.3-1.2-.7-1.1-.5-.3 .3-3.2 .2-.6-.4 1.3-.9 2.1 0 2.3-.2-.1-.4 .8-.6 2.2-1.1 0-.5-.1-.3-1.2-.6-1.8-.3 .9-.3-.6-.7-.8 0-.5-.4-.9 .3-1.9 .2-3.5-.3-1.9-.3-1.5-.1-.5-.4 1.4-.4-1.4 0zm-5.3 9.6l 1.4-.7 .9-.9 1.3-1.1 .7 .1-.3 .5 .7-.2 .4 .3 .9 .5 .9 .3-.3 .6 .8-.1 .5 .4-1.3 .4-1.4-.3-.2-.5-1.6 .6-2.1 .7 .2-.8zm-28.1 69.7l .9-.6 .4-.7 .8-.4 .8-.4 1.1-.2 .4-.2 1.2 .1 1.2 0 1.2 .7 .4 .7 1.4-.2 .5 .4 1 1.3 .7 .8 .5 0 .8 .4-.2 .6 1 0 1 .8-.2 .5-1 .2-1 .1-1-.1-2.2 .2 1.2-1.1-.5-.5-.9-.2-.4-.5-.2-1.1-.8 0-1.2-.5-.4-.4-1.8-.3-.5-.4 .7-.5-1.4-.1-1.3 1.1-.6 0-.3 .5-.8 .2zm30.5-68.4l 1.3-.6 1.5 .1-.2 .2-1.8 .7-.8 0zm13.2-11.9l .3-.3 .5-.1 2.2 .1 1.3 .5-.2 .3-1 0-1-.1-1.2 .2-.3-.1zm-9.5 12.5l .1-.1 .7-.4 .4 0 .1 .3-.9 .7-.4-.1zm-23.5 58.3l .7-.1 .9 0 0 .5-1.7 .3zm-.1 4.3l .5-1.2 .5 0 .1 1.6-.2 1.2-.4 .1-.1-1.2zm-2.2 12.4l .2-.5 .6-.1 .4 .1 .9 .1 .7 .5 .2 .6-1 0-.5 .3-.8-.3zm4.1-17.1l .9 .8-.5 1.4-.2-.3 .2-1-.4-.7zm30-64.6l .9-.6 1.1-.2 .6 .3-.4 .5-.2 .1-.9 .4-1.2 0zm-28.4 81.5l .2-.7 1.3 .3 1.1 .2 .6-.5-.5-.8 .1-.8-.9-.3 .4-.5 .9 .1 1.2 .3 .3-.4 1.1 0 .8 .5 .4 0 .2 .7 .8-.1-.2 .6 .7 .1 .6 .7-.7 .8-.6-.4-.7 .1-.5-.1-.3 .4-.6 .1-.1-.5-.5 .3-.8 1.3-.3-.3 0-.6-1-.3-.7 .2-.9-.2-.7 .4zm40.2-91l .4-.2 3.8-.3 3.6-.3 .6-.2-2.4-.2 1-.3 3.5-.3 1.4-.1-.2-.2 2.3-.1 2.8-.1 2.9 0 .9 .1 2.5-.2 2.1 .2 1.3 0 1.8 .1-2-.2 .2-.2 3.2-.2 3.2 0 1.2-.2 3.3 0 7.2 0 5.6 .4-1.8 .1-3.5 .1-4.9 0 .4 .1 3.3-.1 2.7 .2 1.8-.2 .7 .2-1.1 .3 2.4-.2 4.5-.2 2.8 .1 .5 .2-3.9 .4-.5 .1-3 .1 2.1 .1-1.1 .4-.9 .4-.1 .7 1 .5-1.5 0-1.6 .2 1.6 .4 .1 .7-1 .1 1.1 .7-2.2 0 1 .4-.4 .3-1.4 .1-1.4 0 1.1 .7-.1 .4-1.8-.4-.6 .2 1.3 .3 1.1 .5 .2 .8-1.8 .2-.7-.4-1.1-.5 .1 .7-1.3 .5 2.7 0 1.4 .1-3 .9-3 .8-3.2 .4-1.1 0-1.3 .4-1.8 1.2-2.6 .8-.7 .1-1.6 .3-1.6 .2-1.2 .8-.3 .8-.9 .8-2.2 1 .1 1-.9 1.1-1.1 1.3-1.6 .1-1.2-1.1-2.3 0-.8-.7-.2-1.3-1.2-1.6-.1-.8 .4-1-1-1.1 .9-.9-.5-.4 1.7-1.3 1.8-.4 .6-.4 .7-.8-1.4 .3-.6 .2-1 .2-1.1-.4 .3-.7 .7-.5 1 0 1.9 .2-1.4-.6-.7-.3-1.1 .1-.7-.2 1.7-.9-.4-.3-.4-.7-.6-.9-1-.3 .2-.3-2.3-.5-2 0-2.6 0-2.3 .1-1-.3-1.2-.4 2.7-.3 1.9 0-3.9-.2zm-29.6 90.9l .3-.3 1.2 0 .7 .2 .2 .4-.4 .5-1.1 0-.9 0zm18.6-57.2l .5-.1 1.4 .4 1 .7 0 .3-.7 0-1.4-.5zm-1.9 5.1l .7-.5 .2 .8 .8 .2 1.2 0-.9 .7-.5 .1-1.4-.7zm-10.5 68.6l .5-.5 0-.8 .9-.3 .3 .1-.2 1.5-1.2 .2zm17.5-70.5l 1-.6-.4-.4 1.5-1 2.2-2.5 1.1-.9 1.2-.5 .6 .1-.4 .4-1 1-1.4 1.3 1-.5 .8 .3-.7 .6 1 .4 .7-.4 1.1 .5-.8 1.2 1-.3-.2 .9 .1 1-1 1.4-.6 .1-.7-.3 .7-1.3-.3-.3-1.9 1.5-.8-.1 1.2-.8-1.1-.4-1.4 .1-2.4 0z";
 
@@ -297,6 +301,7 @@ fn hit_continent_vb(vx: f32, vy: f32) -> Option<Continent> {
 }
 
 /// Sample the diagonal pastel coastline shine (`(0,0) -> (540,242)`).
+#[cfg_attr(not(test), allow(dead_code))]
 fn coastline_pastel_color(ax: f32, ay: f32) -> Hsla {
     let denom = MAP_VB_W * MAP_VB_W + MAP_VB_H * MAP_VB_H;
     let u = ((ax * MAP_VB_W + ay * MAP_VB_H) / denom).clamp(0.0, 1.0);
@@ -313,81 +318,93 @@ fn coastline_pastel_color(ax: f32, ay: f32) -> Hsla {
     }
 }
 
-/// Paint a contiguous sub-arc `[start_s .. start_s + span_s]` (modulo `1000.0`) along `geo`.
-#[allow(clippy::too_many_arguments)]
-fn paint_coastline_window(
-    geo: &CoastlineGeometry,
-    start_s: f32,
-    span_s: f32,
-    stroke_w: f32,
-    opacity: f32,
-    soft_ends: bool,
-    map_pt: &dyn Fn(f32, f32) -> Point<Pixels>,
-    window: &mut Window,
-) {
-    if geo.pts.len() < 2 || opacity <= 0.003 || span_s <= 0.5 {
-        return;
+/// Build an SVG `<path d="...">` sub-arc `[start_s .. start_s + span_s]` (modulo `1000.0`) along `geo`.
+fn build_coastline_svg_d(geo: &CoastlineGeometry, start_s: f32, span_s: f32) -> String {
+    use std::fmt::Write as _;
+    if geo.pts.len() < 2 || span_s <= 0.5 {
+        return String::new();
     }
     let s0 = start_s.rem_euclid(1000.0);
     let s1 = s0 + span_s;
-    let ranges: [(f32, f32, f32); 2] = if s1 <= 1000.0 {
-        [(s0, s1, 0.0), (0.0, 0.0, 0.0)]
+    let ranges: [(f32, f32); 2] = if s1 <= 1000.0 {
+        [(s0, s1), (0.0, 0.0)]
     } else {
-        [(s0, 1000.0, 0.0), (0.0, s1 - 1000.0, 1000.0 - s0)]
+        [(s0, 1000.0), (0.0, s1 - 1000.0)]
     };
 
-    for (a_win, b_win, base_off) in ranges {
-        if b_win - a_win <= 0.05 {
+    let mut out = String::with_capacity(1400);
+    for (ca, cb) in ranges {
+        if cb - ca <= 0.05 {
             continue;
         }
-        // Subdivide into color-consistent chunks so the diagonal pastel gradient reads smoothly
-        let chunks = if soft_ends { 12usize } else { 8usize };
-        let step = (b_win - a_win) / chunks as f32;
-        for c_idx in 0..chunks {
-            let ca = a_win + (c_idx as f32) * step;
-            let cb = ca + step;
-            let mid_in_band = (base_off + (c_idx as f32 + 0.5) * step) / span_s;
-            let taper = if soft_ends {
-                (mid_in_band * std::f32::consts::PI).sin().clamp(0.0, 1.0)
-            } else {
-                1.0
-            };
-            let eff_alpha = (opacity * taper).clamp(0.0, 1.0);
-            if eff_alpha <= 0.003 {
+        let mut started = false;
+        for i in 0..(geo.pts.len() - 1) {
+            let sa = geo.norm_s[i];
+            let sb = geo.norm_s[i + 1];
+            if sb <= ca || sa >= cb {
                 continue;
             }
-            let mut pb = PathBuilder::stroke(px(stroke_w));
-            let mut started = false;
-            let mut sample_xy = geo.pts[0];
-            for i in 0..(geo.pts.len() - 1) {
-                let sa = geo.norm_s[i];
-                let sb = geo.norm_s[i + 1];
-                if sb <= ca || sa >= cb {
-                    continue;
-                }
-                let seg = (sb - sa).max(1e-4);
-                let u0 = ((ca - sa) / seg).clamp(0.0, 1.0);
-                let u1 = ((cb - sa) / seg).clamp(0.0, 1.0);
-                let x0 = geo.pts[i].0 + (geo.pts[i + 1].0 - geo.pts[i].0) * u0;
-                let y0 = geo.pts[i].1 + (geo.pts[i + 1].1 - geo.pts[i].1) * u0;
-                let x1 = geo.pts[i].0 + (geo.pts[i + 1].0 - geo.pts[i].0) * u1;
-                let y1 = geo.pts[i].1 + (geo.pts[i + 1].1 - geo.pts[i].1) * u1;
-                if !started {
-                    pb.move_to(map_pt(x0, y0));
-                    sample_xy = (x0, y0);
-                    started = true;
-                }
-                pb.line_to(map_pt(x1, y1));
+            let seg = (sb - sa).max(1e-4);
+            let u0 = ((ca - sa) / seg).clamp(0.0, 1.0);
+            let u1 = ((cb - sa) / seg).clamp(0.0, 1.0);
+            let x0 = geo.pts[i].0 + (geo.pts[i + 1].0 - geo.pts[i].0) * u0;
+            let y0 = geo.pts[i].1 + (geo.pts[i + 1].1 - geo.pts[i].1) * u0;
+            let x1 = geo.pts[i].0 + (geo.pts[i + 1].0 - geo.pts[i].0) * u1;
+            let y1 = geo.pts[i].1 + (geo.pts[i + 1].1 - geo.pts[i].1) * u1;
+            if !started {
+                let _ = write!(out, "M{x0:.2} {y0:.2}");
+                started = true;
             }
-            if started && let Ok(path) = pb.build() {
-                let col = coastline_pastel_color(sample_xy.0, sample_xy.1).opacity(eff_alpha);
-                window.paint_path(path, col);
-            }
+            let _ = write!(out, "L{x1:.2} {y1:.2}");
         }
     }
+    out
 }
 
-/// Cached crisp SVG of the gray world base (`2` static entries: light & dark).
+/// Unclipped multi-pass concentric SVG `<path>` aurora under-glow (`0` `<filter>` clipping, solid stroke hexes for 100% `usvg` reliability).
+fn continent_under_glow_svg(continent: Continent, step: usize) -> Arc<Image> {
+    static CACHE: [OnceLock<Arc<Image>>; 6 * BAND_STEPS] =
+        [const { OnceLock::new() }; 6 * BAND_STEPS];
+    let st = step % BAND_STEPS;
+    let idx = continent.index() * BAND_STEPS + st;
+    CACHE[idx]
+        .get_or_init(|| {
+            let geo = coastline_cache(continent);
+            let head = (st as f32 / BAND_STEPS as f32) * 1000.0;
+            let d_wide = build_coastline_svg_d(geo, head, 210.0);
+            let d_mid = build_coastline_svg_d(geo, head + 26.0, 162.0);
+            let d_warm = build_coastline_svg_d(geo, head + 56.0, 118.0);
+            let d_core = build_coastline_svg_d(geo, head + 86.0, 74.0);
+            let doc = format!(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="596" height="298" viewBox="-28 -28 596 298" fill="none"><path d="{d_wide}" fill="none" stroke="#ff7fa6" stroke-width="15" stroke-opacity="0.11" stroke-linecap="round" stroke-linejoin="round"/><path d="{d_wide}" fill="none" stroke="#ff98b6" stroke-width="9.5" stroke-opacity="0.19" stroke-linecap="round" stroke-linejoin="round"/><path d="{d_mid}" fill="none" stroke="#ffb3c6" stroke-width="5.5" stroke-opacity="0.34" stroke-linecap="round" stroke-linejoin="round"/><path d="{d_warm}" fill="none" stroke="#ffd6e2" stroke-width="3.0" stroke-opacity="0.54" stroke-linecap="round" stroke-linejoin="round"/><path d="{d_core}" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-opacity="0.72" stroke-linecap="round" stroke-linejoin="round"/></svg>"##
+            );
+            Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
+        })
+        .clone()
+}
+
+/// Unclipped crisp stepped SVG `<path>` coastline shine rendered above the highlighted continent.
+fn continent_top_band_svg(continent: Continent, step: usize) -> Arc<Image> {
+    static CACHE: [OnceLock<Arc<Image>>; 6 * BAND_STEPS] =
+        [const { OnceLock::new() }; 6 * BAND_STEPS];
+    let st = step % BAND_STEPS;
+    let idx = continent.index() * BAND_STEPS + st;
+    CACHE[idx]
+        .get_or_init(|| {
+            let geo = coastline_cache(continent);
+            let head = (st as f32 / BAND_STEPS as f32) * 1000.0;
+            let d_tail = build_coastline_svg_d(geo, head, 210.0);
+            let d_body = build_coastline_svg_d(geo, head + 52.0, 148.0);
+            let d_head = build_coastline_svg_d(geo, head + 104.0, 88.0);
+            let doc = format!(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="596" height="298" viewBox="-28 -28 596 298" fill="none"><path d="{d_tail}" fill="none" stroke="#ff94b2" stroke-width="1.5" stroke-opacity="0.42" stroke-linecap="round" stroke-linejoin="round"/><path d="{d_body}" fill="none" stroke="#ffc2d4" stroke-width="1.65" stroke-opacity="0.76" stroke-linecap="round" stroke-linejoin="round"/><path d="{d_head}" fill="none" stroke="#fff7fa" stroke-width="1.8" stroke-opacity="0.96" stroke-linecap="round" stroke-linejoin="round"/></svg>"##
+            );
+            Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
+        })
+        .clone()
+}
+
+/// Cached crisp SVG of the gray world base inside the generous padded viewBox (`2` static entries: light & dark).
 fn world_base_svg(dark: bool) -> Arc<Image> {
     static LIGHT_BASE: OnceLock<Arc<Image>> = OnceLock::new();
     static DARK_BASE: OnceLock<Arc<Image>> = OnceLock::new();
@@ -401,27 +418,27 @@ fn world_base_svg(dark: bool) -> Arc<Image> {
             paths.push_str(r#""/>"#);
         }
         let doc = format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" width="540" height="242" viewBox="0 0 540 242" fill="none"><g fill="{fill_hex}" stroke="{fill_hex}" stroke-width="0.5" stroke-linejoin="round">{paths}</g></svg>"#
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="596" height="298" viewBox="-28 -28 596 298" fill="none"><g fill="{fill_hex}" stroke="{fill_hex}" stroke-width="0.5" stroke-linejoin="round">{paths}</g></svg>"#
         );
         Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
     })
     .clone()
 }
 
-/// Cached crisp SVG of a single highlighted continent with elevation drop-shadow (`12` static entries: `(dark, Continent)`).
+/// Cached crisp SVG of a single highlighted continent with unclipped multi-pass `<path>` elevation shadow (zero `<filter>`).
 fn continent_focus_svg(dark: bool, continent: Continent) -> Arc<Image> {
     static CACHE: [OnceLock<Arc<Image>>; 12] = [const { OnceLock::new() }; 12];
     let idx = usize::from(dark) * 6 + continent.index();
     CACHE[idx]
         .get_or_init(|| {
-            let (fill_hex, stroke_hex, stroke_op, drop_hex, drop_op) = if dark {
-                ("#46464c", "#ffffff", "0.12", "#000000", "0.45")
+            let (fill_hex, stroke_hex, stroke_op, drop_hex, sh_a1, sh_a2, sh_a3) = if dark {
+                ("#46464c", "#ffffff", "0.14", "#000000", "0.10", "0.16", "0.24")
             } else {
-                ("#FFFFFF", "#E2E2E2", "1.0", "#1F2128", "0.10")
+                ("#FFFFFF", "#E2E2E2", "1.0", "#1F2128", "0.025", "0.04", "0.06")
             };
             let d = continent.svg_path();
             let doc = format!(
-                r##"<svg xmlns="http://www.w3.org/2000/svg" width="540" height="242" viewBox="0 0 540 242" fill="none"><defs><filter id="wms" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/><feOffset in="blur" dx="0" dy="2" result="off"/><feFlood flood-color="{drop_hex}" flood-opacity="{drop_op}" result="col"/><feComposite in="col" in2="off" operator="in" result="sh"/><feMerge><feMergeNode in="sh"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="{d}" filter="url(#wms)" fill="{fill_hex}" stroke="{stroke_hex}" stroke-opacity="{stroke_op}" stroke-width="0.5" stroke-linejoin="round"/></svg>"##
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="596" height="298" viewBox="-28 -28 596 298" fill="none"><path d="{d}" transform="translate(0 2.4)" fill="{drop_hex}" fill-opacity="{sh_a1}" stroke="{drop_hex}" stroke-width="5.6" stroke-opacity="{sh_a1}" stroke-linecap="round" stroke-linejoin="round"/><path d="{d}" transform="translate(0 1.6)" fill="{drop_hex}" fill-opacity="{sh_a2}" stroke="{drop_hex}" stroke-width="3.0" stroke-opacity="{sh_a2}" stroke-linecap="round" stroke-linejoin="round"/><path d="{d}" transform="translate(0 0.8)" fill="{drop_hex}" fill-opacity="{sh_a3}" stroke="{drop_hex}" stroke-width="1.2" stroke-opacity="{sh_a3}" stroke-linecap="round" stroke-linejoin="round"/><path d="{d}" fill="{fill_hex}" stroke="{stroke_hex}" stroke-opacity="{stroke_op}" stroke-width="0.55" stroke-linejoin="round"/></svg>"#
             );
             Arc::new(Image::from_bytes(ImageFormat::Svg, doc.into_bytes()))
         })
@@ -748,104 +765,28 @@ impl Render for WorldMap {
 
         let base_img = world_base_svg(dark);
         let focus_img = continent_focus_svg(dark, active);
-        let geo = coastline_cache(active);
+        let band_step = (((head_norm / 1000.0).rem_euclid(1.0) * BAND_STEPS as f32).round()
+            as usize)
+            % BAND_STEPS;
+        let under_glow_img = continent_under_glow_svg(active, band_step);
+        let top_band_img = continent_top_band_svg(active, band_step);
+
+        let pad_px = VB_PAD * scale;
+        let full_w_px = VB_FULL_W * scale;
+        let full_h_px = VB_FULL_H * scale;
 
         // Subtle `0.94 -> 1.0` scale settle around the active continent's focal origin (+ tactile press)
         let enter_scale = (0.94 + 0.06 * enter_t) * (1.0 - 0.012 * map_down);
         let (orig_x, orig_y) = active.origin();
+        let focus_scale = scale * enter_scale;
+        let focus_pad_px = VB_PAD * focus_scale;
+        let focus_full_w = VB_FULL_W * focus_scale;
+        let focus_full_h = VB_FULL_H * focus_scale;
         let focus_w = map_w * enter_scale;
         let focus_h = map_h * enter_scale;
         let focus_dx = (orig_x * scale) * (1.0 - enter_scale);
         let focus_dy = (orig_y * scale) * (1.0 - enter_scale);
-
-        // Layer A (under opaque continent silhouette): soft outward pastel coastline glow (`180/1000` window)
-        let glow_alpha_mul = enter_t * if dark { 0.88 } else { 1.0 };
-        let under_glow_canvas = canvas(
-            |_, _, _| (),
-            move |bounds, _, window, _| {
-                let bw = f32::from(bounds.size.width);
-                let bh = f32::from(bounds.size.height);
-                if bw <= 4.0 || bh <= 4.0 {
-                    return;
-                }
-                let sx = bw / MAP_VB_W;
-                let sy = bh / MAP_VB_H;
-                let s = sx.min(sy);
-                let x0 = f32::from(bounds.left());
-                let y0 = f32::from(bounds.top());
-                let map_pt = |ax: f32, ay: f32| point(px(x0 + ax * sx), px(y0 + ay * sy));
-
-                const GLOW_PASSES: [(f32, f32); 4] =
-                    [(13.5, 0.075), (9.6, 0.12), (6.4, 0.18), (3.8, 0.25)];
-                for (w_vb, a_rel) in GLOW_PASSES {
-                    paint_coastline_window(
-                        geo,
-                        head_norm,
-                        180.0,
-                        (w_vb * s).max(2.0),
-                        a_rel * glow_alpha_mul,
-                        true,
-                        &map_pt,
-                        window,
-                    );
-                }
-            },
-        )
-        .absolute()
-        .inset_0();
-
-        // Layer C (above opaque continent silhouette): 3 crisp stepped pastel coastline strokes
-        let sharp_alpha_mul = enter_t;
-        let top_band_canvas = canvas(
-            |_, _, _| (),
-            move |bounds, _, window, _| {
-                let bw = f32::from(bounds.size.width);
-                let bh = f32::from(bounds.size.height);
-                if bw <= 4.0 || bh <= 4.0 {
-                    return;
-                }
-                let sx = bw / MAP_VB_W;
-                let sy = bh / MAP_VB_H;
-                let s = sx.min(sy);
-                let x0 = f32::from(bounds.left());
-                let y0 = f32::from(bounds.top());
-                let map_pt = |ax: f32, ay: f32| point(px(x0 + ax * sx), px(y0 + ay * sy));
-                let sw = (1.45 * s).max(1.0);
-
-                paint_coastline_window(
-                    geo,
-                    head_norm,
-                    200.0,
-                    sw,
-                    0.32 * sharp_alpha_mul,
-                    false,
-                    &map_pt,
-                    window,
-                );
-                paint_coastline_window(
-                    geo,
-                    head_norm + 60.0,
-                    140.0,
-                    sw,
-                    0.55 * sharp_alpha_mul,
-                    false,
-                    &map_pt,
-                    window,
-                );
-                paint_coastline_window(
-                    geo,
-                    head_norm + 120.0,
-                    80.0,
-                    sw,
-                    1.00 * sharp_alpha_mul,
-                    false,
-                    &map_pt,
-                    window,
-                );
-            },
-        )
-        .absolute()
-        .inset_0();
+        let glow_alpha = if dark { 0.94 } else { 0.88 };
 
         let map_bounds_cell = self.map_bounds.clone();
         let hovering_land = self.hovered_map_continent.is_some();
@@ -910,11 +851,11 @@ impl Render for WorldMap {
             )
             .child(
                 img(base_img)
-                    .w(px(map_w))
-                    .h(px(map_h))
+                    .w(px(full_w_px))
+                    .h(px(full_h_px))
                     .absolute()
-                    .left_0()
-                    .top_0(),
+                    .left(px(-pad_px))
+                    .top(px(-pad_px)),
             );
 
         // Smooth `Slide::snappy` hover preview silhouettes + subtle coastline shimmer for non-active continents
@@ -925,35 +866,7 @@ impl Render for WorldMap {
             let pv = preview_vals[c.index()];
             if pv > 0.01 {
                 let prev_svg = continent_focus_svg(dark, c);
-                let prev_geo = coastline_cache(c);
-                let pv_band = canvas(
-                    |_, _, _| (),
-                    move |bounds, _, window, _| {
-                        let bw = f32::from(bounds.size.width);
-                        let bh = f32::from(bounds.size.height);
-                        if bw <= 4.0 || bh <= 4.0 {
-                            return;
-                        }
-                        let sx = bw / MAP_VB_W;
-                        let sy = bh / MAP_VB_H;
-                        let s = sx.min(sy);
-                        let x0 = f32::from(bounds.left());
-                        let y0 = f32::from(bounds.top());
-                        let map_pt = |ax: f32, ay: f32| point(px(x0 + ax * sx), px(y0 + ay * sy));
-                        paint_coastline_window(
-                            prev_geo,
-                            head_norm,
-                            180.0,
-                            (1.3 * s).max(1.0),
-                            0.45 * pv,
-                            true,
-                            &map_pt,
-                            window,
-                        );
-                    },
-                )
-                .absolute()
-                .inset_0();
+                let prev_band_svg = continent_top_band_svg(c, band_step);
                 map_stage = map_stage.child(
                     div()
                         .absolute()
@@ -961,13 +874,21 @@ impl Render for WorldMap {
                         .opacity(pv * 0.68)
                         .child(
                             img(prev_svg)
-                                .w(px(map_w))
-                                .h(px(map_h))
+                                .w(px(full_w_px))
+                                .h(px(full_h_px))
                                 .absolute()
-                                .left_0()
-                                .top_0(),
+                                .left(px(-pad_px))
+                                .top(px(-pad_px)),
                         )
-                        .child(pv_band),
+                        .child(
+                            img(prev_band_svg)
+                                .w(px(full_w_px))
+                                .h(px(full_h_px))
+                                .absolute()
+                                .left(px(-pad_px))
+                                .top(px(-pad_px))
+                                .opacity(0.55),
+                        ),
                 );
             }
         }
@@ -976,11 +897,11 @@ impl Render for WorldMap {
             let prev_img = continent_focus_svg(dark, prev_c);
             map_stage = map_stage.child(
                 img(prev_img)
-                    .w(px(map_w))
-                    .h(px(map_h))
+                    .w(px(full_w_px))
+                    .h(px(full_h_px))
                     .absolute()
-                    .left_0()
-                    .top_0()
+                    .left(px(-pad_px))
+                    .top(px(-pad_px))
                     .opacity(exit_a),
             );
         }
@@ -994,16 +915,31 @@ impl Render for WorldMap {
                 .w(px(focus_w))
                 .h(px(focus_h))
                 .opacity(enter_t)
-                .child(under_glow_canvas)
+                .child(
+                    img(under_glow_img)
+                        .w(px(focus_full_w))
+                        .h(px(focus_full_h))
+                        .absolute()
+                        .left(px(-focus_pad_px))
+                        .top(px(-focus_pad_px))
+                        .opacity(glow_alpha),
+                )
                 .child(
                     img(focus_img)
-                        .w(px(focus_w))
-                        .h(px(focus_h))
+                        .w(px(focus_full_w))
+                        .h(px(focus_full_h))
                         .absolute()
-                        .left_0()
-                        .top_0(),
+                        .left(px(-focus_pad_px))
+                        .top(px(-focus_pad_px)),
                 )
-                .child(top_band_canvas),
+                .child(
+                    img(top_band_img)
+                        .w(px(focus_full_w))
+                        .h(px(focus_full_h))
+                        .absolute()
+                        .left(px(-focus_pad_px))
+                        .top(px(-focus_pad_px)),
+                ),
         );
 
         // Top-left interactive continent capsule switcher + morphing listbox

@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mix_color,
-        pro_person_avatar, pro_skeleton_bar, pro_swap_label, pro_toast_banner, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_mix_color, pro_person_avatar, pro_skeleton_bar, pro_swap_label, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -174,7 +174,7 @@ impl RenderOnce for CountdownRing {
                 if r <= 1.0 {
                     return;
                 }
-                let steps = 32usize;
+                let steps = 48usize;
                 let mut bg_ring = PathBuilder::stroke(px(stroke));
                 for i in 0..=steps {
                     let angle = (i as f32 / steps as f32) * std::f32::consts::TAU
@@ -190,7 +190,7 @@ impl RenderOnce for CountdownRing {
                     window.paint_path(path, track);
                 }
                 if ratio > 0.005 {
-                    let arc_steps = ((steps as f32 * ratio).ceil() as usize).max(2);
+                    let arc_steps = ((steps as f32 * ratio).ceil() as usize).max(3);
                     let mut fg_arc = PathBuilder::stroke(px(stroke));
                     for i in 0..=arc_steps {
                         let frac = (i as f32 / arc_steps as f32) * ratio;
@@ -813,31 +813,32 @@ impl Render for ApprovalCard {
         let compact_buttons = cw < 400.0;
         let ultra_narrow = cw < 340.0;
 
-        // Tray & surface tokens aligned closely with `.ui-apc` Light & Dark specs
+        // Tray & surface tokens aligned with reference sunken-tray + elevated-card hierarchy
         let tray_bg: Hsla = if p.dark {
-            rgb(0x131316).into()
+            rgb(0x121215).into()
         } else {
-            rgb(0xf0f0f1).into()
+            rgb(0xf0f0f2).into()
         };
         let card_bg: Hsla = if p.dark {
             rgb(0x19191c).into()
         } else {
             rgb(0xffffff).into()
         };
-        let card_border: Hsla = if p.dark {
-            rgb(0x2a2a2f).into()
+        let card_border = p.line;
+        let icon_tile_bg: Hsla = if p.dark {
+            rgb(0x202024).into()
         } else {
-            rgb(0xececee).into()
+            rgb(0xfafafa).into()
         };
         let quiet_hover: Hsla = if p.dark {
             rgb(0x232327).into()
         } else {
-            rgb(0xe4e4e6).into()
+            rgb(0xe4e4e7).into()
         };
 
         let is_pending = self.status == ApprovalStatus::Pending;
 
-        // Build leading chat prompt bubble if configured
+        // Build sleek compact leading chat prompt bubble if configured
         let prompt_el = self.prompt.as_ref().map(|prompt_txt| {
             let prompt_localized: SharedString =
                 if prompt_txt.as_ref() == "I drafted the October newsletter. Ready to send?" {
@@ -851,47 +852,46 @@ impl Render for ApprovalCard {
                     prompt_txt.clone()
                 };
             let bot_bg: Hsla = if p.dark {
-                rgb(0xededed).into()
+                rgb(0xededef).into()
             } else {
                 rgb(0x171717).into()
             };
             let bot_fg: Hsla = if p.dark {
-                rgb(0x19191b).into()
+                rgb(0x18181b).into()
             } else {
                 rgb(0xffffff).into()
             };
             let bubble_bg: Hsla = if p.dark {
-                rgb(0x262629).into()
+                rgb(0x232327).into()
             } else {
-                rgb(0xf1f1f2).into()
+                rgb(0xf1f1f3).into()
             };
             div()
                 .w_full()
                 .flex()
                 .items_center()
-                .gap(px(10.0))
+                .gap(px(9.0))
                 .child(
                     div()
-                        .size(px(26.0))
+                        .size(px(24.0))
                         .flex_none()
                         .rounded_full()
                         .bg(bot_bg)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_svg("0 0 24 24", SPARK_BOT_SVG, 13.0, bot_fg)),
+                        .child(pro_svg("0 0 24 24", SPARK_BOT_SVG, 12.0, bot_fg)),
                 )
                 .child(
                     div()
-                        .px(px(14.0))
-                        .py(px(8.0))
-                        .rounded_tl(px(6.0))
-                        .rounded_tr(px(18.0))
-                        .rounded_br(px(18.0))
-                        .rounded_bl(px(18.0))
+                        .px(px(13.0))
+                        .py(px(6.5))
+                        .rounded(px(16.0))
                         .bg(bubble_bg)
-                        .text_size(px(13.5))
-                        .line_height(px(20.0))
+                        .border_1()
+                        .border_color(p.line_soft)
+                        .text_size(px(13.0))
+                        .line_height(px(18.5))
                         .text_color(p.ink)
                         .child(prompt_localized),
                 )
@@ -953,7 +953,7 @@ impl Render for ApprovalCard {
                 .rounded(px(6.0))
                 .bg(r_bg)
                 .text_color(r_fg)
-                .text_size(px(12.0))
+                .text_size(px(11.5))
                 .font_weight(FontWeight::MEDIUM)
                 .flex()
                 .items_center()
@@ -962,9 +962,9 @@ impl Render for ApprovalCard {
         });
 
         let header_icon = if let Some(ic) = self.icon {
-            pro_icon(ic, 16.0, p.ink)
+            pro_icon(ic, 15.5, p.ink)
         } else {
-            pro_svg("0 0 24 24", MAIL_STROKE_SVG, 16.0, p.ink)
+            pro_svg("0 0 24 24", MAIL_STROKE_SVG, 15.5, p.ink)
         };
 
         // Recipients overlapping avatar strip
@@ -1011,8 +1011,8 @@ impl Render for ApprovalCard {
                         .flex_1()
                         .min_w_0()
                         .flex()
-                        .items_center()
-                        .gap(px(5.0))
+                        .items_baseline()
+                        .gap(px(6.0))
                         .overflow_hidden()
                         .child(
                             div()
@@ -1025,14 +1025,7 @@ impl Render for ApprovalCard {
                             d.child(
                                 div()
                                     .flex_none()
-                                    .px(px(6.0))
-                                    .h(px(19.0))
-                                    .rounded_full()
-                                    .bg(p.chip)
-                                    .flex()
-                                    .items_center()
-                                    .text_size(px(11.5))
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_size(px(12.5))
                                     .text_color(p.muted)
                                     .child(m),
                             )
@@ -1041,7 +1034,7 @@ impl Render for ApprovalCard {
         });
 
         // Structured preview details
-        let mut details_col = div().w_full().flex().flex_col().gap(px(6.0));
+        let mut details_col = div().w_full().flex().flex_col().gap(px(5.0));
         for (idx, row) in self.details.iter().enumerate() {
             let lbl_text: SharedString = match row.label.as_ref() {
                 "Subject" => tr(cx, "Subject", "主题").into(),
@@ -1082,7 +1075,7 @@ impl Render for ApprovalCard {
                     .flex_1()
                     .min_w_0()
                     .text_size(px(13.0))
-                    .line_height(px(19.0))
+                    .line_height(px(18.5))
                     .text_color(p.ink)
                     .truncate()
                     .child(val_text)
@@ -1096,10 +1089,10 @@ impl Render for ApprovalCard {
                     .gap(px(if ultra_narrow { 12.0 } else { 16.0 }))
                     .child(
                         div()
-                            .w(px(if ultra_narrow { 52.0 } else { 64.0 }))
+                            .w(px(if ultra_narrow { 52.0 } else { 60.0 }))
                             .flex_none()
-                            .text_size(px(13.0))
-                            .line_height(px(19.0))
+                            .text_size(px(12.5))
+                            .line_height(px(18.5))
                             .text_color(p.muted)
                             .truncate()
                             .child(lbl_text),
@@ -1112,21 +1105,16 @@ impl Render for ApprovalCard {
         let checkbox_el = self.allow_always.then(|| {
             let checked = self.always_checked;
             let always_lbl = tr(cx, "Always allow this action", "始终允许执行此操作");
-            let label_ink = pro_mix_color(p.text, p.ink, always_hov);
+            let label_ink = pro_mix_color(p.muted, p.ink, always_hov);
             div()
                 .id(pro_eid(&self.id, "always-chk"))
                 .role(Role::CheckBox)
                 .aria_label(always_lbl)
                 .aria_toggled(checked.into())
                 .tab_index(0)
-                .mt(px(if self.placement == ApprovalActionsPlacement::Tray {
-                    14.0
-                } else {
-                    0.0
-                }))
                 .flex()
                 .items_center()
-                .gap(px(8.0))
+                .gap(px(7.0))
                 .cursor_pointer()
                 .focus_visible(move |s| s.rounded(px(5.0)).border_1().border_color(p.focus))
                 .on_hover(cx.listener(|this, inside: &bool, _, cx| {
@@ -1145,20 +1133,20 @@ impl Render for ApprovalCard {
                 .child(pro_check_draw(
                     pro_eid(&self.id, "always-chk-draw"),
                     checked,
-                    16.0,
+                    15.0,
                     true,
                     p.primary,
                 ))
                 .child(
                     div()
-                        .text_size(px(13.0))
-                        .line_height(px(18.0))
+                        .text_size(px(12.5))
+                        .line_height(px(17.5))
                         .text_color(label_ink)
                         .child(always_lbl),
                 )
         });
 
-        // Countdown label + action buttons
+        // Countdown label (shown when `allow_always` is off, or as compact pause cue)
         let timer_label = countdown.map(|(rem, _)| {
             let is_low = rem <= 10;
             let timer_fg = if is_low { p.amber_ink } else { p.muted };
@@ -1176,8 +1164,8 @@ impl Render for ApprovalCard {
             div()
                 .flex()
                 .items_center()
-                .gap(px(5.0))
-                .text_size(px(12.5))
+                .gap(px(4.5))
+                .text_size(px(12.0))
                 .text_color(timer_fg)
                 .whitespace_nowrap()
                 .child(pro_icon(
@@ -1186,7 +1174,7 @@ impl Render for ApprovalCard {
                     } else {
                         ProIcon::Clock
                     },
-                    13.0,
+                    12.5,
                     timer_fg,
                 ))
                 .child(text_str)
@@ -1214,10 +1202,10 @@ impl Render for ApprovalCard {
             ApcTactileBtn {
                 id: pro_eid(&self.id, "edit-btn"),
                 aria: edit_lbl.into(),
-                height: 34.0,
-                pad_l: 11.0,
-                pad_r: 11.0,
-                radius: 10.0,
+                height: 32.0,
+                pad_l: 10.0,
+                pad_r: 10.0,
+                radius: 9.0,
                 rest_bg: transparent_black(),
                 hover_bg: quiet_hover,
                 rest_fg: p.text,
@@ -1226,11 +1214,11 @@ impl Render for ApprovalCard {
                 elevated: false,
                 flex_fill: false,
                 gap: 5.0,
-                font_size: 13.0,
+                font_size: 12.5,
                 content: pro_swap_label(
                     pro_eid(&self.id, "edit-swap-lbl"),
                     edit_lbl,
-                    13.0,
+                    12.5,
                     FontWeight::MEDIUM,
                     p.ink,
                 ),
@@ -1253,19 +1241,19 @@ impl Render for ApprovalCard {
         let deny_inner = div()
             .flex()
             .items_center()
-            .gap(px(7.0))
+            .gap(px(6.5))
             .child(deny_lbl)
             .when(show_kbd, |d| {
                 d.child(
                     div()
-                        .h(px(20.0))
+                        .h(px(19.0))
                         .px(px(5.0))
-                        .rounded(px(6.0))
+                        .rounded(px(5.0))
                         .bg(kbd_quiet_bg)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(11.0))
+                        .text_size(px(10.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .child("Esc"),
@@ -1274,19 +1262,19 @@ impl Render for ApprovalCard {
         let deny_btn = ApcTactileBtn {
             id: pro_eid(&self.id, "deny-btn"),
             aria: deny_lbl.into(),
-            height: 34.0,
-            pad_l: 12.0,
-            pad_r: if show_kbd { 8.0 } else { 12.0 },
-            radius: 10.0,
+            height: 32.0,
+            pad_l: 11.0,
+            pad_r: if show_kbd { 7.5 } else { 11.0 },
+            radius: 9.0,
             rest_bg: transparent_black(),
             hover_bg: quiet_hover,
-            rest_fg: p.ink,
+            rest_fg: p.text,
             hover_fg: p.strong,
             border: transparent_black(),
             elevated: false,
             flex_fill: compact_buttons,
-            gap: 7.0,
-            font_size: 13.0,
+            gap: 6.5,
+            font_size: 12.5,
             content: deny_inner.into_any_element(),
             on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.deny(ApprovalDenyReason::User, cx);
@@ -1298,49 +1286,52 @@ impl Render for ApprovalCard {
             .flex()
             .items_center()
             .gap(px(7.0))
-            .when_some(countdown, |d, (rem, ratio)| {
-                let ring_fg = if rem <= 10 {
-                    p.amber
-                } else {
-                    p.on_primary.opacity(0.92)
-                };
-                let ring_track = p.on_primary.opacity(0.24);
-                d.child(CountdownRing {
-                    remaining_ratio: ratio,
-                    side: 14.0,
-                    stroke: 1.8,
-                    fg: ring_fg,
-                    track: ring_track,
-                })
-            })
             .child(approve_lbl)
-            .when(show_kbd, |d| {
-                d.child(
-                    div()
-                        .h(px(20.0))
-                        .px(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(kbd_primary_bg)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(px(11.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(kbd_primary_fg)
-                        .child("⌘↵"),
-                )
+            .map(|d| {
+                if let Some((rem, ratio)) = countdown {
+                    let ring_fg = if rem <= 10 {
+                        p.amber
+                    } else {
+                        p.on_primary.opacity(0.90)
+                    };
+                    let ring_track = p.on_primary.opacity(0.22);
+                    d.child(CountdownRing {
+                        remaining_ratio: ratio,
+                        side: 13.5,
+                        stroke: 1.75,
+                        fg: ring_fg,
+                        track: ring_track,
+                    })
+                } else if show_kbd {
+                    d.child(
+                        div()
+                            .h(px(19.0))
+                            .px(px(5.0))
+                            .rounded(px(5.0))
+                            .bg(kbd_primary_bg)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(10.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(kbd_primary_fg)
+                            .child("⌘↵"),
+                    )
+                } else {
+                    d
+                }
             });
         let approve_btn = ApcTactileBtn {
             id: pro_eid(&self.id, "approve-btn"),
             aria: approve_lbl.into(),
-            height: 34.0,
-            pad_l: 12.0,
-            pad_r: if show_kbd || countdown.is_some() {
-                9.0
+            height: 32.0,
+            pad_l: 13.0,
+            pad_r: if countdown.is_some() || show_kbd {
+                10.5
             } else {
                 13.0
             },
-            radius: 10.0,
+            radius: 9.0,
             rest_bg: p.primary,
             hover_bg: pro_mix_color(p.primary, p.on_primary, 0.12),
             rest_fg: p.on_primary,
@@ -1349,7 +1340,7 @@ impl Render for ApprovalCard {
             elevated: true,
             flex_fill: compact_buttons,
             gap: 7.0,
-            font_size: 13.0,
+            font_size: 12.5,
             content: approve_inner.into_any_element(),
             on_click: Rc::new(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.approve(cx);
@@ -1367,15 +1358,19 @@ impl Render for ApprovalCard {
             .child(approve_btn);
 
         let has_preview = !self.recipients.is_empty() || !self.details.is_empty();
+        let mut checkbox_slot = checkbox_el;
+        let mut timer_slot = timer_label;
+        let mut actions_slot = Some(actions_row);
+
         let inner_card = {
             let mut c = div()
                 .w_full()
-                .p(px(if ultra_narrow { 14.0 } else { 16.0 }))
-                .rounded(px(16.0))
+                .p(px(if ultra_narrow { 14.0 } else { 15.0 }))
+                .rounded(px(14.0))
                 .bg(card_bg)
                 .border_1()
                 .border_color(card_border)
-                .when(!p.dark, |d| d.shadow_xs())
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .child(
@@ -1383,12 +1378,13 @@ impl Render for ApprovalCard {
                         .w_full()
                         .flex()
                         .items_start()
-                        .gap(px(if ultra_narrow { 10.0 } else { 12.0 }))
+                        .gap(px(if ultra_narrow { 10.0 } else { 11.0 }))
                         .child(
                             div()
                                 .size(px(32.0))
                                 .flex_none()
-                                .rounded(px(9.0))
+                                .rounded(px(8.0))
+                                .bg(icon_tile_bg)
                                 .border_1()
                                 .border_color(card_border)
                                 .flex()
@@ -1400,25 +1396,24 @@ impl Render for ApprovalCard {
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .pt(px(1.0))
                                 .flex()
                                 .flex_col()
                                 .gap(px(1.0))
                                 .child(
                                     div()
-                                        .text_size(px(14.0))
+                                        .text_size(px(13.5))
                                         .font_weight(FontWeight::SEMIBOLD)
-                                        .line_height(px(20.0))
-                                        .text_color(p.ink)
+                                        .line_height(px(19.0))
+                                        .text_color(p.strong)
                                         .truncate()
                                         .child(title_str.clone()),
                                 )
                                 .when_some(desc_str, |d, desc| {
                                     d.child(
                                         div()
-                                            .text_size(px(13.0))
-                                            .line_height(px(18.0))
-                                            .text_color(p.text)
+                                            .text_size(px(12.5))
+                                            .line_height(px(17.5))
+                                            .text_color(p.muted)
                                             .truncate()
                                             .child(desc),
                                     )
@@ -1431,50 +1426,50 @@ impl Render for ApprovalCard {
                 c = c.child(
                     div()
                         .w_full()
-                        .mt(px(14.0))
-                        .pt(px(14.0))
+                        .mt(px(13.0))
+                        .pt(px(13.0))
                         .border_t_1()
                         .border_color(card_border)
                         .flex()
                         .flex_col()
-                        .gap(px(12.0))
+                        .gap(px(10.0))
                         .when_some(recipients_el, |d, r| d.child(r))
                         .when(!self.details.is_empty(), |d| d.child(details_col)),
                 );
             }
 
-            let mut timer_slot = timer_label;
-            let mut actions_slot = Some(actions_row);
-            if self.placement == ApprovalActionsPlacement::Tray {
-                if let Some(chk) = checkbox_el {
-                    c = c.child(chk);
-                }
-            } else {
+            if self.placement == ApprovalActionsPlacement::Card {
                 c = c.child(
                     div()
                         .w_full()
-                        .mt(px(16.0))
-                        .pt(px(14.0))
+                        .mt(px(14.0))
+                        .pt(px(12.0))
                         .border_t_1()
                         .border_color(card_border)
                         .flex()
                         .flex_wrap()
                         .items_center()
                         .justify_between()
-                        .gap(px(10.0))
-                        .when_some(checkbox_el, |d, chk| d.child(chk))
-                        .when_some(timer_slot.take(), |d, t| d.child(t))
+                        .gap(px(8.0))
+                        .child(div().flex().items_center().gap(px(8.0)).map(|left| {
+                            if let Some(chk) = checkbox_slot.take() {
+                                left.child(chk)
+                            } else if let Some(t) = timer_slot.take() {
+                                left.child(t)
+                            } else {
+                                left
+                            }
+                        }))
                         .when_some(actions_slot.take(), |d, a| d.child(a)),
                 );
             }
-            (c, timer_slot, actions_slot)
+            c
         };
-        let (inner_card, timer_slot, actions_slot) = inner_card;
 
         let tray_footer = (self.placement == ApprovalActionsPlacement::Tray).then(|| {
             div()
                 .w_full()
-                .min_h(px(44.0))
+                .min_h(px(42.0))
                 .pl(px(if compact_buttons { 6.0 } else { 10.0 }))
                 .pr(px(2.0))
                 .pt(px(6.0))
@@ -1484,13 +1479,16 @@ impl Render for ApprovalCard {
                 .items_center()
                 .justify_between()
                 .gap(px(8.0))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .when_some(timer_slot, |d, t| d.child(t)),
-                )
-                .when_some(actions_slot, |d, a| d.child(a))
+                .child(div().flex().items_center().gap(px(8.0)).map(|left| {
+                    if let Some(chk) = checkbox_slot.take() {
+                        left.child(chk)
+                    } else if let Some(t) = timer_slot.take() {
+                        left.child(t)
+                    } else {
+                        left
+                    }
+                }))
+                .when_some(actions_slot.take(), |d, a| d.child(a))
         });
 
         let pending_tree = div()
@@ -1624,7 +1622,7 @@ impl Render for ApprovalCard {
             div()
                 .w_full()
                 .p(px(4.0))
-                .rounded(px(20.0))
+                .rounded(px(18.0))
                 .bg(tray_bg)
                 .border_1()
                 .border_color(p.line_soft)
@@ -1633,7 +1631,7 @@ impl Render for ApprovalCard {
                 .child(pro_fold(
                     pro_eid(&self.id, "pending-fold"),
                     is_pending,
-                    256.0,
+                    228.0,
                     0.0,
                     move || pending_tree.into_any_element(),
                 ))
@@ -1647,13 +1645,13 @@ impl Render for ApprovalCard {
         } else {
             div()
                 .w_full()
-                .rounded(px(16.0))
+                .rounded(px(14.0))
                 .flex()
                 .flex_col()
                 .child(pro_fold(
                     pro_eid(&self.id, "pending-fold-c"),
                     is_pending,
-                    256.0,
+                    228.0,
                     0.0,
                     move || pending_tree.into_any_element(),
                 ))
@@ -1669,6 +1667,7 @@ impl Render for ApprovalCard {
                             .bg(card_bg)
                             .border_1()
                             .border_color(card_border)
+                            .shadow(pro_card_shadow(p.dark))
                             .child(resolved_row)
                             .into_any_element()
                     },
@@ -1720,7 +1719,7 @@ impl Render for ApprovalCard {
                     .max_w(px(420.0))
                     .flex()
                     .flex_col()
-                    .gap(px(14.0))
+                    .gap(px(11.0))
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(b) = bounds.last() {
                             let w_px = f32::from(b.size.width);

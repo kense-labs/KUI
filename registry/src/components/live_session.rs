@@ -2435,7 +2435,6 @@ impl Render for LiveSessionBlock {
                 .id(self.id.clone())
                 .w_full()
                 .p(px(16.))
-                .bg(p.page)
                 .flex()
                 .when(stacked, |d| d.flex_col())
                 .gap(px(16.))
@@ -2478,8 +2477,7 @@ impl Render for LiveSessionBlock {
                 .id(self.id.clone())
                 .w_full()
                 .p(px(16.))
-                .bg(p.page)
-                .child(
+                    .child(
                     div()
                         .w_full()
                         .rounded(px(12.))
@@ -2646,7 +2644,6 @@ impl Render for LiveSessionBlock {
                 32.
             }))
             .py(px(if compact { 20. } else { 28. }))
-            .bg(p.page)
             .flex()
             .flex_col()
             .child(

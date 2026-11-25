@@ -201,7 +201,7 @@ impl ProPalette {
                 pink: rgb(0xf06db5).into(),
                 teal: rgb(0x4fc3b4).into(),
                 cyan: rgb(0x5cc6ee).into(),
-                logo_tile: rgb(0xffffff).into(),
+                logo_tile: rgb(0x27272b).into(),
                 mono,
             }
         } else {
@@ -266,6 +266,25 @@ pub enum ProPresence {
     Busy,
 }
 
+/// Subtle dual-layer card elevation shadow matching the Pro surface hierarchy.
+pub fn pro_card_shadow(dark: bool) -> Vec<BoxShadow> {
+    if dark {
+        vec![
+            BoxShadow::new(px(0.), px(2.), black().opacity(0.38))
+                .blur_radius(px(8.))
+                .spread_radius(px(-1.)),
+            BoxShadow::new(px(0.), px(1.), black().opacity(0.28)).blur_radius(px(2.)),
+        ]
+    } else {
+        vec![
+            BoxShadow::new(px(0.), px(4.), black().opacity(0.045))
+                .blur_radius(px(12.))
+                .spread_radius(px(-2.)),
+            BoxShadow::new(px(0.), px(1.), black().opacity(0.055)).blur_radius(px(2.)),
+        ]
+    }
+}
+
 /// Rounded square tile showing an app or provider mark, with neutral fallback.
 pub fn pro_app_tile(app: &str, side: f32, cx: &App) -> AnyElement {
     let p = ProPalette::get(cx);
@@ -282,7 +301,7 @@ pub fn pro_app_tile(app: &str, side: f32, cx: &App) -> AnyElement {
             .child(mark)
             .into_any_element();
     }
-    let mark_side = (side * 0.62).round();
+    let mark_side = (side * 0.58).round();
     let content = if let Some(mark) = pro_app_artwork(app, mark_side, cx) {
         mark
     } else {
@@ -298,33 +317,102 @@ pub fn pro_app_tile(app: &str, side: f32, cx: &App) -> AnyElement {
             })
             .into_any_element()
     };
-    let tile_bg: Hsla = if matches!(lower.as_str(), "github") && p.dark {
-        rgb(0x242428).into()
-    } else if matches!(
-        lower.as_str(),
-        "gmail" | "google calendar" | "calendar" | "google drive" | "drive" | "slack"
-    ) {
-        rgb(0xffffff).into()
-    } else if p.dark {
-        rgb(0x222226).into()
+    let tile_bg: Hsla = if p.dark {
+        rgb(0x27272b).into()
     } else {
         rgb(0xffffff).into()
     };
-    div()
+    let bdr: Hsla = if p.dark {
+        hsla(0., 0., 1., 0.09)
+    } else {
+        hsla(0., 0., 0., 0.065)
+    };
+    let mut tile = div()
         .size(px(side))
         .flex_none()
         .rounded(px(radius))
         .bg(tile_bg)
         .border_1()
-        .border_color(p.line)
+        .border_color(bdr)
         .flex()
         .items_center()
         .justify_center()
-        .child(content)
-        .into_any_element()
+        .child(content);
+    if !p.dark && side >= 24. {
+        tile = tile.shadow(vec![
+            BoxShadow::new(px(0.), px(1.), black().opacity(0.05)).blur_radius(px(2.)),
+        ]);
+    }
+    tile.into_any_element()
 }
 
-/// Render the 3x3 mirrored agent pixel mark with optional diagonal wave twinkle.
+fn infer_agent_brand_key(seed: &str) -> Option<&'static str> {
+    let s = seed.trim().to_ascii_lowercase();
+    if s.is_empty() {
+        return None;
+    }
+    if s.contains("claude")
+        || s.contains("opus")
+        || s.contains("sonnet")
+        || s.contains("haiku")
+        || s.contains("orchestrat")
+        || s.contains("writer")
+        || s.contains("research")
+        || s.contains("lead")
+        || s.contains("launch")
+        || s.contains("support")
+        || s.contains("planner")
+        || s.contains("review")
+        || s.contains("editor")
+        || s.contains("fact")
+        || s.contains("design")
+        || s.contains("copy")
+    {
+        Some("claude")
+    } else if s.contains("gpt")
+        || s.contains("openai")
+        || s.contains("codex")
+        || s.contains("coder")
+        || s.contains("code")
+        || s.contains("release")
+        || s.contains("inspect")
+        || s.contains("engineer")
+        || s.contains("build")
+        || s.contains("test")
+        || s.contains("commit")
+        || s.contains("migrat")
+        || s.contains("patch")
+        || s.contains("deploy")
+    {
+        Some("openai")
+    } else if s.contains("gemini")
+        || s.contains("ops")
+        || s.contains("analyst")
+        || s.contains("search")
+        || s.contains("data")
+        || s.contains("triage")
+        || s.contains("router")
+        || s.contains("monitor")
+        || s.contains("audit")
+        || s.contains("sec")
+    {
+        Some("gemini")
+    } else if s.contains("deepseek") {
+        Some("deepseek")
+    } else if s.contains("mistral") {
+        Some("mistral")
+    } else if s.contains("qwen") {
+        Some("qwen")
+    } else if s.contains("llama") || s.contains("meta") {
+        Some("meta")
+    } else if s.contains("grok") || s.contains("xai") {
+        Some("xai")
+    } else {
+        None
+    }
+}
+
+/// Render an AI model/agent mark tile (resolving provider artwork when recognizable, with 3x3 pixel fallback).
 pub fn pro_agent_avatar(
     seed: &str,
     color: Hsla,
@@ -335,6 +423,48 @@ pub fn pro_agent_avatar(
 ) -> AnyElement {
     let p = ProPalette::get(cx);
     let reduced = Theme::global(cx).reduced_motion;
+    let radius = (side * 0.28).clamp(5., 9.).round();
+    let tile_bg: Hsla = if p.dark {
+        rgb(0x232327).into()
+    } else {
+        rgb(0xffffff).into()
+    };
+    let pulse_a = if working && !reduced {
+        let phase = (elapsed_ms / 1100.) * std::f32::consts::TAU;
+        0.16 + 0.14 * (0.5 + 0.5 * phase.sin())
+    } else {
+        0.0
+    };
+    let bdr = if pulse_a > 0.01 {
+        pro_mix_color(p.line, color, pulse_a * 2.2)
+    } else if p.dark {
+        hsla(0., 0., 1., 0.09)
+    } else {
+        hsla(0., 0., 0., 0.07)
+    };
+
+    if let Some(brand) = infer_agent_brand_key(seed)
+        && let Some(mark) = pro_app_artwork(brand, (side * 0.58).round().max(11.), cx)
+    {
+        let mut wrap = div()
+            .size(px(side))
+            .flex_none()
+            .rounded(px(radius))
+            .bg(tile_bg)
+            .border_1()
+            .border_color(bdr)
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(mark);
+        if !p.dark && side >= 22. {
+            wrap = wrap.shadow(vec![
+                BoxShadow::new(px(0.), px(1.), black().opacity(0.045)).blur_radius(px(2.)),
+            ]);
+        }
+        return wrap.into_any_element();
+    }
+
     let cells = agent_pixel_cells(seed);
     let sq = if side <= 20. {
         3.
@@ -351,12 +481,6 @@ pub fn pro_agent_avatar(
         1.5
     } else {
         2.
-    };
-    let radius = (side * 0.30).round();
-    let tile_bg: Hsla = if p.dark {
-        rgb(0x202024).into()
-    } else {
-        rgb(0xfafafb).into()
     };
 
     let mut grid = div().flex().flex_col().gap(px(gap));
@@ -390,7 +514,7 @@ pub fn pro_agent_avatar(
         .rounded(px(radius))
         .bg(tile_bg)
         .border_1()
-        .border_color(p.line_strong)
+        .border_color(bdr)
         .flex()
         .items_center()
         .justify_center()

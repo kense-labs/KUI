@@ -295,9 +295,96 @@ fn infer_provider_key(step: &CostStep) -> Option<SharedString> {
         Some("slack".into())
     } else if name_lower.contains("stripe") {
         Some("stripe".into())
+    } else if name_lower.contains("notion") {
+        Some("notion".into())
     } else {
         None
     }
+}
+
+fn infer_tool_pro_icon(name: &str) -> ProIcon {
+    let nl = name.to_ascii_lowercase();
+    if nl.contains("db")
+        || nl.contains("sql")
+        || nl.contains("postgres")
+        || nl.contains("warehouse")
+        || nl.contains("usage")
+    {
+        ProIcon::Database
+    } else if nl.contains("search") || nl.contains("find") || nl.contains("query") {
+        ProIcon::Search
+    } else if nl.contains("fetch")
+        || nl.contains("http")
+        || nl.contains("web")
+        || nl.contains("url")
+        || nl.contains("crawl")
+        || nl.contains("page")
+        || nl.contains("review")
+    {
+        ProIcon::Globe
+    } else if nl.contains("verify")
+        || nl.contains("check")
+        || nl.contains("valid")
+        || nl.contains("cit")
+    {
+        ProIcon::Check
+    } else if nl.contains("read") || nl.contains("file") || nl.contains("doc") {
+        ProIcon::PageDoc
+    } else if nl.contains("mail") || nl.contains("send") {
+        ProIcon::Mail
+    } else {
+        ProIcon::Terminal
+    }
+}
+
+fn render_cost_running_spinner(elapsed_secs: f32, reduced: bool, color: Hsla) -> AnyElement {
+    let angle = if reduced {
+        -std::f32::consts::FRAC_PI_2
+    } else {
+        (elapsed_secs / 0.85).fract() * std::f32::consts::TAU
+    };
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let center = bounds.center();
+            let r = (f32::from(bounds.size.width).min(f32::from(bounds.size.height)) - 2.0) * 0.5;
+            if r <= 1.0 {
+                return;
+            }
+            let steps = 28usize;
+            let mut track = PathBuilder::stroke(px(1.65));
+            for i in 0..=steps {
+                let a = (i as f32 / steps as f32) * std::f32::consts::TAU;
+                let pt = center + point(px(r * a.cos()), px(r * a.sin()));
+                if i == 0 {
+                    track.move_to(pt);
+                } else {
+                    track.line_to(pt);
+                }
+            }
+            if let Ok(path) = track.build() {
+                window.paint_path(path, color.opacity(0.22));
+            }
+            let arc_steps = 20usize;
+            let sweep = std::f32::consts::TAU * 0.70;
+            let mut arc = PathBuilder::stroke(px(1.65));
+            for i in 0..=arc_steps {
+                let a = angle + (i as f32 / arc_steps as f32) * sweep;
+                let pt = center + point(px(r * a.cos()), px(r * a.sin()));
+                if i == 0 {
+                    arc.move_to(pt);
+                } else {
+                    arc.line_to(pt);
+                }
+            }
+            if let Ok(path) = arc.build() {
+                window.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(12.5))
+    .flex_none()
+    .into_any_element()
 }
 
 fn nice_cost_ceiling(v: f64) -> f64 {
@@ -1397,14 +1484,18 @@ impl Render for CostWaterfall {
                     .child(top_stat_content),
             );
 
-        // Column widths matching reference CSS variables.
+        // Column widths with generous proportional STEP column (~35% on wide viewports) + tabular numbers.
         let pad_l = 10.0_f32;
         let pad_r = if is_stack { 12.0 } else { 16.0 };
         let col_gap = 12.0_f32;
-        let name_w = if hide_in_out { 196.0 } else { 228.0 };
-        let num_w = 44.0_f32;
-        let cost_w = 54.0_f32;
-        let time_w = 50.0_f32;
+        let name_w = if hide_in_out {
+            (width_px * 0.40).clamp(212.0, 248.0).round()
+        } else {
+            (width_px * 0.35).clamp(254.0, 278.0).round()
+        };
+        let num_w = 46.0_f32;
+        let cost_w = 58.0_f32;
+        let time_w = 48.0_f32;
 
         let axis_max = match cur_mode {
             CostMeasureMode::Cost => summary.cost_axis_max.max(0.01),
@@ -1906,30 +1997,86 @@ impl Render for CostWaterfall {
                     div().w(px(16.0)).mr(px(4.0)).flex_none().into_any_element()
                 };
 
-                let icon_inner: AnyElement = if let Some(key) = &row.artwork_key
+                let icon_tile: AnyElement = if let Some(key) = &row.artwork_key
+                    && key.as_ref() == "stripe"
+                    && let Some(art) = pro_app_artwork("stripe", 20.0, cx)
+                {
+                    div()
+                        .size(px(20.0))
+                        .mr(px(8.0))
+                        .flex_none()
+                        .rounded(px(6.0))
+                        .overflow_hidden()
+                        .child(art)
+                        .into_any_element()
+                } else if let Some(key) = &row.artwork_key
                     && let Some(art) = pro_app_artwork(key, 12.0, cx)
                 {
-                    art
-                } else {
+                    let tile_bg: Hsla = if p.dark {
+                        rgb(0x232327).into()
+                    } else {
+                        rgb(0xffffff).into()
+                    };
                     div()
-                        .size(px(8.0))
-                        .rounded(px(2.0))
-                        .bg(mark_c)
+                        .size(px(20.0))
+                        .mr(px(8.0))
+                        .flex_none()
+                        .rounded(px(6.0))
+                        .bg(tile_bg)
+                        .border_1()
+                        .border_color(p.line)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(art)
+                        .into_any_element()
+                } else {
+                    let (sq_bg, sq_bdr, ic, ic_col): (Hsla, Hsla, ProIcon, Hsla) = match row.kind {
+                        CostStepKind::Tool => (
+                            if p.dark {
+                                rgb(0x1d2a30).into()
+                            } else {
+                                rgb(0xeef6fa).into()
+                            },
+                            p.cyan.opacity(if p.dark { 0.24 } else { 0.22 }),
+                            infer_tool_pro_icon(row.name.as_ref()),
+                            p.cyan,
+                        ),
+                        CostStepKind::Agent => (
+                            if p.dark {
+                                rgb(0x202630).into()
+                            } else {
+                                rgb(0xeef4fb).into()
+                            },
+                            p.blue.opacity(0.22),
+                            ProIcon::Sparkles,
+                            p.blue,
+                        ),
+                        CostStepKind::Llm => (
+                            if p.dark {
+                                rgb(0x262030).into()
+                            } else {
+                                rgb(0xf5f0fc).into()
+                            },
+                            p.purple.opacity(0.22),
+                            ProIcon::Sparkles,
+                            p.purple,
+                        ),
+                    };
+                    div()
+                        .size(px(20.0))
+                        .mr(px(8.0))
+                        .flex_none()
+                        .rounded(px(6.0))
+                        .bg(sq_bg)
+                        .border_1()
+                        .border_color(sq_bdr)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_icon(ic, 11.5, ic_col))
                         .into_any_element()
                 };
-
-                let icon_tile = div()
-                    .size(px(20.0))
-                    .mr(px(8.0))
-                    .flex_none()
-                    .rounded(px(5.0))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(icon_inner);
 
                 let primary_metric_str =
                     if (is_stack || hide_in_out) && cur_mode == CostMeasureMode::Tokens {
@@ -1938,6 +2085,7 @@ impl Render for CostWaterfall {
                         format_usd(row.cost)
                     };
 
+                let max_title_w = (name_w - (depth as f32 * 14.0) - 56.0).max(116.0);
                 let name_cell = div()
                     .when(!is_stack, |d| d.w(px(name_w)).flex_none().h(px(32.0)))
                     .when(is_stack, |d| d.w_full().flex_none().min_w_0().h(px(28.0)))
@@ -1957,12 +2105,10 @@ impl Render for CostWaterfall {
                             .overflow_hidden()
                             .child(
                                 div()
+                                    .flex_shrink_0()
+                                    .max_w(px(max_title_w))
                                     .text_size(px(13.0))
-                                    .font_weight(if row.has_children {
-                                        FontWeight::MEDIUM
-                                    } else {
-                                        FontWeight::NORMAL
-                                    })
+                                    .font_weight(FontWeight::MEDIUM)
                                     .text_color(if row.has_children { p.strong } else { p.ink })
                                     .truncate()
                                     .child(row.name.clone()),
@@ -1972,6 +2118,8 @@ impl Render for CostWaterfall {
                                 |d, sub| {
                                     d.child(
                                         div()
+                                            .flex_1()
+                                            .min_w_0()
                                             .text_size(px(12.0))
                                             .text_color(p.muted)
                                             .truncate()
@@ -2014,6 +2162,14 @@ impl Render for CostWaterfall {
                                 .child(tr(cx, "TOP", "最高")),
                         )
                     })
+                    .when(row.status == CostStepStatus::Running, |d| {
+                        d.child(
+                            div()
+                                .ml(px(5.0))
+                                .flex_none()
+                                .child(render_cost_running_spinner(elapsed, reduced, p.blue)),
+                        )
+                    })
                     .when(row.status == CostStepStatus::Failed, |d| {
                         d.child(div().ml(px(4.0)).flex_none().child(pro_icon(
                             ProIcon::AlertTriangle,
@@ -2027,8 +2183,9 @@ impl Render for CostWaterfall {
                                 .ml(px(8.0))
                                 .w(px(cost_w))
                                 .flex_none()
+                                .font_family(p.mono)
                                 .text_right()
-                                .text_size(px(12.0))
+                                .text_size(px(11.5))
                                 .text_color(p.ink)
                                 .child(primary_metric_str.clone()),
                         )
@@ -2037,8 +2194,9 @@ impl Render for CostWaterfall {
                                 .ml(px(8.0))
                                 .w(px(time_w))
                                 .flex_none()
+                                .font_family(p.mono)
                                 .text_right()
-                                .text_size(px(12.0))
+                                .text_size(px(11.5))
                                 .text_color(p.text)
                                 .child(format_duration_ms(row.duration_ms)),
                         )
@@ -2102,8 +2260,9 @@ impl Render for CostWaterfall {
                                             div()
                                                 .w(px(num_w))
                                                 .flex_none()
+                                                .font_family(p.mono)
                                                 .text_right()
-                                                .text_size(px(12.0))
+                                                .text_size(px(11.5))
                                                 .text_color(p.text)
                                                 .child(format_tokens(row.tokens_in)),
                                         )
@@ -2111,8 +2270,9 @@ impl Render for CostWaterfall {
                                             div()
                                                 .w(px(num_w))
                                                 .flex_none()
+                                                .font_family(p.mono)
                                                 .text_right()
-                                                .text_size(px(12.0))
+                                                .text_size(px(11.5))
                                                 .text_color(p.text)
                                                 .child(format_tokens(row.tokens_out)),
                                         )
@@ -2121,8 +2281,9 @@ impl Render for CostWaterfall {
                                         div()
                                             .w(px(cost_w))
                                             .flex_none()
+                                            .font_family(p.mono)
                                             .text_right()
-                                            .text_size(px(12.0))
+                                            .text_size(px(11.5))
                                             .font_weight(if row.has_children {
                                                 FontWeight::MEDIUM
                                             } else {
@@ -2135,8 +2296,9 @@ impl Render for CostWaterfall {
                                         div()
                                             .w(px(time_w))
                                             .flex_none()
+                                            .font_family(p.mono)
                                             .text_right()
-                                            .text_size(px(12.0))
+                                            .text_size(px(11.5))
                                             .text_color(if row.status == CostStepStatus::Failed {
                                                 p.red_ink
                                             } else {

@@ -9,7 +9,7 @@
       <h1 id="cover-title" data-kui-intro-title aria-label="{title}"><span class="title-prefix">{prefix}</span>{reel}</h1>
       <p class="lead" data-kui-intro-lead>{description}</p>
       <div class="cta-row">
-        <a class="cover-btn primary" data-guide-hint="{try_one}" href="{base}/kui/components/button/">{explore} {arrow}</a>
+        <a class="cover-btn primary" data-guide-hint="{try_one}" href="{base}/kui/library/">{explore} {arrow}</a>
         <a class="cover-btn secondary" data-guide-hint="{docs_hint}" href="{base}/kui/docs/">{book} {docs}</a>
       </div>
     </div>
@@ -27,10 +27,20 @@
     </div></div>
   </section>
   {guide}
+  <section class="live-showcase bounds" aria-labelledby="live-heading">
+    <p class="section-label">01 <i></i> LIVE GPUI</p>
+    <div class="section-head live-head"><div><h2 id="live-heading">{live_heading}</h2><p class="live-note">{live_note}</p></div>
+      <a class="more" data-cover-open-link href="{base}/kui/components/mission-control/">{live_open} {arrow}</a></div>
+    <div class="live-shell" data-cover-live-shell>
+      <div class="live-bar"><div class="live-tabs" role="toolbar" aria-label="Live GPUI showcases">{showcase_tabs}</div><span class="live-runtime">{live_badge}</span></div>
+      <div class="live-frame"><iframe allow="clipboard-write" loading="lazy" class="rust-story family-story pro-stage-story" data-cover-live-frame data-story="mission-control" data-story-key="mission-control" data-lang="{live_locale}" aria-label="Mission Control · {live_badge}" src="{live_url}"></iframe></div>
+      <div class="live-foot"><span>{live_interactions}</span><a data-cover-open-link href="{base}/kui/components/mission-control/">{live_source} {arrow}</a></div>
+    </div>
+  </section>
   <section class="collection bounds" aria-labelledby="collection-heading">
-    <p class="section-label">01 <i></i> COMPONENT INDEX</p>
+    <p class="section-label">02 <i></i> COMPONENT INDEX</p>
     <div class="section-head"><h2 id="collection-heading">{selected}</h2>
-      <a class="more" data-guide-hint="{all_hint}" href="{base}/kui/components/button/">{view_all} {arrow}</a></div>
+      <a class="more" data-guide-hint="{all_hint}" href="{base}/kui/library/">{view_all} {arrow}</a></div>
     <div class="samples">{cards}</div>
     <p class="collection-tip">{tip}</p>
   </section>

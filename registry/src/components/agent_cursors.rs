@@ -6,22 +6,28 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
-        pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_eid, pro_empty_state, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
+        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_raw_svg, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
-use std::f32::consts::{FRAC_PI_2, TAU};
+use std::{
+    f32::consts::{FRAC_PI_2, TAU},
+    rc::Rc,
+};
 use web_time::Instant;
 
 const DOC_ICON_SVG: &str = r#"<path d="M14 2.5H7.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M14 2.5V7h4.5M9 12.5h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const PLAY_SOLID_SVG: &str = r#"<path d="M7.5 5.6c0-.88.96-1.42 1.72-.96l8.9 5.4c.72.44.72 1.48 0 1.92l-8.9 5.4c-.76.46-1.72-.08-1.72-.96V5.6Z" fill="currentColor"></path>"#;
+const CURSOR_ARROW_DARK_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 18 18"><path d="M3 2.5L13.5 8.2L8.6 9.6L6.8 14.5L3 2.5Z" fill="#000000" fill-opacity="0.34" transform="translate(0 0.8)"/><path d="M3 2.5L13.5 8.2L8.6 9.6L6.8 14.5L3 2.5Z" fill="#18181b" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/></svg>"##;
+const CURSOR_ARROW_LIGHT_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 18 18"><path d="M3 2.5L13.5 8.2L8.6 9.6L6.8 14.5L3 2.5Z" fill="none" stroke="#000000" stroke-opacity="0.18" stroke-width="2.6" stroke-linejoin="round"/><path d="M3 2.5L13.5 8.2L8.6 9.6L6.8 14.5L3 2.5Z" fill="#18181b" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/></svg>"##;
 
 /// Events emitted by [`AgentCursors`].
 #[derive(Clone, Debug, PartialEq)]
@@ -611,8 +617,9 @@ struct GlidingPointer {
     name: SharedString,
     cost_tag: Option<SharedString>,
     doing: Option<SharedString>,
-    pink: Hsla,
     blue: Hsla,
+    #[allow(clippy::type_complexity)]
+    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
 }
 
 impl RenderOnce for GlidingPointer {
@@ -649,63 +656,37 @@ impl RenderOnce for GlidingPointer {
         });
 
         let flag_bg: Hsla = if self.dark {
-            rgb(0xf4f4f5).into()
+            rgb(0xeaeaef).opacity(0.95).into()
         } else {
-            rgb(0x141416).into()
+            rgb(0x1c1c20).opacity(0.95).into()
         };
         let flag_ink: Hsla = if self.dark {
-            rgb(0x141416).into()
+            rgb(0x16161a).into()
         } else {
-            rgb(0xffffff).into()
+            rgb(0xf4f4f6).into()
         };
-        let flag_soft: Hsla = if self.dark {
-            hsla(0., 0., 0., 0.08)
+        let flag_muted: Hsla = if self.dark {
+            rgb(0x56565e).into()
         } else {
-            hsla(0., 0., 1., 0.14)
+            hsla(0., 0., 1., 0.62)
         };
-        let arrow_outline: Hsla = if self.dark {
-            rgb(0x1c1c1f).into()
+        let flag_border: Hsla = if self.dark {
+            hsla(0., 0., 1., 0.55)
         } else {
-            rgb(0xffffff).into()
+            hsla(0., 0., 1., 0.11)
         };
-        let arrow_fill = self.color;
 
-        let arrow_canvas = canvas(
-            |_, _, _| (),
-            move |bounds, _, window, _| {
-                let ox = f32::from(bounds.left());
-                let oy = f32::from(bounds.top());
-                let pts = [
-                    point(px(ox + 1.8), px(oy + 1.2)),
-                    point(px(ox + 15.2), px(oy + 7.2)),
-                    point(px(ox + 8.8), px(oy + 9.8)),
-                    point(px(ox + 5.9), px(oy + 16.4)),
-                ];
-                let mut stroke_b = PathBuilder::stroke(px(2.4));
-                stroke_b.move_to(pts[0]);
-                stroke_b.line_to(pts[1]);
-                stroke_b.line_to(pts[2]);
-                stroke_b.line_to(pts[3]);
-                stroke_b.close();
-                if let Ok(path) = stroke_b.build() {
-                    window.paint_path(path, arrow_outline);
-                }
-
-                let mut fill_b = PathBuilder::fill();
-                fill_b.move_to(pts[0]);
-                fill_b.line_to(pts[1]);
-                fill_b.line_to(pts[2]);
-                fill_b.line_to(pts[3]);
-                fill_b.close();
-                if let Ok(path) = fill_b.build() {
-                    window.paint_path(path, arrow_fill);
-                }
+        let arrow_el = pro_raw_svg(
+            if self.dark {
+                CURSOR_ARROW_DARK_SVG
+            } else {
+                CURSOR_ARROW_LIGHT_SVG
             },
-        )
-        .w(px(17.0))
-        .h(px(19.0));
+            16.0,
+            16.0,
+        );
 
-        let pink = self.pink;
+        let accent = self.color;
         let blue = self.blue;
         let edge_bar = canvas(
             |_, _, _| (),
@@ -714,8 +695,8 @@ impl RenderOnce for GlidingPointer {
                     bounds,
                     linear_gradient(
                         90.0,
-                        linear_color_stop(pink, 0.0),
-                        linear_color_stop(blue, 1.0),
+                        linear_color_stop(accent.opacity(0.70), 0.0),
+                        linear_color_stop(blue.opacity(0.55), 1.0),
                     ),
                 ));
             },
@@ -723,9 +704,96 @@ impl RenderOnce for GlidingPointer {
         .w_full()
         .h(px(1.5));
 
+        let pill_shadows = if self.dark {
+            vec![
+                BoxShadow::new(px(0.), px(5.), accent.opacity(0.28))
+                    .blur_radius(px(12.))
+                    .spread_radius(px(-1.)),
+                BoxShadow::new(px(0.), px(2.), black().opacity(0.36)).blur_radius(px(6.)),
+            ]
+        } else {
+            vec![
+                BoxShadow::new(px(0.), px(5.), accent.opacity(0.24))
+                    .blur_radius(px(12.))
+                    .spread_radius(px(-1.)),
+                BoxShadow::new(px(0.), px(3.), black().opacity(0.18)).blur_radius(px(8.)),
+            ]
+        };
+
         let show_caret = !self.free_handle && (self.typing || self.caret_blink_on);
-        let arrow_top = if self.free_handle { 0.0 } else { 11.0 };
-        let flag_top = if self.free_handle { 18.0 } else { 28.0 };
+        let caret_ink: Hsla = if self.dark {
+            rgb(0xf4f4f5).into()
+        } else {
+            rgb(0x18181b).into()
+        };
+        let arrow_top = if self.free_handle { -1.0 } else { 11.0 };
+        let flag_top = if self.free_handle { 12.0 } else { 23.0 };
+        let flag_left = if self.free_handle { 10.0 } else { 12.0 };
+
+        let mut pill = div()
+            .id(pro_eid(&self.id, "pill"))
+            .absolute()
+            .left(px(flag_left))
+            .top(px(flag_top))
+            .rounded(px(8.0))
+            .overflow_hidden()
+            .bg(flag_bg)
+            .border_1()
+            .border_color(flag_border)
+            .shadow(pill_shadows)
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .px(px(9.0))
+                    .py(px(4.5))
+                    .flex()
+                    .flex_col()
+                    .gap(px(1.0))
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .justify_between()
+                            .gap(px(8.0))
+                            .whitespace_nowrap()
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(flag_ink)
+                                    .child(self.name),
+                            )
+                            .when_some(self.cost_tag, |row, tag| {
+                                row.child(
+                                    div()
+                                        .text_size(px(11.0))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(flag_muted)
+                                        .child(tag),
+                                )
+                            }),
+                    )
+                    .when(!self.dimmed, |col| {
+                        col.when_some(self.doing, |col, doing_str| {
+                            col.child(
+                                div()
+                                    .text_size(px(11.0))
+                                    .font_weight(FontWeight::NORMAL)
+                                    .text_color(flag_muted)
+                                    .whitespace_nowrap()
+                                    .child(doing_str),
+                            )
+                        })
+                    }),
+            )
+            .child(edge_bar);
+
+        if let Some(cb) = self.on_click {
+            pill = pill
+                .cursor_pointer()
+                .on_click(move |ev, w, cx| cb(ev, w, cx));
+        }
 
         div()
             .absolute()
@@ -736,86 +804,22 @@ impl RenderOnce for GlidingPointer {
                 d.child(
                     div()
                         .absolute()
-                        .left(px(-1.0))
+                        .left(px(-0.5))
                         .top(px(0.0))
-                        .w(px(1.8))
-                        .h(px(16.0))
+                        .w(px(1.6))
+                        .h(px(17.0))
                         .rounded(px(1.0))
-                        .bg(self.color.opacity(if show_caret { 1.0 } else { 0.0 })),
+                        .bg(caret_ink.opacity(if show_caret { 0.92 } else { 0.0 })),
                 )
             })
             .child(
                 div()
                     .absolute()
-                    .left(px(if self.free_handle { -1.5 } else { 0.0 }))
+                    .left(px(if self.free_handle { -2.0 } else { -1.0 }))
                     .top(px(arrow_top))
-                    .child(arrow_canvas),
+                    .child(arrow_el),
             )
-            .child(
-                div()
-                    .absolute()
-                    .left(px(14.0))
-                    .top(px(flag_top))
-                    .rounded(px(8.0))
-                    .overflow_hidden()
-                    .bg(flag_bg)
-                    .border_1()
-                    .border_color(flag_soft)
-                    .shadow_md()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .px(px(8.5))
-                            .py(px(4.5))
-                            .flex()
-                            .flex_col()
-                            .gap(px(1.5))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(7.0))
-                                    .whitespace_nowrap()
-                                    .child(div().size(px(6.0)).rounded_full().bg(self.color))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(flag_ink)
-                                            .child(self.name),
-                                    )
-                                    .when_some(self.cost_tag, |row, tag| {
-                                        row.child(
-                                            div()
-                                                .px(px(4.5))
-                                                .h(px(15.0))
-                                                .rounded(px(4.0))
-                                                .bg(flag_soft)
-                                                .flex()
-                                                .items_center()
-                                                .text_size(px(10.0))
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(flag_ink)
-                                                .child(tag),
-                                        )
-                                    }),
-                            )
-                            .when(!self.dimmed, |col| {
-                                col.when_some(self.doing, |col, doing_str| {
-                                    col.child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(FontWeight::NORMAL)
-                                            .text_color(flag_ink.opacity(0.78))
-                                            .whitespace_nowrap()
-                                            .child(doing_str),
-                                    )
-                                })
-                            }),
-                    )
-                    .child(edge_bar),
-            )
+            .child(pill)
     }
 }
 
@@ -1111,8 +1115,11 @@ impl AgentCursors {
         cx: &App,
     ) -> AnyElement {
         let col = agent.color.unwrap_or(p.blue);
-        if let Some(provider) = &agent.provider {
-            return pro_app_tile(provider.as_ref(), side, cx);
+        if let Some(provider) = &agent.provider
+            && let Some(art) =
+                pro_app_artwork(provider.as_ref(), (side * 0.88).round().max(11.0), cx)
+        {
+            return art;
         }
         pro_agent_avatar(agent.id.as_ref(), col, side, true, elapsed_ms, cx)
     }
@@ -1141,6 +1148,21 @@ impl AgentCursors {
                 Some(zh) => tr(cx, block.text.as_ref(), zh.as_ref()),
                 None => block.text.as_ref(),
             };
+            if is_code {
+                let mut code_col = div()
+                    .font_family(p.mono)
+                    .text_size(px(fs))
+                    .line_height(px(lh))
+                    .text_color(base_fg)
+                    .flex()
+                    .flex_col();
+                for line in txt.split('\n') {
+                    let trimmed = line.trim_start_matches(' ');
+                    let indent = line.len().saturating_sub(trimmed.len()) as f32 * 7.2;
+                    code_col = code_col.child(div().pl(px(indent)).child(trimmed.to_string()));
+                }
+                return code_col.into_any_element();
+            }
             return div()
                 .text_size(px(fs))
                 .line_height(px(lh))
@@ -1151,11 +1173,84 @@ impl AgentCursors {
 
         let chars: Vec<char> = block.text.chars().collect();
         let mut cursor = 0usize;
+
+        if is_code {
+            let mut lines_col = div();
+            let mut cur_line = div().flex().items_center().flex_wrap();
+            let mut line_start = true;
+
+            let push_code_str = |text: &str,
+                                 lines_col: &mut Div,
+                                 cur_line: &mut Div,
+                                 line_start: &mut bool| {
+                for (seg_idx, seg) in text.split('\n').enumerate() {
+                    if seg_idx > 0 {
+                        let finished =
+                            std::mem::replace(cur_line, div().flex().items_center().flex_wrap());
+                        *lines_col = std::mem::replace(lines_col, div()).child(finished);
+                        *line_start = true;
+                    }
+                    if seg.is_empty() {
+                        continue;
+                    }
+                    if *line_start {
+                        let trimmed = seg.trim_start_matches(' ');
+                        let spaces = seg.len().saturating_sub(trimmed.len());
+                        if spaces > 0 {
+                            *cur_line = std::mem::replace(
+                                cur_line,
+                                div().flex().items_center().flex_wrap(),
+                            )
+                            .pl(px(spaces as f32 * 7.2));
+                        }
+                        if !trimmed.is_empty() {
+                            *cur_line = std::mem::replace(
+                                cur_line,
+                                div().flex().items_center().flex_wrap(),
+                            )
+                            .child(div().child(trimmed.to_string()));
+                            *line_start = false;
+                        }
+                    } else {
+                        *cur_line =
+                            std::mem::replace(cur_line, div().flex().items_center().flex_wrap())
+                                .child(div().child(seg.to_string()));
+                    }
+                }
+            };
+
+            for sug in &block_sugs {
+                let start = sug.at.min(chars.len());
+                if start > cursor {
+                    let prefix: String = chars[cursor..start].iter().collect();
+                    push_code_str(&prefix, &mut lines_col, &mut cur_line, &mut line_start);
+                }
+                let rem_len = sug.remove.chars().count();
+                cursor = (start + rem_len).min(chars.len());
+                cur_line =
+                    cur_line.child(self.build_suggestion_chip(sug, true, typed_chars, p, cx));
+                line_start = false;
+            }
+            if cursor < chars.len() {
+                let tail: String = chars[cursor..].iter().collect();
+                push_code_str(&tail, &mut lines_col, &mut cur_line, &mut line_start);
+            }
+            return lines_col
+                .child(cur_line)
+                .font_family(p.mono)
+                .text_size(px(fs))
+                .line_height(px(lh))
+                .text_color(base_fg)
+                .flex()
+                .flex_col()
+                .into_any_element();
+        }
+
         let mut wrap = div()
             .flex()
             .flex_wrap()
             .items_center()
-            .gap_x(px(3.0))
+            .gap_x(px(3.5))
             .gap_y(px(2.0))
             .text_size(px(fs))
             .line_height(px(lh))
@@ -1171,105 +1266,7 @@ impl AgentCursors {
             }
             let rem_len = sug.remove.chars().count();
             cursor = (start + rem_len).min(chars.len());
-
-            let ag_col = self.agent_color(sug.agent.as_ref(), p);
-            let is_open = self.open_suggestion.as_ref() == Some(&sug.id);
-            let sug_id = sug.id.clone();
-            let sug_snap_key = sug.clone();
-            let sug_snap_click = sug.clone();
-
-            // Live letter-by-letter typing for Coder's rollout patch while live_demo is active.
-            let ins_full = sug.insert.as_ref();
-            let shown_ins: String = if self.live_demo && sug.id.as_ref() == "s-date" {
-                let total = ins_full.chars().count().max(1);
-                let n = (typed_chars % (total + 5)).clamp(1, total);
-                ins_full.chars().take(n).collect()
-            } else {
-                ins_full.to_string()
-            };
-
-            let agent_name = self
-                .agents
-                .iter()
-                .find(|a| a.id == sug.agent)
-                .map(|a| a.label(cx).to_string())
-                .unwrap_or_else(|| sug.agent.to_string());
-            let aria = format!(
-                "{agent_name} {}: {}",
-                tr(cx, "suggests", "建议修改为"),
-                sug.insert
-            );
-
-            let chip_bg = ag_col.opacity(if is_open { 0.22 } else { 0.12 });
-            let hover_bg = ag_col.opacity(0.22);
-
-            wrap = wrap.child(
-                div()
-                    .id(pro_eid(&self.id, format!("sug-{}", sug.id)))
-                    .role(Role::Button)
-                    .aria_label(aria)
-                    .aria_expanded(is_open)
-                    .tab_index(0)
-                    .px(px(4.0))
-                    .rounded(px(4.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.0))
-                    .cursor_pointer()
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_key_down(cx.listener({
-                        let sug_id = sug_id.clone();
-                        move |this, ev: &KeyDownEvent, _, cx| match ev.keystroke.key.as_str() {
-                            "enter" | "space" | " " => {
-                                if this.open_suggestion.as_ref() == Some(&sug_id) {
-                                    this.open_suggestion = None;
-                                } else {
-                                    this.last_open_sug = Some(sug_snap_key.clone());
-                                    this.open_suggestion = Some(sug_id.clone());
-                                }
-                                cx.stop_propagation();
-                                cx.notify();
-                            }
-                            "escape" if this.open_suggestion.is_some() => {
-                                this.open_suggestion = None;
-                                cx.stop_propagation();
-                                cx.notify();
-                            }
-                            _ => {}
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if this.open_suggestion.as_ref() == Some(&sug_id) {
-                            this.open_suggestion = None;
-                        } else {
-                            this.last_open_sug = Some(sug_snap_click.clone());
-                            this.open_suggestion = Some(sug_id.clone());
-                        }
-                        cx.notify();
-                    }))
-                    .when(!sug.remove.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .text_color(p.muted)
-                                .line_through()
-                                .child(sug.remove.clone()),
-                        )
-                    })
-                    .when(!shown_ins.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .px(px(3.5))
-                                .rounded(px(3.0))
-                                .bg(chip_bg)
-                                .hover(move |s| s.bg(hover_bg))
-                                .border_b_2()
-                                .border_color(ag_col)
-                                .text_color(p.ink)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(shown_ins),
-                        )
-                    }),
-            );
+            wrap = wrap.child(self.build_suggestion_chip(sug, false, typed_chars, p, cx));
         }
 
         if cursor < chars.len() {
@@ -1280,6 +1277,113 @@ impl AgentCursors {
         }
 
         wrap.into_any_element()
+    }
+
+    fn build_suggestion_chip(
+        &self,
+        sug: &DocSuggestion,
+        is_code: bool,
+        typed_chars: usize,
+        p: &ProPalette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let ag_col = self.agent_color(sug.agent.as_ref(), p);
+        let is_open = self.open_suggestion.as_ref() == Some(&sug.id);
+        let sug_id = sug.id.clone();
+        let sug_snap_key = sug.clone();
+        let sug_snap_click = sug.clone();
+
+        let ins_full = sug.insert.as_ref();
+        let shown_ins: String = if self.live_demo && sug.id.as_ref() == "s-date" {
+            let total = ins_full.chars().count().max(1);
+            let n = (typed_chars % (total + 5)).clamp(2, total);
+            ins_full.chars().take(n).collect()
+        } else {
+            ins_full.to_string()
+        };
+
+        let agent_name = self
+            .agents
+            .iter()
+            .find(|a| a.id == sug.agent)
+            .map(|a| a.label(cx).to_string())
+            .unwrap_or_else(|| sug.agent.to_string());
+        let aria = format!(
+            "{agent_name} {}: {}",
+            tr(cx, "suggests", "建议修改为"),
+            sug.insert
+        );
+
+        let chip_bg = ag_col.opacity(if is_open { 0.18 } else { 0.08 });
+        let hover_bg = ag_col.opacity(0.18);
+        let underline_col = if is_code { p.ink.opacity(0.75) } else { ag_col };
+
+        div()
+            .id(pro_eid(&self.id, format!("sug-{}", sug.id)))
+            .role(Role::Button)
+            .aria_label(aria)
+            .aria_expanded(is_open)
+            .tab_index(0)
+            .px(px(if is_code { 1.0 } else { 2.0 }))
+            .rounded(px(3.0))
+            .flex()
+            .items_center()
+            .gap(px(if is_code { 3.0 } else { 4.0 }))
+            .cursor_pointer()
+            .focus_visible(move |s| s.border_1().border_color(p.focus))
+            .on_key_down(cx.listener({
+                let sug_id = sug_id.clone();
+                move |this, ev: &KeyDownEvent, _, cx| match ev.keystroke.key.as_str() {
+                    "enter" | "space" | " " => {
+                        if this.open_suggestion.as_ref() == Some(&sug_id) {
+                            this.open_suggestion = None;
+                        } else {
+                            this.last_open_sug = Some(sug_snap_key.clone());
+                            this.open_suggestion = Some(sug_id.clone());
+                        }
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                    "escape" if this.open_suggestion.is_some() => {
+                        this.open_suggestion = None;
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                    _ => {}
+                }
+            }))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if this.open_suggestion.as_ref() == Some(&sug_id) {
+                    this.open_suggestion = None;
+                } else {
+                    this.last_open_sug = Some(sug_snap_click.clone());
+                    this.open_suggestion = Some(sug_id.clone());
+                }
+                cx.notify();
+            }))
+            .when(!sug.remove.is_empty(), |d| {
+                d.child(
+                    div()
+                        .text_color(p.muted)
+                        .line_through()
+                        .child(sug.remove.clone()),
+                )
+            })
+            .when(!shown_ins.is_empty(), |d| {
+                d.child(
+                    div()
+                        .px(px(2.0))
+                        .rounded(px(2.5))
+                        .bg(chip_bg)
+                        .hover(move |s| s.bg(hover_bg))
+                        .border_b_2()
+                        .border_color(underline_col)
+                        .text_color(p.strong)
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(shown_ins),
+                )
+            })
+            .into_any_element()
     }
 }
 
@@ -1586,7 +1690,7 @@ impl Render for AgentCursors {
                 bar.child(pro_btn(
                     pro_eid(&self.id, "accept-all"),
                     tr(cx, "Accept all", "全部采纳"),
-                    Some(ProIcon::Check),
+                    None,
                     ProBtnStyle::Primary,
                     true,
                     cx,
@@ -1627,7 +1731,7 @@ impl Render for AgentCursors {
                                 .bg(card_bg)
                                 .border_1()
                                 .border_color(card_border)
-                                .when(!p.dark, |d| d.shadow_sm())
+                                .shadow(pro_card_shadow(p.dark))
                                 .flex()
                                 .flex_col()
                                 .child(header)
@@ -1680,7 +1784,7 @@ impl Render for AgentCursors {
                                 .bg(card_bg)
                                 .border_1()
                                 .border_color(card_border)
-                                .when(!p.dark, |d| d.shadow_sm())
+                                .shadow(pro_card_shadow(p.dark))
                                 .flex()
                                 .flex_col()
                                 .child(header)
@@ -1699,13 +1803,11 @@ impl Render for AgentCursors {
         let hero_wave = if self.live_demo && !reduced {
             0.5 + 0.5 * (elapsed_secs * 1.15).sin()
         } else {
-            0.65
+            0.5
         };
-        let hero_w_target = 276.0 + 36.0 * hero_wave;
+        let hero_w_target = 208.0 + 8.0 * hero_wave;
         let hero_w = pro_spring_f32(pro_eid(&self.id, "hero-w"), hero_w_target, 0.38, w, cx);
-        let hero_h = (hero_w / 3.35).round();
-        let disp_w = (hero_w * 2.0).round() as u32;
-        let disp_h = (hero_h * 2.0).round() as u32;
+        let hero_h = 98.0_f32;
 
         let body_content = if self.active_tab.as_ref() == "table" {
             self.render_table_stage(elapsed_secs, reduced, &p, cx)
@@ -1716,8 +1818,6 @@ impl Render for AgentCursors {
                 typed_step,
                 hero_w,
                 hero_h,
-                disp_w,
-                disp_h,
                 reduced,
                 &p,
                 cx,
@@ -1737,7 +1837,7 @@ impl Render for AgentCursors {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!p.dark, |d| d.shadow_sm())
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
@@ -1776,8 +1876,6 @@ impl AgentCursors {
         typed_step: usize,
         hero_w: f32,
         hero_h: f32,
-        disp_w: u32,
-        disp_h: u32,
         reduced: bool,
         p: &ProPalette,
         cx: &mut Context<Self>,
@@ -1791,8 +1889,6 @@ impl AgentCursors {
             .flex_col()
             .gap(px(14.0));
 
-        let writer_col = self.agent_color("writer", p);
-        let designer_col = self.agent_color("designer", p);
         let writer_dimmed = self
             .following
             .as_ref()
@@ -1807,8 +1903,8 @@ impl AgentCursors {
                         Some(zh) => tr(cx, blk.text.as_ref(), zh.as_ref()),
                         None => blk.text.as_ref(),
                     };
-                    // Split last two words so Writer's selection highlight sits cleanly behind them
-                    let (lead, highlighted) = split_title_selection(title_txt);
+                    // Highlight/strikethrough only the trailing target word (`brief`) as Writer renames it
+                    let (lead, target_word) = split_title_selection(title_txt);
                     doc_col = doc_col.child(
                         div()
                             .id(pro_eid(&self.id, format!("doc-h2-{idx}")))
@@ -1816,24 +1912,28 @@ impl AgentCursors {
                             .aria_level(2)
                             .flex()
                             .flex_wrap()
-                            .items_center()
-                            .gap(px(6.0))
+                            .items_baseline()
+                            .gap(px(5.0))
                             .text_size(px(20.0))
                             .line_height(px(28.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.strong)
                             .child(lead)
-                            .when(!highlighted.is_empty(), |d| {
+                            .when(!target_word.is_empty(), |d| {
                                 d.child(
                                     div()
-                                        .px(px(4.0))
+                                        .px(px(2.5))
                                         .rounded(px(4.0))
-                                        .bg(writer_col.opacity(if writer_dimmed {
-                                            0.06
-                                        } else {
-                                            0.18
-                                        }))
-                                        .child(highlighted),
+                                        .when(!writer_dimmed, |s| {
+                                            s.bg(if p.dark {
+                                                hsla(0., 0., 1., 0.06)
+                                            } else {
+                                                hsla(0., 0., 0., 0.045)
+                                            })
+                                            .text_color(p.muted)
+                                            .line_through()
+                                        })
+                                        .child(target_word),
                                 )
                             }),
                     );
@@ -1864,15 +1964,25 @@ impl AgentCursors {
                     idx += 1;
                 }
                 DocBlockKind::Image => {
-                    let handle_bg: Hsla = if p.dark {
-                        rgb(0x1c1c1f).into()
+                    let media_bg: Hsla = if p.dark {
+                        rgb(0x252529).into()
                     } else {
-                        rgb(0xffffff).into()
+                        rgb(0xebebee).into()
+                    };
+                    let media_border: Hsla = if p.dark {
+                        hsla(0., 0., 1., 0.07)
+                    } else {
+                        hsla(0., 0., 0., 0.055)
+                    };
+                    let play_fg: Hsla = if p.dark {
+                        hsla(0., 0., 1., 0.86)
+                    } else {
+                        rgb(0x18181b).into()
                     };
                     let shimmer_phase = if reduced {
                         0.35
                     } else {
-                        (elapsed_secs / 1.6).fract()
+                        (elapsed_secs / 2.2).fract()
                     };
                     let sheen_x = -80.0 + shimmer_phase * (hero_w + 140.0);
 
@@ -1881,136 +1991,43 @@ impl AgentCursors {
                         .w(px(hero_w))
                         .h(px(hero_h))
                         .flex_none()
+                        .rounded(px(10.0))
+                        .bg(media_bg)
+                        .border_1()
+                        .border_color(media_border)
+                        .overflow_hidden()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .when(p.dark, |card| {
+                            card.child(
+                                div()
+                                    .absolute()
+                                    .w(px(120.0))
+                                    .h(px(64.0))
+                                    .rounded_full()
+                                    .bg(hsla(0., 0., 1., 0.035)),
+                            )
+                        })
+                        .when(blk.loading && !reduced, |card| {
+                            card.child(
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .bottom_0()
+                                    .left(px(sheen_x))
+                                    .w(px(68.0))
+                                    .bg(p.ink.opacity(0.028)),
+                            )
+                        })
                         .child(
                             div()
-                                .size_full()
-                                .rounded(px(8.0))
-                                .bg(p.subtle)
-                                .border_2()
-                                .border_color(designer_col)
-                                .overflow_hidden()
                                 .relative()
-                                .p(px(10.0))
                                 .flex()
-                                .flex_col()
-                                .justify_between()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(5.0))
-                                                .child(
-                                                    div()
-                                                        .size(px(7.0))
-                                                        .rounded_full()
-                                                        .bg(designer_col.opacity(0.65)),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .w(px(56.0))
-                                                        .h(px(6.0))
-                                                        .rounded(px(3.0))
-                                                        .bg(p.line_strong),
-                                                ),
-                                        )
-                                        .child(
-                                            div()
-                                                .w(px(34.0))
-                                                .h(px(6.0))
-                                                .rounded(px(3.0))
-                                                .bg(p.chip_hover),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap(px(5.0))
-                                        .child(
-                                            div()
-                                                .w(relative(0.82))
-                                                .h(px(6.0))
-                                                .rounded(px(3.0))
-                                                .bg(p.chip_hover),
-                                        )
-                                        .child(
-                                            div()
-                                                .w(relative(0.58))
-                                                .h(px(6.0))
-                                                .rounded(px(3.0))
-                                                .bg(p.chip),
-                                        ),
-                                )
-                                .when(blk.loading && !reduced, |card| {
-                                    card.child(
-                                        div()
-                                            .absolute()
-                                            .top_0()
-                                            .bottom_0()
-                                            .left(px(sheen_x))
-                                            .w(px(72.0))
-                                            .bg(p.ink.opacity(0.04)),
-                                    )
-                                })
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .bottom(px(7.0))
-                                        .left_0()
-                                        .right_0()
-                                        .flex()
-                                        .justify_center()
-                                        .child(
-                                            div()
-                                                .px(px(6.5))
-                                                .h(px(18.0))
-                                                .rounded(px(5.0))
-                                                .bg(designer_col)
-                                                .flex()
-                                                .items_center()
-                                                .text_size(px(10.5))
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(rgb(0xffffff))
-                                                .child(format!("{disp_w} × {disp_h}")),
-                                        ),
-                                ),
-                        )
-                        // 4 corner resize handles
-                        .child(corner_handle(
-                            -4.0,
-                            Some(-4.0),
-                            None,
-                            None,
-                            handle_bg,
-                            designer_col,
-                        ))
-                        .child(corner_handle(
-                            -4.0,
-                            None,
-                            Some(-4.0),
-                            None,
-                            handle_bg,
-                            designer_col,
-                        ))
-                        .child(corner_handle_bottom(
-                            -4.0,
-                            Some(-4.0),
-                            None,
-                            handle_bg,
-                            designer_col,
-                        ))
-                        .child(corner_handle_bottom(
-                            -4.0,
-                            None,
-                            Some(-4.0),
-                            handle_bg,
-                            designer_col,
-                        ));
+                                .items_center()
+                                .justify_center()
+                                .child(pro_svg("0 0 24 24", PLAY_SOLID_SVG, 16.0, play_fg)),
+                        );
 
                     if blk.float != ImageFloat::None
                         && idx + 1 < self.blocks.len()
@@ -2028,7 +2045,7 @@ impl AgentCursors {
                                 .w_full()
                                 .flex()
                                 .items_start()
-                                .gap(px(22.0))
+                                .gap(px(20.0))
                                 .child(figure_el)
                                 .child(div().flex_1().min_w_0().child(beside))
                         } else {
@@ -2036,7 +2053,7 @@ impl AgentCursors {
                                 .w_full()
                                 .flex()
                                 .items_start()
-                                .gap(px(22.0))
+                                .gap(px(20.0))
                                 .child(div().flex_1().min_w_0().child(beside))
                                 .child(figure_el)
                         };
@@ -2523,6 +2540,31 @@ impl AgentCursors {
             let cost_tag = agent.cost.map(|c| SharedString::from(format!("${c:.2}")));
             let doing_lbl = cur.doing_text(cx).map(SharedString::from);
 
+            type CursorClickFn = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+            let aid_click = agent_id.clone();
+            let ptr_click: Option<CursorClickFn> =
+                Some(Rc::new(cx.listener(move |this, _, _, cx| {
+                    if let Some(c) = this.comments.iter_mut().find(|c| c.agent == aid_click) {
+                        c.open = !c.open;
+                        cx.notify();
+                    } else if let Some(s) = this
+                        .suggestions
+                        .iter()
+                        .find(|s| s.agent == aid_click)
+                        .cloned()
+                    {
+                        if this.open_suggestion.as_ref() == Some(&s.id) {
+                            this.open_suggestion = None;
+                        } else {
+                            this.last_open_sug = Some(s.clone());
+                            this.open_suggestion = Some(s.id);
+                        }
+                        cx.notify();
+                    } else {
+                        this.toggle_follow(aid_click.as_ref(), cx);
+                    }
+                })));
+
             cursors_layer = cursors_layer.child(GlidingPointer {
                 id: pro_eid(&self.id, format!("ptr-{agent_id}")),
                 target_x: tx,
@@ -2537,8 +2579,8 @@ impl AgentCursors {
                 name: SharedString::from(agent.label(cx).to_string()),
                 cost_tag,
                 doing: doing_lbl,
-                pink: p.pink,
                 blue: p.blue,
+                on_click: ptr_click,
             });
         }
 
@@ -2559,28 +2601,36 @@ impl AgentCursors {
         phase_slot: usize,
         typed_step: usize,
         hero_w: f32,
-        _hero_h: f32,
+        hero_h: f32,
     ) -> (f32, f32, f32) {
         if !self.live_demo {
             return (40.0 + cur.x_ratio * 580.0, cur.y_px, 0.48);
         }
         match agent_id {
             "designer" => {
-                // Tracks top-right corner handle of the resizing hero image so its flag stays above margin comments
-                (40.0 + hero_w - 2.0, 148.0, 0.36)
+                // Inspects the hero video card near its play glyph, cleanly separated from Researcher above and Rollout below
+                let offsets = [
+                    (40.0 + hero_w * 0.52, 138.0 + hero_h * 0.56),
+                    (40.0 + hero_w * 0.58, 138.0 + hero_h * 0.60),
+                    (40.0 + hero_w * 0.48, 138.0 + hero_h * 0.54),
+                ];
+                let (x, y) = offsets[phase_slot % offsets.len()];
+                (x, y, 0.46)
             }
             "coder" => {
-                // Advances character-by-character along `"Nov 3"` inside the rollout code block, clear of right margin comments
-                let n = (typed_step % 11).clamp(1, 6) as f32;
-                (224.0 + n * 6.4, 314.0, 0.14)
+                // Advances character-by-character along `"Nov 10"` on line 3 of the rollout code block
+                let n = (typed_step % 11).clamp(2, 6) as f32;
+                (292.0 + n * 7.0, 336.0, 0.14)
             }
             "researcher" => {
-                let offsets = [(164.0, 82.0), (192.0, 82.0), (144.0, 82.0)];
+                // Tracks `"38%"` on paragraph 1 cleanly below and to the left of Writer's title badge
+                let offsets = [(164.0, 78.0), (178.0, 78.0), (156.0, 78.0)];
                 let (x, y) = offsets[phase_slot % offsets.len()];
                 (x, y, 0.54)
             }
             "writer" => {
-                let offsets = [(274.0, 24.0), (318.0, 426.0), (290.0, 24.0)];
+                // Edits `"brief"` on the title line without crossing Researcher
+                let offsets = [(258.0, 24.0), (272.0, 24.0), (250.0, 24.0)];
                 let (x, y) = offsets[phase_slot % offsets.len()];
                 (x, y, 0.56)
             }
@@ -2737,10 +2787,10 @@ impl AgentCursors {
                 color: researcher_col,
                 dark: p.dark,
                 name: SharedString::from(tr(cx, "Researcher", "研究智能体")),
-                cost_tag: Some(SharedString::from("$0.14")),
+                cost_tag: Some(SharedString::from("$0.24")),
                 doing: Some(SharedString::from(tr(cx, "Verifying owners", "核对负责人"))),
-                pink: p.pink,
                 blue: p.blue,
+                on_click: None,
             })
             .child(GlidingPointer {
                 id: pro_eid(&self.id, "tbl-ptr-c"),
@@ -2757,71 +2807,22 @@ impl AgentCursors {
                 color: coder_col,
                 dark: p.dark,
                 name: SharedString::from(tr(cx, "Coder", "编码智能体")),
-                cost_tag: Some(SharedString::from("$0.14")),
+                cost_tag: Some(SharedString::from("$0.12")),
                 doing: Some(SharedString::from(tr(
                     cx,
                     "Syncing rollout dates",
                     "同步上线排期",
                 ))),
-                pink: p.pink,
                 blue: p.blue,
+                on_click: None,
             })
             .into_any_element()
     }
 }
 
-fn corner_handle(
-    top: f32,
-    left: Option<f32>,
-    right: Option<f32>,
-    _unused: Option<f32>,
-    bg: Hsla,
-    border: Hsla,
-) -> Div {
-    let mut d = div()
-        .absolute()
-        .top(px(top))
-        .size(px(8.0))
-        .rounded(px(2.5))
-        .bg(bg)
-        .border_2()
-        .border_color(border);
-    if let Some(l) = left {
-        d = d.left(px(l));
-    }
-    if let Some(r) = right {
-        d = d.right(px(r));
-    }
-    d
-}
-
-fn corner_handle_bottom(
-    bottom: f32,
-    left: Option<f32>,
-    right: Option<f32>,
-    bg: Hsla,
-    border: Hsla,
-) -> Div {
-    let mut d = div()
-        .absolute()
-        .bottom(px(bottom))
-        .size(px(8.0))
-        .rounded(px(2.5))
-        .bg(bg)
-        .border_2()
-        .border_color(border);
-    if let Some(l) = left {
-        d = d.left(px(l));
-    }
-    if let Some(r) = right {
-        d = d.right(px(r));
-    }
-    d
-}
-
 fn split_title_selection(title: &str) -> (String, String) {
-    if let Some((a, b)) = title.rsplit_once(" – ") {
-        (format!("{a} –"), b.to_string())
+    if let Some((a, b)) = title.rsplit_once(' ') {
+        (a.to_string(), b.to_string())
     } else {
         (title.to_string(), String::new())
     }
@@ -2835,26 +2836,26 @@ fn split_preserving_lines(text: &str) -> Vec<String> {
 
 fn default_agents() -> Vec<CursorAgent> {
     vec![
-        CursorAgent::new("researcher", "Researcher")
-            .with_name_zh("研究智能体")
-            .with_provider("claude")
-            .with_color(rgb(0x0190fe).into())
-            .with_cost(0.14),
-        CursorAgent::new("designer", "Designer")
-            .with_name_zh("设计智能体")
-            .with_provider("gemini")
-            .with_color(rgb(0xa651f0).into())
-            .with_cost(0.11),
-        CursorAgent::new("coder", "Coder")
-            .with_name_zh("编码智能体")
-            .with_provider("github")
-            .with_color(rgb(0xf28a2e).into())
-            .with_cost(0.14),
         CursorAgent::new("writer", "Writer")
             .with_name_zh("撰稿智能体")
+            .with_provider("claude")
+            .with_color(rgb(0xf28a2e).into())
+            .with_cost(0.11),
+        CursorAgent::new("researcher", "Researcher")
+            .with_name_zh("研究智能体")
+            .with_provider("gemini")
+            .with_color(rgb(0x4fb0fe).into())
+            .with_cost(0.24),
+        CursorAgent::new("designer", "Designer")
+            .with_name_zh("设计智能体")
+            .with_provider("mistral")
+            .with_color(rgb(0xa651f0).into())
+            .with_cost(0.17),
+        CursorAgent::new("coder", "Coder")
+            .with_name_zh("编码智能体")
             .with_provider("openai")
             .with_color(rgb(0x13b3a0).into())
-            .with_cost(0.08),
+            .with_cost(0.12),
     ]
 }
 
@@ -2881,7 +2882,7 @@ fn default_doc_blocks() -> Vec<DocBlock> {
         DocBlock::new(
             "rollout-code",
             DocBlockKind::Code,
-            "const rollout = { waitlist: \"Nov 3\", everyone: \"second week of November\" };",
+            "const rollout = {\n  waitlist: \"Nov 3\",\n  everyone: \"second week of November\",\n};",
         ),
         DocBlock::new(
             "launch-week",
@@ -2951,7 +2952,7 @@ fn default_suggestions() -> Vec<DocSuggestion> {
             "s-date",
             "coder",
             "rollout-code",
-            48,
+            52,
             "second week of November",
             "Nov 10",
         )
@@ -2968,40 +2969,40 @@ fn default_comments() -> Vec<DocComment> {
             "c-date",
             "coder",
             "rollout-code",
-            0.03,
-            274.0,
+            0.02,
+            272.0,
             "Should waitlist and everyone share one date format? I'd use \"Nov 3\" everywhere.",
         )
         .with_text_zh("waitlist 与 everyone 是否应统一日期格式？建议统一写成“Nov 3”风格。")
-        .with_open(true),
+        .with_open(false),
     ]
 }
 
 fn default_cursors() -> Vec<CursorEntry> {
     vec![
         (
+            SharedString::from("writer"),
+            LiveCursor::new("title", 0.38, 24.0)
+                .with_span(19, 5)
+                .with_doing("Renaming", "打磨简报标题"),
+        ),
+        (
             SharedString::from("researcher"),
-            LiveCursor::new("why", 0.30, 74.0)
+            LiveCursor::new("why", 0.24, 78.0)
                 .with_span(11, 3)
                 .with_doing("Fixing the number", "核准数据指标"),
         ),
         (
             SharedString::from("designer"),
-            LiveCursor::new("hero", 0.48, 226.0)
-                .with_image_point(ImageAnchor::BottomRight)
-                .with_doing("Resizing the hero", "调整首屏配图尺寸"),
+            LiveCursor::new("hero", 0.26, 192.0)
+                .with_image_point(ImageAnchor::Center)
+                .with_doing("Looks right", "确认首屏预览"),
         ),
         (
             SharedString::from("coder"),
-            LiveCursor::new("rollout-code", 0.56, 314.0)
+            LiveCursor::new("rollout-code", 0.48, 336.0)
                 .with_suggestion("s-date", true)
                 .with_doing("Fixing the date", "修正上线日期"),
-        ),
-        (
-            SharedString::from("writer"),
-            LiveCursor::new("title", 0.42, 28.0)
-                .with_span(12, 12)
-                .with_doing("Finding a sharper title", "打磨更精炼的标题"),
         ),
     ]
 }

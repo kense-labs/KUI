@@ -3,6 +3,14 @@
     "zh": "文档",
     "en": "Docs"
   },
+  "docs.library.title": {
+    "zh": "组件总览",
+    "en": "Library"
+  },
+  "docs.library.lead": {
+    "zh": "浏览全部原生桌面与 WebAssembly 共用源码的 GPUI 组件、业务区块与应用屏幕。按分类筛选或直接进入实时交互预览。",
+    "en": "Browse every native desktop and WebAssembly GPUI control, SaaS block, and application screen built from one shared Rust source."
+  },
   "docs.intro.title": {
     "zh": "介绍",
     "en": "Introduction"

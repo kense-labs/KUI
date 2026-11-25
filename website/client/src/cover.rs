@@ -110,5 +110,60 @@ pub fn init() -> Result {
     intro::init(&window, &document, &root, &reduced)?;
     motion::init(&window, &document, &root, &reduced)?;
     guide::init(&window, &document, &root, &reduced)?;
+    {
+        let root_clone = root.clone();
+        listen(&root, "click", move |event: Event| {
+            let Some(target) = event.target().and_then(|t| t.dyn_into::<Element>().ok()) else {
+                return;
+            };
+            let Ok(Some(btn)) = target.closest("[data-cover-story]") else {
+                return;
+            };
+            let Some(story) = btn.get_attribute("data-cover-story") else {
+                return;
+            };
+            if let Ok(tabs) = root_clone.query_selector_all("[data-cover-story]") {
+                for i in 0..tabs.length() {
+                    if let Some(el) = tabs.get(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                        let _ = el.set_attribute(
+                            "aria-pressed",
+                            if el == btn { "true" } else { "false" },
+                        );
+                    }
+                }
+            }
+            if let Some(href) = btn.get_attribute("data-cover-href")
+                && let Ok(links) = root_clone.query_selector_all("[data-cover-open-link]")
+            {
+                for i in 0..links.length() {
+                    if let Some(el) = links.get(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                        let _ = el.set_attribute("href", &href);
+                    }
+                }
+            }
+            if let Ok(Some(frame)) = root_clone.query_selector("[data-cover-live-frame]")
+                && let Ok(iframe) = frame.dyn_into::<web_sys::HtmlIFrameElement>()
+            {
+                let lang = iframe
+                    .get_attribute("data-lang")
+                    .unwrap_or_else(|| "zh".into());
+                let _ = iframe.set_attribute("data-story", &story);
+                let _ = iframe.set_attribute("data-story-key", &story);
+                let mut switched = false;
+                if let Some(win) = iframe.content_window()
+                    && let Ok(rt) = js_sys::Reflect::get(&win, &"kuiPreview".into())
+                    && !rt.is_undefined()
+                    && !rt.is_null()
+                    && let Ok(show) = js_sys::Reflect::get(&rt, &"show".into())
+                    && let Ok(func) = show.dyn_into::<js_sys::Function>()
+                {
+                    switched = func.call2(&rt, &story.into(), &lang.into()).is_ok();
+                }
+                if !switched && let Some(src) = btn.get_attribute("data-cover-src") {
+                    let _ = iframe.set_attribute("src", &src);
+                }
+            }
+        })?;
+    }
     root.set_attribute("data-initialized", "")
 }

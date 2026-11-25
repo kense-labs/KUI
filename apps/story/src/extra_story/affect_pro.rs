@@ -132,21 +132,28 @@ impl AffectProStage {
 }
 
 impl Render for AffectProStage {
-    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dark = Theme::global(cx).mode == kui::foundation::ThemeMode::Dark;
+        let stage_bg = if dark { rgb(0x1f1f22) } else { rgb(0xf4f4f6) };
         let vw = f32::from(window.viewport_size().width);
         let narrow = vw > 0. && vw < 520.;
         if self.full_block {
             div()
                 .w_full()
+                .flex_1()
+                .bg(stage_bg)
                 .flex()
                 .flex_col()
                 .items_stretch()
+                .justify_center()
                 .child(self.view.clone())
         } else {
             let px_pad = if narrow { 16. } else { 44. };
             let py_pad = if narrow { 20. } else { 44. };
             div()
                 .w_full()
+                .flex_1()
+                .bg(stage_bg)
                 .px(px(px_pad))
                 .py(px(py_pad))
                 .flex()
@@ -217,7 +224,7 @@ pub fn story(
                         kui::components::glow_keyboard::GlowKeyboard::new("glow-keyboard", cx)
                     })
                     .into();
-                AffectProStage::new(view, false, cx)
+                AffectProStage::new(view, true, cx)
             })
             .into(),
         ),
@@ -259,7 +266,7 @@ pub fn story(
                         )
                     })
                     .into();
-                AffectProStage::new(view, false, cx)
+                AffectProStage::new(view, true, cx)
             })
             .into(),
         ),

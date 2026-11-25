@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_modal_appear, pro_pill_indicator,
-        pro_popover_presence, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_mix_color, pro_modal_appear,
+        pro_pill_indicator, pro_popover_presence, pro_selection_sensor, pro_skeleton_bar,
         pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
@@ -16,7 +16,7 @@ use crate::{
         control::{UiLanguage, activate},
         editor::{EditEvent, Editor, InputMode},
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, person_initials, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -467,43 +467,117 @@ fn translate_app_desc<'a>(id: &str, fallback: &'a str, cx: &App) -> &'a str {
     }
 }
 
+fn render_directory_tile(app: &str, side: f32, custom_bg: Option<Hsla>, cx: &App) -> AnyElement {
+    let p = ProPalette::get(cx);
+    let radius = if side <= 24. {
+        6.
+    } else if side <= 34. {
+        8.
+    } else {
+        9.
+    };
+    if let Some(bg) = custom_bg {
+        return div()
+            .size(px(side))
+            .rounded(px(radius))
+            .bg(bg)
+            .border_1()
+            .border_color(if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                hsla(0., 0., 0., 0.08)
+            })
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px((side * 0.40).round()))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(rgb(0xffffff))
+            .child(
+                app.chars()
+                    .next()
+                    .map(|c| c.to_uppercase().collect::<String>())
+                    .unwrap_or_else(|| "A".to_owned()),
+            )
+            .into_any_element();
+    }
+    if app.trim().eq_ignore_ascii_case("stripe")
+        && let Some(mark) = pro_app_artwork("stripe", side, cx)
+    {
+        return div()
+            .size(px(side))
+            .flex_none()
+            .rounded(px(radius))
+            .overflow_hidden()
+            .child(mark)
+            .into_any_element();
+    }
+    let mark_side = (side * 0.58).round();
+    let content = if let Some(mark) = pro_app_artwork(app, mark_side, cx) {
+        mark
+    } else {
+        let initial = person_initials(app);
+        div()
+            .text_size(px((side * 0.40).max(9.)))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(p.ink)
+            .child(if initial.is_empty() {
+                "A".to_owned()
+            } else {
+                initial.chars().take(1).collect()
+            })
+            .into_any_element()
+    };
+    let tile_bg: Hsla = if p.dark {
+        rgb(0x28282c).into()
+    } else {
+        rgb(0xffffff).into()
+    };
+    let bdr: Hsla = if p.dark {
+        hsla(0., 0., 1., 0.09)
+    } else {
+        hsla(0., 0., 0., 0.065)
+    };
+    let mut tile = div()
+        .size(px(side))
+        .flex_none()
+        .rounded(px(radius))
+        .bg(tile_bg)
+        .border_1()
+        .border_color(bdr)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(content);
+    if !p.dark && side >= 28. {
+        tile = tile.shadow(vec![
+            BoxShadow::new(px(0.), px(1.), black().opacity(0.05)).blur_radius(px(2.)),
+        ]);
+    }
+    tile.into_any_element()
+}
+
 struct AppCardAnim {
     hover: Slide,
-    conn_val: bool,
-    conn_slide: Slide,
 }
 
 #[derive(IntoElement)]
 struct AppCardSurface {
     id: ElementId,
-    connected: bool,
     content: AnyElement,
 }
 
 impl RenderOnce for AppCardSurface {
     fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let init_conn = self.connected;
         let st = w.use_keyed_state(pro_eid(&self.id, "card-surf"), cx, |_, _| AppCardAnim {
             hover: Slide::snappy(0.),
-            conn_val: init_conn,
-            conn_slide: Slide::snappy(f32::from(init_conn)),
         });
-        let (hov, conn_t) = st.update(cx, |s, cx| {
-            if s.conn_val != self.connected {
-                s.conn_val = self.connected;
-                s.conn_slide.duration(f32::from(self.connected), 0.22, cx);
-            }
-            (
-                s.hover.get(w, cx).clamp(0., 1.),
-                s.conn_slide.get(w, cx).clamp(0., 1.),
-            )
-        });
+        let hov = st.update(cx, |s, cx| s.hover.get(w, cx).clamp(0., 1.));
 
-        let rest_border = pro_mix_color(p.line, p.green.opacity(0.24), conn_t * 0.45);
-        let border = pro_mix_color(rest_border, p.line_strong, hov);
+        let border = pro_mix_color(p.line, p.line_strong, hov);
         let bg = pro_mix_color(p.card, pro_mix_color(p.card, p.ink, 0.018), hov);
-        let dark = p.dark;
 
         let paint_face = canvas(
             |_, _, _| (),
@@ -512,19 +586,6 @@ impl RenderOnce for AppCardSurface {
                     return;
                 }
                 let r = px(12.);
-                if hov > 0.015 {
-                    let sh_alpha = if dark { 0.24 } else { 0.055 } * hov;
-                    window.paint_quad(
-                        fill(
-                            Bounds::new(
-                                point(bounds.origin.x, bounds.origin.y + px(2. * hov)),
-                                bounds.size,
-                            ),
-                            black().opacity(sh_alpha),
-                        )
-                        .corner_radii(r),
-                    );
-                }
                 window.paint_quad(quad(
                     bounds,
                     Corners::all(r),
@@ -543,6 +604,7 @@ impl RenderOnce for AppCardSurface {
             .flex_1()
             .relative()
             .rounded(px(12.))
+            .shadow(pro_card_shadow(p.dark))
             .p(px(16.))
             .flex()
             .flex_col()
@@ -777,13 +839,14 @@ impl RenderOnce for AppConnectBtn {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(div().opacity(chk_alpha).child(pro_check_draw(
-                                    pro_eid(&self.id, "chk"),
-                                    self.connected,
-                                    13.5,
-                                    false,
-                                    p.green,
-                                )))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .opacity(chk_alpha)
+                                        .child(pro_icon(ProIcon::Link, 12., fg)),
+                                )
                                 .child(
                                     div()
                                         .absolute()
@@ -1306,31 +1369,7 @@ impl AppDirectoryBlock {
             translate_app_desc(&app.id, &app.description, cx).into()
         };
 
-        let tile = if let Some(custom_bg) = app.tile_color {
-            div()
-                .size(px(32.))
-                .rounded(px(8.))
-                .bg(custom_bg)
-                .border_1()
-                .border_color(hsla(0., 0., 0., 0.08))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(13.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(0xffffff))
-                .child(
-                    app.name
-                        .chars()
-                        .next()
-                        .map(|c| c.to_uppercase().collect::<String>())
-                        .unwrap_or_else(|| "A".to_owned()),
-                )
-                .into_any_element()
-        } else {
-            pro_app_tile(&app.name, 32., cx)
-        };
+        let tile = render_directory_tile(&app.name, 34., app.tile_color, cx);
 
         let app_id = app.id.clone();
         let click_id = app.id.clone();
@@ -1406,10 +1445,7 @@ impl AppDirectoryBlock {
                                             .truncate()
                                             .child(app.vendor.clone()),
                                     ),
-                            )
-                            .when(app.connected, |d| {
-                                d.child(div().size(px(7.)).rounded_full().flex_none().bg(p.green))
-                            }),
+                            ),
                     )
                     .child(
                         div()
@@ -1426,7 +1462,6 @@ impl AppDirectoryBlock {
 
         AppCardSurface {
             id: pro_eid(&self.id, format!("card-{}", app.id)),
-            connected: app.connected,
             content: body.into_any_element(),
         }
         .into_any_element()
@@ -1448,7 +1483,7 @@ impl AppDirectoryBlock {
                     .rounded(px(7.))
                     .bg(p.card)
                     .p(px(1.5))
-                    .child(pro_app_tile(name, 24., cx)),
+                    .child(render_directory_tile(name, 24., None, cx)),
             );
         }
 
@@ -1495,9 +1530,10 @@ impl AppDirectoryBlock {
             .id(pro_eid(&self.id, "discover-card"))
             .flex_1()
             .rounded(px(12.))
-            .bg(p.subtle)
+            .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .p(px(16.))
             .flex()
             .flex_col()
@@ -1742,7 +1778,7 @@ impl AppDirectoryBlock {
                             .items_center()
                             .gap(px(12.))
                             .min_w_0()
-                            .child(pro_app_tile(&app.name, 38., cx))
+                            .child(render_directory_tile(&app.name, 38., app.tile_color, cx))
                             .child(
                                 div()
                                     .min_w_0()
@@ -2093,31 +2129,20 @@ impl Render for AppDirectoryBlock {
                             )),
                     ),
             )
-            .child({
-                let live_t = pro_spring_f32(
-                    pro_eid(&self.id, "conn-dot-sp"),
-                    if connected_n > 0 { 1. } else { 0. },
-                    0.24,
-                    w,
-                    cx,
-                )
-                .clamp(0., 1.);
-                let dot_c = pro_mix_color(p.faint, p.green, live_t);
+            .child(
                 div()
                     .flex_none()
                     .when(!single_col, |d| d.mt(px(6.)))
                     .flex()
                     .items_center()
-                    .gap(px(6.))
-                    .child(div().size(px(6.5)).rounded_full().bg(dot_c))
                     .child(pro_swap_label(
                         pro_eid(&self.id, "connected-roll"),
                         format!("{connected_n}{connected_suffix}"),
                         12.5,
-                        FontWeight::MEDIUM,
+                        FontWeight::NORMAL,
                         p.muted,
-                    ))
-            });
+                    )),
+            );
 
         let query = self.current_query(cx);
         let has_query = !query.is_empty();

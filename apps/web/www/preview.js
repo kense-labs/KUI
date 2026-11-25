@@ -483,7 +483,20 @@ window.kuiPreviewStarted = () => {
   set_preferences(dark, reduced);
   if (!embedded || !selected.story) status.hidden = true;
 };
-window.kuiPreview = { show, preferences, accent, preparePicture, copyPicture, controlRadius: () => themeRadius, iconIntent: dark => { if (running) set_icon_intent(dark); } };
+window.kuiPreview = {
+  show,
+  replay() {
+    if (!running || !selected.story) return;
+    mounted = undefined;
+    show(selected.story, selected.lang);
+  },
+  preferences,
+  accent,
+  preparePicture,
+  copyPicture,
+  controlRadius: () => themeRadius,
+  iconIntent: dark => { if (running) set_icon_intent(dark); }
+};
 motion.addEventListener("change", () => preferences(dark, motion.matches));
 window.addEventListener("pagehide", () => { if (orientationActive) stopHoloOrientation(); window.kuiArticleModal(false); editorScroll = []; horizontalScroll = []; preparePicture(false); finishWaiters(); }, { once: true });
 setPageColor();

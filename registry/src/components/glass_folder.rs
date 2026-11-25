@@ -197,6 +197,42 @@ fn blur_planar<const CH: usize>(
     }
 }
 
+/// Single-pass `r = 1` (`[1, 2, 1] / 4`) gentle glass softening blended with `src` by `mix`.
+fn soften_rgba_1px(
+    src: &[[f32; 4]],
+    dst: &mut [[f32; 4]],
+    scratch: &mut [[f32; 4]],
+    w: usize,
+    h: usize,
+    mix: f32,
+) {
+    let m = mix.clamp(0., 1.);
+    let inv_m = 1. - m;
+    for y in 0..h {
+        let row = y * w;
+        for x in 0..w {
+            let xm = x.saturating_sub(1);
+            let xp = (x + 1).min(w - 1);
+            for c in 0..4 {
+                scratch[row + x][c] =
+                    (src[row + xm][c] + 2.0 * src[row + x][c] + src[row + xp][c]) * 0.25;
+            }
+        }
+    }
+    for y in 0..h {
+        let ym = y.saturating_sub(1) * w;
+        let yc = y * w;
+        let yp = (y + 1).min(h - 1) * w;
+        for x in 0..w {
+            for c in 0..4 {
+                let blurred =
+                    (scratch[ym + x][c] + 2.0 * scratch[yc + x][c] + scratch[yp + x][c]) * 0.25;
+                dst[yc + x][c] = src[yc + x][c] * inv_m + blurred * m;
+            }
+        }
+    }
+}
+
 /// Signed distance to an axis-aligned rounded rectangle `[x0..x1] x [y0..y1]` with corner radius `r`.
 fn sd_round_rect(px_x: f32, px_y: f32, x0: f32, y0: f32, x1: f32, y1: f32, r: f32) -> f32 {
     let cx = (x0 + x1) * 0.5;
@@ -385,25 +421,25 @@ fn rasterize_glass_folder(
         if !key.custom_accent {
             if key.dark {
                 (
-                    [0x3d as f32 / 255., 0x8f as f32 / 255., 0xc6 as f32 / 255.],
+                    [0x3e as f32 / 255., 0x8f as f32 / 255., 0xc7 as f32 / 255.],
                     [0.0, 0.0, 0.0],
-                    0.45,
-                    0.30,
-                    [100. / 255., 190. / 255., 235. / 255., 0.42],
-                    [45. / 255., 130. / 255., 190. / 255., 0.50],
-                    [0.0, 20. / 255., 40. / 255.],
-                    0.40,
+                    0.44,
+                    0.28,
+                    [94. / 255., 184. / 255., 232. / 255., 0.37],
+                    [44. / 255., 128. / 255., 188. / 255., 0.47],
+                    [0.0, 18. / 255., 38. / 255.],
+                    0.34,
                 )
             } else {
                 (
                     [0x5b as f32 / 255., 0xb7 as f32 / 255., 0xea as f32 / 255.],
                     [60. / 255., 130. / 255., 180. / 255.],
-                    0.28,
-                    0.16,
-                    [132. / 255., 214. / 255., 248. / 255., 0.45],
-                    [69. / 255., 170. / 255., 220. / 255., 0.45],
+                    0.26,
+                    0.15,
+                    [136. / 255., 214. / 255., 248. / 255., 0.38],
+                    [68. / 255., 168. / 255., 220. / 255., 0.45],
                     [0.0, 40. / 255., 75. / 255.],
-                    0.28,
+                    0.24,
                 )
             }
         } else if key.dark {
@@ -413,12 +449,12 @@ fn rasterize_glass_folder(
             (
                 back,
                 [0.0, 0.0, 0.0],
-                0.45,
-                0.30,
-                [gt[0], gt[1], gt[2], 0.42],
-                [gb[0], gb[1], gb[2], 0.50],
+                0.44,
+                0.28,
+                [gt[0], gt[1], gt[2], 0.38],
+                [gb[0], gb[1], gb[2], 0.47],
                 accent_f.map(|c| c * 0.16),
-                0.40,
+                0.34,
             )
         } else {
             let back = accent_f.map(|c| (c * 0.88 + 0.12).clamp(0., 1.));
@@ -428,12 +464,12 @@ fn rasterize_glass_folder(
             (
                 back,
                 sh,
-                0.28,
-                0.16,
-                [gt[0], gt[1], gt[2], 0.45],
+                0.26,
+                0.15,
+                [gt[0], gt[1], gt[2], 0.38],
                 [gb[0], gb[1], gb[2], 0.45],
                 accent_f.map(|c| c * 0.24),
-                0.28,
+                0.24,
             )
         };
 
@@ -444,11 +480,11 @@ fn rasterize_glass_folder(
         alpha_tmp,
         TEX_W,
         TEX_H,
-        (4.0 * px_per_u).max(0.9),
+        (3.2 * px_per_u).max(0.9),
     );
     let dy_sh1 = (24.0 * px_per_u).round() as isize;
     let dy_sh2 = (8.0 * px_per_u).round() as isize;
-    let dy_hl = (3.0 * px_per_u).round().max(1.) as isize;
+    let dy_hl = (2.6 * px_per_u).round().max(1.) as isize;
 
     scene_buf.fill([0.0; 4]);
     for y in 0..TEX_H {
@@ -465,42 +501,49 @@ fn rasterize_glass_folder(
             if cov_b > 0.0 {
                 px_c = blend_over(px_c, back_rgb, cov_b);
                 let diff = (back_blur[row + x][0] - back_blur[sy_hl * TEX_W + x][0]).max(0.);
-                let hl_a = diff * cov_b * if key.dark { 0.45 } else { 0.65 };
+                let hl_a = diff * cov_b * if key.dark { 0.48 } else { 0.68 };
                 px_c = blend_over(px_c, [1.0, 1.0, 1.0], hl_a);
             }
             scene_buf[row + x] = px_c;
         }
     }
 
-    // Paint the angled documents in SVG layer order (left, right, middle for 3 docs).
+    // Paint the crisp angled documents in SVG layer order (left, right, front-center for 3 docs).
     let count = usize::from(key.doc_count).min(5);
-    let (paper_top, paper_bot, paper_stroke, paper_stroke_a, line_rgb, line_a, doc_sh_a) =
-        if key.dark {
-            (
-                [0x34 as f32 / 255., 0x36 as f32 / 255., 0x3c as f32 / 255.],
-                [0x26 as f32 / 255., 0x29 as f32 / 255., 0x2f as f32 / 255.],
-                [1.0, 1.0, 1.0],
-                0.10,
-                [1.0, 1.0, 1.0],
-                0.24,
-                0.42,
-            )
-        } else {
-            (
-                [1.0, 1.0, 1.0],
-                [0xea as f32 / 255., 0xf2 as f32 / 255., 0xf8 as f32 / 255.],
-                [0.0, 0.0, 0.0],
-                0.12,
-                [0.0, 0.0, 0.0],
-                0.18,
-                0.18,
-            )
-        };
+    let (paper_hdr, paper_top, paper_bot, paper_stroke, line_rgb, line_a, doc_sh_a) = if key.dark {
+        (
+            [0x2c as f32 / 255., 0x2f as f32 / 255., 0x38 as f32 / 255.],
+            [0x2a as f32 / 255., 0x2d as f32 / 255., 0x36 as f32 / 255.],
+            [0x23 as f32 / 255., 0x26 as f32 / 255., 0x2f as f32 / 255.],
+            [1.0, 1.0, 1.0],
+            [0.88, 0.94, 1.0],
+            0.27,
+            0.14,
+        )
+    } else {
+        (
+            [1.0, 1.0, 1.0],
+            [0xfb as f32 / 255., 0xfd as f32 / 255., 0xff as f32 / 255.],
+            [0xe2 as f32 / 255., 0xea as f32 / 255., 0xf3 as f32 / 255.],
+            [0.10, 0.24, 0.38],
+            [0.08, 0.22, 0.36],
+            0.19,
+            0.08,
+        )
+    };
 
     let par_x = f32::from(key.tilt_x_q) / 10.0;
     let par_y = f32::from(key.tilt_y_q) / 10.0;
 
     for slot in 0..count {
+        let is_front_sheet = slot + 1 == count;
+        let paper_stroke_a = if key.dark {
+            if is_front_sheet { 0.24 } else { 0.15 }
+        } else if is_front_sheet {
+            0.15
+        } else {
+            0.10
+        };
         let (base_tx, base_ty, deg) = document_pose(slot, count, open_t);
         let depth_factor = 0.65 + 0.35 * (slot as f32 / count.saturating_sub(1).max(1) as f32);
         let tx = base_tx + par_x * 9.5 * depth_factor;
@@ -515,7 +558,7 @@ fn rasterize_glass_folder(
             for x in 0..TEX_W {
                 let (fx, fy) = to_folder(x, y);
                 // Clip document bottoms/sides cleanly within the folder bottom silhouette
-                // while letting their upper portions emerge above the pocket.
+                // while letting their upper portions emerge sharp above the pocket.
                 if fy > 500. || (fy > 125. && (fx < -2. || fx > 602.)) {
                     continue;
                 }
@@ -524,11 +567,11 @@ fn rasterize_glass_folder(
                 let dx = rx * cos_r + ry * sin_r + 140.;
                 let dy = -rx * sin_r + ry * cos_r + 175.;
 
-                // Soft document drop shadow (offset 0, +4.5u)
-                let s_dy = -rx * sin_r + (ry - 4.5) * cos_r + 175.;
+                // Subtle tight inter-sheet separation shadow (no wide dark halo inside pocket)
+                let s_dy = -rx * sin_r + (ry - 2.6) * cos_r + 175.;
                 let d_sh = sd_round_rect(dx, s_dy, 0.6, 0.6, 279.4, 349.4, 19.4);
-                if d_sh < 10.0 {
-                    let sh_cov = (1. - (d_sh.max(0.) / 10.0)).powi(2) * doc_sh_a;
+                if d_sh > 0.0 && d_sh < 4.5 {
+                    let sh_cov = (1. - d_sh / 4.5).powi(2) * doc_sh_a;
                     let sh_tint = if key.dark {
                         [0.0, 0.0, 0.0]
                     } else {
@@ -542,19 +585,28 @@ fn rasterize_glass_folder(
                 if cov_doc <= 0.0 {
                     continue;
                 }
-                let gy = (dy / 350.).clamp(0., 1.);
-                let fill_rgb = [
-                    lerp(paper_top[0], paper_bot[0], gy),
-                    lerp(paper_top[1], paper_bot[1], gy),
-                    lerp(paper_top[2], paper_bot[2], gy),
-                ];
+                let fill_rgb = if dy < 54.0 {
+                    let ht = (dy / 54.0).clamp(0., 1.);
+                    [
+                        lerp(paper_hdr[0], paper_top[0], ht),
+                        lerp(paper_hdr[1], paper_top[1], ht),
+                        lerp(paper_hdr[2], paper_top[2], ht),
+                    ]
+                } else {
+                    let gy = ((dy - 54.0) / 296.0).clamp(0., 1.);
+                    [
+                        lerp(paper_top[0], paper_bot[0], gy),
+                        lerp(paper_top[1], paper_bot[1], gy),
+                        lerp(paper_top[2], paper_bot[2], gy),
+                    ]
+                };
                 let mut p_c = blend_over(scene_buf[row + x], fill_rgb, cov_doc);
 
-                // Placeholder rounded text bars
+                // Crisp rounded skeleton bars
                 if (28.0..=215.0).contains(&dx) && (80.0..=268.0).contains(&dy) {
                     for &(ly, lw) in &DOC_LINES {
-                        if (dy - (ly + 4.5)).abs() <= 6.5 {
-                            let dl = sd_round_rect(dx, dy, 30., ly, 30. + lw, ly + 9., 4.5);
+                        if (dy - (ly + 4.25)).abs() <= 6.0 {
+                            let dl = sd_round_rect(dx, dy, 30., ly, 30. + lw, ly + 8.5, 4.25);
                             let l_cov = (0.5 - dl / aa).clamp(0., 1.);
                             if l_cov > 0.0 {
                                 p_c = blend_over(p_c, line_rgb, l_cov * line_a * cov_doc);
@@ -563,8 +615,9 @@ fn rasterize_glass_folder(
                     }
                 }
 
-                // 1.2u crisp paper border
-                let border_band = (1. - (d_doc.abs() / (1.35 * aa))).clamp(0., 1.);
+                // Crisp 1.0px logical highlight border around each sheet
+                let inner_doc = -d_doc;
+                let border_band = ((2.1 * aa - inner_doc) / aa).clamp(0., 1.);
                 if border_band > 0.0 {
                     p_c = blend_over(p_c, paper_stroke, border_band * paper_stroke_a * cov_doc);
                 }
@@ -573,14 +626,14 @@ fn rasterize_glass_folder(
         }
     }
 
-    // Frosted glass front pocket: blur a copy of `scene_buf` (`backdrop-filter: blur(0.55cqw) saturate(1.1)`)
-    blur_buf.copy_from_slice(scene_buf);
-    blur_planar(blur_buf, blur_tmp, TEX_W, TEX_H, (3.4 * px_per_u).max(0.8));
+    // Light `r = 1` softening strictly behind the front pocket (zero blur on sheet tops above)
+    soften_rgba_1px(scene_buf, blur_buf, blur_tmp, TEX_W, TEX_H, 0.55);
 
     let y_pocket_top = lerp(108., 124., open_t);
-    let depth_start = if key.dark { 0.70 } else { 0.74 };
-    let rim_ring_a = if key.dark { 0.14 } else { 0.30 };
-    let rim_top_a = if key.dark { 0.30 } else { 0.55 };
+    let depth_start = if key.dark { 0.72 } else { 0.76 };
+    let rim_ring_a = if key.dark { 0.16 } else { 0.28 };
+    let rim_top_a = if key.dark { 0.46 } else { 0.66 };
+    let line_1px_u = 2.3 * aa;
 
     for y in 0..TEX_H {
         let row = y * TEX_W;
@@ -592,14 +645,14 @@ fn rasterize_glass_folder(
                 continue;
             }
 
-            // Sample blurred backdrop inside the pocket and boost saturation by 1.10
+            // Sample gently softened backdrop inside the pocket with slight saturation lift
             let b_px = blur_buf[row + x];
             let ba = b_px[3].clamp(1e-4, 1.);
             let (mut br, mut bg_c, mut bb) = (b_px[0] / ba, b_px[1] / ba, b_px[2] / ba);
             let lum = 0.2126 * br + 0.7152 * bg_c + 0.0722 * bb;
-            br = (lum + (br - lum) * 1.12).clamp(0., 1.);
-            bg_c = (lum + (bg_c - lum) * 1.12).clamp(0., 1.);
-            bb = (lum + (bb - lum) * 1.12).clamp(0., 1.);
+            br = (lum + (br - lum) * 1.10).clamp(0., 1.);
+            bg_c = (lum + (bg_c - lum) * 1.10).clamp(0., 1.);
+            bb = (lum + (bb - lum) * 1.10).clamp(0., 1.);
             let mut frosted = [br * ba, bg_c * ba, bb * ba, b_px[3].clamp(0., 1.)];
 
             let pv = ((fy - y_pocket_top) / (500. - y_pocket_top)).clamp(0., 1.);
@@ -616,16 +669,19 @@ fn rasterize_glass_folder(
                 frosted = blend_over(frosted, depth_rgb, dv * depth_a);
             }
 
-            // Inset 4.0u (`0.67cqw`) glass rim + 1.6u (`0.25cqw`) specular top highlight
+            // Crisp 1.0px logical perimeter rim + bright 1.0px specular top hairline (`rgba(255,255,255,0.46)`)
             let inner_depth = -d_p;
-            let ring_cov = (1. - ((inner_depth - 2.0).abs() / (2.2 + 0.5 * aa))).clamp(0., 1.);
-            if ring_cov > 0.0 {
-                frosted = blend_over(frosted, [1.0, 1.0, 1.0], ring_cov * rim_ring_a);
-            }
-            let d_top_shift = sd_front_pocket(fx, fy - 1.8, open_t);
-            if d_p < 0.0 && d_top_shift >= -0.6 {
-                let top_lip = ((d_top_shift + 0.6) / 2.2).clamp(0., 1.);
-                frosted = blend_over(frosted, [1.0, 1.0, 1.0], top_lip * rim_top_a);
+            let ring_cov = ((line_1px_u - inner_depth) / aa).clamp(0., 1.);
+            let d_top_shift = sd_front_pocket(fx, fy - line_1px_u, open_t);
+            let top_spec_cov = if fy <= y_pocket_top + 42.0 {
+                ((d_top_shift + 0.4 * aa) / aa).clamp(0., 1.)
+                    * ((inner_depth + 0.5 * aa) / aa).clamp(0., 1.)
+            } else {
+                0.0
+            };
+            let rim_a = (ring_cov * rim_ring_a).max(top_spec_cov * rim_top_a);
+            if rim_a > 0.0 {
+                frosted = blend_over(frosted, [1.0, 1.0, 1.0], rim_a);
             }
 
             let base = scene_buf[row + x];

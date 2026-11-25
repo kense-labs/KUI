@@ -215,6 +215,7 @@ fn indicator() -> Option<()> {
     let stage = query("[data-component-stage]")?;
     let tabs = child(&stage, "[role=tablist]")?;
     let tab = child(&tabs, "[aria-selected=true]")?.get_bounding_client_rect();
+    let border_left = tabs.client_left() as f64;
     let underline = child(&tabs, "[data-view-indicator]")?
         .dyn_into::<HtmlElement>()
         .ok()?;
@@ -224,7 +225,7 @@ fn indicator() -> Option<()> {
         "transform",
         &format!(
             "translateX({}px)",
-            tab.left() - tabs.get_bounding_client_rect().left()
+            tab.left() - tabs.get_bounding_client_rect().left() - border_left
         ),
     );
     let _ = style.set_property("opacity", "1");
@@ -443,10 +444,90 @@ fn tab_stops(scope: &Element) -> Vec<HtmlElement> {
         .collect()
 }
 
+fn replay_preview(button: &Element) -> Option<()> {
+    let stage = button.closest("[data-component-stage]").ok()??;
+    let frame: HtmlIFrameElement = child(&stage, "[data-preview-slot] iframe")?.unchecked_into();
+    if let Some(win) = frame.content_window()
+        && let Ok(runtime) = Reflect::get(&win, &"kuiPreview".into())
+        && !runtime.is_undefined()
+        && !runtime.is_null()
+        && let Ok(func) = Reflect::get(&runtime, &"replay".into())
+        && let Ok(func) = func.dyn_into::<Function>()
+    {
+        let _ = func.call0(&runtime);
+    }
+    if preview_motion()
+        && let Some(svg) = child(button, "svg")
+    {
+        let _ = preview_animation(
+            &svg,
+            &[("transform", "rotate(0deg)".into(), "rotate(-360deg)".into())],
+            360.,
+        );
+    }
+    Some(())
+}
+
+fn filter_library() -> Option<()> {
+    let root = query("[data-library-root]")?;
+    let search = child(&root, "[data-library-search]")
+        .and_then(|v| v.dyn_into::<HtmlInputElement>().ok())
+        .map(|i| i.value().trim().to_lowercase())
+        .unwrap_or_default();
+    let cat = child(&root, "[data-library-filter][aria-pressed=true]")
+        .and_then(|b| b.get_attribute("data-library-filter"))
+        .unwrap_or_else(|| "all".into());
+
+    if let Some(featured) = child(&root, "[data-library-featured]") {
+        flag(&featured, "hidden", !search.is_empty() || cat != "all");
+    }
+
+    let mut total_visible = 0usize;
+    for section in children(&root, "[data-library-section]") {
+        let sec_cat = section
+            .get_attribute("data-library-cat")
+            .unwrap_or_default();
+        let cat_match = cat == "all" || sec_cat == cat;
+        let mut sec_visible = 0usize;
+        for card in children(&section, "[data-library-card]") {
+            let show = cat_match
+                && (search.is_empty()
+                    || card
+                        .get_attribute("data-search-terms")
+                        .unwrap_or_default()
+                        .contains(&search));
+            flag(&card, "hidden", !show);
+            if show {
+                sec_visible += 1;
+            }
+        }
+        flag(&section, "hidden", sec_visible == 0);
+        if let Some(cnt_el) = child(&section, "[data-library-section-count]") {
+            cnt_el.set_text_content(Some(&sec_visible.to_string()));
+        }
+        total_visible += sec_visible;
+    }
+    if let Some(empty) = child(&root, "[data-library-empty]") {
+        flag(&empty, "hidden", total_visible > 0);
+    }
+    Some(())
+}
+
 fn click(event: &Event) -> Option<()> {
     let target = target(event)?;
+    if let Some(pill) = target.closest("[data-library-filter]").ok()? {
+        let root = pill.closest("[data-library-root]").ok()??;
+        for item in children(&root, "[data-library-filter]") {
+            let active = item == pill;
+            attr(&item, "aria-pressed", if active { "true" } else { "false" });
+        }
+        return filter_library();
+    }
     if let Some(tab) = target.closest("[data-component-stage] [data-view]").ok()? {
         set_view(&tab, false);
+    }
+    if let Some(button) = target.closest("[data-preview-replay]").ok()? {
+        return replay_preview(&button);
     }
     if let Some(button) = target.closest("[data-preview-mode]").ok()? {
         return set_preview_size(&button);
@@ -748,6 +829,8 @@ pub fn init() -> Result<(), JsValue> {
     on(&doc, "input", false, |e| {
         if target(e).is_some_and(|t| matches(&t, "[data-sidebar-search]")) {
             filter();
+        } else if target(e).is_some_and(|t| matches(&t, "[data-library-search]")) {
+            filter_library();
         }
     })?;
     on(&doc, "keydown", false, |e| {

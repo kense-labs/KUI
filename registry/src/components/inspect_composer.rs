@@ -25,14 +25,16 @@ use std::{
 };
 use web_time::Instant;
 
-const STAGE_W: usize = 436;
-const STAGE_H: usize = 356;
+const STAGE_W: usize = 504;
+const STAGE_H: usize = 404;
 const RASTER_SCALE: usize = 2;
 const TEX_W: usize = STAGE_W * RASTER_SCALE;
 const TEX_H: usize = STAGE_H * RASTER_SCALE;
 const COMP_W: f32 = 320.0;
 const WRITE_H: f32 = 106.0;
 const BODY_H: f32 = 142.0;
+const PERSP_SCALE: f32 = 1.15;
+const ABOVE_GAP: f32 = 20.0;
 
 const LAYER_TAG_SVG: &str = r#"<rect x="1.5" y="2" width="9" height="3" rx="1" fill="currentColor"></rect><rect x="1.5" y="7" width="6" height="3" rx="1" fill="currentColor"></rect>"#;
 
@@ -118,7 +120,7 @@ struct RegionBox {
 }
 
 fn region_box(region: InspectComposerRegion, mirror: bool) -> RegionBox {
-    let gx_edge = if mirror { COMP_W - 14.0 } else { 14.0 };
+    let gx_open = if mirror { 216.0 } else { 14.0 };
     match region {
         InspectComposerRegion::Message => RegionBox {
             fx: 0.0,
@@ -126,7 +128,7 @@ fn region_box(region: InspectComposerRegion, mirror: bool) -> RegionBox {
             fw: COMP_W,
             fh: 64.0,
             pad: 10.0,
-            guide_x: gx_edge,
+            guide_x: gx_open,
             guide_y0: 54.0,
             guide_y1: 68.0,
             gap_label: "14px",
@@ -139,7 +141,7 @@ fn region_box(region: InspectComposerRegion, mirror: bool) -> RegionBox {
             fw: COMP_W,
             fh: 48.0,
             pad: 10.0,
-            guide_x: gx_edge,
+            guide_x: gx_open,
             guide_y0: 54.0,
             guide_y1: 68.0,
             gap_label: "14px",
@@ -152,7 +154,7 @@ fn region_box(region: InspectComposerRegion, mirror: bool) -> RegionBox {
             fw: 96.0,
             fh: 36.0,
             pad: 6.0,
-            guide_x: 88.0,
+            guide_x: 132.0,
             guide_y0: 56.0,
             guide_y1: 64.0,
             gap_label: "8px",
@@ -165,7 +167,7 @@ fn region_box(region: InspectComposerRegion, mirror: bool) -> RegionBox {
             fw: COMP_W,
             fh: 38.0,
             pad: 6.0,
-            guide_x: gx_edge,
+            guide_x: gx_open,
             guide_y0: 96.0,
             guide_y1: 106.0,
             gap_label: "10px",
@@ -209,7 +211,7 @@ fn composer_target_box(target_idx: usize, mirror: bool) -> ComposerTargetBox {
                 fw: 34.0,
                 fh: 36.0,
                 pad: 3.0,
-                guide_x: 23.0,
+                guide_x: 118.0,
                 guide_y0: 56.0,
                 guide_y1: 64.0,
                 gap_label: "8px",
@@ -226,7 +228,7 @@ fn composer_target_box(target_idx: usize, mirror: bool) -> ComposerTargetBox {
                 fw: 34.0,
                 fh: 36.0,
                 pad: 3.0,
-                guide_x: 261.0,
+                guide_x: 206.0,
                 guide_y0: 56.0,
                 guide_y1: 64.0,
                 gap_label: "8px",
@@ -243,7 +245,7 @@ fn composer_target_box(target_idx: usize, mirror: bool) -> ComposerTargetBox {
                 fw: 34.0,
                 fh: 36.0,
                 pad: 3.0,
-                guide_x: 295.0,
+                guide_x: 214.0,
                 guide_y0: 56.0,
                 guide_y1: 64.0,
                 gap_label: "8px",
@@ -260,7 +262,7 @@ fn composer_target_box(target_idx: usize, mirror: bool) -> ComposerTargetBox {
                 fw: 132.0,
                 fh: 30.0,
                 pad: 4.0,
-                guide_x: 68.0,
+                guide_x: 146.0,
                 guide_y0: 98.0,
                 guide_y1: 107.0,
                 gap_label: "9px",
@@ -277,7 +279,7 @@ fn composer_target_box(target_idx: usize, mirror: bool) -> ComposerTargetBox {
                 fw: 158.0,
                 fh: 30.0,
                 pad: 4.0,
-                guide_x: 232.0,
+                guide_x: 248.0,
                 guide_y0: 98.0,
                 guide_y1: 107.0,
                 gap_label: "9px",
@@ -303,9 +305,9 @@ impl ComposerTilt {
         let (ox, oy) = if flat {
             (58.0, 150.0)
         } else if mirror {
-            (46.0, 152.0)
+            (38.0, 172.0)
         } else {
-            (76.0, 152.0)
+            (96.0, 172.0)
         };
         Self {
             flat,
@@ -315,21 +317,29 @@ impl ComposerTilt {
         }
     }
 
+    fn scale(self) -> f32 {
+        if self.flat { 1.0 } else { PERSP_SCALE }
+    }
+
     fn project(self, u: f32, v: f32) -> (f32, f32) {
         if self.flat {
             return (self.ox + u, self.oy + v);
         }
+        let s = PERSP_SCALE;
         if self.mirror {
             let u_rel = u - COMP_W;
             let xp = 0.963_063 * u_rel + 0.118_249 * v;
             let yp = 0.014_517 * u_rel + 0.874_312 * v;
             let wp = (1.0 + 0.000_244 * u_rel - 0.000_428 * v).max(0.25);
-            (self.ox + COMP_W + xp / wp, self.oy + yp / wp)
+            (
+                self.ox + COMP_W * s + (xp / wp) * s,
+                self.oy + (yp / wp) * s,
+            )
         } else {
             let xp = 0.963_063 * u - 0.118_249 * v;
             let yp = -0.014_517 * u + 0.874_312 * v;
             let wp = (1.0 - 0.000_244 * u - 0.000_428 * v).max(0.25);
-            (self.ox + xp / wp, self.oy + yp / wp)
+            (self.ox + (xp / wp) * s, self.oy + (yp / wp) * s)
         }
     }
 
@@ -337,9 +347,10 @@ impl ComposerTilt {
         if self.flat {
             return (sx - self.ox, sy - self.oy);
         }
+        let s = PERSP_SCALE;
         if self.mirror {
-            let dx = sx - (self.ox + COMP_W);
-            let dy = sy - self.oy;
+            let dx = (sx - (self.ox + COMP_W * s)) / s;
+            let dy = (sy - self.oy) / s;
             let a11 = 0.963_063 - 0.000_244 * dx;
             let a12 = 0.118_249 + 0.000_428 * dx;
             let a21 = 0.014_517 - 0.000_244 * dy;
@@ -352,8 +363,8 @@ impl ComposerTilt {
             let v = (a11 * dy - a21 * dx) / det;
             (u_rel + COMP_W, v)
         } else {
-            let dx = sx - self.ox;
-            let dy = sy - self.oy;
+            let dx = (sx - self.ox) / s;
+            let dy = (sy - self.oy) / s;
             let a11 = 0.963_063 + 0.000_244 * dx;
             let a12 = -0.118_249 + 0.000_428 * dx;
             let a21 = -0.014_517 + 0.000_244 * dy;
@@ -376,12 +387,12 @@ fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
 
 fn stage_mask_alpha(sx: f32, sy: f32, mirror: bool) -> f32 {
     let mx = if mirror {
-        smoothstep(4.0, STAGE_W as f32 * 0.25, sx)
+        smoothstep(8.0, STAGE_W as f32 * 0.27, sx)
     } else {
-        1. - smoothstep(STAGE_W as f32 * 0.74, STAGE_W as f32 - 4.0, sx)
+        1. - smoothstep(STAGE_W as f32 * 0.66, STAGE_W as f32 * 0.94, sx)
     };
-    let my_bot = 1. - smoothstep(STAGE_H as f32 * 0.65, STAGE_H as f32 * 0.96, sy);
-    let my_top = smoothstep(4.0, 52.0, sy);
+    let my_bot = 1. - smoothstep(STAGE_H as f32 * 0.64, STAGE_H as f32 * 0.87, sy);
+    let my_top = smoothstep(14.0, STAGE_H as f32 * 0.25, sy);
     (mx * my_bot * my_top).clamp(0., 1.)
 }
 
@@ -544,7 +555,7 @@ fn rasterize_composer_plate(key: ComposerPlateKey) -> RenderImage {
     let px_u = 1.0 / RASTER_SCALE as f32;
     let mut raw = vec![0u8; TEX_W * TEX_H * 4];
     let above_u_off = if key.mirror { 16.0 } else { -16.0 };
-    let above_v_off = -(BODY_H + 14.0);
+    let above_v_off = -(BODY_H + ABOVE_GAP);
 
     for py in 0..TEX_H {
         let sy = (py as f32 + 0.5) * px_u;
@@ -752,6 +763,7 @@ fn render_composer_contents(
     cx: &App,
 ) -> Vec<AnyElement> {
     let mut out = Vec::with_capacity(3);
+    let s_ui = tf.scale();
     let hint_c: Hsla = if dark {
         hsla(0., 0., 1., 0.38)
     } else {
@@ -772,21 +784,31 @@ fn render_composer_contents(
     } else {
         hsla(0., 0., 0., 0.28)
     };
+    let tile_bg: Hsla = if dark {
+        rgb(0x27272b).into()
+    } else {
+        rgb(0xffffff).into()
+    };
+    let tile_bdr: Hsla = if dark {
+        hsla(0., 0., 1., 0.09)
+    } else {
+        hsla(0., 0., 0., 0.07)
+    };
 
     // Row A: Prompt message (`u = 14, v = 14`)
     let (mx, my) = tf.project(14.0 + u_off, 14.0 + v_off);
-    let m_alpha = stage_mask_alpha(mx + 120., my + 12., mirror) * extra_fade;
+    let m_alpha = stage_mask_alpha(mx + 120. * s_ui, my + 12. * s_ui, mirror) * extra_fade;
     if m_alpha > 0.02 {
         out.push(
             div()
                 .absolute()
                 .left(px(mx))
                 .top(px(my))
-                .w(px(286.))
-                .h(px(40.))
+                .w(px(286. * s_ui))
+                .h(px(40. * s_ui))
                 .overflow_hidden()
-                .text_size(px(13.))
-                .line_height(px(20.))
+                .text_size(px(13. * s_ui))
+                .line_height(px(20. * s_ui))
                 .text_color(hint_c)
                 .opacity(m_alpha)
                 .child(message.clone())
@@ -796,15 +818,15 @@ fn render_composer_contents(
 
     // Row B: Toolbar (`u = 10..310, v = 68`)
     let (tx, ty) = tf.project(10.0 + u_off, 68.0 + v_off);
-    let t_alpha = stage_mask_alpha(tx + 140., ty + 14., mirror) * extra_fade;
+    let t_alpha = stage_mask_alpha(tx + 140. * s_ui, ty + 14. * s_ui, mirror) * extra_fade;
     if t_alpha > 0.02 {
         out.push(
             div()
                 .absolute()
                 .left(px(tx))
                 .top(px(ty))
-                .w(px(300.))
-                .h(px(28.))
+                .w(px(300. * s_ui))
+                .h(px(28. * s_ui))
                 .flex()
                 .items_center()
                 .justify_between()
@@ -813,53 +835,58 @@ fn render_composer_contents(
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(4.))
+                        .gap(px(4. * s_ui))
                         .child(
                             div()
-                                .size(px(28.))
+                                .size(px(28. * s_ui))
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(pro_svg("0 0 16 16", PLUS_THIN_SVG, 16., icon_c)),
+                                .child(pro_svg("0 0 16 16", PLUS_THIN_SVG, 16. * s_ui, icon_c)),
                         )
                         .child(
                             div()
-                                .h(px(28.))
-                                .px(px(8.))
+                                .h(px(28. * s_ui))
+                                .px(px(8. * s_ui))
                                 .flex()
                                 .items_center()
-                                .gap(px(6.))
-                                .child(pro_svg("0 0 68.155 68.155", HAND_MODE_SVG, 15., icon_c))
+                                .gap(px(6. * s_ui))
+                                .child(pro_svg(
+                                    "0 0 68.155 68.155",
+                                    HAND_MODE_SVG,
+                                    15. * s_ui,
+                                    icon_c,
+                                ))
                                 .child(
                                     div()
-                                        .text_size(px(13.))
-                                        .line_height(px(18.))
+                                        .text_size(px(13. * s_ui))
+                                        .line_height(px(18. * s_ui))
                                         .text_color(muted_c)
                                         .child(mode.clone()),
                                 )
-                                .child(pro_icon(ProIcon::ChevronDown, 13., faint_c)),
+                                .child(pro_icon(ProIcon::ChevronDown, 13. * s_ui, faint_c)),
                         ),
                 )
                 .child(
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(4.))
+                        .gap(px(4. * s_ui))
                         .child(
                             div()
-                                .size(px(28.))
+                                .size(px(28. * s_ui))
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(pro_icon(ProIcon::Mic, 15., icon_c)),
+                                .child(pro_icon(ProIcon::Mic, 15. * s_ui, icon_c)),
                         )
                         .child(
                             div()
-                                .size(px(28.))
+                                .size(px(28. * s_ui))
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(pro_icon(ProIcon::ArrowUp, 15., faint_c)),
+                                .child(pro_icon(ProIcon::ArrowUp, 15. * s_ui, faint_c)),
                         ),
                 )
                 .into_any_element(),
@@ -868,19 +895,33 @@ fn render_composer_contents(
 
     // Row C: Tray footer (`Work in a folder` + `Connect apps` with Gmail, Slack, ClickUp)
     let (fx_p, fy_p) = tf.project(12.0 + u_off, 111.0 + v_off);
-    let f_alpha = stage_mask_alpha(fx_p + 150., fy_p + 12., mirror) * extra_fade;
+    let f_alpha = stage_mask_alpha(fx_p + 150. * s_ui, fy_p + 12. * s_ui, mirror) * extra_fade;
     if f_alpha > 0.02 {
-        let gmail = pro_app_artwork("gmail", 13., cx)
-            .unwrap_or_else(|| pro_icon(ProIcon::Mail, 13., icon_c));
-        let slack = pro_app_artwork("slack", 13., cx)
-            .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, 13., icon_c));
+        let app_sz = (12.5 * s_ui).round();
+        let chip_sz = 18.5 * s_ui;
+        let wrap_tile = |el: AnyElement| {
+            div()
+                .size(px(chip_sz))
+                .rounded(px(4.5 * s_ui))
+                .bg(tile_bg)
+                .border_1()
+                .border_color(tile_bdr)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(el)
+        };
+        let gmail = pro_app_artwork("gmail", app_sz, cx)
+            .unwrap_or_else(|| pro_icon(ProIcon::Mail, app_sz, icon_c));
+        let slack = pro_app_artwork("slack", app_sz, cx)
+            .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, app_sz, icon_c));
         out.push(
             div()
                 .absolute()
                 .left(px(fx_p))
                 .top(px(fy_p))
-                .w(px(296.))
-                .h(px(24.))
+                .w(px(296. * s_ui))
+                .h(px(24. * s_ui))
                 .flex()
                 .items_center()
                 .justify_between()
@@ -889,12 +930,12 @@ fn render_composer_contents(
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(6.))
-                        .child(pro_raw_svg(FOLDER_MINI_SVG, 15., 15.))
+                        .gap(px(6. * s_ui))
+                        .child(pro_raw_svg(FOLDER_MINI_SVG, 15. * s_ui, 15. * s_ui))
                         .child(
                             div()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
+                                .text_size(px(12. * s_ui))
+                                .line_height(px(16. * s_ui))
                                 .text_color(muted_c)
                                 .child(tr(cx, "Work in a folder", "在文件夹中协作")),
                         ),
@@ -903,11 +944,11 @@ fn render_composer_contents(
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(8.))
+                        .gap(px(7. * s_ui))
                         .child(
                             div()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
+                                .text_size(px(12. * s_ui))
+                                .line_height(px(16. * s_ui))
                                 .text_color(muted_c)
                                 .child(tr(cx, "Connect apps", "连接应用")),
                         )
@@ -915,10 +956,10 @@ fn render_composer_contents(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(5.))
-                                .child(gmail)
-                                .child(slack)
-                                .child(pro_raw_svg(CLICKUP_MINI_SVG, 13., 13.)),
+                                .gap(px(3.5 * s_ui))
+                                .child(wrap_tile(gmail))
+                                .child(wrap_tile(slack))
+                                .child(wrap_tile(pro_raw_svg(CLICKUP_MINI_SVG, app_sz, app_sz))),
                         ),
                 )
                 .into_any_element(),
@@ -1424,7 +1465,7 @@ impl Render for InspectComposer {
                 &mode_str,
                 tf,
                 u_off,
-                -(BODY_H + 14.0),
+                -(BODY_H + ABOVE_GAP),
                 dark,
                 self.mirror,
                 0.55,
@@ -1461,13 +1502,17 @@ impl Render for InspectComposer {
         let dim_a = pro_ease(((reveal - 0.48) / 0.45).clamp(0., 1.));
         let cur_a = pro_ease((reveal / 0.38).clamp(0., 1.));
 
-        // Layer tag pill above-right (when `mirror = true`) or above-left of the selected region
+        // Layer tag pill cleanly ABOVE-LEFT of the selection frame (`cur_fy - 18.0`)
         let tag_u = if self.mirror {
-            (cur_fx + cur_fw - 68.0).max(cur_fx)
+            (cur_fx + 44.0).min(cur_fx + cur_fw - 68.0).max(cur_fx)
+        } else if cur_fy > 12.0 {
+            cur_fx - 14.0
         } else {
             cur_fx
         };
-        let (tag_x, tag_y) = tf.project(tag_u, cur_fy - 17.0 + press_t * 1.0);
+        let (_, tag_top_y) = tf.project(tag_u, cur_fy);
+        let (tag_x, _) = tf.project(tag_u, cur_fy - 18.0);
+        let tag_y = tag_top_y - 18.0 + press_t * 1.0;
         let is_pinned = self.pinned_target.is_some() || self.pinned_region.is_some();
         let tag_text = if is_pinned {
             format!("{} •", tb.tag_label(cx))
@@ -1486,7 +1531,7 @@ impl Render for InspectComposer {
                 .flex()
                 .items_center()
                 .gap(px(3.))
-                .opacity(tag_a * stage_mask_alpha(tag_x + 20., tag_y + 7., self.mirror))
+                .opacity(tag_a * stage_mask_alpha(tag_x + 24., tag_y + 7., self.mirror))
                 .child(pro_svg("0 0 12 12", LAYER_TAG_SVG, 9., white_ink))
                 .child(pro_swap_label(
                     pro_eid(&self.id, "layer-tag"),
@@ -1497,37 +1542,41 @@ impl Render for InspectComposer {
                 )),
         );
 
-        // Top blue padding badge (`10`, `6`, `4`, or `3`)
         let pad_num = format!("{:.0}", cur_pad.round());
-        let pad_top_u = cur_fx + cur_fw * 0.68;
-        let (pt_x, pt_y) = tf.project(pad_top_u, cur_fy - 2.0);
-        scene = scene.child(
-            div()
-                .absolute()
-                .left(px(pt_x))
-                .top(px(pt_y))
-                .h(px(13.))
-                .px(px(3.5))
-                .rounded(px(3.))
-                .bg(blue_pill)
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(8.5))
-                .line_height(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(white_ink)
-                .opacity(pad_a * stage_mask_alpha(pt_x, pt_y, self.mirror))
-                .child(pad_num.clone()),
-        );
+        // Top blue padding badge centered cleanly along the top edge when wide enough
+        if cur_fw >= 88.0 {
+            let pad_top_u = cur_fx + cur_fw * 0.48;
+            let (pt_x, pt_edge_y) = tf.project(pad_top_u, cur_fy);
+            let pt_y = pt_edge_y - 6.5;
+            scene = scene.child(
+                div()
+                    .absolute()
+                    .left(px(pt_x))
+                    .top(px(pt_y))
+                    .h(px(13.))
+                    .px(px(3.5))
+                    .rounded(px(3.))
+                    .bg(blue_pill)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(8.5))
+                    .line_height(px(13.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(white_ink)
+                    .opacity(pad_a * stage_mask_alpha(pt_x, pt_y + 6., self.mirror))
+                    .child(pad_num.clone()),
+            );
+        }
 
-        // Side blue padding badge
+        // Side blue padding badge in the outer margin (never covering Send button or `+`)
         let pad_side_u = if self.mirror {
-            cur_fx + cur_fw - 14.0
+            cur_fx + cur_fw + 5.0
         } else {
-            cur_fx - 2.0
+            cur_fx - 20.0
         };
-        let (ps_x, ps_y) = tf.project(pad_side_u, cur_fy + cur_fh * 0.5 - 6.5);
+        let (ps_x, ps_mid_y) = tf.project(pad_side_u, cur_fy + cur_fh * 0.5);
+        let ps_y = ps_mid_y - 6.5;
         scene = scene.child(
             div()
                 .absolute()
@@ -1544,18 +1593,18 @@ impl Render for InspectComposer {
                 .line_height(px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(white_ink)
-                .opacity(pad_a * stage_mask_alpha(ps_x, ps_y, self.mirror))
+                .opacity(pad_a * stage_mask_alpha(ps_x, ps_y + 6., self.mirror))
                 .child(pad_num),
         );
 
-        // Red spacing guide badge (`14px` / `8px` / `10px` / `9px`)
-        let red_u = if self.mirror {
-            (cur_gx - 32.0).max(16.0)
+        // Red spacing guide badge (`14px` / `8px` / `10px` / `9px`) cleanly in open space
+        let red_u = if !self.mirror && cur_gx < 30.0 {
+            cur_gx - 42.0
         } else {
             cur_gx + 6.0
         };
-        let red_v = (cur_gy0 + cur_gy1) * 0.5 - 6.5;
-        let (rx, ry) = tf.project(red_u, red_v);
+        let (rx, r_mid_y) = tf.project(red_u, (cur_gy0 + cur_gy1) * 0.5);
+        let ry = r_mid_y - 6.5;
         scene = scene.child(
             div()
                 .absolute()
@@ -1568,7 +1617,7 @@ impl Render for InspectComposer {
                 .flex()
                 .items_center()
                 .justify_center()
-                .opacity(dim_a * stage_mask_alpha(rx, ry, self.mirror))
+                .opacity(dim_a * stage_mask_alpha(rx + 14., ry + 6., self.mirror))
                 .child(pro_swap_label(
                     pro_eid(&self.id, "gap-tag"),
                     rb.gap_label,
@@ -1578,13 +1627,21 @@ impl Render for InspectComposer {
                 )),
         );
 
-        // Dimension pill (`W Fill 300 px` / `W Hug 84 px` / `W Fixed 28 × 28 px`)
-        let size_u = if self.mirror {
-            (cur_fx + cur_fw - 88.0).max(cur_fx)
+        // Dimension pill (`W Fill 300 px` / `W Hug 84 px` / `W Fixed 28 × 28 px`) never covering footer apps
+        let size_u = if cur_fy < 10.0 && cur_fw > 200.0 {
+            148.0
+        } else if self.mirror {
+            (cur_fx + cur_fw - 96.0).max(cur_fx)
         } else {
-            cur_fx + (cur_fw - 88.0).max(0.0)
+            cur_fx + (cur_fw - 96.0).max(0.0)
         };
-        let (sz_x, sz_y) = tf.project(size_u, cur_fy + cur_fh + 7.0);
+        let size_base_v = if (96.0..136.0).contains(&(cur_fy + cur_fh)) {
+            BODY_H
+        } else {
+            cur_fy + cur_fh
+        };
+        let (sz_x, sz_bot_y) = tf.project(size_u, size_base_v);
+        let sz_y = sz_bot_y + 6.0;
         scene = scene.child(
             div()
                 .absolute()
@@ -1614,8 +1671,12 @@ impl Render for InspectComposer {
                 )),
         );
 
-        // Hand cursor
-        let cur_u = cur_fx + cur_fw * 0.72;
+        // Hand cursor positioned in open toolbar/frame space
+        let cur_u = if cur_fw > 200.0 {
+            196.0
+        } else {
+            cur_fx + cur_fw * 0.68
+        };
         let (cx_p, cy_p) = tf.project(cur_u, cur_fy + cur_fh - 16.0 + press_t * 1.5);
         let cur_slide = (1. - cur_a) * 6.0;
         scene = scene.child(

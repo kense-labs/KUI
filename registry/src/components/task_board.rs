@@ -2970,7 +2970,6 @@ impl Render for TaskBoardBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .bg(p.page)
             .px(px(if narrow { 16. } else { 32. }))
             .py(px(if narrow { 20. } else { 28. }))
             .child(

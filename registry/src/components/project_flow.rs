@@ -135,11 +135,11 @@ impl TechTool {
     fn backdrop_tint(self, dark: bool) -> Hsla {
         if dark {
             match self {
-                Self::Slack => hsla(0.833, 0.58, 0.19, 0.28),
-                Self::Gmail => hsla(0.0, 0.0, 0.60, 0.20),
-                Self::Figma => hsla(0.0, 0.0, 0.49, 0.20),
-                Self::Framer => hsla(0.576, 0.92, 0.50, 0.22),
-                Self::ClickUp => hsla(0.0, 0.0, 0.66, 0.20),
+                Self::Slack => hsla(0.833, 0.52, 0.16, 0.28),
+                Self::Gmail => hsla(0.0, 0.0, 1.0, 0.035),
+                Self::Figma => hsla(0.0, 0.0, 1.0, 0.035),
+                Self::Framer => hsla(0.576, 0.88, 0.46, 0.20),
+                Self::ClickUp => hsla(0.95, 0.60, 0.40, 0.10),
             }
         } else {
             match self {
@@ -153,21 +153,27 @@ impl TechTool {
     }
 }
 
-fn tech_tool_svg(tool: TechTool, side: f32) -> AnyElement {
-    let svg_markup = match tool {
-        TechTool::Slack => {
+fn tech_tool_svg(tool: TechTool, side: f32, dark: bool) -> AnyElement {
+    let svg_markup = match (tool, dark) {
+        (TechTool::Slack, _) => {
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#4B144B"/><g transform="translate(12, 12.3)"><g transform="translate(0, 0)"><path d="M10.849 6.192C9.145 6.192 7.753 4.8 7.753 3.096C7.753 1.392 9.145 0 10.849 0C12.553 0 13.945 1.392 13.945 3.096V6.192H10.849Z" fill="#36C5F0"/><path d="M10.848 7.752C12.552 7.752 13.944 9.144 13.944 10.848C13.944 12.552 12.552 13.944 10.848 13.944H3.096C1.392 13.944 0 12.552 0 10.848C0 9.144 1.392 7.752 3.096 7.752H10.848Z" fill="#36C5F0"/></g><g transform="translate(15.53, 0)"><path d="M7.744 10.848C7.744 9.144 9.136 7.752 10.84 7.752C12.544 7.752 13.936 9.144 13.936 10.848C13.936 12.552 12.544 13.944 10.84 13.944H7.744V10.848Z" fill="#2EB67D"/><path d="M6.192 10.848C6.192 12.552 4.8 13.944 3.096 13.944C1.392 13.944 0 12.552 0 10.848V3.096C0 1.392 1.392 0 3.096 0C4.8 0 6.192 1.392 6.192 3.096V10.848Z" fill="#2EB67D"/></g><g transform="translate(0, 15.53)"><path d="M6.192 3.096C6.192 4.8 4.8 6.192 3.096 6.192C1.392 6.192 0 4.8 0 3.096C0 1.392 1.392 0 3.096 0H6.192V3.096Z" fill="#E01E5A"/><path d="M7.753 3.096C7.753 1.392 9.145 0 10.849 0C12.553 0 13.945 1.392 13.945 3.096V10.848C13.945 12.552 12.553 13.944 10.849 13.944C9.145 13.944 7.753 12.552 7.753 10.848V3.096Z" fill="#E01E5A"/></g><g transform="translate(15.53, 15.53)"><path d="M3.096 7.752C4.8 7.752 6.192 9.144 6.192 10.848C6.192 12.552 4.8 13.944 3.096 13.944C1.392 13.944 0 12.552 0 10.848V7.752H3.096Z" fill="#ECB22E"/><path d="M3.096 6.192C1.392 6.192 0 4.8 0 3.096C0 1.392 1.392 0 3.096 0H10.848C12.552 0 13.944 1.392 13.944 3.096C13.944 4.8 12.552 6.192 10.848 6.192H3.096Z" fill="#ECB22E"/></g></g></svg>"##
         }
-        TechTool::Gmail => {
+        (TechTool::Gmail, true) => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#26262A"/><g transform="translate(11.5, 14.7)"><path d="M24.181 3.154H30.84V22.429C30.84 23.59 29.898 24.532 28.737 24.532H25.232C24.651 24.532 24.181 24.061 24.181 23.48V3.154Z" fill="url(#gm0)"/><path d="M6.659 3.154H0V22.429C0 23.59 0.941 24.532 2.103 24.532H5.607C6.188 24.532 6.659 23.48 6.659 23.48V3.154Z" fill="#FC413D"/><path d="M5.472 0.781C4.064 -0.402 1.964 -0.22 0.781 1.187C-0.402 2.595 -0.22 4.695 1.187 5.878L14.518 17.084C15.04 17.522 15.8 17.522 16.322 17.084L29.653 5.878C31.06 4.695 31.242 2.595 30.059 1.187C28.876 -0.22 26.776 -0.402 25.368 0.781L15.42 9.143L5.472 0.781Z" fill="url(#gm1)"/></g><defs><linearGradient id="gm0" x1="27.51" y1="3.154" x2="27.51" y2="24.532" gradientUnits="userSpaceOnUse"><stop stop-color="#60D673"/><stop offset="0.39" stop-color="#0EBC5F"/><stop offset="0.62" stop-color="#00A9BB"/><stop offset="1" stop-color="#3186FF"/></linearGradient><linearGradient id="gm1" x1="0" y1="3.527" x2="30.84" y2="3.527" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#FF63A0"/><stop offset="0.5" stop-color="#FC413D"/><stop offset="0.72" stop-color="#FC5C30"/><stop offset="0.96" stop-color="#FFDB0F"/></linearGradient></defs></svg>"##
+        }
+        (TechTool::Gmail, false) => {
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#FFFFFF"/><g transform="translate(11.5, 14.7)"><path d="M24.181 3.154H30.84V22.429C30.84 23.59 29.898 24.532 28.737 24.532H25.232C24.651 24.532 24.181 24.061 24.181 23.48V3.154Z" fill="url(#gm0)"/><path d="M6.659 3.154H0V22.429C0 23.59 0.941 24.532 2.103 24.532H5.607C6.188 24.532 6.659 23.48 6.659 23.48V3.154Z" fill="#FC413D"/><path d="M5.472 0.781C4.064 -0.402 1.964 -0.22 0.781 1.187C-0.402 2.595 -0.22 4.695 1.187 5.878L14.518 17.084C15.04 17.522 15.8 17.522 16.322 17.084L29.653 5.878C31.06 4.695 31.242 2.595 30.059 1.187C28.876 -0.22 26.776 -0.402 25.368 0.781L15.42 9.143L5.472 0.781Z" fill="url(#gm1)"/></g><defs><linearGradient id="gm0" x1="27.51" y1="3.154" x2="27.51" y2="24.532" gradientUnits="userSpaceOnUse"><stop stop-color="#60D673"/><stop offset="0.39" stop-color="#0EBC5F"/><stop offset="0.62" stop-color="#00A9BB"/><stop offset="1" stop-color="#3186FF"/></linearGradient><linearGradient id="gm1" x1="0" y1="3.527" x2="30.84" y2="3.527" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#FF63A0"/><stop offset="0.5" stop-color="#FC413D"/><stop offset="0.72" stop-color="#FC5C30"/><stop offset="0.96" stop-color="#FFDB0F"/></linearGradient></defs></svg>"##
         }
-        TechTool::Figma => {
+        (TechTool::Figma, _) => {
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="url(#fgbg)"/><g transform="translate(15.5, 9.8)"><path d="M11.41 17.118C11.41 13.998 13.939 11.47 17.058 11.47C20.177 11.47 22.706 13.998 22.706 17.118C22.706 20.237 20.177 22.765 17.058 22.765C13.939 22.765 11.41 20.237 11.41 17.118Z" fill="#1ABCFE"/><path d="M0.115 28.413C0.115 25.294 2.644 22.765 5.763 22.765H11.411V28.413C11.411 31.532 8.882 34.061 5.763 34.061C2.644 34.061 0.115 31.532 0.115 28.413Z" fill="#0ACF83"/><path d="M11.41 0.174V11.47H17.058C20.177 11.47 22.706 8.941 22.706 5.822C22.706 2.703 20.177 0.174 17.058 0.174H11.41Z" fill="#FF7262"/><path d="M0.115 5.822C0.115 8.941 2.644 11.47 5.763 11.47H11.411V0.174H5.763C2.644 0.174 0.115 2.703 0.115 5.822Z" fill="#F24E1E"/><path d="M0.115 17.118C0.115 20.237 2.644 22.765 5.763 22.765H11.411V11.47H5.763C2.644 11.47 0.115 13.998 0.115 17.118Z" fill="#A259FF"/></g><defs><linearGradient id="fgbg" x1="27" y1="0" x2="27" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#292C2E"/><stop offset="1" stop-color="#050505"/></linearGradient></defs></svg>"##
         }
-        TechTool::Framer => {
+        (TechTool::Framer, _) => {
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="url(#frbg)"/><path d="M16 11.5H38V22H27L16 11.5ZM16 22H27L38 32.5H16V22ZM16 32.5H27V43L16 32.5Z" fill="#FFFFFF"/><defs><linearGradient id="frbg" x1="27" y1="0" x2="27" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#23CFFD"/><stop offset="0.52" stop-color="#147CEB"/><stop offset="1" stop-color="#204ED7"/></linearGradient></defs></svg>"##
         }
-        TechTool::ClickUp => {
+        (TechTool::ClickUp, true) => {
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#26262A"/><g transform="translate(13.5, 11)"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 24.608L4.976 20.815C7.637 24.219 10.445 25.824 13.549 25.824C16.653 25.824 19.412 24.268 21.925 20.863L27 24.559C23.354 29.422 18.821 32 13.549 32C8.327 32 3.745 29.422 0 24.608Z" fill="url(#cu0)"/><path fill-rule="evenodd" clip-rule="evenodd" d="M13.549 8.219L4.681 15.757L0.591 11.04L13.599 0L26.507 11.04L22.369 15.708L13.549 8.219Z" fill="url(#cu1)"/></g><defs><linearGradient id="cu0" x1="0" y1="26.413" x2="27.022" y2="26.413" gradientUnits="userSpaceOnUse"><stop stop-color="#8930FD"/><stop offset="1" stop-color="#49CCF9"/></linearGradient><linearGradient id="cu1" x1="0.589" y1="7.876" x2="26.48" y2="7.876" gradientUnits="userSpaceOnUse"><stop stop-color="#FF02F0"/><stop offset="1" stop-color="#FFC800"/></linearGradient></defs></svg>"##
+        }
+        (TechTool::ClickUp, false) => {
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 54 54" fill="none"><rect width="54" height="54" rx="12.73" fill="#FFFFFF"/><g transform="translate(13.5, 11)"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 24.608L4.976 20.815C7.637 24.219 10.445 25.824 13.549 25.824C16.653 25.824 19.412 24.268 21.925 20.863L27 24.559C23.354 29.422 18.821 32 13.549 32C8.327 32 3.745 29.422 0 24.608Z" fill="url(#cu0)"/><path fill-rule="evenodd" clip-rule="evenodd" d="M13.549 8.219L4.681 15.757L0.591 11.04L13.599 0L26.507 11.04L22.369 15.708L13.549 8.219Z" fill="url(#cu1)"/></g><defs><linearGradient id="cu0" x1="0" y1="26.413" x2="27.022" y2="26.413" gradientUnits="userSpaceOnUse"><stop stop-color="#8930FD"/><stop offset="1" stop-color="#49CCF9"/></linearGradient><linearGradient id="cu1" x1="0.589" y1="7.876" x2="26.48" y2="7.876" gradientUnits="userSpaceOnUse"><stop stop-color="#FF02F0"/><stop offset="1" stop-color="#FFC800"/></linearGradient></defs></svg>"##
         }
     };
@@ -295,7 +301,7 @@ fn flow_connectors() -> &'static [PolyConnector; 5] {
             // 0: Client -> Task
             PolyConnector::from_points(
                 vec![(1133.5, 290.0), (1133.5, 359.0)],
-                Some((1133.0, 289.0, 0.45)),
+                Some((1133.5, 290.0, 0.45)),
                 0.60,
                 0.30,
                 ProjectFlowNode::Client,
@@ -304,8 +310,8 @@ fn flow_connectors() -> &'static [PolyConnector; 5] {
             ),
             // 1: Task -> Client Notes
             PolyConnector::from_points(
-                vec![(1424.0, 499.0), (1493.0, 499.0)],
-                Some((1423.0, 499.0, 1.30)),
+                vec![(1425.0, 499.0), (1493.0, 499.0)],
+                Some((1425.0, 499.0, 1.30)),
                 1.50,
                 0.30,
                 ProjectFlowNode::Task,
@@ -314,8 +320,8 @@ fn flow_connectors() -> &'static [PolyConnector; 5] {
             ),
             // 2: Task -> Assigned Roles -> Project Manager
             PolyConnector::from_points(
-                build_rounded_sbend(1133.0, 647.0, 722.0, 1635.5, 911.0),
-                Some((1133.0, 638.0, 1.30)),
+                build_rounded_sbend(1133.0, 640.0, 722.0, 1635.5, 911.0),
+                Some((1133.0, 640.0, 1.30)),
                 1.50,
                 0.60,
                 ProjectFlowNode::Task,
@@ -324,8 +330,8 @@ fn flow_connectors() -> &'static [PolyConnector; 5] {
             ),
             // 3: Project Manager -> UX Designer
             PolyConnector::from_points(
-                vec![(1627.5, 1189.0), (1627.5, 1235.0)],
-                Some((1627.0, 1188.0, 2.50)),
+                vec![(1627.5, 1191.0), (1627.5, 1235.0)],
+                Some((1627.5, 1191.0, 2.50)),
                 2.65,
                 0.25,
                 ProjectFlowNode::ProjectManager,
@@ -334,7 +340,7 @@ fn flow_connectors() -> &'static [PolyConnector; 5] {
             ),
             // 4: Task -> Subtasks
             PolyConnector::from_points(
-                build_rounded_sbend(1133.0, 647.0, 722.0, 615.75, 816.85),
+                build_rounded_sbend(1133.0, 640.0, 722.0, 615.75, 816.85),
                 None,
                 5.05,
                 0.45,
@@ -963,8 +969,9 @@ fn render_tech_stack_row(tools: &[TechTool], s: f32, dark: bool, cx: &App) -> An
     let icon_gap = if dark { 8.0 * s } else { 14.0 * s };
 
     let mut icons_row = div().flex().items_center().gap(px(icon_gap.max(3.0)));
+    let tile_r = (12.7 * s).max(3.5);
     for &tool in tools {
-        let icon_el = tech_tool_svg(tool, tile_sz);
+        let icon_el = tech_tool_svg(tool, tile_sz, dark);
         icons_row = icons_row.child(
             div()
                 .relative()
@@ -996,10 +1003,22 @@ fn render_tech_stack_row(tools: &[TechTool], s: f32, dark: bool, cx: &App) -> An
                         .left(px(ring_pad))
                         .top(px(ring_pad))
                         .size(px(tile_sz))
-                        .rounded(px((12.7 * s).max(3.5)))
+                        .rounded(px(tile_r))
                         .overflow_hidden()
                         .shadow_xs()
-                        .child(icon_el),
+                        .child(icon_el)
+                        .child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .rounded(px(tile_r))
+                                .border_1()
+                                .border_color(if dark {
+                                    hsla(0.0, 0.0, 1.0, 0.09)
+                                } else {
+                                    hsla(0.0, 0.0, 0.0, 0.05)
+                                }),
+                        ),
                 ),
         );
     }
@@ -1310,29 +1329,6 @@ impl Render for ProjectFlow {
                                     window,
                                 );
                             }
-                        }
-                    }
-
-                    // Anchor dot with white/card center and `#82BCFF` border
-                    if let Some((cx_a, cy_a, dot_delay)) = conn.anchor {
-                        let dot_a = match intro_t {
-                            Some(t) => ((t - dot_delay) / 0.20).clamp(0.0, 1.0),
-                            None => 1.0,
-                        } * line_alpha;
-                        if dot_a > 0.01 {
-                            let r_out = ((11.5 + 1.8 * illum) * sc).max(3.5);
-                            let ring_w = (3.4 * sc).max(1.25);
-                            window.paint_quad(quad(
-                                Bounds::new(
-                                    point(px(x0 + cx_a * sc - r_out), px(y0 + cy_a * sc - r_out)),
-                                    size(px(r_out * 2.0), px(r_out * 2.0)),
-                                ),
-                                Corners::all(px(r_out)),
-                                card_bg.opacity(dot_a),
-                                Edges::all(px(ring_w)),
-                                sky.opacity(dot_a),
-                                BorderStyle::Solid,
-                            ));
                         }
                     }
                 }
@@ -1973,6 +1969,111 @@ impl Render for ProjectFlow {
             cx,
         );
 
+        let ports_client_dy = intro.client_dy;
+        let ports_task_dy = intro.task_dy;
+        let ports_pm_dy = intro.pm_dy;
+        let ports_canvas = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                if bw <= 8.0 || bh <= 8.0 {
+                    return;
+                }
+                let sc = (bw / STAGE_W).min(bh / STAGE_H);
+                let x0 = f32::from(bounds.left());
+                let y0 = f32::from(bounds.top());
+                let core_col: Hsla = if dark {
+                    rgb(0xf4fbff).into()
+                } else {
+                    rgb(0xffffff).into()
+                };
+
+                for (ci, conn) in flow_connectors().iter().enumerate() {
+                    let Some((cx_a, cy_a, dot_delay)) = conn.anchor else {
+                        continue;
+                    };
+                    let port_illum = if ci == 2 {
+                        conn_illums[2].max(conn_illums[4])
+                    } else {
+                        conn_illums[ci]
+                    };
+                    let line_alpha = if any_focus {
+                        0.42 + 0.58 * port_illum
+                    } else {
+                        0.96 + 0.04 * port_illum
+                    };
+                    let dot_a = match intro_t {
+                        Some(t) => ((t - dot_delay) / 0.20).clamp(0.0, 1.0),
+                        None => 1.0,
+                    } * line_alpha;
+                    if dot_a <= 0.01 {
+                        continue;
+                    }
+
+                    let ni = conn.from_node.index();
+                    let hov_dy =
+                        -4.5 * node_hovs[ni] * (1.0 - node_downs[ni]) + 5.0 * node_downs[ni];
+                    let intro_dy = match conn.from_node {
+                        ProjectFlowNode::Client => ports_client_dy,
+                        ProjectFlowNode::Task => ports_task_dy,
+                        ProjectFlowNode::ProjectManager => ports_pm_dy,
+                        _ => 0.0,
+                    };
+                    let px_x = x0 + cx_a * sc;
+                    let px_y = y0 + (cy_a + hov_dy + intro_dy) * sc;
+
+                    // 12px soft cyan-blue halo (`0.25` base alpha)
+                    let d_halo = ((36.5 + 4.0 * port_illum) * sc).clamp(12.0, 15.0);
+                    let r_halo = d_halo * 0.5;
+                    let halo_a = ((if dark { 0.25 } else { 0.20 }) + 0.14 * port_illum) * dot_a;
+                    window.paint_quad(quad(
+                        Bounds::new(
+                            point(px(px_x - r_halo), px(px_y - r_halo)),
+                            size(px(d_halo), px(d_halo)),
+                        ),
+                        Corners::all(px(r_halo)),
+                        sky.opacity(halo_a.min(0.65)),
+                        Edges::all(px(0.)),
+                        gpui::transparent_black(),
+                        BorderStyle::Solid,
+                    ));
+
+                    // Crisp `#82BCFF` port ring
+                    let d_ring = ((23.5 + 2.0 * port_illum) * sc).clamp(8.0, 10.2);
+                    let r_ring = d_ring * 0.5;
+                    window.paint_quad(quad(
+                        Bounds::new(
+                            point(px(px_x - r_ring), px(px_y - r_ring)),
+                            size(px(d_ring), px(d_ring)),
+                        ),
+                        Corners::all(px(r_ring)),
+                        sky.opacity(dot_a),
+                        Edges::all(px(0.)),
+                        gpui::transparent_black(),
+                        BorderStyle::Solid,
+                    ));
+
+                    // 6px glowing white/cyan core
+                    let d_core = ((17.5 + 1.2 * port_illum) * sc).clamp(5.8, 6.8);
+                    let r_core = d_core * 0.5;
+                    window.paint_quad(quad(
+                        Bounds::new(
+                            point(px(px_x - r_core), px(px_y - r_core)),
+                            size(px(d_core), px(d_core)),
+                        ),
+                        Corners::all(px(r_core)),
+                        core_col.opacity(dot_a),
+                        Edges::all(px(0.)),
+                        gpui::transparent_black(),
+                        BorderStyle::Solid,
+                    ));
+                }
+            },
+        )
+        .absolute()
+        .inset_0();
+
         let mut stage_div = div()
             .id(pro_eid(&self.id, "stage"))
             .relative()
@@ -1995,7 +2096,8 @@ impl Render for ProjectFlow {
             .child(notes_card)
             .child(pm_card)
             .child(ux_card)
-            .child(subtasks_group);
+            .child(subtasks_group)
+            .child(ports_canvas);
 
         if intro.hand_alpha > 0.01 {
             let hand_sz = (168.0 * s).max(24.0);
