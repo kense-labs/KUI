@@ -291,6 +291,45 @@ struct WalletSlot {
 }
 
 /// A wallet whose resting, dragged, fanned and opened states share one geometry.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::wallet_stack::{
+///     WalletStack, WalletStackCard, WalletStackSelected, WalletTransaction, WalletVariant,
+/// };
+///
+/// let wallet = cx.new(|cx| {
+///     WalletStack::new(
+///         vec![
+///             WalletStackCard::new(
+///                 "debit", "Fieldnote", "Everyday debit", "4821", "Jordan Hayes",
+///                 3248.60, "Available",
+///             )
+///             .with_expiration("09/29")
+///             .with_transactions(vec![WalletTransaction::new(
+///                 "split", "Ryan Mitchell", "Dinner split · Today", 36.50,
+///             )]),
+///             WalletStackCard::new(
+///                 "credit", "Meridian", "Reserve credit", "0917", "Jordan Hayes",
+///                 1286.44, "Spent in September",
+///             )
+///             .with_variant(WalletVariant::Black),
+///         ],
+///         cx,
+///     )
+///     .with_label("Jordan’s cards")
+/// });
+/// cx.subscribe(&wallet, |_, event: &WalletStackSelected, _| {
+///     let selected_id = event.0.as_ref().map(|card| card.id.as_ref());
+///     println!("Opened card: {selected_id:?}");
+/// }).detach();
+/// # }
+/// ```
 pub struct WalletStack {
     id: ElementId,
     label: Option<SharedString>,

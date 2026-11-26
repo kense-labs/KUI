@@ -288,6 +288,22 @@ fn product_filter_scale(product: Option<&str>) -> f32 {
 }
 
 /// Revenue and channel telemetry screen hosted inside [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::analytics::{AnalyticsScreen, AnalyticsEvent};
+///
+/// let screen = cx.new(|cx| AnalyticsScreen::new("analytics", cx));
+/// cx.subscribe(&screen, |_, event: &AnalyticsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AnalyticsScreen {
     id: ElementId,
     standalone: bool,
@@ -416,7 +432,7 @@ impl AnalyticsScreen {
             channel_plot_bounds: Rc::new(Cell::new(Bounds::default())),
             sessions_plot_bounds: Rc::new(Cell::new(Bounds::default())),
             aov_plot_bounds: Rc::new(Cell::new(Bounds::default())),
-            measured_width: Rc::new(Cell::new(960.)),
+            measured_width: Rc::new(Cell::new(684.)),
             toast: None,
             saved_report: false,
             anim_start: Instant::now(),
@@ -808,16 +824,18 @@ impl AnalyticsScreen {
         };
         div()
             .h(px(20.))
-            .px(px(6.))
+            .px(px(5.5))
             .rounded(px(5.))
             .bg(bg)
             .text_color(fg)
-            .text_size(px(12.))
+            .text_size(px(11.5))
             .font_weight(FontWeight::MEDIUM)
+            .whitespace_nowrap()
             .flex_none()
+            .flex_shrink_0()
             .flex()
             .items_center()
-            .gap(px(4.))
+            .gap(px(3.5))
             .child(pro_svg("0 0 8 8", tri, 7., fg))
             .child(delta.to_owned())
     }
@@ -836,6 +854,7 @@ impl AnalyticsScreen {
         card_id: ElementId,
         bars: &[f32],
         active: bool,
+        compact: bool,
         p: &ProPalette,
         w: &mut Window,
         cx: &mut App,
@@ -848,13 +867,16 @@ impl AnalyticsScreen {
             hsla(0., 0., 0., 0.22)
         };
         let mut row = div()
-            .w(px(66.))
-            .h(px(22.))
+            .w(px(if compact { 44. } else { 62. }))
+            .h(px(if compact { 18. } else { 22. }))
             .flex_none()
+            .flex_shrink_0()
             .flex()
             .items_end()
             .justify_between()
-            .gap(px(4.));
+            .gap(px(if compact { 2.5 } else { 4. }));
+        let max_bar_h = if compact { 16. } else { 20. };
+        let bar_w = if compact { 3.5 } else { 4.5 };
         for (bi, &v) in bars.iter().enumerate() {
             let target = if active {
                 (v * 1.08).clamp(0.14, 1.0)
@@ -863,8 +885,8 @@ impl AnalyticsScreen {
             };
             let anim_v =
                 pro_spring_f32(pro_eid(&card_id, format!("bar-{bi}")), target, 0.28, w, cx);
-            let h_px = (anim_v * 20.).round().max(3.);
-            row = row.child(div().w(px(4.5)).h(px(h_px)).rounded(px(2.)).bg(bar_color));
+            let h_px = (anim_v * max_bar_h).round().max(3.);
+            row = row.child(div().w(px(bar_w)).h(px(h_px)).rounded(px(2.)).bg(bar_color));
         }
         row
     }
@@ -1466,10 +1488,11 @@ impl AnalyticsScreen {
 
         let measure_cell = self.measured_width.clone();
         let main_w = measure_cell.get();
-        let compact_head = main_w < 580.;
-        let stats_cols_2 = main_w < 820.;
-        let stack_main = main_w < 860.;
-        let stack_bottom = main_w < 780.;
+        let compact_head = main_w < 460.;
+        let compact_kpi = main_w < 820.;
+        let stats_cols_2 = main_w < 540.;
+        let stack_main = main_w < 600.;
+        let stack_bottom = main_w < 580.;
 
         // Sticky top header (`48px`)
         let filter_pills = {
@@ -1696,13 +1719,22 @@ impl AnalyticsScreen {
         } else {
             let stats = self.effective_stats(cx);
             let selected_stat = self.selected_stat;
+            let kpi_font = if main_w < 760. { 21. } else { 24. };
+            let kpi_lh = if main_w < 760. { 27. } else { 32. };
             let mut stat_els: Vec<Stateful<Div>> = Vec::with_capacity(stats.len());
             for (idx, st) in stats.iter().enumerate() {
                 let is_sel = selected_stat == Some(idx);
                 let is_dim = selected_stat.is_some_and(|sel| sel != idx);
                 let card_eid = pro_eid(&self.id, format!("stat-{idx}"));
-                let mini_bars =
-                    Self::render_mini_bars(card_eid.clone(), &st.bars, is_sel, &p, w, cx);
+                let mini_bars = Self::render_mini_bars(
+                    card_eid.clone(),
+                    &st.bars,
+                    is_sel,
+                    compact_kpi,
+                    &p,
+                    w,
+                    cx,
+                );
                 stat_els.push(activate(
                     div()
                         .id(card_eid)
@@ -1710,9 +1742,10 @@ impl AnalyticsScreen {
                         .aria_label(format!("{}: {}", st.label, st.value))
                         .tab_index(0)
                         .flex_1()
-                        .min_w(px(150.))
-                        .p(px(16.))
-                        .pt(px(14.))
+                        .min_w(px(if stats_cols_2 { 140. } else { 128. }))
+                        .overflow_hidden()
+                        .p(px(if compact_kpi { 12. } else { 16. }))
+                        .pt(px(if compact_kpi { 11. } else { 14. }))
                         .rounded(px(12.))
                         .bg(p.card)
                         .border_1()
@@ -1724,18 +1757,19 @@ impl AnalyticsScreen {
                                 .opacity(1.0)
                         })
                         .flex()
-                        .items_end()
+                        .flex_col()
                         .justify_between()
-                        .gap(px(12.))
+                        .gap(px(4.))
                         .child(
                             div()
+                                .w_full()
                                 .min_w_0()
                                 .flex()
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_size(px(13.))
-                                        .line_height(px(20.))
+                                        .text_size(px(if compact_kpi { 12.5 } else { 13. }))
+                                        .line_height(px(18.))
                                         .text_color(p.text)
                                         .truncate()
                                         .child(st.label.clone()),
@@ -1743,17 +1777,25 @@ impl AnalyticsScreen {
                                 .child(
                                     div()
                                         .mt(px(2.))
-                                        .text_size(px(24.))
-                                        .line_height(px(32.))
+                                        .text_size(px(kpi_font))
+                                        .line_height(px(kpi_lh))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.strong)
+                                        .whitespace_nowrap()
                                         .child(st.value.clone()),
-                                )
-                                .child(div().mt(px(4.)).flex().items_center().child(
-                                    Self::render_delta_pill(&st.delta, st.up, st.is_good(), &p),
-                                )),
+                                ),
                         )
-                        .child(mini_bars),
+                        .child(
+                            div()
+                                .mt(px(2.))
+                                .w_full()
+                                .flex()
+                                .items_end()
+                                .justify_between()
+                                .gap(px(6.))
+                                .child(Self::render_delta_pill(&st.delta, st.up, st.is_good(), &p))
+                                .child(mini_bars),
+                        ),
                     cx,
                     move |this, _, cx| {
                         if this.selected_stat == Some(idx) {
@@ -1767,10 +1809,11 @@ impl AnalyticsScreen {
                 ));
             }
 
+            let kpi_gap = if compact_kpi { 10. } else { 12. };
             let stats_grid = if stats_cols_2 {
-                let mut col = div().flex().flex_col().gap(px(12.));
-                let mut r1 = div().flex().gap(px(12.));
-                let mut r2 = div().flex().gap(px(12.));
+                let mut col = div().flex().flex_col().gap(px(kpi_gap));
+                let mut r1 = div().flex().gap(px(kpi_gap));
+                let mut r2 = div().flex().gap(px(kpi_gap));
                 for (i, card) in stat_els.into_iter().enumerate() {
                     if i < 2 {
                         r1 = r1.child(card);
@@ -1781,7 +1824,7 @@ impl AnalyticsScreen {
                 col = col.child(r1).child(r2);
                 col
             } else {
-                div().flex().gap(px(12.)).children(stat_els)
+                div().flex().gap(px(kpi_gap)).children(stat_els)
             };
 
             // Main channel chart card
@@ -1920,10 +1963,11 @@ impl AnalyticsScreen {
                                 .child(
                                     div()
                                         .mt(px(2.))
-                                        .text_size(px(24.))
-                                        .line_height(px(32.))
+                                        .text_size(px(kpi_font))
+                                        .line_height(px(kpi_lh))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.strong)
+                                        .whitespace_nowrap()
                                         .child(channel_headline),
                                 )
                                 .child(div().mt(px(4.)).flex().items_center().child(
@@ -2010,9 +2054,11 @@ impl AnalyticsScreen {
             }
 
             let breakdown_card = div()
-                .when(!stack_main, |d| d.w(px(340.)).flex_none())
+                .when(!stack_main, |d| {
+                    d.w(px(if main_w < 840. { 258. } else { 340. })).flex_none()
+                })
                 .when(stack_main, |d| d.w_full())
-                .p(px(16.))
+                .p(px(if compact_kpi { 14. } else { 16. }))
                 .pt(px(14.))
                 .rounded(px(12.))
                 .bg(p.card)
@@ -2098,7 +2144,7 @@ impl AnalyticsScreen {
             let products_card = div()
                 .flex_1()
                 .min_w_0()
-                .p(px(16.))
+                .p(px(if compact_kpi { 14. } else { 16. }))
                 .pt(px(14.))
                 .rounded(px(12.))
                 .bg(p.card)
@@ -2175,7 +2221,7 @@ impl AnalyticsScreen {
                 .flex_col()
                 .child(
                     div()
-                        .p(px(16.))
+                        .p(px(if compact_kpi { 14. } else { 16. }))
                         .pt(px(14.))
                         .flex_1()
                         .flex()
@@ -2190,15 +2236,17 @@ impl AnalyticsScreen {
                                         .text_size(px(13.))
                                         .line_height(px(20.))
                                         .text_color(p.text)
+                                        .truncate()
                                         .child(tr(cx, "Sessions over time", "会话趋势")),
                                 )
                                 .child(
                                     div()
                                         .mt(px(2.))
-                                        .text_size(px(24.))
-                                        .line_height(px(32.))
+                                        .text_size(px(kpi_font))
+                                        .line_height(px(kpi_lh))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.strong)
+                                        .whitespace_nowrap()
                                         .child(sessions_val),
                                 )
                                 .child(
@@ -2213,12 +2261,13 @@ impl AnalyticsScreen {
                 )
                 .child(
                     div()
-                        .px(px(16.))
+                        .px(px(if compact_kpi { 14. } else { 16. }))
                         .py(px(10.))
                         .border_t_1()
                         .border_color(p.line)
                         .text_size(px(12.))
                         .text_color(p.muted)
+                        .truncate()
                         .child(tr(cx, "This week vs. last week", "本周对比上周")),
                 );
 
@@ -2265,7 +2314,7 @@ impl AnalyticsScreen {
                 .flex_col()
                 .child(
                     div()
-                        .p(px(16.))
+                        .p(px(if compact_kpi { 14. } else { 16. }))
                         .pt(px(14.))
                         .flex_1()
                         .flex()
@@ -2280,15 +2329,17 @@ impl AnalyticsScreen {
                                         .text_size(px(13.))
                                         .line_height(px(20.))
                                         .text_color(p.text)
+                                        .truncate()
                                         .child(tr(cx, "Average order value", "平均客单价")),
                                 )
                                 .child(
                                     div()
                                         .mt(px(2.))
-                                        .text_size(px(24.))
-                                        .line_height(px(32.))
+                                        .text_size(px(kpi_font))
+                                        .line_height(px(kpi_lh))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.strong)
+                                        .whitespace_nowrap()
                                         .child("$141"),
                                 )
                                 .child(
@@ -2303,12 +2354,13 @@ impl AnalyticsScreen {
                 )
                 .child(
                     div()
-                        .px(px(16.))
+                        .px(px(if compact_kpi { 14. } else { 16. }))
                         .py(px(10.))
                         .border_t_1()
                         .border_color(p.line)
                         .text_size(px(12.))
                         .text_color(p.muted)
+                        .truncate()
                         .child(tr(cx, "This week vs. last week", "本周对比上周")),
                 );
 
@@ -2399,7 +2451,10 @@ impl AnalyticsScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(body);

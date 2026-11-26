@@ -8,6 +8,20 @@ use gpui::{prelude::*, *};
 use std::collections::BTreeMap;
 
 pub struct PageChanged(pub usize);
+/// `Pagination` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::pagination::Pagination;
+///
+/// let control = cx.new(|_| Pagination::new(12, 2));
+/// # }
+/// ```
 pub struct Pagination {
     count: usize,
     page: usize,

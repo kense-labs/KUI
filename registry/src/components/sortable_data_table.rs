@@ -23,6 +23,20 @@ pub struct TableSorted {
 }
 pub struct TableSelection(pub Vec<usize>);
 impl EventEmitter<TableSelection> for SortableTable {}
+/// `SortableTable` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::sortable_data_table::{SortableTable, TableColumn};
+///
+/// let control = cx.new(|_| SortableTable::new("Scores", vec![TableColumn::new("Score",true)], vec![vec!["92".into()],vec!["8".into()]]));
+/// # }
+/// ```
 pub struct SortableTable {
     hscroll: ScrollHandle,
     selected: std::collections::BTreeSet<usize>,

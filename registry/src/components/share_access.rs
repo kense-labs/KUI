@@ -36,6 +36,20 @@ pub enum AccessEvent {
     Undo(String),
     LinkAccess(bool),
 }
+/// `AccessEditor` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::share_access::{AccessEditor, Person, AccessRole};
+///
+/// let control = cx.new(|cx| AccessEditor::new("share","Release plan","https://workspace.example/release",vec![Person{name:"Maya".into(),email:"maya@example.com".into(),role:AccessRole::Owner}],window,cx));
+/// # }
+/// ```
 pub struct AccessEditor {
     id: SharedString,
     pub document: String,

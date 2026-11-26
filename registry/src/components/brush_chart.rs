@@ -72,6 +72,21 @@ struct CachedOverview {
     revision: u64,
     path: Option<Path<Pixels>>,
 }
+/// `BrushChart` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::brush_chart::{BrushChart, BrushPoint, BrushPreset};
+///
+/// let data = vec![BrushPoint::new("Day 1", 24.0), BrushPoint::new("Day 2", 32.0).with_event("Release")];
+/// let control = cx.new(|_| BrushChart::new("Activity", data).with_presets(vec![BrushPreset::new("All", None)]));
+/// # }
+/// ```
 pub struct BrushChart {
     title: SharedString,
     points: Vec<BrushPoint>,

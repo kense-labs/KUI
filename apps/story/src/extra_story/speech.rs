@@ -297,16 +297,7 @@ impl Render for Demo {
             .flex_col()
             .gap_4()
             .items_center()
-            .justify_center()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Sample only — no microphone or network",
-                        "样例演示，不会申请麦克风或连接网络",
-                    )),
-            );
+            .justify_center();
         if let Example::Dictation(control) = &self.example {
             let control = control.clone();
             let lang = self.language;

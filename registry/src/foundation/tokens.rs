@@ -1,8 +1,10 @@
+//! Semantic color, spacing, radius, and typography tokens for KUI chrome.
+
 use gpui::{Hsla, Pixels, px, rgb};
 
 /// Semantic color tokens. KUI components must read these instead of hard-coded RGB
 /// when an `App` theme is available. Default chrome is pure black/white (DESIGN.md).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ColorTokens {
     pub background: Hsla,
     pub surface: Hsla,

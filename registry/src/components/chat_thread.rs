@@ -21,6 +21,20 @@ pub enum ChatEvent {
     Download(usize),
     React(usize),
 }
+/// `ChatThread` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::chat_thread::{ChatThread, Message};
+///
+/// let control = cx.new(|cx| ChatThread::new("thread", "Release review", vec![Message { author: "Maya".into(), time: "09:18".into(), text: "Ready for review.".into(), own: false, attachment: None, reactions: 0 }], window, cx));
+/// # }
+/// ```
 pub struct ChatThread {
     id: SharedString,
     pub topic: String,

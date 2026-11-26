@@ -60,6 +60,20 @@ struct Form {
     tried: bool,
 }
 
+/// `CredentialPanel` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::provider_keys::{CredentialPanel, Provider};
+///
+/// let control = cx.new(|cx| CredentialPanel::new("keys",vec![Provider{id:"custom".into(),name:"Provider".into(),masked:String::new(),last_used:String::new(),valid:false,prefix:"sk-".into()}],window,cx));
+/// # }
+/// ```
 pub struct CredentialPanel {
     id: SharedString,
     pub providers: Vec<Provider>,
@@ -270,12 +284,16 @@ impl CredentialPanel {
         let Some(p) = self.provider(&id) else { return };
         let key = self.editor.read(cx).value().trim().to_owned();
         if Self::format_error(p, &key, cx).is_some() {
-            self.form.as_mut().unwrap().tried = true;
+            if let Some(f) = &mut self.form {
+                f.tried = true;
+            }
             cx.notify();
             return;
         }
         let ticket = self.ticket();
-        self.form.as_mut().unwrap().ticket = Some(ticket);
+        if let Some(f) = &mut self.form {
+            f.ticket = Some(ticket);
+        }
         cx.emit(KeyAction::Test {
             provider: id,
             secret: key,
@@ -297,7 +315,9 @@ impl CredentialPanel {
         if !self.awaiting(ticket) {
             return;
         }
-        let f = self.form.as_mut().unwrap();
+        let Some(f) = self.form.as_mut() else {
+            return;
+        };
         f.ticket = None;
         let id = f.id.clone();
         if let Some(masked) = masked {

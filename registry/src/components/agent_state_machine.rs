@@ -5,13 +5,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_ease,
-        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon},
+    primitives::{
+        family::disabled_motion,
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon},
+    },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, rc::Rc};
@@ -216,10 +219,14 @@ struct ActiveTxPulse {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_state_machine::AgentStateMachine;
 ///
 /// let sm = cx.new(|cx| AgentStateMachine::new("atlas-sm", cx));
+/// # }
 /// ```
 pub struct AgentStateMachine {
     id: ElementId,
@@ -891,7 +898,7 @@ impl AgentStateMachine {
 impl Render for AgentStateMachine {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         let elapsed_ms = self.boot.elapsed().as_secs_f32() * 1000.0;
         let live_dwell_extra = self.entered_current_at.elapsed().as_millis() as u64;
 
@@ -984,16 +991,16 @@ impl Render for AgentStateMachine {
         let usable_w = (inner_w - start_lead - 8.0).max(240.0);
         let cols_f = (max_col + 1) as f32;
         let min_gap = if inner_w < 560.0 { 16.0 } else { 32.0 };
-        let card_w = ((usable_w - min_gap * (cols_f - 1.0)) / cols_f).clamp(84.0, 128.0);
+        let card_w = ((usable_w - min_gap * (cols_f - 1.0)) / cols_f).clamp(88.0, 144.0);
         let col_gap = if max_col > 0 {
             ((usable_w - card_w * cols_f) / (max_col as f32)).clamp(12.0, 48.0)
         } else {
             24.0
         };
-        let card_h = 56.0_f32;
-        let top_loop_room = 54.0_f32;
-        let row_pitch = 108.0_f32;
-        let bottom_loop_room = 52.0_f32;
+        let card_h = 60.0_f32;
+        let top_loop_room = 56.0_f32;
+        let row_pitch = 112.0_f32;
+        let bottom_loop_room = 54.0_f32;
         let stage_h = top_loop_room + (max_row as f32) * row_pitch + card_h + bottom_loop_room;
 
         let mut state_rects: HashMap<SharedString, (f32, f32, f32, f32)> =
@@ -1026,6 +1033,7 @@ impl Render for AgentStateMachine {
         };
 
         let pkey = infer_provider_key(&self.agent_model);
+        let hdr_seed = format!("{} {}", self.agent_model, self.agent_name);
         let total_tx = self.total_transitions();
 
         let header = div()
@@ -1041,9 +1049,9 @@ impl Render for AgentStateMachine {
                     .items_center()
                     .gap(px(8.))
                     .child(pro_agent_avatar(
-                        &self.agent_name,
+                        &hdr_seed,
                         p.blue,
-                        22.,
+                        24.,
                         cur_kind != MachineStateKind::Final,
                         elapsed_ms,
                         cx,
@@ -1071,18 +1079,7 @@ impl Render for AgentStateMachine {
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap(px(8.))
-                    .child(pro_btn(
-                        pro_eid(&self.id, "sm-step-btn"),
-                        tr(cx, "Step state", "单步迁移"),
-                        Some(ProIcon::Play),
-                        ProBtnStyle::Secondary,
-                        true,
-                        cx,
-                        |this, _, cx| {
-                            this.step_demo_transition(cx);
-                        },
-                    ))
+                    .gap(px(10.))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, "sm-tot-tx"),
                         f64::from(total_tx),
@@ -1102,14 +1099,20 @@ impl Render for AgentStateMachine {
                             .flex()
                             .items_center()
                             .gap(px(5.))
-                            .when(cur_kind == MachineStateKind::Final, |d| {
-                                d.child(pro_check_draw(
+                            .child(if cur_kind == MachineStateKind::Final {
+                                pro_check_draw(
                                     pro_eid(&self.id, "sm-hdr-chk"),
                                     true,
                                     12.5,
                                     false,
                                     p.green,
-                                ))
+                                )
+                            } else {
+                                div()
+                                    .size(px(6.))
+                                    .rounded_full()
+                                    .bg(hdr_fg)
+                                    .into_any_element()
                             })
                             .child(pro_swap_label(
                                 pro_eid(&self.id, "sm-hdr-st"),
@@ -1639,6 +1642,7 @@ impl Render for AgentStateMachine {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .relative()
             .overflow_hidden()
             .flex()

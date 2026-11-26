@@ -399,6 +399,23 @@ type Overlay = Box<dyn Fn(&mut Window, &mut App) -> AnyElement>;
 type Visibility = Rc<dyn Fn(&App) -> bool>;
 
 /// A decoration with an independent animation layer. Overlay content keeps its GPUI semantics.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{div, prelude::*, px};
+/// use kui::components::dot_grid::{DotGrid, DotGridOptions};
+///
+/// let control = cx.new(|cx| {
+///     DotGrid::new(DotGridOptions::default(), cx)
+///         .with_style(|root| root.h(px(480.)).flex().items_center().justify_center())
+///         .with_content(|_, _| div().child("Interfaces with a pulse"))
+/// });
+/// # }
+/// ```
 pub struct DotGrid {
     layer: Entity<DotLayer>,
     id: ElementId,

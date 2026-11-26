@@ -92,6 +92,20 @@ impl Slot {
     }
 }
 /// Stable-width presence control. Updates are keyed by `PresencePerson::id`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::presence_stack::{PresencePerson, PresenceStack, PresenceStatus};
+///
+/// let people = vec![PresencePerson::new("me", "Alex"), PresencePerson::new("emma", "Emma").with_status(PresenceStatus::Typing)];
+/// let control = cx.new(|cx| PresenceStack::new("people", people, cx).with_self_id("me", cx));
+/// # }
+/// ```
 pub struct PresenceStack {
     people: Vec<PresencePerson>,
     slots: Vec<Slot>,

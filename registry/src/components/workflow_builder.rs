@@ -422,6 +422,22 @@ struct EdgePaintSpec {
 const RUN_STAGE_MS: f32 = 560.;
 
 /// Visual node-graph automation builder with palette, step inspector, and animated test runner.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::workflow_builder::{WorkflowBuilderScreen, WorkflowBuilderEvent};
+///
+/// let screen = cx.new(|cx| WorkflowBuilderScreen::new("workflow-builder", cx));
+/// cx.subscribe(&screen, |_, event: &WorkflowBuilderEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct WorkflowBuilderScreen {
     id: ElementId,
     id_name: SharedString,

@@ -391,6 +391,22 @@ enum OpenPopover {
 }
 
 /// KUI Pro `Settings / Members & Teams` screen (`settings-members`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_members::{SettingsMembersScreen, SettingsMembersEvent};
+///
+/// let screen = cx.new(|cx| SettingsMembersScreen::new("settings-members", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsMembersEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsMembersScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -2604,7 +2620,10 @@ impl SettingsMembersScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

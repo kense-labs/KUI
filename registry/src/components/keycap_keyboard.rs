@@ -270,6 +270,27 @@ type BoardStyle = Box<dyn Fn(Div) -> Div>;
 type Visibility = Box<dyn Fn(&App) -> bool>;
 
 /// A focus-scoped keyboard by default, with optional window-wide observation.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::keycap_keyboard::{
+///     KeycapKeyboard, KeycapLayout, KeycapListen, KeycapValueChanged,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     KeycapKeyboard::new(cx)
+///         .with_layout(KeycapLayout::Compact, cx)
+///         .with_listen(KeycapListen::Focus)
+///         .with_placeholder("Type anything")
+/// });
+/// window.subscribe(&control, cx, |_, _: &KeycapValueChanged, _, _| {}).detach();
+/// # }
+/// ```
 pub struct KeycapKeyboard {
     id: ElementId,
     layout: KeycapLayout,

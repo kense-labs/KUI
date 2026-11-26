@@ -268,7 +268,15 @@ fn render_integration_logo(id: &str, name: &str, side: f32, cx: &App) -> AnyElem
 
     let open_mark = |mark: AnyElement| -> AnyElement {
         if compact_tile {
-            solid_tile(p.card, mark, Some(p.line))
+            solid_tile(
+                p.logo_tile,
+                mark,
+                Some(if p.dark {
+                    hsla(0., 0., 1., 0.09)
+                } else {
+                    p.line
+                }),
+            )
         } else {
             div()
                 .size(px(side))
@@ -595,6 +603,22 @@ fn format_more_label(names: &[&str], more_word: &str) -> String {
 }
 
 /// Interactive app directory screen with categorized integrations, search, and detail drawer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::integrations::{IntegrationsScreen, IntegrationsEvent};
+///
+/// let screen = cx.new(|cx| IntegrationsScreen::new("integrations", cx));
+/// cx.subscribe(&screen, |_, event: &IntegrationsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct IntegrationsScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -1949,7 +1973,10 @@ impl IntegrationsScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

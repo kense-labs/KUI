@@ -815,6 +815,28 @@ fn default_cost_steps(cx: &App) -> Vec<CostStep> {
 }
 
 /// Financial and token waterfall card for inspecting multi-step agent run spend.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::cost_waterfall::{
+///     CostMeasureMode, CostWaterfall, CostWaterfallEvent,
+/// };
+///
+/// let waterfall = cx.new(|cx| {
+///     CostWaterfall::new("run-cost-waterfall", cx)
+///         .with_task("Report on LLM API prices in 2026")
+///         .with_mode(CostMeasureMode::Cost)
+/// });
+/// cx.subscribe(&waterfall, |_, ev: &CostWaterfallEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct CostWaterfall {
     id: ElementId,
     title: Option<SharedString>,

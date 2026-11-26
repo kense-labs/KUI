@@ -18,7 +18,7 @@
   "files": [
     {
       "path": "components/combobox.rs",
-      "content": "//! An editable, filterable single-choice field.\nuse crate::primitives::picker::{Picker, PickerStyle};\npub struct ComboboxStyle;\nimpl PickerStyle for ComboboxStyle {\n    const SEARCH: bool = true;\n}\npub type Combobox = Picker<ComboboxStyle>;\n"
+      "content": "//! An editable, filterable single-choice field.\nuse crate::primitives::picker::{Picker, PickerStyle};\n/// `Combobox` component.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::combobox::Combobox;\n/// use kui::primitives::picker::PickerOption;\n///\n/// let control = cx.new(|cx| Combobox::new(\"model\", \"Model\", vec![\n///         PickerOption::new(\"fast\", \"Fast\").with_keywords([\"quick\"]),\n///         PickerOption::new(\"reasoning\", \"Reasoning\"),\n///     ], window, cx).with_value(\"fast\"));\n/// # }\n/// ```\npub struct ComboboxStyle;\nimpl PickerStyle for ComboboxStyle {\n    const SEARCH: bool = true;\n}\npub type Combobox = Picker<ComboboxStyle>;\n"
     },
     {
       "path": "primitives/control.rs",

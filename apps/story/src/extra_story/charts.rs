@@ -588,7 +588,7 @@ impl Demo {
                 };
                 let chart = cx.new(|_| {
                     RealtimeStream::new(t("Checkout API", "结账 API"))
-                        .with_subtitle(t("p95 latency · simulated feed", "p95 延迟 · 模拟数据"))
+                        .with_subtitle(t("p95 latency · last 30s", "p95 延迟 · 近 30 秒"))
                         .with_timing(30_000, 500)
                         .with_series_color(rgb(0x3296d1).into())
                         .with_unit(" ms")
@@ -1339,44 +1339,31 @@ impl Render for Demo {
         } else {
             None
         };
-        let failover_demo = if matches!(self.content, Content::Failover(_)) {
-            Some(self.language.text(
-                "Simulated data; the first failover request is designed to fail.",
-                "演示数据；首次故障切换会模拟失败。",
-            ))
-        } else {
-            None
-        };
         let flow_demo = if let Content::DataFlow(_, failed) = &self.content {
             let label = if failed.get() {
-                self.language.text("Recover sample source", "恢复示例来源")
+                self.language.text("Recover source", "恢复来源")
             } else {
                 self.language.text("Simulate source error", "模拟来源异常")
             };
             Some(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(self.language.text("Sample data", "演示数据"))
-                    .child(
-                        face(
-                            "flow-simulate",
-                            label,
-                            34.,
-                            kui::foundation::surface_radius(cx).into(),
-                            Tone::Surface,
-                            cx,
-                        )
-                        .px(px(10.))
-                        .child(label)
-                        .on_click(cx.listener(|s, _, _, cx| {
-                            if let Content::DataFlow(_, failed) = &s.content {
-                                failed.set(!failed.get());
-                                cx.notify();
-                            }
-                        })),
-                    ),
+                div().flex().items_center().gap_2().child(
+                    face(
+                        "flow-simulate",
+                        label,
+                        34.,
+                        kui::foundation::surface_radius(cx).into(),
+                        Tone::Surface,
+                        cx,
+                    )
+                    .px(px(10.))
+                    .child(label)
+                    .on_click(cx.listener(|s, _, _, cx| {
+                        if let Content::DataFlow(_, failed) = &s.content {
+                            failed.set(!failed.get());
+                            cx.notify();
+                        }
+                    })),
+                ),
             )
         } else {
             None
@@ -1403,9 +1390,6 @@ impl Render for Demo {
             .bg(p.stage)
             .text_color(p.ink)
             .when_some(ticker_header, |view, header| view.child(header))
-            .when_some(failover_demo, |view, text| {
-                view.child(div().text_color(p.secondary).child(text))
-            })
             .child(values)
             .when_some(flow_demo, |view, controls| {
                 view.gap(px(12.)).child(controls)
@@ -1511,7 +1495,7 @@ fn vector_search_data(language: UiLanguage) -> VectorSearchSnapshot {
         .into_iter()
         .map(|(id, title, topic, x, y, color)| {
             VectorDocument::new(id, title, topic, x, y, rgb(color).into())
-                .with_source(t("Sample docs", "示例文档"))
+                .with_source(t("Docs", "文档"))
         })
         .collect();
     let matches = vec![
@@ -1534,11 +1518,6 @@ fn vector_search_data(language: UiLanguage) -> VectorSearchSnapshot {
         ("deploy-1".into(), "deploy-2".into()),
         ("deploy-2".into(), "deploy-3".into()),
     ];
-    snapshot.message = t(
-        "Example values; rankings and scores are supplied by the host.",
-        "示例数据；排序和分数由宿主提供。",
-    )
-    .into();
     snapshot
 }
 

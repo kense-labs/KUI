@@ -63,6 +63,20 @@ pub enum UndoToastEvent {
     Undone(Vec<UndoEntry>),
 }
 /// Optimistically hides rows until a reversible batch is undone or confirmed by the host.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::undo_toast::{UndoItem, UndoToast};
+///
+/// let items = vec![UndoItem::new("one", "Design review"), UndoItem::new("two", "Project notes")];
+/// let control = cx.new(|cx| UndoToast::new("Inbox", items, cx));
+/// # }
+/// ```
 pub struct UndoToast {
     label: SharedString,
     avatars: HashMap<SharedString, ImageSource>,

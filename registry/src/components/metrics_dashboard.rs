@@ -6,10 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -1051,6 +1051,30 @@ fn default_channels() -> Vec<RankedShareItem> {
 }
 
 /// Sales overview dashboard block with clickable KPI cards, area/bar trend chart, and ranked breakdowns.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::metrics_dashboard::{
+///     DashboardMetric, DashboardRange, MetricsDashboardBlock, MetricsDashboardEvent,
+/// };
+///
+/// let dashboard = cx.new(|cx| {
+///     MetricsDashboardBlock::new("sales-dashboard", cx)
+///         .with_title("Sales")
+///         .with_site("Northwind Store")
+///         .with_default_range(DashboardRange::Month)
+///         .with_default_metric(DashboardMetric::Revenue)
+/// });
+/// cx.subscribe(&dashboard, |_, event: &MetricsDashboardEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct MetricsDashboardBlock {
     id: ElementId,
     focus: FocusHandle,
@@ -1344,8 +1368,8 @@ impl MetricsDashboardBlock {
                 id: pro_eid(&self.id, "kpi-rev"),
                 target: cur.revenue,
                 prefix: sym.into(),
-                font_size: 24.,
-                weight: FontWeight::MEDIUM,
+                font_size: 21.,
+                weight: FontWeight::SEMIBOLD,
                 color: p.strong,
             }
             .into_any_element(),
@@ -1353,8 +1377,8 @@ impl MetricsDashboardBlock {
                 id: pro_eid(&self.id, "kpi-ord"),
                 target: cur.orders as f64,
                 prefix: "".into(),
-                font_size: 24.,
-                weight: FontWeight::MEDIUM,
+                font_size: 21.,
+                weight: FontWeight::SEMIBOLD,
                 color: p.strong,
             }
             .into_any_element(),
@@ -1364,8 +1388,8 @@ impl MetricsDashboardBlock {
                 2,
                 sym,
                 "",
-                24.,
-                FontWeight::MEDIUM,
+                21.,
+                FontWeight::SEMIBOLD,
                 p.strong,
             ),
             DashboardMetric::RefundRate => pro_rolling_number(
@@ -1374,8 +1398,8 @@ impl MetricsDashboardBlock {
                 1,
                 "",
                 "%",
-                24.,
-                FontWeight::MEDIUM,
+                21.,
+                FontWeight::SEMIBOLD,
                 p.strong,
             ),
             DashboardMetric::Conversion => pro_rolling_number(
@@ -1384,8 +1408,8 @@ impl MetricsDashboardBlock {
                 2,
                 "",
                 "%",
-                24.,
-                FontWeight::MEDIUM,
+                21.,
+                FontWeight::SEMIBOLD,
                 p.strong,
             ),
         };
@@ -1418,7 +1442,7 @@ impl MetricsDashboardBlock {
 
         let inner_opacity = pro_spring_f32(
             pro_eid(&self.id, format!("kpi-op-{}", m.slug())),
-            if selected { 1.0 } else { 0.52 },
+            if selected { 1.0 } else { 0.56 },
             0.22,
             w,
             cx,
@@ -1439,15 +1463,15 @@ impl MetricsDashboardBlock {
 
         let content = div()
             .w_full()
-            .px(px(16.))
-            .py(px(14.))
+            .px(px(14.))
+            .py(px(11.))
             .opacity(inner_opacity)
             .flex()
             .flex_col()
-            .gap(px(4.))
+            .gap(px(3.))
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_size(px(12.5))
                     .text_color(p.text)
                     .truncate()
                     .child(label),
@@ -1461,21 +1485,21 @@ impl MetricsDashboardBlock {
                 };
                 d.child(
                     div()
-                        .mt(px(2.))
+                        .mt(px(1.))
                         .w(px(64.))
                         .min_w(px(54.))
                         .flex()
                         .items_center()
                         .child(
                             div()
-                                .h(px(20.))
-                                .px(px(6.))
+                                .h(px(19.))
+                                .px(px(5.5))
                                 .rounded(px(5.))
                                 .bg(bg)
                                 .flex()
                                 .items_center()
                                 .gap(px(4.))
-                                .text_size(px(12.))
+                                .text_size(px(11.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(fg)
                                 .whitespace_nowrap()
@@ -1508,7 +1532,7 @@ impl MetricsDashboardBlock {
         .role(Role::Tab)
         .flex_1()
         .min_w_0()
-        .when(sel_mix > 0.12, |d| d.shadow_sm())
+        .shadow(pro_card_shadow(p.dark))
     }
 
     fn render_ranked_card(
@@ -1542,12 +1566,12 @@ impl MetricsDashboardBlock {
         let body = if items.is_empty() {
             div()
                 .px(px(8.))
-                .py(px(12.))
-                .text_size(px(13.))
+                .py(px(10.))
+                .text_size(px(12.5))
                 .text_color(p.muted)
                 .child(tr(cx, "No breakdown items recorded.", "暂无分类明细。"))
         } else {
-            let mut list = div().flex().flex_col().gap(px(4.));
+            let mut list = div().flex().flex_col().gap(px(3.));
             for (idx, item) in items.iter().enumerate() {
                 let target_ratio = (item.share / max_share).clamp(0.0, 1.0) as f32;
                 let spring_ratio = pro_spring_f32(
@@ -1568,14 +1592,14 @@ impl MetricsDashboardBlock {
                 let row_inner = div()
                     .relative()
                     .w_full()
-                    .h(px(30.))
+                    .h(px(26.))
                     .px(px(8.))
                     .rounded(px(6.))
                     .overflow_hidden()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap(px(12.))
+                    .gap(px(10.))
                     .child(
                         div()
                             .absolute()
@@ -1590,7 +1614,7 @@ impl MetricsDashboardBlock {
                         div()
                             .relative()
                             .min_w_0()
-                            .text_size(px(13.))
+                            .text_size(px(12.5))
                             .text_color(p.ink)
                             .truncate()
                             .child(item.name.clone()),
@@ -1599,7 +1623,7 @@ impl MetricsDashboardBlock {
                         id: pro_eid(&self.id, format!("{list_id}-val-{idx}")),
                         target: val_target,
                         prefix: val_prefix,
-                        font_size: 13.,
+                        font_size: 12.5,
                         weight: FontWeight::NORMAL,
                         color: p.text,
                     }));
@@ -1620,12 +1644,13 @@ impl MetricsDashboardBlock {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .px(px(12.))
-            .pt(px(14.))
-            .pb(px(12.))
+            .pt(px(12.))
+            .pb(px(10.))
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(5.))
             .child(
                 div()
                     .px(px(8.))
@@ -1802,7 +1827,8 @@ impl Render for MetricsDashboardBlock {
                 cx.notify();
             },
         )
-        .flex_none();
+        .flex_none()
+        .shadow(pro_card_shadow(p.dark));
 
         let top_bar = div()
             .w_full()
@@ -1850,41 +1876,43 @@ impl Render for MetricsDashboardBlock {
                 .p(px(16.))
                 .flex()
                 .flex_col()
-                .gap(px(12.))
+                .gap(px(10.))
                 .child(top_bar)
                 .child(
                     div()
                         .w_full()
                         .flex()
                         .flex_wrap()
-                        .gap(px(12.))
+                        .gap(px(10.))
                         .children((0..4).map(|i| {
                             div()
                                 .flex_1()
                                 .min_w(px(140.))
-                                .h(px(94.))
+                                .h(px(86.))
                                 .rounded(px(10.))
                                 .bg(p.card)
                                 .border_1()
                                 .border_color(p.line)
-                                .p(px(16.))
+                                .shadow(pro_card_shadow(p.dark))
+                                .p(px(14.))
                                 .flex()
                                 .flex_col()
                                 .justify_between()
                                 .child(pro_skeleton_bar(64., 12., 4., phase, cx))
-                                .child(pro_skeleton_bar(96., 22., 6., phase + i as f32 * 0.1, cx))
+                                .child(pro_skeleton_bar(96., 20., 6., phase + i as f32 * 0.1, cx))
                         })),
                 )
                 .child(
                     div()
                         .w_full()
-                        .h(px(236.))
+                        .h(px(212.))
                         .rounded(px(12.))
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
-                        .p(px(16.))
-                        .child(pro_skeleton_bar(240., 180., 8., phase + 0.2, cx)),
+                        .shadow(pro_card_shadow(p.dark))
+                        .p(px(14.))
+                        .child(pro_skeleton_bar(240., 160., 8., phase + 0.2, cx)),
                 );
         }
 
@@ -1893,9 +1921,9 @@ impl Render for MetricsDashboardBlock {
                 .id(self.id.clone())
                 .w_full()
                 .p(px(16.))
-                    .flex()
+                .flex()
                 .flex_col()
-                .gap(px(12.))
+                .gap(px(10.))
                 .child(top_bar)
                 .child(
                     div()
@@ -1904,6 +1932,7 @@ impl Render for MetricsDashboardBlock {
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .child(pro_empty_state(
                             ProIcon::UsageChart,
                             tr(cx, "No sales data in this period", "当前周期暂无销售数据"),
@@ -1950,7 +1979,7 @@ impl Render for MetricsDashboardBlock {
             div()
                 .w_full()
                 .flex()
-                .gap(px(12.))
+                .gap(px(10.))
                 .child(self.render_kpi_card(m0, &cur_rollup, prev_rollup.as_ref(), w, cx))
                 .child(self.render_kpi_card(m1, &cur_rollup, prev_rollup.as_ref(), w, cx))
                 .child(self.render_kpi_card(m2, &cur_rollup, prev_rollup.as_ref(), w, cx))
@@ -2012,15 +2041,15 @@ impl Render for MetricsDashboardBlock {
                     transparent_black(),
                     is_area,
                     div()
-                        .w(px(28.))
-                        .h(px(24.))
+                        .w(px(26.))
+                        .h(px(22.))
                         .flex()
                         .items_center()
                         .justify_center()
                         .child(pro_svg(
                             "0 0 24 24",
                             KIND_AREA_SVG,
-                            15.,
+                            14.,
                             if is_area { p.strong } else { p.muted },
                         )),
                     cx,
@@ -2054,15 +2083,15 @@ impl Render for MetricsDashboardBlock {
                     transparent_black(),
                     is_bars,
                     div()
-                        .w(px(28.))
-                        .h(px(24.))
+                        .w(px(26.))
+                        .h(px(22.))
                         .flex()
                         .items_center()
                         .justify_center()
                         .child(pro_svg(
                             "0 0 24 24",
                             KIND_BARS_SVG,
-                            15.,
+                            14.,
                             if is_bars { p.strong } else { p.muted },
                         )),
                     cx,
@@ -2121,7 +2150,7 @@ impl Render for MetricsDashboardBlock {
                     .bg(pop_bg)
                     .border_1()
                     .border_color(p.line_strong)
-                    .shadow_md()
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .gap(px(4.))
@@ -2196,7 +2225,7 @@ impl Render for MetricsDashboardBlock {
             }),
         };
 
-        let plot_height = if compact { 164. } else { 184. };
+        let plot_height = if compact { 148. } else { 164. };
         let hit_slices = div()
             .absolute()
             .inset_0()
@@ -2244,10 +2273,11 @@ impl Render for MetricsDashboardBlock {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .p(px(if compact { 12. } else { 16. }))
+            .shadow(pro_card_shadow(p.dark))
+            .p(px(if compact { 12. } else { 14. }))
             .flex()
             .flex_col()
-            .gap(px(16.))
+            .gap(px(12.))
             .child(
                 div()
                     .w_full()
@@ -2280,13 +2310,13 @@ impl Render for MetricsDashboardBlock {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(14.))
+                            .gap(px(12.))
                             .child(kind_toggle)
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap(px(8.))
+                                    .gap(px(7.))
                                     .child(pro_switch(
                                         pro_eid(&self.id, "mdc-compare-sw"),
                                         compare_label,
@@ -2303,7 +2333,7 @@ impl Render for MetricsDashboardBlock {
                                     .child(activate(
                                         div()
                                             .id(pro_eid(&self.id, "mdc-compare-lbl"))
-                                            .text_size(px(13.))
+                                            .text_size(px(12.5))
                                             .text_color(p.text)
                                             .cursor_pointer()
                                             .child(compare_label),
@@ -2405,7 +2435,7 @@ impl Render for MetricsDashboardBlock {
             .w_full()
             .flex()
             .when(medium_narrow, |d| d.flex_col())
-            .gap(px(if medium_narrow { 8. } else { 12. }))
+            .gap(px(if medium_narrow { 8. } else { 10. }))
             .child(prod_card)
             .child(chan_card);
 
@@ -2416,11 +2446,11 @@ impl Render for MetricsDashboardBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .px(px(if compact { 16. } else { 32. }))
-            .py(px(if compact { 20. } else { 28. }))
+            .px(px(if compact { 14. } else { 22. }))
+            .py(px(if compact { 16. } else { 18. }))
             .flex()
             .flex_col()
-            .gap(px(if medium_narrow { 8. } else { 12. }))
+            .gap(px(if medium_narrow { 8. } else { 10. }))
             .child(
                 canvas(
                     move |b, window, _| {
@@ -2443,7 +2473,7 @@ impl Render for MetricsDashboardBlock {
                     .w_full()
                     .flex()
                     .flex_col()
-                    .gap(px(if medium_narrow { 8. } else { 12. }))
+                    .gap(px(if medium_narrow { 8. } else { 10. }))
                     .child(kpis_el)
                     .child(chart_card)
                     .child(lists_row),

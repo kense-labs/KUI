@@ -67,6 +67,24 @@ struct StarPhase {
     reduced: bool,
 }
 /// Rating state shared by native and Web; `new` takes an initial value.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::{components::rating::Rating, primitives::Size};
+///
+/// let control = cx.new(|cx| {
+///     Rating::new("Quality", 5, 3.5, cx)
+///         .with_half(true)
+///         .with_size(Size::Md)
+///         .with_name("quality")
+/// });
+/// # }
+/// ```
 pub struct Rating {
     label: SharedString,
     description: SharedString,

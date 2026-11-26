@@ -36,6 +36,19 @@ impl CurrencySpec {
 }
 
 /// A locale-neutral currency field. Values are integer minor units (100 = 1.00).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::money_input::MoneyInput;
+///
+/// let control = cx.new(|cx| MoneyInput::new("Amount", 12500, 0..=1000000, window, cx).with_symbol("$").with_quick_add(vec![1000, 5000]));
+/// # }
+/// ```
 pub struct MoneyInput {
     label: SharedString,
     description: SharedString,

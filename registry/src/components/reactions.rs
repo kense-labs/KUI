@@ -50,6 +50,23 @@ struct Pill {
     kick: Slide,
     focus: FocusHandle,
 }
+/// `Reactions` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::reactions::{Reaction, ReactionOption, Reactions};
+/// use kui::primitives::glyph::Glyph;
+///
+/// let control = cx.new(|cx| Reactions::new("votes",
+///     vec![ReactionOption::new("like", "Like", Glyph::Like)],
+///     vec![Reaction::new("like", 3, false)], cx));
+/// # }
+/// ```
 pub struct Reactions {
     id: ElementId,
     options: Vec<ReactionOption>,

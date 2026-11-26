@@ -38,6 +38,20 @@ struct Photo {
     image: Arc<Image>,
     crop: AvatarCrop,
 }
+/// `AvatarUpload` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::avatar_upload::AvatarUpload;
+///
+/// let control = cx.new(|cx| AvatarUpload::new("Jordan Reyes", cx));
+/// # }
+/// ```
 pub struct AvatarUpload {
     name: SharedString,
     current: Option<Photo>,

@@ -174,6 +174,21 @@ struct Ridge {
     lift: Slide,
     sorted: Vec<f32>,
 }
+/// `Ridgeline` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ridgeline::{Ridgeline, RidgeSeries};
+///
+/// let series = vec![RidgeSeries::new("jan", "January", vec![1.0, 3.0, 5.0], gpui::rgb(0x609cd8).into())];
+/// let control = cx.new(|_| Ridgeline::new("Temperatures", series));
+/// # }
+/// ```
 pub struct Ridgeline {
     title: SharedString,
     series: Vec<RidgeSeries>,

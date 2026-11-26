@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_bar, pro_step_transition, pro_swap_label, pro_tactile,
-        pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_step_transition,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
@@ -176,6 +176,25 @@ pub enum StepperFormEvent {
 }
 
 /// Multi-step onboarding & workspace setup wizard card.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::stepper_form::{StepperForm, StepperFormEvent};
+///
+/// let wizard = cx.new(|cx| {
+///     StepperForm::new("workspace-onboarding", cx)
+///         .with_submit_label("Create workspace")
+/// });
+/// cx.subscribe(&wizard, |_, event: &StepperFormEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct StepperForm {
     id: ElementId,
     steps: Vec<StepperStepMeta>,
@@ -868,12 +887,18 @@ impl StepperForm {
                             .child(
                                 div()
                                     .w_full()
-                                    .h(px(34.))
-                                    .px(px(10.))
+                                    .h(px(38.))
+                                    .px(px(12.))
                                     .relative()
                                     .left(px(name_dx))
                                     .rounded(px(8.))
-                                    .bg(if name_invalid { p.red_soft } else { p.card })
+                                    .bg(if name_invalid {
+                                        p.red_soft
+                                    } else if p.dark {
+                                        p.subtle
+                                    } else {
+                                        p.card
+                                    })
                                     .border_1()
                                     .border_color(if name_invalid {
                                         p.red.opacity(0.55)
@@ -915,12 +940,18 @@ impl StepperForm {
                             .child(
                                 div()
                                     .w_full()
-                                    .h(px(34.))
-                                    .px(px(10.))
+                                    .h(px(38.))
+                                    .px(px(12.))
                                     .relative()
                                     .left(px(slug_dx))
                                     .rounded(px(8.))
-                                    .bg(if slug_invalid { p.red_soft } else { p.card })
+                                    .bg(if slug_invalid {
+                                        p.red_soft
+                                    } else if p.dark {
+                                        p.subtle
+                                    } else {
+                                        p.card
+                                    })
                                     .border_1()
                                     .border_color(if slug_invalid {
                                         p.red.opacity(0.55)
@@ -1495,13 +1526,7 @@ impl Render for StepperForm {
             for (idx, sm) in self.steps.iter().enumerate() {
                 let is_done = self.completed || idx < self.step;
                 let is_current = !self.completed && idx == self.step;
-                let fill_target = if is_done {
-                    1.0
-                } else if is_current {
-                    0.55
-                } else {
-                    0.0
-                };
+                let fill_target = if is_done || is_current { 1.0 } else { 0.0 };
 
                 let stitle = tr(cx, sm.title.as_ref(), sm.title_zh.as_ref()).to_uppercase();
                 let mark_el = div()
@@ -1526,9 +1551,9 @@ impl Render for StepperForm {
                             .items_center()
                             .justify_center()
                             .opacity(if is_done { 0.0 } else { 1.0 })
-                            .text_size(px(9.5))
+                            .text_size(px(10.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(if is_current { p.blue } else { p.faint })
+                            .text_color(if is_current { p.blue } else { p.muted })
                             .child(format!("{}", idx + 1)),
                     )
                     .into_any_element();
@@ -1557,8 +1582,8 @@ impl Render for StepperForm {
                                 div()
                                     .min_w_0()
                                     .truncate()
-                                    .text_size(px(10.))
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_size(px(10.5))
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(if is_current {
                                         p.strong
                                     } else if is_done {
@@ -1712,15 +1737,15 @@ impl Render for StepperForm {
         let footer_fold = pro_fold(
             pro_eid(&self.id, "foot-fold"),
             !self.completed,
-            48.,
+            52.,
             0.,
             move || {
                 div()
                     .w_full()
-                    .h(px(48.))
-                    .px(px(14.))
+                    .h(px(52.))
+                    .px(px(20.))
                     .border_t_1()
-                    .border_color(p.line)
+                    .border_color(p.line_soft)
                     .flex()
                     .items_center()
                     .justify_between()
@@ -1769,11 +1794,11 @@ impl Render for StepperForm {
                     .w_full()
                     .max_w(px(500.))
                     .mx_auto()
-                    .rounded(px(10.))
+                    .rounded(px(12.))
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

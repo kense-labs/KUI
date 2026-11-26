@@ -8,6 +8,20 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
+/// `CodeBlock` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::code_block::CodeBlock;
+///
+/// let control = cx.new(|cx| CodeBlock::new("main.rs","Rust","fn main() {}",cx));
+/// # }
+/// ```
 pub struct CodeBlock {
     filename: SharedString,
     language: SharedString,

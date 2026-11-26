@@ -32,6 +32,20 @@ pub enum ToolAction {
     Retry(usize),
 }
 
+/// `InvocationInspector` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tool_call::{InvocationInspector, Invocation, ToolState};
+///
+/// let control = cx.new(|_| InvocationInspector::new("calls",vec![Invocation { name:"Search".into(),action:"Find release issues".into(),input:"release".into(),output:String::new(), state:ToolState::Approval }]));
+/// # }
+/// ```
 pub struct InvocationInspector {
     id: SharedString,
     pub calls: Vec<Invocation>,

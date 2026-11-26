@@ -2186,7 +2186,10 @@ impl Render for OnboardingBrandScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .when_some(preview, |d, p| d.child(p))
             .child(top_bar)

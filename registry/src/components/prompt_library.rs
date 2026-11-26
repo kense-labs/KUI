@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     primitives::{
         control::activate,
@@ -223,6 +223,25 @@ struct VarEditorEntry {
 }
 
 /// Interactive prompt template library with inline `{variable}` slot chips and live preview.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::prompt_library::{PromptLibrary, PromptLibraryEvent};
+///
+/// let prompts = cx.new(|cx| {
+///     PromptLibrary::new("workspace-prompts", cx)
+///         .with_default_template("release")
+/// });
+/// cx.subscribe(&prompts, |_, event: &PromptLibraryEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct PromptLibrary {
     id: ElementId,
     title: SharedString,
@@ -540,9 +559,10 @@ impl PromptLibrary {
 
     fn ensure_editors(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if self.search_editor.is_none() {
+            let ph = tr(cx, "Search templates", "搜索模板").to_string();
             let se = cx.new(|cx| {
                 let mut e = Editor::new("Search templates", InputMode::Search, w, cx);
-                e.set_placeholder("Search...");
+                e.set_placeholder(ph);
                 e.font_size = 12.5;
                 e
             });
@@ -837,6 +857,37 @@ impl Render for PromptLibrary {
             }
         }
 
+        let split_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.09)
+        } else {
+            hsla(0., 0., 0., 0.07)
+        };
+        let side_bg: Hsla = if p.dark {
+            rgb(0x17171a).into()
+        } else {
+            rgb(0xfafafb).into()
+        };
+        let search_bg: Hsla = if p.dark {
+            rgb(0x202024).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let preview_bg: Hsla = if p.dark {
+            rgb(0x151518).into()
+        } else {
+            rgb(0xf7f7f9).into()
+        };
+        let card_shell_bg: Hsla = if p.dark {
+            rgb(0x1c1c1f).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let card_shell_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.10)
+        } else {
+            hsla(0., 0., 0., 0.075)
+        };
+
         let search_box = self
             .search_editor
             .as_ref()
@@ -848,9 +899,9 @@ impl Render for PromptLibrary {
                     .pl(px(7.))
                     .pr(px(8.))
                     .rounded(px(6.))
-                    .bg(p.subtle)
+                    .bg(search_bg)
                     .border_1()
-                    .border_color(p.line_strong)
+                    .border_color(split_border)
                     .flex()
                     .items_center()
                     .gap(px(6.))
@@ -862,10 +913,16 @@ impl Render for PromptLibrary {
 
         let side_heading = tr(cx, self.title.as_ref(), self.title_zh.as_ref()).to_string();
         let sidebar = div()
+            .bg(side_bg)
             .when(!narrow, |d| {
-                d.w(px(220.)).flex_none().border_r_1().border_color(p.line)
+                d.w(px(220.))
+                    .flex_none()
+                    .border_r_1()
+                    .border_color(split_border)
             })
-            .when(narrow, |d| d.w_full().border_b_1().border_color(p.line))
+            .when(narrow, |d| {
+                d.w_full().border_b_1().border_color(split_border)
+            })
             .pt(px(12.))
             .px(px(8.))
             .pb(px(10.))
@@ -933,22 +990,27 @@ impl Render for PromptLibrary {
                 let v_str = v.clone();
                 let v_click = v.to_string();
                 let is_on = !self.variable_value(&tid, v.as_ref()).trim().is_empty();
+                let pill_label = format!("{{{{{v_str}}}}}");
                 var_pills_row = var_pills_row.child(
                     pro_tactile(
                         pro_eid(&self.id, format!("var-pill-{tid}-{v_str}")),
-                        format!("[{v_str}]"),
+                        pill_label.clone(),
                         5.,
                         if is_on { p.accent_soft } else { p.chip },
                         if is_on {
-                            p.blue.opacity(0.18)
+                            p.blue.opacity(0.20)
                         } else {
                             p.chip_hover
                         },
-                        if is_on { p.blue.opacity(0.34) } else { p.line },
+                        if is_on {
+                            p.blue.opacity(0.38)
+                        } else {
+                            p.line_strong
+                        },
                         p.line_strong,
                         is_on,
                         div()
-                            .h(px(22.))
+                            .h(px(21.))
                             .px(px(6.5))
                             .flex()
                             .items_center()
@@ -957,7 +1019,7 @@ impl Render for PromptLibrary {
                             .child(pro_check_draw(
                                 pro_eid(&self.id, format!("var-chk-{tid}-{v_str}")),
                                 is_on,
-                                12.,
+                                11.5,
                                 false,
                                 p.blue,
                             ))
@@ -966,7 +1028,7 @@ impl Render for PromptLibrary {
                                     .text_size(px(11.))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(if is_on { p.blue } else { p.text })
-                                    .child(format!("[{v_str}]")),
+                                    .child(pill_label),
                             ),
                         cx,
                         move |this, w, cx| {
@@ -1009,14 +1071,14 @@ impl Render for PromptLibrary {
                         .flex()
                         .items_center()
                         .gap(px(7.))
+                        .child(mini_bars)
                         .child(pro_swap_label(
                             pro_eid(&self.id, "fill-cnt-lbl"),
                             count_text,
                             12.,
                             FontWeight::NORMAL,
                             p.muted,
-                        ))
-                        .child(mini_bars),
+                        )),
                 );
 
             // Inline editable sentence with `{variable}` Editor chips
@@ -1037,7 +1099,7 @@ impl Render for PromptLibrary {
                 .flex_wrap()
                 .items_center()
                 .gap_x(px(4.))
-                .gap_y(px(3.));
+                .gap_y(px(4.));
 
             for seg in segments {
                 match seg {
@@ -1076,18 +1138,29 @@ impl Render for PromptLibrary {
                         } else {
                             vname.chars().count()
                         };
-                        let chip_w = ((char_len as f32) * 7.5 + 20.0).clamp(62.0, 224.0);
+                        let chip_w = ((char_len as f32) * 7.4 + 18.0).clamp(58.0, 224.0);
 
-                        let base_bg = if is_filled { p.accent_soft } else { p.chip };
+                        let unfilled_bg: Hsla = if p.dark {
+                            hsla(0., 0., 1., 0.065)
+                        } else {
+                            hsla(0., 0., 0., 0.045)
+                        };
+                        let base_bg = if is_filled {
+                            p.accent_soft
+                        } else {
+                            unfilled_bg
+                        };
                         let chip_bg = if is_flashing {
-                            pro_mix_color(base_bg, p.blue.opacity(0.28), flash_alpha)
+                            pro_mix_color(base_bg, p.blue.opacity(0.30), flash_alpha)
                         } else {
                             base_bg
                         };
                         let chip_border = if is_filled {
-                            p.blue.opacity(0.36)
+                            p.blue.opacity(0.42)
+                        } else if p.dark {
+                            hsla(0., 0., 1., 0.16)
                         } else {
-                            p.line_strong
+                            hsla(0., 0., 0., 0.13)
                         };
 
                         let ed_slot = self
@@ -1113,31 +1186,39 @@ impl Render for PromptLibrary {
                             .children(ed_slot);
                         sentence_flow = sentence_flow.child(chip);
 
-                        // Preview representation (filled highlight vs unfilled `{hole}`)
+                        // Preview representation: filled accent pill vs unfilled `{{variable}}` highlight pill
                         if is_filled {
                             let prev_bg = if is_flashing {
-                                p.blue.opacity(0.22 * flash_alpha)
+                                pro_mix_color(p.accent_soft, p.blue.opacity(0.28), flash_alpha)
                             } else {
-                                transparent_black()
+                                p.accent_soft
                             };
                             preview_flow = preview_flow.child(
                                 div()
-                                    .px(px(2.))
-                                    .rounded(px(3.))
+                                    .px(px(5.))
+                                    .py(px(0.5))
+                                    .rounded(px(4.))
                                     .bg(prev_bg)
                                     .text_size(px(12.5))
-                                    .line_height(px(19.))
+                                    .line_height(px(18.))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.ink)
+                                    .text_color(if p.dark { p.strong } else { p.blue })
                                     .child(trimmed_val.to_string()),
                             );
                         } else {
                             preview_flow = preview_flow.child(
                                 div()
-                                    .text_size(px(12.5))
-                                    .line_height(px(19.))
-                                    .text_color(p.faint)
-                                    .child(format!("{{{vname}}}")),
+                                    .px(px(5.))
+                                    .py(px(0.5))
+                                    .rounded(px(4.))
+                                    .bg(unfilled_bg)
+                                    .border_1()
+                                    .border_color(p.line_strong)
+                                    .text_size(px(11.5))
+                                    .line_height(px(17.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.muted)
+                                    .child(format!("{{{{{vname}}}}}")),
                             );
                         }
                     }
@@ -1169,9 +1250,9 @@ impl Render for PromptLibrary {
                         .py(px(9.))
                         .px(px(12.))
                         .rounded(px(8.))
-                        .bg(p.subtle)
+                        .bg(preview_bg)
                         .border_1()
-                        .border_color(p.line)
+                        .border_color(split_border)
                         .child(preview_flow),
                 );
 
@@ -1360,8 +1441,9 @@ impl Render for PromptLibrary {
             .h(px(44.))
             .pl(px(16.))
             .pr(px(8.))
+            .bg(side_bg)
             .border_t_1()
-            .border_color(p.line)
+            .border_color(split_border)
             .flex()
             .items_center()
             .justify_between()
@@ -1406,10 +1488,10 @@ impl Render for PromptLibrary {
                     .max_w(px(640.))
                     .mx_auto()
                     .rounded(px(10.))
-                    .bg(p.card)
+                    .bg(card_shell_bg)
                     .border_1()
-                    .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .border_color(card_shell_border)
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

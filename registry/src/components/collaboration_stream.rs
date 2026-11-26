@@ -7,7 +7,7 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_app_tile, pro_btn,
+        ProPalette, ProSelectionSensor, pro_agent_avatar, pro_app_tile, pro_card_shadow,
         pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
         pro_mark_selected, pro_mix_color, pro_person_avatar, pro_pill_indicator,
         pro_popover_presence, pro_presence, pro_selection_sensor, pro_shimmer_text,
@@ -543,6 +543,28 @@ fn default_stream_messages(cx: &App) -> Vec<StreamMessage> {
 }
 
 /// Inter-agent collaboration stream with `From -> To` badges, file previews, payload cards, and `@agent` composer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::collaboration_stream::{
+///     CollaborationStream, CollaborationStreamEvent,
+/// };
+///
+/// let stream = cx.new(|cx| {
+///     CollaborationStream::new("pricing-collab-stream", cx)
+///         .with_task("Launch the new pricing page")
+///         .with_live(true)
+/// });
+/// cx.subscribe(&stream, |_, ev: &CollaborationStreamEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct CollaborationStream {
     id: ElementId,
     title: Option<SharedString>,
@@ -583,8 +605,6 @@ impl CollaborationStream {
             .detach();
         cx.observe_global::<crate::primitives::control::UiLanguage>(|_, cx| cx.notify())
             .detach();
-        let mut expanded = HashSet::new();
-        expanded.insert(SharedString::from("m3"));
         Self {
             id: id.into(),
             title: None,
@@ -592,14 +612,14 @@ impl CollaborationStream {
             agents: default_stream_agents(),
             messages: default_stream_messages(cx),
             focus_agent: None,
-            expanded_payloads: expanded,
+            expanded_payloads: HashSet::new(),
             preview: None,
             replying_to: None,
             mention_menu_open: false,
             mention_cursor: 0,
             composer_enabled: true,
             live: true,
-            max_height: 440.0,
+            max_height: 484.0,
             loading: false,
             empty: false,
             next_seq: 100,
@@ -903,9 +923,11 @@ impl CollaborationStream {
                 .child(pro_icon(ProIcon::Users, (side * 0.62).max(10.0), p.muted))
                 .into_any_element()
         } else if let Some(ag) = self.agents.iter().find(|a| a.id.as_ref() == id) {
-            pro_agent_avatar(&ag.id, ag.tone.color(p), side, busy, elapsed_ms, cx)
+            let seed = format!("{} {}", ag.model.as_deref().unwrap_or("claude"), ag.name);
+            pro_agent_avatar(&seed, ag.tone.color(p), side, busy, elapsed_ms, cx)
         } else {
-            pro_agent_avatar(id, p.blue, side, busy, elapsed_ms, cx)
+            let fallback_seed = format!("{id} claude");
+            pro_agent_avatar(&fallback_seed, p.blue, side, busy, elapsed_ms, cx)
         }
     }
 
@@ -1229,7 +1251,6 @@ impl Render for CollaborationStream {
                 None => title_str.to_string(),
             })
             .relative()
-            .flex_1()
             .min_w_0()
             .p(px(2.0))
             .rounded(px(9.0))
@@ -1258,7 +1279,8 @@ impl Render for CollaborationStream {
         ));
         for ag in &self.agents {
             let ag_busy = self.live && self.messages.iter().any(|m| m.from == ag.id && m.typing);
-            let av = pro_agent_avatar(&ag.id, ag.tone.color(&p), 16.0, ag_busy, elapsed_ms, cx);
+            let tab_seed = format!("{} {}", ag.model.as_deref().unwrap_or("claude"), ag.name);
+            let av = pro_agent_avatar(&tab_seed, ag.tone.color(&p), 16.0, ag_busy, elapsed_ms, cx);
             tab_defs.push((Some(ag.id.clone()), ag.name.clone(), Some(av)));
         }
 
@@ -1318,51 +1340,37 @@ impl Render for CollaborationStream {
             .child(tabs_row)
             .child(
                 div()
+                    .id(pro_eid(&self.id, "stream-live-toggle-btn"))
+                    .role(Role::Button)
+                    .tab_index(0)
+                    .h(px(26.0))
+                    .px(px(8.0))
+                    .rounded(px(6.0))
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(p.hover))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.live = !this.live;
+                        cx.notify();
+                    }))
                     .flex_none()
                     .flex()
                     .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.0))
-                            .child(div().size(px(6.0)).rounded_full().bg(if self.live {
-                                p.blue.opacity(live_dot_alpha)
-                            } else {
-                                p.faint
-                            }))
-                            .child(pro_swap_label(
-                                pro_eid(&self.id, "live-state-swap"),
-                                if self.live {
-                                    tr(cx, "Live", "实时")
-                                } else {
-                                    tr(cx, "Paused", "已暂停")
-                                },
-                                12.0,
-                                FontWeight::NORMAL,
-                                p.muted,
-                            )),
-                    )
-                    .child(pro_btn(
-                        pro_eid(&self.id, "stream-live-toggle-btn"),
+                    .gap(px(6.0))
+                    .child(div().size(px(6.0)).rounded_full().bg(if self.live {
+                        p.blue.opacity(live_dot_alpha)
+                    } else {
+                        p.faint
+                    }))
+                    .child(pro_swap_label(
+                        pro_eid(&self.id, "live-state-swap"),
                         if self.live {
-                            tr(cx, "Stop", "暂停")
+                            tr(cx, "Live", "实时")
                         } else {
-                            tr(cx, "Resume", "继续")
+                            tr(cx, "Paused", "已暂停")
                         },
-                        Some(if self.live {
-                            ProIcon::Pause
-                        } else {
-                            ProIcon::Play
-                        }),
-                        ProBtnStyle::Ghost,
-                        true,
-                        cx,
-                        |this, _, cx| {
-                            this.live = !this.live;
-                            cx.notify();
-                        },
+                        12.0,
+                        FontWeight::NORMAL,
+                        p.muted,
                     )),
             );
 
@@ -1766,7 +1774,7 @@ impl Render for CollaborationStream {
                 } else {
                     p.line
                 })
-                .when(!p.dark && !is_you, |d| d.shadow_xs())
+                .when(!is_you, |d| d.shadow(pro_card_shadow(p.dark)))
                 .flex()
                 .flex_col()
                 .gap(px(6.0))
@@ -1792,6 +1800,7 @@ impl Render for CollaborationStream {
                 let muted_c = p.muted;
                 let ink_c = p.ink;
                 let faint_c = p.faint;
+                let payload_shadow = pro_card_shadow(p.dark);
 
                 pro_fold(
                     pro_eid(&self.id, format!("payload-{mid}")),
@@ -1809,6 +1818,7 @@ impl Render for CollaborationStream {
                             .bg(card_bg)
                             .border_1()
                             .border_color(line_c)
+                            .shadow(payload_shadow)
                             .flex()
                             .flex_col()
                             .gap(px(8.0));
@@ -1993,8 +2003,10 @@ impl Render for CollaborationStream {
                 .enumerate()
                 .map(|(mi, ag)| {
                     let nm = ag.name.clone();
+                    let av_seed =
+                        format!("{} {}", ag.model.as_deref().unwrap_or("claude"), ag.name);
                     let av =
-                        pro_agent_avatar(&ag.id, ag.tone.color(&p), 18.0, false, elapsed_ms, cx);
+                        pro_agent_avatar(&av_seed, ag.tone.color(&p), 18.0, false, elapsed_ms, cx);
                     let is_cur = mi == self.mention_cursor.min(matching_agents.len() - 1);
                     let m_inner = div()
                         .w_full()
@@ -2198,7 +2210,7 @@ impl Render for CollaborationStream {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line_strong)
-                        .when(!p.dark, |d| d.shadow_xs())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .gap(px(8.0))

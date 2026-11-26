@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_fold, pro_icon_btn, pro_popover_presence, pro_presence, pro_skeleton_bar,
-        pro_swap_label, pro_switch, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_popover_presence, pro_presence,
+        pro_skeleton_bar, pro_swap_label, pro_switch, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
@@ -91,6 +91,27 @@ pub enum IntegrationSettingsEvent {
 }
 
 /// Connected SaaS service settings card with live validation and dirty-state confirmation bar.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::integration_settings::{IntegrationSettings, IntegrationSettingsEvent};
+///
+/// let card = cx.new(|cx| {
+///     IntegrationSettings::new("stripe-integration", cx)
+///         .with_provider("stripe")
+///         .with_name("Stripe store")
+///         .with_count(Some(128))
+/// });
+/// cx.subscribe(&card, |_, event: &IntegrationSettingsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct IntegrationSettings {
     id: ElementId,
     provider: SharedString,
@@ -1338,7 +1359,7 @@ impl Render for IntegrationSettings {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

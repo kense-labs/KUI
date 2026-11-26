@@ -424,6 +424,26 @@ impl LoaderMotion {
 }
 
 /// A fixed-footprint loader that morphs into a host-reported result.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::morph_loader::{LoaderStatus, LoaderVariant, MorphLoader};
+///
+/// let loader = cx.new(|_| MorphLoader::new("publish-status")
+///     .with_size(24.)
+///     .with_stroke_width(2.5)
+///     .with_tone(true)
+///     .with_labels(["Publishing", "Published", "Publish failed"]));
+/// loader.update(cx, |view, cx| view.set_variant(LoaderVariant::Ring, cx));
+/// // Call only after the host operation has completed.
+/// loader.update(cx, |view, cx| view.set_status(LoaderStatus::Success, cx));
+/// # }
+/// ```
 pub struct MorphLoader {
     id: ElementId,
     size: f32,

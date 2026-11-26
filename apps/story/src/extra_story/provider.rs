@@ -69,8 +69,8 @@ fn samples(language: UiLanguage, healthy: bool) -> Vec<ProviderStatusItem> {
                         language.text("Investigating", "调查中"),
                         "14:02 UTC",
                         language.text(
-                            "The simulated Responses endpoint is returning more 5xx errors.",
-                            "模拟 Responses 接口的 5xx 错误增多。",
+                            "The Responses endpoint is returning elevated 5xx errors.",
+                            "Responses 接口的 5xx 错误率升高。",
                         ),
                     )],
                 ));
@@ -89,8 +89,8 @@ impl Example {
             )
             .with_open_incident("openai")
             .footnote(language.text(
-                "Sample data. Latency is the median over the last 5 minutes.",
-                "仅为样例。延迟展示最近 5 分钟的中位数。",
+                "Latency is the median over the last 5 minutes.",
+                "延迟展示最近 5 分钟的中位数。",
             ))
         });
         let sub = cx.subscribe(

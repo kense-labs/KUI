@@ -126,6 +126,27 @@ impl LogEntry {
 pub struct LogEntrySelected(pub SharedString);
 
 /// Multi-pane log viewer with source directory, live search, severity filters, and detail pane.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::log_stream::{LogEntry, LogLevel, LogStream};
+///
+/// let control = cx.new(|cx| {
+///     LogStream::new(
+///         "logs",
+///         "Live logs",
+///         vec![LogEntry::new("1", "10:00:01", LogLevel::Info, "gateway", "ready")],
+///         window,
+///         cx,
+///     )
+/// });
+/// # }
+/// ```
 pub struct LogStream {
     id: ElementId,
     title: SharedString,

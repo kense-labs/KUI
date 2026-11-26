@@ -419,6 +419,22 @@ fn reopen_to_top(items: &mut Vec<InboxItem>, item_id: &str) -> bool {
 }
 
 /// Single-thread orchestrator inbox screen hosted in [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::inbox::{AgentInboxScreen, AgentInboxEvent};
+///
+/// let screen = cx.new(|cx| AgentInboxScreen::new("inbox", cx));
+/// cx.subscribe(&screen, |_, event: &AgentInboxEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentInboxScreen {
     id: ElementId,
     standalone: bool,
@@ -2765,7 +2781,10 @@ impl AgentInboxScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

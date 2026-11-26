@@ -195,6 +195,22 @@ fn format_char_count(n: usize) -> String {
 }
 
 /// Workspace general settings screen (`settings-general`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_general::{SettingsGeneralScreen, SettingsGeneralEvent};
+///
+/// let screen = cx.new(|cx| SettingsGeneralScreen::new("settings-general", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsGeneralEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsGeneralScreen {
     id: ElementId,
     focus: FocusHandle,

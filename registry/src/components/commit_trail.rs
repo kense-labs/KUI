@@ -7,9 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_person_avatar, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
-        pro_skeleton_bar, pro_swap_label, pro_tactile, tr,
+        ProPalette, pro_agent_avatar, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_person_avatar, pro_popover_presence, pro_rolling_number,
+        pro_shimmer_text, pro_skeleton_bar, pro_swap_label, pro_tactile, tr,
     },
     primitives::{
         family::{PhaseClock, disabled_motion},
@@ -519,6 +519,26 @@ fn default_refs() -> HashMap<SharedString, SharedString> {
 }
 
 /// Git commit history feed on a vertical blue trail with merge folding and commit detail drawers.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::commit_trail::{CommitTrail, CommitTrailEvent};
+///
+/// let history = cx.new(|cx| {
+///     CommitTrail::new("main-commits", cx)
+///         .with_branches(["main", "invoice-pdf", "tax-rates"])
+///         .with_has_more(true)
+/// });
+/// cx.subscribe(&history, |_, ev: &CommitTrailEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct CommitTrail {
     id: ElementId,
     branches: Vec<SharedString>,
@@ -701,6 +721,38 @@ impl CommitTrail {
     }
 }
 
+fn commit_agent_avatar_seed(name: &str) -> &'static str {
+    let s = name.to_ascii_lowercase();
+    if s.contains("claude")
+        || s.contains("opus")
+        || s.contains("sonnet")
+        || s.contains("haiku")
+        || s.contains("anthropic")
+    {
+        "claude"
+    } else if s.contains("gemini") {
+        "gemini"
+    } else if s.contains("deepseek") {
+        "deepseek"
+    } else if s.contains("mistral") || s.contains("codestral") {
+        "mistral"
+    } else if s.contains("qwen") {
+        "qwen"
+    } else if s.contains("llama") {
+        "llama"
+    } else if s.contains("grok") {
+        "grok"
+    } else if s.contains("gpt")
+        || s.contains("openai")
+        || s.contains("codex")
+        || s.contains("coder")
+    {
+        "gpt"
+    } else {
+        "claude"
+    }
+}
+
 fn render_author_inline(
     author: &CommitAuthor,
     elapsed_ms: f32,
@@ -713,7 +765,14 @@ fn render_author_inline(
             .color_hex
             .map(|h| Hsla::from(rgb(h)))
             .unwrap_or(default_agent_c);
-        pro_agent_avatar(author.name.as_ref(), c, 18., false, elapsed_ms, cx)
+        pro_agent_avatar(
+            commit_agent_avatar_seed(author.name.as_ref()),
+            c,
+            18.,
+            false,
+            elapsed_ms,
+            cx,
+        )
     } else {
         pro_person_avatar(author.name.as_ref(), 18., false, None, cx)
     };
@@ -2065,7 +2124,7 @@ impl Render for CommitTrail {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

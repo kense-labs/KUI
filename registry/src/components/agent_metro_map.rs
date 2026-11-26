@@ -5,10 +5,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_ease,
-        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_popover_presence, pro_presence, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -236,10 +236,14 @@ enum MetroHoverFocus {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_metro_map::AgentMetroMap;
 ///
 /// let metro = cx.new(|cx| AgentMetroMap::new("agent-metro-map", cx));
+/// # }
 /// ```
 pub struct AgentMetroMap {
     id: ElementId,
@@ -866,7 +870,7 @@ impl AgentMetroMap {
                     .items_center()
                     .gap(px(8.))
                     .child(pro_agent_avatar(
-                        &line.id,
+                        metro_avatar_seed(&line.model, &line.name, &line.id),
                         lcol,
                         24.,
                         line.status == MetroLineStatus::Running,
@@ -968,6 +972,7 @@ impl Render for AgentMetroMap {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(18.))
@@ -1178,7 +1183,7 @@ impl Render for AgentMetroMap {
                             div()
                                 .size(px(18.))
                                 .rounded(px(5.))
-                                .bg(p.card)
+                                .bg(p.logo_tile)
                                 .border_1()
                                 .border_color(p.line)
                                 .flex()
@@ -1260,8 +1265,10 @@ impl Render for AgentMetroMap {
             vis: f32,
         }
 
+        type MetroTrainMarker = (SharedString, &'static str, Hsla, (f32, f32), f32);
+
         let mut line_renders: Vec<LineRenderData> = Vec::with_capacity(self.lines.len());
-        let mut train_markers: Vec<(SharedString, Hsla, (f32, f32), f32)> = Vec::new();
+        let mut train_markers: Vec<MetroTrainMarker> = Vec::new();
 
         for (li, ln) in self.lines.iter().enumerate() {
             let lcol = self.line_color(li, ln, &p);
@@ -1284,7 +1291,13 @@ impl Render for AgentMetroMap {
                 };
                 if ln.status == MetroLineStatus::Running {
                     let pt = sample_train_point(&ln.stations, &segs, &st_px, clamped);
-                    train_markers.push((ln.id.clone(), lcol, pt, vis));
+                    train_markers.push((
+                        ln.id.clone(),
+                        metro_avatar_seed(&ln.model, &ln.name, &ln.id),
+                        lcol,
+                        pt,
+                        vis,
+                    ));
                 }
                 line_renders.push(LineRenderData {
                     segments: segs,
@@ -1560,7 +1573,7 @@ impl Render for AgentMetroMap {
 
         // White agent train chips riding on top of active stations/rails
         let mut train_elements: Vec<AnyElement> = Vec::with_capacity(train_markers.len());
-        for (ti, (lid, lcol, (tx, ty), vis)) in train_markers.into_iter().enumerate() {
+        for (ti, (lid, seed, lcol, (tx, ty), vis)) in train_markers.into_iter().enumerate() {
             let offset_y = (ti % 2) as f32 * 0.0;
             let lid_click = lid.clone();
             train_elements.push(
@@ -1578,7 +1591,7 @@ impl Render for AgentMetroMap {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_agent_avatar(&lid, lcol, 22., true, elapsed_ms, cx)),
+                        .child(pro_agent_avatar(seed, lcol, 22., true, elapsed_ms, cx)),
                     cx,
                     move |this, _, cx| {
                         let target = lid_click.clone();
@@ -1592,7 +1605,7 @@ impl Render for AgentMetroMap {
                 .left(px(tx - 11.0))
                 .top(px(ty - 11.0 + offset_y))
                 .opacity(vis)
-                .shadow_sm()
+                .shadow(pro_card_shadow(p.dark))
                 .into_any_element(),
             );
         }
@@ -1671,6 +1684,7 @@ impl Render for AgentMetroMap {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .relative()
             .overflow_hidden()
             .flex()
@@ -1869,12 +1883,63 @@ fn station_passed_by_line(line: &MetroLine, station_id: &SharedString) -> bool {
 
 fn infer_provider_key(model: &str) -> &'static str {
     let lower = model.to_ascii_lowercase();
-    if lower.contains("claude") || lower.contains("opus") || lower.contains("sonnet") {
+    if lower.contains("claude")
+        || lower.contains("opus")
+        || lower.contains("sonnet")
+        || lower.contains("haiku")
+        || lower.contains("anthropic")
+    {
         "claude"
     } else if lower.contains("gemini") {
         "gemini"
+    } else if lower.contains("deepseek") {
+        "deepseek"
+    } else if lower.contains("mistral") || lower.contains("codestral") {
+        "mistral"
+    } else if lower.contains("qwen") {
+        "qwen"
+    } else if lower.contains("llama") {
+        "llama"
+    } else if lower.contains("grok") {
+        "grok"
     } else {
         "openai"
+    }
+}
+
+fn metro_avatar_seed(model: &str, name: &str, id: &str) -> &'static str {
+    let m = model.to_ascii_lowercase();
+    if m.contains("claude")
+        || m.contains("opus")
+        || m.contains("sonnet")
+        || m.contains("haiku")
+        || m.contains("anthropic")
+    {
+        "claude"
+    } else if m.contains("gemini") {
+        "gemini"
+    } else if m.contains("deepseek") {
+        "deepseek"
+    } else if m.contains("mistral") || m.contains("codestral") {
+        "mistral"
+    } else if m.contains("qwen") {
+        "qwen"
+    } else if m.contains("llama") {
+        "llama"
+    } else if m.contains("grok") {
+        "grok"
+    } else if m.contains("gpt") || m.contains("openai") || m.contains("codex") {
+        "gpt"
+    } else {
+        let s = format!("{name} {id}").to_ascii_lowercase();
+        if s.contains("research") || s.contains("note") || s.contains("write") || s.contains("lead")
+        {
+            "claude"
+        } else if s.contains("doc") || s.contains("help") || s.contains("review") {
+            "gemini"
+        } else {
+            "gpt"
+        }
     }
 }
 

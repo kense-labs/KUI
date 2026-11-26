@@ -156,6 +156,22 @@ struct Drag {
 }
 
 /// Scrollable, square-cell album with an in-place photo viewer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::photo_grid::{GridPhoto, PhotoGrid};
+///
+/// let photo = GridPhoto::new("west", "west.jpg".to_owned(), "Sunset over a canyon", "West canyon", gpui::size(gpui::px(900.), gpui::px(600.)))
+///     .with_detail("October 9")
+///     .with_thumbnail("west-thumb.jpg".to_owned());
+/// let grid = cx.new(|cx| PhotoGrid::new("October", vec![photo], cx));
+/// # }
+/// ```
 pub struct PhotoGrid {
     title: SharedString,
     photos: Vec<GridPhoto>,

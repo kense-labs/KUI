@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
-        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_swap_label, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     primitives::{
         control::activate,
@@ -482,6 +482,27 @@ struct LineEditorSlot {
 }
 
 /// Interactive SaaS billing schedule and contract phase composer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::billing_schedule::{BillingSchedule, BillingScheduleEvent, PhaseDuration};
+///
+/// let schedule = cx.new(|cx| {
+///     BillingSchedule::new("billing-schedule", cx)
+///         .with_phase("Build-out phase")
+///         .with_default_start("2026-01-01")
+///         .with_duration(PhaseDuration::TwelveMonths)
+/// });
+/// cx.subscribe(&schedule, |_, event: &BillingScheduleEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct BillingSchedule {
     id: ElementId,
     title: SharedString,
@@ -2693,7 +2714,7 @@ impl Render for BillingSchedule {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

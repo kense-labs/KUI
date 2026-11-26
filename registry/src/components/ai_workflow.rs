@@ -123,6 +123,22 @@ pub enum WorkflowEvent {
         success: bool,
     },
 }
+/// `AiWorkflow` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ai_workflow::{AiWorkflow, WorkflowKind, WorkflowPath, WorkflowStep};
+///
+/// let steps = vec![WorkflowStep::new("trigger", "Receive request", "Inbox", WorkflowKind::Trigger)];
+/// let paths: Vec<WorkflowPath> = vec![];
+/// let control = cx.new(|_| AiWorkflow::new("Request triage", "Review incoming requests", steps, paths));
+/// # }
+/// ```
 pub struct AiWorkflow {
     title: SharedString,
     description: SharedString,

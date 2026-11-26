@@ -5,15 +5,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
-        pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_rolling_number,
-        pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
-        pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         family::{PhaseClock, Slide},
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -246,10 +246,14 @@ impl EventEmitter<AgentFleetEvent> for AgentFleet {}
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_fleet::AgentFleet;
 ///
 /// let fleet = cx.new(|cx| AgentFleet::new("agent-fleet", cx));
+/// # }
 /// ```
 pub struct AgentFleet {
     id: ElementId,
@@ -601,30 +605,14 @@ impl AgentFleet {
 
         let (pie_ratio, summary_phrase, summary_tone) = summarize_sub_agents(lead, p, cx);
         let status_pill = render_status_pill(&self.id, &lead.id, lead.status, p, cx);
-        let provider_key = infer_provider_key(&lead.model);
-        let avatar_el = if let Some(art) = pro_app_artwork(provider_key, 13., cx) {
-            div()
-                .size(px(22.))
-                .flex_none()
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(art)
-                .into_any_element()
-        } else {
-            pro_agent_avatar(
-                &lead.id,
-                p.blue,
-                22.,
-                lead.status == FleetStatus::Running,
-                0.,
-                cx,
-            )
-        };
+        let avatar_el = pro_agent_avatar(
+            fleet_avatar_seed(&lead.model, &lead.name, &lead.id),
+            p.blue,
+            22.,
+            lead.status == FleetStatus::Running,
+            (live_tick_secs as f32) * 1000.0,
+            cx,
+        );
 
         let mut task_row = div()
             .w_full()
@@ -797,6 +785,7 @@ impl AgentFleet {
         )
         .when(wide, |d| d.w(px(288.)))
         .when(!wide, |d| d.w_full())
+        .shadow(pro_card_shadow(p.dark))
         .relative()
         .opacity(opacity)
         .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
@@ -903,7 +892,7 @@ impl AgentFleet {
                     .gap(px(8.))
                     .min_w_0()
                     .child(pro_agent_avatar(
-                        &sub.id,
+                        fleet_avatar_seed(&sub.model, &sub.name, &sub.id),
                         if sub.status == FleetStatus::Waiting {
                             p.amber
                         } else if sub.status == FleetStatus::Failed {
@@ -1028,6 +1017,7 @@ impl AgentFleet {
             },
         )
         .role(Role::TreeItem)
+        .shadow(pro_card_shadow(p.dark))
         .when(wide, |d| d.w(px(240.)))
         .when(!wide, |d| d.w_full())
         .relative()
@@ -2137,14 +2127,54 @@ fn find_fleet_mut<'a>(node: &'a mut FleetAgent, id: &SharedString) -> Option<&'a
     None
 }
 
-fn infer_provider_key(model: &str) -> &'static str {
-    let lower = model.to_ascii_lowercase();
-    if lower.contains("opus") || lower.contains("sonnet") || lower.contains("claude") {
+fn fleet_avatar_seed<'a>(model: &'a str, name: &'a str, id: &'a str) -> &'static str {
+    let m = model.to_ascii_lowercase();
+    if m.contains("claude") || m.contains("opus") || m.contains("sonnet") || m.contains("haiku") {
+        return "claude";
+    }
+    if m.contains("gpt") || m.contains("openai") || m.contains("codex") {
+        return "gpt";
+    }
+    if m.contains("gemini") {
+        return "gemini";
+    }
+    if m.contains("deepseek") {
+        return "deepseek";
+    }
+    if m.contains("mistral") {
+        return "mistral";
+    }
+    if m.contains("qwen") {
+        return "qwen";
+    }
+    let combined = format!("{name} {id}").to_ascii_lowercase();
+    if combined.contains("claude")
+        || combined.contains("writer")
+        || combined.contains("research")
+        || combined.contains("billing")
+        || combined.contains("notes")
+        || combined.contains("change")
+        || combined.contains("launch")
+        || combined.contains("support")
+    {
         "claude"
-    } else if lower.contains("gemini") {
+    } else if combined.contains("gemini")
+        || combined.contains("qa")
+        || combined.contains("triage")
+        || combined.contains("router")
+        || combined.contains("analyst")
+        || combined.contains("price")
+        || combined.contains("deck")
+    {
         "gemini"
+    } else if combined.contains("deepseek") {
+        "deepseek"
+    } else if combined.contains("mistral") {
+        "mistral"
+    } else if combined.contains("qwen") {
+        "qwen"
     } else {
-        "openai"
+        "gpt"
     }
 }
 

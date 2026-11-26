@@ -38,6 +38,20 @@ pub fn histogram(data: &[f64], min: f64, max: f64, bins: usize) -> Vec<usize> {
 }
 
 /// A distribution-aware filter. Drag either handle or focus it and use the arrow keys.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::range_histogram_slider::RangeHistogramSlider;
+///
+/// let data = vec![30.0, 80.0, 180.0, 260.0, 400.0];
+/// let control = cx.new(|cx| RangeHistogramSlider::new("Price", data, 0.0..=500.0, 5.0, (80.0, 260.0), 32, window, cx));
+/// # }
+/// ```
 pub struct RangeHistogramSlider {
     slider: Entity<Slider>,
     bounds: std::ops::RangeInclusive<f64>,

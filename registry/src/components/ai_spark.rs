@@ -514,6 +514,27 @@ impl LabelLayer {
 }
 
 /// An eight-ray activity mark. Without a host status it cycles through four phases.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ai_spark::{AiSpark, SparkStatus, SparkVariant};
+///
+/// // 宿主控制实际任务状态；初次挂载不播放入场形变。
+/// let mark = cx.new(|_| AiSpark::new("assistant")
+///     .with_status(SparkStatus::Thinking)
+///     .with_size(24.));
+/// mark.update(cx, |mark, cx| mark.set_status(SparkStatus::Done, cx));
+///
+/// let label = cx.new(|_| AiSpark::new("activity-label")
+///     .with_variant(SparkVariant::Pill)
+///     .with_status(SparkStatus::Writing));
+/// # }
+/// ```
 pub struct AiSpark {
     id: ElementId,
     motion: Motion,

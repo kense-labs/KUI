@@ -1170,10 +1170,14 @@ impl KeyCapAnim {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::glow_keyboard::GlowKeyboard;
 ///
 /// let hero = cx.new(|cx| GlowKeyboard::new("hero-glow-kb", cx));
+/// # }
 /// ```
 pub struct GlowKeyboard {
     id: ElementId,

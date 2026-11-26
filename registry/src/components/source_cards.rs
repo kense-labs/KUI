@@ -35,6 +35,20 @@ pub enum SourceEvent {
     Open(String),
     Retry,
 }
+/// `CitationShelf` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::source_cards::{CitationShelf, Citation};
+///
+/// let control = cx.new(|_| CitationShelf::new("sources","References",vec![Citation {domain:"docs.rs".into(), title:"Rust API".into(), passage:"Public module documentation".into(),url:"https://docs.rs/".into()}]));
+/// # }
+/// ```
 pub struct CitationShelf {
     id: SharedString,
     pub query: String,

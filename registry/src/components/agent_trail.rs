@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
-        pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
-        pro_tactile, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_bar, pro_tactile, tr,
     },
     primitives::{
         family::{PhaseClock, disabled_motion},
@@ -409,6 +409,25 @@ fn default_trail_steps() -> Vec<TrailStep> {
 }
 
 /// Quiet vertical progress trail for an autonomous agent run.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_trail::{AgentTrail, AgentTrailEvent};
+///
+/// let trail = cx.new(|cx| {
+///     AgentTrail::new("checkout-trail", cx)
+///         .with_title("Fix the checkout crash")
+/// });
+/// cx.subscribe(&trail, |_, ev: &AgentTrailEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentTrail {
     id: ElementId,
     title: Option<SharedString>,
@@ -1004,7 +1023,7 @@ impl Render for AgentTrail {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .when_some(header_el, |d, h| d.child(h))
@@ -1041,7 +1060,7 @@ impl Render for AgentTrail {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .when_some(header_el, |d, h| d.child(h))
@@ -1132,7 +1151,7 @@ impl Render for AgentTrail {
                     .mr(px(6.))
                     .flex_none()
                     .rounded_full()
-                    .bg(card_bg)
+                    .bg(p.logo_tile)
                     .border_1()
                     .border_color(logo_edge)
                     .when(!p.dark, |d| d.shadow_xs())
@@ -1930,7 +1949,7 @@ impl Render for AgentTrail {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .when_some(header_el, |d, h| d.child(h))

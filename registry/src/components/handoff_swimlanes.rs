@@ -7,17 +7,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_connector_pulse,
-        pro_ease, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence,
-        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_icon_btn,
+        pro_mix_color, pro_person_avatar, pro_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
-    foundation::Theme,
     primitives::{
         family::disabled_motion,
-        pro_icons::{
-            AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork, pro_icon, pro_svg,
-        },
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -703,55 +700,38 @@ fn default_swim_tasks(cx: &App) -> Vec<SwimTask> {
     ]
 }
 
-#[allow(clippy::too_many_arguments)]
-fn render_pixel_mark(
-    seed: &str,
-    person: bool,
-    color: Hsla,
-    side: f32,
-    sq: f32,
-    gap: f32,
-    busy: bool,
-    elapsed_ms: f32,
-    reduced: bool,
-) -> AnyElement {
-    let cells = if person {
-        [true; 9]
+fn swim_agent_seed(lane: &SwimLane) -> &'static str {
+    let s = format!(
+        "{} {} {}",
+        lane.logo.as_deref().unwrap_or(""),
+        lane.id,
+        lane.name
+    )
+    .to_ascii_lowercase();
+    if s.contains("claude")
+        || s.contains("opus")
+        || s.contains("sonnet")
+        || s.contains("haiku")
+        || s.contains("plan")
+        || s.contains("write")
+        || s.contains("lead")
+    {
+        "claude"
+    } else if s.contains("gemini") || s.contains("review") || s.contains("audit") {
+        "gemini"
+    } else if s.contains("deepseek") {
+        "deepseek"
+    } else if s.contains("mistral") {
+        "mistral"
+    } else if s.contains("qwen") {
+        "qwen"
+    } else if s.contains("llama") {
+        "llama"
+    } else if s.contains("grok") {
+        "grok"
     } else {
-        agent_pixel_cells(seed)
-    };
-    let mut col_el = div()
-        .size(px(side))
-        .flex_none()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(px(gap));
-    for r in 0..3usize {
-        let mut row_el = div().flex().items_center().gap(px(gap));
-        for c in 0..3usize {
-            let i = r * 3 + c;
-            let on = cells[i];
-            let alpha = if busy && !reduced {
-                let phase = ((elapsed_ms + AGENT_WAVE_MS[i]) / 1200.0) * std::f32::consts::TAU;
-                let wave = 0.60 + 0.40 * phase.cos();
-                if on { wave } else { 0.16 * wave }
-            } else if on {
-                1.0
-            } else {
-                0.0
-            };
-            row_el = row_el.child(
-                div()
-                    .size(px(sq))
-                    .rounded(px((sq * 0.28).max(0.75)))
-                    .bg(color.opacity(alpha)),
-            );
-        }
-        col_el = col_el.child(row_el);
+        "gpt"
     }
-    col_el.into_any_element()
 }
 
 fn render_lane_mark(
@@ -762,29 +742,24 @@ fn render_lane_mark(
     p: &ProPalette,
     cx: &App,
 ) -> AnyElement {
-    let reduced = Theme::global(cx).reduced_motion;
     let color = lane.color(p);
-    let (sq, gap) = if side <= 13.0 {
-        (2.5, 1.0)
-    } else if side <= 15.0 {
-        (2.5, 1.25)
-    } else {
-        (3.0, 1.5)
-    };
+    let box_side = side.max(16.0);
     match lane.kind {
-        SwimLaneKind::Person => render_pixel_mark(
-            &lane.id, true, color, side, sq, gap, false, elapsed_ms, reduced,
-        ),
-        SwimLaneKind::Agent => render_pixel_mark(
-            &lane.id, false, color, side, sq, gap, busy, elapsed_ms, reduced,
-        ),
+        SwimLaneKind::Person => pro_person_avatar(lane.name.as_ref(), box_side, false, None, cx),
+        SwimLaneKind::Agent => {
+            pro_agent_avatar(swim_agent_seed(lane), color, box_side, busy, elapsed_ms, cx)
+        }
         SwimLaneKind::Tool => {
             let key = lane.logo.as_deref().unwrap_or(lane.name.as_ref());
-            let icon_sz = (side - 2.0).max(11.0);
+            let icon_sz = (box_side * 0.58).round().max(10.0);
             if key.eq_ignore_ascii_case("vercel") {
                 div()
-                    .size(px(side))
+                    .size(px(box_side))
                     .flex_none()
+                    .rounded(px((box_side * 0.28).clamp(5.0, 7.0)))
+                    .bg(p.logo_tile)
+                    .border_1()
+                    .border_color(p.line)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -792,15 +767,19 @@ fn render_lane_mark(
                     .into_any_element()
             } else if let Some(art) = pro_app_artwork(key, icon_sz, cx) {
                 div()
-                    .size(px(side))
+                    .size(px(box_side))
                     .flex_none()
+                    .rounded(px((box_side * 0.28).clamp(5.0, 7.0)))
+                    .bg(p.logo_tile)
+                    .border_1()
+                    .border_color(p.line)
                     .flex()
                     .items_center()
                     .justify_center()
                     .child(art)
                     .into_any_element()
             } else {
-                pro_app_tile(key, side, cx)
+                pro_app_tile(key, box_side, cx)
             }
         }
     }
@@ -988,6 +967,25 @@ fn paint_diamond(
 }
 
 /// Process swimlane diagram across people, agents, and tools with inline gate approvals.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::handoff_swimlanes::{HandoffSwimlanes, HandoffSwimlanesEvent};
+///
+/// let swimlanes = cx.new(|cx| {
+///     HandoffSwimlanes::new("billing-swimlanes", cx)
+///         .with_title("Ship the billing fix")
+/// });
+/// cx.subscribe(&swimlanes, |_, ev: &HandoffSwimlanesEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct HandoffSwimlanes {
     id: ElementId,
     title: Option<SharedString>,
@@ -2772,7 +2770,7 @@ impl Render for HandoffSwimlanes {
             .bg(card_surface)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .gap(px(12.0))

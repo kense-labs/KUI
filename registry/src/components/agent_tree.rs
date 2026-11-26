@@ -5,13 +5,13 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
-        pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mix_color,
-        pro_popover_presence, pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
-        pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mix_color, pro_popover_presence, pro_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+    primitives::pro_icons::{ProIcon, pro_icon, pro_svg},
 };
 use gpui::{prelude::*, *};
 use std::{
@@ -197,10 +197,14 @@ enum HeaderFilterPopover {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_tree::AgentTree;
 ///
 /// let tree = cx.new(|cx| AgentTree::new("agent-tree", cx));
+/// # }
 /// ```
 pub struct AgentTree {
     id: ElementId,
@@ -465,38 +469,20 @@ impl AgentTree {
             tr_tree_task(&node.task, cx).into()
         };
 
-        let provider_key = infer_provider_key(&node.model);
-        let avatar_el = if !node.model.is_empty()
-            && let Some(art) = pro_app_artwork(provider_key, 13., cx)
-        {
-            div()
-                .size(px(22.))
-                .flex_none()
-                .rounded(px(6.))
-                .bg(p.card)
-                .border_1()
-                .border_color(p.line_strong)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(art)
-                .into_any_element()
-        } else {
-            pro_agent_avatar(
-                &node.id,
-                if node.status == TreeStatus::Waiting {
-                    p.amber
-                } else if node.status == TreeStatus::Failed {
-                    p.red
-                } else {
-                    p.blue
-                },
-                22.,
-                node.status == TreeStatus::Running,
-                (live_secs as f32) * 1000.0,
-                cx,
-            )
-        };
+        let avatar_el = pro_agent_avatar(
+            tree_avatar_seed(&node.model, &node.name, &node.id),
+            if node.status == TreeStatus::Waiting {
+                p.amber
+            } else if node.status == TreeStatus::Failed {
+                p.red
+            } else {
+                p.blue
+            },
+            22.,
+            node.status == TreeStatus::Running,
+            (live_secs as f32) * 1000.0,
+            cx,
+        );
 
         let status_pill = render_tree_status(&self.id, &nid, node.status, p, cx);
 
@@ -710,6 +696,7 @@ impl AgentTree {
         .role(Role::TreeItem)
         .when(full_width, |d| d.w_full())
         .when(!full_width, |d| d.w(px(220.)))
+        .shadow(pro_card_shadow(p.dark))
         .opacity(card_op)
         .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
             let next = if *hovered {
@@ -863,7 +850,14 @@ impl AgentTree {
                             .items_center()
                             .gap(px(8.))
                             .min_w_0()
-                            .child(pro_agent_avatar(&node.id, p.blue, 24., false, 0., cx))
+                            .child(pro_agent_avatar(
+                                tree_avatar_seed(&node.model, &node.name, &node.id),
+                                p.blue,
+                                24.,
+                                false,
+                                0.,
+                                cx,
+                            ))
                             .child(
                                 div()
                                     .flex()
@@ -2103,18 +2097,43 @@ fn find_tree_mut<'a>(node: &'a mut TreeAgent, id: &SharedString) -> Option<&'a m
     None
 }
 
-fn infer_provider_key(model: &str) -> &'static str {
+fn tree_avatar_seed(model: &str, name: &str, id: &str) -> &'static str {
     let lower = model.to_ascii_lowercase();
     if lower.contains("opus")
         || lower.contains("sonnet")
         || lower.contains("haiku")
         || lower.contains("claude")
+        || lower.contains("anthropic")
     {
         "claude"
     } else if lower.contains("gemini") {
         "gemini"
+    } else if lower.contains("deepseek") {
+        "deepseek"
+    } else if lower.contains("mistral") || lower.contains("codestral") {
+        "mistral"
+    } else if lower.contains("qwen") {
+        "qwen"
+    } else if lower.contains("llama") {
+        "llama"
+    } else if lower.contains("grok") {
+        "grok"
+    } else if lower.contains("gpt") || lower.contains("openai") || lower.contains("codex") {
+        "gpt"
     } else {
-        "openai"
+        let s = format!("{name} {id}").to_ascii_lowercase();
+        if s.contains("orchestrat")
+            || s.contains("research")
+            || s.contains("writer")
+            || s.contains("scrape")
+            || s.contains("lead")
+        {
+            "claude"
+        } else if s.contains("analyst") || s.contains("review") || s.contains("audit") {
+            "gemini"
+        } else {
+            "gpt"
+        }
     }
 }
 

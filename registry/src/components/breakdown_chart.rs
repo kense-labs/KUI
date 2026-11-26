@@ -6,7 +6,7 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
         pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
         pro_skeleton_bar, pro_swap_label, pro_tactile, tr,
     },
@@ -221,6 +221,28 @@ pub enum BreakdownChartEvent {
 }
 
 /// Interactive stacked breakdown chart with linked cross-highlighting table and legend.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::breakdown_chart::{BreakdownChart, BreakdownChartEvent};
+///
+/// let chart = cx.new(|cx| {
+///     BreakdownChart::new("sprint-breakdown", cx)
+///         .with_title("Sprint 24")
+///         .with_default_measure("count")
+///         .with_default_slice("status")
+///         .with_default_segment("priority")
+/// });
+/// cx.subscribe(&chart, |_, event: &BreakdownChartEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct BreakdownChart {
     id: ElementId,
     title: SharedString,
@@ -2003,7 +2025,7 @@ impl Render for BreakdownChart {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

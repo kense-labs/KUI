@@ -89,6 +89,21 @@ pub struct FailoverRequest {
     pub id: u64,
     pub phase: FailoverPhase,
 }
+/// `MultiRegionFailover` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::multi_region_failover::{FailoverSnapshot, MultiRegionFailover};
+///
+/// let snapshot = FailoverSnapshot::new("East", "West");
+/// let control = cx.new(|_| MultiRegionFailover::new(snapshot));
+/// # }
+/// ```
 pub struct MultiRegionFailover {
     snapshot: FailoverSnapshot,
     weight: Slide,

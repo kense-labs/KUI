@@ -6,8 +6,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
         pro_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32,
         pro_swap_label, pro_switch, pro_tactile, tr,
     },
@@ -173,6 +173,25 @@ fn default_categories() -> Vec<SharedString> {
 }
 
 /// Grouped and editable assistant memory manager with master switch, category pills, and Undo tray.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::memory_panel::{MemoryPanel, MemoryPanelEvent};
+///
+/// let panel = cx.new(|cx| {
+///     MemoryPanel::new("memory-panel", cx)
+///         .with_title("Memory")
+/// });
+/// cx.subscribe(&panel, |_, event: &MemoryPanelEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct MemoryPanel {
     id: ElementId,
     focus: FocusHandle,
@@ -1872,7 +1891,7 @@ impl Render for MemoryPanel {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(

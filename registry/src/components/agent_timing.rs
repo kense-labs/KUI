@@ -8,13 +8,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_icon_btn,
-        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, tr,
+        ProPalette, pro_agent_avatar, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_person_avatar, pro_popover_presence, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_f32, tr,
     },
     foundation::Theme,
     primitives::{
         family::{Slide, disabled_motion},
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells},
+        pro_icons::ProIcon,
     },
 };
 use gpui::{prelude::*, *};
@@ -26,7 +27,7 @@ const BASELINE_Y: f32 = 52.0;
 const LEVEL_THINKING: f32 = 16.0;
 const LEVEL_WAITING: f32 = 25.0;
 const LEVEL_TOOL: f32 = 36.0;
-const GUTTER_W: f32 = 124.0;
+const GUTTER_W: f32 = 128.0;
 const AXIS_H: f32 = 26.0;
 
 /// Kind of participant row in [`AgentTiming`].
@@ -376,44 +377,44 @@ fn participant_palette_color(idx: usize, part: &TimingParticipant, p: &ProPalett
     agent_colors[idx % agent_colors.len()]
 }
 
-fn render_timing_pixel_mark(
+fn timing_avatar_seed(part: &TimingParticipant) -> &'static str {
+    let combined = format!("{} {}", part.id, part.name).to_ascii_lowercase();
+    if combined.contains("claude")
+        || combined.contains("lead")
+        || combined.contains("doc")
+        || combined.contains("write")
+        || combined.contains("plan")
+    {
+        "claude"
+    } else if combined.contains("gemini")
+        || combined.contains("review")
+        || combined.contains("audit")
+        || combined.contains("ops")
+    {
+        "gemini"
+    } else if combined.contains("deepseek") {
+        "deepseek"
+    } else if combined.contains("mistral") {
+        "mistral"
+    } else if combined.contains("qwen") {
+        "qwen"
+    } else {
+        "gpt"
+    }
+}
+
+fn render_timing_participant_mark(
     part: &TimingParticipant,
     color: Hsla,
     busy: bool,
     elapsed_ms: f32,
-    reduced: bool,
+    cx: &App,
 ) -> AnyElement {
-    let cells = if part.kind == TimingParticipantKind::Person {
-        [true; 9]
+    if part.kind == TimingParticipantKind::Person {
+        pro_person_avatar(part.name.as_ref(), 20.0, true, None, cx)
     } else {
-        agent_pixel_cells(part.id.as_ref())
-    };
-    let mut col = div()
-        .size(px(16.))
-        .flex_none()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(px(1.5));
-    for r in 0..3usize {
-        let mut row = div().flex().items_center().gap(px(1.5));
-        for c in 0..3usize {
-            let i = r * 3 + c;
-            let on = cells[i];
-            let alpha = if !on {
-                0.0
-            } else if busy && !reduced && part.kind == TimingParticipantKind::Agent {
-                let ph = ((elapsed_ms + AGENT_WAVE_MS[i]) / 1200.0) * TAU;
-                0.45 + 0.55 * (0.5 + 0.5 * ph.cos())
-            } else {
-                1.0
-            };
-            row = row.child(div().size(px(3.)).rounded(px(0.8)).bg(color.opacity(alpha)));
-        }
-        col = col.child(row);
+        pro_agent_avatar(timing_avatar_seed(part), color, 20.0, busy, elapsed_ms, cx)
     }
-    col.into_any_element()
 }
 
 fn default_timing_participants() -> Vec<TimingParticipant> {
@@ -434,13 +435,13 @@ fn default_timing_segments() -> Vec<TimingSegment> {
             .with_label("Prompt: negative cart total")
             .with_label_zh("提问：负数购物车总额缺陷"),
         TimingSegment::new("lead", TimingState::Thinking, 2.0)
-            .with_end(5.4)
+            .with_end(3.8)
             .with_label("Plan reproduction & patch")
             .with_label_zh("规划复现与修补方案"),
-        TimingSegment::new("lead", TimingState::Tool, 5.4)
-            .with_end(9.2)
+        TimingSegment::new("lead", TimingState::Tool, 3.8)
+            .with_end(10.0)
             .with_label("search_code"),
-        TimingSegment::new("coder", TimingState::Thinking, 9.2)
+        TimingSegment::new("coder", TimingState::Thinking, 10.0)
             .with_end(12.2)
             .with_label("Inspect coupon rounding")
             .with_label_zh("排查优惠券舍入逻辑"),
@@ -448,27 +449,27 @@ fn default_timing_segments() -> Vec<TimingSegment> {
             .with_end(18.6)
             .with_label("edit_file"),
         TimingSegment::new("tester", TimingState::Tool, 18.6)
-            .with_end(23.0)
+            .with_end(22.6)
             .with_label("vitest"),
-        TimingSegment::new("coder", TimingState::Tool, 23.0)
-            .with_end(27.2)
+        TimingSegment::new("coder", TimingState::Tool, 22.6)
+            .with_end(28.6)
             .with_label("apply_patch"),
-        TimingSegment::new("lead", TimingState::Thinking, 27.2)
-            .with_end(29.0)
+        TimingSegment::new("lead", TimingState::Thinking, 28.6)
+            .with_end(29.4)
             .with_label("Summarize diff")
             .with_label_zh("汇总变更差异"),
         // Dashed amber step waiting on user!
-        TimingSegment::new("lead", TimingState::Waiting, 29.0)
+        TimingSegment::new("lead", TimingState::Waiting, 29.4)
             .with_label("Approve hotfix PR #419")
             .with_label_zh("请批准热修复 PR #419"),
         // Parallel running steps at `now`!
-        TimingSegment::new("tester", TimingState::Tool, 27.4).with_label("playwright"),
-        TimingSegment::new("reviewer", TimingState::Thinking, 27.2)
-            .with_end(29.8)
+        TimingSegment::new("tester", TimingState::Tool, 27.6).with_label("playwright"),
+        TimingSegment::new("reviewer", TimingState::Thinking, 28.6)
+            .with_end(30.4)
             .with_label("Audit negative floor")
             .with_label_zh("审计下界保护"),
-        TimingSegment::new("reviewer", TimingState::Tool, 29.8).with_label("gh_diff"),
-        TimingSegment::new("docs", TimingState::Thinking, 30.0)
+        TimingSegment::new("reviewer", TimingState::Tool, 30.4).with_label("gh_diff"),
+        TimingSegment::new("docs", TimingState::Thinking, 31.0)
             .with_label("Draft changelog")
             .with_label_zh("起草变更日志"),
     ]
@@ -479,25 +480,60 @@ fn default_timing_handoffs() -> Vec<TimingHandoff> {
         TimingHandoff::new("you", "lead", 2.0)
             .with_label("Fix the cart total bug")
             .with_label_zh("修复购物车金额为负的缺陷"),
-        TimingHandoff::new("lead", "coder", 9.2)
+        TimingHandoff::new("lead", "coder", 10.0)
             .with_label("Clamp subtotal in cart.ts")
             .with_label_zh("在 cart.ts 中限制小计下界"),
         TimingHandoff::new("coder", "tester", 18.6)
             .with_label("Run unit suite on cart.ts")
             .with_label_zh("对 cart.ts 运行单元测试"),
-        TimingHandoff::new("tester", "coder", 23.0)
+        TimingHandoff::new("tester", "coder", 22.6)
             .with_label("1 edge case failed on stacked coupons")
             .with_label_zh("叠加优惠券场景 1 项用例失败"),
-        TimingHandoff::new("coder", "reviewer", 27.2)
+        TimingHandoff::new("coder", "reviewer", 28.6)
             .with_label("Review updated guard")
             .with_label_zh("审查更新后的守卫逻辑"),
-        TimingHandoff::new("lead", "you", 29.0)
+        TimingHandoff::new("lead", "you", 29.4)
             .with_label("Ready to merge PR #419?")
             .with_label_zh("确认合并 PR #419？"),
     ]
 }
 
 /// Hardware-logic-style multi-agent timing diagram component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_timing::{
+///     AgentTiming, AgentTimingEvent, TimingHandoff, TimingParticipant, TimingSegment, TimingState,
+/// };
+///
+/// let timing = cx.new(|cx| {
+///     AgentTiming::new("cart-timing", cx)
+///         .with_title("Fix the cart total")
+///         .with_participants(vec![
+///             TimingParticipant::person("you", "You"),
+///             TimingParticipant::agent("lead", "Lead"),
+///             TimingParticipant::agent("coder", "Coder"),
+///         ])
+///         .with_segments(vec![
+///             TimingSegment::new("lead", TimingState::Thinking, 0.5).with_end(4.0).with_label("Planning the fix"),
+///             TimingSegment::new("lead", TimingState::Tool, 4.0).with_end(8.5).with_label("search_code"),
+///             TimingSegment::new("coder", TimingState::Tool, 9.0).with_label("edit_file"),
+///         ])
+///         .with_handoffs(vec![
+///             TimingHandoff::new("you", "lead", 0.4).with_label("Fix the cart total bug"),
+///             TimingHandoff::new("lead", "coder", 8.8).with_label("Fix rounding in cart.ts"),
+///         ])
+/// });
+/// cx.subscribe(&timing, |_, ev: &AgentTimingEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentTiming {
     id: ElementId,
     title: Option<SharedString>,
@@ -533,7 +569,7 @@ impl AgentTiming {
             segments: default_timing_segments(),
             handoffs: default_timing_handoffs(),
             duration_secs: 40.0,
-            base_now_secs: 33.0,
+            base_now_secs: 35.6,
             live: true,
             replay_mode: false,
             inspected: None,
@@ -812,7 +848,7 @@ impl Render for AgentTiming {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(720.))
+                        .max_w(px(780.))
                         .pt(px(14.))
                         .pr(px(18.))
                         .pb(px(10.))
@@ -821,7 +857,7 @@ impl Render for AgentTiming {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(header)
@@ -850,7 +886,7 @@ impl Render for AgentTiming {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(720.))
+                        .max_w(px(780.))
                         .pt(px(14.))
                         .pr(px(18.))
                         .pb(px(10.))
@@ -859,7 +895,7 @@ impl Render for AgentTiming {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(header)
@@ -943,10 +979,10 @@ impl Render for AgentTiming {
             ho_alphas.push(ha);
         }
 
-        // Left participant column (`64px` per row: pixel mark + name + current live status!)
+        // Left participant column (`64px` per row: vector mark + name + current live status!)
         let mut names_col = div()
             .w(px(GUTTER_W))
-            .pr(px(14.))
+            .pr(px(10.))
             .flex_none()
             .flex()
             .flex_col();
@@ -990,8 +1026,8 @@ impl Render for AgentTiming {
                     .flex()
                     .items_start()
                     .gap(px(8.))
-                    .child(div().mt(px(1.)).child(render_timing_pixel_mark(
-                        part, row_c, is_busy, wall_ms, reduced,
+                    .child(div().mt(px(1.)).child(render_timing_participant_mark(
+                        part, row_c, is_busy, wall_ms, cx,
                     )))
                     .child(
                         div()
@@ -1426,7 +1462,7 @@ impl Render for AgentTiming {
                     .w(relative(width_f))
                     .top(px(top_px))
                     .h(px(step_h))
-                    .px(px(6.))
+                    .px(px(4.))
                     .pt(px(4.))
                     .opacity(seg_a)
                     .cursor_pointer()
@@ -1451,13 +1487,13 @@ impl Render for AgentTiming {
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(3.5))
+                                .gap(px(3.))
                                 .min_w_0()
-                                .when(seg_finished && width_f >= 0.12, |row| {
+                                .when(seg_finished && width_f >= 0.17, |row| {
                                     row.child(pro_check_draw(
                                         pro_eid(&self.id, format!("atg-seg-chk-{s_idx}")),
                                         true,
-                                        12.0,
+                                        11.5,
                                         false,
                                         p.green_ink,
                                     ))
@@ -1466,7 +1502,7 @@ impl Render for AgentTiming {
                                     div()
                                         .min_w_0()
                                         .truncate()
-                                        .text_size(px(11.))
+                                        .text_size(px(10.5))
                                         .line_height(px(15.))
                                         .font_weight(if seg.state == TimingState::Thinking {
                                             FontWeight::NORMAL
@@ -1761,7 +1797,7 @@ impl Render for AgentTiming {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(720.))
+                    .max_w(px(780.))
                     .pt(px(14.))
                     .pr(px(18.))
                     .pb(px(10.))
@@ -1770,7 +1806,7 @@ impl Render for AgentTiming {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

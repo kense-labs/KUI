@@ -47,6 +47,20 @@ pub enum AnnouncementEvent {
 }
 /// Rotates visible messages and sends actions and dismissal to the host.
 /// Persistence, navigation and campaign scheduling belong to the host.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::announcement_bar::{Announcement, AnnouncementBar};
+///
+/// let messages = vec![Announcement::new("launch", "New components are available").with_action("Learn more")];
+/// let control = cx.new(|cx| AnnouncementBar::new(messages, cx));
+/// # }
+/// ```
 pub struct AnnouncementBar {
     messages: Vec<Announcement>,
     tone: AnnouncementTone,

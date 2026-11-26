@@ -640,10 +640,14 @@ impl InspectorCallTab {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::run_inspector::RunInspectorBlock;
 ///
 /// let inspector = cx.new(|cx| RunInspectorBlock::new("run-inspector", cx));
+/// # }
 /// ```
 pub struct RunInspectorBlock {
     id: ElementId,

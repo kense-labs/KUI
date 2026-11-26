@@ -231,7 +231,7 @@ impl QueueJob {
         self
     }
 
-    /// Set retry attempt number (`2` -> `↻2`).
+    /// Set retry attempt number (`2` -> retry badge `2`).
     pub fn with_attempt(mut self, attempt: u32) -> Self {
         self.attempt = attempt.max(1);
         self
@@ -258,6 +258,26 @@ impl QueueJob {
 }
 
 /// Live job queue, worker pool slots, and [`PathBuilder`] backlog depth chart.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_queue::{AgentQueue, AgentQueueEvent};
+///
+/// let queue = cx.new(|cx| {
+///     AgentQueue::new("ops-agent-queue", cx)
+///         .with_title("Queue", "agent-jobs")
+///         .with_backpressure(8)
+/// });
+/// cx.subscribe(&queue, |_, ev: &AgentQueueEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentQueue {
     id: ElementId,
     title: SharedString,
@@ -1858,10 +1878,12 @@ impl AgentQueue {
                                 .bg(p.red_soft)
                                 .flex()
                                 .items_center()
+                                .gap(px(2.0))
                                 .text_size(px(9.5))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(p.red_ink)
-                                .child(format!("↻{}", job.attempt)),
+                                .child(pro_icon(ProIcon::Refresh, 9.0, p.red_ink))
+                                .child(job.attempt.to_string()),
                         )
                     })
                     .child(div().flex_none().child(if in_worker {

@@ -57,6 +57,20 @@ pub enum SearchAnchor {
     #[default]
     End,
 }
+/// `ExpandingSearch` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::expanding_search::{ExpandingSearch, SearchItem};
+///
+/// let control = cx.new(|cx| ExpandingSearch::new("find", "Search", vec![SearchItem::new("notes", "Release notes")], window, cx).with_suggestions(vec!["notes".into()]));
+/// # }
+/// ```
 pub struct ExpandingSearch {
     id: ElementId,
     label: SharedString,

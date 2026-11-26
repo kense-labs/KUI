@@ -24,6 +24,20 @@ pub struct SaveRequest {
     pub value: SharedString,
 }
 type Validator = Rc<dyn Fn(&str) -> Option<SharedString>>;
+/// `InlineEdit` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::inline_edit::InlineEdit;
+///
+/// let control = cx.new(|cx| InlineEdit::new("name", "Project name", "KUI project", window, cx).with_validator(|s| s.is_empty().then(|| "Enter a name.".into())));
+/// # }
+/// ```
 pub struct InlineEdit {
     id: ElementId,
     label: SharedString,

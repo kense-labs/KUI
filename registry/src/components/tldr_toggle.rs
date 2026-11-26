@@ -93,6 +93,20 @@ struct ResultData {
     points: Vec<TldrPoint>,
 }
 /// The component renders supplied article content; a host owns all summarization work.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tldr_toggle::{TldrArticle, TldrParagraph, TldrToggle};
+///
+/// let article = TldrArticle::new("Project notes", vec![TldrParagraph::new("intro", "The source paragraph.")]);
+/// let control = cx.new(|cx| TldrToggle::new(article, cx));
+/// # }
+/// ```
 pub struct TldrToggle {
     article: TldrArticle,
     model: Option<SharedString>,

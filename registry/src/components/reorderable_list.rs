@@ -36,6 +36,20 @@ impl Render for Ghost {
     }
 }
 pub struct OrderChanged(pub Vec<SharedString>);
+/// `ReorderableList` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::reorderable_list::{ReorderableList, OrderedItem};
+///
+/// let control = cx.new(|cx| ReorderableList::new(vec![OrderedItem::new("a","Review changes","Product brief"),OrderedItem::new("b","Ship","Release")],cx));
+/// # }
+/// ```
 pub struct ReorderableList {
     items: Vec<(OrderedItem, FocusHandle, Slide)>,
     preview: Option<(usize, usize)>,

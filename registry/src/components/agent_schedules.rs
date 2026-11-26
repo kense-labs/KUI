@@ -366,6 +366,22 @@ struct ActiveManualRun {
 }
 
 /// Pro Agent Schedules screen with around-now activity line, schedule list, and run inspector.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_schedules::{AgentSchedulesScreen, AgentSchedulesEvent};
+///
+/// let screen = cx.new(|cx| AgentSchedulesScreen::new("agent-schedules", cx));
+/// cx.subscribe(&screen, |_, event: &AgentSchedulesEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentSchedulesScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -2375,7 +2391,10 @@ impl AgentSchedulesScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(

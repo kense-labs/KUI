@@ -32,6 +32,20 @@ impl GalleryPhoto {
     }
 }
 pub struct GallerySelection(pub Option<usize>);
+/// `PhotoExhibit` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::lightbox_gallery::{GalleryPhoto, PhotoExhibit};
+///
+/// let control = cx.new(|cx| PhotoExhibit::new(vec![GalleryPhoto::new("photos/harbor.jpg","Harbor","Dawn on the coast",1.5)],cx));
+/// # }
+/// ```
 pub struct PhotoExhibit {
     photos: Vec<GalleryPhoto>,
     targets: Vec<(FocusHandle, TriggerBounds)>,

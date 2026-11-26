@@ -1125,10 +1125,14 @@ fn render_card_rows(
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::inspect_agent_card::InspectAgentCard;
 ///
 /// let scene = cx.new(|cx| InspectAgentCard::new("hero-agent-inspect", cx));
+/// # }
 /// ```
 pub struct InspectAgentCard {
     id: ElementId,

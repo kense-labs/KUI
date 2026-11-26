@@ -1,6 +1,21 @@
 //! DonutChart with pointer and keyboard inspection.
 use crate::primitives::plot::{InspectSample, Plot, PlotKind, Sample};
 use gpui::{prelude::*, *};
+/// `DonutChart` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::donut_chart::DonutChart;
+/// use kui::primitives::plot::Sample;
+///
+/// let control = cx.new(|_| DonutChart::new("Activity", vec![Sample::new("Mon", 12.0), Sample::new("Tue", 18.0)]));
+/// # }
+/// ```
 pub struct DonutChart {
     plot: Plot,
 }

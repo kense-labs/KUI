@@ -3,6 +3,19 @@ use crate::primitives::family::{Paint, PhaseClock, disabled_motion, ease, measur
 use gpui::{prelude::*, *};
 
 /// A one-shot text entrance. Newlines create separate lines.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::text_reveal::TextReveal;
+///
+/// let control = cx.new(|cx| TextReveal::new("A quieter way to work.", cx));
+/// # }
+/// ```
 pub struct TextReveal {
     text: SharedString,
     delay: f32,

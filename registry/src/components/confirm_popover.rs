@@ -17,6 +17,20 @@ enum State {
     Done,
 }
 pub struct ConfirmRequested(pub u64);
+/// `ConfirmPopover` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::confirm_popover::ConfirmPopover;
+///
+/// let control = cx.new(|cx| ConfirmPopover::new("Delete", "Remove this project?", Some("Atlas".into()), window, cx));
+/// # }
+/// ```
 pub struct ConfirmPopover {
     label: SharedString,
     description: SharedString,

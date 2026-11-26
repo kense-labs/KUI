@@ -89,6 +89,22 @@ struct MovingStage {
 /// Series tones for stacked segments, matching the wider chart palette.
 const SERIES: [u32; 4] = [0x55adff, 0x9c37be, 0xe66e00, 0x00a861];
 
+/// `FunnelChart` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::funnel_chart::{FunnelChart, FunnelSegment, FunnelStage};
+///
+/// let segments = vec![FunnelSegment::new("mobile", "Mobile"), FunnelSegment::new("desktop", "Desktop")];
+/// let stages = vec![FunnelStage::new("visit", "Visit", vec![600.0, 400.0]), FunnelStage::new("buy", "Buy", vec![120.0, 80.0])];
+/// let control = cx.new(|cx| FunnelChart::new("Checkout", stages, segments, cx));
+/// # }
+/// ```
 pub struct FunnelChart {
     title: SharedString,
     period: Option<SharedString>,

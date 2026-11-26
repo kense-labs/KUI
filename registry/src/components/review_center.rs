@@ -8,8 +8,8 @@
 use crate::{
     components::pro_chrome::{
         ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_app_tile, pro_btn,
-        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
-        pro_mark_selected, pro_pill_indicator, pro_presence, pro_rolling_number,
+        pro_card_shadow, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_presence, pro_rolling_number,
         pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
@@ -598,6 +598,26 @@ struct StampGhost {
 }
 
 /// Focused human-in-the-loop review workspace for agent proposals.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::review_center::{ReviewCenter, ReviewCenterEvent, ReviewFilter};
+///
+/// let center = cx.new(|cx| {
+///     ReviewCenter::new("agent-review-center", cx)
+///         .with_reviewed(24)
+///         .with_default_filter(ReviewFilter::All)
+/// });
+/// cx.subscribe(&center, |_, event: &ReviewCenterEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ReviewCenter {
     id: ElementId,
     focus: FocusHandle,
@@ -1306,10 +1326,11 @@ impl ReviewCenter {
         cx: &mut Context<Self>,
     ) -> Div {
         let mut flag_cursor = 0usize;
+        let avatar_seed = format!("{} {}", item.model, item.agent);
         let avatar_el = if let Some(app_name) = &item.app {
             pro_app_tile(app_name, 32., cx)
         } else {
-            pro_agent_avatar(&item.agent, p.blue, 32., false, 0., cx)
+            pro_agent_avatar(&avatar_seed, p.blue, 32., false, 0., cx)
         };
 
         let (risk_bg, risk_fg) = match item.risk {
@@ -1608,16 +1629,18 @@ impl ReviewCenter {
                         .flex_col();
 
                     for ln in &file.lines {
-                        let (row_bg, sign_str, sign_col) = match ln.kind {
-                            ReviewDiffKind::Context => (transparent_black(), " ", p.faint),
+                        let (row_bg, sign_str, sign_col, line_fg) = match ln.kind {
+                            ReviewDiffKind::Context => (transparent_black(), " ", p.faint, p.text),
                             ReviewDiffKind::Add => (
-                                p.green.opacity(if p.dark { 0.09 } else { 0.08 }),
+                                p.green.opacity(if p.dark { 0.13 } else { 0.11 }),
                                 "+",
+                                p.green_ink,
                                 p.green_ink,
                             ),
                             ReviewDiffKind::Del => (
-                                p.red.opacity(if p.dark { 0.09 } else { 0.07 }),
-                                "-",
+                                p.red.opacity(if p.dark { 0.13 } else { 0.10 }),
+                                "−",
+                                p.red_ink,
                                 p.red_ink,
                             ),
                         };
@@ -1627,7 +1650,7 @@ impl ReviewCenter {
                             .flex()
                             .flex_wrap()
                             .items_center()
-                            .text_color(p.ink);
+                            .text_color(line_fg);
                         for sp in &ln.spans {
                             if interactive {
                                 code_spans = code_spans.child(self.render_span_el(
@@ -1643,7 +1666,8 @@ impl ReviewCenter {
                         diff_rows = diff_rows.child(
                             div()
                                 .w_full()
-                                .px(px(8.))
+                                .px(px(10.))
+                                .py(px(1.))
                                 .bg(row_bg)
                                 .flex()
                                 .items_start()
@@ -1657,9 +1681,13 @@ impl ReviewCenter {
                                 )
                                 .child(
                                     div()
-                                        .w(px(28.))
+                                        .w(px(26.))
                                         .flex_none()
-                                        .text_color(p.muted)
+                                        .text_color(if ln.kind == ReviewDiffKind::Context {
+                                            p.faint
+                                        } else {
+                                            sign_col.opacity(0.78)
+                                        })
                                         .child(format!("{:>3}", ln.line_no)),
                                 )
                                 .child(code_spans),
@@ -2312,10 +2340,11 @@ impl Render for ReviewCenter {
                 } else {
                     p.faint
                 };
+                let row_seed = format!("{} {}", it.model, it.agent);
                 let tile = if let Some(app_name) = &it.app {
                     pro_app_tile(app_name, 24., cx)
                 } else {
-                    pro_agent_avatar(&it.agent, p.blue, 24., false, 0., cx)
+                    pro_agent_avatar(&row_seed, p.blue, 24., false, 0., cx)
                 };
                 let risk_col = match it.risk {
                     ReviewRisk::High => p.red_ink,
@@ -2342,11 +2371,11 @@ impl Render for ReviewCenter {
                 let row_bdr = if is_cur { p.line } else { transparent_black() };
                 let row_inner = div()
                     .w_full()
-                    .h(px(56.))
-                    .px(px(10.))
+                    .h(px(54.))
+                    .px(px(8.))
                     .flex()
                     .items_center()
-                    .gap(px(10.))
+                    .gap(px(9.))
                     .child(tile)
                     .child(
                         div()
@@ -2359,13 +2388,13 @@ impl Render for ReviewCenter {
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap(px(8.))
+                                    .gap(px(6.))
                                     .min_w_0()
                                     .child(
                                         div()
                                             .flex_1()
                                             .min_w_0()
-                                            .text_size(px(13.))
+                                            .text_size(px(12.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
                                             .truncate()
@@ -2374,7 +2403,7 @@ impl Render for ReviewCenter {
                                     .child(
                                         div()
                                             .flex_none()
-                                            .text_size(px(12.))
+                                            .text_size(px(11.5))
                                             .text_color(wait_col)
                                             .child(format!("{}m", it.waiting_mins)),
                                     ),
@@ -2384,7 +2413,7 @@ impl Render for ReviewCenter {
                                     .flex()
                                     .items_center()
                                     .gap(px(5.))
-                                    .text_size(px(12.))
+                                    .text_size(px(11.5))
                                     .text_color(p.muted)
                                     .child(it.kind_label.clone())
                                     .when(it.risk != ReviewRisk::Low, |d| {
@@ -2430,7 +2459,7 @@ impl Render for ReviewCenter {
 
         let left_queue = div()
             .when(!stacked, |d| {
-                d.w(px(276.)).h_full().border_r_1().border_color(p.line)
+                d.w(px(296.)).h_full().border_r_1().border_color(p.line)
             })
             .when(stacked, |d| d.w_full().border_b_1().border_color(p.line))
             .bg(if p.dark {
@@ -2699,8 +2728,8 @@ impl Render for ReviewCenter {
                     (rest, p.chip_hover, p.strong, p.line_strong)
                 };
                 let inner = div()
-                    .h(px(28.))
-                    .px(px(8.))
+                    .h(px(30.))
+                    .px(px(10.))
                     .flex()
                     .items_center()
                     .gap(px(6.))
@@ -2947,7 +2976,7 @@ impl Render for ReviewCenter {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .shadow_sm()
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
@@ -2969,7 +2998,7 @@ impl Render for ReviewCenter {
             .child(
                 div()
                     .w_full()
-                    .when(!stacked, |d| d.h(px(548.)).flex())
+                    .when(!stacked, |d| d.h(px(564.)).flex())
                     .when(stacked, |d| d.flex().flex_col())
                     .child(left_queue)
                     .child(right_main),

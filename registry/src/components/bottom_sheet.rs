@@ -21,6 +21,21 @@ struct Drag {
     last_time: web_time::Instant,
     speed: f32,
 }
+/// `BottomSheet` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::bottom_sheet::BottomSheet;
+///
+/// let body = Box::new(|_: &mut gpui::Window, _: &mut gpui::App| gpui::div().child("Flights, hotel, and bookings.").into_any_element());
+/// let control = cx.new(|cx| BottomSheet::new("Trip details", "Lisbon, 3 nights", body, cx));
+/// # }
+/// ```
 pub struct BottomSheet {
     trigger: SharedString,
     title: SharedString,

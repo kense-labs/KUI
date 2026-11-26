@@ -1,6 +1,22 @@
 //! An action strip that reveals the focused or hovered label.
 use crate::primitives::strip::{Activated, Layout, Segment, Strip, StripControl, draw};
 use gpui::{prelude::*, *};
+/// `ExpandingButtonGroup` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::expanding_button_group::ExpandingButtonGroup;
+/// use kui::primitives::glyph::Glyph;
+/// use kui::primitives::strip::{Segment};
+///
+/// let control = cx.new(|cx| ExpandingButtonGroup::new("mail", vec![Segment::new("reply", "Reply", Some(Glyph::Undo), 96.), Segment::new("forward", "Forward", Some(Glyph::Redo), 106.)], cx));
+/// # }
+/// ```
 pub struct ExpandingButtonGroup {
     strip: Strip,
 }

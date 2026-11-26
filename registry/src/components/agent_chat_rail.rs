@@ -341,6 +341,22 @@ struct SheetSnapshot {
 }
 
 /// Double-sidebar AI search chat screen with project switcher and live spreadsheet artifacts.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_chat_rail::{AgentChatRailScreen, AgentChatRailEvent};
+///
+/// let screen = cx.new(|cx| AgentChatRailScreen::new("agent-chat-rail", cx));
+/// cx.subscribe(&screen, |_, event: &AgentChatRailEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentChatRailScreen {
     id: ElementId,
     focus: FocusHandle,
@@ -4052,7 +4068,10 @@ impl Render for AgentChatRailScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .when(!compact, |d| d.child(self.render_icon_rail(&p, cx)))
             .child(

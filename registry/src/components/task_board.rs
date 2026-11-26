@@ -7,11 +7,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
-        pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color, pro_person_avatar,
-        pro_pill_indicator, pro_popover_presence, pro_presence, pro_progress_ring,
-        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
-        pro_switch, pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected,
+        pro_mix_color, pro_person_avatar, pro_pill_indicator, pro_popover_presence, pro_presence,
+        pro_progress_ring, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_switch, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -193,6 +193,7 @@ impl RenderOnce for TaskCardSurface {
             .role(Role::Button)
             .aria_label(self.aria)
             .tab_index(0)
+            .group("tb-card-grp")
             .relative()
             .top(px(lift_y))
             .w_full()
@@ -200,8 +201,7 @@ impl RenderOnce for TaskCardSurface {
             .bg(card_bg)
             .border_1()
             .border_color(border_col)
-            .when(!p.dark && (hov > 0.05 || drag_t > 0.05), |d| d.shadow_sm())
-            .when(!p.dark && hov <= 0.05 && drag_t <= 0.05, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .focus_visible(move |s| s.border_1().border_color(p.focus))
             .opacity(opacity)
             .cursor_pointer()
@@ -691,10 +691,14 @@ pub fn default_board_tasks() -> Vec<BoardTask> {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::task_board::TaskBoardBlock;
 ///
 /// let board = cx.new(|cx| TaskBoardBlock::new("task-board", cx));
+/// # }
 /// ```
 pub struct TaskBoardBlock {
     id: ElementId,
@@ -704,6 +708,7 @@ pub struct TaskBoardBlock {
     people: Vec<TaskBoardPerson>,
     tasks: Vec<BoardTask>,
     active_labels: Vec<SharedString>,
+    filter_open: bool,
     compact: bool,
     starred: bool,
     open_task_key: Option<SharedString>,
@@ -747,6 +752,7 @@ impl TaskBoardBlock {
             people: default_board_people(),
             tasks: default_board_tasks(),
             active_labels: Vec::new(),
+            filter_open: false,
             compact: false,
             starred: false,
             open_task_key: None,
@@ -1271,6 +1277,41 @@ impl TaskBoardBlock {
             .map(|p| &p.name)
     }
 
+    fn render_assignee_avatar(
+        &self,
+        person_id: &str,
+        side: f32,
+        p: &ProPalette,
+        cx: &App,
+    ) -> Option<AnyElement> {
+        let pname = self.find_person_name(person_id)?;
+        let low_id = person_id.to_ascii_lowercase();
+        let low_name = pname.to_ascii_lowercase();
+        let agent_seed = if low_id.contains("claude")
+            || low_name.contains("claude")
+            || low_name.contains("opus")
+            || low_name.contains("sonnet")
+        {
+            Some("claude")
+        } else if low_id.contains("gpt")
+            || low_id.contains("openai")
+            || low_id.contains("codex")
+            || low_name.contains("gpt")
+            || low_name.contains("codex")
+        {
+            Some("gpt")
+        } else if low_id.contains("gemini") || low_name.contains("gemini") {
+            Some("gemini")
+        } else {
+            None
+        };
+        if let Some(seed) = agent_seed {
+            Some(pro_agent_avatar(seed, p.blue, side, false, 0., cx))
+        } else {
+            Some(pro_person_avatar(pname, side, false, None, cx).into_any_element())
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn render_task_card(
         &self,
@@ -1306,13 +1347,9 @@ impl TaskBoardBlock {
                 }
             }));
 
-        let person_avatar = task
-            .assignee
-            .as_deref()
-            .and_then(|pid| self.find_person_name(pid))
-            .map(|pname| {
-                pro_person_avatar(pname, if self.compact { 17. } else { 19. }, false, None, cx)
-            });
+        let person_avatar = task.assignee.as_deref().and_then(|pid| {
+            self.render_assignee_avatar(pid, if self.compact { 16. } else { 18. }, p, cx)
+        });
 
         if self.compact {
             let dots: Vec<_> = task
@@ -1320,20 +1357,20 @@ impl TaskBoardBlock {
                 .iter()
                 .filter_map(|lid| self.find_label(lid))
                 .take(3)
-                .map(|lbl| div().size(px(6.5)).rounded_full().bg(rgb(lbl.color_rgb)))
+                .map(|lbl| div().size(px(6.)).rounded_full().bg(rgb(lbl.color_rgb)))
                 .collect();
 
             let compact_inner = div()
-                .px(px(10.))
-                .py(px(8.))
+                .px(px(9.))
+                .py(px(7.))
                 .flex()
                 .items_center()
-                .gap(px(7.))
+                .gap(px(6.))
                 .child(Self::render_priority_bars(task.priority, p))
                 .child(
                     div()
                         .flex_none()
-                        .text_size(px(11.5))
+                        .text_size(px(11.))
                         .text_color(p.muted)
                         .child(task.key.clone()),
                 )
@@ -1342,7 +1379,7 @@ impl TaskBoardBlock {
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(12.5))
+                        .text_size(px(12.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.ink)
                         .child(task.title.clone()),
@@ -1356,7 +1393,7 @@ impl TaskBoardBlock {
             return TaskCardSurface {
                 id: pro_eid(&self.id, format!("tb-card-{}", task.key)),
                 aria: format!("{} {}", task.key, task.title).into(),
-                radius: 9.,
+                radius: 8.,
                 is_open,
                 is_dragging,
                 bounds_cell,
@@ -1391,7 +1428,7 @@ impl TaskBoardBlock {
             .collect();
         let tags_row = if resolved_labels.is_empty() {
             div()
-                .text_size(px(12.))
+                .text_size(px(11.5))
                 .text_color(p.faint)
                 .child(tr(cx, "No labels", "无标签"))
         } else {
@@ -1400,15 +1437,15 @@ impl TaskBoardBlock {
                 .flex()
                 .flex_wrap()
                 .items_center()
-                .gap(px(9.))
-                .text_size(px(12.))
+                .gap(px(8.))
+                .text_size(px(11.5))
                 .text_color(p.muted)
                 .children(resolved_labels.into_iter().take(3).map(|lbl| {
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(5.))
-                        .child(div().size(px(6.5)).rounded_full().bg(rgb(lbl.color_rgb)))
+                        .gap(px(4.5))
+                        .child(div().size(px(6.)).rounded_full().bg(rgb(lbl.color_rgb)))
                         .child(lbl.label.clone())
                 }))
                 .when(extra > 0, |d| {
@@ -1425,21 +1462,21 @@ impl TaskBoardBlock {
                 (transparent_black(), p.faint, format!("{days}d"))
             };
             div()
-                .h(px(18.))
-                .px(px(5.5))
-                .rounded(px(5.))
+                .h(px(17.))
+                .px(px(5.))
+                .rounded(px(4.5))
                 .bg(bg)
                 .flex()
                 .items_center()
-                .gap(px(3.5))
-                .text_size(px(11.5))
+                .gap(px(3.))
+                .text_size(px(11.))
                 .font_weight(if days <= 2 {
                     FontWeight::MEDIUM
                 } else {
                     FontWeight::NORMAL
                 })
                 .text_color(fg)
-                .child(pro_icon(ProIcon::Clock, 11., fg))
+                .child(pro_icon(ProIcon::Clock, 10.5, fg))
                 .child(txt)
         });
 
@@ -1450,14 +1487,14 @@ impl TaskBoardBlock {
             div()
                 .flex()
                 .items_center()
-                .gap(px(4.))
-                .text_size(px(11.5))
+                .gap(px(3.5))
+                .text_size(px(11.))
                 .text_color(p.faint)
-                .child(pro_progress_ring(ratio, 11.5, 2.0, p.muted, p.line_strong))
+                .child(pro_progress_ring(ratio, 11., 1.8, p.muted, p.line_strong))
                 .child(pro_swap_label(
                     pro_eid(&self.id, format!("tb-csub-cnt-{}", task.key)),
                     format!("{done_n}/{tot_n}"),
-                    11.5,
+                    11.,
                     FontWeight::NORMAL,
                     p.faint,
                 ))
@@ -1467,10 +1504,10 @@ impl TaskBoardBlock {
             div()
                 .flex()
                 .items_center()
-                .gap(px(3.5))
-                .text_size(px(11.5))
+                .gap(px(3.))
+                .text_size(px(11.))
                 .text_color(p.faint)
-                .child(pro_icon(ProIcon::GitBranch, 11., p.faint))
+                .child(pro_icon(ProIcon::GitBranch, 10.5, p.faint))
                 .child(format!("#{pr_num}"))
         });
 
@@ -1513,7 +1550,6 @@ impl TaskBoardBlock {
         } else {
             status_meta.label.clone()
         };
-        let has_right_badges = due_badge.is_some() || subtask_badge.is_some() || pr_badge.is_some();
         let can_left = col_idx > 0;
         let can_right = col_idx + 1 < total_cols;
 
@@ -1533,30 +1569,32 @@ impl TaskBoardBlock {
                 this.shift_task_column(&key_right, 1, cx);
             })),
         });
+        let card_bg_hover = p.card;
 
         let standard_inner = div()
-            .px(px(12.))
-            .pt(px(11.))
-            .pb(px(10.))
+            .relative()
+            .px(px(10.))
+            .pt(px(9.))
+            .pb(px(8.))
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(4.))
             .child(
                 div()
                     .flex()
                     .items_start()
-                    .gap(px(8.))
+                    .gap(px(6.))
                     .child(
                         div()
-                            .mt(px(2.))
+                            .mt(px(1.5))
                             .child(Self::render_priority_bars(task.priority, p)),
                     )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(13.))
-                            .line_height(px(19.))
+                            .text_size(px(12.2))
+                            .line_height(px(16.8))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.ink)
                             .child(disp_title),
@@ -1564,15 +1602,14 @@ impl TaskBoardBlock {
             )
             .child(
                 div()
-                    .pl(px(22.))
                     .flex()
                     .flex_col()
                     .gap(px(2.))
                     .child(
                         div()
                             .truncate()
-                            .text_size(px(12.))
-                            .line_height(px(17.))
+                            .text_size(px(11.2))
+                            .line_height(px(15.5))
                             .text_color(p.muted)
                             .child(meta_line),
                     )
@@ -1580,45 +1617,59 @@ impl TaskBoardBlock {
             )
             .child(
                 div()
-                    .pl(px(22.))
                     .pt(px(2.))
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap(px(6.))
+                    .gap(px(5.))
                     .child(
                         div()
                             .min_w_0()
                             .flex()
                             .items_center()
-                            .gap(px(4.))
-                            .text_size(px(12.))
-                            .text_color(p.text)
-                            .child(Self::render_status_glyph(status_meta.icon, 12.5, p))
-                            .when(!has_right_badges, |d| {
-                                d.child(div().truncate().child(disp_status_lbl))
-                            })
-                            .when_some(shift_left_btn, |d, b| d.child(b))
-                            .when_some(shift_right_btn, |d, b| d.child(b)),
+                            .gap(px(4.5))
+                            .text_size(px(11.5))
+                            .text_color(p.muted)
+                            .child(Self::render_status_glyph(status_meta.icon, 11.5, p))
+                            .child(div().whitespace_nowrap().child(disp_status_lbl)),
                     )
                     .child(
                         div()
                             .flex_none()
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(px(5.))
                             .when_some(due_badge, |d, b| d.child(b))
                             .when_some(subtask_badge, |d, b| d.child(b))
                             .when_some(pr_badge, |d, b| d.child(b))
                             .when_some(person_avatar, |d, av| d.child(av)),
                     ),
             )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(6.))
+                    .right(px(6.))
+                    .px(px(2.))
+                    .py(px(1.))
+                    .rounded(px(5.))
+                    .bg(card_bg_hover)
+                    .border_1()
+                    .border_color(p.line)
+                    .opacity(0.)
+                    .group_hover("tb-card-grp", |s| s.opacity(1.))
+                    .flex()
+                    .items_center()
+                    .gap(px(1.))
+                    .when_some(shift_left_btn, |d, b| d.child(b))
+                    .when_some(shift_right_btn, |d, b| d.child(b)),
+            )
             .into_any_element();
 
         TaskCardSurface {
             id: pro_eid(&self.id, format!("tb-card-{}", task.key)),
             aria: format!("{} {}", task.key, task.title).into(),
-            radius: 10.,
+            radius: 9.,
             is_open,
             is_dragging,
             bounds_cell,
@@ -2337,57 +2388,125 @@ impl Render for TaskBoardBlock {
             .child(star_btn);
 
         let search_ed = self.search_editor.clone();
+        let filter_active = self.filter_open || !self.active_labels.is_empty();
+        let active_lbl_cnt = self.active_labels.len();
+        let filter_btn = pro_tactile(
+            pro_eid(&self.id, "tb-filter-btn"),
+            tr(cx, "Filter labels", "筛选标签"),
+            7.,
+            if filter_active {
+                p.chip
+            } else {
+                transparent_black()
+            },
+            p.hover,
+            if filter_active {
+                p.line
+            } else {
+                transparent_black()
+            },
+            p.line_strong,
+            filter_active,
+            div()
+                .h(px(26.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .whitespace_nowrap()
+                .text_size(px(12.))
+                .font_weight(if filter_active {
+                    FontWeight::MEDIUM
+                } else {
+                    FontWeight::NORMAL
+                })
+                .text_color(if filter_active { p.ink } else { p.muted })
+                .child(pro_icon(
+                    ProIcon::Filter,
+                    12.5,
+                    if filter_active { p.ink } else { p.muted },
+                ))
+                .child(tr(cx, "Filter", "筛选"))
+                .when(active_lbl_cnt > 0, |d| {
+                    d.child(
+                        div()
+                            .min_w(px(16.))
+                            .h(px(16.))
+                            .px(px(4.))
+                            .rounded(px(4.))
+                            .bg(p.accent_soft)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(10.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.blue)
+                            .child(format!("{active_lbl_cnt}")),
+                    )
+                }),
+            cx,
+            |this, _, cx| {
+                this.filter_open = !this.filter_open;
+                if !this.filter_open {
+                    this.active_labels.clear();
+                }
+                cx.notify();
+            },
+        )
+        .flex_none();
+
         let top_bar = div()
-            .px(px(if narrow { 12. } else { 16. }))
-            .pt(px(10.))
+            .px(px(if narrow { 10. } else { 14. }))
+            .pt(px(9.))
             .pb(px(8.))
             .flex()
             .flex_wrap()
             .items_center()
             .justify_between()
-            .gap(px(10.))
+            .gap(px(8.))
             .child(breadcrumb)
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap(px(10.))
+                    .gap(px(8.))
                     .when(!very_narrow, |d| {
                         d.child(pro_swap_label(
                             pro_eid(&self.id, "tb-vis-count"),
                             format!("{visible_total} {}", tr(cx, "tasks", "项任务")),
-                            12.,
+                            11.5,
                             FontWeight::NORMAL,
                             p.faint,
                         ))
                     })
                     .child(
                         div()
-                            .w(px(if very_narrow { 128. } else { 156. }))
-                            .h(px(28.))
-                            .px(px(9.))
-                            .rounded(px(8.))
+                            .w(px(if very_narrow { 120. } else { 144. }))
+                            .h(px(26.))
+                            .px(px(8.))
+                            .rounded(px(7.))
                             .bg(p.subtle)
                             .border_1()
-                            .border_color(p.line_strong)
+                            .border_color(p.line)
                             .flex()
                             .items_center()
-                            .gap(px(6.))
-                            .child(pro_icon(ProIcon::Search, 12.5, p.muted))
+                            .gap(px(5.))
+                            .child(pro_icon(ProIcon::Search, 12., p.muted))
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .h(px(20.))
+                                    .h(px(19.))
                                     .when_some(search_ed, |d, ed| d.child(ed)),
                             ),
                     )
+                    .child(filter_btn)
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(px(5.))
                             .child(pro_switch(
                                 pro_eid(&self.id, "tb-compact-sw"),
                                 tr(cx, "Compact cards", "紧凑卡片模式"),
@@ -2400,7 +2519,7 @@ impl Render for TaskBoardBlock {
                             ))
                             .child(
                                 div()
-                                    .text_size(px(12.5))
+                                    .text_size(px(12.))
                                     .text_color(if self.compact { p.ink } else { p.muted })
                                     .child(tr(cx, "Compact", "紧凑")),
                             ),
@@ -2424,8 +2543,8 @@ impl Render for TaskBoardBlock {
 
         let mut filter_strip = div()
             .relative()
-            .px(px(if narrow { 12. } else { 16. }))
-            .pb(px(10.))
+            .px(px(if narrow { 10. } else { 14. }))
+            .pb(px(8.))
             .flex()
             .flex_wrap()
             .items_center()
@@ -2556,6 +2675,13 @@ impl Render for TaskBoardBlock {
                 }),
             );
         }
+        let filter_fold = pro_fold(
+            pro_eid(&self.id, "tb-filter-fold"),
+            filter_active,
+            34.,
+            0.,
+            move || filter_strip.into_any_element(),
+        );
 
         while self.col_bounds.len() < self.statuses.len() {
             self.col_bounds.push(Rc::new(Cell::new(Bounds::default())));
@@ -2812,19 +2938,19 @@ impl Render for TaskBoardBlock {
                 let add_btn_el = pro_tactile(
                     pro_eid(&self.id, format!("tb-add-btn-{st_add_id}")),
                     format!("{} {}", tr(cx, "Add task to", "添加任务到"), st_col.label),
-                    8.,
+                    7.,
                     transparent_black(),
                     p.hover,
                     transparent_black(),
                     transparent_black(),
                     false,
                     div()
-                        .h(px(28.))
+                        .h(px(24.))
                         .w_full()
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_icon(ProIcon::Plus, 13., p.muted)),
+                        .child(pro_icon(ProIcon::Plus, 12.5, p.muted)),
                     cx,
                     move |this, w, cx| {
                         this.quick_add_col = Some(st_open_id.clone());
@@ -2836,7 +2962,7 @@ impl Render for TaskBoardBlock {
                         cx.notify();
                     },
                 )
-                .mt(px(2.))
+                .mt(px(1.))
                 .w_full()
                 .into_any_element();
 
@@ -2846,15 +2972,15 @@ impl Render for TaskBoardBlock {
                     move || add_btn_el,
                 );
 
-                let col_w = if narrow { 236.0 } else { 0.0 };
+                let col_w = if narrow { 232.0 } else { 0.0 };
                 let col_div = div()
                     .id(pro_eid(&self.id, format!("tb-col-{}", st_col.id)))
                     .relative()
                     .when(narrow, |d| d.w(px(col_w)).flex_none())
-                    .when(!narrow, |d| d.flex_1().min_w(px(192.)))
-                    .min_h(px(280.))
-                    .p(px(5.))
-                    .rounded(px(14.))
+                    .when(!narrow, |d| d.flex_1().min_w(px(184.)))
+                    .min_h(px(210.))
+                    .p(px(4.))
+                    .rounded(px(11.))
                     .bg(col_bg)
                     .border_1()
                     .border_color(col_border)
@@ -2867,20 +2993,20 @@ impl Render for TaskBoardBlock {
                     )
                     .child(
                         div()
-                            .h(px(32.))
+                            .h(px(28.))
                             .px(px(6.))
                             .flex()
                             .items_center()
                             .justify_between()
-                            .gap(px(6.))
-                            .child(Self::render_status_glyph(st_col.icon, 13.5, &p))
+                            .gap(px(5.))
+                            .child(Self::render_status_glyph(st_col.icon, 12.5, &p))
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
                                     .truncate()
                                     .text_center()
-                                    .text_size(px(11.))
+                                    .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted)
                                     .child(if UiLanguage::current(cx) == UiLanguage::Chinese {
@@ -2897,10 +3023,10 @@ impl Render for TaskBoardBlock {
                             )
                             .child(
                                 div()
-                                    .min_w(px(20.))
-                                    .h(px(18.))
-                                    .px(px(5.))
-                                    .rounded(px(6.))
+                                    .min_w(px(18.))
+                                    .h(px(16.))
+                                    .px(px(4.5))
+                                    .rounded(px(5.))
                                     .bg(p.chip)
                                     .flex()
                                     .items_center()
@@ -2908,7 +3034,7 @@ impl Render for TaskBoardBlock {
                                     .child(pro_swap_label(
                                         pro_eid(&self.id, format!("tb-col-cnt-{}", st_col.id)),
                                         count_txt,
-                                        11.,
+                                        10.5,
                                         FontWeight::MEDIUM,
                                         p.muted,
                                     )),
@@ -2919,8 +3045,8 @@ impl Render for TaskBoardBlock {
                             .flex_1()
                             .flex()
                             .flex_col()
-                            .gap(px(6.))
-                            .pt(px(2.))
+                            .gap(px(5.))
+                            .pt(px(1.))
                             .children(card_els)
                             .child(
                                 div()
@@ -2938,13 +3064,13 @@ impl Render for TaskBoardBlock {
 
             div()
                 .id(pro_eid(&self.id, "tb-cols-scroll"))
-                .px(px(12.))
-                .pb(px(12.))
+                .px(px(10.))
+                .pb(px(10.))
                 .w_full()
                 .overflow_x_scroll()
                 .flex()
                 .items_start()
-                .gap(px(8.))
+                .gap(px(7.))
                 .children(col_els)
                 .into_any_element()
         };
@@ -2970,8 +3096,8 @@ impl Render for TaskBoardBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .px(px(if narrow { 16. } else { 32. }))
-            .py(px(if narrow { 20. } else { 28. }))
+            .px(px(if narrow { 12. } else { 18. }))
+            .py(px(if narrow { 14. } else { 18. }))
             .child(
                 canvas(
                     move |b, window, _| {
@@ -2994,12 +3120,12 @@ impl Render for TaskBoardBlock {
                     .bg(p.panel)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()
                     .child(top_bar)
-                    .child(filter_strip)
+                    .child(filter_fold)
                     .child(pro_view_transition(
                         pro_eid(&self.id, "tb-mode-vtx"),
                         mode_key,

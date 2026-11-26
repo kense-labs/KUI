@@ -783,6 +783,27 @@ fn default_trace_root(cx: &App) -> TraceSpan {
 }
 
 /// Live hierarchical execution trace waterfall for debugging agent latency, concurrency, and spend.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::trace_waterfall::{
+///     TraceWaterfall, TraceWaterfallEvent,
+/// };
+///
+/// let trace = cx.new(|cx| {
+///     TraceWaterfall::new("agent-trace-waterfall", cx)
+///         .with_mark_slowest(true)
+/// });
+/// cx.subscribe(&trace, |_, ev: &TraceWaterfallEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct TraceWaterfall {
     id: ElementId,
     title: Option<SharedString>,

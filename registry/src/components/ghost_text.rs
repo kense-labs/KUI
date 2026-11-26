@@ -52,6 +52,20 @@ impl Generation {
         !composing && self.active == Some(id)
     }
 }
+/// `GhostText` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ghost_text::GhostText;
+///
+/// let control = cx.new(|cx| GhostText::new("Description", window, cx));
+/// # }
+/// ```
 pub struct GhostText {
     editor: Entity<Editor>,
     label: SharedString,

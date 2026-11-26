@@ -342,6 +342,22 @@ struct ChannelToggle {
 }
 
 /// Orchestrating AI agent chat screen with sub-agent pills and a tabbed campaign brief.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_chat::{AgentChatScreen, AgentChatEvent};
+///
+/// let screen = cx.new(|cx| AgentChatScreen::new("agent-chat", cx));
+/// cx.subscribe(&screen, |_, event: &AgentChatEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentChatScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -2458,7 +2474,10 @@ impl AgentChatScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(top_bar)
             .child(

@@ -30,6 +30,20 @@ pub struct PhoneValue {
     pub international: String,
     pub possible: bool,
 }
+/// `PhoneInput` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::phone_input::PhoneInput;
+///
+/// let control = cx.new(|cx| PhoneInput::new("Mobile number", "US", window, cx));
+/// # }
+/// ```
 pub struct PhoneInput {
     label: SharedString,
     country: usize,

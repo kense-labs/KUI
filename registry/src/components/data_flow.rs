@@ -77,6 +77,23 @@ pub struct DataFlowInspect {
 pub struct DataFlowPlaybackChanged {
     pub paused: bool,
 }
+/// `DataFlow` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::data_flow::{DataFlow, DataFlowNode, DataFlowSnapshot, DataFlowStatus};
+///
+/// let sources = vec![DataFlowNode::new("app", "App")];
+/// let destinations = vec![DataFlowNode::new("store", "Warehouse")];
+/// let snapshot = DataFlowSnapshot::new(42, DataFlowStatus::Running);
+/// let control = cx.new(|_| DataFlow::new(sources, DataFlowNode::new("core", "Transform"), destinations, snapshot));
+/// # }
+/// ```
 pub struct DataFlow {
     sources: Vec<DataFlowNode>,
     core: DataFlowNode,
@@ -225,11 +242,17 @@ fn chip_rect(
     let count = count.max(1);
     let narrow = width > 0. && width < 600.;
     if !narrow {
-        let chip_w = (width * 0.18).clamp(132., 184.);
-        let core = (width * 0.1).clamp(84., 104.);
-        let center_y = height / 2. - 10.;
+        let chip_w = (width * 0.185).clamp(136., 184.);
+        let core_w = (width * 0.175).clamp(126., 152.);
+        let core_h = 78.;
+        let center_y = height / 2. - 14.;
         if side == 1 {
-            return ((width - core) / 2., center_y - core / 2., core, core);
+            return (
+                (width - core_w) / 2.,
+                center_y - core_h / 2.,
+                core_w,
+                core_h,
+            );
         }
         let spread = (height * 0.29).min(112.);
         let offset = if count == 1 {
@@ -241,9 +264,15 @@ fn chip_rect(
         let x = if side == 0 { 1. } else { width - 1. - chip_w };
         (x, y, chip_w, 52.)
     } else {
-        let core = 84.;
+        let core_w = 120_f32.min((width - 24.).max(88.));
+        let core_h = 74.;
         if side == 1 {
-            return ((width - core) / 2., (height - core) / 2., core, core);
+            return (
+                (width - core_w) / 2.,
+                (height - core_h) / 2.,
+                core_w,
+                core_h,
+            );
         }
         let chip_w = ((width - 2. - 8. * (count - 1) as f32).max(1.)) / count as f32;
         let x = 1. + index as f32 * (chip_w + 8.);
@@ -261,18 +290,32 @@ fn between(a: Point<Pixels>, b: Point<Pixels>, t: f32, vertical: bool) -> Point<
     }
 }
 fn marker(pos: Point<Pixels>, solid: bool, color: Hsla, w: &mut Window) {
-    let mut path = if solid {
-        PathBuilder::fill()
-    } else {
-        PathBuilder::stroke(px(1.5))
-    };
-    let radius = 3.5;
     if solid {
-        path.move_to(point(pos.x - px(radius), pos.y - px(radius)));
-        path.line_to(point(pos.x + px(radius), pos.y - px(radius)));
-        path.line_to(point(pos.x + px(radius), pos.y + px(radius)));
-        path.line_to(point(pos.x - px(radius), pos.y + px(radius)));
+        let halo_r = 6.5;
+        w.paint_quad(
+            fill(
+                Bounds {
+                    origin: point(pos.x - px(halo_r), pos.y - px(halo_r)),
+                    size: size(px(halo_r * 2.), px(halo_r * 2.)),
+                },
+                color.opacity(color.a * 0.22),
+            )
+            .corner_radii(px(halo_r)),
+        );
+        let r = 3.2;
+        w.paint_quad(
+            fill(
+                Bounds {
+                    origin: point(pos.x - px(r), pos.y - px(r)),
+                    size: size(px(r * 2.), px(r * 2.)),
+                },
+                color,
+            )
+            .corner_radii(px(r)),
+        );
     } else {
+        let mut path = PathBuilder::stroke(px(1.5));
+        let radius = 3.3;
         for i in 0..=16 {
             let a = TAU * i as f32 / 16.;
             let q = point(pos.x + px(a.cos() * radius), pos.y + px(a.sin() * radius));
@@ -282,10 +325,10 @@ fn marker(pos: Point<Pixels>, solid: bool, color: Hsla, w: &mut Window) {
                 path.line_to(q)
             }
         }
-    }
-    path.close();
-    if let Ok(path) = path.build() {
-        w.paint_path(path, color);
+        path.close();
+        if let Ok(path) = path.build() {
+            w.paint_path(path, color);
+        }
     }
 }
 fn intersects_viewport(bounds: Bounds<Pixels>, viewport: Size<Pixels>) -> bool {
@@ -344,7 +387,8 @@ impl Render for DataFlow {
             .get_or_insert_with(|| {
                 cx.new(|_| {
                     AnimatedCounter::new(self.snapshot.processed.min(1_000_000_000_000) as f64)
-                        .with_size(14.)
+                        .with_size(13.)
+                        .with_wheel_style(1.2, 0., FontWeight::SEMIBOLD)
                 })
             })
             .clone();
@@ -424,7 +468,7 @@ impl Render for DataFlow {
                                 } else {
                                     (i as f32 / (count - 1) as f32 - 0.5)
                                         * 2.
-                                        * 14_f32.min(core_box.2 * 0.16)
+                                        * 14_f32.min(core_box.3 * 0.22)
                                 };
                                 let endpoint = if narrow {
                                     point(
@@ -483,24 +527,27 @@ impl Render for DataFlow {
                                 if let Ok(path) = path.build() {
                                     w.paint_path(path, p.line.blend(p.bright.opacity(alpha)));
                                 }
-                                marker(endpoint, false, p.secondary.opacity(0.42), w);
+                                marker(endpoint, false, p.secondary.opacity(0.38), w);
                                 {
                                     for packet in 0..6 {
                                         let phase = if reduced {
                                             packet as f32 / 6.
                                         } else {
-                                            (age / 6.6 + packet as f32 / 6.).fract()
+                                            (age / 5.4 + packet as f32 / 6.).fract()
                                         };
-                                        let serial = (age / 6.6).floor() as usize * 6 + packet;
+                                        let serial = (age / 5.4).floor() as usize * 6 + packet;
                                         if side == 0
                                             && phase < 0.5
                                             && source_count > 0
                                             && serial % source_count == i
                                         {
+                                            let local = phase * 2.;
+                                            let env =
+                                                (local * 5.).min(1.) * ((1. - local) * 5.).min(1.);
                                             marker(
-                                                between(a, z, phase * 2., narrow),
-                                                false,
-                                                p.bright.opacity(alpha),
+                                                between(a, z, local, narrow),
+                                                true,
+                                                p.bright.opacity(alpha * 0.85 * env),
                                                 w,
                                             );
                                         }
@@ -509,10 +556,13 @@ impl Render for DataFlow {
                                                 dests.get(i).map_or(0., |d| d.share.clamp(0., 1.));
                                             if ((serial * 37 + i * 13) % 100) as f32 / 100. < share
                                             {
+                                                let local = (phase - 0.5) * 2.;
+                                                let env = (local * 5.).min(1.)
+                                                    * ((1. - local) * 5.).min(1.);
                                                 marker(
-                                                    between(a, z, (phase - 0.5) * 2., narrow),
+                                                    between(a, z, local, narrow),
                                                     true,
-                                                    p.bright.opacity(alpha),
+                                                    p.bright.opacity(alpha * env),
                                                     w,
                                                 );
                                             }
@@ -527,7 +577,6 @@ impl Render for DataFlow {
                 .inset_0(),
             );
         let mut node_elements = Vec::new();
-        let core_side_caption = narrow && width >= 360.;
         for index in 0..self.total() {
             let (side, within, count) = if index < source_count {
                 (0, index, source_count)
@@ -542,6 +591,7 @@ impl Render for DataFlow {
             let rect = chip_rect(width.max(1.), stage_h, within, count, side);
             let label = node.label.clone();
             let meta = node.meta.clone();
+            let is_core = side == 1;
             node_elements.push(
                 div()
                     .id(("data-flow-node", index))
@@ -555,20 +605,31 @@ impl Render for DataFlow {
                     .w(px(rect.2))
                     .h(px(rect.3))
                     .rounded(crate::foundation::surface_radius(cx))
-                    .bg(p.panel)
+                    .bg(if is_core {
+                        p.panel.blend(p.bright.opacity(0.028))
+                    } else {
+                        p.panel
+                    })
+                    .when(is_core, |v| v.shadow_sm())
                     .border_1()
                     .border_color(if self.selected == Some(index) {
-                        p.line.blend(p.bright.opacity(0.55))
+                        p.line.blend(p.bright.opacity(0.65))
                     } else if self.hovered == Some(index) {
-                        p.line.blend(p.bright.opacity(0.40))
+                        p.line.blend(p.bright.opacity(0.45))
+                    } else if is_core {
+                        p.line.blend(p.bright.opacity(0.24))
                     } else {
                         p.line
                     })
                     .flex()
-                    .when(narrow || side == 1, |v| {
-                        v.flex_col().justify_center().gap(px(6.)).px(px(8.))
+                    .when(narrow || is_core, |v| {
+                        v.flex_col().justify_center().gap(px(5.)).px(px(if is_core {
+                            12.
+                        } else {
+                            8.
+                        }))
                     })
-                    .when(!narrow && side != 1, |v| {
+                    .when(!narrow && !is_core, |v| {
                         v.flex_row().items_center().gap(px(12.)).px(px(16.))
                     })
                     .items_center()
@@ -583,18 +644,21 @@ impl Render for DataFlow {
                         }),
                         |node, mark| node.child(mark),
                     )
-                    .when(side != 1 || !core_side_caption, |v| {
-                        v.child(
-                            div()
-                                .max_w_full()
-                                .truncate()
-                                .text_size(px(if narrow { 12. } else { 14. }))
-                                .line_height(px(if narrow { 16. } else { 20. }))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(label),
-                        )
-                    })
-                    .when(!narrow && side != 1 && !meta.is_empty(), |v| {
+                    .child(
+                        div()
+                            .max_w_full()
+                            .whitespace_nowrap()
+                            .when(!is_core, |d| d.truncate())
+                            .text_size(px(if narrow && !is_core { 12. } else { 14. }))
+                            .line_height(px(if narrow && !is_core { 16. } else { 20. }))
+                            .font_weight(if is_core {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
+                            .child(label),
+                    )
+                    .when(!narrow && !is_core && !meta.is_empty(), |v| {
                         v.child(
                             div()
                                 .text_size(px(12.))
@@ -630,44 +694,76 @@ impl Render for DataFlow {
             })
             .unwrap_or_else(|| tr(cx, "Select a node to inspect", "选择节点查看说明").into());
         let core_rect = chip_rect(width.max(1.), stage_h, 0, 1, 1);
-        let summary = column()
-            .min_w_0()
-            .gap_0()
-            .when(core_side_caption, |v| {
+        let dot_tone = match self.snapshot.status {
+            DataFlowStatus::Running => p.success,
+            DataFlowStatus::Paused => p.faint,
+            DataFlowStatus::Error => p.danger,
+        };
+        let counter_pill = div()
+            .h(px(26.))
+            .px(px(10.))
+            .rounded(crate::foundation::surface_radius(cx))
+            .bg(p.tray)
+            .border_1()
+            .border_color(p.line)
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
+            .child(div().size(px(6.)).rounded_full().bg(dot_tone))
+            .when(self.snapshot.processed <= 1_000_000_000_000, |v| {
                 v.child(
                     div()
-                        .text_size(px(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(self.core.label.clone()),
+                        .h(px(16.))
+                        .overflow_hidden()
+                        .flex()
+                        .items_center()
+                        .child(counter),
+                )
+            })
+            .when(self.snapshot.processed > 1_000_000_000_000, |v| {
+                v.child(
+                    div()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(self.snapshot.processed.to_string()),
                 )
             })
             .child(
-                row()
-                    .flex_wrap()
-                    .gap_1()
-                    .items_center()
-                    .when(self.snapshot.processed <= 1_000_000_000_000, |v| {
-                        v.child(counter)
-                    })
-                    .when(self.snapshot.processed > 1_000_000_000_000, |v| {
-                        v.child(self.snapshot.processed.to_string())
-                    })
-                    .child(hint(tr(cx, "processed", "条已处理"), p)),
+                div()
+                    .text_size(px(12.))
+                    .line_height(px(16.))
+                    .text_color(p.secondary)
+                    .child(tr(cx, "processed", "条已处理")),
             );
         let graph = graph.children(node_elements);
-        let (graph, summary) = if core_side_caption {
+        let (graph, footer_pill) = if !narrow {
             (
                 graph.child(
-                    summary
+                    div()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .top(px(core_rect.1 + core_rect.3 + 10.))
+                        .flex()
+                        .justify_center()
+                        .child(counter_pill),
+                ),
+                None,
+            )
+        } else if width >= 380. {
+            (
+                graph.child(
+                    div()
                         .absolute()
                         .left(px(core_rect.0 + core_rect.2 + 10.))
-                        .right_0()
-                        .top(px(core_rect.1 + 16.)),
+                        .top(px(core_rect.1 + (core_rect.3 - 26.) * 0.5))
+                        .child(counter_pill),
                 ),
                 None,
             )
         } else {
-            (graph, Some(summary))
+            (graph, Some(counter_pill))
         };
         column()
             .w_full()
@@ -685,10 +781,15 @@ impl Render for DataFlow {
                     .justify_between()
                     .gap_2()
                     .child(title(tr(cx, "Data flow", "数据流"), p))
-                    .child(hint(status, p)),
+                    .child(
+                        row()
+                            .items_center()
+                            .gap_2()
+                            .children(footer_pill)
+                            .child(hint(status, p)),
+                    ),
             )
             .child(graph)
-            .children(summary)
             .child(
                 row()
                     .justify_between()

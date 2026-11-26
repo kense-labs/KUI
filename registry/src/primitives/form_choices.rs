@@ -145,8 +145,10 @@ impl<L: ChoiceLayout> FormChoices<L> {
     }
     pub fn set_multiple(&mut self, multiple: bool, cx: &mut Context<Self>) {
         self.one_chip = !multiple;
-        if self.one_chip && self.selected.len() > 1 {
-            let first = *self.selected.first().unwrap();
+        if self.one_chip
+            && self.selected.len() > 1
+            && let Some(&first) = self.selected.first()
+        {
             self.selected.retain(|x| *x == first);
             cx.emit(SelectionChanged(self.selected()))
         }

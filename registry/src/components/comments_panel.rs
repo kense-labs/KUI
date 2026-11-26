@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_mark_selected, pro_person_avatar, pro_pill_indicator,
+        ProPalette, pro_agent_avatar, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_icon_btn, pro_mark_selected, pro_person_avatar, pro_pill_indicator,
         pro_popover_presence, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
         pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
@@ -1172,7 +1172,7 @@ impl Render for CommentsPanel {
 
         let mut feed_list = div()
             .id(pro_eid(&self.id, "comments-scroll"))
-            .max_h(px(360.))
+            .max_h(px(296.))
             .overflow_y_scroll()
             .flex()
             .flex_col();
@@ -1180,7 +1180,7 @@ impl Render for CommentsPanel {
         if visible.is_empty() {
             feed_list = feed_list.child(
                 div()
-                    .py(px(32.))
+                    .py(px(28.))
                     .px(px(16.))
                     .text_size(px(12.5))
                     .text_color(p.muted)
@@ -1202,14 +1202,14 @@ impl Render for CommentsPanel {
                 let cid_rep = cid.clone();
                 let author_rep = item.author.clone();
                 let avatar = if item.is_ai {
-                    pro_agent_avatar(&item.author, p.blue, 20., false, elapsed_ms, cx)
+                    pro_agent_avatar("claude", p.blue, 22., false, elapsed_ms, cx)
                 } else {
-                    pro_person_avatar(&item.author, 20., false, None, cx)
+                    pro_person_avatar(&item.author, 22., false, None, cx)
                 };
 
                 let mut thread_card = div()
-                    .px(px(if compact { 12. } else { 16. }))
-                    .py(px(12.))
+                    .px(px(if compact { 12. } else { 15. }))
+                    .py(px(10.))
                     .when(ci > 0, |d| d.border_t_1().border_color(p.line))
                     .when(item.resolved, |d| d.opacity(0.76))
                     .flex()
@@ -1246,9 +1246,47 @@ impl Render for CommentsPanel {
                             .child(
                                 div()
                                     .ml_auto()
-                                    .text_size(px(11.5))
-                                    .text_color(p.faint)
-                                    .child(item.created_at.clone()),
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .child(
+                                        pro_tactile(
+                                            pro_eid(&self.id, format!("reply-btn-{cid}")),
+                                            tr(cx, "Reply", "回复"),
+                                            4.,
+                                            transparent_black(),
+                                            p.hover,
+                                            transparent_black(),
+                                            transparent_black(),
+                                            false,
+                                            div()
+                                                .h(px(20.))
+                                                .px(px(5.))
+                                                .flex()
+                                                .items_center()
+                                                .text_size(px(11.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.muted)
+                                                .whitespace_nowrap()
+                                                .child(tr(cx, "Reply", "回复")),
+                                            cx,
+                                            move |this, w, cx| {
+                                                this.replying_to =
+                                                    Some((cid_rep.clone(), author_rep.clone()));
+                                                if let Some(ed) = &this.editor {
+                                                    ed.update(cx, |e, cx| e.focus(w, cx));
+                                                }
+                                                cx.notify();
+                                            },
+                                        )
+                                        .flex_none(),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(p.muted)
+                                            .child(item.created_at.clone()),
+                                    ),
                             )
                             .child(
                                 pro_tactile(
@@ -1269,14 +1307,14 @@ impl Render for CommentsPanel {
                                     transparent_black(),
                                     item.resolved,
                                     div()
-                                        .size(px(24.))
+                                        .size(px(22.))
                                         .flex()
                                         .items_center()
                                         .justify_center()
                                         .child(pro_check_draw(
                                             pro_eid(&self.id, format!("res-chk-{cid}")),
                                             item.resolved,
-                                            15.,
+                                            14.,
                                             false,
                                             p.green,
                                         )),
@@ -1290,8 +1328,8 @@ impl Render for CommentsPanel {
                     )
                     .child(
                         div()
-                            .pl(px(28.))
-                            .mt(px(4.))
+                            .pl(px(30.))
+                            .mt(px(3.))
                             .flex()
                             .flex_col()
                             .child(self.render_rich_body(&item.text, item.resolved, cx))
@@ -1303,58 +1341,27 @@ impl Render for CommentsPanel {
                                     item.applied,
                                     cx,
                                 ))
-                            })
-                            .child(
-                                div().mt(px(5.)).flex().items_center().gap(px(8.)).child(
-                                    pro_tactile(
-                                        pro_eid(&self.id, format!("reply-btn-{cid}")),
-                                        tr(cx, "Reply", "回复"),
-                                        4.,
-                                        transparent_black(),
-                                        p.hover,
-                                        transparent_black(),
-                                        transparent_black(),
-                                        false,
-                                        div()
-                                            .h(px(20.))
-                                            .px(px(5.))
-                                            .flex()
-                                            .items_center()
-                                            .text_size(px(11.5))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.muted)
-                                            .whitespace_nowrap()
-                                            .child(tr(cx, "Reply", "回复")),
-                                        cx,
-                                        move |this, w, cx| {
-                                            this.replying_to =
-                                                Some((cid_rep.clone(), author_rep.clone()));
-                                            if let Some(ed) = &this.editor {
-                                                ed.update(cx, |e, cx| e.focus(w, cx));
-                                            }
-                                            cx.notify();
-                                        },
-                                    )
-                                    .flex_none()
-                                    .mx(px(-5.)),
-                                ),
-                            ),
+                            }),
                     );
 
                 if !item.replies.is_empty() {
                     let mut replies_col = div()
-                        .ml(px(28.))
-                        .mt(px(8.))
-                        .pl(px(10.))
+                        .ml(px(11.))
+                        .mt(px(7.))
+                        .pl(px(19.))
                         .border_l_1()
-                        .border_color(p.line_strong)
+                        .border_color(if p.dark {
+                            hsla(0., 0., 1., 0.12)
+                        } else {
+                            hsla(0., 0., 0., 0.10)
+                        })
                         .flex()
                         .flex_col()
-                        .gap(px(9.));
+                        .gap(px(8.));
 
                     for rep in &item.replies {
                         let rep_av = if rep.is_ai {
-                            pro_agent_avatar(&rep.author, p.blue, 18., false, elapsed_ms, cx)
+                            pro_agent_avatar("claude", p.blue, 18., false, elapsed_ms, cx)
                         } else {
                             pro_person_avatar(&rep.author, 18., false, None, cx)
                         };
@@ -1391,14 +1398,14 @@ impl Render for CommentsPanel {
                                         div()
                                             .ml_auto()
                                             .text_size(px(11.))
-                                            .text_color(p.faint)
+                                            .text_color(p.muted)
                                             .child(rep.created_at.clone()),
                                     ),
                             )
                             .child(
                                 div()
                                     .pl(px(24.))
-                                    .mt(px(3.))
+                                    .mt(px(2.))
                                     .flex()
                                     .flex_col()
                                     .child(self.render_rich_body(&rep.text, item.resolved, cx))
@@ -1416,8 +1423,8 @@ impl Render for CommentsPanel {
                         replies_col = replies_col.child(pro_fold(
                             pro_eid(&self.id, format!("rep-fold-{cid}-{}", rep.id)),
                             rep_open,
-                            64.,
-                            9.,
+                            60.,
+                            8.,
                             move || rep_node,
                         ));
                     }
@@ -1442,7 +1449,7 @@ impl Render for CommentsPanel {
                 feed_list = feed_list.child(pro_fold(
                     pro_eid(&self.id, format!("cmt-fold-{cid}")),
                     cmt_open,
-                    108.,
+                    96.,
                     0.,
                     move || thread_el,
                 ));
@@ -1604,118 +1611,98 @@ impl Render for CommentsPanel {
 
         let composer_row = div()
             .px(px(12.))
-            .py(px(9.))
+            .py(px(8.))
             .border_t_1()
             .border_color(p.line)
             .flex()
-            .flex_col()
-            .gap(px(7.))
+            .items_center()
+            .gap(px(6.))
+            .child(pro_person_avatar(&self.current_user, 20., false, None, cx))
             .child(
                 div()
+                    .id(pro_eid(&self.id, "comment-input-hit"))
+                    .flex_1()
+                    .min_w_0()
+                    .min_h(px(26.))
                     .flex()
                     .items_center()
-                    .gap(px(8.))
-                    .child(pro_person_avatar(&self.current_user, 20., false, None, cx))
-                    .child(
-                        div()
-                            .id(pro_eid(&self.id, "comment-input-hit"))
-                            .flex_1()
-                            .min_w_0()
-                            .min_h(px(26.))
-                            .flex()
-                            .items_center()
-                            .cursor_text()
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |_, _, w, cx| {
-                                    if let Some(ed) = &ed_click {
-                                        ed.read(cx).focus.clone().focus(w, cx);
-                                    }
-                                }),
-                            )
-                            .when_some(self.editor.clone(), |d, ed| {
-                                d.child(div().flex_1().min_w_0().h(px(22.)).child(ed))
-                            }),
+                    .cursor_text()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |_, _, w, cx| {
+                            if let Some(ed) = &ed_click {
+                                ed.read(cx).focus.clone().focus(w, cx);
+                            }
+                        }),
                     )
-                    .child(send_btn),
+                    .when_some(self.editor.clone(), |d, ed| {
+                        d.child(div().flex_1().min_w_0().h(px(22.)).child(ed))
+                    }),
             )
             .child(
-                div()
-                    .pl(px(28.))
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .child(
-                        pro_tactile(
-                            pro_eid(&self.id, "quick-at-btn"),
-                            tr(cx, "Insert @mention", "插入 @提及"),
-                            5.,
-                            if self.mention_picker_open {
-                                p.accent_soft
-                            } else {
-                                p.chip
-                            },
-                            p.chip_hover,
-                            transparent_black(),
-                            p.line_strong,
-                            self.mention_picker_open,
-                            div()
-                                .h(px(21.))
-                                .px(px(6.5))
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(if self.mention_picker_open {
-                                    p.blue
-                                } else {
-                                    p.text
-                                })
-                                .whitespace_nowrap()
-                                .child("@mention"),
-                            cx,
-                            |this, _, cx| {
-                                this.mention_picker_open = !this.mention_picker_open;
-                                cx.notify();
-                            },
-                        )
-                        .flex_none(),
-                    )
-                    .child(
-                        pro_tactile(
-                            pro_eid(&self.id, "quick-slash-edit"),
-                            tr(cx, "Insert /edit command", "插入 /edit 指令"),
-                            5.,
-                            p.chip,
-                            p.chip_hover,
-                            transparent_black(),
-                            p.line_strong,
-                            false,
-                            div()
-                                .h(px(21.))
-                                .px(px(6.5))
-                                .flex()
-                                .items_center()
-                                .text_size(px(11.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.purple)
-                                .whitespace_nowrap()
-                                .child("/edit"),
-                            cx,
-                            |this, w, cx| {
-                                this.insert_composer_prefix("/edit", w, cx);
-                            },
-                        )
-                        .flex_none(),
-                    )
-                    .child(
-                        div()
-                            .ml_auto()
-                            .text_size(px(11.))
-                            .text_color(p.faint)
-                            .child(tr(cx, "Enter to send", "按 Enter 发送")),
-                    ),
-            );
+                pro_tactile(
+                    pro_eid(&self.id, "quick-at-btn"),
+                    tr(cx, "Insert @mention", "插入 @提及"),
+                    5.,
+                    if self.mention_picker_open {
+                        p.accent_soft
+                    } else {
+                        p.chip
+                    },
+                    p.chip_hover,
+                    transparent_black(),
+                    p.line_strong,
+                    self.mention_picker_open,
+                    div()
+                        .h(px(22.))
+                        .px(px(5.5))
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if self.mention_picker_open {
+                            p.blue
+                        } else {
+                            p.muted
+                        })
+                        .whitespace_nowrap()
+                        .child("@"),
+                    cx,
+                    |this, _, cx| {
+                        this.mention_picker_open = !this.mention_picker_open;
+                        cx.notify();
+                    },
+                )
+                .flex_none(),
+            )
+            .child(
+                pro_tactile(
+                    pro_eid(&self.id, "quick-slash-edit"),
+                    tr(cx, "Insert /edit command", "插入 /edit 指令"),
+                    5.,
+                    p.chip,
+                    p.chip_hover,
+                    transparent_black(),
+                    p.line_strong,
+                    false,
+                    div()
+                        .h(px(22.))
+                        .px(px(6.))
+                        .flex()
+                        .items_center()
+                        .text_size(px(10.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.purple)
+                        .whitespace_nowrap()
+                        .child("/edit"),
+                    cx,
+                    |this, w, cx| {
+                        this.insert_composer_prefix("/edit", w, cx);
+                    },
+                )
+                .flex_none(),
+            )
+            .child(send_btn);
 
         let feed_state_key =
             SharedString::from(format!("feed-{}-{:?}", self.filter.key(), self.sort));
@@ -1728,7 +1715,7 @@ impl Render for CommentsPanel {
             .relative()
             .w_full()
             .min_w_0()
-            .p(px(if compact { 12. } else { 20. }))
+            .p(px(if compact { 12. } else { 16. }))
             .flex()
             .flex_col()
             .items_center()
@@ -1749,28 +1736,28 @@ impl Render for CommentsPanel {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(420.))
-                    .rounded(px(10.))
+                    .max_w(px(396.))
+                    .rounded(px(12.))
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .shadow_xs()
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     // Header
                     .child(
                         div()
-                            .px(px(16.))
-                            .pt(px(12.))
-                            .pb(px(4.))
+                            .px(px(15.))
+                            .pt(px(11.))
+                            .pb(px(2.))
                             .flex()
                             .items_center()
                             .justify_between()
                             .gap(px(8.))
                             .child(
                                 div()
-                                    .text_size(px(15.))
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_size(px(14.5))
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.strong)
                                     .child(self.title.clone()),
                             )
@@ -1779,7 +1766,7 @@ impl Render for CommentsPanel {
                                     pro_eid(&self.id, "close-comments-btn"),
                                     tr(cx, "Close comments", "关闭评论面板"),
                                     ProIcon::Close,
-                                    28.,
+                                    26.,
                                     false,
                                     cx,
                                     |this, _, cx| {
@@ -1796,8 +1783,8 @@ impl Render for CommentsPanel {
                     // Filter bar + Sort button
                     .child(
                         div()
-                            .px(px(16.))
-                            .py(px(10.))
+                            .px(px(15.))
+                            .py(px(8.))
                             .border_b_1()
                             .border_color(p.line)
                             .flex()

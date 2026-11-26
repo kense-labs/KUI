@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
-        pro_mix_color, pro_presence, pro_shimmer_text, pro_skeleton_bar, pro_swap_label,
-        pro_tactile, pro_view_transition, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_mix_color, pro_presence, pro_shimmer_text, pro_skeleton_bar,
+        pro_swap_label, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -230,77 +230,86 @@ fn rasterize_glow(dark: bool, intensity: f32, t: f32, raw: &mut [u8]) {
     } else {
         [1.0, 1.0, 1.0]
     };
-    let pink: [f32; 3] = if dark {
-        [0xf0 as f32 / 255., 0x6d as f32 / 255., 0xb5 as f32 / 255.]
+    let rose: [f32; 3] = if dark {
+        [0xec as f32 / 255., 0x6a as f32 / 255., 0xb8 as f32 / 255.]
     } else {
-        [0xee as f32 / 255., 0x3e as f32 / 255., 0x9e as f32 / 255.]
+        [0xe6 as f32 / 255., 0x52 as f32 / 255., 0xa8 as f32 / 255.]
     };
-    let violet: [f32; 3] = if dark {
-        [0xb9 as f32 / 255., 0x8a as f32 / 255., 0xf0 as f32 / 255.]
+    let lavender: [f32; 3] = if dark {
+        [0xb4 as f32 / 255., 0x82 as f32 / 255., 0xf4 as f32 / 255.]
     } else {
-        [0xa6 as f32 / 255., 0x51 as f32 / 255., 0xf0 as f32 / 255.]
+        [0x9d as f32 / 255., 0x5c as f32 / 255., 0xf2 as f32 / 255.]
     };
-    let blue: [f32; 3] = [0x4f as f32 / 255., 0xb0 as f32 / 255., 0xfe as f32 / 255.];
-    let base_alpha = (if dark { 0.175 } else { 0.145 }) * intensity.clamp(0., 1.);
+    let indigo: [f32; 3] = if dark {
+        [0x56 as f32 / 255., 0xa8 as f32 / 255., 0xfe as f32 / 255.]
+    } else {
+        [0x5c as f32 / 255., 0xa4 as f32 / 255., 0xfc as f32 / 255.]
+    };
+    let base_alpha = (if dark { 0.19 } else { 0.135 }) * intensity.clamp(0., 1.);
 
-    let ua = ping_pong(t, 6.0);
-    let ub = ping_pong(t, 7.0);
-    let uc = ping_pong(t, 5.5);
+    let ua = ping_pong(t, 6.2);
+    let ub = ping_pong(t, 7.4);
+    let uc = ping_pong(t, 5.6);
 
-    let da = eval_three_stop(ua, (0.0, 0.0, 1.0), (0.55, -0.22, 1.25), (0.20, 0.14, 0.85));
+    let da = eval_three_stop(ua, (0.0, 0.0, 1.0), (0.32, -0.14, 1.15), (0.12, 0.08, 0.92));
     let db = eval_three_stop(
         ub,
         (0.0, 0.0, 1.0),
-        (-0.55, 0.24, 0.85),
-        (-0.22, -0.16, 1.25),
+        (-0.30, 0.12, 0.92),
+        (-0.14, -0.12, 1.16),
     );
     let dc = eval_three_stop(
         uc,
         (0.0, 0.0, 1.0),
-        (-0.45, -0.26, 1.20),
-        (0.30, -0.10, 0.88),
+        (-0.24, -0.16, 1.14),
+        (0.22, -0.08, 0.94),
     );
 
     let lobes: [([f32; 3], f32, f32, f32, f32); 3] = [
         (
-            pink,
-            0.11 + 0.58 * da.0,
-            0.74 + 0.40 * da.1,
-            0.35 * da.2,
-            0.28 * da.2,
+            rose,
+            0.34 + 0.36 * da.0,
+            0.78 + 0.28 * da.1,
+            0.34 * da.2,
+            0.25 * da.2,
         ),
         (
-            violet,
-            0.89 + 0.54 * db.0,
-            0.67 + 0.42 * db.1,
-            0.33 * db.2,
-            0.29 * db.2,
+            lavender,
+            0.62 + 0.34 * db.0,
+            0.75 + 0.28 * db.1,
+            0.36 * db.2,
+            0.26 * db.2,
         ),
         (
-            blue,
-            0.53 + 0.62 * dc.0,
-            0.96 + 0.40 * dc.1,
-            0.37 * dc.2,
-            0.27 * dc.2,
+            indigo,
+            0.50 + 0.38 * dc.0,
+            0.95 + 0.26 * dc.1,
+            0.40 * dc.2,
+            0.25 * dc.2,
         ),
     ];
 
     for y in 0..GLOW_H {
         let ny = (y as f32 + 0.5) / GLOW_H as f32;
+        // Smooth vertical mask so upper half remains pristine card surface (`ny <= 0.36` -> 0.0)
+        let v_mask = ((ny - 0.36) / 0.34).clamp(0.0, 1.0);
+        let v_smooth = v_mask * v_mask * (3.0 - 2.0 * v_mask);
         for x in 0..GLOW_W {
             let nx = (x as f32 + 0.5) / GLOW_W as f32;
             let mut r = bg[0];
             let mut g = bg[1];
             let mut b = bg[2];
-            for &(col, cx_n, cy_n, rx, ry) in &lobes {
-                let dx = (nx - cx_n) / rx.max(0.08);
-                let dy = (ny - cy_n) / ry.max(0.08);
-                let d2 = dx * dx + dy * dy;
-                if d2 < 4.5 {
-                    let w = (-1.15 * d2).exp() * base_alpha;
-                    r = r * (1.0 - w) + col[0] * w;
-                    g = g * (1.0 - w) + col[1] * w;
-                    b = b * (1.0 - w) + col[2] * w;
+            if v_smooth > 0.001 {
+                for &(col, cx_n, cy_n, rx, ry) in &lobes {
+                    let dx = (nx - cx_n) / rx.max(0.08);
+                    let dy = (ny - cy_n) / ry.max(0.08);
+                    let d2 = dx * dx + dy * dy;
+                    if d2 < 4.5 {
+                        let w = (-1.12 * d2).exp() * base_alpha * v_smooth;
+                        r = r * (1.0 - w) + col[0] * w;
+                        g = g * (1.0 - w) + col[1] * w;
+                        b = b * (1.0 - w) + col[2] * w;
+                    }
                 }
             }
             let dst = (y * GLOW_W + x) * 4;
@@ -319,10 +328,8 @@ fn default_suggestions(zh: bool) -> Vec<WritingSuggestion> {
                 .with_prompt("帮我润色这段客户跟进邮件，让表达更清晰得体。"),
             WritingSuggestion::new("shorter", "精简篇幅")
                 .with_prompt("把这段更新压缩到两句话以内，只保留核心结论。"),
-            WritingSuggestion::new("warmer", "语气更温和")
+            WritingSuggestion::new("tone", "调整语气")
                 .with_prompt("把这段项目延期说明改得更真诚温和，同时给出明确时间点。"),
-            WritingSuggestion::new("translate", "多语翻译")
-                .with_prompt("将发布说明翻译成自然地道的英文产品公告。"),
             WritingSuggestion::new("reply", "起草回复")
                 .with_prompt("起草一段简短回复，确认周四下午三点评审设计稿。"),
         ]
@@ -332,10 +339,8 @@ fn default_suggestions(zh: bool) -> Vec<WritingSuggestion> {
                 .with_prompt("Polish my follow-up email so it reads clearly and confidently."),
             WritingSuggestion::new("shorter", "Make it shorter")
                 .with_prompt("Shorten this status update to two crisp sentences."),
-            WritingSuggestion::new("warmer", "Make warmer")
+            WritingSuggestion::new("tone", "Fix the tone")
                 .with_prompt("Make the tone warmer while keeping the timeline clear."),
-            WritingSuggestion::new("translate", "Translate")
-                .with_prompt("Translate our release note into natural Japanese and Spanish."),
             WritingSuggestion::new("reply", "Draft a reply")
                 .with_prompt("Draft a concise reply confirming Thursday at 3 PM for the review."),
         ]
@@ -956,7 +961,7 @@ impl WritingAssistant {
             .bg(card_bg)
             .border_1()
             .border_color(p.line)
-            .shadow_sm()
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
@@ -1028,6 +1033,7 @@ impl Render for WritingAssistant {
                 .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Sparkles,
                     tr(cx, "Assistant unavailable", "写作助手暂不可用"),
@@ -1144,7 +1150,7 @@ impl Render for WritingAssistant {
             )
             .child(div().size(px(28.)).flex_none().child(new_btn));
 
-        // Drifting 3-lobe Gaussian glow canvas
+        // Drifting 3-lobe Gaussian glow canvas (bleed 2px inside overflow_hidden to prevent 1px bilinear edge seams)
         let glow_canvas = canvas(
             |_, _, _| (),
             move |bounds, _, window, _| {
@@ -1155,7 +1161,11 @@ impl Render for WritingAssistant {
                 let image = glow_surface
                     .borrow_mut()
                     .frame(dark, glow_level, elapsed, reduced, window);
-                let _ = window.paint_image(bounds, bounds, Corners::default(), image, 0, false);
+                let dest = Bounds::new(
+                    point(bounds.origin.x - px(2.), bounds.origin.y - px(2.)),
+                    size(bounds.size.width + px(4.), bounds.size.height + px(4.)),
+                );
+                let _ = window.paint_image(dest, dest, Corners::default(), image, 0, false);
                 if !reduced {
                     window.request_animation_frame();
                 }
@@ -1187,15 +1197,25 @@ impl Render for WritingAssistant {
                 .custom_suggestions
                 .clone()
                 .unwrap_or_else(|| default_suggestions(zh));
-            let chip_bg = if p.dark {
-                rgb(0x1c1c1e).opacity(0.74)
+            let chip_bg: Hsla = if p.dark {
+                hsla(0., 0., 1., 0.045)
             } else {
-                rgb(0xffffff).opacity(0.76)
+                hsla(0., 0., 1., 0.68)
             };
-            let chip_hover_bg = if p.dark {
-                rgb(0x28282c).opacity(0.88)
+            let chip_hover_bg: Hsla = if p.dark {
+                hsla(0., 0., 1., 0.085)
             } else {
-                rgb(0xf6f6f7).opacity(0.92)
+                hsla(0., 0., 1., 0.90)
+            };
+            let chip_border: Hsla = if p.dark {
+                hsla(0., 0., 1., 0.085)
+            } else {
+                hsla(240. / 360., 0.10, 0.15, 0.065)
+            };
+            let chip_hover_border: Hsla = if p.dark {
+                hsla(0., 0., 1., 0.15)
+            } else {
+                hsla(240. / 360., 0.10, 0.15, 0.13)
             };
 
             let mut chip_row = div().flex().flex_wrap().gap(px(6.));
@@ -1217,10 +1237,10 @@ impl Render for WritingAssistant {
                         chip_id,
                         label,
                         6.,
-                        chip_bg.into(),
-                        chip_hover_bg.into(),
-                        p.line,
-                        p.line_strong,
+                        chip_bg,
+                        chip_hover_bg,
+                        chip_border,
+                        chip_hover_border,
                         false,
                         chip_inner,
                         cx,
@@ -1803,7 +1823,7 @@ impl Render for WritingAssistant {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .shadow_sm()
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

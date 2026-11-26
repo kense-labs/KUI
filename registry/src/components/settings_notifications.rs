@@ -496,6 +496,22 @@ fn localized_type_copy<'a>(item: &'a NotificationTypePref, cx: &App) -> (&'a str
 }
 
 /// Personal notification settings screen (`settings-notifications`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_notifications::{SettingsNotificationsScreen, SettingsNotificationsEvent};
+///
+/// let screen = cx.new(|cx| SettingsNotificationsScreen::new("settings-notifications", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsNotificationsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsNotificationsScreen {
     id: ElementId,
     focus: FocusHandle,

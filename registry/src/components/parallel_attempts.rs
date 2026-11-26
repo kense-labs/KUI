@@ -5,21 +5,22 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_mix_color, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
-        pro_spring_f32, pro_swap_label, pro_tactile, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         family::disabled_motion,
-        pro_icons::{ProIcon, person_initials, pro_app_artwork, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
 use web_time::Instant;
 
 const PANEL_MAX_W: f32 = 756.0;
-const ROW_H: f32 = 62.0;
+const ROW_H: f32 = 52.0;
 
 const PARALLEL_MARK_SVG: &str = r#"<rect x="1.5" y="2.5" width="9" height="2.4" rx="1.2" fill="currentColor"></rect><rect x="1.5" y="6.8" width="12" height="2.4" rx="1.2" fill="currentColor" opacity="0.55"></rect><rect x="1.5" y="11.1" width="6" height="2.4" rx="1.2" fill="currentColor" opacity="0.3"></rect>"#;
 
@@ -231,6 +232,40 @@ pub enum ParallelAttemptsEvent {
 impl EventEmitter<ParallelAttemptsEvent> for ParallelAttempts {}
 
 /// Best-of-N parallel attempt racer with live spring bars, automatic winner crowning, and diff inspector.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::parallel_attempts::{
+///     AttemptStatus, ParallelAttempt, ParallelAttempts, ParallelAttemptsEvent,
+/// };
+///
+/// let attempts = cx.new(|cx| {
+///     ParallelAttempts::new("checkout-best-of-4", cx)
+///         .with_task("Fix the flaky checkout test")
+///         .with_attempts(vec![
+///             ParallelAttempt::new("a", "Claude Opus 4.6", "Idempotency key + backoff")
+///                 .with_icon("claude")
+///                 .with_status(AttemptStatus::Done)
+///                 .with_score(96)
+///                 .with_note("20/20 stress runs green")
+///                 .with_cost(0.26),
+///             ParallelAttempt::new("b", "GPT-5", "Deterministic mock clock")
+///                 .with_icon("openai")
+///                 .with_status(AttemptStatus::Running)
+///                 .with_progress(0.64)
+///                 .with_step("Running tests 13/20"),
+///         ])
+/// });
+/// cx.subscribe(&attempts, |_, ev: &ParallelAttemptsEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ParallelAttempts {
     id: ElementId,
     title: Option<SharedString>,
@@ -448,36 +483,16 @@ impl ParallelAttempts {
     }
 }
 
-fn model_tile(icon: Option<&str>, fallback_name: &str, p: &ProPalette, cx: &App) -> AnyElement {
-    let tile_bg: Hsla = if p.dark { rgb(0x232326).into() } else { p.card };
-    let key = icon.unwrap_or(fallback_name);
-    let inner = if let Some(art) = pro_app_artwork(key, 15.0, cx) {
-        art
-    } else {
-        let init = person_initials(fallback_name);
-        div()
-            .text_size(px(11.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(p.ink)
-            .child(if init.is_empty() {
-                "M".to_string()
-            } else {
-                init
-            })
-            .into_any_element()
-    };
-    div()
-        .size(px(28.))
-        .flex_none()
-        .rounded(px(7.))
-        .bg(tile_bg)
-        .border_1()
-        .border_color(p.line_strong)
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(inner)
-        .into_any_element()
+fn model_tile(
+    icon: Option<&str>,
+    fallback_name: &str,
+    running: bool,
+    elapsed_ms: f32,
+    p: &ProPalette,
+    cx: &App,
+) -> AnyElement {
+    let seed = icon.unwrap_or(fallback_name);
+    pro_agent_avatar(seed, p.blue, 26.0, running, elapsed_ms, cx)
 }
 
 fn format_took(ms: u64) -> String {
@@ -598,7 +613,7 @@ impl Render for ParallelAttempts {
         };
         let header = div()
             .w_full()
-            .mb(px(12.))
+            .mb(px(8.))
             .flex()
             .flex_wrap()
             .items_center()
@@ -688,7 +703,7 @@ impl Render for ParallelAttempts {
             let quiet = picked_id.is_some() && !is_picked && !is_inspected && !is_hovered;
             row_opacities.push(pro_spring_f32(
                 pro_eid(&self.id, format!("pa-op-{}", attempt.id)),
-                if quiet { 0.56 } else { 1.0 },
+                if quiet { 0.62 } else { 1.0 },
                 0.22,
                 window,
                 cx,
@@ -696,9 +711,9 @@ impl Render for ParallelAttempts {
         }
 
         let track_c: Hsla = if p.dark {
-            hsla(0., 0., 1., 0.055)
+            hsla(0., 0., 1., 0.06)
         } else {
-            hsla(0., 0., 0., 0.04)
+            hsla(0., 0., 0., 0.045)
         };
         let running_ink: Hsla = if p.dark {
             rgb(0x8bcbfe).into()
@@ -713,7 +728,7 @@ impl Render for ParallelAttempts {
             .w_full()
             .flex()
             .flex_col()
-            .gap(px(8.));
+            .gap(px(6.));
 
         for (idx, attempt) in self.attempts.iter().enumerate() {
             let is_best = best_id.as_ref() == Some(&attempt.id);
@@ -742,8 +757,8 @@ impl Render for ParallelAttempts {
             };
 
             let bar_fill = match attempt.status {
-                AttemptStatus::Running => p.blue.opacity(if p.dark { 0.48 } else { 0.36 }),
-                AttemptStatus::Done if is_best => p.green.opacity(if p.dark { 0.56 } else { 0.46 }),
+                AttemptStatus::Running => p.blue.opacity(if p.dark { 0.52 } else { 0.38 }),
+                AttemptStatus::Done if is_best => p.green.opacity(if p.dark { 0.58 } else { 0.46 }),
                 AttemptStatus::Done => p.green.opacity(if p.dark { 0.36 } else { 0.30 }),
                 AttemptStatus::Failed => p.red.opacity(if p.dark { 0.45 } else { 0.38 }),
             };
@@ -758,7 +773,7 @@ impl Render for ParallelAttempts {
                         s_txt.to_string(),
                         running_ink,
                         p.strong,
-                        12.0,
+                        11.5,
                         FontWeight::NORMAL,
                         true,
                     )
@@ -769,8 +784,8 @@ impl Render for ParallelAttempts {
                         .unwrap_or_else(|| tr(cx, "Completed cleanly", "顺利通过"));
                     div()
                         .truncate()
-                        .text_size(px(12.))
-                        .line_height(px(18.))
+                        .text_size(px(11.5))
+                        .line_height(px(16.))
                         .text_color(p.text)
                         .child(n_txt.to_string())
                         .into_any_element()
@@ -781,8 +796,8 @@ impl Render for ParallelAttempts {
                         .unwrap_or_else(|| tr(cx, "Attempt failed", "尝试失败"));
                     div()
                         .truncate()
-                        .text_size(px(12.))
-                        .line_height(px(18.))
+                        .text_size(px(11.5))
+                        .line_height(px(16.))
                         .text_color(p.red_ink)
                         .child(e_txt.to_string())
                         .into_any_element()
@@ -794,16 +809,16 @@ impl Render for ParallelAttempts {
             let dark = p.dark;
             let bar_el = div()
                 .relative()
-                .w(px(210.))
+                .w(px(196.))
                 .flex_none()
-                .h(px(8.))
-                .rounded(px(4.))
+                .h(px(6.))
+                .rounded(px(3.))
                 .overflow_hidden()
                 .child(pro_spring_bar(
                     pro_eid(&self.id, format!("bar-{}", attempt.id)),
                     prog,
-                    8.0,
-                    4.0,
+                    6.0,
+                    3.0,
                     track_c,
                     bar_fill,
                 ))
@@ -828,7 +843,7 @@ impl Render for ParallelAttempts {
                                     );
                                     window.paint_quad(
                                         fill(r, hsla(0., 0., 1., if dark { 0.25 } else { 0.55 }))
-                                            .corner_radii(px(4.)),
+                                            .corner_radii(px(3.)),
                                     );
                                 }
                             },
@@ -845,16 +860,18 @@ impl Render for ParallelAttempts {
                         .flex()
                         .items_center()
                         .justify_end()
-                        .gap(px(6.))
+                        .gap(px(5.))
                         .when(is_best, |d| {
                             d.child(
                                 div()
-                                    .h(px(18.))
+                                    .h(px(17.))
                                     .px(px(6.))
-                                    .rounded(px(4.))
+                                    .rounded(px(5.))
                                     .bg(p.green_soft)
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .border_1()
+                                    .border_color(p.green.opacity(0.28))
+                                    .text_size(px(10.5))
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.green_ink)
                                     .flex()
                                     .items_center()
@@ -867,7 +884,7 @@ impl Render for ParallelAttempts {
                             0,
                             "",
                             "",
-                            13.,
+                            12.5,
                             FontWeight::SEMIBOLD,
                             p.ink,
                         ))
@@ -878,13 +895,13 @@ impl Render for ParallelAttempts {
                     (prog * 100.0) as f64,
                     0,
                     "",
-                    " %",
-                    13.,
+                    "%",
+                    12.5,
                     FontWeight::NORMAL,
                     p.muted,
                 ),
                 AttemptStatus::Failed => div()
-                    .text_size(px(12.5))
+                    .text_size(px(12.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.red_ink)
                     .child(tr(cx, "Failed", "失败"))
@@ -907,18 +924,18 @@ impl Render for ParallelAttempts {
                     .flex()
                     .items_center()
                     .justify_end()
-                    .gap(px(5.))
+                    .gap(px(4.))
                     .child(pro_check_draw(
                         pro_eid(&self.id, format!("pick-chk-{}", attempt.id)),
                         true,
-                        13.,
+                        12.,
                         false,
                         p.green,
                     ))
                     .child(pro_swap_label(
                         pro_eid(&self.id, format!("pick-lbl-{}", attempt.id)),
                         tr(cx, "Using", "已采用"),
-                        12.,
+                        11.5,
                         FontWeight::MEDIUM,
                         p.green_ink,
                     ))
@@ -926,19 +943,19 @@ impl Render for ParallelAttempts {
             } else if is_hovered && attempt.status == AttemptStatus::Done {
                 div()
                     .px(px(6.))
-                    .h(px(20.))
+                    .h(px(18.))
                     .rounded(px(5.))
                     .bg(p.chip)
                     .flex()
                     .items_center()
-                    .text_size(px(11.5))
+                    .text_size(px(11.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.ink)
                     .child(tr(cx, "Use this one", "选用此方案"))
                     .into_any_element()
             } else {
                 div()
-                    .text_size(px(12.))
+                    .text_size(px(11.5))
                     .text_color(p.muted)
                     .child(meta_text)
                     .into_any_element()
@@ -947,17 +964,24 @@ impl Render for ParallelAttempts {
             let id_click = attempt.id.clone();
             let id_hover = attempt.id.clone();
             let row_aria = format!("{} — {}", attempt.name, attempt.display_approach(cx));
-            let tile = model_tile(attempt.icon.as_deref(), attempt.name.as_ref(), &p, cx);
+            let tile = model_tile(
+                attempt.icon.as_deref(),
+                attempt.name.as_ref(),
+                is_running,
+                elapsed_s * 1000.0,
+                &p,
+                cx,
+            );
 
             let row_inner = div()
                 .w_full()
                 .min_h(px(ROW_H))
-                .pl(px(12.))
-                .pr(px(16.))
-                .py(px(11.))
+                .pl(px(11.))
+                .pr(px(14.))
+                .py(px(7.))
                 .flex()
                 .items_center()
-                .gap(px(14.))
+                .gap(px(12.))
                 .child(tile)
                 .child(
                     div()
@@ -975,7 +999,8 @@ impl Render for ParallelAttempts {
                                 .child(
                                     div()
                                         .flex_none()
-                                        .text_size(px(13.))
+                                        .whitespace_nowrap()
+                                        .text_size(px(12.5))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.ink)
                                         .child(attempt.name.clone()),
@@ -983,7 +1008,7 @@ impl Render for ParallelAttempts {
                                 .child(
                                     div()
                                         .flex_none()
-                                        .text_size(px(13.))
+                                        .text_size(px(12.))
                                         .text_color(p.faint)
                                         .child("·"),
                                 )
@@ -992,7 +1017,7 @@ impl Render for ParallelAttempts {
                                         .flex_1()
                                         .min_w_0()
                                         .truncate()
-                                        .text_size(px(13.))
+                                        .text_size(px(12.5))
                                         .text_color(p.muted)
                                         .child(attempt.display_approach(cx).to_string()),
                                 ),
@@ -1002,12 +1027,12 @@ impl Render for ParallelAttempts {
                 .child(bar_el)
                 .child(
                     div()
-                        .w(px(110.))
+                        .w(px(98.))
                         .flex_none()
                         .flex()
                         .flex_col()
                         .items_end()
-                        .gap(px(2.))
+                        .gap(px(1.))
                         .child(score_line)
                         .child(bottom_right),
                 );
@@ -1029,7 +1054,7 @@ impl Render for ParallelAttempts {
             )
             .role(Role::RadioButton)
             .w_full()
-            .when(!p.dark, |d| d.shadow_sm())
+            .shadow(pro_card_shadow(p.dark))
             .opacity(row_op)
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 if *inside {
@@ -1043,7 +1068,7 @@ impl Render for ParallelAttempts {
             rows_col = rows_col.child(row);
         }
 
-        // Diff / output preview for the inspected or winning attempt (with bidirectional fold)
+        // Compact diff / output preview for the inspected or winning attempt
         let active_diff_att = self
             .inspected_attempt()
             .filter(|a| !a.diff_lines.is_empty())
@@ -1066,12 +1091,12 @@ impl Render for ParallelAttempts {
 
             let mut code_col = div()
                 .w_full()
-                .px(px(12.))
-                .py(px(8.))
+                .px(px(10.))
+                .py(px(5.))
                 .flex()
                 .flex_col()
-                .gap(px(2.));
-            for line in &att.diff_lines {
+                .gap(px(1.));
+            for line in att.diff_lines.iter().take(4) {
                 let txt = line.as_ref();
                 let (bg, fg) = if txt.starts_with('+') {
                     (p.green_soft.opacity(0.65), p.green_ink)
@@ -1084,12 +1109,12 @@ impl Render for ParallelAttempts {
                     div()
                         .w_full()
                         .px(px(6.))
-                        .py(px(1.5))
-                        .rounded(px(4.))
+                        .py(px(0.5))
+                        .rounded(px(3.5))
                         .bg(bg)
                         .font_family(crate::components::pro_chrome::pro_mono_name())
-                        .text_size(px(11.5))
-                        .line_height(px(16.5))
+                        .text_size(px(11.))
+                        .line_height(px(15.))
                         .text_color(fg)
                         .truncate()
                         .child(line.clone()),
@@ -1100,7 +1125,7 @@ impl Render for ParallelAttempts {
             let chk_el = pro_check_draw(
                 pro_eid(&self.id, "active-patch-chk"),
                 is_winner,
-                12.,
+                11.5,
                 false,
                 p.green,
             );
@@ -1110,7 +1135,7 @@ impl Render for ParallelAttempts {
                 0,
                 "+",
                 "",
-                11.5,
+                11.,
                 FontWeight::MEDIUM,
                 p.green_ink,
             );
@@ -1120,41 +1145,42 @@ impl Render for ParallelAttempts {
                 0,
                 "-",
                 "",
-                11.5,
+                11.,
                 FontWeight::MEDIUM,
                 p.red_ink,
             );
             let card = div()
                 .w_full()
-                .mt(px(10.))
+                .mt(px(7.))
                 .rounded(px(10.))
                 .bg(panel_bg)
                 .border_1()
                 .border_color(panel_border)
+                .shadow(pro_card_shadow(p.dark))
                 .overflow_hidden()
                 .flex()
                 .flex_col()
                 .child(
                     div()
-                        .px(px(12.))
-                        .py(px(8.))
+                        .px(px(11.))
+                        .py(px(5.5))
                         .bg(p.subtle)
                         .border_b_1()
                         .border_color(p.line)
                         .flex()
                         .items_center()
-                        .gap(px(8.))
-                        .child(pro_icon(ProIcon::Code, 13.5, p.muted))
+                        .gap(px(7.))
+                        .child(pro_icon(ProIcon::Code, 12.5, p.muted))
                         .child(
                             div()
                                 .font_family(crate::components::pro_chrome::pro_mono_name())
-                                .text_size(px(12.))
+                                .text_size(px(11.5))
                                 .text_color(p.ink)
                                 .child(file),
                         )
                         .child(
                             div()
-                                .text_size(px(12.))
+                                .text_size(px(11.5))
                                 .text_color(p.muted)
                                 .child(format!("— {}", att.name)),
                         )
@@ -1163,17 +1189,17 @@ impl Render for ParallelAttempts {
                                 .ml_auto()
                                 .flex()
                                 .items_center()
-                                .gap(px(8.))
+                                .gap(px(7.))
                                 .child(adds_num)
                                 .child(dels_num)
                                 .when(is_winner, |d| {
                                     d.child(
                                         div()
-                                            .h(px(19.))
+                                            .h(px(18.))
                                             .px(px(6.))
                                             .rounded(px(4.))
                                             .bg(p.green_soft)
-                                            .text_size(px(11.))
+                                            .text_size(px(10.5))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.green_ink)
                                             .flex()
@@ -1191,7 +1217,7 @@ impl Render for ParallelAttempts {
             pro_fold(
                 pro_eid(&self.id, "diff-fold"),
                 has_diff_open,
-                148.0,
+                98.0,
                 0.0,
                 move || vtx_card,
             )

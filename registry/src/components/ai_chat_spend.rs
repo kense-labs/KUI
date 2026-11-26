@@ -332,6 +332,22 @@ struct ActivePick {
 }
 
 /// Interactive AI Chat / Spend Planner Pro screen (`ai-chat-spend`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ai_chat_spend::{AiChatSpendScreen, AiChatSpendEvent};
+///
+/// let screen = cx.new(|cx| AiChatSpendScreen::new("ai-chat-spend", cx));
+/// cx.subscribe(&screen, |_, event: &AiChatSpendEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AiChatSpendScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -1168,7 +1184,10 @@ impl AiChatSpendScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

@@ -1,12 +1,229 @@
 //! Host-driven live metrics with rolling values and recent-history details.
-use crate::components::animated_counter::AnimatedCounter;
 use crate::primitives::{
     control::UiLanguage,
-    family::{Paint, PhaseClock, Slide, disabled_motion, ease},
+    family::{Paint, PhaseClock, Slide, disabled_motion, ease, measure},
     presentation::{column, hint, row, title, tr},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
+
+#[derive(Default)]
+struct ClippedRoll {
+    shown: Option<(f64, SharedString)>,
+    previous: SharedString,
+    direction: f32,
+    clock: PhaseClock,
+}
+
+fn grouped_core(metric: &TickerMetric) -> String {
+    let number = format!("{:.*}", metric.decimals, metric.value.abs());
+    let (whole, part) = number.split_once('.').unwrap_or((&number, ""));
+    let mut grouped = String::new();
+    for (i, c) in whole.chars().enumerate() {
+        if i > 0 && (whole.len() - i).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(c);
+    }
+    if !part.is_empty() {
+        grouped.push('.');
+        grouped.push_str(part);
+    }
+    grouped
+}
+
+impl ClippedRoll {
+    #[allow(clippy::too_many_arguments)]
+    fn render(
+        &mut self,
+        metric: &TickerMetric,
+        font_size: f32,
+        line_h: f32,
+        visible: bool,
+        accessible: bool,
+        p: Paint,
+        w: &Window,
+        cx: &App,
+    ) -> Div {
+        let core: SharedString = grouped_core(metric).into();
+        let _ = accessible;
+        if let Some((old_val, old_text)) = &self.shown {
+            if *old_text != core {
+                self.previous = old_text.clone();
+                self.direction = if metric.value >= *old_val { 1. } else { -1. };
+                self.shown = Some((metric.value, core.clone()));
+                if visible && !disabled_motion(cx) {
+                    self.clock.restart(cx);
+                }
+            }
+        } else {
+            self.previous = core.clone();
+            self.direction = 1.;
+            self.shown = Some((metric.value, core.clone()));
+        }
+
+        let duration = 0.24;
+        let elapsed = if visible {
+            self.clock.time(duration, w, cx)
+        } else {
+            duration
+        };
+        let animating = elapsed < duration && !disabled_motion(cx);
+        let t = if animating {
+            ease((elapsed / duration).clamp(0., 1.))
+        } else {
+            1.
+        };
+
+        let prev_chars: Vec<char> = self.previous.chars().collect();
+        let next_chars: Vec<char> = core.chars().collect();
+        let slots = if animating {
+            prev_chars.len().max(next_chars.len())
+        } else {
+            next_chars.len()
+        };
+        let prev_pad = slots.saturating_sub(prev_chars.len());
+        let next_pad = slots.saturating_sub(next_chars.len());
+
+        let digit_w = measure(&"0".into(), font_size, w).ceil();
+        let comma_w = measure(&",".into(), font_size, w).ceil();
+        let dot_w = measure(&".".into(), font_size, w).ceil();
+        let char_w = |ch: char| -> f32 {
+            if ch == ' ' {
+                0.
+            } else if ch.is_ascii_digit() {
+                digit_w
+            } else if ch == ',' {
+                comma_w
+            } else if ch == '.' {
+                dot_w
+            } else {
+                measure(&ch.to_string().into(), font_size, w).ceil()
+            }
+        };
+
+        let mut container = div()
+            .h(px(line_h))
+            .overflow_hidden()
+            .flex()
+            .items_center()
+            .whitespace_nowrap()
+            .text_size(px(font_size))
+            .line_height(px(line_h))
+            .font_weight(FontWeight::SEMIBOLD)
+            .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
+            .text_color(p.ink);
+
+        if !metric.prefix.is_empty() {
+            container = container.child(
+                div()
+                    .flex_none()
+                    .h(px(line_h))
+                    .line_height(px(line_h))
+                    .overflow_hidden()
+                    .child(metric.prefix.clone()),
+            );
+        }
+        if metric.value < 0. {
+            container = container.child(
+                div()
+                    .flex_none()
+                    .h(px(line_h))
+                    .line_height(px(line_h))
+                    .overflow_hidden()
+                    .child("−"),
+            );
+        }
+
+        for idx in 0..slots {
+            let p_ch = if idx < prev_pad {
+                ' '
+            } else {
+                prev_chars[idx - prev_pad]
+            };
+            let n_ch = if idx < next_pad {
+                ' '
+            } else {
+                next_chars[idx - next_pad]
+            };
+            if !animating || p_ch == n_ch {
+                if n_ch == ' ' {
+                    continue;
+                }
+                let cw = char_w(n_ch);
+                container = container.child(
+                    div()
+                        .relative()
+                        .flex_none()
+                        .w(px(cw))
+                        .h(px(line_h))
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .w(px(cw))
+                                .h(px(line_h))
+                                .line_height(px(line_h))
+                                .child(n_ch.to_string()),
+                        ),
+                );
+            } else {
+                let wp = char_w(p_ch);
+                let wn = char_w(n_ch);
+                let cw = (wp + (wn - wp) * t).max(0.5);
+                container = container.child(
+                    div()
+                        .relative()
+                        .flex_none()
+                        .w(px(cw))
+                        .h(px(line_h))
+                        .overflow_hidden()
+                        .when(p_ch != ' ', |col| {
+                            col.child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(-self.direction * line_h * t))
+                                    .w(px(wp))
+                                    .h(px(line_h))
+                                    .line_height(px(line_h))
+                                    .opacity((1. - t * 1.15).clamp(0., 1.))
+                                    .child(p_ch.to_string()),
+                            )
+                        })
+                        .when(n_ch != ' ', |col| {
+                            col.child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(self.direction * line_h * (1. - t)))
+                                    .w(px(wn))
+                                    .h(px(line_h))
+                                    .line_height(px(line_h))
+                                    .opacity(t.clamp(0., 1.))
+                                    .child(n_ch.to_string()),
+                            )
+                        }),
+                );
+            }
+        }
+
+        if !metric.suffix.is_empty() {
+            container = container.child(
+                div()
+                    .flex_none()
+                    .h(px(line_h))
+                    .line_height(px(line_h))
+                    .overflow_hidden()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.secondary)
+                    .child(metric.suffix.clone()),
+            );
+        }
+
+        container
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TickerDelta {
     Percent,
@@ -72,8 +289,8 @@ impl TickerMetric {
 }
 struct Entry {
     metric: TickerMetric,
-    counter: Entity<AnimatedCounter>,
-    duplicate: Entity<AnimatedCounter>,
+    roll: ClippedRoll,
+    duplicate_roll: ClippedRoll,
     previous: Option<f64>,
     history: Vec<f64>,
     flash: PhaseClock,
@@ -83,6 +300,21 @@ pub struct TickerInspect {
     pub id: SharedString,
     pub value: f64,
 }
+/// `MetricTicker` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::metric_ticker::{MetricTicker, TickerMetric};
+///
+/// let metrics = vec![TickerMetric::new("requests", "Requests", 1234.0)];
+/// let control = cx.new(|cx| MetricTicker::new("Live metrics", metrics, cx));
+/// # }
+/// ```
 pub struct MetricTicker {
     label: SharedString,
     entries: Vec<Entry>,
@@ -103,7 +335,6 @@ pub struct MetricTicker {
     measured: Rc<Cell<Bounds<Pixels>>>,
     marquee: bool,
     inline_deltas: bool,
-    counter_size: f32,
 }
 impl EventEmitter<TickerInspect> for MetricTicker {}
 impl MetricTicker {
@@ -130,9 +361,8 @@ impl MetricTicker {
             clock: PhaseClock::default(),
             last_time: 0.,
             measured: Default::default(),
-            marquee: true,
+            marquee: false,
             inline_deltas: true,
-            counter_size: 18.,
         };
         result.set_metrics(metrics, cx);
         result
@@ -179,12 +409,6 @@ impl MetricTicker {
                 if entry.metric.value != metric.value {
                     entry.previous = Some(entry.metric.value);
                     entry.flash.restart(cx);
-                    entry
-                        .counter
-                        .update(cx, |counter, cx| counter.set_value(metric.value, cx));
-                    entry
-                        .duplicate
-                        .update(cx, |counter, cx| counter.set_value(metric.value, cx));
                 }
                 if metric.history.is_empty() {
                     if entry.history.last() != Some(&metric.value) {
@@ -207,21 +431,8 @@ impl MetricTicker {
                     || entry.metric.suffix != metric.suffix
                     || entry.metric.decimals != metric.decimals
                 {
-                    entry.counter = cx.new(|_| {
-                        AnimatedCounter::new(metric.value)
-                            .with_prefix(metric.prefix.clone())
-                            .with_suffix(metric.suffix.clone())
-                            .with_decimals(metric.decimals)
-                            .with_size(18.)
-                    });
-                    entry.duplicate = cx.new(|_| {
-                        AnimatedCounter::new(metric.value)
-                            .with_prefix(metric.prefix.clone())
-                            .with_suffix(metric.suffix.clone())
-                            .with_decimals(metric.decimals)
-                            .with_size(18.)
-                            .with_accessibility(false)
-                    });
+                    entry.roll = ClippedRoll::default();
+                    entry.duplicate_roll = ClippedRoll::default();
                 }
                 entry.metric = metric;
                 entries.push(entry);
@@ -238,25 +449,10 @@ impl MetricTicker {
                         .copied()
                         .collect()
                 };
-                let counter = cx.new(|_| {
-                    AnimatedCounter::new(metric.value)
-                        .with_prefix(metric.prefix.clone())
-                        .with_suffix(metric.suffix.clone())
-                        .with_decimals(metric.decimals)
-                        .with_size(18.)
-                });
-                let duplicate = cx.new(|_| {
-                    AnimatedCounter::new(metric.value)
-                        .with_prefix(metric.prefix.clone())
-                        .with_suffix(metric.suffix.clone())
-                        .with_decimals(metric.decimals)
-                        .with_size(18.)
-                        .with_accessibility(false)
-                });
                 entries.push(Entry {
                     metric,
-                    counter,
-                    duplicate,
+                    roll: ClippedRoll::default(),
+                    duplicate_roll: ClippedRoll::default(),
                     previous: None,
                     history,
                     flash: PhaseClock::default(),
@@ -297,9 +493,6 @@ impl MetricTicker {
         cx.notify();
     }
 }
-fn delta_text(entry: &Entry) -> (&'static str, String, bool) {
-    change_text(entry.previous, &entry.metric)
-}
 fn delta_chip(arrow: &'static str, amount: &str, good: bool, age: f32, p: Paint) -> Div {
     let tone = if good { p.success } else { p.danger };
     let wash = if good { 0.14 } else { 0.13 };
@@ -313,6 +506,7 @@ fn delta_chip(arrow: &'static str, amount: &str, good: bool, age: f32, p: Paint)
     };
     div()
         .relative()
+        .flex_none()
         .child(
             div()
                 .flex()
@@ -323,8 +517,8 @@ fn delta_chip(arrow: &'static str, amount: &str, good: bool, age: f32, p: Paint)
                 .pl(px(4.))
                 .pr(px(6.))
                 .rounded(px(8.))
-                .text_size(px(12.))
-                .line_height(px(16.8))
+                .text_size(px(11.))
+                .line_height(px(16.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if flash {
                     tone
@@ -398,24 +592,11 @@ fn change_text(previous: Option<f64>, metric: &TickerMetric) -> (&'static str, S
     (arrow, format!("{value:.1}{suffix}"), good)
 }
 fn display_value(metric: &TickerMetric) -> String {
-    let number = format!("{:.*}", metric.decimals, metric.value.abs());
-    let (whole, part) = number.split_once('.').unwrap_or((&number, ""));
-    let mut grouped = String::new();
-    for (i, c) in whole.chars().enumerate() {
-        if i > 0 && (whole.len() - i) % 3 == 0 {
-            grouped.push(',');
-        }
-        grouped.push(c);
-    }
-    if !part.is_empty() {
-        grouped.push('.');
-        grouped.push_str(part);
-    }
     format!(
         "{}{}{}{}",
         metric.prefix,
         if metric.value < 0. { "−" } else { "" },
-        grouped,
+        grouped_core(metric),
         metric.suffix
     )
 }
@@ -436,51 +617,21 @@ impl Render for MetricTicker {
         }
         self.was_focused = focused;
         let measured = self.measured.get();
-        let width = f32::from(measured.size.width).max(1.);
-        let compact = width < 420.;
-        let strip_height = if self.inline_deltas { 82. } else { 66. };
-        // Below 420px values drop to the base size; the counters are rebuilt
-        // only when the strip crosses that line, not on every frame.
-        let wanted = if compact { 16. } else { 18. };
-        if (self.counter_size - wanted).abs() > 0.01 {
-            for entry in &mut self.entries {
-                let value = entry.metric.value;
-                let prefix = entry.metric.prefix.clone();
-                let suffix = entry.metric.suffix.clone();
-                let decimals = entry.metric.decimals;
-                entry.counter = cx.new(|_| {
-                    AnimatedCounter::new(value)
-                        .with_prefix(prefix.clone())
-                        .with_suffix(suffix.clone())
-                        .with_decimals(decimals)
-                        .with_size(wanted)
-                });
-                entry.duplicate = cx.new(|_| {
-                    AnimatedCounter::new(value)
-                        .with_prefix(prefix)
-                        .with_suffix(suffix)
-                        .with_decimals(decimals)
-                        .with_size(wanted)
-                        .with_accessibility(false)
-                });
-            }
-            self.counter_size = wanted;
-        }
-        let min_width = if compact {
-            155.
-        } else if self.inline_deltas {
-            190.
+        let viewport_w = f32::from(w.viewport_size().width);
+        let width = if measured.size.width > px(1.) {
+            f32::from(measured.size.width)
         } else {
-            162.
+            (viewport_w - 40.).clamp(1., 520.)
         };
         let count = self.entries.len().max(1);
-        let cell_width = (width / count as f32).max(min_width);
+        let desktop = width >= 476. || (measured.size.width <= px(1.) && viewport_w >= 520.);
+        let min_marquee_w = if self.inline_deltas { 180. } else { 156. };
+        let cell_width = (width / count as f32).max(min_marquee_w);
         let content_width = cell_width * self.entries.len() as f32;
-        let repeat = self.marquee && !disabled_motion(cx) && content_width > width + 1.;
-        let moving = self.visible && self.marquee && !disabled_motion(cx) && w.is_visible();
+        let repeat = self.marquee && desktop && !disabled_motion(cx) && content_width > width + 1.;
+        let moving = self.visible && repeat && w.is_visible();
         let max = f32::from(self.scroll.max_offset().x).abs();
-        let target_speed = if moving && repeat && max > 0. && !self.hover && self.selected.is_none()
-        {
+        let target_speed = if moving && max > 0. && !self.hover && self.selected.is_none() {
             32.
         } else {
             0.
@@ -511,109 +662,196 @@ impl Render for MetricTicker {
             self.clock.restart(cx);
             self.last_time = 0.;
         }
-        let cells: Vec<_> = self
-            .entries
-            .iter()
-            .enumerate()
-            .map(|(i, entry)| {
-                let (arrow, amount, good) = delta_text(entry);
-                let change = if amount == "—" {
-                    amount.clone()
-                } else {
-                    format!("{arrow} {amount}")
-                };
-                let age = if self.visible && self.inline_deltas {
-                    entry.flash.time(1.6, w, cx)
-                } else {
-                    1.6
-                };
-                div()
-                    .id(("ticker-metric", i))
-                    .role(Role::Button)
-                    .tab_index(-1)
-                    .aria_expanded(self.selected == Some(i))
-                    .when(self.selected == Some(i), |v| v.aria_active_descendant())
-                    .aria_label(format!(
-                        "{} · {} · {}",
-                        entry.metric.label,
-                        display_value(&entry.metric),
-                        change
-                    ))
-                    .flex_none()
-                    .relative()
-                    .w(px(cell_width - 8.))
-                    .m(px(4.))
-                    .px(px(14.))
-                    .pt(px(8.))
-                    .pb(px(9.))
-                    .rounded(crate::foundation::surface_radius(cx))
-                    .hover(|s| s.bg(p.tray))
-                    .when(self.selected == Some(i) && !self.repeated, |v| v.bg(p.tray))
-                    .child(hint(entry.metric.label.clone(), p))
-                    .child(
-                        row()
-                            .items_baseline()
-                            .gap(px(8.))
-                            .child(entry.counter.clone())
-                            .when(self.inline_deltas, |r| {
-                                r.child(delta_chip(arrow, &amount, good, age, p))
-                            }),
-                    )
-                    .child(
+
+        let col_est = if repeat {
+            cell_width
+        } else if desktop {
+            width / count as f32
+        } else {
+            width * 0.5
+        };
+        let tight_col = col_est < 122.;
+        let font_size = if tight_col { 15.5 } else { 18. };
+        let line_h = if tight_col { 21. } else { 24. };
+        let cell_px = if tight_col { 9. } else { 14. };
+        let label_size = if tight_col { 11. } else { 12. };
+        let label_lh = if tight_col { 14.5 } else { 16.5 };
+        let visible_roll = self.visible && w.is_visible();
+        let inline_deltas = self.inline_deltas;
+        let selected_idx = self.selected;
+        let repeated_sel = self.repeated;
+        let radius = crate::foundation::surface_radius(cx);
+        let total = self.entries.len();
+        let last_row = total.saturating_sub(1) / 2;
+
+        let mut cells = Vec::with_capacity(total);
+        let mut duplicates = Vec::new();
+        for (i, entry) in self.entries.iter_mut().enumerate() {
+            let (arrow, amount, good) = change_text(entry.previous, &entry.metric);
+            let change = if amount == "—" {
+                amount.clone()
+            } else {
+                format!("{arrow} {amount}")
+            };
+            let age = if visible_roll && inline_deltas {
+                entry.flash.time(1.6, w, cx)
+            } else {
+                1.6
+            };
+            let counter_el = entry.roll.render(
+                &entry.metric,
+                font_size,
+                line_h,
+                visible_roll,
+                true,
+                p,
+                w,
+                cx,
+            );
+            let label_text = entry.metric.label.clone();
+            let aria = format!(
+                "{} · {} · {}",
+                label_text,
+                display_value(&entry.metric),
+                change
+            );
+            let odd_trailing = !desktop && total % 2 == 1 && i + 1 == total;
+
+            let cell = div()
+                .id(("ticker-metric", i))
+                .role(Role::Button)
+                .tab_index(-1)
+                .aria_expanded(selected_idx == Some(i))
+                .when(selected_idx == Some(i), |v| v.aria_active_descendant())
+                .aria_label(aria)
+                .relative()
+                .when(repeat, |v| {
+                    v.flex_none()
+                        .w(px(cell_width - 8.))
+                        .m(px(4.))
+                        .rounded(radius)
+                })
+                .when(!repeat && desktop, |v| v.flex_1().min_w_0())
+                .when(!repeat && !desktop && odd_trailing, |v| {
+                    v.w_full().min_w_0()
+                })
+                .when(!repeat && !desktop && !odd_trailing, |v| {
+                    v.w(relative(0.5)).min_w_0()
+                })
+                .when(!repeat && !desktop && (i / 2) < last_row, |v| {
+                    v.border_b_1().border_color(p.line)
+                })
+                .when(!repeat && !desktop && i % 2 == 0 && i + 1 < total, |v| {
+                    v.border_r_1().border_color(p.line)
+                })
+                .px(px(cell_px))
+                .pt(px(10.))
+                .pb(px(11.))
+                .flex()
+                .flex_col()
+                .justify_between()
+                .gap(px(6.))
+                .overflow_hidden()
+                .hover(|s| s.bg(p.tray))
+                .when(selected_idx == Some(i) && !repeated_sel, |v| v.bg(p.tray))
+                .child(
+                    div()
+                        .min_w_0()
+                        .text_size(px(label_size))
+                        .line_height(px(label_lh))
+                        .text_color(p.faint)
+                        .child(label_text.clone()),
+                )
+                .child(
+                    row()
+                        .min_w_0()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_x(px(6.))
+                        .gap_y(px(2.))
+                        .child(counter_el)
+                        .when(inline_deltas, |r| {
+                            r.child(delta_chip(arrow, &amount, good, age, p))
+                        }),
+                )
+                .when((repeat || desktop) && i + 1 < total, |v| {
+                    v.child(
                         div()
                             .absolute()
                             .right_0()
-                            .top(px(14.))
-                            .bottom(px(14.))
+                            .top(px(12.))
+                            .bottom(px(12.))
                             .w(px(1.))
                             .bg(p.line),
                     )
-                    .on_hover(cx.listener(move |s, inside: &bool, _, cx| {
-                        if *inside && !s.pinned {
-                            if s.repeated {
-                                s.repeated = false;
-                                cx.notify();
-                            }
-                            s.select(Some(i), cx);
+                })
+                .on_hover(cx.listener(move |s, inside: &bool, _, cx| {
+                    if *inside && !s.pinned {
+                        if s.repeated {
+                            s.repeated = false;
+                            cx.notify();
                         }
-                    }))
-                    .on_click(cx.listener(move |s, _, _, cx| {
-                        s.repeated = false;
-                        if s.pinned && s.selected == Some(i) {
-                            s.pinned = false;
-                            s.select(None, cx);
-                        } else {
-                            s.pinned = true;
-                            s.select(Some(i), cx);
-                        }
-                    }))
-            })
-            .collect();
-        let duplicates: Vec<_> = if repeat {
-            self.entries
-                .iter()
-                .enumerate()
-                .map(|(i, entry)| {
-                    let (arrow, amount, good) = delta_text(entry);
+                        s.select(Some(i), cx);
+                    }
+                }))
+                .on_click(cx.listener(move |s, _, _, cx| {
+                    s.repeated = false;
+                    if s.pinned && s.selected == Some(i) {
+                        s.pinned = false;
+                        s.select(None, cx);
+                    } else {
+                        s.pinned = true;
+                        s.select(Some(i), cx);
+                    }
+                }));
+            cells.push(cell);
+
+            if repeat {
+                let dup_counter = entry.duplicate_roll.render(
+                    &entry.metric,
+                    font_size,
+                    line_h,
+                    visible_roll,
+                    false,
+                    p,
+                    w,
+                    cx,
+                );
+                duplicates.push(
                     div()
                         .id(("ticker-repeat", i))
                         .flex_none()
                         .relative()
                         .w(px(cell_width - 8.))
                         .m(px(4.))
-                        .px(px(14.))
-                        .pt(px(8.))
-                        .pb(px(9.))
-                        .rounded(crate::foundation::surface_radius(cx))
+                        .px(px(cell_px))
+                        .pt(px(10.))
+                        .pb(px(11.))
+                        .rounded(radius)
+                        .flex()
+                        .flex_col()
+                        .justify_between()
+                        .gap(px(6.))
+                        .overflow_hidden()
                         .hover(|s| s.bg(p.tray))
-                        .when(self.selected == Some(i) && self.repeated, |v| v.bg(p.tray))
-                        .child(hint(entry.metric.label.clone(), p))
+                        .when(selected_idx == Some(i) && repeated_sel, |v| v.bg(p.tray))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .text_size(px(label_size))
+                                .line_height(px(label_lh))
+                                .text_color(p.faint)
+                                .child(label_text),
+                        )
                         .child(
                             row()
-                                .items_baseline()
-                                .gap(px(8.))
-                                .child(entry.duplicate.clone())
-                                .when(self.inline_deltas, |r| {
+                                .min_w_0()
+                                .flex_wrap()
+                                .items_center()
+                                .gap_x(px(6.))
+                                .gap_y(px(2.))
+                                .child(dup_counter)
+                                .when(inline_deltas, |r| {
                                     r.child(delta_chip(arrow, &amount, good, 1.6, p))
                                 }),
                         )
@@ -644,12 +882,11 @@ impl Render for MetricTicker {
                                 s.pinned = true;
                                 s.select(Some(i), cx);
                             }
-                        }))
-                })
-                .collect()
-        } else {
-            vec![]
-        };
+                        })),
+                );
+            }
+        }
+
         let scroll = self.scroll.clone();
         let measured = self.measured.clone();
         let strip = div()
@@ -660,6 +897,11 @@ impl Render for MetricTicker {
             .aria_label(self.label.clone())
             .relative()
             .w_full()
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .overflow_hidden()
             .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
                 let n = s.entries.len();
                 if n == 0 {
@@ -690,7 +932,9 @@ impl Render for MetricTicker {
                     _ => return,
                 };
                 s.select(Some(next), cx);
-                s.scroll.scroll_to_item(next);
+                if s.marquee {
+                    s.scroll.scroll_to_item(next);
+                }
                 cx.stop_propagation();
             }))
             .child(
@@ -711,20 +955,19 @@ impl Render for MetricTicker {
                     .id("ticker-scroll")
                     .w_full()
                     .flex()
-                    .overflow_x_scroll()
-                    .track_scroll(&scroll)
+                    .flex_row()
+                    .when(!repeat && !desktop, |el| el.flex_wrap())
+                    .when(repeat, |el| el.overflow_x_scroll().track_scroll(&scroll))
                     .children(cells)
                     .children(duplicates),
             )
-            // The marquee feathers its ends while the border stays crisp; a
-            // plain canvas paints the fade and stays out of hit testing.
             .when(repeat, |strip| {
                 let panel = p.panel;
                 strip.child(
                     canvas(
                         move |_, _, _| {},
                         move |b, _, w, _| {
-                            let feather = px(28.);
+                            let feather = px(24.);
                             let left = Bounds {
                                 origin: b.origin,
                                 size: size(feather, b.size.height),
@@ -831,7 +1074,14 @@ impl Render for MetricTicker {
                             }
                             area.close();
                             if let Ok(area) = area.build() {
-                                w.paint_path(area, p.bright.opacity(0.08));
+                                w.paint_path(
+                                    area,
+                                    linear_gradient(
+                                        180.,
+                                        linear_color_stop(p.bright.opacity(0.14), 0.),
+                                        linear_color_stop(p.bright.opacity(0.), 1.),
+                                    ),
+                                );
                             }
                         }
                         let mut path = PathBuilder::stroke(px(1.75));
@@ -849,8 +1099,6 @@ impl Render for MetricTicker {
                 )
                 .w_full()
                 .h(px(56.));
-                // The panel grows out of the metric row that opened it; GPUI
-                // has no element scale, so the grow is a height reveal.
                 let open = ease(reveal);
                 column()
                     .w(px(248.))
@@ -859,7 +1107,7 @@ impl Render for MetricTicker {
                     .px(px(14.))
                     .py(px(12.))
                     .shadow_lg()
-                    .rounded(crate::foundation::surface_radius(cx))
+                    .rounded(radius)
                     .bg(p.tray)
                     .border_1()
                     .border_color(p.line)
@@ -883,10 +1131,16 @@ impl Render for MetricTicker {
             })
         });
         let desired = self.selected.map_or(0., |i| {
-            (i as f32 * cell_width
-                + if self.repeated { content_width } else { 0. }
-                + f32::from(self.scroll.offset().x))
-            .clamp(0., (width - 248.).max(0.))
+            let slot_x = if repeat {
+                i as f32 * cell_width
+                    + if self.repeated { content_width } else { 0. }
+                    + f32::from(self.scroll.offset().x)
+            } else if desktop {
+                i as f32 * (width / count as f32)
+            } else {
+                (i % 2) as f32 * (width * 0.5)
+            };
+            slot_x.clamp(0., (width - 248.).max(0.))
         });
         self.panel_x.duration(desired, 0.42, cx);
         let x = if self.visible && w.is_visible() {
@@ -894,15 +1148,11 @@ impl Render for MetricTicker {
         } else {
             self.panel_x.value(cx)
         };
-        div()
+        column()
             .id("ticker-shell")
             .relative()
             .w_full()
-            .h(px(strip_height + if panel.is_some() { 158. } else { 0. }))
-            .rounded(crate::foundation::surface_radius(cx))
-            .border_1()
-            .border_color(p.line)
-            .bg(p.panel)
+            .gap(px(8.))
             .text_color(p.ink)
             .on_mouse_down_out(cx.listener(|s, _, _, cx| {
                 if s.pinned {
@@ -919,20 +1169,16 @@ impl Render for MetricTicker {
             }))
             .child(strip)
             .when_some(panel, |v, panel| {
-                v.child(
-                    div()
-                        .absolute()
-                        .top(px(strip_height + 8.))
-                        .left(px(x))
-                        .child(panel),
-                )
+                v.child(div().w_full().pl(px(x)).child(panel))
             })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{TickerDelta, TickerGood, TickerMetric, change_text, display_value};
+    use super::{MetricTicker, TickerDelta, TickerGood, TickerMetric, change_text, display_value};
+    use gpui::TestAppContext;
+
     #[test]
     fn delta_handles_direction_and_zero_baselines() {
         let mut metric = TickerMetric::new("latency", "Latency", 110.)
@@ -953,9 +1199,40 @@ mod tests {
         metric.suffix = "%".into();
         assert_eq!(change_text(Some(100.), &metric).1, "10.0 pts");
     }
+
     #[test]
     fn duplicate_matches_grouped_value() {
         let metric = TickerMetric::new("revenue", "Revenue", 12345.25).with_format("$", "", 2);
         assert_eq!(display_value(&metric), "$12,345.25");
+    }
+
+    #[test]
+    fn desktop_and_mobile_layouts_mount_and_update_cleanly() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let metrics = vec![
+            TickerMetric::new("mrr", "Monthly recurring revenue", 84_210.).with_format("$", "", 0),
+            TickerMetric::new("active", "Active now", 1_284.),
+            TickerMetric::new("conv", "Trial conversion", 18.4).with_format("", "%", 1),
+            TickerMetric::new("lat", "API latency", 182.).with_format("", " ms", 0),
+        ];
+        let (view, w) =
+            app.add_window_view(|_, cx| MetricTicker::new("Product health", metrics, cx));
+        w.run_until_parked();
+        w.update(|_, cx| {
+            view.update(cx, |ticker, cx| {
+                ticker.set_metrics(
+                    vec![
+                        TickerMetric::new("mrr", "Monthly recurring revenue", 85_000.)
+                            .with_format("$", "", 0),
+                        TickerMetric::new("active", "Active now", 1_401.),
+                        TickerMetric::new("conv", "Trial conversion", 18.6).with_format("", "%", 1),
+                        TickerMetric::new("lat", "API latency", 190.).with_format("", " ms", 0),
+                    ],
+                    cx,
+                );
+            });
+        });
+        w.run_until_parked();
     }
 }

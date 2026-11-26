@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
-        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile,
-        tr,
+        ProPalette, pro_agent_avatar, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_popover_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -217,6 +217,39 @@ fn format_mm_ss(secs: u32) -> String {
     format!("{}:{:02}", secs / 60, secs % 60)
 }
 
+fn diff_avatar_seed(id: &str, name: &str) -> &'static str {
+    let s = format!("{id} {name}").to_ascii_lowercase();
+    if s.contains("claude")
+        || s.contains("opus")
+        || s.contains("sonnet")
+        || s.contains("haiku")
+        || s.contains("frontend")
+        || s.contains("design")
+    {
+        "claude"
+    } else if s.contains("gemini") {
+        "gemini"
+    } else if s.contains("deepseek") {
+        "deepseek"
+    } else if s.contains("mistral") || s.contains("codestral") {
+        "mistral"
+    } else if s.contains("qwen") {
+        "qwen"
+    } else if s.contains("llama") {
+        "llama"
+    } else if s.contains("grok") {
+        "grok"
+    } else if s.contains("gpt")
+        || s.contains("openai")
+        || s.contains("codex")
+        || s.contains("coder")
+    {
+        "gpt"
+    } else {
+        "claude"
+    }
+}
+
 fn file_icon_and_color(path: &str, p: &ProPalette) -> (ProIcon, Hsla) {
     let lower = path.to_ascii_lowercase();
     if lower.ends_with(".svg") || lower.ends_with(".png") || lower.ends_with(".webp") {
@@ -292,6 +325,27 @@ fn default_pr_edits() -> Vec<DiffEdit> {
 }
 
 /// Pull-request edit-by-edit timeline card with dual area curves and per-file diff bars.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::diff_timeline::{DiffTimeline, DiffTimelineAgent, DiffTimelineEvent};
+///
+/// let timeline = cx.new(|cx| {
+///     DiffTimeline::new("pr-214-diff", cx)
+///         .with_agent(DiffTimelineAgent::new("frontend", "Frontend agent"))
+///         .with_context(Some("PR #214".into()))
+///         .with_live(true)
+/// });
+/// cx.subscribe(&timeline, |_, ev: &DiffTimelineEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct DiffTimeline {
     id: ElementId,
     agent: DiffTimelineAgent,
@@ -616,7 +670,7 @@ impl Render for DiffTimeline {
             .items_center()
             .gap(px(10.))
             .child(pro_agent_avatar(
-                self.agent.id.as_ref(),
+                diff_avatar_seed(&self.agent.id, &self.agent.name),
                 agent_mark_c,
                 24.,
                 is_live_now,
@@ -719,7 +773,7 @@ impl Render for DiffTimeline {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .gap(px(14.))

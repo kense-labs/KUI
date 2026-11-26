@@ -1,6 +1,22 @@
 //! A spaced action tray with horizontal or vertical orientation.
 use crate::primitives::strip::{Activated, Layout, Segment, Strip, StripControl, draw};
 use gpui::{prelude::*, *};
+/// `FloatingButtonGroup` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::floating_button_group::FloatingButtonGroup;
+/// use kui::primitives::glyph::Glyph;
+/// use kui::primitives::strip::{Segment};
+///
+/// let control = cx.new(|cx| FloatingButtonGroup::new("canvas", vec![Segment::new("zoom", "Zoom in", Some(Glyph::ZoomIn), 36.).icon_only(), Segment::new("lock", "Lock", Some(Glyph::Lock), 36.).icon_only().divider()], cx).vertical());
+/// # }
+/// ```
 pub struct FloatingButtonGroup {
     strip: Strip,
 }

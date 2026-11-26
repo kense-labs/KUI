@@ -12,6 +12,20 @@ pub enum ToastEvent {
     Action,
     Dismissed,
 }
+/// `Toast` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::toast::Toast;
+///
+/// let control = cx.new(|_| Toast::new());
+/// # }
+/// ```
 pub struct Toast {
     message: ChangingText,
     description: Option<SharedString>,

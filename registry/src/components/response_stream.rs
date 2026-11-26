@@ -6,17 +6,17 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mark_selected, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         clipboard,
         control::UiLanguage,
         family::{PhaseClock, Slide, disabled_motion},
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -169,7 +169,7 @@ pub enum ResponseStreamEvent {
     },
     /// Emitted when `Dismiss` clears a stopped or failed answer.
     Dismissed,
-    /// Emitted when a steer or queued chip above the answer is removed (`✕`).
+    /// Emitted when a steer or queued chip above the answer is removed via its close button.
     ChipRemoved(SharedString),
     /// Emitted when `Copy` copies the answer text.
     Copied(SharedString),
@@ -251,6 +251,27 @@ pub(crate) fn parse_stream_segments(raw: &str) -> Vec<StreamSegment> {
 }
 
 /// Complete lifecycle component for a streamed agent response.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::response_stream::{ResponseStream, ResponseStreamEvent, ResponseStreamStatus};
+///
+/// let stream = cx.new(|cx| {
+///     ResponseStream::new("atlas-answer", cx)
+///         .with_agent("atlas", "Atlas")
+///         .with_status(ResponseStreamStatus::Streaming)
+///         .with_meta(182, 6_400)
+/// });
+/// cx.subscribe(&stream, |_, event: &ResponseStreamEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ResponseStream {
     id: ElementId,
     focus: FocusHandle,
@@ -298,19 +319,19 @@ impl ResponseStream {
             id: id.into(),
             focus: cx.focus_handle(),
             prompt: Some("How should we roll out the new billing page?".into()),
-            agent: ResponseAgent::new("atlas", "Atlas"),
+            agent: ResponseAgent::new("claude-atlas", "Atlas"),
             raw_text: raw,
-            word_cursor: 24.min(segments.len()),
+            word_cursor: 31.min(segments.len()),
             segments,
             last_advance_at: now,
             status: ResponseStreamStatus::Streaming,
             error: "Upstream model stream dropped (HTTP 502) — partial output preserved.".into(),
-            chips: default_steer_chips(),
+            chips: Vec::new(),
             expand_chips: false,
-            bends: vec![ResponseBend::new(28, "Keep rollout behind flag billing_v2")],
+            bends: Vec::new(),
             meta: ResponseMeta::default(),
             esc_to_stop: true,
-            interactive_controls: true,
+            interactive_controls: false,
             words_per_sec: 8.5,
             stream_accum: 0.0,
             started_at: now,
@@ -578,41 +599,20 @@ impl ResponseStream {
         }
     }
 
-    fn render_pixel_mark(&self, busy: bool, elapsed_ms: f32, p: &ProPalette, cx: &App) -> Div {
-        let reduced = Theme::global(cx).reduced_motion;
-        let cells = agent_pixel_cells(&self.agent.id);
+    fn render_pixel_mark(
+        &self,
+        busy: bool,
+        elapsed_ms: f32,
+        p: &ProPalette,
+        cx: &App,
+    ) -> AnyElement {
         let col = if self.status == ResponseStreamStatus::Failed {
             p.red_ink
         } else {
             p.blue
         };
-        let mut grid = div()
-            .size(px(16.))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(1.5));
-        for r in 0..3usize {
-            let mut row = div().flex().items_center().gap(px(1.5));
-            for c in 0..3usize {
-                let i = r * 3 + c;
-                let on = cells[i];
-                let alpha = if busy && !reduced {
-                    let ph = ((elapsed_ms + AGENT_WAVE_MS[i]) / 1200.0) * std::f32::consts::TAU;
-                    let wv = 0.56 + 0.44 * ph.cos();
-                    if on { wv } else { 0.16 * wv }
-                } else if on {
-                    0.92
-                } else {
-                    0.0
-                };
-                row = row.child(div().size(px(3.)).rounded(px(0.8)).bg(col.opacity(alpha)));
-            }
-            grid = grid.child(row);
-        }
-        grid
+        let seed = format!("{} {} claude", self.agent.id, self.agent.name);
+        pro_agent_avatar(&seed, col, 20.0, busy, elapsed_ms, cx)
     }
 }
 
@@ -1310,7 +1310,7 @@ impl Render for ResponseStream {
                 .child(pro_btn(
                     pro_eid(&self.id, "rstr-dismiss-stop"),
                     tr(cx, "Dismiss", "移除"),
-                    None,
+                    Some(ProIcon::Close),
                     ProBtnStyle::Ghost,
                     true,
                     cx,
@@ -1333,7 +1333,7 @@ impl Render for ResponseStream {
                 .child(pro_btn(
                     pro_eid(&self.id, "rstr-dismiss-fail"),
                     tr(cx, "Dismiss", "移除"),
-                    None,
+                    Some(ProIcon::Close),
                     ProBtnStyle::Ghost,
                     true,
                     cx,
@@ -1437,7 +1437,7 @@ impl Render for ResponseStream {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .shadow_xs()
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(chips_block)
@@ -1454,6 +1454,7 @@ impl Render for ResponseStream {
             .relative()
             .w_full()
             .min_w_0()
+            .py(px(20.))
             .flex()
             .justify_center()
             .child(
@@ -1467,7 +1468,10 @@ impl Render for ResponseStream {
                     },
                     |_, _, _, _| (),
                 )
-                .w(px(0.))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
                 .h(px(0.)),
             )
             .child(
@@ -1484,6 +1488,7 @@ impl Render for ResponseStream {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn default_steer_chips() -> Vec<ResponseSteerChip> {
     vec![
         ResponseSteerChip::new(
@@ -1500,7 +1505,7 @@ fn default_steer_chips() -> Vec<ResponseSteerChip> {
 }
 
 fn default_stream_text() -> &'static str {
-    "Roll the new billing page out in three steps. First, ship it behind a flag to the internal team for a week and watch the error rate and invoice webhook latency.\n\n```ts\nconst enabled = flags.check(\"billing_v2\", { orgId, cohort: \"canary_10\" });\n```\n\nSecond, ramp 10% of self-serve workspaces while keeping one-click fallback to the legacy checkout route.\n\nThird, promote to 100% once 48 hours of renewal runs finish with zero failed charges."
+    "Roll the new billing page out in three steps. First, ship it behind a flag to the internal team for a week and watch the error rate and the time to first payment.\n\n```ts\nconst enabled = flags.check(\"billing_v2\", { orgId, cohort: \"canary_10\" });\n```\n\nSecond, ramp 10% of self-serve workspaces while keeping one-click fallback to the legacy checkout route.\n\nThird, promote to 100% once 48 hours of renewal runs finish with zero failed charges."
 }
 
 #[cfg(test)]

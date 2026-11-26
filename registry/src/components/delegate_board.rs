@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar,
-        pro_spring_f32, pro_swap_label, pro_switch, pro_tactile, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_mix_color, pro_popover_presence,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch,
+        pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -275,6 +276,33 @@ impl Render for TaskDragGhost {
 }
 
 /// Task delegation board with drag-and-drop hand-off, `"Busy until …"` previews, and `Auto` routing.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::delegate_board::{
+///     DelegateAgent, DelegateBoard, DelegateBoardEvent, DelegateTask,
+/// };
+///
+/// let board = cx.new(|cx| {
+///     DelegateBoard::new("team-dispatch", cx)
+///         .with_agents(vec![
+///             DelegateAgent::new("coder", "Coder").with_model("GPT-6 Sol").with_provider("openai").with_rate(0.06),
+///             DelegateAgent::new("ops", "Ops").with_model("Gemini 3.8 Flash").with_provider("gemini").with_rate(0.01),
+///         ])
+///         .with_tasks(vec![
+///             DelegateTask::new("t1", "Fix flaky checkout test", 20),
+///         ])
+/// });
+/// cx.subscribe(&board, |_, ev: &DelegateBoardEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct DelegateBoard {
     id: ElementId,
     title: SharedString,
@@ -317,8 +345,8 @@ impl DelegateBoard {
                 task_id: SharedString::from("t-flaky"),
                 agent_id: SharedString::from("coder"),
             }),
-            picked_task_id: Some(SharedString::from("t-flaky")),
-            hovered_agent_idx: Some(2),
+            picked_task_id: None,
+            hovered_agent_idx: None,
             drag_preview: None,
             hovered_overflow_agent: None,
             last_auto_step: Instant::now(),
@@ -502,8 +530,8 @@ impl DelegateBoard {
     pub fn reset_board(&mut self, cx: &mut Context<Self>) {
         self.tasks = self.initial_tasks.clone();
         self.mode = DelegateMode::Manual;
-        self.picked_task_id = Some(SharedString::from("t-flaky"));
-        self.hovered_agent_idx = Some(2);
+        self.picked_task_id = None;
+        self.hovered_agent_idx = None;
         self.suggestion = Some(DelegateSuggestion {
             task_id: SharedString::from("t-flaky"),
             agent_id: SharedString::from("coder"),
@@ -665,18 +693,18 @@ impl Render for DelegateBoard {
                         this.reset_board(cx);
                     },
                 ))
+                .child(pro_btn(
+                    pro_eid(&self.id, "add-task-btn"),
+                    tr(cx, "+ Task", "+ 任务"),
+                    None,
+                    ProBtnStyle::Secondary,
+                    true,
+                    cx,
+                    |this, _, cx| {
+                        this.add_sample_task(cx);
+                    },
+                ))
             })
-            .child(pro_btn(
-                pro_eid(&self.id, "add-task-btn"),
-                tr(cx, "+ Task", "+ 任务"),
-                None,
-                ProBtnStyle::Secondary,
-                true,
-                cx,
-                |this, _, cx| {
-                    this.add_sample_task(cx);
-                },
-            ))
             .child(
                 div()
                     .flex_none()
@@ -721,6 +749,7 @@ impl Render for DelegateBoard {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -751,6 +780,7 @@ impl Render for DelegateBoard {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -865,7 +895,7 @@ impl Render for DelegateBoard {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -1122,11 +1152,14 @@ impl DelegateBoard {
                 .map(|(t, _)| t);
             let is_targeted = preview_task.is_some();
 
+            let ag_name = ag.display_name(cx).to_string();
             let avatar = match &ag.provider {
                 Some(prov) => pro_app_tile(prov.as_ref(), 28.0, cx),
-                None => pro_agent_avatar(aid.as_ref(), p.accent_info, 28.0, busy_mins > 0, 0.0, cx),
+                None => {
+                    let seed = format!("{} {}", ag_name, ag.model.as_deref().unwrap_or(""));
+                    pro_agent_avatar(seed.as_str(), p.accent_info, 28.0, busy_mins > 0, 0.0, cx)
+                }
             };
-            let ag_name = ag.display_name(cx).to_string();
 
             // Load / Busy-until badge + optional `+$1.20` preview
             let load_badge = if let Some(pt) = preview_task {
@@ -1177,14 +1210,6 @@ impl DelegateBoard {
                         .bg(p.green_soft)
                         .flex()
                         .items_center()
-                        .gap(px(4.0))
-                        .child(pro_check_draw(
-                            pro_eid(&self.id, format!("free-chk-{aid}")),
-                            true,
-                            12.0,
-                            false,
-                            p.green_ink,
-                        ))
                         .child(pro_swap_label(
                             pro_eid(&self.id, format!("load-st-{aid}")),
                             tr(cx, "Free", "空闲"),
@@ -1348,13 +1373,6 @@ impl DelegateBoard {
                                 .gap(px(5.0))
                                 .text_size(px(12.0))
                                 .text_color(p.ink)
-                                .child(pro_check_draw(
-                                    pro_eid(&self.id, format!("qchip-chk-{qtid}")),
-                                    true,
-                                    12.0,
-                                    false,
-                                    p.green_ink,
-                                ))
                                 .when(!qt.tools.is_empty(), |d| d.child(mini_tools))
                                 .child(div().max_w(px(150.0)).truncate().child(qtitle)),
                             cx,
@@ -1564,6 +1582,10 @@ impl DelegateBoard {
                     move |this, _, cx| {
                         if let Some(tid) = this.picked_task_id.clone() {
                             this.assign_task(tid.as_ref(), Some(aid_click.as_ref()), cx);
+                        } else if let Some(sug) = this.suggestion.clone()
+                            && sug.agent_id == aid_click
+                        {
+                            this.assign_task(sug.task_id.as_ref(), Some(aid_click.as_ref()), cx);
                         }
                     },
                 )

@@ -18,7 +18,7 @@
   "files": [
     {
       "path": "components/input.rs",
-      "content": "//! A labelled, single-line text field.\nuse crate::primitives::{\n    editor::InputMode,\n    field::{Field, FieldStyle},\n};\n\n/// Defines the input behavior of this field.\npub struct InputStyle;\nimpl FieldStyle for InputStyle {\n    const MODE: InputMode = InputMode::Single;\n}\n/// A labelled, single-line text field.\npub type Input = Field<InputStyle>;\n"
+      "content": "//! A labelled, single-line text field.\nuse crate::primitives::{\n    editor::InputMode,\n    field::{Field, FieldStyle},\n};\n\n/// Defines the input behavior of this field.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::input::Input;\n///\n/// let control = cx.new(|cx| Input::new(\"project\", \"Project name\", window, cx).with_description(\"A short descriptive name.\"));\n/// # }\n/// ```\npub struct InputStyle;\nimpl FieldStyle for InputStyle {\n    const MODE: InputMode = InputMode::Single;\n}\n/// A labelled, single-line text field.\npub type Input = Field<InputStyle>;\n"
     },
     {
       "path": "primitives/control.rs",

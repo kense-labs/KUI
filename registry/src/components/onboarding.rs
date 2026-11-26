@@ -424,6 +424,22 @@ fn sidebar_groups(cx: &App) -> Vec<ShellNavGroup> {
 }
 
 /// First-run workspace setup screen with interactive checklist and step wizard.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::onboarding::{OnboardingScreen, OnboardingEvent};
+///
+/// let screen = cx.new(|cx| OnboardingScreen::new("onboarding", cx));
+/// cx.subscribe(&screen, |_, event: &OnboardingEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct OnboardingScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -1044,25 +1060,31 @@ impl OnboardingScreen {
     }
 
     fn render_tool_logo(tool_name: &str, cx: &App) -> AnyElement {
+        let p = ProPalette::get(cx);
         let lower = tool_name.trim().to_ascii_lowercase();
+        let mono_ink: Hsla = if p.dark { p.ink } else { rgb(0x171717).into() };
         let inner = if lower == "notion" {
-            pro_svg("0 0 24 24", NOTION_SVG, 15., rgb(0x171717).into())
+            pro_svg("0 0 24 24", NOTION_SVG, 15., mono_ink)
         } else if lower == "linear" {
             pro_svg("0 0 24 24", LINEAR_SVG, 15., rgb(0x5e6ad2).into())
         } else if let Some(art) = pro_app_artwork(tool_name, 15., cx) {
             art
         } else {
-            pro_icon(ProIcon::Grid, 15., rgb(0x171717).into())
+            pro_icon(ProIcon::Grid, 15., mono_ink)
         };
         div()
             .size(px(28.))
             .flex_none()
             .rounded(px(8.))
-            .bg(rgb(0xffffff))
+            .bg(p.logo_tile)
             .border_1()
-            .border_color(hsla(0., 0., 0., 0.10))
+            .border_color(if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                hsla(0., 0., 0., 0.10)
+            })
             .shadow(vec![BoxShadow {
-                color: hsla(0., 0., 0., 0.06),
+                color: hsla(0., 0., 0., if p.dark { 0.24 } else { 0.06 }),
                 offset: point(px(0.), px(1.)),
                 blur_radius: px(1.5),
                 spread_radius: px(0.),

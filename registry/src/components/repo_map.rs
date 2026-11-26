@@ -7,10 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
-        pro_spring_f32, pro_tactile, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_popover_presence,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -22,8 +21,8 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, f32::consts::TAU, rc::Rc};
 use web_time::Instant;
 
-const DEFAULT_MAP_W: f32 = 740.0;
-const DEFAULT_MAP_H: f32 = 344.0;
+const DEFAULT_MAP_W: f32 = 756.0;
+const DEFAULT_MAP_H: f32 = 340.0;
 const FOLDER_GAP: f32 = 4.0;
 const TILE_GAP: f32 = 3.0;
 const FOLDER_HEAD_H: f32 = 20.0;
@@ -197,6 +196,16 @@ impl RepoAgent {
     }
 }
 
+fn repo_agent_brand_seed(ag: &RepoAgent) -> &str {
+    match ag.id.as_ref() {
+        "auth" => "claude",
+        "ui" => "gpt",
+        "test" => "gemini",
+        "docs" => "deepseek",
+        other => other,
+    }
+}
+
 fn agent_accent(color_idx: usize, p: &ProPalette) -> Hsla {
     match color_idx % 5 {
         0 => p.purple,
@@ -215,7 +224,7 @@ struct RectF {
     h: f32,
 }
 
-/// Balanced binary-split treemap layout preserving input neighbor order.
+/// Balanced binary-split treemap layout preserving input neighbor order while avoiding skinny slivers.
 fn layout_treemap(weights: &[f32], rect: RectF, gap: f32) -> Vec<RectF> {
     let n = weights.len();
     if n == 0 {
@@ -240,10 +249,13 @@ fn layout_treemap(weights: &[f32], rect: RectF, gap: f32) -> Vec<RectF> {
     let left_sum: f32 = weights[..split].iter().map(|w| w.max(1.0)).sum();
     let ratio = (left_sum / total.max(1.0)).clamp(0.14, 0.86);
 
-    let (r_a, r_b) = if rect.w >= rect.h * 1.05 {
-        let usable = (rect.w - gap).max(2.0);
-        let w_a = usable * ratio;
-        let w_b = (usable - w_a).max(1.0);
+    let usable_w = (rect.w - gap).max(2.0);
+    let min_child_w = (usable_w * ratio).min(usable_w * (1.0 - ratio));
+    let split_horiz = rect.w >= rect.h * 1.08 && !(min_child_w < 84.0 && rect.h >= 72.0);
+
+    let (r_a, r_b) = if split_horiz {
+        let w_a = usable_w * ratio;
+        let w_b = (usable_w - w_a).max(1.0);
         (
             RectF {
                 x: rect.x,
@@ -378,6 +390,38 @@ pub enum RepoMapEvent {
 impl EventEmitter<RepoMapEvent> for RepoMap {}
 
 /// Codebase treemap visualizing live coding agents, bottom-up edit fills, dashed reads, and conflicts.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::repo_map::{
+///     RepoAction, RepoAgent, RepoFile, RepoMap, RepoMapEvent,
+/// };
+///
+/// let map = cx.new(|cx| {
+///     RepoMap::new("workspace-map", cx)
+///         .with_title("acme/web")
+///         .with_branch("feat/token-refresh")
+///         .with_files(vec![
+///             RepoFile::new("src/lib/auth.ts", 320).with_edit("auth", 64, 12),
+///             RepoFile::new("src/lib/session.ts", 240),
+///             RepoFile::new("tests/auth.test.ts", 230).with_edit("test", 58, 3),
+///         ])
+///         .with_agents(vec![
+///             RepoAgent::new("auth", "Auth agent").with_color_idx(0).with_target("src/lib/session.ts", RepoAction::Edit),
+///             RepoAgent::new("ui", "UI agent").with_color_idx(1).with_target("src/lib/session.ts", RepoAction::Edit),
+///             RepoAgent::new("docs", "Docs agent").with_color_idx(4).with_target("tests/auth.test.ts", RepoAction::Read),
+///         ])
+/// });
+/// cx.subscribe(&map, |_, ev: &RepoMapEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct RepoMap {
     id: ElementId,
     title: SharedString,
@@ -820,63 +864,15 @@ impl Render for RepoMap {
                     ),
             );
 
-        // Top Row 2: Agent filter pills (with liquid `pro_pill_indicator`) + "Step agents" button
-        let pill_card_bg: Hsla = if p.dark { rgb(0x28282d).into() } else { p.card };
-        let ag_sensor = pro_selection_sensor();
-        let active_ag_key: SharedString = self
-            .isolated_agent
-            .clone()
-            .unwrap_or_else(|| SharedString::from("__all__"));
+        // Top Row 2: Individual Agent toggle pills + "Step agents" button
+        let pill_card_bg: Hsla = if p.dark { rgb(0x232327).into() } else { p.card };
         let all_active = self.isolated_agent.is_none();
 
-        let mut filter_pills = div()
-            .relative()
-            .p(px(2.5))
-            .rounded(px(9.5))
-            .bg(p.chip)
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap(px(4.))
-            .child(pro_pill_indicator(
-                pro_eid(&self.id, "ag-pill-ind"),
-                active_ag_key,
-                ag_sensor.clone(),
-                7.5,
-                pill_card_bg,
-                Some(p.line_strong),
-                true,
-            ))
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "ag-pill-all"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "All agents", "全部智能体"))
-                    .aria_toggled(all_active.into())
-                    .tab_index(0)
-                    .relative()
-                    .h(px(26.))
-                    .px(px(9.))
-                    .rounded(px(7.5))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if all_active { p.ink } else { p.muted })
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        if this.isolated_agent.is_some() {
-                            this.isolated_agent = None;
-                            cx.emit(RepoMapEvent::AgentIsolated(None));
-                            cx.notify();
-                        }
-                    }))
-                    .when(all_active, |d| d.child(pro_mark_selected(&ag_sensor)))
-                    .child(tr(cx, "All", "全部")),
-            );
+        let mut filter_pills = div().flex().flex_wrap().items_center().gap(px(6.));
 
         for ag in &self.agents {
             let ac = agent_accent(ag.color_idx, &p);
+            let brand_seed = repo_agent_brand_seed(ag);
             let touched_cnt = self
                 .files
                 .iter()
@@ -886,7 +882,7 @@ impl Render for RepoMap {
             let dimmed = self.isolated_agent.is_some() && !pressed;
             let pill_op = pro_spring_f32(
                 pro_eid(&self.id, format!("ag-pop-{}", ag.id)),
-                if dimmed { 0.55 } else { 1.0 },
+                if dimmed { 0.50 } else { 1.0 },
                 0.20,
                 window,
                 cx,
@@ -902,12 +898,24 @@ impl Render for RepoMap {
                     .aria_toggled(pressed.into())
                     .tab_index(0)
                     .relative()
-                    .h(px(26.))
+                    .h(px(27.))
                     .pl(px(6.))
-                    .pr(px(6.))
+                    .pr(px(7.))
                     .rounded(px(7.5))
+                    .bg(if pressed {
+                        pro_mix_color(pill_card_bg, ac, if p.dark { 0.16 } else { 0.10 })
+                    } else {
+                        pill_card_bg
+                    })
+                    .border_1()
+                    .border_color(if pressed {
+                        ac.opacity(0.55)
+                    } else {
+                        panel_border
+                    })
                     .opacity(pill_op)
                     .cursor_pointer()
+                    .hover(move |s| s.border_color(p.line_strong))
                     .focus_visible(move |s| s.border_2().border_color(p.focus))
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
@@ -923,9 +931,8 @@ impl Render for RepoMap {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .when(pressed, |d| d.child(pro_mark_selected(&ag_sensor)))
                     .child(pro_agent_avatar(
-                        ag.id.as_ref(),
+                        brand_seed,
                         ac,
                         16.0,
                         ag.file.is_some() && ag.action == RepoAction::Edit,
@@ -942,7 +949,7 @@ impl Render for RepoMap {
                     .child(
                         div()
                             .min_w(px(18.))
-                            .h(px(18.))
+                            .h(px(17.))
                             .px(px(5.))
                             .rounded(px(4.))
                             .bg(p.chip)
@@ -966,7 +973,7 @@ impl Render for RepoMap {
         let agent_strip = div()
             .w_full()
             .mt(px(8.))
-            .mb(px(12.))
+            .mb(px(10.))
             .flex()
             .flex_wrap()
             .items_center()
@@ -1046,11 +1053,11 @@ impl Render for RepoMap {
             .relative()
             .w_full()
             .h(px(map_h))
-            .rounded(px(10.))
+            .rounded(px(12.))
             .bg(panel_bg)
             .border_1()
             .border_color(panel_border)
-            .when(!p.dark, |d| d.shadow_sm())
+            .shadow(pro_card_shadow(p.dark))
             .focus_visible(move |s| s.border_2().border_color(p.focus))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if !*inside && this.hovered_file.is_some() {
@@ -1372,6 +1379,7 @@ impl Render for RepoMap {
 
             let show_name = r.w >= 42.0 && r.h >= 22.0;
             let show_sub = r.w >= 54.0 && r.h >= 38.0;
+            let tight_tile = r.w < 92.0;
             let name_fg = if is_conflict { p.amber_ink } else { p.ink };
 
             let sub_el = if is_conflict {
@@ -1414,7 +1422,7 @@ impl Render for RepoMap {
                     0,
                     "",
                     format!(" {}", tr(cx, "lines", "行")),
-                    11.,
+                    if tight_tile { 10.5 } else { 11. },
                     FontWeight::NORMAL,
                     p.muted,
                 )
@@ -1432,7 +1440,7 @@ impl Render for RepoMap {
                     d.child(
                         div()
                             .relative()
-                            .px(px(7.))
+                            .px(px(if tight_tile { 5. } else { 7. }))
                             .pt(px(5.))
                             .flex()
                             .flex_col()
@@ -1447,14 +1455,14 @@ impl Render for RepoMap {
                                         div()
                                             .flex_1()
                                             .min_w_0()
-                                            .text_size(px(11.5))
+                                            .text_size(px(if tight_tile { 10.5 } else { 11.5 }))
                                             .line_height(px(15.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(name_fg)
                                             .truncate()
                                             .child(file.basename().to_string()),
                                     )
-                                    .when(is_settled_edit && r.w >= 92.0, |row| {
+                                    .when(is_settled_edit && r.w >= 104.0, |row| {
                                         row.child(pro_check_draw(
                                             pro_eid(&self.id, format!("tchk-{fi}")),
                                             true,
@@ -1556,7 +1564,7 @@ impl Render for RepoMap {
                     .top(px(pin_y))
                     .opacity(pin_op)
                     .child(pro_agent_avatar(
-                        ag.id.as_ref(),
+                        repo_agent_brand_seed(ag),
                         ac,
                         22.0,
                         ag.action == RepoAction::Edit,

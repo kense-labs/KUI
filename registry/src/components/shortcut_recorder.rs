@@ -320,6 +320,24 @@ fn cap(key: String, small: bool, pressed: bool, warn: bool, t: f32, p: Paint, cx
         .child(div().opacity(0.).child(key_symbol(&key, p.ink)))
         .child(face)
 }
+/// `ShortcutRecorder` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::shortcut_recorder::ShortcutRecorder;
+///
+/// let control = cx.new(|cx| {
+///     let mut recorder = ShortcutRecorder::new("Open command menu", Some("Mod+K".into()), cx);
+///     recorder.set_bindings(vec![("Alt+N".into(), "Create issue".into())]);
+///     recorder
+/// });
+/// # }
+/// ```
 pub struct ShortcutRecorder {
     label: SharedString,
     value: Option<String>,

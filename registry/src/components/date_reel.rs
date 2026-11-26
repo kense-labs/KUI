@@ -492,6 +492,36 @@ fn last_day(year: i32, month: u32) -> u32 {
 }
 
 /// Three reel layouts share one civil date and time value.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use chrono::NaiveDate;
+/// use gpui::{Task, prelude::*};
+/// use kui::components::date_reel::{DateReel, DateReelChanged, MinuteStep};
+///
+/// let today = NaiveDate::from_ymd_opt(2026, 9, 24).expect("valid sample date");
+/// let start = today.succ_opt()
+///     .and_then(|day| day.and_hms_opt(9, 0, 0))
+///     .expect("valid sample time");
+///
+/// let control = cx.new(|cx| {
+///     DateReel::new(cx)
+///         .with_today(today)
+///         .with_default_value(start)
+///         .with_title("Send later")
+///         .with_minute_step(MinuteStep::Five)
+///         .with_confirm(|value, _| {
+///             let _scheduled_civil_time = value;
+///             Task::ready(Ok(()))
+///         })
+/// });
+/// window.subscribe(&control, cx, |_, _: &DateReelChanged, _, _| {}).detach();
+/// # }
+/// ```
 pub struct DateReel {
     id: ElementId,
     mode: DateReelMode,

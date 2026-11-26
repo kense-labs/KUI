@@ -727,6 +727,25 @@ impl Flight {
 type Refine = Box<dyn Fn(Div) -> Div>;
 type Visibility = Box<dyn Fn(&App) -> bool>;
 
+/// `BranchGraph` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::branch_graph::{BranchGraph, BranchGraphOptions, BranchStrategy};
+///
+/// let options = BranchGraphOptions {
+///     default_strategy: BranchStrategy::Open,
+///     autoplay: false,
+///     ..Default::default()
+/// };
+/// let control = cx.new(|cx| BranchGraph::new(options, cx));
+/// # }
+/// ```
 pub struct BranchGraph {
     options: BranchGraphOptions,
     data: GraphData,

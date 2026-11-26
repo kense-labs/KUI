@@ -149,6 +149,21 @@ fn tree_rows(nodes: &[Node]) -> (Vec<f32>, f32) {
     }
     (rows, cursor.max(1.))
 }
+/// `ReasoningTree` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::reasoning_tree::{ReasoningTree, Thought};
+///
+/// let thoughts = vec![Thought::new("first", "Reduce scope").score(0.8)];
+/// let control = cx.new(|cx| ReasoningTree::new("Choose a plan", thoughts, cx));
+/// # }
+/// ```
 pub struct ReasoningTree {
     question: SharedString,
     model: Option<SharedString>,
@@ -676,11 +691,31 @@ impl Render for ReasoningTree {
                 .gap_2()
                 .cursor_pointer()
                 .child(if completed && self.answer == Some(index) {
-                    "✓"
+                    icon(Glyph::Check, 12., p.success).into_any_element()
                 } else if has_children {
-                    if folded { "›" } else { "⌄" }
+                    if folded {
+                        crate::primitives::glyph::transformed(
+                            Glyph::Down,
+                            12.,
+                            p.secondary,
+                            -std::f32::consts::FRAC_PI_2,
+                            1.,
+                            (0., 0.),
+                            1.,
+                        )
+                        .into_any_element()
+                    } else {
+                        icon(Glyph::Down, 12., p.secondary).into_any_element()
+                    }
                 } else {
-                    "·"
+                    div()
+                        .size(px(12.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(div().size(px(3.5)).rounded_full().bg(p.faint))
+                        .into_any_element()
                 })
                 .child(
                     div()

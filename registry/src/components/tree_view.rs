@@ -30,6 +30,20 @@ struct RowEntrance {
     offset: Slide,
     starts: Option<web_time::Instant>,
 }
+/// `TreeView` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tree_view::{TreeView, TreeNode};
+///
+/// let control = cx.new(|cx| TreeView::new(vec![TreeNode::new("src","src", vec![TreeNode::new("main","main.rs",vec![])])], cx).expanded(vec!["src".into()]));
+/// # }
+/// ```
 pub struct TreeView {
     nodes: Vec<TreeNode>,
     expanded: BTreeSet<SharedString>,

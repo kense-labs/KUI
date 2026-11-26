@@ -4,6 +4,20 @@ use crate::primitives::{
     presentation::*,
 };
 use gpui::{prelude::*, *};
+/// `Skeleton` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::skeleton::Skeleton;
+///
+/// let control = cx.new(|cx| Skeleton::new("Loading summary", [0.8, 1.0, 0.6], cx).with_avatar());
+/// # }
+/// ```
 pub struct Skeleton {
     label: SharedString,
     lines: Vec<f32>,

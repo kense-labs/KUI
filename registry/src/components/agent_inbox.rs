@@ -8,10 +8,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_switch,
-        pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mark_selected, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_swap_label, pro_switch, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
@@ -504,6 +504,28 @@ fn default_inbox_tasks(cx: &App) -> Vec<AgentTask> {
 }
 
 /// Calm unified list and kanban board for background agent tasks.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_inbox::{
+///     AgentInbox, AgentInboxEvent, AgentInboxFilter, AgentInboxView,
+/// };
+///
+/// let inbox = cx.new(|cx| {
+///     AgentInbox::new("background-agent-inbox", cx)
+///         .with_default_filter(AgentInboxFilter::All)
+///         .with_default_view(AgentInboxView::List)
+/// });
+/// cx.subscribe(&inbox, |_, ev: &AgentInboxEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentInbox {
     id: ElementId,
     title: Option<SharedString>,
@@ -546,7 +568,7 @@ impl AgentInbox {
             tasks: initial_tasks,
             task_reset_at: HashMap::new(),
             filter: AgentInboxFilter::All,
-            view: AgentInboxView::List,
+            view: AgentInboxView::Board,
             open_id: Some("migrate".into()),
             show_done: true,
             archived_ids: HashSet::new(),
@@ -838,7 +860,7 @@ impl AgentInbox {
     ) -> AnyElement {
         let p = ProPalette::get(cx);
         let card_bg: Hsla = if p.dark {
-            rgb(0x1e1e21).into()
+            rgb(0x222226).into()
         } else {
             rgb(0xffffff).into()
         };
@@ -921,14 +943,14 @@ impl AgentInbox {
                 0,
                 "",
                 "s",
-                12.5,
+                12.0,
                 FontWeight::NORMAL,
                 p.muted,
             )
             .into_any_element()
         } else {
             div()
-                .text_size(px(12.5))
+                .text_size(px(12.0))
                 .text_color(p.muted)
                 .child(format_elapsed_clock(live_secs))
                 .into_any_element()
@@ -938,23 +960,23 @@ impl AgentInbox {
             .flex_none()
             .flex()
             .items_center()
-            .text_size(px(12.0))
+            .text_size(px(11.5))
             .text_color(p.muted);
         if let Some(src) = task.sources {
             meta_counters = meta_counters.child(
                 div()
-                    .px(px(8.0))
+                    .px(px(6.0))
                     .flex()
                     .items_center()
-                    .gap(px(4.5))
-                    .child(pro_svg("0 0 12 12", SEARCH_TINY_SVG, 11.5, p.muted))
+                    .gap(px(4.0))
+                    .child(pro_svg("0 0 12 12", SEARCH_TINY_SVG, 11.0, p.muted))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, format!("isrc-{tid}")),
                         src as f64,
                         0,
                         "",
                         "",
-                        12.0,
+                        11.5,
                         FontWeight::NORMAL,
                         p.muted,
                     )),
@@ -963,21 +985,21 @@ impl AgentInbox {
         if let Some(tls) = task.tools {
             meta_counters = meta_counters.child(
                 div()
-                    .pl(px(8.0))
+                    .pl(px(6.0))
                     .when(task.sources.is_some(), |d| {
                         d.border_l_1().border_color(p.line)
                     })
                     .flex()
                     .items_center()
-                    .gap(px(4.5))
-                    .child(pro_svg("0 0 12 12", WRENCH_TINY_SVG, 11.5, p.muted))
+                    .gap(px(4.0))
+                    .child(pro_svg("0 0 12 12", WRENCH_TINY_SVG, 11.0, p.muted))
                     .child(pro_rolling_number(
                         pro_eid(&self.id, format!("itls-{tid}")),
                         tls as f64,
                         0,
                         "",
                         "",
-                        12.0,
+                        11.5,
                         FontWeight::NORMAL,
                         p.muted,
                     )),
@@ -987,33 +1009,33 @@ impl AgentInbox {
         let click_id = tid.clone();
         let card_face = div()
             .w_full()
-            .p(px(12.0))
+            .p(px(11.0))
             .flex()
             .flex_col()
-            .gap(px(6.0))
+            .gap(px(5.0))
             .child(
                 div()
                     .w_full()
                     .flex()
                     .items_center()
-                    .gap(px(10.0))
+                    .gap(px(8.0))
                     .min_w_0()
                     .child(
                         div()
-                            .w(px(16.0))
-                            .h(px(20.0))
+                            .w(px(15.0))
+                            .h(px(18.0))
                             .flex_none()
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(pro_svg("0 0 14 14", SPARK_SVG, 14.0, tone_c)),
+                            .child(pro_svg("0 0 14 14", SPARK_SVG, 13.5, tone_c)),
                     )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(14.0))
-                            .line_height(px(20.0))
+                            .text_size(px(13.5))
+                            .line_height(px(19.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.ink)
                             .when(!is_open, |d| d.truncate())
@@ -1025,16 +1047,16 @@ impl AgentInbox {
                         } else {
                             ProIcon::ChevronDown
                         },
-                        13.0,
+                        12.5,
                         p.muted,
                     )),
             )
             .when_some(task.description.clone(), |d, desc| {
                 d.child(
                     div()
-                        .pl(px(26.0))
-                        .text_size(px(13.0))
-                        .line_height(px(19.0))
+                        .pl(px(23.0))
+                        .text_size(px(12.5))
+                        .line_height(px(18.0))
                         .text_color(p.text)
                         .when(!is_open, |t| t.line_clamp(2))
                         .child(desc),
@@ -1044,24 +1066,24 @@ impl AgentInbox {
                 div()
                     .w_full()
                     .mt(px(2.0))
-                    .pl(px(26.0))
+                    .pl(px(23.0))
                     .flex()
                     .flex_wrap()
                     .items_center()
                     .justify_between()
-                    .gap(px(8.0))
+                    .gap(px(6.0))
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(6.0))
-                            .text_size(px(12.5))
+                            .gap(px(5.5))
+                            .text_size(px(12.0))
                             .text_color(status_fg)
                             .child(state_glyph)
                             .child(pro_swap_label(
                                 pro_eid(&self.id, format!("istatus-{tid}")),
                                 task.status.word(cx),
-                                12.5,
+                                12.0,
                                 FontWeight::MEDIUM,
                                 status_fg,
                             ))
@@ -1090,6 +1112,15 @@ impl AgentInbox {
         let agent_str = task.agent.clone();
         let steps_list = task.steps.clone();
         let status = task.status;
+        let elapsed_ms = self.started_at.elapsed().as_secs_f32() * 1000.0;
+        let agent_badge = pro_agent_avatar(
+            agent_str.as_ref(),
+            tone_c,
+            16.0,
+            status == AgentTaskStatus::Running,
+            elapsed_ms,
+            cx,
+        );
         let act_tid = tid.clone();
         let base_id = self.id.clone();
         let entity_weak = cx.entity().downgrade();
@@ -1104,7 +1135,7 @@ impl AgentInbox {
                 let rej_id = act_tid.clone();
                 let app_id = act_tid.clone();
                 div()
-                    .mt(px(10.0))
+                    .mt(px(9.0))
                     .flex()
                     .justify_end()
                     .gap(px(6.0))
@@ -1120,7 +1151,7 @@ impl AgentInbox {
                     .child(pro_btn(
                         pro_eid(&base_id, format!("iapp-{app_id}")),
                         tr(cx, "Approve", "批准"),
-                        Some(ProIcon::Check),
+                        None,
                         ProBtnStyle::Primary,
                         true,
                         cx,
@@ -1132,7 +1163,7 @@ impl AgentInbox {
                 let opn_id = act_tid.clone();
                 let ret_id = act_tid.clone();
                 div()
-                    .mt(px(10.0))
+                    .mt(px(9.0))
                     .flex()
                     .justify_end()
                     .gap(px(6.0))
@@ -1160,14 +1191,14 @@ impl AgentInbox {
                 let opn_id = act_tid.clone();
                 let dn_id = act_tid.clone();
                 div()
-                    .mt(px(10.0))
+                    .mt(px(9.0))
                     .flex()
                     .justify_end()
                     .gap(px(6.0))
                     .child(pro_btn(
                         pro_eid(&base_id, format!("iopn-{opn_id}")),
                         tr(cx, "Open", "打开详情"),
-                        Some(ProIcon::ExternalArrow),
+                        None,
                         ProBtnStyle::Secondary,
                         true,
                         cx,
@@ -1188,7 +1219,7 @@ impl AgentInbox {
                 let arch_id = act_tid.clone();
                 let opn_id = act_tid.clone();
                 div()
-                    .mt(px(10.0))
+                    .mt(px(9.0))
                     .flex()
                     .justify_end()
                     .gap(px(6.0))
@@ -1204,7 +1235,7 @@ impl AgentInbox {
                     .child(pro_btn(
                         pro_eid(&base_id, format!("iopn-{opn_id}")),
                         tr(cx, "Open", "打开详情"),
-                        Some(ProIcon::ExternalArrow),
+                        None,
                         ProBtnStyle::Secondary,
                         true,
                         cx,
@@ -1219,12 +1250,12 @@ impl AgentInbox {
         let fold_section = pro_fold(
             pro_eid(&self.id, format!("ifold-{tid}")),
             is_open,
-            136.0,
+            156.0,
             0.0,
             move || {
                 let _ = &entity_weak;
                 let step_len = steps_list.len();
-                let mut timeline = div().mt(px(6.0)).flex().flex_col().gap(px(6.0));
+                let mut timeline = div().mt(px(6.0)).flex().flex_col().gap(px(5.0));
                 for (i, st) in steps_list.into_iter().enumerate() {
                     let is_last = i + 1 == step_len;
                     let step_done = status == AgentTaskStatus::Done || !is_last;
@@ -1232,11 +1263,11 @@ impl AgentInbox {
                         div()
                             .absolute()
                             .left(px(-2.0))
-                            .top(px(3.0))
+                            .top(px(2.5))
                             .child(pro_check_draw(
                                 pro_eid(&fold_base_id, format!("istp-chk-{fold_tid}-{i}")),
                                 true,
-                                12.0,
+                                11.5,
                                 false,
                                 green_c,
                             ))
@@ -1245,8 +1276,8 @@ impl AgentInbox {
                         div()
                             .absolute()
                             .left(px(1.5))
-                            .top(px(6.5))
-                            .size(px(5.0))
+                            .top(px(6.0))
+                            .size(px(4.5))
                             .rounded_full()
                             .bg(ink_c)
                             .into_any_element()
@@ -1254,44 +1285,54 @@ impl AgentInbox {
                     timeline = timeline.child(
                         div()
                             .relative()
-                            .pl(px(16.0))
+                            .pl(px(15.0))
                             .flex()
                             .items_start()
                             .justify_between()
-                            .gap(px(10.0))
-                            .text_size(px(12.5))
-                            .line_height(px(18.0))
+                            .gap(px(8.0))
+                            .text_size(px(12.0))
+                            .line_height(px(17.0))
                             .child(marker)
                             .when(!is_last, |d| {
                                 d.child(
                                     div()
                                         .absolute()
                                         .left(px(3.5))
-                                        .top(px(15.0))
-                                        .bottom(px(-5.0))
+                                        .top(px(14.5))
+                                        .bottom(px(-4.5))
                                         .w(px(1.0))
                                         .bg(line_c),
                                 )
                             })
                             .child(div().flex_1().min_w_0().text_color(text_c).child(st.label))
                             .when_some(st.time, |d, tm| {
-                                d.child(div().flex_none().text_color(muted_c).child(tm))
+                                d.child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(11.0))
+                                        .text_color(muted_c)
+                                        .child(tm),
+                                )
                             }),
                     );
                 }
 
                 div()
-                    .mx(px(12.0))
-                    .pt(px(10.0))
-                    .pb(px(12.0))
+                    .mx(px(11.0))
+                    .pt(px(9.0))
+                    .pb(px(11.0))
                     .border_t_1()
                     .border_color(line_c)
                     .flex()
                     .flex_col()
                     .child(
                         div()
-                            .text_size(px(12.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .text_size(px(11.5))
                             .text_color(muted_c)
+                            .child(agent_badge)
                             .child(agent_str),
                     )
                     .when(step_len > 0, |d| d.child(timeline))
@@ -1307,7 +1348,7 @@ impl AgentInbox {
             .bg(card_bg)
             .border_1()
             .border_color(border_c)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(card_main)
@@ -1345,12 +1386,17 @@ impl Render for AgentInbox {
         let reduced = disabled_motion(cx);
         let elapsed_secs = self.started_at.elapsed().as_secs_f32();
         let lane_bg: Hsla = if p.dark {
-            rgb(0x161618).into()
+            rgb(0x1a1a1d).into()
         } else {
-            rgb(0xf4f4f5).into()
+            rgb(0xf4f4f6).into()
+        };
+        let lane_bdr: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.06)
+        } else {
+            hsla(0., 0., 0., 0.05)
         };
         let card_bg: Hsla = if p.dark {
-            rgb(0x1e1e21).into()
+            rgb(0x222226).into()
         } else {
             rgb(0xffffff).into()
         };
@@ -1385,6 +1431,8 @@ impl Render for AgentInbox {
                         .p(px(6.0))
                         .rounded(px(14.0))
                         .bg(lane_bg)
+                        .border_1()
+                        .border_color(lane_bdr)
                         .flex()
                         .flex_col()
                         .gap(px(6.0))
@@ -1395,6 +1443,7 @@ impl Render for AgentInbox {
                                 .bg(card_bg)
                                 .border_1()
                                 .border_color(p.line)
+                                .shadow(pro_card_shadow(p.dark))
                                 .flex()
                                 .flex_col()
                                 .gap(px(8.0))
@@ -1434,10 +1483,11 @@ impl Render for AgentInbox {
             AgentInboxView::List
         };
 
-        // Top bar: Breadcrumb + Filter Tabs (`pro_pill_indicator` + `pro_rolling_number`) + `pro_switch` + View Switcher.
         let filter_sensor = self.filter_sensor.clone();
         let cur_filter = self.filter;
         let show_done_now = self.show_done;
+        let is_board_cols =
+            effective_view == AgentInboxView::Board && cur_filter == AgentInboxFilter::All;
         let live_tasks: Vec<AgentTask> = self
             .tasks
             .iter()
@@ -1445,77 +1495,81 @@ impl Render for AgentInbox {
             .cloned()
             .collect();
         let tab_hover_bg = p.hover;
-        let filter_strip = div()
-            .id(pro_eid(&self.id, "filter-tabs"))
-            .role(Role::TabList)
-            .aria_label(tr(cx, "Filter tasks", "按状态筛选"))
-            .relative()
-            .p(px(3.0))
-            .rounded(px(9.0))
-            .bg(lane_bg)
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap(px(2.0))
-            .child(pro_pill_indicator(
-                pro_eid(&self.id, "filter-pill"),
-                cur_filter.key(),
-                filter_sensor.clone(),
-                6.5,
-                card_bg,
-                Some(p.line),
-                true,
-            ))
-            .children(AgentInboxFilter::ALL.into_iter().map(|flt| {
-                let active = cur_filter == flt;
-                let cnt = count_inbox_tasks(&live_tasks, flt) as f64;
-                let focus_c = p.focus;
-                activate(
-                    div()
-                        .id(pro_eid(&self.id, format!("ftab-{}", flt.key())))
-                        .role(Role::Tab)
-                        .aria_selected(active)
-                        .tab_index(0)
-                        .relative()
-                        .h(px(26.0))
-                        .px(px(9.0))
-                        .rounded(px(6.5))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(if active { p.ink } else { p.muted })
-                        .when(!active, |d| d.hover(move |s| s.bg(tab_hover_bg)))
-                        .cursor_pointer()
-                        .focus_visible(move |s| s.border_1().border_color(focus_c))
-                        .when(active, |d| d.child(pro_mark_selected(&filter_sensor)))
-                        .child(flt.label(cx))
-                        .child(
-                            div()
-                                .h(px(17.0))
-                                .min_w(px(18.0))
-                                .px(px(4.5))
-                                .rounded(px(5.0))
-                                .bg(p.chip)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(pro_rolling_number(
-                                    pro_eid(&self.id, format!("fcnt-{}", flt.key())),
-                                    cnt,
-                                    0,
-                                    "",
-                                    "",
-                                    11.0,
-                                    FontWeight::MEDIUM,
-                                    if active { p.ink } else { p.muted },
-                                )),
-                        ),
-                    cx,
-                    move |this, _, cx| this.set_filter(flt, cx),
-                )
-            }));
+        let filter_strip = (!is_board_cols).then(|| {
+            div()
+                .id(pro_eid(&self.id, "filter-tabs"))
+                .role(Role::TabList)
+                .aria_label(tr(cx, "Filter tasks", "按状态筛选"))
+                .relative()
+                .p(px(3.0))
+                .rounded(px(9.0))
+                .bg(lane_bg)
+                .border_1()
+                .border_color(lane_bdr)
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(2.0))
+                .child(pro_pill_indicator(
+                    pro_eid(&self.id, "filter-pill"),
+                    cur_filter.key(),
+                    filter_sensor.clone(),
+                    6.5,
+                    card_bg,
+                    Some(p.line),
+                    true,
+                ))
+                .children(AgentInboxFilter::ALL.into_iter().map(|flt| {
+                    let active = cur_filter == flt;
+                    let cnt = count_inbox_tasks(&live_tasks, flt) as f64;
+                    let focus_c = p.focus;
+                    activate(
+                        div()
+                            .id(pro_eid(&self.id, format!("ftab-{}", flt.key())))
+                            .role(Role::Tab)
+                            .aria_selected(active)
+                            .tab_index(0)
+                            .relative()
+                            .h(px(26.0))
+                            .px(px(9.0))
+                            .rounded(px(6.5))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(if active { p.ink } else { p.muted })
+                            .when(!active, |d| d.hover(move |s| s.bg(tab_hover_bg)))
+                            .cursor_pointer()
+                            .focus_visible(move |s| s.border_1().border_color(focus_c))
+                            .when(active, |d| d.child(pro_mark_selected(&filter_sensor)))
+                            .child(flt.label(cx))
+                            .child(
+                                div()
+                                    .h(px(17.0))
+                                    .min_w(px(18.0))
+                                    .px(px(4.5))
+                                    .rounded(px(5.0))
+                                    .bg(p.chip)
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(pro_rolling_number(
+                                        pro_eid(&self.id, format!("fcnt-{}", flt.key())),
+                                        cnt,
+                                        0,
+                                        "",
+                                        "",
+                                        11.0,
+                                        FontWeight::MEDIUM,
+                                        if active { p.ink } else { p.muted },
+                                    )),
+                            ),
+                        cx,
+                        move |this, _, cx| this.set_filter(flt, cx),
+                    )
+                }))
+        });
 
         let view_sensor = self.view_sensor.clone();
         let cur_view = effective_view;
@@ -1528,6 +1582,8 @@ impl Render for AgentInbox {
                 .p(px(3.0))
                 .rounded(px(9.0))
                 .bg(lane_bg)
+                .border_1()
+                .border_color(lane_bdr)
                 .flex()
                 .items_center()
                 .gap(px(2.0))
@@ -1542,12 +1598,12 @@ impl Render for AgentInbox {
                 ))
                 .children(
                     [
-                        (AgentInboxView::List, LIST_ICON_SVG, tr(cx, "List", "列表")),
                         (
                             AgentInboxView::Board,
                             BOARD_ICON_SVG,
                             tr(cx, "Board", "看板"),
                         ),
+                        (AgentInboxView::List, LIST_ICON_SVG, tr(cx, "List", "列表")),
                     ]
                     .into_iter()
                     .map(|(vw, svg_ic, lbl)| {
@@ -1583,7 +1639,7 @@ impl Render for AgentInbox {
                 )
         });
 
-        let show_done_toggle = (cur_filter == AgentInboxFilter::All).then(|| {
+        let show_done_toggle = (!is_board_cols && cur_filter == AgentInboxFilter::All).then(|| {
             div()
                 .flex()
                 .items_center()
@@ -1619,7 +1675,7 @@ impl Render for AgentInbox {
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    .text_size(px(14.0))
+                    .text_size(px(13.5))
                     .child(div().text_color(p.muted).child(tr(cx, "Agents", "智能体")))
                     .child(div().text_color(p.faint).child("/"))
                     .child(
@@ -1636,10 +1692,10 @@ impl Render for AgentInbox {
                     .flex_wrap()
                     .items_center()
                     .gap(px(8.0))
-                    .child(filter_strip)
+                    .when_some(filter_strip, |d, fs| d.child(fs))
                     .when_some(show_done_toggle, |d, sw| d.child(sw))
                     .when_some(view_switch, |d, vs| d.child(vs))
-                    .when(self.header_action_label.is_none(), |d| {
+                    .when(!is_board_cols && self.header_action_label.is_none(), |d| {
                         d.child(pro_icon_btn(
                             pro_eid(&self.id, "quick-new-task"),
                             tr(cx, "Queue background task", "加入后台任务"),
@@ -1673,17 +1729,24 @@ impl Render for AgentInbox {
                 .flex_col()
                 .gap(px(12.0))
                 .child(top_bar)
-                .child(div().rounded(px(14.0)).bg(lane_bg).child(pro_empty_state(
-                    ProIcon::Inbox,
-                    tr(cx, "All clear in Agent inbox", "智能体收件箱已清空"),
-                    tr(
-                        cx,
-                        "Background migrations, reviews, and digests appear here when agents run.",
-                        "后台智能体启动数据迁移、代码审查或简报汇总后将在此列出。",
-                    ),
-                    None,
-                    cx,
-                )));
+                .child(
+                    div()
+                        .rounded(px(14.0))
+                        .bg(lane_bg)
+                        .border_1()
+                        .border_color(lane_bdr)
+                        .child(pro_empty_state(
+                            ProIcon::Inbox,
+                            tr(cx, "All clear in Agent inbox", "智能体收件箱已清空"),
+                            tr(
+                                cx,
+                                "Background migrations, reviews, and digests appear here when agents run.",
+                                "后台智能体启动数据迁移、代码审查或简报汇总后将在此列出。",
+                            ),
+                            None,
+                            cx,
+                        )),
+                );
         }
 
         // Group tasks into the 3 canonical lanes (`Needs you`, `Running`, `Done`).
@@ -1707,9 +1770,6 @@ impl Render for AgentInbox {
                 tr(cx, "DONE", "已完成").into(),
             ),
         ];
-
-        let is_board_cols =
-            effective_view == AgentInboxView::Board && cur_filter == AgentInboxFilter::All;
 
         let origin_cell = self.board_origin.clone();
         let mut lanes_container = div()
@@ -1813,12 +1873,12 @@ impl Render for AgentInbox {
 
             let lane_header = div()
                 .w_full()
-                .h(px(34.0))
+                .h(px(32.0))
                 .px(px(10.0))
                 .flex()
                 .items_center()
-                .gap(px(8.0))
-                .child(pro_svg("0 0 14 14", SPARK_SVG, 13.5, spark_c.opacity(0.8)))
+                .gap(px(7.0))
+                .child(pro_svg("0 0 14 14", SPARK_SVG, 13.0, spark_c.opacity(0.85)))
                 .child(
                     div()
                         .text_size(px(11.0))
@@ -1828,6 +1888,7 @@ impl Render for AgentInbox {
                 )
                 .child(
                     div()
+                        .ml_auto()
                         .h(px(18.0))
                         .min_w(px(20.0))
                         .px(px(5.0))
@@ -1847,7 +1908,7 @@ impl Render for AgentInbox {
                             p.text,
                         )),
                 )
-                .when_some(restore_btn, |d, btn| d.child(div().ml_auto().child(btn)));
+                .when_some(restore_btn, |d, btn| d.child(btn));
 
             let lane_box = div()
                 .id(pro_eid(&self.id, format!("lane-sec-{g_idx}")))
@@ -1855,11 +1916,14 @@ impl Render for AgentInbox {
                 .aria_label(group_title)
                 .when(is_board_cols, |d| d.flex_1().min_w_0())
                 .when(!is_board_cols, |d| d.w_full())
-                .p(px(4.0))
-                .rounded(px(14.0))
+                .p(px(5.0))
+                .rounded(px(13.0))
                 .bg(lane_bg)
+                .border_1()
+                .border_color(lane_bdr)
                 .flex()
                 .flex_col()
+                .gap(px(4.0))
                 .child(lane_header)
                 .child(cards_el);
 

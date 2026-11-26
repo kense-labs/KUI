@@ -29,6 +29,20 @@ enum Mode {
     Create,
     Join,
 }
+/// `WorkspacePicker` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::team_switcher::{WorkspacePicker, Workspace};
+///
+/// let control = cx.new(|cx| WorkspacePicker::new("team",vec![Workspace{id:"main".into(),name:"Product".into(),plan:"Team".into(),members:12,role:"Admin".into()}],window,cx));
+/// # }
+/// ```
 pub struct WorkspacePicker {
     id: SharedString,
     pub teams: Vec<Workspace>,

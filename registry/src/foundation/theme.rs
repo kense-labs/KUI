@@ -1,3 +1,5 @@
+//! Global KUI theme state, light/dark modes, and dynamic accent palettes.
+
 use gpui::{App, Global, Hsla, Rgba};
 
 use super::tokens::{ColorTokens, Tokens};

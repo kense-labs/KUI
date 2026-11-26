@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
-        pro_mix_color, pro_person_avatar, pro_pill_indicator, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
-        pro_tactile, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_mark_selected, pro_mix_color, pro_person_avatar, pro_pill_indicator,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -456,7 +456,7 @@ impl Render for ProjectCard {
                         .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
                         .border_1()
                         .border_color(p.line)
-                        .shadow_sm()
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .items_center()
                         .gap(px(10.))
@@ -484,6 +484,7 @@ impl Render for ProjectCard {
                 .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::ProjectFolder,
                     tr(cx, "No project milestones", "暂无项目子任务"),
@@ -1241,7 +1242,7 @@ impl Render for ProjectCard {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .shadow_sm()
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

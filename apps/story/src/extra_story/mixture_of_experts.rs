@@ -90,7 +90,6 @@ impl Demo {
             MixtureOfExperts::new(experts, tokens)
                 .with_capacity_factor(1.)
                 .with_parameters(671., 5., 16.)
-                .with_simulated(true)
         });
         let visible = cx
             .try_global::<crate::StoryBridge>()

@@ -13,6 +13,20 @@ pub enum BadgeTone {
     Warning,
     Danger,
 }
+/// `Badge` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::badge::{Badge, BadgeTone};
+///
+/// let control = cx.new(|_| Badge::new("In review", BadgeTone::Info));
+/// # }
+/// ```
 pub struct Badge {
     label: ChangingText,
     prior_tone: BadgeTone,

@@ -72,6 +72,23 @@ struct Drag {
     raw: f32,
     moved: bool,
 }
+/// `ResizablePanels` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::resizable_panels::{ResizablePanels, Pane};
+///
+/// let control = cx.new(|cx| ResizablePanels::new("workspace", "Workspace", vec![
+///         Pane::new("files", "Files", 30., |_, _, _| gpui::div().child("Files")).collapsible(),
+///         Pane::new("editor", "Editor", 70., |_, _, _| gpui::div().child("Editor")),
+///     ], cx));
+/// # }
+/// ```
 pub struct ResizablePanels {
     id: ElementId,
     label: SharedString,

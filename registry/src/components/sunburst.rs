@@ -155,6 +155,21 @@ fn lerp_pose(a: Pose, b: Pose, t: f32) -> Pose {
         outer: v(a.outer, b.outer),
     }
 }
+/// `Sunburst` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::sunburst::{Sunburst, SunburstNode};
+///
+/// let root = SunburstNode::new("all", "All teams", 0.0, gpui::rgb(0x8f7ad4).into()).with_children(vec![SunburstNode::new("platform", "Platform", 40.0, gpui::rgb(0x8f7ad4).into())]);
+/// let control = cx.new(|_| Sunburst::new("Cloud spend", root));
+/// # }
+/// ```
 pub struct Sunburst {
     title: SharedString,
     subtitle: Option<SharedString>,
@@ -485,6 +500,7 @@ impl Render for Sunburst {
                     }
                 }));
         }
+        let focus_depth = self.focus.len();
         let mut graph = div()
             .id("sunburst")
             .role(Role::Figure)
@@ -612,6 +628,7 @@ impl Render for Sunburst {
                         let width = f32::from(b.size.width);
                         let height = f32::from(b.size.height);
                         let radius = width.min(height) / 2. - 2.;
+                        let dark = p.panel.l < 0.5;
                         let center =
                             point(b.origin.x + px(width / 2.), b.origin.y + px(height / 2.));
                         for (item, pose, departing) in &data {
@@ -619,8 +636,12 @@ impl Render for Sunburst {
                                 continue;
                             }
                             let gap = (1. / radius.max(1.)).min((pose.end - pose.start) * 0.18);
+                            let r_gap =
+                                (0.75 / radius.max(1.)).min((pose.outer - pose.inner) * 0.12);
                             let start = pose.start + gap;
                             let end = pose.end - gap;
+                            let r_inner = pose.inner + r_gap;
+                            let r_outer = pose.outer - r_gap;
                             let steps =
                                 (((end - start).abs() * radius / 5.).ceil() as usize).clamp(2, 180);
                             let at = |angle: f32, r: f32| {
@@ -630,51 +651,71 @@ impl Render for Sunburst {
                                 )
                             };
                             let mut path = PathBuilder::fill();
-                            path.move_to(at(start, pose.outer));
+                            path.move_to(at(start, r_outer));
                             for i in 1..=steps {
                                 path.line_to(at(
                                     start + (end - start) * i as f32 / steps as f32,
-                                    pose.outer,
+                                    r_outer,
                                 ));
                             }
                             for i in (0..=steps).rev() {
                                 path.line_to(at(
                                     start + (end - start) * i as f32 / steps as f32,
-                                    pose.inner,
+                                    r_inner,
                                 ));
                             }
                             path.close();
+                            let is_active = active.as_ref().is_some_and(|p| p == &item.path);
+                            let ring_level = item.path.len().saturating_sub(focus_depth + 1).min(3);
+                            let base_opacity = if dark {
+                                0.86 - 0.13 * ring_level as f32
+                            } else {
+                                0.78 - 0.13 * ring_level as f32
+                            };
+                            let opacity = if *departing {
+                                0.45
+                            } else if is_active {
+                                0.96
+                            } else {
+                                base_opacity.clamp(0.42, 0.92)
+                            };
+                            let slice_color = if dark {
+                                item.color.blend(hsla(0., 0., 1., 0.12))
+                            } else {
+                                item.color
+                            };
+                            let mut slice_fill = p.panel.blend(slice_color.opacity(opacity));
+                            if active.is_some() && !is_active && !*departing {
+                                slice_fill = slice_fill.opacity(0.42);
+                            }
                             if let Ok(path) = path.build() {
-                                let is_active = active.as_ref().is_some_and(|p| p == &item.path);
-                                let opacity = if *departing {
-                                    0.45
-                                } else if is_active {
-                                    0.96
-                                } else {
-                                    0.70
-                                };
-                                let mut fill = p.panel.blend(item.color.opacity(opacity));
-                                if active.is_some() && !is_active && !*departing {
-                                    fill = fill.opacity(0.42);
-                                }
-                                w.paint_path(path, fill);
+                                w.paint_path(path, slice_fill);
                             }
                             // Keep the entire shaped label on one horizontal baseline. Placing
                             // characters independently along the arc reverses their visual order
                             // on its left half and breaks shaping for multi-codepoint glyphs.
-                            let ring_radius = radius * (pose.inner + pose.outer) * 0.5;
-                            let thickness = (pose.outer - pose.inner) * radius;
+                            let ring_radius = radius * (r_inner + r_outer) * 0.5;
+                            let thickness = (r_outer - r_inner) * radius;
                             if !departing
                                 && active.as_ref().is_none_or(|path| path == &item.path)
                                 && ring_radius > 0.
                                 && thickness >= 16.
                             {
                                 let mid = (start + end) * 0.5;
-                                let mut run = w.text_style().to_run(item.label.len());
-                                run.color = p.ink;
+                                let srgb = slice_fill.to_rgb();
+                                let luminance = 0.2126 * srgb.r + 0.7152 * srgb.g + 0.0722 * srgb.b;
+                                let label_ink = if luminance < 0.48 {
+                                    hsla(0., 0., 0.98, 0.96)
+                                } else {
+                                    hsla(0., 0., 0.08, 0.92)
+                                };
+                                let mut style = w.text_style();
+                                style.font_weight = FontWeight::MEDIUM;
+                                let mut run = style.to_run(item.label.len());
+                                run.color = label_ink;
                                 let line = w.text_system().shape_line(
                                     item.label.clone(),
-                                    px(10.),
+                                    px(10.5),
                                     &[run],
                                     None,
                                 );

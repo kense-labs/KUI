@@ -140,6 +140,21 @@ fn is_current_request(active: Option<u64>, request: u64) -> bool {
     active == Some(request)
 }
 
+/// `ProviderStatus` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::provider_status::{ProviderHealth, ProviderStatus, ProviderStatusItem};
+///
+/// let providers = vec![ProviderStatusItem::new("main", "Main provider", ProviderHealth::Operational)];
+/// let control = cx.new(|_| ProviderStatus::new("AI providers", providers));
+/// # }
+/// ```
 pub struct ProviderStatus {
     title: SharedString,
     footnote: SharedString,
@@ -693,7 +708,7 @@ impl Render for ProviderStatus {
             if !compact {
                 row = row
                     .child(latency_readout().w(px(64.)))
-                    .child(div().w(px(150.)).child(bar.take().unwrap()))
+                    .when_some(bar.take(), |row, b| row.child(div().w(px(150.)).child(b)))
                     .child(
                         div()
                             .w(px(52.))
@@ -729,7 +744,7 @@ impl Render for ProviderStatus {
                             .gap_2()
                             .pl(px(44.))
                             .pr(px(12.))
-                            .child(div().flex_1().child(bar.take().unwrap()))
+                            .when_some(bar.take(), |el, b| el.child(div().flex_1().child(b)))
                             .child(
                                 div()
                                     .text_size(px(12.))

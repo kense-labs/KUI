@@ -16,6 +16,21 @@ pub enum HoldEvent {
     Holding(bool),
     Confirmed,
 }
+/// `HoldToConfirm` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::hold_to_confirm::HoldToConfirm;
+///
+/// let control = cx.new(|cx| HoldToConfirm::new("remove", "Hold to delete", window, cx)
+///     .with_done_label("Deleted"));
+/// # }
+/// ```
 pub struct HoldToConfirm {
     id: ElementId,
     label: SharedString,

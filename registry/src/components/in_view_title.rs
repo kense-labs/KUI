@@ -15,6 +15,20 @@ pub enum TitleEntrance {
     #[default]
     Blur,
 }
+/// `InViewTitle` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::in_view_title::InViewTitle;
+///
+/// let control = cx.new(|_| InViewTitle::new("Make room for ideas"));
+/// # }
+/// ```
 pub struct InViewTitle {
     text: SharedString,
     once: bool,

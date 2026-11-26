@@ -8,6 +8,22 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
+/// `DropdownMenu` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::dropdown_menu::DropdownMenu;
+/// use kui::primitives::menu::MenuItem;
+///
+/// let control = cx.new(|cx| DropdownMenu::new("actions", "Project actions",
+///     vec![MenuItem::new("edit", "Edit project")], cx));
+/// # }
+/// ```
 pub struct DropdownMenu {
     core: MenuCore,
     label: SharedString,

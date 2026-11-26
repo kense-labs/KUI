@@ -63,6 +63,22 @@ pub struct StreamInspect {
     pub total: f32,
     pub values: Vec<(SharedString, f32)>,
 }
+/// `Streamgraph` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::streamgraph::{Streamgraph, StreamLayer, StreamPoint};
+///
+/// let layers = vec![StreamLayer::new("product", "Product", gpui::rgb(0x8f7ad4).into()), StreamLayer::new("support", "Support", gpui::rgb(0x58bd91).into())];
+/// let points = vec![StreamPoint::new("Week 1", vec![20.0, 12.0]), StreamPoint::new("Week 2", vec![24.0, 16.0])];
+/// let control = cx.new(|_| Streamgraph::new("Activity", layers, points));
+/// # }
+/// ```
 pub struct Streamgraph {
     title: SharedString,
     unit: SharedString,

@@ -11,6 +11,19 @@ pub struct RulerChanged(pub f64);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RulerCommitted(pub f64);
 /// Drag the tape beneath its fixed needle, or focus it and use arrow keys.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ruler_slider::RulerSlider;
+///
+/// let control = cx.new(|cx| RulerSlider::new("Height", 120.0..=220.0, 1.0, 172.0, cx).with_unit("cm"));
+/// # }
+/// ```
 pub struct RulerSlider {
     label: SharedString,
     unit: SharedString,

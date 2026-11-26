@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
-        pro_tactile, pro_view_transition, tr,
+        ProPalette, pro_card_shadow, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_view_transition, tr,
     },
     primitives::{
         control::activate,
@@ -128,6 +128,26 @@ pub enum CompactBreakdownEvent {
 }
 
 /// Compact part-of-whole breakdown card with gliding bar and position-trading ranked rows.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::compact_breakdown::{CompactBreakdown, CompactBreakdownEvent};
+///
+/// let card = cx.new(|cx| {
+///     CompactBreakdown::new("channel-breakdown", cx)
+///         .with_title("Revenue by channel")
+///         .with_default_period("30d")
+/// });
+/// cx.subscribe(&card, |_, event: &CompactBreakdownEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct CompactBreakdown {
     id: ElementId,
     title: SharedString,
@@ -960,7 +980,7 @@ impl Render for CompactBreakdown {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

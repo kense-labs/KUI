@@ -16,7 +16,7 @@
   "files": [
     {
       "path": "components/date_picker.rs",
-      "content": "//! DatePicker on a proleptic Gregorian grid.\npub use crate::primitives::form_dates::{CivilDate, DateCleared, DateSpan};\nuse crate::primitives::form_dates::{DateControl, DateLayout};\npub struct DatePickerLayout;\nimpl DateLayout for DatePickerLayout {\n    const FIELD: bool = true;\n    const RANGE: bool = false;\n}\npub type DatePicker = DateControl<DatePickerLayout>;\n"
+      "content": "//! DatePicker on a proleptic Gregorian grid.\npub use crate::primitives::form_dates::{CivilDate, DateCleared, DateSpan};\nuse crate::primitives::form_dates::{DateControl, DateLayout};\n/// `DatePicker` component.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::date_picker::{DatePicker, CivilDate};\n///\n/// let control = cx.new(|cx| DatePicker::new(\"Review date\", CivilDate::today_utc(), cx));\n/// # }\n/// ```\npub struct DatePickerLayout;\nimpl DateLayout for DatePickerLayout {\n    const FIELD: bool = true;\n    const RANGE: bool = false;\n}\npub type DatePicker = DateControl<DatePickerLayout>;\n"
     },
     {
       "path": "primitives/control.rs",

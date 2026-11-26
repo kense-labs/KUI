@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-        pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
+        pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -25,6 +26,7 @@ use web_time::Instant;
 const CIRCLE_CROSS_SVG: &str = r#"<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"></circle><path d="m8.8 8.8 6.4 6.4M15.2 8.8l-6.4 6.4" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>"#;
 const WARN_MINI_SVG: &str = r#"<path d="M13.92 21H10.08C5.44 21 3.13 21 2.28 19.49C1.42 17.99 2.61 15.99 4.98 12L6.9 8.75C9.18 4.92 10.31 3 12 3C13.69 3 14.82 4.92 17.1 8.75L19.02 12C21.39 15.99 22.58 17.99 21.72 19.49C20.87 21 18.56 21 13.92 21Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 9V13" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="16.7" r="1" fill="currentColor"></circle>"#;
 const DANGER_MINI_SVG: &str = r#"<path d="M5.92 5.92C8.16 3.68 9.28 2.56 10.59 2.2C11.51 1.93 12.49 1.93 13.41 2.2C14.72 2.56 15.84 3.68 18.08 5.92C20.32 8.16 21.44 9.28 21.8 10.59C22.07 11.51 22.07 12.49 21.8 13.41C21.44 14.72 20.32 15.84 18.08 18.08C15.84 20.32 14.72 21.44 13.41 21.8C12.49 22.07 11.51 22.07 10.59 21.8C9.28 21.44 8.16 20.32 5.92 18.08C3.68 15.84 2.56 14.72 2.2 13.41C1.93 12.49 1.93 11.51 2.2 10.59C2.56 9.28 3.68 8.16 5.92 5.92Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 8V12.2" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="15.8" r="1" fill="currentColor"></circle>"#;
+const ENTER_MINI_SVG: &str = r#"<path d="M19 5V11C19 12.6569 17.6569 14 16 14H5M5 14L9 10M5 14L9 18" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 /// Risk classification of a [`PermissionRequest`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -359,6 +361,30 @@ impl RenderOnce for PrTactileBtn {
 }
 
 /// Granular scope consent card that folds into a live draining status line with `Revoke`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::permission_request::{
+///     PermissionRequest, PermissionRequestEvent, PermissionRisk, PermissionScope,
+/// };
+///
+/// let request = cx.new(|cx| {
+///     PermissionRequest::new("coder-push-request", cx)
+///         .with_action("push to main")
+///         .with_target("acme/web", "github")
+///         .with_risk(PermissionRisk::Risky)
+///         .with_scope(PermissionScope::Timed)
+/// });
+/// cx.subscribe(&request, |_, event: &PermissionRequestEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct PermissionRequest {
     id: ElementId,
     focus: FocusHandle,
@@ -850,14 +876,32 @@ impl Render for PermissionRequest {
                         .child(lbl.clone()),
                 )
                 .when_some(item.meta.clone(), |d, meta| {
-                    d.child(
-                        div()
-                            .flex_none()
-                            .font_family(crate::components::pro_chrome::pro_mono_name())
-                            .text_size(px(11.5))
-                            .text_color(p.muted)
-                            .child(meta),
-                    )
+                    let parts: Vec<&str> = meta.split_whitespace().collect();
+                    if parts.len() == 2
+                        && parts[0].starts_with('+')
+                        && (parts[1].starts_with('−') || parts[1].starts_with('-'))
+                    {
+                        d.child(
+                            div()
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.0))
+                                .font_family(crate::components::pro_chrome::pro_mono_name())
+                                .text_size(px(11.5))
+                                .child(div().text_color(p.green_ink).child(parts[0].to_string()))
+                                .child(div().text_color(p.red_ink).child(parts[1].to_string())),
+                        )
+                    } else {
+                        d.child(
+                            div()
+                                .flex_none()
+                                .font_family(crate::components::pro_chrome::pro_mono_name())
+                                .text_size(px(11.5))
+                                .text_color(p.muted)
+                                .child(meta),
+                        )
+                    }
                 })
                 .child(pro_icon(
                     if item_open {
@@ -952,28 +996,35 @@ impl Render for PermissionRequest {
             self.preview_title.clone()
         };
 
+        let sunken_bg: Hsla = if p.dark {
+            rgb(0x161619).into()
+        } else {
+            rgb(0xf7f7f8).into()
+        };
+
         let preview_section = (!self.preview.is_empty()).then(|| {
             let total_prev = self.preview.len();
             div()
                 .w_full()
                 .mt(px(14.0))
                 .pt(px(12.0))
-                .pb(px(4.0))
-                .px(px(10.0))
+                .pb(px(6.0))
+                .px(px(16.0))
                 .border_t_1()
                 .border_color(p.line)
                 .flex()
                 .flex_col()
-                .gap(px(4.0))
+                .gap(px(6.0))
                 .child(
                     div()
-                        .px(px(6.0))
+                        .px(px(2.0))
                         .flex()
                         .items_center()
                         .gap(px(6.0))
                         .child(
                             div()
                                 .text_size(px(12.0))
+                                .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.muted)
                                 .child(prev_title_str),
                         )
@@ -983,9 +1034,9 @@ impl Render for PermissionRequest {
                                 .h(px(16.0))
                                 .px(px(4.5))
                                 .rounded(px(4.0))
-                                .bg(card_bg)
+                                .bg(p.logo_tile)
                                 .border_1()
-                                .border_color(p.line_strong)
+                                .border_color(p.line)
                                 .flex()
                                 .items_center()
                                 .justify_center()
@@ -995,7 +1046,27 @@ impl Render for PermissionRequest {
                                 .child(format!("{total_prev}")),
                         ),
                 )
-                .child(prev_list)
+                .child(
+                    div()
+                        .w_full()
+                        .p(px(4.0))
+                        .rounded(px(8.0))
+                        .bg(sunken_bg)
+                        .border_1()
+                        .border_color(p.line_soft)
+                        .flex()
+                        .flex_col()
+                        .child(prev_list)
+                        .when(extra_cnt > 0, |d| {
+                            d.child(pro_fold(
+                                pro_eid(&self.id, "pr-extra-fold"),
+                                prev_expanded,
+                                (extra_cnt as f32) * 30.0,
+                                0.0,
+                                move || extra_list.into_any_element(),
+                            ))
+                        }),
+                )
                 .when(extra_cnt > 0, |d| {
                     let more_txt: SharedString = if prev_expanded {
                         tr(cx, "Show less", "收起").into()
@@ -1004,14 +1075,7 @@ impl Render for PermissionRequest {
                     } else {
                         format!("{extra_cnt} more").into()
                     };
-                    d.child(pro_fold(
-                        pro_eid(&self.id, "pr-extra-fold"),
-                        prev_expanded,
-                        (extra_cnt as f32) * 30.0,
-                        0.0,
-                        move || extra_list.into_any_element(),
-                    ))
-                    .child(div().ml(px(22.0)).self_start().child(pro_btn(
+                    d.child(div().ml(px(4.0)).self_start().child(pro_btn(
                         pro_eid(&self.id, "pr-more-btn"),
                         more_txt,
                         None,
@@ -1040,7 +1104,9 @@ impl Render for PermissionRequest {
                 .w_full()
                 .p(px(2.5))
                 .rounded(px(8.0))
-                .bg(fill_bg)
+                .bg(sunken_bg)
+                .border_1()
+                .border_color(p.line_soft)
                 .flex()
                 .items_center()
                 .gap(px(2.0))
@@ -1067,7 +1133,7 @@ impl Render for PermissionRequest {
                         .tab_index(if selected { 0 } else { -1 })
                         .relative()
                         .flex_1()
-                        .h(px(25.0))
+                        .h(px(26.0))
                         .px(px(6.0))
                         .rounded(px(6.0))
                         .flex()
@@ -1163,12 +1229,21 @@ impl Render for PermissionRequest {
                         .bg(primary_fg.opacity(0.16))
                         .flex()
                         .items_center()
-                        .text_size(px(10.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(primary_fg.opacity(0.78))
-                        .child("↵"),
+                        .justify_center()
+                        .child(pro_svg(
+                            "0 0 24 24",
+                            ENTER_MINI_SVG,
+                            11.0,
+                            primary_fg.opacity(0.84),
+                        )),
                 )
             });
+
+        let avatar_seed = format!(
+            "{} {}",
+            self.agent_name,
+            self.agent_model.as_deref().unwrap_or("gpt")
+        );
 
         let ask_tree = div()
             .w_full()
@@ -1177,16 +1252,16 @@ impl Render for PermissionRequest {
             .child(
                 div()
                     .w_full()
-                    .pt(px(14.0))
+                    .pt(px(16.0))
                     .pl(px(16.0))
                     .pr(px(14.0))
                     .flex()
                     .items_center()
                     .gap(px(10.0))
                     .child(pro_agent_avatar(
-                        self.agent_name.as_ref(),
+                        &avatar_seed,
                         p.blue,
-                        28.0,
+                        30.0,
                         true,
                         elapsed_ms,
                         cx,
@@ -1197,7 +1272,7 @@ impl Render for PermissionRequest {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .gap(px(2.0))
+                            .gap(px(2.5))
                             .child(
                                 div()
                                     .flex()
@@ -1246,7 +1321,7 @@ impl Render for PermissionRequest {
             .child(
                 div()
                     .mt(px(12.0))
-                    .ml(px(if narrow { 16.0 } else { 54.0 }))
+                    .ml(px(if narrow { 16.0 } else { 56.0 }))
                     .mr(px(16.0))
                     .pl(px(10.0))
                     .border_l_2()
@@ -1260,9 +1335,9 @@ impl Render for PermissionRequest {
             .child(
                 div()
                     .w_full()
-                    .mt(px(if self.preview.is_empty() { 14.0 } else { 4.0 }))
-                    .pt(px(12.0))
-                    .pb(px(15.0))
+                    .mt(px(if self.preview.is_empty() { 14.0 } else { 6.0 }))
+                    .pt(px(13.0))
+                    .pb(px(16.0))
                     .px(px(16.0))
                     .border_t_1()
                     .border_color(p.line)
@@ -1419,7 +1494,7 @@ impl Render for PermissionRequest {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .gap(px(1.0))
+                    .gap(px(1.5))
                     .child(
                         div()
                             .flex()
@@ -1477,18 +1552,18 @@ impl Render for PermissionRequest {
 
         let card_shell = div()
             .w_full()
-            .rounded(px(10.0))
+            .rounded(px(11.0))
             .bg(card_bg)
             .border_1()
-            .border_color(p.line_strong)
-            .when(!p.dark, |d| d.shadow_xs())
+            .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
             .child(pro_fold(
                 pro_eid(&self.id, "pr-ask-fold"),
                 is_pending,
-                298.0,
+                326.0,
                 0.0,
                 move || ask_tree.into_any_element(),
             ))
@@ -1513,7 +1588,7 @@ impl Render for PermissionRequest {
             .tab_index(0)
             .relative()
             .w_full()
-            .py(px(24.0))
+            .py(px(28.0))
             .px(px(16.0))
             .flex()
             .flex_col()
@@ -1557,7 +1632,7 @@ impl Render for PermissionRequest {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(408.0))
+                    .max_w(px(416.0))
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(b) = bounds.first() {
                             let w_px = f32::from(b.size.width);

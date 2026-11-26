@@ -5,6 +5,20 @@ use crate::primitives::{
     nav::*,
 };
 use gpui::{prelude::*, *};
+/// `DetailCard` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::expandable_card::DetailCard;
+///
+/// let control = cx.new(|_| DetailCard::new("Launch checklist","4/6 complete", Box::new(|_, _| gpui::div().child("Invite reviewers").into_any_element())));
+/// # }
+/// ```
 pub struct DetailCard {
     title: SharedString,
     summary: SharedString,

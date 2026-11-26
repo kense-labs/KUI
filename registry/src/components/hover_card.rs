@@ -1,6 +1,20 @@
 //! Hoverable and touch-accessible preview of an identity or link.
 use crate::primitives::nav::{Content, Hint};
 use gpui::*;
+/// `PreviewCard` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::hover_card::PreviewCard;
+///
+/// let control = cx.new(|cx| PreviewCard::new("Jasmine Brooks","JB",Box::new(|_, _| gpui::div().child("Product designer").into_any_element()),cx));
+/// # }
+/// ```
 pub struct PreviewCard(Entity<Hint>);
 impl PreviewCard {
     pub fn new(

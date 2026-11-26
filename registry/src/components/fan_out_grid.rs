@@ -6,9 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_presence, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_ease, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
+        tr,
     },
     foundation::Theme,
     primitives::{
@@ -20,15 +21,15 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, f32::consts::TAU, rc::Rc};
 use web_time::Instant;
 
-const DEFAULT_PANEL_W: f32 = 756.0;
-const PANEL_PAD_X: f32 = 16.0;
-const PANEL_PAD_TOP: f32 = 16.0;
-const PANEL_PAD_BOTTOM: f32 = 14.0;
-const PANEL_GAP: f32 = 14.0;
-const FOOT_H: f32 = 24.0;
-const CELL_SIDE: f32 = 12.0;
-const CELL_GAP: f32 = 4.0;
-const TIP_W: f32 = 256.0;
+const DEFAULT_PANEL_W: f32 = 676.0;
+const PANEL_PAD_X: f32 = 14.0;
+const PANEL_PAD_TOP: f32 = 12.0;
+const PANEL_PAD_BOTTOM: f32 = 10.0;
+const PANEL_GAP: f32 = 10.0;
+const FOOT_H: f32 = 22.0;
+const CELL_SIDE: f32 = 10.5;
+const CELL_GAP: f32 = 3.0;
+const TIP_W: f32 = 252.0;
 
 const FAN_OUT_MARK_SVG: &str = r#"<circle cx="3" cy="8" r="1.9" fill="currentColor"></circle><rect x="10.2" y="1.6" width="3.6" height="3.6" rx="1" fill="currentColor" opacity="0.9"></rect><rect x="10.2" y="6.2" width="3.6" height="3.6" rx="1" fill="currentColor" opacity="0.6"></rect><rect x="10.2" y="10.8" width="3.6" height="3.6" rx="1" fill="currentColor" opacity="0.3"></rect><path d="M4.9 8H7c.6 0 .9-.3 1-.9l.4-2.4c.1-.6.4-.9 1-.9h.6M4.9 8h5.1M4.9 8H7c.6 0 .9.3 1 .9l.4 2.4c.1.6.4.9 1 .9h.6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"></path>"#;
 
@@ -114,8 +115,8 @@ fn status_colors(status: FanOutStatus, p: &ProPalette) -> StatusColors {
                 ink: p.muted,
             },
             FanOutStatus::Running => StatusColors {
-                bg: hsla(215. / 360., 1.0, 0.44, 0.12),
-                edge: hsla(215. / 360., 1.0, 0.44, 0.36),
+                bg: hsla(215. / 360., 1.0, 0.44, 0.16),
+                edge: hsla(215. / 360., 1.0, 0.44, 0.30),
                 ink: p.accent_info,
             },
             FanOutStatus::Retrying => StatusColors {
@@ -412,6 +413,33 @@ pub enum FanOutGridEvent {
 impl EventEmitter<FanOutGridEvent> for FanOutGrid {}
 
 /// Live multi-worker batch grid with rolling telemetry, status filter tray, and floating cell inspector.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::fan_out_grid::{
+///     FanOutGrid, FanOutGridEvent, FanOutStatus, FanOutTask,
+/// };
+///
+/// let grid = cx.new(|cx| {
+///     FanOutGrid::new("lead-enrichment", cx)
+///         .with_job("Enrich 240 leads")
+///         .with_workers(16)
+///         .with_tasks(vec![
+///             FanOutTask::new("t1", "linear.app").with_status(FanOutStatus::Done).with_timing(0, 1_180).with_cost(0.014).with_result("Series B · ICP score 94%"),
+///             FanOutTask::new("t2", "stripe.com").with_status(FanOutStatus::Running).with_start_ms(1_200).with_worker("worker-02"),
+///             FanOutTask::new("t3", "vercel.com").with_status(FanOutStatus::Failed).with_attempts(3).with_error("429 rate_limit_exceeded"),
+///         ])
+/// });
+/// cx.subscribe(&grid, |_, ev: &FanOutGridEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct FanOutGrid {
     id: ElementId,
     title: SharedString,
@@ -767,7 +795,7 @@ impl Render for FanOutGrid {
 
         let header = div()
             .w_full()
-            .mb(px(12.))
+            .mb(px(8.))
             .flex()
             .flex_wrap()
             .items_center()
@@ -913,11 +941,11 @@ impl Render for FanOutGrid {
                     let stroke_c = if is_active || is_pinned {
                         sc.ink.opacity(alpha)
                     } else {
-                        sc.edge.opacity(alpha * 0.85)
+                        sc.edge.opacity(alpha * 0.45)
                     };
                     window.paint_quad(quad(
                         rect,
-                        Corners::all(px(3.0 * scale.min(1.15))),
+                        Corners::all(px(2.6 * scale.min(1.15))),
                         sc.bg.opacity(alpha),
                         Edges::all(px(1.0)),
                         stroke_c,
@@ -1181,7 +1209,7 @@ impl Render for FanOutGrid {
                                         .rounded(px(2.5))
                                         .bg(sc.bg)
                                         .border_1()
-                                        .border_color(sc.edge),
+                                        .border_color(sc.edge.opacity(0.55)),
                                 )
                                 .child(
                                     div()
@@ -1447,7 +1475,7 @@ impl Render for FanOutGrid {
             .bg(panel_bg)
             .border_1()
             .border_color(panel_border)
-            .when(!p.dark, |d| d.shadow_sm())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .gap(px(PANEL_GAP))

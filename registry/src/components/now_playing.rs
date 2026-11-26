@@ -50,6 +50,21 @@ pub enum PlayerEvent {
     Seek(f32),
     Expanded(bool),
 }
+/// `NowPlaying` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::now_playing::{NowPlaying, Track};
+///
+/// let tracks = vec![Track::new("one", "Morning light", "Kense", 212., "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee")];
+/// let control = cx.new(|_| NowPlaying::new("Player", tracks));
+/// # }
+/// ```
 pub struct NowPlaying {
     label: SharedString,
     tracks: Vec<Track>,

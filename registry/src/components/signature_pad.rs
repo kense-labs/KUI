@@ -68,6 +68,19 @@ pub enum SignaturePngError {
 #[derive(Clone, Debug)]
 pub struct SignaturePngExported(pub Result<Vec<u8>, SignaturePngError>);
 /// Drawn ink is stored in normalized coordinates so it survives resizing.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::signature_pad::SignaturePad;
+///
+/// let control = cx.new(|cx| SignaturePad::new("Sign here", cx));
+/// # }
+/// ```
 pub struct SignaturePad {
     label: SharedString,
     signer: SharedString,

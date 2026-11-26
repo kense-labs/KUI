@@ -41,6 +41,20 @@ impl GlassSegmentOption {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlassSegmentChanged(pub SharedString);
 /// Equal-width segments that can be selected by pointer, keyboard, or a drag of the selected item.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::glass_segmented::{GlassSegmentOption, GlassSegmented};
+///
+/// let options = vec![GlassSegmentOption::new("overview", "Overview"), GlassSegmentOption::new("details", "Details")];
+/// let control = cx.new(|cx| GlassSegmented::new("View", options, cx).with_value("overview"));
+/// # }
+/// ```
 pub struct GlassSegmented {
     label: SharedString,
     options: Vec<GlassSegmentOption>,

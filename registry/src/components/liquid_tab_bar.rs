@@ -282,6 +282,39 @@ struct Drag {
 }
 
 /// Controlled tab list with one moving, shape-preserving selection.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::liquid_tab_bar::{
+///     LiquidTabBar, LiquidTabChanged, LiquidTabIcon, LiquidTabItem, liquid_panel_id,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     LiquidTabBar::new(
+///         vec![
+///             LiquidTabItem::new("home", "Home", LiquidTabIcon::Home),
+///             LiquidTabItem::new("saved", "Saved", LiquidTabIcon::Bookmark),
+///             LiquidTabItem::new("inbox", "Inbox", LiquidTabIcon::Inbox)
+///                 .with_badge(2)
+///                 .with_badge_label("2 unread"),
+///         ],
+///         "home",
+///         cx,
+///     )
+///     .with_id("main-sections")
+/// });
+/// cx.subscribe(&control, |bar, event: &LiquidTabChanged, cx| {
+///     // Update the corresponding host panel as part of accepting the new section.
+///     bar.update(cx, |bar, cx| bar.set_value(event.0.clone(), cx));
+/// }).detach();
+/// let home_panel_id = liquid_panel_id("main-sections", "home");
+/// # }
+/// ```
 pub struct LiquidTabBar {
     id: SharedString,
     label: Option<SharedString>,

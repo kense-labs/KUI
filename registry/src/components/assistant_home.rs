@@ -232,6 +232,22 @@ enum OpenMenu {
 }
 
 /// AI assistant start screen (`assistant-home`) with greeting, tool composer, and starter chips.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::assistant_home::{AssistantHomeScreen, AssistantHomeEvent};
+///
+/// let screen = cx.new(|cx| AssistantHomeScreen::new("assistant-home", cx));
+/// cx.subscribe(&screen, |_, event: &AssistantHomeEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AssistantHomeScreen {
     id: ElementId,
     focus: FocusHandle,
@@ -2560,7 +2576,10 @@ impl AssistantHomeScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(pro_view_transition_fill(
                 pro_eid(&self.id, "home-mode-vtx"),

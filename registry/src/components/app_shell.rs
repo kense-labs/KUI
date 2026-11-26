@@ -155,6 +155,27 @@ type BoundPanelFn =
     Rc<dyn Fn(&mut Window, &mut App) -> Option<(SharedString, ProIcon, AnyElement)>>;
 
 /// Interactive state and layout configuration for [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::app_shell::{AppShell, AppShellEvent, AppShellPreset};
+///
+/// let shell = cx.new(|cx| {
+///     AppShell::new("workspace-shell", cx)
+///         .with_preset(AppShellPreset::Agent, cx)
+///         .with_active("Activity")
+///         .with_work_area(true, true)
+/// });
+/// cx.subscribe(&shell, |_, ev: &AppShellEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AppShell {
     id: ElementId,
     layout: AppShellLayout,
@@ -2775,7 +2796,10 @@ impl AppShell {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .when_some(flat_top_bar, |d, bar| d.child(bar))
             .child(

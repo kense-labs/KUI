@@ -78,6 +78,20 @@ pub enum LinkUnfurlEvent {
         text: SharedString,
     },
 }
+/// `LinkUnfurl` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::link_unfurl::LinkUnfurl;
+///
+/// let control = cx.new(|cx| LinkUnfurl::new("Message", window, cx));
+/// # }
+/// ```
 pub struct LinkUnfurl {
     editor: Entity<Textarea>,
     text: SharedString,

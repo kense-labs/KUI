@@ -442,6 +442,22 @@ impl ToneSampleScenario {
 }
 
 /// Step 3 of 4 in the AI assistant onboarding wizard: persona name, tone, length, and handover.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::onboarding_tone::{OnboardingToneScreen, OnboardingToneEvent};
+///
+/// let screen = cx.new(|cx| OnboardingToneScreen::new("onboarding-tone", cx));
+/// cx.subscribe(&screen, |_, event: &OnboardingToneEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct OnboardingToneScreen {
     id: ElementId,
     domain: SharedString,
@@ -2199,7 +2215,10 @@ impl Render for OnboardingToneScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .when_some(preview, |d, p| d.child(p))
             .child(top_bar)

@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state,
-        pro_fold, pro_icon_btn, pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_bar,
-        pro_spring_f32, pro_swap_label, pro_tactile, tr,
+        ProPalette, pro_agent_avatar, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_presence, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -331,6 +331,37 @@ impl RenderOnce for SlidingFindingRow {
 }
 
 /// Parallel audit/verification swarm card with live per-agent progress bars and a sliding findings feed.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_findings::{
+///     AgentFindings, AgentFindingsEvent, Finding, FindingAgent, FindingSeverity,
+/// };
+///
+/// let audit = cx.new(|cx| {
+///     AgentFindings::new("security-verification", cx)
+///         .with_title("Verification")
+///         .with_agents(vec![
+///             FindingAgent::new("auditor", "Auditor", 8, 24)
+///                 .with_step("Tracing calls in Vault.withdraw", "追踪 Vault.withdraw 调用链"),
+///             FindingAgent::new("fuzzer", "Fuzzer", 7, 18)
+///                 .with_step("Fuzzing transfer with 10k inputs", "模糊测试 transfer"),
+///         ])
+///         .with_findings(vec![
+///             Finding::new("f1", "auditor", FindingSeverity::Critical, "Reentrancy in withdraw()")
+///                 .with_location("Vault.sol:142"),
+///         ])
+/// });
+/// cx.subscribe(&audit, |_, ev: &AgentFindingsEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentFindings {
     id: ElementId,
     title: SharedString,
@@ -699,7 +730,7 @@ impl Render for AgentFindings {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -750,7 +781,7 @@ impl Render for AgentFindings {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -780,9 +811,20 @@ impl Render for AgentFindings {
             let dimmed = self.filter_agent.as_ref().is_some_and(|f| f != &aid);
             let avatar_col = ag.color.unwrap_or(p.accent_info);
             let avatar = if let Some(ref brand) = ag.brand {
-                pro_app_tile(brand.as_ref(), 24.0, cx)
+                if finding_brand_is_model(brand.as_ref()) {
+                    pro_agent_avatar(brand.as_ref(), avatar_col, 24.0, is_running, elapsed_ms, cx)
+                } else {
+                    pro_app_tile(brand.as_ref(), 24.0, cx)
+                }
             } else {
-                pro_agent_avatar(aid.as_ref(), avatar_col, 24.0, is_running, elapsed_ms, cx)
+                pro_agent_avatar(
+                    finding_avatar_seed(&ag),
+                    avatar_col,
+                    24.0,
+                    is_running,
+                    elapsed_ms,
+                    cx,
+                )
             };
 
             let ag_crit = self
@@ -1279,7 +1321,7 @@ impl Render for AgentFindings {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -1289,6 +1331,59 @@ impl Render for AgentFindings {
                     .child(feed_body),
             )
             .into_any_element()
+    }
+}
+
+fn finding_brand_is_model(brand: &str) -> bool {
+    let lower = brand.trim().to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "claude"
+            | "anthropic"
+            | "openai"
+            | "gpt"
+            | "codex"
+            | "gemini"
+            | "deepseek"
+            | "mistral"
+            | "qwen"
+            | "meta"
+            | "llama"
+            | "xai"
+            | "grok"
+    )
+}
+
+fn finding_avatar_seed(agent: &FindingAgent) -> &'static str {
+    let combined = format!("{} {}", agent.id, agent.name).to_ascii_lowercase();
+    if combined.contains("claude")
+        || combined.contains("opus")
+        || combined.contains("sonnet")
+        || combined.contains("gas")
+        || combined.contains("review")
+    {
+        "claude"
+    } else if combined.contains("gpt")
+        || combined.contains("openai")
+        || combined.contains("fuzz")
+        || combined.contains("test")
+        || combined.contains("lint")
+    {
+        "gpt"
+    } else if combined.contains("gemini")
+        || combined.contains("prov")
+        || combined.contains("formal")
+        || combined.contains("invar")
+    {
+        "gemini"
+    } else if combined.contains("deepseek") {
+        "deepseek"
+    } else if combined.contains("mistral") {
+        "mistral"
+    } else if combined.contains("qwen") {
+        "qwen"
+    } else {
+        "claude"
     }
 }
 

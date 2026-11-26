@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
-        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
-        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_popover_presence,
+        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -394,6 +394,35 @@ pub fn format_live_clock(secs: u64) -> String {
 }
 
 /// Compact supervisory card for one working agent with tool time strip, approval gate, and foldable slim bar.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_monitor::{
+///     AgentMonitor, AgentMonitorEvent, MonitorAsk, MonitoredAgent,
+/// };
+///
+/// let monitor = cx.new(|cx| {
+///     AgentMonitor::new("release-monitor", cx)
+///         .with_agent(
+///             MonitoredAgent::new("Claude Opus 5.5")
+///                 .with_role("Release agent · web-app v3.2", "发布智能体 · web-app v3.2")
+///                 .with_provider("claude"),
+///         )
+///         .with_ask(Some(
+///             MonitorAsk::new("Ready to ship", "gh release create v3.2.0 --latest")
+///                 .with_app("github"),
+///         ))
+/// });
+/// cx.subscribe(&monitor, |_, ev: &AgentMonitorEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentMonitor {
     id: ElementId,
     state: MonitorState,
@@ -789,10 +818,11 @@ impl Render for AgentMonitor {
                 .into_any_element();
         }
 
+        let fallback_seed = format!("{} claude", self.agent.name);
         let agent_mark = match &self.agent.provider {
             Some(prov) => pro_app_tile(prov.as_ref(), 26.0, cx),
             None => pro_agent_avatar(
-                self.agent.name.as_ref(),
+                &fallback_seed,
                 p.accent_info,
                 26.0,
                 live_ticking,
@@ -801,19 +831,15 @@ impl Render for AgentMonitor {
             ),
         };
 
-        // Mode switcher pills above the card so users can also preview Needs you / Running / Done / Folded effortlessly
-        let quick_bar = self.render_scenario_bar(&p, w, cx);
-
         if self.folded {
             let folded_el = self.render_folded_bar(elapsed_s, live_cost, card_bg, w, &p, cx);
             return div()
                 .id(self.id.clone())
                 .w_full()
+                .py(px(24.0))
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap(px(10.0))
-                .child(quick_bar)
                 .child(pro_view_transition(
                     pro_eid(&self.id, "fold-shell-tx"),
                     "folded",
@@ -1000,10 +1026,10 @@ impl Render for AgentMonitor {
         div()
             .id(self.id.clone())
             .w_full()
+            .py(px(24.0))
             .flex()
             .flex_col()
             .items_center()
-            .gap(px(10.0))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
                 match ev.keystroke.key.as_str() {
                     "enter" if this.state == MonitorState::Waiting => {
@@ -1023,20 +1049,19 @@ impl Render for AgentMonitor {
                     _ => {}
                 }
             }))
-            .child(quick_bar)
             .child(pro_view_transition(
                 pro_eid(&self.id, "fold-shell-tx"),
                 "open",
                 div().w_full().flex().justify_center().child(
                     div()
                         .w_full()
-                        .max_w(px(388.0))
-                        .p(px(14.0))
+                        .max_w(px(406.0))
+                        .p(px(15.0))
                         .rounded(px(14.0))
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
-                        .when(!p.dark, |d| d.shadow_md())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(top_row)
@@ -1048,123 +1073,6 @@ impl Render for AgentMonitor {
 }
 
 impl AgentMonitor {
-    fn render_scenario_bar(
-        &self,
-        p: &ProPalette,
-        _w: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let items: [(Option<MonitorState>, &str, &str, &str); 4] = [
-            (
-                Some(MonitorState::Waiting),
-                "waiting",
-                "Needs you",
-                "待审批",
-            ),
-            (Some(MonitorState::Running), "running", "Running", "运行中"),
-            (Some(MonitorState::Finished), "done", "Done", "已完成"),
-            (None, "folded", "Folded", "精简栏"),
-        ];
-        let active_key: SharedString = if self.folded {
-            "folded".into()
-        } else {
-            match self.state {
-                MonitorState::Running | MonitorState::Paused | MonitorState::Idle => {
-                    "running".into()
-                }
-                MonitorState::Finished => "done".into(),
-                _ => "waiting".into(),
-            }
-        };
-        let sensor = pro_selection_sensor();
-        let mut bar = div()
-            .id(pro_eid(&self.id, "scenario-tabs"))
-            .role(Role::TabList)
-            .aria_label(tr(cx, "Monitor state", "运行状态"))
-            .h(px(30.0))
-            .p(px(2.0))
-            .rounded(px(8.0))
-            .bg(p.chip)
-            .border_1()
-            .border_color(p.line_soft)
-            .relative()
-            .flex()
-            .items_center()
-            .gap(px(2.0))
-            .child(pro_pill_indicator(
-                pro_eid(&self.id, "scenario-pill"),
-                active_key.clone(),
-                sensor.clone(),
-                6.0,
-                p.card,
-                Some(p.line_strong),
-                !p.dark,
-            ));
-
-        for (st_opt, key, en, zh) in items {
-            let active = active_key.as_ref() == key;
-            bar = bar.child(
-                div()
-                    .id(pro_eid(&self.id, format!("mode-{key}")))
-                    .role(Role::Tab)
-                    .aria_label(tr(cx, en, zh))
-                    .aria_selected(active)
-                    .tab_index(if active { 0 } else { -1 })
-                    .relative()
-                    .h(px(26.0))
-                    .px(px(10.0))
-                    .rounded(px(6.0))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if active { p.ink } else { p.muted })
-                    .hover(move |s| s.text_color(p.ink))
-                    .focus_visible(move |s| s.border_1().border_color(p.focus))
-                    .on_click(cx.listener(move |this, _, _, cx| match st_opt {
-                        None => {
-                            this.set_folded(true, cx);
-                        }
-                        Some(st) => {
-                            this.folded = false;
-                            this.open_step_id = None;
-                            this.started_at = Instant::now();
-                            match st {
-                                MonitorState::Waiting => {
-                                    this.steps = default_steps();
-                                    this.state = MonitorState::Waiting;
-                                }
-                                MonitorState::Running => {
-                                    let mut s = default_steps();
-                                    if let Some(q) =
-                                        s.iter_mut().find(|x| x.state == MonitorStepState::Queued)
-                                    {
-                                        q.state = MonitorStepState::Running;
-                                    }
-                                    this.steps = s;
-                                    this.state = MonitorState::Running;
-                                }
-                                MonitorState::Finished => {
-                                    let mut s = default_steps();
-                                    for x in &mut s {
-                                        x.state = MonitorStepState::Done;
-                                    }
-                                    this.steps = s;
-                                    this.state = MonitorState::Finished;
-                                }
-                                _ => {}
-                            }
-                            cx.notify();
-                        }
-                    }))
-                    .when(active, |d| d.child(pro_mark_selected(&sensor)))
-                    .child(div().relative().child(tr(cx, en, zh))),
-            );
-        }
-        bar
-    }
-
     fn render_folded_bar(
         &self,
         elapsed_s: f32,
@@ -1174,10 +1082,11 @@ impl AgentMonitor {
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let folded_seed = format!("{} claude", self.agent.name);
         let lead_mark = match &self.agent.provider {
             Some(prov) => pro_app_tile(prov.as_ref(), 24.0, cx),
             None => pro_agent_avatar(
-                self.agent.name.as_ref(),
+                &folded_seed,
                 p.accent_info,
                 24.0,
                 true,
@@ -1364,7 +1273,7 @@ impl AgentMonitor {
             },
         )
         .w_auto()
-        .when(!p.dark, |d| d.shadow_md())
+        .shadow(pro_card_shadow(p.dark))
         .into_any_element()
     }
 
@@ -1386,7 +1295,7 @@ impl AgentMonitor {
                     None => div()
                         .size(px(22.0))
                         .rounded(px(6.0))
-                        .bg(p.card)
+                        .bg(p.logo_tile)
                         .flex()
                         .items_center()
                         .justify_center()
@@ -1395,7 +1304,7 @@ impl AgentMonitor {
                 };
                 div()
                     .w_full()
-                    .p(px(9.0))
+                    .p(px(9.5))
                     .rounded(px(9.0))
                     .bg(p.amber_soft)
                     .border_1()
@@ -1435,8 +1344,9 @@ impl AgentMonitor {
                             .bg(p.card)
                             .border_1()
                             .border_color(p.line)
+                            .font_family(crate::components::pro_chrome::pro_mono_name())
                             .truncate()
-                            .text_size(px(11.5))
+                            .text_size(px(11.0))
                             .text_color(p.ink)
                             .child(ask.command.clone()),
                     )

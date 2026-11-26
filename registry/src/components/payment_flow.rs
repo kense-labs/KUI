@@ -263,7 +263,7 @@ impl Layout {
                 height: 56.,
             })
         } else {
-            let card_width = 150.;
+            let card_width = (width * 0.18).clamp(128., 138.);
             std::array::from_fn(|i| Card {
                 origin: xy(
                     if i < 4 {
@@ -388,6 +388,25 @@ type Mark = Box<dyn Fn() -> AnyElement>;
 type FormatMoney = Box<dyn Fn(f64, &str, &str) -> SharedString>;
 
 /// Renders a simulated card payment as a single accessible figure.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::payment_flow::{PaymentFlow, PaymentFlowOptions};
+///
+/// let options = PaymentFlowOptions {
+///     amount: 42.50,
+///     fee: 1.53,
+///     balance: 1284.10,
+///     ..Default::default()
+/// };
+/// let control = cx.new(|cx| PaymentFlow::new(options, cx));
+/// # }
+/// ```
 pub struct PaymentFlow {
     options: PaymentFlowOptions,
     id: ElementId,
@@ -749,6 +768,122 @@ fn default_mark(i: usize, color: Hsla, custom_color: bool) -> AnyElement {
     }
 }
 
+fn chip_width(label: &SharedString, approval: bool, w: &Window) -> f32 {
+    crate::primitives::family::measure(label, 11., w) + if approval { 26. } else { 12. }
+}
+
+fn pill_clearance_alpha(center: Coordinate, pill_w: f32, pill_h: f32, cards: &[Card; 5]) -> f32 {
+    let half_w = pill_w * 0.5;
+    let half_h = pill_h * 0.5;
+    let mut min_dist = f32::INFINITY;
+    for card in cards {
+        let dx = if center.x < card.origin.x {
+            card.origin.x - (center.x + half_w)
+        } else if center.x > card.origin.x + card.width {
+            (center.x - half_w) - (card.origin.x + card.width)
+        } else {
+            -((half_w)
+                .min(center.x - card.origin.x)
+                .min(card.origin.x + card.width - center.x))
+        };
+        let dy = if center.y < card.origin.y {
+            card.origin.y - (center.y + half_h)
+        } else if center.y > card.origin.y + card.height {
+            (center.y - half_h) - (card.origin.y + card.height)
+        } else {
+            -((half_h)
+                .min(center.y - card.origin.y)
+                .min(card.origin.y + card.height - center.y))
+        };
+        let dist = if dx > 0. && dy > 0. {
+            dx.hypot(dy)
+        } else {
+            dx.max(dy)
+        };
+        min_dist = min_dist.min(dist);
+    }
+    ((min_dist - 4.) / 10.).clamp(0., 1.)
+}
+
+fn is_active_stage(i: usize, t: f32) -> bool {
+    match i {
+        0 => (0.60..2.11).contains(&t) || (7.10..8.35).contains(&t),
+        1 => (2.11..3.32).contains(&t) || (11.10..12.35).contains(&t),
+        2 => (3.32..4.56).contains(&t) || (10.20..11.10).contains(&t),
+        3 => (4.56..6.48).contains(&t) || (SETTLEMENT..10.20).contains(&t),
+        4 => (12.35..14.95).contains(&t),
+        _ => false,
+    }
+}
+
+fn amount_gap_placement(frame: Frame, pill_w: f32, layout: &Layout) -> Option<(Coordinate, f32)> {
+    let t = frame.time;
+    let (hop, leg_t) = if (AUTH_START..2.60).contains(&t) {
+        (0usize, frame.between(AUTH_START, 2.60))
+    } else if (2.63..3.85).contains(&t) {
+        (1, frame.between(2.63, 3.85))
+    } else if (3.86..4.72).contains(&t) {
+        (2, frame.between(3.86, 4.72))
+    } else {
+        return None;
+    };
+    let a = layout.cards[hop];
+    let b = layout.cards[hop + 1];
+    let env = (leg_t * 5.).clamp(0., 1.) * ((1. - leg_t) * 5.).clamp(0., 1.);
+    let vertical = layout.width < 700.;
+    let pos = if vertical {
+        let gap_top = a.origin.y + a.height;
+        let gap_bot = b.origin.y;
+        let safe_drift = ((gap_bot - gap_top - 20.) * 0.5 - 4.).clamp(0., 5.);
+        xy(
+            a.center().x,
+            (gap_top + gap_bot) * 0.5 + (leg_t * 2. - 1.) * safe_drift,
+        )
+    } else {
+        let gap_left = a.origin.x + a.width;
+        let gap_right = b.origin.x;
+        let gap_w = gap_right - gap_left;
+        if pill_w + 8. <= gap_w {
+            let safe_drift = ((gap_w - pill_w) * 0.5 - 4.).clamp(0., 5.);
+            xy(
+                (gap_left + gap_right) * 0.5 + (leg_t * 2. - 1.) * safe_drift,
+                a.center().y,
+            )
+        } else {
+            xy((gap_left + gap_right) * 0.5, a.origin.y + a.height + 16.)
+        }
+    };
+    Some((pos, env))
+}
+
+fn approval_placement(
+    frame: Frame,
+    progress: f32,
+    pill_w: f32,
+    layout: &Layout,
+) -> (Coordinate, f32) {
+    let u = frame.between(5.60, 7.86);
+    let env = (u * 6.).clamp(0., 1.) * ((1. - u) * 6.).clamp(0., 1.);
+    if layout.width < 700. {
+        let scaled = (1. - u).clamp(0., 0.9999) * 3.;
+        let hop = (scaled.floor() as usize).min(2);
+        let local = 1. - scaled.fract();
+        let hop_env = (local * 4.5).clamp(0., 1.) * ((1. - local) * 4.5).clamp(0., 1.);
+        let a = layout.cards[hop];
+        let b = layout.cards[hop + 1];
+        let mid_y = (a.origin.y + a.height + b.origin.y) * 0.5;
+        (xy(a.center().x, mid_y), hop_env)
+    } else {
+        let raw = layout.auth.at(layout.auth.length * progress);
+        let x = raw.x.clamp(
+            pill_w * 0.5 + 2.,
+            (layout.width - pill_w * 0.5 - 2.).max(pill_w * 0.5 + 2.),
+        );
+        let lane_y = layout.cards[0].origin.y + layout.cards[0].height + 16.;
+        (xy(x, lane_y), env)
+    }
+}
+
 fn chip_face(
     label: SharedString,
     center: Coordinate,
@@ -757,8 +892,7 @@ fn chip_face(
     approval: bool,
     w: &Window,
 ) -> Div {
-    let width =
-        crate::primitives::family::measure(&label, 11., w) + if approval { 28. } else { 14. };
+    let width = chip_width(&label, approval, w);
     div()
         .absolute()
         .left(px(center.x - width / 2.))
@@ -767,10 +901,10 @@ fn chip_face(
         .h(px(20.))
         .rounded(radius)
         .border_1()
-        .border_color(ink.opacity(if approval { 0.4 } else { 0.22 }))
+        .border_color(ink.opacity(if approval { 0.45 } else { 0.28 }))
         .bg(paint
             .panel
-            .blend(ink.opacity(if approval { 0.11 } else { 0.045 })))
+            .blend(ink.opacity(if approval { 0.12 } else { 0.05 })))
         .opacity(opacity)
         .flex()
         .gap(px(4.))
@@ -873,44 +1007,65 @@ impl Render for PaymentFlow {
                 .size_full()
             })
             .when_some(frame.chip(), |e, (chip, progress)| match chip {
-                Chip::Amount => e.child(chip_face(
-                    amount,
-                    layout.auth.at(layout.auth.length * progress),
-                    1.,
-                    (accent, paint, radius),
-                    false,
-                    w,
-                )),
-                Chip::Approval => e.child(chip_face(
-                    self.options
+                Chip::Amount => {
+                    let pill_w = chip_width(&amount, false, w);
+                    if let Some((pos, alpha)) = amount_gap_placement(frame, pill_w, &layout)
+                        && alpha > 0.01
+                    {
+                        e.child(chip_face(
+                            amount,
+                            pos,
+                            alpha,
+                            (accent, paint, radius),
+                            false,
+                            w,
+                        ))
+                    } else {
+                        e
+                    }
+                }
+                Chip::Approval => {
+                    let approved_label = self
+                        .options
                         .labels
                         .approved
                         .clone()
-                        .unwrap_or_else(|| tr(cx, "Approved", "已授权").into()),
-                    layout.auth.at(layout.auth.length * progress),
-                    1.,
-                    (paint.success, paint, radius),
-                    true,
-                    w,
-                )),
+                        .unwrap_or_else(|| tr(cx, "Approved", "已授权").into());
+                    let pill_w = chip_width(&approved_label, true, w);
+                    let (pos, alpha) = approval_placement(frame, progress, pill_w, &layout);
+                    e.when(alpha > 0.01, |e| {
+                        e.child(chip_face(
+                            approved_label,
+                            pos,
+                            alpha,
+                            (paint.success, paint, radius),
+                            true,
+                            w,
+                        ))
+                    })
+                }
                 Chip::Settlement => {
                     let center = layout.settle.at(layout.settlement_position(frame));
                     let crossfade = frame.motion(11.92, 12.10);
-                    e.when(crossfade < 1., |e| {
+                    let amount_w = chip_width(&amount, false, w);
+                    let net_w = chip_width(&net, false, w);
+                    let clear_a = pill_clearance_alpha(center, amount_w, 20., &layout.cards);
+                    let clear_n = pill_clearance_alpha(center, net_w, 20., &layout.cards);
+                    e.when(crossfade < 1. && clear_a > 0.01, |e| {
                         e.child(chip_face(
                             amount,
                             center,
-                            1. - crossfade,
+                            (1. - crossfade) * clear_a,
                             (accent, paint, radius),
                             false,
                             w,
                         ))
                     })
-                    .when(crossfade > 0., |e| {
+                    .when(crossfade > 0. && clear_n > 0.01, |e| {
                         e.child(chip_face(
                             net,
                             center,
-                            crossfade,
+                            crossfade * clear_n,
                             (accent, paint, radius),
                             false,
                             w,
@@ -922,6 +1077,7 @@ impl Render for PaymentFlow {
                 let node = &self.options.nodes[i];
                 let mark_color = node.color.unwrap_or(paint.secondary);
                 let (status, success, active) = self.status(i, frame, &balance, cx);
+                let active_stage = is_active_stage(i, frame.time);
                 let over = hovered == Some(i);
                 let mark = self.marks[i].as_ref().map_or_else(
                     || {
@@ -932,7 +1088,7 @@ impl Render for PaymentFlow {
                     },
                     |mark| mark(),
                 );
-                let pad = if card.width >= 150. { 16. } else { 8. };
+                let pad = if card.width >= 134. { 13. } else { 8. };
                 div()
                     .id(("payment-node", i))
                     .debug_selector(move || format!("payment-node-{i}"))
@@ -944,20 +1100,21 @@ impl Render for PaymentFlow {
                     .px(px(pad))
                     .flex()
                     .items_center()
-                    .gap(px(if card.width >= 150. { 12. } else { 7. }))
+                    .gap(px(if card.width >= 134. { 10. } else { 7. }))
                     .border_1()
-                    .border_color(if over {
-                        accent.opacity(0.48)
+                    .border_color(if over || active_stage {
+                        accent.opacity(0.92)
                     } else if success {
                         paint.success.opacity(0.58)
-                    } else if active {
-                        paint.ink.opacity(0.62)
                     } else {
                         paint.line
                     })
+                    .when(active_stage || over, |d| d.shadow_sm())
                     .rounded(radius)
                     .bg(if over {
                         paint.panel.blend(accent.opacity(0.065))
+                    } else if active_stage {
+                        paint.panel.blend(accent.opacity(0.038))
                     } else {
                         paint.panel
                     })
@@ -979,6 +1136,11 @@ impl Render for PaymentFlow {
                                 one_line()
                                     .text_size(px(14.))
                                     .line_height(px(18.))
+                                    .font_weight(if active_stage {
+                                        FontWeight::MEDIUM
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
                                     .child(labels[i].clone()),
                             )
                             .child(
@@ -991,6 +1153,8 @@ impl Render for PaymentFlow {
                                     .line_height(px(16.))
                                     .text_color(if success {
                                         paint.success
+                                    } else if active_stage {
+                                        paint.ink
                                     } else if active {
                                         paint.secondary
                                     } else {
@@ -999,6 +1163,8 @@ impl Render for PaymentFlow {
                                     .child(div().size(px(6.)).flex_none().rounded_full().bg(
                                         if success {
                                             paint.success
+                                        } else if active_stage {
+                                            accent
                                         } else if active {
                                             paint.secondary
                                         } else {
@@ -1128,7 +1294,10 @@ impl Render for PaymentFlow {
 
 #[cfg(test)]
 mod tests {
-    use super::{CYCLE, Chip, Frame, Layout, PaymentFlowOptions, format_money};
+    use super::{
+        CYCLE, Chip, Frame, Layout, PaymentFlowOptions, amount_gap_placement, format_money,
+        pill_clearance_alpha,
+    };
 
     #[test]
     fn fee_conversion_and_payout_are_continuous_across_cycles() {
@@ -1164,6 +1333,35 @@ mod tests {
                     .cards
                     .iter()
                     .all(|card| card.origin.x + card.width <= width)
+            );
+        }
+    }
+
+    #[test]
+    fn traveling_chips_never_collide_with_card_borders() {
+        for width in [360., 700., 761.] {
+            let layout = Layout::new(width);
+            let pill_w = 46.;
+            let pill_h = 20.;
+            for step in 0..320 {
+                let t = 1.56 + step as f64 * 0.01;
+                let frame = Frame::at(t);
+                if let Some((pos, alpha)) = amount_gap_placement(frame, pill_w, &layout)
+                    && alpha > 0.01
+                {
+                    for card in &layout.cards {
+                        let overlaps_x = pos.x + pill_w * 0.5 > card.origin.x - 1.
+                            && pos.x - pill_w * 0.5 < card.origin.x + card.width + 1.;
+                        let overlaps_y = pos.y + pill_h * 0.5 > card.origin.y - 1.
+                            && pos.y - pill_h * 0.5 < card.origin.y + card.height + 1.;
+                        assert!(!(overlaps_x && overlaps_y));
+                    }
+                }
+            }
+            let at_issuer = layout.cards[3].center();
+            assert_eq!(
+                pill_clearance_alpha(at_issuer, pill_w, pill_h, &layout.cards),
+                0.
             );
         }
     }

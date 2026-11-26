@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_connector_pulse, pro_eid,
-        pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_connector_pulse,
+        pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
         pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
         pro_view_transition, tr,
     },
@@ -684,6 +684,25 @@ fn layout_fault_tree(
 }
 
 /// Fault-tree diagnostic explorer with live verification steps, OR/AND gates, causal path lighting, and evidence panel.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::root_cause_tree::{RootCauseTree, RootCauseTreeEvent};
+///
+/// let tree = cx.new(|cx| {
+///     RootCauseTree::new("root-cause-tree", cx)
+///         .with_live(true)
+/// });
+/// cx.subscribe(&tree, |_, event: &RootCauseTreeEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct RootCauseTree {
     id: ElementId,
     focus: FocusHandle,
@@ -1763,7 +1782,7 @@ impl Render for RootCauseTree {
                 .bg(card_bg)
                 .border_1()
                 .border_color(p.line)
-                .when(!p.dark, |d| d.shadow_xs())
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(9.))

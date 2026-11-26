@@ -6,8 +6,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw, pro_ease,
+        pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
         pro_pill_indicator, pro_popover_presence, pro_selection_sensor, pro_shimmer_text,
         pro_skeleton_bar, pro_swap_label, pro_switch, pro_tactile, pro_toast_banner,
         pro_view_transition, tr,
@@ -24,7 +24,7 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
-const SVG_HAND_PALM: &str = r#"<path d="M52.5305 32.6557V24.8463C52.5305 22.1016 54.7555 19.8766 57.5001 19.8766C60.2448 19.8766 62.4698 22.1016 62.4698 24.8463V42.027C62.4698 53.3194 53.3154 62.4735 42.0233 62.4735H34.2388M22.7127 39.7552L15.94 31.8537C14.8314 30.5602 13.2129 29.8159 11.5094 29.8159H11.1235C8.11379 29.8159 5.67395 32.2558 5.67395 35.2655C5.67395 36.3412 5.99241 37.393 6.58919 38.2881L16.4118 53.0221C20.3482 58.9269 26.9753 62.4735 34.0719 62.4735" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M52.534 24.1378V16.3284C52.534 13.5837 50.3091 11.3588 47.5644 11.3588C44.8197 11.3588 42.5948 13.5837 42.5948 16.3284V29.8174" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M42.5958 29.8198V10.6513C42.5958 7.90661 40.3708 5.68163 37.6262 5.68163C34.8815 5.68163 32.6565 7.90661 32.6565 10.6513V28.4" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M32.6576 28.3975V16.3284C32.6576 13.5837 30.4326 11.3588 27.6879 11.3588C24.9433 11.3588 22.7183 13.5837 22.7183 16.3284V39.7567" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_HAND_PALM: &str = r#"<path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v6M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 const SVG_BLUE_FOLDER: &str = r#"<path d="M1.4 3.1c0-.72.58-1.3 1.3-1.3h1.72c.38 0 .73.19.94.5l.6.9h3.34c.72 0 1.3.58 1.3 1.3V6H1.4Z" fill="currentColor"></path><path d="M1 6.95C.86 6.3 1.36 5.7 2.02 5.7h7.96c.66 0 1.16.6 1.02 1.25l-.5 2.4a1.3 1.3 0 0 1-1.27 1.05H2.77A1.3 1.3 0 0 1 1.5 9.35Z" fill="currentColor" opacity="0.48"></path>"#;
 
@@ -66,10 +66,21 @@ impl RenderOnce for ComposerSendVisual {
                 s.active_slide.get(w, cx).clamp(0., 1.),
             )
         });
-        let base_bg = pro_mix_color(p.chip, p.primary, act);
+        let rest_bg: Hsla = if p.dark {
+            rgb(0x27272b).into()
+        } else {
+            rgb(0xf2f2f4).into()
+        };
+        let rest_bdr: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.08)
+        } else {
+            hsla(0., 0., 0., 0.06)
+        };
+        let base_bg = pro_mix_color(rest_bg, p.primary, act);
         let hover_target = pro_mix_color(p.primary, p.on_primary, 0.14);
         let face_bg = pro_mix_color(base_bg, hover_target, hov * act);
-        let fg = pro_mix_color(p.faint, p.on_primary, act);
+        let bdr = pro_mix_color(rest_bdr, transparent_black(), act);
+        let fg = pro_mix_color(p.muted, p.on_primary, act);
         let icon_sz = 15. * (1. - 0.10 * down);
         let enabled = self.enabled;
         let on_click = self.on_click;
@@ -88,7 +99,14 @@ impl RenderOnce for ComposerSendVisual {
                     size(px((bw - 2. * inset).max(1.)), px((bh - 2. * inset).max(1.))),
                 );
                 let r = px(8.).min(rect.size.width / 2.).min(rect.size.height / 2.);
-                window.paint_quad(fill(rect, face_bg).corner_radii(r));
+                window.paint_quad(quad(
+                    rect,
+                    Corners::all(r),
+                    face_bg,
+                    Edges::all(px(if bdr.a > 0.005 { 1. } else { 0. })),
+                    bdr,
+                    BorderStyle::Solid,
+                ));
             },
         )
         .absolute()
@@ -390,16 +408,17 @@ fn default_models() -> Vec<ChatModelOption> {
             "deepseek",
             "Open-weight reasoning",
         ),
+        ChatModelOption::new("auto", "Auto", "auto", "Picks the best model per message"),
     ]
 }
 
 fn default_apps() -> Vec<ComposerApp> {
     vec![
-        ComposerApp::new("github", "GitHub", true),
-        ComposerApp::new("linear", "Linear", true),
+        ComposerApp::new("gmail", "Gmail", true),
         ComposerApp::new("slack", "Slack", true),
+        ComposerApp::new("linear", "Linear", true),
+        ComposerApp::new("github", "GitHub", false),
         ComposerApp::new("notion", "Notion", false),
-        ComposerApp::new("google drive", "Google Drive", false),
     ]
 }
 
@@ -501,35 +520,35 @@ pub struct ChatComposer {
 impl EventEmitter<ChatComposerEvent> for ChatComposer {}
 
 impl ChatComposer {
-    /// Create a [`ChatComposer`] preloaded with models, connected apps, file chips, and an inline tool banner.
+    /// Create a [`ChatComposer`] with a calm resting state, model options, folder scoping, and connected apps.
     pub fn new(id: impl Into<ElementId>, cx: &mut Context<Self>) -> Self {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
             .detach();
-        let init_approval = Some(default_tool_approval());
-        let init_attachments = default_attachments();
+        let models = default_models();
+        let default_auto_idx = models.len().saturating_sub(1);
         Self {
             id: id.into(),
             focus: cx.focus_handle(),
-            placeholder: "Ask anything, attach files, or run connected tools…".into(),
+            placeholder: "Start by typing…".into(),
             initial_draft: SharedString::default(),
             editor: None,
             editor_focused: false,
-            models: default_models(),
-            active_model_idx: 0,
+            models,
+            active_model_idx: default_auto_idx,
             approval_mode: ComposerApprovalMode::RequestApproval,
             approval_requesting_since: None,
             load_ms: 1100,
-            pending_approval: init_approval.clone(),
-            last_approval: init_approval,
+            pending_approval: None,
+            last_approval: Some(default_tool_approval()),
             inspect_payload_open: false,
-            attachments: init_attachments.clone(),
-            last_attachments: init_attachments,
+            attachments: Vec::new(),
+            last_attachments: default_attachments(),
             exiting_attachments: Vec::new(),
             animate_added_chips: false,
             sample_attach_seq: 0,
             folders: default_folders(),
-            active_folder: Some("kense-ui/registry".into()),
+            active_folder: None,
             apps: default_apps(),
             dictation_script: "Summarize the open PRs in GitHub, cross-check Linear blockers, and post the release checklist to Slack.".into(),
             recording_since: None,
@@ -677,7 +696,7 @@ impl ChatComposer {
                 let mut e = Editor::new(ph.clone(), InputMode::InlineMulti, w, cx);
                 e.set_placeholder(ph);
                 e.set_command_submit(true);
-                e.font_size = 13.;
+                e.font_size = 14.;
                 if !init.is_empty() {
                     e.set_value(init.to_string(), w, cx);
                 }
@@ -1331,7 +1350,7 @@ impl Render for ChatComposer {
                 ChatModelOption::new("claude-sonnet", "Claude Sonnet 4.5", "claude", "")
             });
         let is_unrestricted = self.approval_mode == ComposerApprovalMode::Unrestricted;
-        let approval_fg = if is_unrestricted { p.red_ink } else { p.muted };
+        let approval_fg = if is_unrestricted { p.red_ink } else { p.text };
 
         let appr_open = self.open_menu == Some(OpenMenu::Approval);
         let appr_inner = div()
@@ -1340,12 +1359,7 @@ impl Render for ChatComposer {
             .flex()
             .items_center()
             .gap(px(6.))
-            .child(pro_svg(
-                "0 0 68.155 68.155",
-                SVG_HAND_PALM,
-                15.,
-                approval_fg,
-            ))
+            .child(pro_svg("0 0 24 24", SVG_HAND_PALM, 14., approval_fg))
             .when(!compact, |d| {
                 d.child(if requesting_access {
                     pro_shimmer_text(
@@ -1469,19 +1483,22 @@ impl Render for ChatComposer {
                 )
         } else {
             let model_open = self.open_menu == Some(OpenMenu::Model);
+            let is_auto_model = active_model.provider.as_ref() == "auto";
             let model_btn_inner = div()
                 .h(px(28.))
                 .pl(px(8.))
                 .pr(px(6.))
                 .flex()
                 .items_center()
-                .gap(px(6.))
-                .child(Self::render_model_artwork(
-                    &active_model.provider,
-                    14.,
-                    &p,
-                    cx,
-                ))
+                .gap(px(5.))
+                .when(!is_auto_model, |d| {
+                    d.child(Self::render_model_artwork(
+                        &active_model.provider,
+                        14.,
+                        &p,
+                        cx,
+                    ))
+                })
                 .child(
                     div()
                         .max_w(px(if compact { 100. } else { 150. }))
@@ -1489,7 +1506,7 @@ impl Render for ChatComposer {
                         .child(pro_swap_label(
                             pro_eid(&self.id, "active-model-lbl"),
                             active_model.name.clone(),
-                            12.5,
+                            13.,
                             FontWeight::MEDIUM,
                             p.ink,
                         )),
@@ -1568,7 +1585,7 @@ impl Render for ChatComposer {
 
         let write_card = div()
             .w_full()
-            .p(px(12.))
+            .p(px(14.))
             .pb(px(10.))
             .rounded(px(15.))
             .bg(p.card)
@@ -1578,14 +1595,14 @@ impl Render for ChatComposer {
             } else {
                 p.line
             })
-            .shadow_xs()
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(attachments_fold)
             .child(field_area)
             .child(
                 div()
-                    .mt(px(10.))
+                    .mt(px(12.))
                     .flex()
                     .items_center()
                     .justify_between()
@@ -1594,7 +1611,7 @@ impl Render for ChatComposer {
                     .child(right_tools),
             );
 
-        // 5. Bottom Tray Footer: Folder picker (left) + Connected apps with stacked brand marks (right).
+        // 5. Bottom Tray Footer: Folder picker (left) + Connected apps with crisp brand marks (right).
         let connected_list: Vec<ComposerApp> =
             self.apps.iter().filter(|a| a.connected).cloned().collect();
         let folder_label = self
@@ -1604,7 +1621,7 @@ impl Render for ChatComposer {
 
         let mut app_marks = div().flex().items_center().gap(px(5.));
         for app in connected_list.iter().take(4) {
-            if let Some(mark) = pro_app_artwork(&app.id, 13., cx) {
+            if let Some(mark) = pro_app_artwork(&app.id, 13.5, cx) {
                 app_marks = app_marks.child(mark);
             } else {
                 app_marks = app_marks.child(pro_app_tile(&app.id, 14., cx));
@@ -1612,8 +1629,8 @@ impl Render for ChatComposer {
         }
 
         let tray_footer = div()
-            .h(px(36.))
-            .px(px(6.))
+            .h(px(34.))
+            .px(px(8.))
             .flex()
             .items_center()
             .justify_between()
@@ -1652,7 +1669,7 @@ impl Render for ChatComposer {
                     .child(
                         div()
                             .truncate()
-                            .text_size(px(12.))
+                            .text_size(px(12.5))
                             .text_color(if self.active_folder.is_some() {
                                 p.ink
                             } else {
@@ -1682,24 +1699,19 @@ impl Render for ChatComposer {
                     .flex_none()
                     .flex()
                     .items_center()
-                    .gap(px(8.))
+                    .gap(px(7.))
                     .cursor_pointer()
                     .hover(move |s| s.bg(p.hover))
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_menu(OpenMenu::Apps, cx);
                     }))
-                    .child(div().text_size(px(12.)).text_color(p.muted).child(
-                        if connected_list.is_empty() {
-                            tr(cx, "Connect apps", "连接应用").to_owned()
-                        } else {
-                            format!(
-                                "{} ({})",
-                                tr(cx, "Connected apps", "已连应用"),
-                                connected_list.len()
-                            )
-                        },
-                    ))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .text_color(p.muted)
+                            .child(tr(cx, "Connect apps", "连接应用").to_owned()),
+                    )
                     .when(!connected_list.is_empty(), |d| d.child(app_marks)),
             );
 
@@ -2221,10 +2233,12 @@ impl Render for ChatComposer {
                     .child(
                         div()
                             .w_full()
-                            .rounded(px(16.))
+                            .p(px(3.))
+                            .rounded(px(18.))
                             .bg(outer_tray_bg)
                             .border_1()
                             .border_color(p.line)
+                            .shadow(pro_card_shadow(p.dark))
                             .flex()
                             .flex_col()
                             .child(approval_banner)
@@ -2255,11 +2269,12 @@ mod tests {
     #[test]
     fn defaults_include_four_providers_and_five_workspace_apps() {
         let models = default_models();
-        assert_eq!(models.len(), 4);
+        assert_eq!(models.len(), 5);
         assert_eq!(models[0].provider.as_ref(), "claude");
         assert_eq!(models[1].provider.as_ref(), "openai");
         assert_eq!(models[2].provider.as_ref(), "gemini");
         assert_eq!(models[3].provider.as_ref(), "deepseek");
+        assert_eq!(models[4].provider.as_ref(), "auto");
 
         let apps = default_apps();
         assert_eq!(apps.len(), 5);

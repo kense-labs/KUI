@@ -51,6 +51,20 @@ pub enum StepEvent {
     Changed(usize),
     Finished,
 }
+/// `Stepper` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::stepper::{Stepper, Step};
+///
+/// let control = cx.new(|_| Stepper::new(vec![Step::new("Profile", "Add your name"), Step::new("Review", "Confirm the details")], 0));
+/// # }
+/// ```
 pub struct Stepper {
     steps: Vec<Step>,
     current: usize,

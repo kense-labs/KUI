@@ -451,6 +451,22 @@ fn render_model_mark(
 }
 
 /// Personal preferences screen (`settings-preferences`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_preferences::{SettingsPreferencesScreen, SettingsPreferencesEvent};
+///
+/// let screen = cx.new(|cx| SettingsPreferencesScreen::new("settings-preferences", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsPreferencesEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsPreferencesScreen {
     id: ElementId,
     focus: FocusHandle,

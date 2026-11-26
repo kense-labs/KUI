@@ -472,6 +472,22 @@ struct Transition {
     delays: Vec<f32>,
     reveal: bool,
 }
+/// `Treemap` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::treemap::{TreeTile, Treemap};
+///
+/// let children = vec![TreeTile::new("basic", "Basic", 40.0, gpui::rgb(0x8f7ad4).into()), TreeTile::new("team", "Team", 60.0, gpui::rgb(0x62b5d0).into())];
+/// let tiles = vec![TreeTile::new("north", "North", 0.0, gpui::rgb(0x8f7ad4).into()).with_children(children)];
+/// let control = cx.new(|_| Treemap::new("Business", tiles));
+/// # }
+/// ```
 pub struct Treemap {
     title: SharedString,
     root: Vec<TreeTile>,
@@ -1027,7 +1043,9 @@ impl Render for Treemap {
         visible.sort_by_key(|&i| flat[i].depth);
         // Label and value visibility fade in step with the tile's room.
         for &i in &visible {
-            let (r, _) = self.drawn[i].unwrap();
+            let Some((r, _)) = self.drawn.get(i).copied().flatten() else {
+                continue;
+            };
             let room = if r.w > 64. && r.h > 38. {
                 if r.h > 54. { 2 } else { 1 }
             } else {
@@ -1068,14 +1086,14 @@ impl Render for Treemap {
         }
         .clamp(0., 1.);
         // Tooltip: trails the pointer, or sits by the tile in focus.
-        if let Some(active) = self.active.filter(|&a| {
+        if let Some((active, ar)) = self.active.and_then(|a| {
             self.drawn
                 .get(a)
                 .copied()
                 .flatten()
-                .is_some_and(|(_, o)| o > 0.01)
+                .filter(|&(_, o)| o > 0.01)
+                .map(|(r, _)| (a, r))
         }) {
-            let (ar, _) = self.drawn[active].unwrap();
             let ax = self.pointer.map_or(ar.x + ar.w / 2., |pp| pp.0);
             let ay = self.pointer.map_or(ar.y + (ar.h / 2.).min(28.), |pp| pp.1);
             let parent = flat[active].parent.unwrap_or(0);
@@ -1255,7 +1273,9 @@ impl Render for Treemap {
                     s.inspect(top_tiles[0], cx);
                 } else if key == "end" {
                     s.pointer = None;
-                    s.inspect(*top_tiles.last().unwrap(), cx);
+                    if let Some(&last) = top_tiles.last() {
+                        s.inspect(last, cx);
+                    }
                 } else if key == "enter" || key == "space" {
                     if let Some(current) = s.active.and_then(|a| s.top_of(a))
                         && !s.flat[current].children.is_empty()
@@ -1320,8 +1340,8 @@ impl Render for Treemap {
                 .absolute()
                 .inset_0(),
             )
-            .children(visible.iter().map(|&i| {
-                let (r, o) = self.drawn[i].unwrap();
+            .children(visible.iter().filter_map(|&i| {
+                let (r, o) = self.drawn.get(i).copied().flatten()?;
                 let node = &flat[i];
                 let level = node.depth - center_depth;
                 let branch = !node.children.is_empty() && level == 1;
@@ -1456,7 +1476,7 @@ impl Render for Treemap {
                             }
                         }));
                 }
-                tile
+                Some(tile)
             }))
             .when(!empty, |mut stage| {
                 // GPUI clips overflow to a rectangle, so the reference's rounded

@@ -109,6 +109,21 @@ pub struct TrainingRunRequest {
     pub id: u64,
     pub action: TrainingRunAction,
 }
+/// `TrainingRun` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::training_run::{TrainingRun, TrainingRunSnapshot};
+///
+/// let job = TrainingRunSnapshot::new("Support classifier", "Example model", 1200, 3);
+/// let control = cx.new(|_| TrainingRun::new(job));
+/// # }
+/// ```
 pub struct TrainingRun {
     snapshot: TrainingRunSnapshot,
     allowed: Vec<TrainingRunAction>,

@@ -44,6 +44,20 @@ impl EmptyContent {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EmptyAction;
+/// `EmptyState` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::empty_state::{EmptyState, EmptyContent};
+///
+/// let control = cx.new(|_| EmptyState::new("saved", EmptyContent::new("No saved views", "Save a view to reuse your filters.").with_action("Create view")));
+/// # }
+/// ```
 pub struct EmptyState {
     id: ElementId,
     content: EmptyContent,

@@ -1,3 +1,5 @@
+//! One-time global KUI theme initialization before opening application windows.
+
 use gpui::{App, UpdateGlobal};
 
 use super::theme::Theme;

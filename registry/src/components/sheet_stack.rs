@@ -65,6 +65,21 @@ struct Drag {
     last_time: web_time::Instant,
     speed: f32,
 }
+/// `SheetStack` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::sheet_stack::{SheetStack, SheetPage, SheetLink};
+///
+/// let pages = vec![SheetPage::new("settings", "Settings", "Manage preferences").with_links(vec![SheetLink::new("privacy", "Privacy")]), SheetPage::new("privacy", "Privacy", "Review privacy settings")];
+/// let control = cx.new(|cx| SheetStack::new("Open settings", pages, cx));
+/// # }
+/// ```
 pub struct SheetStack {
     trigger: SharedString,
     pages: Vec<SheetPage>,
@@ -207,10 +222,7 @@ impl SheetStack {
             return false;
         };
         self.drag = None;
-        if self.stack.is_empty() {
-            self.transition.duration(0., 0.24, cx);
-            self.launch.focus(w, cx);
-        } else {
+        if let Some(&parent) = self.stack.last() {
             let peek = if self.presentation.is_dialog(self.viewport(w).width) {
                 14.
             } else {
@@ -218,7 +230,6 @@ impl SheetStack {
             };
             self.offset.reset(-peek);
             self.offset.duration(0., 0.42, cx);
-            let parent = *self.stack.last().unwrap();
             if let Some(link) = self.pages[parent]
                 .links
                 .iter()
@@ -228,6 +239,9 @@ impl SheetStack {
             } else {
                 self.close.focus(w, cx);
             }
+        } else {
+            self.transition.duration(0., 0.24, cx);
+            self.launch.focus(w, cx);
         }
         self.emit(cx);
         cx.notify();

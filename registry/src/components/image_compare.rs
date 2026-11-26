@@ -24,6 +24,24 @@ struct TouchGate {
     origin: (f32, f32),
 }
 
+/// `ImageCompare` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::image_compare::ImageCompare;
+///
+/// let control = cx.new(|cx| ImageCompare::new(
+///     "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
+///     "https://images.unsplash.com/photo-1470770841072-f978cf4d019e",
+///     "Compare images", cx,
+/// ));
+/// # }
+/// ```
 pub struct ImageCompare {
     before: ImageSource,
     after: ImageSource,

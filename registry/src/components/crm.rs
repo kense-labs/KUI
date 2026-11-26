@@ -442,15 +442,12 @@ fn render_dtc_tag(label: impl Into<SharedString>, tone: TagTone, cx: &App) -> Di
 }
 
 fn render_company_logo(id: &str, name: &str, side: f32, cx: &App) -> AnyElement {
+    let p = ProPalette::get(cx);
     let key = id.trim().to_ascii_lowercase();
     let glyph_side = (side * 0.66).round().max(10.);
+    let mono_ink: Hsla = if p.dark { p.ink } else { rgb(0x171717).into() };
     let inner: Option<AnyElement> = match key.as_str() {
-        "notion" => Some(pro_svg(
-            "0 0 24 24",
-            MARK_NOTION,
-            glyph_side,
-            rgb(0x171717).into(),
-        )),
+        "notion" => Some(pro_svg("0 0 24 24", MARK_NOTION, glyph_side, mono_ink)),
         "linear" => Some(pro_svg(
             "0 0 24 24",
             MARK_LINEAR,
@@ -475,12 +472,7 @@ fn render_company_logo(id: &str, name: &str, side: f32, cx: &App) -> AnyElement 
             glyph_side,
             rgb(0x5fc88a).into(),
         )),
-        "vercel" => Some(pro_svg(
-            "0 0 24 24",
-            MARK_VERCEL,
-            glyph_side,
-            rgb(0x171717).into(),
-        )),
+        "vercel" => Some(pro_svg("0 0 24 24", MARK_VERCEL, glyph_side, mono_ink)),
         "airtable" => Some(pro_svg(
             "0 0 24 24",
             MARK_AIRTABLE,
@@ -519,7 +511,11 @@ fn render_company_logo(id: &str, name: &str, side: f32, cx: &App) -> AnyElement 
         div()
             .text_size(px(10.5))
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(rgb(0x525252))
+            .text_color(if p.dark {
+                p.muted
+            } else {
+                rgb(0x525252).into()
+            })
             .child(initial)
             .into_any_element()
     });
@@ -528,9 +524,13 @@ fn render_company_logo(id: &str, name: &str, side: f32, cx: &App) -> AnyElement 
         .size(px(side))
         .flex_none()
         .rounded(px(4.5))
-        .bg(rgb(0xffffff))
+        .bg(p.logo_tile)
         .border_1()
-        .border_color(hsla(0., 0., 0., 0.08))
+        .border_color(if p.dark {
+            hsla(0., 0., 1., 0.09)
+        } else {
+            hsla(0., 0., 0., 0.08)
+        })
         .flex()
         .items_center()
         .justify_center()
@@ -832,6 +832,22 @@ enum CellPickerKind {
 }
 
 /// Interactive CRM workspace screen with editable table, pipeline views, and account inspector.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::crm::{CrmScreen, CrmEvent};
+///
+/// let screen = cx.new(|cx| CrmScreen::new("crm", cx));
+/// cx.subscribe(&screen, |_, event: &CrmEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct CrmScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -3980,7 +3996,10 @@ impl CrmScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(top_bar)
             .child(tabs_bar)

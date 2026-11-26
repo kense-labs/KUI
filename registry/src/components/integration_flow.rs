@@ -382,10 +382,14 @@ fn render_integration_mark(
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::integration_flow::IntegrationFlow;
 ///
 /// let flow = cx.new(|cx| IntegrationFlow::new("hero-integrations", cx));
+/// # }
 /// ```
 pub struct IntegrationFlow {
     id: ElementId,

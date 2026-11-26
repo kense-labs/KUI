@@ -247,6 +247,28 @@ type HostVisibility = Box<dyn Fn(&App) -> bool>;
 type RefineStyle = Box<dyn Fn(Div) -> Div>;
 
 /// A 24-hour dial with local clocks, an office-hours band and quarter-hour detents.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::time_dial::{TimeDial, TimeDialCity, TimeDialValueChanged};
+///
+/// let cities = vec![
+///     TimeDialCity::new("nyc", "New York", "NYC", -240),
+///     TimeDialCity::new("lon", "London", "LON", 60),
+///     TimeDialCity::new("tyo", "Tokyo", "TYO", 540),
+/// ];
+/// let control = cx.new(|cx| TimeDial::new(cities, cx)
+///     .with_default_value(900)
+///     .with_working_hours(540, 1080)
+///     .with_label("Call time"));
+/// window.subscribe(&control, cx, |_, _: &TimeDialValueChanged, _, _| {}).detach();
+/// # }
+/// ```
 pub struct TimeDial {
     id: ElementId,
     cities: Vec<TimeDialCity>,

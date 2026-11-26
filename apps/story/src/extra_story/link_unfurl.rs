@@ -198,7 +198,6 @@ impl Demo {
 impl Render for Demo {
     fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let lang = UiLanguage::current(cx);
         div()
             .size_full()
             .min_h(px(520.))
@@ -211,11 +210,5 @@ impl Render for Demo {
             .bg(p.stage)
             .text_color(p.ink)
             .child(self.composer.clone())
-            .child(
-                div().text_size(px(12.)).text_color(p.faint).child(lang.text(
-                    "Demo composer. Paste a link or try a sample to open its preview. Nothing is sent.",
-                    "演示编辑器。粘贴链接或试用样例可查看预览，消息不会发送。",
-                )),
-            )
     }
 }

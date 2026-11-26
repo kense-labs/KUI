@@ -973,10 +973,14 @@ fn render_composer_contents(
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::inspect_composer::InspectComposer;
 ///
 /// let composer = cx.new(|cx| InspectComposer::new("hero-composer-inspect", cx));
+/// # }
 /// ```
 pub struct InspectComposer {
     id: ElementId,

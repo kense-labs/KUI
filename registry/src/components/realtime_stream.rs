@@ -1,11 +1,201 @@
 //! A host-driven live series which freezes while inspected.
-use crate::components::animated_counter::AnimatedCounter;
 use crate::primitives::{
-    family::{Paint, PhaseClock, Slide, Tone, face},
+    family::{Paint, PhaseClock, Slide, Tone, disabled_motion, ease, face, measure},
     presentation::{column, row, tr},
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::VecDeque, rc::Rc};
+
+#[derive(Default)]
+struct ClippedRoll {
+    shown: Option<(i64, SharedString)>,
+    previous: SharedString,
+    direction: f32,
+    clock: PhaseClock,
+}
+
+fn format_grouped_int(value: i64) -> String {
+    let digits = value.unsigned_abs().to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+impl ClippedRoll {
+    #[allow(clippy::too_many_arguments)]
+    fn render(
+        &mut self,
+        value: f32,
+        font_size: f32,
+        line_h: f32,
+        visible: bool,
+        p: Paint,
+        w: &Window,
+        cx: &App,
+    ) -> Stateful<Div> {
+        let rounded = value.round().clamp(-1_000_000_000_000., 1_000_000_000_000.) as i64;
+        let core: SharedString = format_grouped_int(rounded).into();
+        let full_label = if rounded < 0 {
+            format!("−{core}")
+        } else {
+            core.to_string()
+        };
+        if let Some((old_val, old_text)) = &self.shown {
+            if *old_text != core {
+                self.previous = old_text.clone();
+                self.direction = if rounded >= *old_val { 1. } else { -1. };
+                self.shown = Some((rounded, core.clone()));
+                if visible && !disabled_motion(cx) {
+                    self.clock.restart(cx);
+                }
+            }
+        } else {
+            self.previous = core.clone();
+            self.direction = 1.;
+            self.shown = Some((rounded, core.clone()));
+        }
+
+        let duration = 0.24;
+        let elapsed = if visible {
+            self.clock.time(duration, w, cx)
+        } else {
+            duration
+        };
+        let animating = elapsed < duration && !disabled_motion(cx);
+        let t = if animating {
+            ease((elapsed / duration).clamp(0., 1.))
+        } else {
+            1.
+        };
+
+        let prev_chars: Vec<char> = self.previous.chars().collect();
+        let next_chars: Vec<char> = core.chars().collect();
+        let slots = if animating {
+            prev_chars.len().max(next_chars.len())
+        } else {
+            next_chars.len()
+        };
+        let prev_pad = slots.saturating_sub(prev_chars.len());
+        let next_pad = slots.saturating_sub(next_chars.len());
+
+        let digit_w = measure(&"0".into(), font_size, w).ceil();
+        let comma_w = measure(&",".into(), font_size, w).ceil();
+        let char_w = |ch: char| -> f32 {
+            if ch == ' ' {
+                0.
+            } else if ch.is_ascii_digit() {
+                digit_w
+            } else if ch == ',' {
+                comma_w
+            } else {
+                measure(&ch.to_string().into(), font_size, w).ceil()
+            }
+        };
+
+        let mut container = div()
+            .id("realtime-value-roll")
+            .role(Role::Label)
+            .aria_label(full_label)
+            .h(px(line_h))
+            .overflow_hidden()
+            .flex()
+            .items_center()
+            .text_size(px(font_size))
+            .line_height(px(line_h))
+            .font_weight(FontWeight::SEMIBOLD)
+            .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
+            .text_color(p.ink);
+
+        if rounded < 0 {
+            container = container.child(
+                div()
+                    .flex_none()
+                    .h(px(line_h))
+                    .line_height(px(line_h))
+                    .overflow_hidden()
+                    .child("−"),
+            );
+        }
+
+        for idx in 0..slots {
+            let p_ch = if idx < prev_pad {
+                ' '
+            } else {
+                prev_chars[idx - prev_pad]
+            };
+            let n_ch = if idx < next_pad {
+                ' '
+            } else {
+                next_chars[idx - next_pad]
+            };
+            if !animating || p_ch == n_ch {
+                if n_ch == ' ' {
+                    continue;
+                }
+                let cw = char_w(n_ch);
+                container = container.child(
+                    div()
+                        .relative()
+                        .flex_none()
+                        .w(px(cw))
+                        .h(px(line_h))
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .w(px(cw))
+                                .h(px(line_h))
+                                .line_height(px(line_h))
+                                .child(n_ch.to_string()),
+                        ),
+                );
+            } else {
+                let wp = char_w(p_ch);
+                let wn = char_w(n_ch);
+                let cw = (wp + (wn - wp) * t).max(0.5);
+                container = container.child(
+                    div()
+                        .relative()
+                        .flex_none()
+                        .w(px(cw))
+                        .h(px(line_h))
+                        .overflow_hidden()
+                        .when(p_ch != ' ', |col| {
+                            col.child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(-self.direction * line_h * t))
+                                    .w(px(wp))
+                                    .h(px(line_h))
+                                    .line_height(px(line_h))
+                                    .opacity((1. - t * 1.15).clamp(0., 1.))
+                                    .child(p_ch.to_string()),
+                            )
+                        })
+                        .when(n_ch != ' ', |col| {
+                            col.child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(self.direction * line_h * (1. - t)))
+                                    .w(px(wn))
+                                    .h(px(line_h))
+                                    .line_height(px(line_h))
+                                    .opacity(t.clamp(0., 1.))
+                                    .child(n_ch.to_string()),
+                            )
+                        }),
+                );
+            }
+        }
+        container
+    }
+}
 #[derive(Clone, Debug)]
 pub struct StreamReading {
     pub label: SharedString,
@@ -42,6 +232,20 @@ struct FrozenSeries {
     evictions: usize,
 }
 
+/// `RealtimeStream` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::realtime_stream::RealtimeStream;
+///
+/// let control = cx.new(|_| RealtimeStream::new("Requests").with_capacity(60).with_unit(" req/s"));
+/// # }
+/// ```
 pub struct RealtimeStream {
     title: SharedString,
     subtitle: Option<SharedString>,
@@ -49,7 +253,7 @@ pub struct RealtimeStream {
     series_color: Option<Hsla>,
     interval: f32,
     window_ms: Option<u32>,
-    counter: Option<Entity<AnimatedCounter>>,
+    roll: ClippedRoll,
     readings: Vec<StreamReading>,
     leading: VecDeque<f32>,
     evictions: usize,
@@ -81,7 +285,7 @@ impl RealtimeStream {
             series_color: None,
             interval: 0.35,
             window_ms: None,
-            counter: None,
+            roll: ClippedRoll::default(),
             readings: vec![],
             leading: VecDeque::with_capacity(EDGE_HISTORY),
             evictions: 0,
@@ -294,7 +498,10 @@ impl Render for RealtimeStream {
             .expect("focus initialized")
             .clone();
         let p = Paint::get(cx);
-        let series_color = self.series_color.unwrap_or(p.bright);
+        let dark = crate::foundation::Theme::global(cx).mode == crate::foundation::ThemeMode::Dark;
+        let default_series: Hsla = rgb(if dark { 0x38bdf8 } else { 0x2563eb }).into();
+        let series_color = self.series_color.unwrap_or(default_series);
+        let frozen_state = self.frozen.is_some();
         let window_ms = self.window_ms;
         let now: SharedString = tr(cx, "now", "现在").into();
         let data = self.data().to_vec();
@@ -527,33 +734,78 @@ impl Render for RealtimeStream {
                         let clip = Bounds::new(b.origin, size(px(plot_width), px(height + 1.)));
                         w.with_content_mask(Some(ContentMask { bounds: clip }), |w| {
                             let overscan = phase.ceil() as usize;
-                            let points = leading
+                            let samples: Vec<Point<Pixels>> = leading
                                 .iter()
                                 .skip(leading.len().saturating_sub(overscan))
                                 .enumerate()
                                 .map(|(i, &value)| at_reading(i as f32 - overscan as f32, value))
-                                .chain((0..n).map(at));
+                                .chain((0..n).map(at))
+                                .collect();
                             let mut area = PathBuilder::fill();
+                            let mut glow = PathBuilder::stroke(px(4.5));
                             let mut path = PathBuilder::stroke(px(2.));
-                            let mut points = points;
-                            if let Some(first) = points.next() {
+                            if let Some(&first) = samples.first() {
                                 area.move_to(point(first.x, b.origin.y + px(height)));
                                 area.line_to(first);
+                                glow.move_to(first);
                                 path.move_to(first);
                             }
-                            for sample in points {
+                            for &sample in samples.iter().skip(1) {
                                 area.line_to(sample);
+                                glow.line_to(sample);
                                 path.line_to(sample);
                             }
                             area.line_to(point(at(n - 1).x, b.origin.y + px(height)));
                             area.close();
-                            if let Ok(path) = area.build() {
-                                w.paint_path(path, series_color.opacity(0.1));
+                            if let Ok(area_path) = area.build() {
+                                w.paint_path(
+                                    area_path,
+                                    linear_gradient(
+                                        180.,
+                                        linear_color_stop(
+                                            series_color.opacity(if dark { 0.24 } else { 0.16 }),
+                                            0.,
+                                        ),
+                                        linear_color_stop(series_color.opacity(0.), 1.),
+                                    ),
+                                );
                             }
-                            if let Ok(path) = path.build() {
-                                w.paint_path(path, series_color);
+                            if let Ok(glow_path) = glow.build() {
+                                w.paint_path(
+                                    glow_path,
+                                    series_color.opacity(if dark { 0.16 } else { 0.10 }),
+                                );
+                            }
+                            if let Ok(stroke_path) = path.build() {
+                                w.paint_path(stroke_path, series_color);
                             }
                         });
+                        if active.is_none() && !frozen_state {
+                            let tip_idx = last_visible_index(n, phase);
+                            let tip = at(tip_idx);
+                            if tip.x >= b.origin.x && tip.x <= b.origin.x + px(plot_width + 2.) {
+                                w.paint_quad(
+                                    fill(
+                                        Bounds {
+                                            origin: point(tip.x - px(5.5), tip.y - px(5.5)),
+                                            size: size(px(11.), px(11.)),
+                                        },
+                                        series_color.opacity(0.22),
+                                    )
+                                    .corner_radii(px(5.5)),
+                                );
+                                w.paint_quad(
+                                    fill(
+                                        Bounds {
+                                            origin: point(tip.x - px(3.), tip.y - px(3.)),
+                                            size: size(px(6.), px(6.)),
+                                        },
+                                        series_color,
+                                    )
+                                    .corner_radii(px(3.)),
+                                );
+                            }
+                        }
                         let mut last_tag_right = b.origin.x - px(8.);
                         for (i, r) in graph_data.iter().enumerate() {
                             if let Some(label) = r.anomaly.as_ref() {
@@ -666,7 +918,7 @@ impl Render for RealtimeStream {
                                         origin: point(pt.x - px(4.), pt.y - px(4.)),
                                         size: size(px(8.), px(8.)),
                                     },
-                                    p.bright,
+                                    series_color,
                                 )
                                 .corner_radii(px(4.)),
                             );
@@ -768,23 +1020,11 @@ impl Render for RealtimeStream {
             .and_then(|i| data.get(i))
             .or_else(|| data.last());
         let value = current.map_or(0., |v| v.value);
-        let counter = self
-            .counter
-            .get_or_insert_with(|| {
-                cx.new(|_| {
-                    AnimatedCounter::new(f64::from(
-                        value.clamp(-1_000_000_000_000., 1_000_000_000_000.),
-                    ))
-                    .with_size(44.)
-                })
-            })
-            .clone();
-        counter.update(cx, |v, cx| {
-            v.set_value(
-                f64::from(value.clamp(-1_000_000_000_000., 1_000_000_000_000.)),
-                cx,
-            )
-        });
+        let roll_element = if value.abs() <= 1_000_000_000_000. {
+            Some(self.roll.render(value, 44., 48., visible, p, w, cx))
+        } else {
+            None
+        };
         let graph_width = self.bounds.get().size.width;
         let compact = if graph_width > px(0.) {
             graph_width < px(250.)
@@ -821,7 +1061,7 @@ impl Render for RealtimeStream {
                 .child(div().w(px(3.)).h(px(8.)).bg(p.secondary))
                 .child(div().w(px(3.)).h(px(8.)).bg(p.secondary))
         } else {
-            div().size(px(8.)).rounded_full().bg(p.bright)
+            div().size(px(8.)).rounded_full().bg(series_color)
         })
         .child(label)
         .on_click(cx.listener(|s, _, _, cx| s.toggle_pause(cx)))
@@ -885,19 +1125,18 @@ impl Render for RealtimeStream {
                             .gap(px(6.))
                             .child(
                                 row()
-                                    .h(px(52.))
+                                    .h(px(48.))
+                                    .overflow_hidden()
                                     .items_center()
                                     .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
-                                    .when(value.abs() <= 1_000_000_000_000., |row| {
-                                        row.child(counter)
-                                    })
+                                    .when_some(roll_element, |row, el| row.child(el))
                                     .when(value.abs() > 1_000_000_000_000., |row| {
                                         row.child(format!("{value:.2e}"))
                                     }),
                             )
                             .child(
                                 div()
-                                    .pb(px(6.))
+                                    .pb(px(5.))
                                     .text_color(p.secondary)
                                     .child(self.unit.clone()),
                             ),
@@ -1016,5 +1255,12 @@ mod tests {
         w.simulate_keystrokes("escape");
         w.run_until_parked();
         assert!(w.update(|_, cx| view.read(cx).frozen.is_none()));
+    }
+
+    #[test]
+    fn grouped_readout_formats_thousands_and_transitions_cleanly() {
+        assert_eq!(super::format_grouped_int(120), "120");
+        assert_eq!(super::format_grouped_int(12_480), "12,480");
+        assert_eq!(super::format_grouped_int(-1_050), "1,050");
     }
 }

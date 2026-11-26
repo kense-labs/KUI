@@ -362,6 +362,22 @@ fn settings_nav_groups(cx: &App) -> Vec<ShellNavGroup> {
 }
 
 /// Workspace security settings screen (`settings-security`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_security::{SettingsSecurityScreen, SettingsSecurityEvent};
+///
+/// let screen = cx.new(|cx| SettingsSecurityScreen::new("settings-security", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsSecurityEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsSecurityScreen {
     id: ElementId,
     focus: FocusHandle,

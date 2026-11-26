@@ -1,3 +1,5 @@
+//! Interactive KUI button builders, variants, sizes, and keyboard activation.
+
 use std::rc::Rc;
 
 use super::style::{chrome, chrome_with_radius, disabled_chrome};
@@ -21,6 +23,19 @@ pub enum ButtonVariant {
 type ClickHandler = dyn Fn(&ClickEvent, &mut Window, &mut App);
 
 /// Finished KUI button with clear control rhythm and theme-aware chrome.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use kui::components::button::Button;
+///
+/// Button::new("save").primary().label("Save")
+/// # ;
+/// # }
+/// ```
 pub struct Button {
     id: ElementId,
     label: SharedString,

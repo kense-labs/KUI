@@ -11,6 +11,20 @@ pub struct SlideValue {
     pub low: f64,
     pub high: Option<f64>,
 }
+/// `Slider` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::slider::{Slider, SlideValue};
+///
+/// let control = cx.new(|cx| Slider::new("Budget", 0.0..=100.0, 1.0, SlideValue { low: 20.0, high: Some(80.0) }, cx));
+/// # }
+/// ```
 pub struct Slider {
     label: SharedString,
     min: f64,
@@ -242,7 +256,7 @@ impl Slider {
                 self.set(projected, high, cx);
             }
             let next = if high {
-                self.value.high.unwrap()
+                self.value.high.unwrap_or(self.value.low)
             } else {
                 self.value.low
             };
@@ -341,7 +355,7 @@ impl Render for Slider {
         {
             let high = i == 1;
             let value = if high {
-                self.value.high.unwrap()
+                self.value.high.unwrap_or(self.value.low)
             } else {
                 self.value.low
             };
@@ -405,7 +419,7 @@ impl Render for Slider {
                 .focus_visible(move |s| s.border_2().border_color(p.focus))
                 .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
                     let current = if high {
-                        s.value.high.unwrap()
+                        s.value.high.unwrap_or(s.value.low)
                     } else {
                         s.value.low
                     };

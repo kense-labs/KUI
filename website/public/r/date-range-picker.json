@@ -16,7 +16,7 @@
   "files": [
     {
       "path": "components/date_range_picker.rs",
-      "content": "//! DateRangePicker on a proleptic Gregorian grid.\npub use crate::primitives::form_dates::{CivilDate, DateSpan};\nuse crate::primitives::form_dates::{DateControl, DateLayout};\npub struct DateRangePickerLayout;\nimpl DateLayout for DateRangePickerLayout {\n    const FIELD: bool = true;\n    const RANGE: bool = true;\n}\npub type DateRangePicker = DateControl<DateRangePickerLayout>;\n"
+      "content": "//! DateRangePicker on a proleptic Gregorian grid.\npub use crate::primitives::form_dates::{CivilDate, DateSpan};\nuse crate::primitives::form_dates::{DateControl, DateLayout};\n/// `DateRangePicker` component.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::date_range_picker::{DateRangePicker, CivilDate};\n///\n/// let control = cx.new(|cx| DateRangePicker::new(\"Review date\", CivilDate::today_utc(), cx));\n/// # }\n/// ```\npub struct DateRangePickerLayout;\nimpl DateLayout for DateRangePickerLayout {\n    const FIELD: bool = true;\n    const RANGE: bool = true;\n}\npub type DateRangePicker = DateControl<DateRangePickerLayout>;\n"
     },
     {
       "path": "primitives/control.rs",

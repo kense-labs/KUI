@@ -7,14 +7,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
-        pro_swap_label, pro_tactile, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
@@ -25,9 +25,41 @@ const ROW_H: f32 = 32.0;
 const BAR_H: f32 = 14.0;
 const AXIS_H: f32 = 30.0;
 const FOOT_H: f32 = 40.0;
-const NAME_COL_W: f32 = 192.0;
+const NAME_COL_W: f32 = 204.0;
 
-const HEADER_GANTT_SVG: &str = r#"<rect x="1.5" y="2.5" width="7" height="3" rx="1.5" fill="currentColor"></rect><rect x="5" y="6.5" width="8" height="3" rx="1.5" fill="currentColor" opacity="0.6"></rect><rect x="8.5" y="10.5" width="6" height="3" rx="1.5" fill="currentColor" opacity="0.32"></rect>"#;
+fn header_gantt_icon(side: f32, color: Hsla) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, win, _| {
+            let s = f32::from(bounds.size.width).min(f32::from(bounds.size.height)) / 16.0;
+            if s <= 0.05 {
+                return;
+            }
+            let ox = f32::from(bounds.left());
+            let oy = f32::from(bounds.top());
+            for (x, y, w, alpha) in [
+                (1.5_f32, 2.5_f32, 7.0_f32, 1.0_f32),
+                (5.0, 6.5, 8.0, 0.62),
+                (8.5, 10.5, 6.0, 0.34),
+            ] {
+                let bh = (3.0 * s).max(1.5);
+                win.paint_quad(
+                    fill(
+                        Bounds::new(
+                            point(px(ox + x * s), px(oy + y * s)),
+                            size(px(w * s), px(bh)),
+                        ),
+                        color.opacity(alpha),
+                    )
+                    .corner_radii(px(bh * 0.5)),
+                );
+            }
+        },
+    )
+    .size(px(side))
+    .flex_none()
+    .into_any_element()
+}
 
 /// Execution state derived from a [`PlanStep`]'s `start_ms` and `end_ms` timestamps relative to `now_ms`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -340,6 +372,31 @@ fn default_pricing_plan_steps() -> Vec<PlanStep> {
 }
 
 /// Planned-vs-actual Gantt chart for an autonomous agent run.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::plan_vs_actual::{PlanStep, PlanVsActual, PlanVsActualEvent};
+///
+/// let gantt = cx.new(|cx| {
+///     PlanVsActual::new("pricing-gantt", cx)
+///         .with_task("Ship the pricing page")
+///         .with_steps(vec![
+///             PlanStep::new("brief", "Read the brief", 20_000).with_icon("slack").with_actual(Some(0), Some(16_000)),
+///             PlanStep::new("layout", "Build the layout", 60_000).with_deps(["brief"]).with_icon("figma").with_actual(Some(16_000), Some(84_000)),
+///             PlanStep::new("stripe", "Wire up Stripe", 45_000).with_deps(["layout"]).with_icon("stripe").with_actual(Some(84_000), None),
+///         ])
+///         .with_now(136_000)
+/// });
+/// cx.subscribe(&gantt, |_, ev: &PlanVsActualEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct PlanVsActual {
     id: ElementId,
     title: Option<SharedString>,
@@ -628,7 +685,7 @@ impl Render for PlanVsActual {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(pro_svg("0 0 16 16", HEADER_GANTT_SVG, 16., accent))
+                .child(header_gantt_icon(16., accent))
                 .child(
                     div()
                         .flex_none()
@@ -704,7 +761,7 @@ impl Render for PlanVsActual {
                 )
                 .child(
                     div()
-                        .min_w(px(90.))
+                        .min_w(px(76.))
                         .h(px(22.))
                         .px(px(8.))
                         .flex_none()
@@ -749,6 +806,7 @@ impl Render for PlanVsActual {
             return div()
                 .id(self.id.clone())
                 .w_full()
+                .py(px(14.))
                 .flex()
                 .justify_center()
                 .child(
@@ -759,7 +817,7 @@ impl Render for PlanVsActual {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(header)
@@ -783,6 +841,7 @@ impl Render for PlanVsActual {
             return div()
                 .id(self.id.clone())
                 .w_full()
+                .py(px(14.))
                 .flex()
                 .justify_center()
                 .child(
@@ -793,7 +852,7 @@ impl Render for PlanVsActual {
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(header)
@@ -1786,6 +1845,7 @@ impl Render for PlanVsActual {
         div()
             .id(self.id.clone())
             .w_full()
+            .py(px(14.))
             .flex()
             .justify_center()
             .child(
@@ -1796,7 +1856,7 @@ impl Render for PlanVsActual {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

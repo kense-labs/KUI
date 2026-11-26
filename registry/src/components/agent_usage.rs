@@ -511,6 +511,22 @@ fn default_notes() -> Vec<UsageNote> {
 }
 
 /// KUI Pro screen tracking monthly agent spend, forecast pace, model/project breakdown, and cost anomalies.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_usage::{AgentUsageScreen, AgentUsageEvent};
+///
+/// let screen = cx.new(|cx| AgentUsageScreen::new("agent-usage", cx));
+/// cx.subscribe(&screen, |_, event: &AgentUsageEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentUsageScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -2729,7 +2745,10 @@ impl AgentUsageScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(

@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
-        pro_tactile, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_mark_selected, pro_mix_color, pro_pill_indicator,
+        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_bar, pro_spring_f32, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -21,12 +21,12 @@ use crate::{
 use gpui::{prelude::*, *};
 use web_time::Instant;
 
-const TREEMAP_MARK_SVG: &str = r#"<rect x="1.8" y="1.8" width="7" height="12.4" rx="1.6" fill="currentColor"></rect><rect x="10" y="1.8" width="4.2" height="6" rx="1.4" fill="currentColor" opacity="0.6"></rect><rect x="10" y="9" width="4.2" height="5.2" rx="1.4" fill="currentColor" opacity="0.3"></rect>"#;
+const TREEMAP_MARK_SVG: &str = r#"<rect x="1.8" y="1.8" width="7" height="12.4" rx="1.6" fill="currentColor"></rect><rect x="10" y="1.8" width="4.2" height="6" rx="1.4" fill="currentColor" fill-opacity="0.6"></rect><rect x="10" y="9" width="4.2" height="5.2" rx="1.4" fill="currentColor" fill-opacity="0.35"></rect>"#;
 
 const CHEV_DOWN_SVG: &str = r#"<path d="m3.5 4.75 2.5 2.5 2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
-const MAP_W: f32 = 656.0;
-const MAP_H: f32 = 268.0;
+const MAP_W: f32 = 676.0;
+const MAP_H: f32 = 264.0;
 const TILE_GAP: f32 = 3.0;
 
 /// Events emitted by [`ContextMap`].
@@ -716,12 +716,15 @@ impl RenderOnce for GlidingTreemapTile {
                 1
             };
             let tok_suf = if self.tokens >= 1_000 { "K" } else { "" };
+            let tight_w = cw_w < 118.0;
+            let pad_x = if tight_w { 6.5 } else { 9.0 };
+            let name_fs = if tight_w { 11.0 } else { 12.0 };
             tile = tile.child(
                 div()
                     .relative()
                     .top(px(0.5 * down))
-                    .px(px(9.0))
-                    .pt(px(7.0))
+                    .px(px(pad_x))
+                    .pt(px(6.5))
                     .flex()
                     .flex_col()
                     .gap(px(1.0))
@@ -729,14 +732,14 @@ impl RenderOnce for GlidingTreemapTile {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(5.0))
+                            .gap(px(4.0))
                             .min_w_0()
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
                                     .truncate()
-                                    .text_size(px(12.0))
+                                    .text_size(px(name_fs))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(self.ink)
                                     .when(is_dropped_before, |d| d.line_through())
@@ -744,7 +747,7 @@ impl RenderOnce for GlidingTreemapTile {
                             )
                             .when(
                                 !is_free
-                                    && cw_w >= 86.0
+                                    && cw_w >= 104.0
                                     && (self.pinned || self.kind == ContextBlockKind::Summary),
                                 |row| {
                                     row.child(pro_check_draw(
@@ -764,7 +767,7 @@ impl RenderOnce for GlidingTreemapTile {
                             tok_dec,
                             "",
                             tok_suf,
-                            11.5,
+                            if tight_w { 11.0 } else { 11.5 },
                             FontWeight::NORMAL,
                             self.ink.opacity(0.75),
                         ))
@@ -785,6 +788,35 @@ struct CompactionRecord {
 }
 
 /// Living 2D squarified treemap of an agent's context window with gliding tiles and `Before | After` compaction.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::context_map::{
+///     ContextBlock, ContextBlockKind, ContextMap, ContextMapEvent,
+/// };
+///
+/// let map = cx.new(|cx| {
+///     ContextMap::new("session-treemap", cx)
+///         .with_blocks(
+///             vec![
+///                 ContextBlock::new("sys", "System prompt", ContextBlockKind::System, 6_400),
+///                 ContextBlock::new("tools", "Tool definitions", ContextBlockKind::Tools, 14_800),
+///                 ContextBlock::new("cart", "src/cart/cart.ts", ContextBlockKind::File, 22_400),
+///                 ContextBlock::new("chat", "Chat", ContextBlockKind::Chat, 41_000),
+///             ],
+///             200_000,
+///         )
+/// });
+/// cx.subscribe(&map, |_, ev: &ContextMapEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ContextMap {
     id: ElementId,
     title: SharedString,
@@ -1424,131 +1456,7 @@ impl Render for ContextMap {
             (Some(rec), CompactionView::Before) => rec.before_blocks.clone(),
             _ => self.blocks.clone(),
         };
-
-        // Category spotlight filter strip with liquid `pro_pill_indicator`
-        let kind_order = [
-            ContextBlockKind::System,
-            ContextBlockKind::Tools,
-            ContextBlockKind::Memory,
-            ContextBlockKind::File,
-            ContextBlockKind::Chat,
-            ContextBlockKind::Result,
-            ContextBlockKind::Summary,
-        ];
-        let present_kinds: Vec<ContextBlockKind> = kind_order
-            .into_iter()
-            .filter(|k| active_blocks.iter().any(|b| b.kind == *k))
-            .collect();
-        if let Some(fk) = self.filter_kind
-            && !present_kinds.contains(&fk)
-        {
-            self.filter_kind = None;
-        }
-        let kind_key_of = |k: Option<ContextBlockKind>| -> &'static str {
-            match k {
-                None => "all",
-                Some(ContextBlockKind::System) => "sys",
-                Some(ContextBlockKind::Tools) => "tools",
-                Some(ContextBlockKind::Memory) => "mem",
-                Some(ContextBlockKind::File) => "file",
-                Some(ContextBlockKind::Chat) => "chat",
-                Some(ContextBlockKind::Result) => "res",
-                Some(ContextBlockKind::Summary) => "sum",
-                Some(ContextBlockKind::Free) => "free",
-            }
-        };
-        let cat_sensor = pro_selection_sensor();
-        let active_cat_key = kind_key_of(self.filter_kind);
-        let all_sel = self.filter_kind.is_none();
-        let mut cat_strip = div()
-            .mb(px(8.0))
-            .relative()
-            .self_start()
-            .p(px(2.0))
-            .rounded(px(7.0))
-            .bg(p.chip)
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap(px(2.0))
-            .child(pro_pill_indicator(
-                pro_eid(&self.id, "cat-pill-ind"),
-                active_cat_key,
-                cat_sensor.clone(),
-                5.0,
-                pill_fill,
-                Some(p.line_strong),
-                true,
-            ))
-            .child(
-                div()
-                    .id(pro_eid(&self.id, "cat-all"))
-                    .role(Role::Button)
-                    .aria_label(tr(cx, "All categories", "全部分类"))
-                    .aria_toggled(all_sel.into())
-                    .tab_index(0)
-                    .relative()
-                    .h(px(22.0))
-                    .px(px(8.0))
-                    .rounded(px(5.0))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if all_sel { p.ink } else { p.muted })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.filter_kind = None;
-                        cx.notify();
-                    }))
-                    .when(all_sel, |d| d.child(pro_mark_selected(&cat_sensor)))
-                    .child(tr(cx, "All", "全部")),
-            );
-
-        for kind in &present_kinds {
-            let k = *kind;
-            let sel = self.filter_kind == Some(k);
-            let (_, k_edge, k_ink) = k.colors(&p);
-            let k_key = kind_key_of(Some(k));
-            let k_lbl = k.label(cx);
-            cat_strip = cat_strip.child(
-                div()
-                    .id(pro_eid(&self.id, format!("cat-{k_key}")))
-                    .role(Role::Button)
-                    .aria_label(k_lbl)
-                    .aria_toggled(sel.into())
-                    .tab_index(0)
-                    .relative()
-                    .h(px(22.0))
-                    .px(px(7.5))
-                    .rounded(px(5.0))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(5.0))
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if sel { p.ink } else { p.muted })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.filter_kind = if this.filter_kind == Some(k) {
-                            None
-                        } else {
-                            Some(k)
-                        };
-                        cx.notify();
-                    }))
-                    .when(sel, |d| d.child(pro_mark_selected(&cat_sensor)))
-                    .child(
-                        div()
-                            .size(px(6.5))
-                            .rounded(px(2.0))
-                            .bg(k_ink.opacity(0.65))
-                            .border_1()
-                            .border_color(k_edge),
-                    )
-                    .child(k_lbl),
-            );
-        }
+        let _ = self.filter_kind;
 
         let free_tokens = self.limit.saturating_sub(used_tokens);
         let mut weighted: Vec<(SharedString, f32)> = active_blocks
@@ -1567,6 +1475,11 @@ impl Render for ContextMap {
         } else {
             hsla(0., 0., 0., 0.038)
         };
+        let surface_bdr: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.10)
+        } else {
+            hsla(0., 0., 0., 0.075)
+        };
 
         let mut map_canvas = div()
             .id(pro_eid(&self.id, "treemap-surface"))
@@ -1576,11 +1489,11 @@ impl Render for ContextMap {
             .w(px(MAP_W + 12.0))
             .h(px(MAP_H + 12.0))
             .p(px(6.0))
-            .rounded(px(10.0))
+            .rounded(px(12.0))
             .bg(card_bg)
             .border_1()
-            .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_sm())
+            .border_color(surface_bdr)
+            .shadow(pro_card_shadow(p.dark))
             .relative()
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
                 if ev.keystroke.key.as_str() == "escape" && this.pinned_id.is_some() {
@@ -2065,7 +1978,6 @@ impl Render for ContextMap {
                     .flex()
                     .flex_col()
                     .child(header)
-                    .child(cat_strip)
                     .child(map_canvas)
                     .child(fates_line)
                     .child(dropdown_menu),
@@ -2110,26 +2022,21 @@ fn default_profiles() -> Vec<ContextAgentProfile> {
                         SharedString::from("edit_file"),
                         SharedString::from("github_pr"),
                     ]),
-                ContextBlock::new(
-                    "memory",
-                    "Workspace memory",
-                    ContextBlockKind::Memory,
-                    7_600,
-                )
-                .with_label_zh("工作区记忆")
-                .with_detail(
-                    "Pinned Stripe webhook invariants",
-                    "已固定的 Stripe 幂等不变量备忘",
+                ContextBlock::new("memory", "Project memory", ContextBlockKind::Memory, 7_600)
+                    .with_label_zh("项目记忆")
+                    .with_detail(
+                        "Pinned Stripe webhook invariants",
+                        "已固定的 Stripe 幂等不变量备忘",
+                    ),
+                ContextBlock::new("f-cart", "cart.ts", ContextBlockKind::File, 22_400).with_detail(
+                    "src/cart/cart.ts · Read at 0:04 · 418 lines",
+                    "src/cart/cart.ts · 0:04 读入 · 共 418 行",
                 ),
-                ContextBlock::new("f-cart", "src/cart/cart.ts", ContextBlockKind::File, 22_400)
-                    .with_detail("Read at 0:04 · 418 lines", "0:04 读入 · 共 418 行"),
-                ContextBlock::new(
-                    "f-spec",
-                    "tests/checkout.spec.ts",
-                    ContextBlockKind::File,
-                    12_200,
-                )
-                .with_detail("Read at 0:09 · 210 lines", "0:09 读入 · 共 210 行"),
+                ContextBlock::new("f-spec", "checkout.spec.ts", ContextBlockKind::File, 12_200)
+                    .with_detail(
+                        "tests/checkout.spec.ts · Read at 0:09 · 210 lines",
+                        "tests/checkout.spec.ts · 0:09 读入 · 共 210 行",
+                    ),
                 ContextBlock::new("chat", "Chat · 14 turns", ContextBlockKind::Chat, 38_000)
                     .with_label_zh("多轮对话 · 14 轮")
                     .with_detail(

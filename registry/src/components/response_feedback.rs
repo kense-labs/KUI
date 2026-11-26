@@ -38,6 +38,19 @@ enum FeedbackPhase {
 }
 
 /// Inline feedback form with explicit host acknowledgement and retry.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::response_feedback::ResponseFeedback;
+///
+/// let control = cx.new(|cx| ResponseFeedback::new("feedback", "message-1", window, cx));
+/// # }
+/// ```
 pub struct ResponseFeedback {
     id: SharedString,
     message_id: SharedString,

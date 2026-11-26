@@ -14,6 +14,20 @@ pub enum PlanEvent {
     Pause(bool),
     Restart,
 }
+/// `TaskPlan` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_plan::{TaskPlan};
+///
+/// let control = cx.new(|cx| TaskPlan::new("plan", "Review release", vec!["Check changes".into(),"Run tests".into()], window, cx));
+/// # }
+/// ```
 pub struct TaskPlan {
     id: SharedString,
     pub goal: String,

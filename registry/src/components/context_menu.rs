@@ -8,6 +8,23 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 type Target = Box<dyn Fn(&mut Window, &mut App) -> AnyElement>;
+/// `ContextMenu` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::context_menu::ContextMenu;
+/// use kui::primitives::menu::MenuItem;
+///
+/// let control = cx.new(|cx| ContextMenu::new("project", "Open actions",
+///     vec![MenuItem::new("edit", "Edit project")],
+///     |_, _| gpui::div().child("Quarterly launch").into_any_element(), cx));
+/// # }
+/// ```
 pub struct ContextMenu {
     core: MenuCore,
     target: Target,

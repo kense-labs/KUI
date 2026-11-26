@@ -6,8 +6,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
-        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
         pro_popover_presence, pro_presence, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar,
         pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
@@ -17,15 +17,18 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 use web_time::Instant;
 
 const STEP_W: f32 = 256.0;
-const STEP_H: f32 = 92.0;
+const STEP_H: f32 = 88.0;
 const LANE_PAD_X: f32 = 14.0;
 const LANE_W: f32 = STEP_W + 2.0 * LANE_PAD_X;
-const LINK_H: f32 = 46.0;
-const FORK_TOP_H: f32 = 34.0;
+const LINK_H: f32 = 36.0;
+const FORK_TOP_H: f32 = 28.0;
 const MENU_W: f32 = 244.0;
 
 /// Functional category of a [`FlowStep`] in [`FlowBuilder`].
@@ -463,6 +466,39 @@ fn build_run_schedule(
 }
 
 /// Top-down interactive workflow builder with `+` insertion menus, conditional branches, undo, and live test run.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::flow_builder::{
+///     FlowBranchPath, FlowBuilder, FlowBuilderEvent, FlowStep, FlowStepKind,
+/// };
+///
+/// let builder = cx.new(|cx| {
+///     FlowBuilder::new("signup-onboarding", cx)
+///         .with_name("Onboard new signups")
+///         .with_steps(vec![
+///             FlowStep::new("signup", FlowStepKind::Trigger, "New signup").with_icon("form").with_detail("Signup form").with_note("Someone signs up on the website"),
+///             FlowStep::new("research", FlowStepKind::Agent, "Research the company").with_detail("Claude · web search").with_note("Reads their site, finds size and industry"),
+///             FlowStep::new("size", FlowStepKind::Branch, "Company size").with_detail("employees > 200").with_paths(vec![
+///                 FlowBranchPath::new("enterprise", "Enterprise").with_steps(vec![
+///                     FlowStep::new("crm", FlowStepKind::Action, "Create CRM deal").with_icon("hubspot"),
+///                 ]),
+///                 FlowBranchPath::new("self", "Self-serve").with_steps(vec![
+///                     FlowStep::new("welcome", FlowStepKind::Action, "Send welcome email").with_icon("gmail"),
+///                 ]),
+///             ]),
+///         ])
+/// });
+/// cx.subscribe(&builder, |_, ev: &FlowBuilderEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct FlowBuilder {
     id: ElementId,
     name: SharedString,
@@ -492,15 +528,36 @@ impl FlowBuilder {
             .detach();
         cx.observe_global::<crate::primitives::control::UiLanguage>(|_, cx| cx.notify())
             .detach();
+        let steps = default_onboarding_steps();
+        let mut t_cursor = 0.0f32;
+        let mut schedule = Vec::new();
+        let mut skipped_paths = Vec::new();
+        let mut skipped_steps = Vec::new();
+        build_run_schedule(
+            &steps,
+            &mut t_cursor,
+            "root",
+            &mut schedule,
+            &mut skipped_paths,
+            &mut skipped_steps,
+        );
+        let now = Instant::now();
+        let initial_run = LiveRun {
+            started_at: now.checked_sub(Duration::from_millis(760)).unwrap_or(now),
+            schedule,
+            skipped_paths,
+            skipped_steps,
+            total_s: t_cursor.max(0.4),
+        };
         Self {
             id: id.into(),
             name: SharedString::from("Onboard new signups"),
             name_zh: SharedString::from("新注册用户自动引导"),
-            steps: default_onboarding_steps(),
+            steps,
             templates: default_templates(),
             controlled_status: HashMap::new(),
             last_finished_status: HashMap::new(),
-            live_run: None,
+            live_run: Some(initial_run),
             selected_id: None,
             hovered_id: None,
             open_menu: None,
@@ -508,8 +565,8 @@ impl FlowBuilder {
             undo_stack: Vec::new(),
             toast: None,
             next_seq: 100,
-            canvas_height: 452.0,
-            started_at: Instant::now(),
+            canvas_height: 428.0,
+            started_at: now,
             loading: false,
             empty: false,
         }
@@ -530,6 +587,7 @@ impl FlowBuilder {
     /// Supply the workflow step tree (first step is typically a `Trigger`).
     pub fn with_steps(mut self, steps: Vec<FlowStep>) -> Self {
         self.steps = steps;
+        self.live_run = None;
         self
     }
 
@@ -542,6 +600,7 @@ impl FlowBuilder {
     /// Supply external step/path statuses keyed by id.
     pub fn with_status(mut self, status: HashMap<SharedString, FlowRunStatus>) -> Self {
         self.controlled_status = status;
+        self.live_run = None;
         self
     }
 
@@ -551,7 +610,7 @@ impl FlowBuilder {
         self
     }
 
-    /// Set the scrollable canvas viewport height in pixels (`452.0` by default).
+    /// Set the scrollable canvas viewport height in pixels (`428.0` by default).
     pub fn with_height(mut self, height: f32) -> Self {
         self.canvas_height = height.max(240.0);
         self
@@ -568,6 +627,7 @@ impl FlowBuilder {
         self.empty = empty;
         if empty {
             self.steps.clear();
+            self.live_run = None;
         }
         self
     }
@@ -629,6 +689,7 @@ impl FlowBuilder {
             }
         }
         self.empty = false;
+        self.live_run = None;
         self.open_menu = None;
         self.last_finished_status.clear();
         self.selected_id = Some(new_id.clone());
@@ -662,6 +723,7 @@ impl FlowBuilder {
         let snapshot = self.steps.clone();
         if let Some(removed_title) = remove_from_list(&mut self.steps, step_id, cx) {
             self.undo_stack.push(snapshot);
+            self.live_run = None;
             self.last_finished_status.clear();
             self.open_menu = None;
             self.selected_id = prev_focus.clone();
@@ -686,6 +748,7 @@ impl FlowBuilder {
         let snapshot = self.steps.clone();
         if move_in_list(&mut self.steps, step_id, delta, true) {
             self.undo_stack.push(snapshot);
+            self.live_run = None;
             self.last_finished_status.clear();
             cx.emit(FlowBuilderEvent::StepsChanged(self.steps.clone()));
             cx.notify();
@@ -702,6 +765,7 @@ impl FlowBuilder {
         };
         self.steps = prev;
         self.empty = self.steps.is_empty();
+        self.live_run = None;
         self.open_menu = None;
         self.last_finished_status.clear();
         self.toast = Some((
@@ -1113,7 +1177,7 @@ impl FlowBuilder {
         p: &ProPalette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let link_h = if compact { 36.0 } else { LINK_H };
+        let link_h = if compact { 28.0 } else { LINK_H };
         let card_bg: Hsla = if p.dark {
             rgb(0x1c1c1e).into()
         } else {
@@ -1185,25 +1249,25 @@ impl FlowBuilder {
         let plus_btn: AnyElement = if is_running {
             div()
                 .id(pro_eid(&self.id, format!("plus-{key}")))
-                .size(px(20.))
+                .size(px(18.))
                 .opacity(0.0)
                 .into_any_element()
         } else {
             pro_tactile(
                 pro_eid(&self.id, format!("plus-{key}")),
                 aria,
-                10.0,
+                9.0,
                 card_bg,
                 p.hover,
                 plus_border,
                 hover_border,
                 menu_open,
                 div()
-                    .size(px(20.))
+                    .size(px(18.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(pro_icon(ProIcon::Plus, 11., plus_fg)),
+                    .child(pro_icon(ProIcon::Plus, 10., plus_fg)),
                 cx,
                 move |this, _, cx| {
                     if this.open_menu.as_ref() == Some(&target_for_btn) {
@@ -1215,7 +1279,7 @@ impl FlowBuilder {
                     cx.notify();
                 },
             )
-            .size(px(20.))
+            .size(px(18.))
             .into_any_element()
         };
 
@@ -1242,8 +1306,15 @@ impl FlowBuilder {
                 let item_hover = p.hover;
                 let t_title = tr(cx, tpl.title.as_ref(), tpl.title_zh.as_ref()).to_string();
                 let t_detail = tr(cx, tpl.detail.as_ref(), tpl.detail_zh.as_ref()).to_string();
-                let tile_icon =
-                    step_icon_element(tpl.kind, Some(tpl.icon.as_ref()), false, 0.0, p, cx);
+                let tile_icon = step_icon_element(
+                    tpl.kind,
+                    Some(tpl.icon.as_ref()),
+                    Some(tpl.detail.as_ref()),
+                    false,
+                    0.0,
+                    p,
+                    cx,
+                );
                 menu_col = menu_col.child(pro_tactile(
                     pro_eid(&self.id, format!("tpl-{key}-{t_idx}")),
                     t_title.clone(),
@@ -1370,6 +1441,7 @@ impl FlowBuilder {
         let tile = step_icon_element(
             step.kind,
             step.icon.as_deref(),
+            step.detail.as_deref(),
             is_running,
             elapsed_ms,
             p,
@@ -1642,7 +1714,7 @@ impl FlowBuilder {
                 )
                 .w(px(STEP_W))
                 .h(px(STEP_H))
-                .when(!p.dark && !is_skipped, |d| d.shadow_sm())
+                .when(!is_skipped, |d| d.shadow(pro_card_shadow(p.dark)))
                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                     if *inside {
                         this.hovered_id = Some(step_id_hover.clone());
@@ -1922,20 +1994,20 @@ impl FlowBuilder {
 fn step_icon_element(
     kind: FlowStepKind,
     icon_key: Option<&str>,
+    detail_hint: Option<&str>,
     is_running: bool,
     elapsed_ms: f32,
     p: &ProPalette,
     cx: &App,
 ) -> AnyElement {
     if kind == FlowStepKind::Agent {
-        return pro_agent_avatar(
-            icon_key.unwrap_or("flow-agent"),
-            p.blue,
-            24.0,
-            is_running,
-            elapsed_ms,
-            cx,
-        );
+        let seed = match (icon_key, detail_hint) {
+            (Some(k), Some(d)) => format!("{k} {d}"),
+            (Some(k), None) => k.to_string(),
+            (None, Some(d)) => d.to_string(),
+            (None, None) => "claude".to_string(),
+        };
+        return pro_agent_avatar(seed.as_str(), p.blue, 24.0, is_running, elapsed_ms, cx);
     }
     if let Some(key) = icon_key
         && matches!(
@@ -2091,12 +2163,12 @@ impl Render for FlowBuilder {
             .step_status
             .values()
             .any(|&(st, _, _)| st == FlowRunStatus::Running);
-        if has_running_agent && !reduced {
+        let is_running = self.live_run.is_some();
+        if (is_running || has_running_agent || elapsed_ms < 850.0) && !reduced {
             window.request_animation_frame();
         }
 
         let total_steps = self.total_step_count();
-        let is_running = self.live_run.is_some();
         let card_bg: Hsla = if p.dark { rgb(0x1c1c1e).into() } else { p.card };
 
         let run_btn: AnyElement = {
@@ -2323,7 +2395,7 @@ impl Render for FlowBuilder {
                 .child(
                     div()
                         .w_full()
-                        .py(px(18.))
+                        .py(px(12.))
                         .px(px(8.))
                         .flex()
                         .flex_col()

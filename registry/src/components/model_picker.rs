@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
         pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
         pro_swap_label, pro_switch, pro_tactile, tr,
     },
@@ -21,7 +21,8 @@ use crate::{
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 
-const SVG_BULB: &str = r#"<path d="M5.3 10.6h3.4M5.8 12.3h2.4M7 1.7a3.9 3.9 0 0 0-2.3 7c.4.3.6.7.6 1.1v.1h3.4v-.1c0-.4.2-.8.6-1.1A3.9 3.9 0 0 0 7 1.7Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_BULB: &str = r#"<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.5 1 1.2 1 2v.5h6v-.5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
+const SVG_RETURN_KEY: &str = r#"<path d="M12.5 3.5v4a2 2 0 0 1-2 2H4m0 0 2.8-2.8M4 9.5l2.8 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>"#;
 
 /// Reasoning effort level unfolded when `"Extended thinking"` is enabled in [`ModelPicker`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -578,13 +579,13 @@ impl Render for ModelPicker {
             .flex()
             .items_center()
             .gap(px(6.))
-            .child(
-                if let Some(mark) = pro_app_artwork(&selected_model.provider, 15., cx) {
-                    mark
-                } else {
-                    pro_app_tile(&selected_model.provider, 18., cx)
-                },
-            )
+            .child(if selected_model.id.as_ref() == "auto" {
+                pro_icon(ProIcon::Sparkles, 14., p.text)
+            } else if let Some(mark) = pro_app_artwork(&selected_model.provider, 15., cx) {
+                mark
+            } else {
+                pro_app_tile(&selected_model.provider, 18., cx)
+            })
             .child(pro_swap_label(
                 pro_eid(&self.id, "trigger-name-lbl"),
                 selected_model.name.clone(),
@@ -593,7 +594,7 @@ impl Render for ModelPicker {
                 if self.open { p.strong } else { p.text },
             ))
             .when(self.thinking, |d| {
-                d.child(pro_svg("0 0 14 14", SVG_BULB, 14., p.blue))
+                d.child(pro_svg("0 0 24 24", SVG_BULB, 14., p.blue))
             })
             .child(pro_icon(
                 if self.open {
@@ -636,13 +637,13 @@ impl Render for ModelPicker {
         let trigger_bar = if self.demo_chrome {
             div()
                 .w_full()
-                .max_w(px(368.))
+                .max_w(px(376.))
                 .p(px(10.))
-                .rounded(px(10.))
+                .rounded(px(12.))
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
-                .shadow_xs()
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(10.))
@@ -650,7 +651,7 @@ impl Render for ModelPicker {
                     div()
                         .px(px(4.))
                         .text_size(px(13.))
-                        .text_color(p.faint)
+                        .text_color(p.muted)
                         .child(tr(cx, "Ask anything…", "输入任意问题…")),
                 )
                 .child(
@@ -663,7 +664,7 @@ impl Render for ModelPicker {
                         .child(
                             div()
                                 .size(px(28.))
-                                .rounded(px(6.))
+                                .rounded(px(7.))
                                 .bg(p.primary)
                                 .flex()
                                 .items_center()
@@ -675,7 +676,7 @@ impl Render for ModelPicker {
         } else {
             div()
                 .w_full()
-                .max_w(px(368.))
+                .max_w(px(376.))
                 .flex()
                 .when(self.align == ModelMenuAlign::End, |d| d.justify_end())
                 .child(trigger_btn)
@@ -702,7 +703,7 @@ impl Render for ModelPicker {
                 .items_center()
                 .justify_between()
                 .gap(px(8.))
-                .text_size(px(10.5))
+                .text_size(px(10.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(p.muted)
                 .child(tr(cx, "MODEL", "模型"))
@@ -711,20 +712,28 @@ impl Render for ModelPicker {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(8.))
+                            .gap(px(6.))
                             .child(
                                 div()
-                                    .w(px(42.))
+                                    .w(px(44.))
+                                    .whitespace_nowrap()
                                     .text_center()
                                     .child(tr(cx, "SPEED", "速度")),
                             )
                             .child(
                                 div()
-                                    .w(px(42.))
+                                    .w(px(48.))
+                                    .whitespace_nowrap()
                                     .text_center()
                                     .child(tr(cx, "QUALITY", "质量")),
                             )
-                            .child(div().w(px(42.)).text_center().child(tr(cx, "COST", "成本"))),
+                            .child(
+                                div()
+                                    .w(px(44.))
+                                    .whitespace_nowrap()
+                                    .text_center()
+                                    .child(tr(cx, "COST", "成本")),
+                            ),
                     )
                 });
 
@@ -789,8 +798,8 @@ impl Render for ModelPicker {
                         .flex_none()
                         .flex()
                         .items_center()
-                        .gap(px(8.))
-                        .child(div().w(px(42.)).child(pro_spring_bar(
+                        .gap(px(6.))
+                        .child(div().w(px(44.)).child(pro_spring_bar(
                             pro_eid(&base_id, format!("bar-sp-{mi}")),
                             r_speed,
                             4.5,
@@ -798,7 +807,7 @@ impl Render for ModelPicker {
                             track_col,
                             fill_c,
                         )))
-                        .child(div().w(px(42.)).child(pro_spring_bar(
+                        .child(div().w(px(48.)).child(pro_spring_bar(
                             pro_eid(&base_id, format!("bar-ql-{mi}")),
                             r_qual,
                             4.5,
@@ -806,7 +815,7 @@ impl Render for ModelPicker {
                             track_col,
                             fill_c,
                         )))
-                        .child(div().w(px(42.)).child(pro_spring_bar(
+                        .child(div().w(px(44.)).child(pro_spring_bar(
                             pro_eid(&base_id, format!("bar-cs-{mi}")),
                             r_cost,
                             4.5,
@@ -817,13 +826,34 @@ impl Render for ModelPicker {
                         .into_any_element()
                 } else {
                     div()
-                        .w(px(142.))
+                        .w(px(148.))
                         .flex_none()
                         .text_center()
                         .text_size(px(11.5))
                         .text_color(p.muted)
                         .child(tr(cx, "Varies", "动态匹配"))
                         .into_any_element()
+                };
+
+                let row_icon: AnyElement = if m.id.as_ref() == "auto" {
+                    div()
+                        .size(px(20.))
+                        .flex_none()
+                        .rounded(px(5.))
+                        .bg(if p.dark { rgb(0x27272b) } else { rgb(0xffffff) })
+                        .border_1()
+                        .border_color(if p.dark {
+                            hsla(0., 0., 1., 0.09)
+                        } else {
+                            hsla(0., 0., 0., 0.065)
+                        })
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_icon(ProIcon::Sparkles, 12., p.text))
+                        .into_any_element()
+                } else {
+                    pro_app_tile(&m.provider, 20., cx)
                 };
 
                 rows_col = rows_col.child(
@@ -861,7 +891,7 @@ impl Render for ModelPicker {
                                 this.select_index(mi, false, cx);
                             });
                         })
-                        .child(pro_app_tile(&m.provider, 20., cx))
+                        .child(row_icon)
                         .child(
                             div()
                                 .flex_1()
@@ -1020,10 +1050,10 @@ impl Render for ModelPicker {
                             ent_think_row.update(app, |this, cx| this.toggle_thinking(cx));
                         })
                         .child(div().w(px(18.)).flex().justify_center().child(pro_svg(
-                            "0 0 14 14",
+                            "0 0 24 24",
                             SVG_BULB,
                             15.,
-                            if thinking { p.blue } else { p.muted },
+                            if thinking { p.blue } else { p.text },
                         )))
                         .child(
                             div()
@@ -1058,7 +1088,7 @@ impl Render for ModelPicker {
                         .child(div().w(px(18.)).flex().justify_center().child(pro_icon(
                             ProIcon::Globe,
                             15.,
-                            if web_search { p.blue } else { p.muted },
+                            if web_search { p.blue } else { p.text },
                         )))
                         .child(
                             div()
@@ -1173,22 +1203,20 @@ impl Render for ModelPicker {
                                     .border_color(p.line_strong)
                                     .flex()
                                     .items_center()
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted)
-                                    .child("↵"),
+                                    .justify_center()
+                                    .child(pro_svg("0 0 16 16", SVG_RETURN_KEY, 10.5, p.muted)),
                             ),
                     )
                 });
 
             div()
                 .w_full()
-                .max_w(px(368.))
-                .rounded(px(10.))
+                .max_w(px(376.))
+                .rounded(px(12.))
                 .bg(if p.dark { rgb(0x1c1c1f) } else { rgb(0xffffff) })
                 .border_1()
                 .border_color(p.line_strong)
-                .shadow_lg()
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .child(
@@ -1207,7 +1235,7 @@ impl Render for ModelPicker {
             div().w_full().child(menu_body).into_any_element()
         });
 
-        let mut stack = div().w_full().max_w(px(368.)).flex().flex_col().gap(px(6.));
+        let mut stack = div().w_full().max_w(px(376.)).flex().flex_col().gap(px(6.));
         if self.side == ModelMenuSide::Top {
             stack = stack.child(menu_el).child(trigger_bar);
         } else {

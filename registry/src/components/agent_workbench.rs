@@ -6,10 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProPresence, pro_agent_avatar, pro_app_tile, pro_btn,
-        pro_check_draw, pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
-        pro_person_avatar, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch, pro_tactile, tr,
+        ProPalette, ProPresence, pro_agent_avatar, pro_app_tile, pro_card_shadow, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_person_avatar, pro_popover_presence, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -452,6 +452,25 @@ fn default_playbook() -> Vec<WorkbenchStep> {
 }
 
 /// Spatial single-agent workbench with live step log, macOS files card, tool cards, and pulsing wires.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_workbench::{AgentWorkbench, AgentWorkbenchEvent};
+///
+/// let workbench = cx.new(|cx| {
+///     AgentWorkbench::new("agent-workbench", cx)
+///         .with_live(true)
+/// });
+/// cx.subscribe(&workbench, |_, event: &AgentWorkbenchEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentWorkbench {
     id: ElementId,
     focus: FocusHandle,
@@ -809,8 +828,9 @@ impl AgentWorkbench {
                 } else {
                     rgba(0x0060e2c7).into()
                 };
+                let agent_seed = format!("{} claude", self.agent.id);
                 let ic = pro_agent_avatar(
-                    &self.agent.id,
+                    &agent_seed,
                     mark_col,
                     26.,
                     working,
@@ -871,7 +891,7 @@ impl AgentWorkbench {
                     div()
                         .size(px(26.))
                         .rounded(px(7.))
-                        .bg(p.card)
+                        .bg(p.logo_tile)
                         .border_1()
                         .border_color(p.line)
                         .flex()
@@ -1299,16 +1319,18 @@ impl Render for AgentWorkbench {
         let user_card = div()
             .id(pro_eid(&self.id, "user-card"))
             .relative()
-            .when(!stacked, |d| d.flex_1().min_w_0())
+            .when(!stacked, |d| {
+                d.flex_basis(relative(0.)).flex_grow(1.0).min_w_0()
+            })
             .when(stacked, |d| d.w_full())
-            .pt(px(12.))
+            .pt(px(14.))
             .px(px(14.))
             .pb(px(14.))
             .rounded(px(12.))
             .bg(card_bg)
             .border_1()
             .border_color(pro_mix_color(p.line, blue.opacity(0.55), u_spot))
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if *inside {
                     this.hovered_link = Some("user".into());
@@ -1560,6 +1582,7 @@ impl Render for AgentWorkbench {
                 ))
         };
 
+        let main_agent_seed = format!("{} claude", self.agent.id);
         let agent_hit = pro_tactile(
             pro_eid(&self.id, "agent-hit"),
             agent_aria,
@@ -1571,7 +1594,7 @@ impl Render for AgentWorkbench {
             agent_open,
             div()
                 .w_full()
-                .pt(px(12.))
+                .pt(px(14.))
                 .px(px(14.))
                 .pb(px(14.))
                 .relative()
@@ -1586,9 +1609,9 @@ impl Render for AgentWorkbench {
                         .gap(px(8.))
                         .min_w_0()
                         .child(pro_agent_avatar(
-                            &self.agent.id,
+                            &main_agent_seed,
                             blue,
-                            26.,
+                            28.,
                             is_working,
                             elapsed_s * 1000.0,
                             cx,
@@ -1633,7 +1656,7 @@ impl Render for AgentWorkbench {
             },
         )
         .aria_expanded(agent_open)
-        .when(!p.dark, |d| d.shadow_xs())
+        .shadow(pro_card_shadow(p.dark))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_hover(cx.listener(|this, inside: &bool, _, cx| {
             if *inside {
@@ -1648,7 +1671,7 @@ impl Render for AgentWorkbench {
         let agent_wrap = div()
             .relative()
             .when(!stacked, |d| {
-                d.flex_basis(relative(0.)).flex_grow(1.42).min_w_0()
+                d.flex_basis(relative(0.)).flex_grow(1.38).min_w_0()
             })
             .when(stacked, |d| d.w_full())
             .child(agent_hit)
@@ -1809,14 +1832,14 @@ impl Render for AgentWorkbench {
                 d.flex_basis(relative(0.)).flex_grow(1.08).min_w_0()
             })
             .when(stacked, |d| d.w_full())
-            .pt(px(12.))
+            .pt(px(14.))
             .px(px(10.))
             .pb(px(10.))
             .rounded(px(12.))
             .bg(card_bg)
             .border_1()
             .border_color(pro_mix_color(p.line, blue.opacity(0.50), f_spot))
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if *inside {
                     this.hovered_link = Some("files".into());
@@ -1842,7 +1865,7 @@ impl Render for AgentWorkbench {
                             .size(px(30.))
                             .flex_none()
                             .rounded(px(8.))
-                            .bg(if p.dark { rgb(0x242428) } else { rgb(0xffffff) })
+                            .bg(p.logo_tile)
                             .border_1()
                             .border_color(p.line)
                             .flex()
@@ -2091,7 +2114,7 @@ impl Render for AgentWorkbench {
                 },
             )
             .aria_expanded(is_open)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 if *inside {
@@ -2153,6 +2176,7 @@ impl Render for AgentWorkbench {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .justify_between()
@@ -2303,113 +2327,10 @@ impl Render for AgentWorkbench {
                 .w_full()
                 .flex()
                 .items_center()
-                .gap(px(36.))
+                .gap(px(28.))
                 .child(user_card)
                 .child(agent_wrap)
                 .child(files_card)
-        };
-
-        let footer_bar = if self.custom_steps.is_none() {
-            let live_now = self.live;
-            let completed_steps = steps.iter().filter(|s| !s.running || done).count();
-            let total_steps = self.playbook.len().max(1);
-            Some(
-                div()
-                    .w_full()
-                    .pt(px(4.))
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap(px(10.))
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(p.muted)
-                                    .child(tr(
-                                        cx,
-                                        "Hover or click any card to illuminate links and inspect permissions.",
-                                        "悬停或点击任意卡片即可点亮连接线路并查看权限与调用明细。",
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .h(px(20.))
-                                    .px(px(7.))
-                                    .rounded(px(5.))
-                                    .bg(fill_bg)
-                                    .border_1()
-                                    .border_color(edge_col)
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(4.))
-                                    .child(pro_rolling_number(
-                                        pro_eid(&self.id, "wb-steps-done"),
-                                        completed_steps as f64,
-                                        0,
-                                        "",
-                                        "",
-                                        11.5,
-                                        FontWeight::MEDIUM,
-                                        p.ink,
-                                    ))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(p.muted)
-                                            .child(format!("/ {total_steps}")),
-                                    ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(10.))
-                            .child(pro_btn(
-                                pro_eid(&self.id, "step-btn"),
-                                tr(cx, "Next step", "下一步"),
-                                Some(ProIcon::ArrowRight),
-                                ProBtnStyle::Secondary,
-                                true,
-                                cx,
-                                |this, _, cx| {
-                                    this.live = false;
-                                    this.advance_demo_step(cx);
-                                },
-                            ))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(if live_now { p.strong } else { p.muted })
-                                            .child(tr(cx, "Auto", "自动")),
-                                    )
-                                    .child(pro_switch(
-                                        pro_eid(&self.id, "live-btn"),
-                                        tr(cx, "Auto-advance demo steps", "自动推进演示步骤"),
-                                        live_now,
-                                        cx,
-                                        move |this, _, cx| {
-                                            this.set_live(!live_now, cx);
-                                        },
-                                    )),
-                            ),
-                    ),
-            )
-        } else {
-            None
         };
 
         div()
@@ -2429,39 +2350,39 @@ impl Render for AgentWorkbench {
                 }
             }))
             .w_full()
+            .py(px(16.))
             .relative()
             .flex()
-            .flex_col()
-            .gap(px(14.))
-            .child(
-                canvas(
-                    move |bounds, _, _| {
-                        let bw = f32::from(bounds.size.width);
-                        if bw > 1.0 {
-                            width_cell.set(bw);
-                        }
-                    },
-                    |_, _, _, _| (),
-                )
-                .absolute()
-                .left_0()
-                .right_0()
-                .top_0()
-                .h(px(1.)),
-            )
+            .justify_center()
             .child(
                 div()
                     .w_full()
+                    .max_w(px(1080.))
                     .relative()
                     .flex()
                     .flex_col()
-                    .gap(px(if stacked { 12. } else { 64. }))
+                    .gap(px(if stacked { 12. } else { 54. }))
+                    .child(
+                        canvas(
+                            move |bounds, _, _| {
+                                let bw = f32::from(bounds.size.width);
+                                if bw > 1.0 {
+                                    width_cell.set(bw);
+                                }
+                            },
+                            |_, _, _, _| (),
+                        )
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .top_0()
+                        .h(px(1.)),
+                    )
                     .child(wires_bg)
                     .child(top_row)
                     .child(tools_row)
                     .child(ports_fg),
             )
-            .when_some(footer_bar, |d, fb| d.child(fb))
             .into_any_element()
     }
 }

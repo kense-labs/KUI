@@ -79,6 +79,21 @@ impl RequestGate {
         }
     }
 }
+/// `AgentCursor` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_cursor::{AgentCursor, DocBlock, DocBlockKind};
+///
+/// let blocks = vec![DocBlock::new("body", DocBlockKind::Paragraph, "A short draft.")];
+/// let control = cx.new(|_| AgentCursor::new("Document", blocks));
+/// # }
+/// ```
 pub struct AgentCursor {
     label: SharedString,
     agent: SharedString,

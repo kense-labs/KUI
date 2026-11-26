@@ -21,6 +21,20 @@ impl Person {
         self
     }
 }
+/// `Avatar` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::avatar::{Avatar, Person};
+///
+/// let control = cx.new(|_| Avatar::new(Person::new("Ari Singh"), 36.0));
+/// # }
+/// ```
 pub struct Avatar {
     person: Person,
     size: f32,

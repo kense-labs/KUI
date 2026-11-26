@@ -14,6 +14,20 @@ pub struct Model {
     pub output_rate: f32,
     pub scores: Vec<(String, f32)>,
 }
+/// `ModelSheet` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::model_card::{ModelSheet, Model};
+///
+/// let control = cx.new(|_| ModelSheet::new("model",vec![Model{name:"Atlas".into(),provider:"Kense".into(),description:"Workspace assistant".into(),features:vec!["Text".into()],context:128000,max_output:32000,input_rate:2.,output_rate:8.,scores:vec![("Code".into(),0.82)]}]));
+/// # }
+/// ```
 pub struct ModelSheet {
     id: SharedString,
     pub models: Vec<Model>,
@@ -148,36 +162,68 @@ impl Render for ModelSheet {
                     row()
                         .child(div().flex_1())
                         .child(
-                            swap_label("model-name", m.name.clone(), w, cx)
-                                .font_weight(FontWeight::SEMIBOLD),
+                            div().w(px(124.)).text_right().child(
+                                swap_label("model-name", m.name.clone(), w, cx)
+                                    .font_weight(FontWeight::SEMIBOLD),
+                            ),
                         )
-                        .child(title(other.name.clone())),
+                        .child(
+                            div()
+                                .w(px(124.))
+                                .text_right()
+                                .child(title(other.name.clone())),
+                        ),
                 );
             for (l, a, b) in [
                 (
                     tr(cx, "Context", "上下文"),
-                    m.context as f32,
-                    other.context as f32,
+                    format_tokens(u64::from(m.context)),
+                    format_tokens(u64::from(other.context)),
+                ),
+                (
+                    tr(cx, "Max output", "输出上限"),
+                    format_tokens(u64::from(m.max_output)),
+                    format_tokens(u64::from(other.max_output)),
                 ),
                 (
                     tr(cx, "Input / 1M", "每百万输入"),
-                    m.input_rate,
-                    other.input_rate,
+                    format!("${:.2}", m.input_rate),
+                    format!("${:.2}", other.input_rate),
                 ),
                 (
                     tr(cx, "Output / 1M", "每百万输出"),
-                    m.output_rate,
-                    other.output_rate,
+                    format!("${:.2}", m.output_rate),
+                    format!("${:.2}", other.output_rate),
                 ),
             ] {
                 r = r.child(
                     row()
                         .child(div().flex_1().child(l))
-                        .child(badge(a.to_string(), cx))
-                        .child(badge(b.to_string(), cx)),
+                        .child(
+                            div()
+                                .w(px(124.))
+                                .flex()
+                                .justify_end()
+                                .font_features(tabular())
+                                .child(badge(a, cx)),
+                        )
+                        .child(
+                            div()
+                                .w(px(124.))
+                                .flex()
+                                .justify_end()
+                                .font_features(tabular())
+                                .child(badge(b, cx)),
+                        ),
                 )
             }
         } else {
+            let context_tokens = animated_value("context-size", m.context as f32, 0.24, w, cx)
+                .round()
+                .max(0.) as u64;
+            let output_tokens = animated_value("output-limit", m.max_output as f32, 0.24, w, cx)
+                .round()
+                .max(0.) as u64;
             r = r
                 .child(
                     row()
@@ -186,41 +232,36 @@ impl Render for ModelSheet {
                             column()
                                 .flex_1()
                                 .child(note(tr(cx, "Context window", "上下文窗口"), cx))
-                                .child(title(format!(
-                                    "{:.0}",
-                                    animated_value("context-size", m.context as f32, 0.24, w, cx)
-                                ))),
+                                .child(
+                                    title(format_tokens(context_tokens)).font_features(tabular()),
+                                ),
                         )
                         .child(
                             column()
                                 .flex_1()
                                 .child(note(tr(cx, "Max output", "输出上限"), cx))
-                                .child(title(format!(
-                                    "{:.0}",
-                                    animated_value(
-                                        "output-limit",
-                                        m.max_output as f32,
-                                        0.24,
-                                        w,
-                                        cx
-                                    )
-                                ))),
+                                .child(
+                                    title(format_tokens(output_tokens)).font_features(tabular()),
+                                ),
                         ),
                 )
-                .child(note(
-                    format!(
-                        "{} · ${:.2} / ${:.2}",
-                        tr(cx, "Input / output per million", "每百万输入 / 输出"),
-                        self.price.get(w, cx),
-                        m.output_rate
-                    ),
-                    cx,
-                ))
+                .child(
+                    note(
+                        format!(
+                            "{} · ${:.2} / ${:.2}",
+                            tr(cx, "Input / output per million", "每百万输入 / 输出"),
+                            self.price.get(w, cx),
+                            m.output_rate
+                        ),
+                        cx,
+                    )
+                    .font_features(tabular()),
+                )
                 .child(
                     row()
                         .justify_between()
                         .child(note(tr(cx, "Monthly volume", "每月用量"), cx))
-                        .child(title(format!("{}M", self.volume))),
+                        .child(title(format!("{}M", self.volume)).font_features(tabular())),
                 )
                 .child(
                     div()
@@ -302,19 +343,69 @@ impl Render for ModelSheet {
                     row()
                         .justify_between()
                         .child(note(tr(cx, "Estimated monthly cost", "预估月费用"), cx))
-                        .child(title(format!(
-                            "${:.2}",
-                            self.volume as f32 * (m.input_rate * 0.8 + m.output_rate * 0.2)
-                        ))),
+                        .child(
+                            title(format_dollars(
+                                f64::from(self.volume)
+                                    * f64::from(m.input_rate * 0.8 + m.output_rate * 0.2),
+                            ))
+                            .font_features(tabular()),
+                        ),
                 )
                 .children(m.scores.iter().enumerate().map(|(i, (s, n))| {
                     let value = animated_value(("benchmark", i), *n, 0.26, w, cx);
                     column()
                         .gap(px(2.))
-                        .child(note(format!("{} · {:.0}%", s, value * 100.), cx))
+                        .child(
+                            note(format!("{} · {:.0}%", s, value * 100.), cx)
+                                .font_features(tabular()),
+                        )
                         .child(bar(value, p.success, cx))
                 }))
         }
         r
+    }
+}
+
+fn tabular() -> FontFeatures {
+    FontFeatures(vec![("tnum".into(), 1)].into())
+}
+
+fn format_tokens(count: u64) -> String {
+    let s = count.to_string();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (i, ch) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+fn format_dollars(amount: f64) -> String {
+    let raw = format!("{:.2}", amount.max(0.));
+    let (whole, frac) = raw.split_once('.').unwrap_or((&raw, "00"));
+    let mut grouped = String::with_capacity(whole.len() + whole.len() / 3);
+    for (i, ch) in whole.chars().enumerate() {
+        if i > 0 && (whole.len() - i).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    format!("${grouped}.{frac}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{format_dollars, format_tokens};
+
+    #[test]
+    fn token_and_cost_counts_group_thousands_cleanly() {
+        assert_eq!(format_tokens(1_000_000), "1,000,000");
+        assert_eq!(format_tokens(128_000), "128,000");
+        assert_eq!(format_tokens(4_096), "4,096");
+        assert_eq!(format_tokens(0), "0");
+        assert_eq!(format_dollars(900.0), "$900.00");
+        assert_eq!(format_dollars(1_450.5), "$1,450.50");
     }
 }

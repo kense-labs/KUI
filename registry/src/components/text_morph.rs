@@ -13,6 +13,19 @@ struct GlyphMotion {
     present: bool,
 }
 /// Keeps character identity and animated position across rapid value changes.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::text_morph::TextMorph;
+///
+/// let control = cx.new(|_| TextMorph::new("Make it simple"));
+/// # }
+/// ```
 pub struct TextMorph {
     current: SharedString,
     measured_text: SharedString,

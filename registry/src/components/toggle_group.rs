@@ -117,6 +117,20 @@ impl ToggleOption {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToggleChanged(pub Vec<SharedString>);
 /// Roving toolbar whose items support independent or exclusive selection.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::toggle_group::{ToggleGroup, ToggleMode, ToggleOption};
+///
+/// let items = vec![ToggleOption::new("left", "Left"), ToggleOption::new("center", "Center")];
+/// let control = cx.new(|cx| ToggleGroup::new("Alignment", items, ToggleMode::Single, cx).with_selected(&["left"]));
+/// # }
+/// ```
 pub struct ToggleGroup {
     label: SharedString,
     items: Vec<ToggleOption>,

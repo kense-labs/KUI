@@ -104,6 +104,25 @@ fn done_mark(age: f32, p: Paint) -> impl IntoElement {
     .size(px(RESULT_ICON))
     .flex_none()
 }
+/// `ConfirmMorph` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::confirm_morph::ConfirmMorph;
+///
+/// let control = cx.new(|cx| ConfirmMorph::new("remove", "Delete project", "Delete project?", window, cx));
+/// use kui::components::confirm_morph::ConfirmRequest;
+/// cx.subscribe(&control, |control, request: &ConfirmRequest, cx| {
+///     // An in-memory success. Finish here only after the real operation returns.
+///     control.update(cx, |view, cx| view.complete(request.ticket, true, cx));
+/// }).detach();
+/// # }
+/// ```
 pub struct ConfirmMorph {
     id: ElementId,
     label: SharedString,

@@ -236,6 +236,37 @@ type Visibility = Box<dyn Fn(&App) -> bool>;
 type Style = Box<dyn Fn(Div) -> Div>;
 
 /// A feed that owns one cycle timer and at most one departing toast.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::social_proof_toast::{
+///     SocialProofEvent, SocialProofOptions, SocialProofPosition, SocialProofToast,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     SocialProofToast::new(
+///         SocialProofOptions {
+///             events: Some(vec![
+///                 SocialProofEvent::new("example-1", "Taylor", "started a trial")
+///                     .with_meta("Lisbon"),
+///             ]),
+///             position: SocialProofPosition::BottomLeft,
+///             looping: false,
+///             limit: Some(6),
+///             ..Default::default()
+///         },
+///         window,
+///         cx,
+///     )
+///     .on_show(|event, _| eprintln!("Shown {}", event.id))
+/// });
+/// # }
+/// ```
 pub struct SocialProofToast {
     id: ElementId,
     options: SocialProofOptions,
@@ -766,6 +797,7 @@ struct Geometry {
     inset: f32,
     height: f32,
     scale: f32,
+    recess: f32,
 }
 
 struct Layer {
@@ -776,7 +808,8 @@ struct Layer {
 
 fn geometry(depth: f32, travel: f32, fan: f32, span: f32, top: bool, shrink: f32) -> Geometry {
     let closed = 1. - fan;
-    let scale = (1. - 0.05 * depth.max(0.) * closed).max(0.35) * shrink;
+    let recess = depth.max(0.) * closed;
+    let scale = (1. - 0.05 * recess).max(0.35) * shrink;
     let offset = depth * (PEEK * closed + (HEIGHT + GAP) * fan);
     Geometry {
         top: if top {
@@ -787,6 +820,7 @@ fn geometry(depth: f32, travel: f32, fan: f32, span: f32, top: bool, shrink: f32
         inset: (1. - scale) * 0.5,
         height: HEIGHT * scale,
         scale,
+        recess,
     }
 }
 
@@ -940,7 +974,18 @@ fn content(event: &SocialProofEvent, opacity: f32, scale: f32, p: Paint, cx: &Ap
 
 fn shell(shape: Geometry, opacity: f32, p: Paint, cx: &App) -> Div {
     let dark = p.panel.l < 0.5;
-    let base = p.panel.blend(p.ink.opacity(if dark { 0.025 } else { 0. }));
+    let rear = shape.recess > 0.05;
+    let lift = if dark {
+        0.02 + 0.045 * shape.recess.min(2.2)
+    } else {
+        0.
+    };
+    let base = p.panel.blend(p.ink.opacity(lift));
+    let border = if dark {
+        hsla(0., 0., 1., if rear { 0.10 } else { 0.12 })
+    } else {
+        p.line
+    };
     div()
         .absolute()
         .top(px(shape.top))
@@ -952,12 +997,12 @@ fn shell(shape: Geometry, opacity: f32, p: Paint, cx: &App) -> Div {
         .rounded(surface_radius(cx) * shape.scale)
         .bg(base)
         .border_1()
-        .border_color(p.line)
+        .border_color(border)
         .shadow(vec![
             BoxShadow::new(
                 px(0.),
                 px(8.),
-                black().opacity(if dark { 0.25 } else { 0.12 }),
+                black().opacity(if dark { 0.42 } else { 0.12 }),
             )
             .blur_radius(px(24.))
             .spread_radius(px(-4.)),

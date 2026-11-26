@@ -261,10 +261,14 @@ struct NodeRipple {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_graph::AgentGraph;
 ///
 /// let graph = cx.new(|cx| AgentGraph::new("agent-graph", cx));
+/// # }
 /// ```
 pub struct AgentGraph {
     id: ElementId,

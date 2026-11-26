@@ -267,6 +267,33 @@ type Visibility = Box<dyn Fn(&App) -> bool>;
 type CostFormatter = Box<dyn Fn(f64, &str, &str) -> SharedString>;
 
 /// Shared desktop and Web charging simulation. The host owns the real charger.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::charge_session::{ChargeSession, ChargeSessionOptions};
+///
+/// let charger = cx.new(|cx| ChargeSession::new(
+///     ChargeSessionOptions {
+///         title: "Bay 12, depot charger".into(),
+///         location: "North yard, 350 kW".into(),
+///         capacity: 98.,
+///         max_power: 350.,
+///         start_charge: 22.,
+///         default_limit: 85.,
+///         rate: 0.38,
+///         currency: "EUR".into(),
+///         locale: "de-DE".into(),
+///         ..Default::default()
+///     },
+///     cx,
+/// ));
+/// # }
+/// ```
 pub struct ChargeSession {
     options: ChargeSessionOptions,
     session: Session,

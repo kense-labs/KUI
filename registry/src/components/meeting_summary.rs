@@ -113,6 +113,20 @@ enum SendState {
     Sent(SharedString),
     Failed(SharedString),
 }
+/// `MeetingSummary` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::meeting_summary::{MeetingData, MeetingSummary};
+///
+/// let control = cx.new(|_| MeetingSummary::new(MeetingData::new("Release review")));
+/// # }
+/// ```
 pub struct MeetingSummary {
     service: SharedString,
     data: MeetingData,

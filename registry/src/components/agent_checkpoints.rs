@@ -7,7 +7,7 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_ease, pro_eid, pro_empty_state, pro_fold,
         pro_icon_btn, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32,
         pro_tactile, tr,
     },
@@ -293,6 +293,14 @@ fn default_checkpoints() -> Vec<Checkpoint> {
             .with_files(1)
             .with_at_ms(47_000)
             .with_cost(0.04),
+        Checkpoint::new("c4", "Built the pricing table")
+            .with_title_zh("构建定价对比表格")
+            .with_parent("c3")
+            .with_icon("figma")
+            .with_files(3)
+            .with_at_ms(81_000)
+            .with_cost(0.11)
+            .with_status(CheckpointStatus::Running),
     ]
 }
 
@@ -350,6 +358,32 @@ fn rewind_branch_template(seq: usize, parent_id: &str, next_at_ms: u64) -> Check
 }
 
 /// Git-like checkpoint history card for an autonomous agent run.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_checkpoints::{
+///     AgentCheckpoints, AgentCheckpointsEvent, Checkpoint, CheckpointStatus,
+/// };
+///
+/// let checkpoints = cx.new(|cx| {
+///     AgentCheckpoints::new("pricing-run", cx)
+///         .with_task("Ship the pricing page")
+///         .with_checkpoints(vec![
+///             Checkpoint::new("c1", "Read the brief").with_icon("slack").with_at_ms(9_000).with_cost(0.03),
+///             Checkpoint::new("c2", "Scaffolded the pricing page").with_parent("c1").with_icon("github").with_files(4).with_at_ms(30_000).with_cost(0.06),
+///             Checkpoint::new("c3", "Built the pricing table").with_parent("c2").with_icon("figma").with_files(3).with_at_ms(81_000).with_cost(0.11).with_status(CheckpointStatus::Running),
+///         ])
+/// });
+/// cx.subscribe(&checkpoints, |_, ev: &AgentCheckpointsEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentCheckpoints {
     id: ElementId,
     title: Option<SharedString>,
@@ -380,9 +414,9 @@ impl AgentCheckpoints {
             title: None,
             task: None,
             checkpoints: default_checkpoints(),
-            head: Some("c3".into()),
+            head: Some("c4".into()),
             auto_branch_on_rewind: true,
-            demo_stream_pending: true,
+            demo_stream_pending: false,
             mounted_at: Instant::now(),
             hovered_idx: None,
             focused_idx: None,
@@ -1205,18 +1239,9 @@ impl Render for AgentCheckpoints {
                 .min_w_0()
                 .flex()
                 .items_center()
-                .gap(px(6.))
+                .gap(px(7.))
                 .opacity(content_opacity * rise_t);
 
-            if cp.status == CheckpointStatus::Done {
-                left_content = left_content.child(pro_check_draw(
-                    pro_eid(&self.id, format!("cp-chk-{cp_id}")),
-                    true,
-                    12.5,
-                    false,
-                    if node.is_live { head_dot } else { p.muted },
-                ));
-            }
             if let Some(icon_key) = &cp.icon {
                 left_content = left_content.child(pro_app_tile(icon_key.as_ref(), 18., cx));
             }
@@ -1500,6 +1525,12 @@ impl Render for AgentCheckpoints {
             },
         );
 
+        let outer_bdr: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.11)
+        } else {
+            hsla(0., 0., 0., 0.08)
+        };
+
         div()
             .id(self.id.clone())
             .w_full()
@@ -1512,9 +1543,9 @@ impl Render for AgentCheckpoints {
                     .rounded(px(12.))
                     .bg(card_bg)
                     .border_1()
-                    .border_color(card_border)
+                    .border_color(outer_bdr)
                     .overflow_hidden()
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

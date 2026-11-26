@@ -6,12 +6,12 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
-        pro_modal_appear, pro_person_avatar, pro_pill_indicator, pro_popover_presence,
-        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
-        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected,
+        pro_mix_color, pro_modal_appear, pro_person_avatar, pro_pill_indicator,
+        pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_shimmer_text,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -488,6 +488,26 @@ fn agent_color(agent_id: &str, p: &ProPalette) -> Hsla {
 }
 
 /// Real-time multi-agent session block combining conversation stream, steer composer, team plan, and shared context.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::live_session::{LiveSessionBlock, LiveSessionEvent};
+///
+/// let session = cx.new(|cx| {
+///     LiveSessionBlock::new("pricing-live-session", cx)
+///         .with_task("Launch the new pricing page")
+///         .with_live(true)
+/// });
+/// cx.subscribe(&session, |_, event: &LiveSessionEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct LiveSessionBlock {
     id: ElementId,
     focus: FocusHandle,
@@ -540,7 +560,7 @@ impl LiveSessionBlock {
             reply_target: None,
             mention_target: None,
             mention_menu_open: false,
-            files_expanded: true,
+            files_expanded: false,
             hovered_ctx_part: None,
             preview_file: None,
             composer_editor: None,
@@ -644,6 +664,37 @@ impl LiveSessionBlock {
             .find(|a| a.id.as_ref() == id)
             .map(|a| a.name.clone())
             .unwrap_or_else(|| SharedString::from(id.to_owned()))
+    }
+
+    fn agent_avatar_seed<'a>(&'a self, id: &'a str) -> &'a str {
+        if let Some(agent) = self.agents.iter().find(|a| a.id.as_ref() == id) {
+            let m = agent.model.to_ascii_lowercase();
+            if m.contains("gpt") || m.contains("openai") || m.contains("codex") {
+                return "gpt";
+            }
+            if m.contains("gemini") {
+                return "gemini";
+            }
+            if id == "research" && m == "sonnet 5.5" {
+                return "gemini";
+            }
+            if id == "writer" && m == "opus 5.5" {
+                return "gpt";
+            }
+            if m.contains("claude")
+                || m.contains("opus")
+                || m.contains("sonnet")
+                || m.contains("haiku")
+            {
+                return "claude";
+            }
+        }
+        match id {
+            "orchestrator" => "claude",
+            "research" => "gemini",
+            "writer" => "gpt",
+            _ => id,
+        }
     }
 
     fn ensure_editor(&mut self, w: &mut Window, cx: &mut Context<Self>) {
@@ -968,7 +1019,14 @@ impl LiveSessionBlock {
                             FontWeight::NORMAL
                         })
                         .text_color(if sel { p.ink } else { p.muted })
-                        .child(pro_agent_avatar(&aid, col, 18., working, elapsed_ms, cx))
+                        .child(pro_agent_avatar(
+                            self.agent_avatar_seed(&aid),
+                            col,
+                            18.,
+                            working,
+                            elapsed_ms,
+                            cx,
+                        ))
                         .child(agent.name.clone()),
                     cx,
                     move |this, _, cx| {
@@ -1179,6 +1237,7 @@ impl LiveSessionBlock {
             .bg(bubble_bg)
             .border_1()
             .border_color(bubble_border)
+            .when(!is_you, |d| d.shadow(pro_card_shadow(p.dark)))
             .px(px(12.))
             .py(px(9.))
             .flex()
@@ -1325,6 +1384,7 @@ impl LiveSessionBlock {
         } else {
             let col = agent_color(&msg.from, &p);
             let working = self.live && self.status == LiveSessionStatus::Running;
+            let brand_seed = self.agent_avatar_seed(&msg.from);
             div()
                 .id(pro_eid(&self.id, format!("msg-row-{msg_id}")))
                 .w_full()
@@ -1341,7 +1401,7 @@ impl LiveSessionBlock {
                     cx.notify();
                 }))
                 .child(div().mt(px(4.)).child(pro_agent_avatar(
-                    &msg.from, col, 22., working, elapsed_ms, cx,
+                    brand_seed, col, 22., working, elapsed_ms, cx,
                 )))
                 .child(div().flex_1().min_w_0().child(card))
                 .into_any_element()
@@ -1511,7 +1571,7 @@ impl LiveSessionBlock {
             .child(
                 div()
                     .w_full()
-                    .rounded(px(14.))
+                    .rounded(px(12.))
                     .bg(p.card)
                     .border_1()
                     .border_color(if self.editor_focused {
@@ -1519,6 +1579,7 @@ impl LiveSessionBlock {
                     } else {
                         p.line
                     })
+                    .shadow(pro_card_shadow(p.dark))
                     .px(px(12.))
                     .py(px(10.))
                     .flex()
@@ -1921,10 +1982,11 @@ impl LiveSessionBlock {
 
         div()
             .w_full()
-            .rounded(px(10.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(
@@ -2247,10 +2309,11 @@ impl LiveSessionBlock {
 
         div()
             .w_full()
-            .rounded(px(10.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(
@@ -2637,13 +2700,13 @@ impl Render for LiveSessionBlock {
             .w_full()
             .min_w_0()
             .px(px(if compact {
-                16.
+                14.
             } else if width < 980. {
-                20.
+                18.
             } else {
-                32.
+                24.
             }))
-            .py(px(if compact { 20. } else { 28. }))
+            .py(px(if compact { 16. } else { 20. }))
             .flex()
             .flex_col()
             .child(

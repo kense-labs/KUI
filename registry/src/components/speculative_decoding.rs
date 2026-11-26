@@ -370,6 +370,26 @@ impl StatusLabel {
     }
 }
 
+/// `SpeculativeDecoding` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::speculative_decoding::{DecodeToken, SpeculativeDecoding};
+///
+/// let tokens = vec![
+///     DecodeToken::new("The"),
+///     DecodeToken::new(" build").with_ease(0.6).with_miss(" deploy"),
+///     DecodeToken::new(" passed"),
+///     DecodeToken::new("."),
+/// ];
+/// let control = cx.new(|_| SpeculativeDecoding::from_tokens(tokens).with_default_compare(true));
+/// # }
+/// ```
 pub struct SpeculativeDecoding {
     rounds: Vec<DecodeRound>,
     tokens: Option<Vec<DecodeToken>>,

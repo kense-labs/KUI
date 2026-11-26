@@ -117,6 +117,20 @@ fn can_append_confirmation(
 ) -> bool {
     is_current_request(active && pending, current, incoming) && phase == RecorderPhase::Sending
 }
+/// `VoiceRecorder` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::voice_recorder::VoiceRecorder;
+///
+/// let control = cx.new(|_| VoiceRecorder::new("Voice note"));
+/// # }
+/// ```
 pub struct VoiceRecorder {
     phase: RecorderPhase,
     seconds: f32,
@@ -695,7 +709,7 @@ impl Render for VoiceRecorder {
                                 Tone::Surface,
                                 cx,
                             )
-                            .track_focus(self.start_focus.as_ref().unwrap())
+                            .when_some(self.start_focus.as_ref(), |el, focus| el.track_focus(focus))
                             .size(px(48.))
                             .rounded_full()
                             .p_0()
@@ -772,7 +786,7 @@ impl Render for VoiceRecorder {
                                 Tone::Primary,
                                 cx,
                             )
-                            .track_focus(self.stop_focus.as_ref().unwrap())
+                            .when_some(self.stop_focus.as_ref(), |el, focus| el.track_focus(focus))
                             .size(px(48.))
                             .rounded_full()
                             .p_0()
@@ -958,7 +972,7 @@ impl Render for VoiceRecorder {
                             Tone::Primary,
                             cx,
                         )
-                        .track_focus(self.send_focus.as_ref().unwrap())
+                        .when_some(self.send_focus.as_ref(), |el, focus| el.track_focus(focus))
                         .size(px(48.))
                         .rounded_full()
                         .p_0()

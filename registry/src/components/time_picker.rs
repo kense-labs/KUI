@@ -32,6 +32,20 @@ impl WallTime {
         }
     }
 }
+/// `TimePicker` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::time_picker::{TimePicker, WallTime};
+///
+/// let control = cx.new(|cx| TimePicker::new("Review time", WallTime::new(9, 30).unwrap(), cx).with_step(15));
+/// # }
+/// ```
 pub struct TimePicker {
     label: SharedString,
     help: SharedString,

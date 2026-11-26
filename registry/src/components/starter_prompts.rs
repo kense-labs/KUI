@@ -11,6 +11,20 @@ pub struct Prompt {
     pub detail: String,
     pub text: String,
 }
+/// `PromptShelf` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::starter_prompts::{PromptShelf, Prompt};
+///
+/// let control = cx.new(|cx| PromptShelf::new("prompts", "What shall we do?", vec![Prompt { group: "Write".into(), app: "Mail".into(), title: "Draft a reply".into(), detail: "Confirm the release".into(), text: "Draft a release reply.".into() }], window, cx));
+/// # }
+/// ```
 pub struct PromptShelf {
     id: SharedString,
     pub greeting: String,

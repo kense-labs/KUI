@@ -48,6 +48,20 @@ fn current_insertion(
 fn final_is_pending(phase: DictationPhase, pending: bool, awaiting_final: bool) -> bool {
     phase == DictationPhase::Transcribing && pending && awaiting_final
 }
+/// `DictationButton` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::dictation_button::DictationButton;
+///
+/// let control = cx.new(|_| DictationButton::new());
+/// # }
+/// ```
 pub struct DictationButton {
     phase: DictationPhase,
     interim: SharedString,

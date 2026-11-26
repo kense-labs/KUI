@@ -432,10 +432,14 @@ fn render_model_mark(model: &MenuModel, dark: bool, w: &mut Window, cx: &mut App
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::model_menu::ModelMenu;
 ///
 /// let menu = cx.new(|cx| ModelMenu::new("hero-models", cx).with_selected(1));
+/// # }
 /// ```
 pub struct ModelMenu {
     id: ElementId,

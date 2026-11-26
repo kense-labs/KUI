@@ -432,6 +432,7 @@ type OverlayBuilder = Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>;
 ///     .with_child(div().child("Ideas start to glow"));
 /// ```
 #[derive(IntoElement)]
+#[must_use]
 pub struct GradientFloor {
     id: ElementId,
     colors: [Hsla; 3],

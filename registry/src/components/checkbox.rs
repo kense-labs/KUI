@@ -10,6 +10,20 @@ pub enum CheckValue {
     On,
     Mixed,
 }
+/// `Checkbox` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::checkbox::{Checkbox, CheckValue};
+///
+/// let control = cx.new(|_| Checkbox::new("Archive", CheckValue::Off));
+/// # }
+/// ```
 pub struct Checkbox {
     label: SharedString,
     description: SharedString,

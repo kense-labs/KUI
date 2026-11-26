@@ -6,11 +6,11 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
-        pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected,
-        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -240,6 +240,32 @@ fn lane_color(id: &str, p: &ProPalette) -> Hsla {
         "billing" => p.red,
         "ops" => p.orange,
         _ => p.blue,
+    }
+}
+
+fn lane_avatar_seed(lane: &TimelineAgentLane) -> &str {
+    let m = lane.model.to_ascii_lowercase();
+    if m.contains("gpt") || m.contains("openai") || m.contains("codex") {
+        return "gpt";
+    }
+    if m.contains("gemini") {
+        return "gemini";
+    }
+    match lane.id.as_ref() {
+        "research" => "gemini",
+        "release" | "ops" => "gpt",
+        "launch" | "writer" | "support" | "billing" => "claude",
+        other => {
+            if m.contains("claude")
+                || m.contains("opus")
+                || m.contains("sonnet")
+                || m.contains("haiku")
+            {
+                "claude"
+            } else {
+                other
+            }
+        }
     }
 }
 
@@ -926,6 +952,28 @@ fn default_events() -> Vec<TimelineRecapEvent> {
 }
 
 /// Shared-clock multi-agent timeline block pairing an event-peak recap curve, Gantt swimlanes, and action inbox.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::mission_timeline::{
+///     MissionTimelineBlock, MissionTimelineEvent, TimelineFilter,
+/// };
+///
+/// let timeline = cx.new(|cx| {
+///     MissionTimelineBlock::new("agent-mission-timeline", cx)
+///         .with_span_minutes(30)
+///         .with_default_filter(TimelineFilter::All)
+/// });
+/// cx.subscribe(&timeline, |_, event: &MissionTimelineEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct MissionTimelineBlock {
     id: ElementId,
     focus: FocusHandle,
@@ -1340,16 +1388,17 @@ impl MissionTimelineBlock {
 
         div()
             .w_full()
-            .rounded(px(14.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .px(px(16.))
-            .pt(px(14.))
+            .pt(px(13.))
             .pb(px(10.))
             .flex()
             .flex_col()
-            .gap(px(10.))
+            .gap(px(8.))
             .child(
                 div()
                     .w_full()
@@ -1629,7 +1678,7 @@ impl MissionTimelineBlock {
                         .items_center()
                         .gap(px(8.))
                         .child(pro_agent_avatar(
-                            &lane.id,
+                            lane_avatar_seed(lane),
                             col,
                             22.,
                             lane.status == TimelineAgentStatus::Running,
@@ -2072,10 +2121,11 @@ impl MissionTimelineBlock {
 
         div()
             .w_full()
-            .rounded(px(10.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
@@ -2366,6 +2416,7 @@ impl MissionTimelineBlock {
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .p(px(11.))
                         .opacity(card_op)
                         .flex()
@@ -2438,6 +2489,7 @@ impl MissionTimelineBlock {
             .bg(lane_bg)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .p(px(6.))
             .flex()
             .flex_col()
@@ -2688,11 +2740,11 @@ impl Render for MissionTimelineBlock {
             .relative()
             .w_full()
             .min_w_0()
-            .px(px(if compact { 16. } else { 32. }))
-            .py(px(if compact { 20. } else { 28. }))
+            .px(px(if compact { 14. } else { 24. }))
+            .py(px(if compact { 16. } else { 20. }))
             .flex()
             .flex_col()
-            .gap(px(14.))
+            .gap(px(12.))
             .child(
                 canvas(
                     move |b, window, _| {

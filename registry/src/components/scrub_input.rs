@@ -13,6 +13,19 @@ pub struct ScrubCommitted(pub f64);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScrubUnitChanged(pub SharedString);
 /// Drag the label horizontally, or edit a number or arithmetic expression.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::scrub_input::ScrubInput;
+///
+/// let control = cx.new(|cx| ScrubInput::new("Width", 0.0..=1000.0, 1.0, 176.0, "px", window, cx));
+/// # }
+/// ```
 pub struct ScrubInput {
     label: SharedString,
     unit: SharedString,

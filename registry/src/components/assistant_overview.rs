@@ -497,6 +497,22 @@ fn step_heatmap_index(current: usize, total: usize, key: &str) -> Option<usize> 
 }
 
 /// AI workspace overview screen (`assistant-overview`) with prompt composer and bento metrics board.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::assistant_overview::{AssistantOverviewScreen, AssistantOverviewEvent};
+///
+/// let screen = cx.new(|cx| AssistantOverviewScreen::new("assistant-overview", cx));
+/// cx.subscribe(&screen, |_, event: &AssistantOverviewEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AssistantOverviewScreen {
     id: ElementId,
     focus: FocusHandle,
@@ -3234,7 +3250,10 @@ impl AssistantOverviewScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(pro_view_transition_fill(
                 pro_eid(&self.id, "ov-mode-vtx"),

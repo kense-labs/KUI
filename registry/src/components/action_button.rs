@@ -5,6 +5,25 @@ use crate::primitives::{
     glyph::Glyph,
 };
 use gpui::{prelude::*, *};
+/// `ActionButton` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::action_button::ActionButton;
+///
+/// let control = cx.new(|_| ActionButton::new("save", ["Save changes", "Saving", "Saved", "Retry"]));
+/// use kui::primitives::commit::Commit;
+/// cx.subscribe(&control, |control, request: &Commit, cx| {
+///     // An in-memory success. Finish here only after the real operation returns.
+///     control.update(cx, |view, cx| view.complete(request.ticket, true, cx));
+/// }).detach();
+/// # }
+/// ```
 pub struct ActionButton {
     core: ActionCore,
 }

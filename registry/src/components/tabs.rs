@@ -38,6 +38,23 @@ impl TabPage {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TabChanged(pub SharedString);
+/// `Tabs` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tabs::{Tabs, TabPage};
+///
+/// let control = cx.new(|cx| Tabs::new("views", "Workspace views", vec![
+///         TabPage::new("overview", "Overview", |_, _| gpui::div().child("Workspace overview")),
+///         TabPage::new("activity", "Activity", |_, _| gpui::div().child("Recent activity")),
+///     ], cx));
+/// # }
+/// ```
 pub struct Tabs {
     id: ElementId,
     name: SharedString,

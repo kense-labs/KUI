@@ -5,9 +5,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
-        pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_mark_selected, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, tr,
     },
     primitives::{
         family::{Slide, disabled_motion},
@@ -259,6 +260,30 @@ fn format_visitors(n: u64) -> String {
 }
 
 /// Compact A/B test disclosure card (`experiment-card`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::experiment_card::{
+///     ExperimentCard, ExperimentCardEvent, ExperimentTone,
+/// };
+///
+/// let card = cx.new(|cx| {
+///     ExperimentCard::new("signup-copy-test", cx)
+///         .with_title("Signup button copy")
+///         .with_status("Running", ExperimentTone::Green)
+///         .with_note("Day 9 of 14")
+///         .with_action_prefix("Ship")
+/// });
+/// cx.subscribe(&card, |_, ev: &ExperimentCardEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ExperimentCard {
     id: ElementId,
     title: SharedString,
@@ -1427,7 +1452,7 @@ impl Render for ExperimentCard {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(dark))
             .on_key_down(cx.listener(Self::handle_key_down))
             .on_hover(cx.listener(|this, inside: &bool, _, cx| {
                 if this.trigger == ExperimentTrigger::Hover && this.hovered_card != *inside {

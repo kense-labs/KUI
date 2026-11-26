@@ -75,6 +75,20 @@ impl Grid {
         }
     }
 }
+/// `SymbolPicker` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::emoji_picker::SymbolPicker;
+///
+/// let control = cx.new(|cx| SymbolPicker::standard(window, cx));
+/// # }
+/// ```
 pub struct SymbolPicker {
     items: Vec<Symbol>,
     keywords: Vec<String>,

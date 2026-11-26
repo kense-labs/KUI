@@ -761,9 +761,9 @@ impl Render for OutreachBranches {
 
         let dark = p.dark;
         let base_line_col: Hsla = if dark {
-            hsla(0.0, 0.0, 1.0, 0.14)
+            hsla(0.0, 0.0, 1.0, 0.16)
         } else {
-            rgb(0xe4e7ec).into()
+            hsla(220.0 / 360.0, 0.13, 0.46, 0.22)
         };
 
         let canvas_layer = canvas(
@@ -799,10 +799,9 @@ impl Render for OutreachBranches {
                         }
                     }
                     if let Ok(path) = pb.build() {
-                        let base_op = (base_line_col.a * dim).clamp(0.05, 0.42);
                         let lit_col = pro_mix_color(
-                            base_line_col.opacity(base_op),
-                            accents[b].opacity(if dark { 0.65 } else { 0.78 }),
+                            base_line_col.opacity(dim),
+                            accents[b].opacity(if dark { 0.68 } else { 0.78 }),
                             illum * 0.85,
                         );
                         window.paint_path(path, lit_col);
@@ -894,13 +893,9 @@ impl Render for OutreachBranches {
         .inset_0();
 
         let glow_img = ambient_pastel_glow_svg();
-        let tile_bg: Hsla = if dark {
-            rgb(0x232326).into()
-        } else {
-            rgb(0xffffff).into()
-        };
+        let tile_bg: Hsla = p.logo_tile;
         let tile_border: Hsla = if dark {
-            hsla(0.0, 0.0, 1.0, 0.08)
+            hsla(0.0, 0.0, 1.0, 0.09)
         } else {
             rgb(0xe4e7ec).into()
         };

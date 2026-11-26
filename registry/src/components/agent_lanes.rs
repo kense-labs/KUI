@@ -7,14 +7,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_mix_color, pro_person_avatar, pro_popover_presence, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_tactile, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_mix_color, pro_popover_presence,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_app_artwork, pro_svg},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -24,7 +24,7 @@ use web_time::Instant;
 const LANE_H: f32 = 48.0;
 const BLOCK_TOP: f32 = 10.0;
 const BLOCK_H: f32 = 28.0;
-const AGENT_COL_W: f32 = 172.0;
+const AGENT_COL_W: f32 = 158.0;
 const DEFAULT_SPAN_MS: u64 = 30 * 60_000;
 
 const SPARK_BAR_SVG: &str = r#"<path d="M7 1.2c.4 2.9 1.9 4.4 4.8 4.8-2.9.4-4.4 1.9-4.8 4.8C6.6 7.9 5.1 6.4 2.2 6 5.1 5.6 6.6 4.1 7 1.2Z" fill="currentColor"></path><circle cx="11.6" cy="11.4" r="1.1" fill="currentColor" opacity="0.55"></circle>"#;
@@ -249,8 +249,8 @@ fn default_lane_agents() -> Vec<LaneAgent> {
             .with_avatar("gemini"),
         LaneAgent::new("ops", "Ops")
             .with_name_zh("运维智能体")
-            .with_model("Sonnet 5.5")
-            .with_avatar("kense"),
+            .with_model("Gemini 3.8 Flash")
+            .with_avatar("gemini"),
     ]
 }
 
@@ -262,10 +262,10 @@ fn default_lane_tasks() -> Vec<LaneTask> {
             "research",
             "Competitor pricing audit",
             LaneTaskStatus::Done,
-            90_000,
+            60_000,
         )
         .with_title_zh("竞品定价调研")
-        .with_end_ms(660_000)
+        .with_end_ms(760_000)
         .with_tools(["drive", "notion"])
         .with_handoff_to("t-copy")
         .with_summary([
@@ -277,7 +277,7 @@ fn default_lane_tasks() -> Vec<LaneTask> {
             "research",
             "Enterprise SLA benchmarks",
             LaneTaskStatus::Running,
-            1_140_000,
+            1_080_000,
         )
         .with_title_zh("企业级 SLA 基准对比")
         .with_tools(["notion"])
@@ -290,10 +290,10 @@ fn default_lane_tasks() -> Vec<LaneTask> {
             "writer",
             "Draft tier copy & FAQs",
             LaneTaskStatus::Done,
-            690_000,
+            660_000,
         )
         .with_title_zh("撰写套餐文案与常见问答")
-        .with_end_ms(1_240_000)
+        .with_end_ms(1_320_000)
         .with_tools(["slack", "figma"])
         .with_handoff_to("t-verify")
         .with_summary([
@@ -305,7 +305,7 @@ fn default_lane_tasks() -> Vec<LaneTask> {
             "reviewer",
             "Verify annual billing math",
             LaneTaskStatus::Running,
-            1_280_000,
+            1_120_000,
         )
         .with_title_zh("校验年付折扣计费逻辑")
         .with_tools(["github", "linear"])
@@ -318,10 +318,10 @@ fn default_lane_tasks() -> Vec<LaneTask> {
             "ops",
             "Sync CRM plan tags",
             LaneTaskStatus::Done,
-            210_000,
+            160_000,
         )
         .with_title_zh("同步 CRM 套餐标签")
-        .with_end_ms(780_000)
+        .with_end_ms(740_000)
         .with_tools(["hubspot"])
         .with_handoff_to("t-stripe")
         .with_summary(["Mapped Pro & Enterprise lifecycle properties in HubSpot"]),
@@ -330,7 +330,7 @@ fn default_lane_tasks() -> Vec<LaneTask> {
             "ops",
             "Publish Stripe price IDs",
             LaneTaskStatus::Waiting,
-            920_000,
+            780_000,
         )
         .with_title_zh("发布 Stripe 正式价格 ID")
         .with_tools(["stripe"])
@@ -341,6 +341,26 @@ fn default_lane_tasks() -> Vec<LaneTask> {
 }
 
 /// Horizontal multi-agent swimlane control room with live task blocks, handoffs, and inline approvals.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_lanes::{AgentLanes, AgentLanesEvent};
+///
+/// let lanes = cx.new(|cx| {
+///     AgentLanes::new("agent-control-room", cx)
+///         .with_span(30 * 60_000)
+///         .with_live(true)
+/// });
+/// cx.subscribe(&lanes, |_, ev: &AgentLanesEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentLanes {
     id: ElementId,
     title: Option<SharedString>,
@@ -747,12 +767,12 @@ impl Render for AgentLanes {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(760.))
+                        .max_w(px(800.))
                         .rounded(px(10.))
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(bar_header)
@@ -781,12 +801,12 @@ impl Render for AgentLanes {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(760.))
+                        .max_w(px(800.))
                         .rounded(px(10.))
                         .bg(card_bg)
                         .border_1()
                         .border_color(card_border)
-                        .when(!p.dark, |d| d.shadow_sm())
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(bar_header)
@@ -840,10 +860,13 @@ impl Render for AgentLanes {
                 cx,
             );
 
-            let avatar_el = if let Some(logo) = &ag.avatar {
+            let avatar_seed = lane_agent_avatar_seed(ag);
+            let avatar_el = if let Some(logo) = &ag.avatar
+                && !lane_brand_is_model(logo.as_ref())
+            {
                 pro_app_tile(logo.as_ref(), 24., cx)
             } else {
-                pro_person_avatar(ag.name.as_ref(), 24., true, None, cx)
+                pro_agent_avatar(avatar_seed, run_fg, 24., has_running, elapsed_s * 1000., cx)
             };
 
             let state_pill: Option<AnyElement> = if has_waiting {
@@ -889,12 +912,12 @@ impl Render for AgentLanes {
                 div()
                     .id(pro_eid(&self.id, format!("lane-ag-{aid}")))
                     .h(px(LANE_H))
-                    .pl(px(16.))
-                    .pr(px(10.))
+                    .pl(px(14.))
+                    .pr(px(8.))
                     .opacity(ag_alpha)
                     .flex()
                     .items_center()
-                    .gap(px(10.))
+                    .gap(px(8.))
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         let next = if *inside { Some(hov_aid.clone()) } else { None };
                         if this.hovered_agent_id != next {
@@ -1359,7 +1382,7 @@ impl Render for AgentLanes {
                 .left(relative(left_frac))
                 .w(relative(width_frac))
                 .h(px(BLOCK_H + 1.6 * hot_amt))
-                .px(px(8.))
+                .px(px(7.))
                 .rounded(px(6.))
                 .overflow_hidden()
                 .opacity(blk_alpha)
@@ -1368,11 +1391,11 @@ impl Render for AgentLanes {
                 .border_color(blk_border_c)
                 .when(is_running, |d| d.border_r_2().border_color(run_edge))
                 .text_color(blk_fg)
-                .text_size(px(12.))
+                .text_size(px(11.5))
                 .font_weight(FontWeight::MEDIUM)
                 .flex()
                 .items_center()
-                .gap(px(5.))
+                .gap(px(4.))
                 .cursor_pointer()
                 .focus_visible(move |s| s.border_1().border_color(p.focus))
                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
@@ -1554,7 +1577,7 @@ impl Render for AgentLanes {
                     .max(1);
                 let bullets = sel_task.summary.clone();
                 let open_tid = st_id.clone();
-                let open_lbl = tr(cx, "Open run →", "打开运行记录 →").to_string();
+                let open_lbl = tr(cx, "Open run", "打开运行记录").to_string();
                 let ent = cx.entity().clone();
                 let tip_bg: Hsla = if p.dark {
                     rgb(0x27272b).into()
@@ -1614,6 +1637,9 @@ impl Render for AgentLanes {
                             .id(SharedString::from(format!("open-run-{open_tid}")))
                             .role(Role::Button)
                             .mt(px(2.))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
                             .text_size(px(11.5))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(rgb(0x82bcff))
@@ -1625,7 +1651,8 @@ impl Render for AgentLanes {
                                     cx.notify();
                                 });
                             })
-                            .child(open_lbl),
+                            .child(open_lbl)
+                            .child(pro_icon(ProIcon::ArrowRight, 11.5, rgb(0x82bcff).into())),
                     )
                     .into_any_element();
                 let mut cell = Some(card);
@@ -1673,18 +1700,95 @@ impl Render for AgentLanes {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(760.))
+                    .max_w(px(800.))
                     .rounded(px(10.))
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(bar_header)
                     .child(body),
             )
             .into_any_element()
+    }
+}
+
+fn lane_brand_is_model(brand: &str) -> bool {
+    let lower = brand.trim().to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "claude"
+            | "anthropic"
+            | "openai"
+            | "gpt"
+            | "codex"
+            | "gemini"
+            | "deepseek"
+            | "mistral"
+            | "qwen"
+            | "meta"
+            | "llama"
+            | "xai"
+            | "grok"
+    )
+}
+
+fn lane_agent_avatar_seed(agent: &LaneAgent) -> &'static str {
+    if let Some(logo) = &agent.avatar {
+        let l = logo.to_ascii_lowercase();
+        if l.contains("claude") || l.contains("anthropic") {
+            return "claude";
+        }
+        if l.contains("openai") || l.contains("gpt") || l.contains("codex") {
+            return "gpt";
+        }
+        if l.contains("gemini") {
+            return "gemini";
+        }
+        if l.contains("deepseek") {
+            return "deepseek";
+        }
+        if l.contains("mistral") {
+            return "mistral";
+        }
+        if l.contains("qwen") {
+            return "qwen";
+        }
+    }
+    if let Some(m) = &agent.model {
+        let ml = m.to_ascii_lowercase();
+        if ml.contains("claude")
+            || ml.contains("opus")
+            || ml.contains("sonnet")
+            || ml.contains("haiku")
+        {
+            return "claude";
+        }
+        if ml.contains("gpt") || ml.contains("openai") || ml.contains("codex") {
+            return "gpt";
+        }
+        if ml.contains("gemini") {
+            return "gemini";
+        }
+        if ml.contains("deepseek") {
+            return "deepseek";
+        }
+        if ml.contains("mistral") {
+            return "mistral";
+        }
+        if ml.contains("qwen") {
+            return "qwen";
+        }
+    }
+    let combined = format!("{} {}", agent.id, agent.name).to_ascii_lowercase();
+    if combined.contains("ops") || combined.contains("review") || combined.contains("gemini") {
+        "gemini"
+    } else if combined.contains("code") || combined.contains("gpt") {
+        "gpt"
+    } else {
+        "claude"
     }
 }
 

@@ -21,6 +21,20 @@ struct Reading {
     original: bool,
 }
 
+/// `MessageTranslation` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ai_translate::{MessageTranslation};
+///
+/// let control = cx.new(|_| MessageTranslation::new("translation","Maya","Bonjour !",vec!["English".into()]));
+/// # }
+/// ```
 pub struct MessageTranslation {
     id: SharedString,
     pub author: String,

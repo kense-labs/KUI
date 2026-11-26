@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_mark_selected, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_switch,
-        pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_switch, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -246,6 +246,26 @@ fn model_route_color(idx: usize, custom: Option<Hsla>, p: &ProPalette) -> Hsla {
 }
 
 /// LLM gateway traffic-splitting router card with spring-width ribbons, rolling cost delta, and deployable fallback rule.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::model_router::{ModelRouter, ModelRouterEvent};
+///
+/// let router = cx.new(|cx| {
+///     ModelRouter::new("model-router", cx)
+///         .with_environment("chat-prod")
+///         .with_version(14)
+/// });
+/// cx.subscribe(&router, |_, event: &ModelRouterEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ModelRouter {
     id: ElementId,
     focus: FocusHandle,
@@ -1615,7 +1635,7 @@ impl Render for ModelRouter {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .gap(px(12.))

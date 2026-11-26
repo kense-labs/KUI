@@ -5,8 +5,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
+        ProPalette, pro_card_shadow, pro_ease, pro_eid, pro_empty_state, pro_mix_color,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     primitives::{
         family::{Slide, disabled_motion},
@@ -280,6 +280,36 @@ fn dock_proximity(distance_slots: f32) -> f32 {
 }
 
 /// Daily usage metering bar chart component (`metering-chart`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::metering_chart::{MeteringChart, MeteringChartEvent, MeteringDay, MeteringTotal};
+///
+/// let chart = cx.new(|cx| {
+///     MeteringChart::new("api-calls", cx)
+///         .with_title("API calls")
+///         .with_live(true)
+///         .with_period("Sep 1 – Sep 21")
+///         .with_data(vec![
+///             MeteringDay::new("Sep 1", 1870.),
+///             MeteringDay::new("Sep 2", 2290.),
+///             MeteringDay::new("Today", 2860.),
+///         ])
+///         .with_totals(vec![
+///             MeteringTotal::new("vol", "Total volume", 50.39).with_format(1.0, 2, "$", "k"),
+///             MeteringTotal::new("evt", "Total events", 36.0).with_format(1.0, 1, "", "k"),
+///         ])
+/// });
+/// cx.subscribe(&chart, |_, ev: &MeteringChartEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct MeteringChart {
     id: ElementId,
     title: SharedString,
@@ -1491,7 +1521,7 @@ impl Render for MeteringChart {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(dark))
             .px(px(16.))
             .pt(px(14.))
             .pb(px(12.))

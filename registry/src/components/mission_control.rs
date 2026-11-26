@@ -491,6 +491,27 @@ fn eval_peak_curve(u: f32, peaks: &[(f32, f32)]) -> f32 {
 }
 
 /// Multi-agent command center block uniting an event-peak recap curve, agent hierarchy, and action queue.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::mission_control::{
+///     MissionControlBlock, MissionControlEvent, MissionFilter,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     MissionControlBlock::new("agent-mission-control", cx)
+///         .with_default_filter(MissionFilter::All)
+/// });
+/// cx.subscribe(&control, |_, event: &MissionControlEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct MissionControlBlock {
     id: ElementId,
     focus: FocusHandle,

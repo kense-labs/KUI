@@ -6,15 +6,15 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_mix_color,
-        pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
-        pro_tactile, pro_toast_banner, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::activate,
         family::disabled_motion,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -239,6 +239,25 @@ fn default_recap_events(cx: &App) -> Vec<RecapEvent> {
 }
 
 /// Overnight `"While you were away"` recap widget with peak curve and 3-lane triage board.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_recap::{AgentRecap, AgentRecapEvent};
+///
+/// let recap = cx.new(|cx| {
+///     AgentRecap::new("morning-recap", cx)
+///         .with_window("6:40 PM", "8:10 AM", "13h 30m")
+/// });
+/// cx.subscribe(&recap, |_, ev: &AgentRecapEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentRecap {
     id: ElementId,
     title: Option<SharedString>,
@@ -448,25 +467,15 @@ impl AgentRecap {
                 true,
                 p.green_ink,
             )
-        } else if let Some(logo) = &ev.logo
-            && let Some(art) = pro_app_artwork(logo, 11.5, cx)
-        {
+        } else if let Some(logo) = &ev.logo {
             div()
-                .size(px(18.0))
                 .flex_none()
-                .rounded(px(5.0))
-                .bg(card_bg)
-                .border_1()
-                .border_color(p.line)
-                .flex()
-                .items_center()
-                .justify_center()
                 .opacity(if state == RecapCardState::Undone {
                     0.5
                 } else {
                     1.0
                 })
-                .child(art)
+                .child(pro_app_tile(logo, 18.0, cx))
                 .into_any_element()
         } else if is_done_check {
             pro_check_draw(
@@ -896,6 +905,7 @@ impl Render for AgentRecap {
                 .bg(card_bg)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(14.0))
@@ -1059,6 +1069,7 @@ impl Render for AgentRecap {
                 .bg(card_bg)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(12.0))
@@ -1516,7 +1527,7 @@ impl Render for AgentRecap {
             .bg(card_bg)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .gap(px(10.0))

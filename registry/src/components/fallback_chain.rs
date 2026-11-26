@@ -7,7 +7,7 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_connector_pulse,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_connector_pulse,
         pro_eid, pro_empty_state, pro_mix_color, pro_rolling_number, pro_shimmer_text,
         pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
         pro_view_transition, tr,
@@ -278,29 +278,19 @@ fn default_attempts() -> Vec<FallbackAttempt> {
             "claude-sonnet",
             "Claude Sonnet 4.5",
             "claude",
-            "Anthropic · us-east-1",
+            "AWS Bedrock",
         )
-        .with_simulated_failure(true, "Overloaded · 529")
+        .with_simulated_failure(true, "Rate limited · 429")
         .with_metrics(1620, 0.0),
-        FallbackAttempt::new("gpt-5", "GPT-5.4", "gpt", "OpenAI · us-central")
+        FallbackAttempt::new("gpt-5", "GPT-5.4", "gpt", "Azure OpenAI")
             .with_simulated_failure(false, "Rate limited · 429")
             .with_metrics(940, 0.0024),
-        FallbackAttempt::new(
-            "gemini-pro",
-            "Gemini 2.5 Pro",
-            "gemini",
-            "Vertex AI · us-central1",
-        )
-        .with_simulated_failure(false, "Timeout · 504")
-        .with_metrics(780, 0.0016),
-        FallbackAttempt::new(
-            "deepseek-v3",
-            "DeepSeek V3",
-            "deepseek",
-            "Fireworks · us-west-2",
-        )
-        .with_simulated_failure(false, "Upstream reset · 502")
-        .with_metrics(690, 0.0007),
+        FallbackAttempt::new("gemini-pro", "Gemini 2.5 Pro", "gemini", "Google Vertex")
+            .with_simulated_failure(false, "Timeout · 504")
+            .with_metrics(780, 0.0016),
+        FallbackAttempt::new("deepseek-v3", "DeepSeek V3", "deepseek", "Fireworks")
+            .with_simulated_failure(false, "Upstream reset · 502")
+            .with_metrics(690, 0.0007),
     ]
 }
 
@@ -323,6 +313,26 @@ fn format_cost(usd: f64) -> String {
 }
 
 /// Model failover flow diagram with live attempt wave, red broken branches, and interactive outage toggles.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::fallback_chain::{FallbackChain, FallbackChainEvent};
+///
+/// let chain = cx.new(|cx| {
+///     FallbackChain::new("fallback-chain", cx)
+///         .with_title("Summarize support ticket")
+///         .with_route("kense/auto")
+/// });
+/// cx.subscribe(&chain, |_, event: &FallbackChainEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct FallbackChain {
     id: ElementId,
     focus: FocusHandle,
@@ -857,8 +867,13 @@ impl Render for FallbackChain {
             );
 
         // 2. Request & Response Endpoint Nodes
-        let ep_w = if compact_stack { 180.0 } else { 142.0 };
+        let ep_w = if compact_stack { 172.0 } else { 132.0 };
         let req_selected = self.inspected == FocusedNode::Request;
+        let req_sq_bg: Hsla = if p.dark {
+            accent_blue.opacity(0.14)
+        } else {
+            accent_blue.opacity(0.10)
+        };
         let req_node = pro_tactile(
             pro_eid(&self.id, "fbk-req"),
             format!("Request · {}", self.route),
@@ -874,12 +889,24 @@ impl Render for FallbackChain {
             req_selected,
             div()
                 .w(px(ep_w))
-                .h(px(52.))
+                .h(px(50.))
                 .px(px(9.))
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(pro_app_tile(&self.request.app, 28., cx))
+                .child(
+                    div()
+                        .size(px(28.))
+                        .flex_none()
+                        .rounded(px(7.))
+                        .bg(req_sq_bg)
+                        .border_1()
+                        .border_color(accent_blue.opacity(0.22))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_icon(ProIcon::Sparkles, 14., accent_blue)),
+                )
                 .child(
                     div()
                         .flex_1()
@@ -897,8 +924,9 @@ impl Render for FallbackChain {
                         )
                         .child(
                             div()
-                                .text_size(px(11.))
-                                .line_height(px(15.))
+                                .font_family(p.mono)
+                                .text_size(px(10.5))
+                                .line_height(px(14.))
                                 .text_color(p.muted)
                                 .truncate()
                                 .child(self.route.clone()),
@@ -906,18 +934,22 @@ impl Render for FallbackChain {
                 ),
             cx,
             |this, _, cx| {
-                this.inspected = FocusedNode::Request;
+                this.inspected = if this.inspected == FocusedNode::Request {
+                    FocusedNode::Model(0)
+                } else {
+                    FocusedNode::Request
+                };
                 cx.notify();
             },
         )
         .w(px(ep_w))
-        .h(px(52.))
+        .h(px(50.))
         .flex_none()
-        .when(!p.dark, |d| d.shadow_xs());
+        .shadow(pro_card_shadow(p.dark));
 
         let resp_selected = self.inspected == FocusedNode::Response;
         let resp_sub = if answered_idx.is_some() {
-            self.response.name.to_string()
+            tr(cx, "200 OK", "已返回").to_owned()
         } else if all_failed {
             tr(cx, "No answer", "未获得响应").to_owned()
         } else {
@@ -937,12 +969,19 @@ impl Render for FallbackChain {
             if answered_idx.is_some() || all_failed {
                 1.0
             } else {
-                0.72
+                0.76
             },
             0.22,
             w,
             cx,
         );
+        let (resp_sq_bg, resp_sq_bdr, resp_ic_fg): (Hsla, Hsla, Hsla) = if answered_idx.is_some() {
+            (ok_col.opacity(0.14), ok_col.opacity(0.26), ok_ink)
+        } else if all_failed {
+            (fail_col.opacity(0.14), fail_col.opacity(0.26), fail_ink)
+        } else {
+            (fill_bg, p.line, p.muted)
+        };
 
         let resp_node = pro_tactile(
             pro_eid(&self.id, "fbk-resp"),
@@ -955,12 +994,24 @@ impl Render for FallbackChain {
             resp_selected,
             div()
                 .w(px(ep_w))
-                .h(px(52.))
+                .h(px(50.))
                 .px(px(9.))
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(pro_app_tile(&self.response.app, 28., cx))
+                .child(
+                    div()
+                        .size(px(28.))
+                        .flex_none()
+                        .rounded(px(7.))
+                        .bg(resp_sq_bg)
+                        .border_1()
+                        .border_color(resp_sq_bdr)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(pro_icon(ProIcon::Thread, 14., resp_ic_fg)),
+                )
                 .child(
                     div()
                         .flex_1()
@@ -992,28 +1043,43 @@ impl Render for FallbackChain {
                 ),
             cx,
             |this, _, cx| {
-                this.inspected = FocusedNode::Response;
+                this.inspected = if this.inspected == FocusedNode::Response {
+                    FocusedNode::Model(0)
+                } else {
+                    FocusedNode::Response
+                };
                 cx.notify();
             },
         )
         .w(px(ep_w))
-        .h(px(52.))
+        .h(px(50.))
         .flex_none()
         .opacity(resp_op)
-        .when(!p.dark, |d| d.shadow_xs());
+        .shadow(pro_card_shadow(p.dark));
 
-        // 3. Ordered Priority Model Cards (`60px` row height, `10px` gap)
-        let row_h = 60.0_f32;
+        // 3. Ordered Priority Model Cards (`68px` row height with 20-dot segmented progress bar, `10px` gap)
+        let row_h = 68.0_f32;
         let row_gap = 10.0_f32;
         let n_models = self.attempts.len();
         let stack_h = n_models as f32 * row_h + (n_models.saturating_sub(1)) as f32 * row_gap;
+        let run_age_s = self.run_started.elapsed().as_secs_f32();
+        let dot_idle_bg: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.085)
+        } else {
+            hsla(0., 0., 0., 0.065)
+        };
 
-        let mut models_col = div().flex_1().min_w_0().flex().flex_col().gap(px(row_gap));
+        let mut models_col = div()
+            .flex_1()
+            .min_w(px(if compact_stack { 220. } else { 304. }))
+            .flex()
+            .flex_col()
+            .gap(px(row_gap));
 
         for (idx, att) in self.attempts.iter().enumerate() {
             let aid = att.id.clone();
             let status = att.status;
-            let is_sel = self.inspected == FocusedNode::Model(idx);
+            let is_hovered = self.hovered_idx == Some(idx);
 
             let (badge_bg, badge_fg) = match status {
                 AttemptStatus::Trying => (accent_blue, rgb(0xffffff).into()),
@@ -1023,10 +1089,9 @@ impl Render for FallbackChain {
             };
 
             let row_border = match status {
-                AttemptStatus::Trying => accent_blue.opacity(0.60),
+                AttemptStatus::Trying => accent_blue.opacity(0.62),
                 AttemptStatus::Answered => ok_col.opacity(0.55),
                 AttemptStatus::Failed => fail_col.opacity(0.38),
-                _ if is_sel => accent_blue.opacity(0.45),
                 _ => p.line,
             };
 
@@ -1060,7 +1125,7 @@ impl Render for FallbackChain {
                     ))
                     .child(pro_swap_label(
                         pro_eid(&self.id, format!("fbk-st-{aid}")),
-                        tr(cx, "Answered · streamed 200 OK", "成功响应 · 200 OK"),
+                        tr(cx, "Answered · 200 OK", "成功响应 · 200 OK"),
                         11.5,
                         FontWeight::MEDIUM,
                         ok_ink,
@@ -1068,7 +1133,7 @@ impl Render for FallbackChain {
                     .into_any_element(),
                 AttemptStatus::Skipped => pro_swap_label(
                     pro_eid(&self.id, format!("fbk-st-{aid}")),
-                    tr(cx, "Not needed", "无需调用（前序已响应）"),
+                    tr(cx, "Waiting", "排队待命"),
                     11.5,
                     FontWeight::NORMAL,
                     p.muted,
@@ -1085,6 +1150,46 @@ impl Render for FallbackChain {
                     p.muted,
                 ),
             };
+
+            // 20-dot segmented status progress bar matching affectUI
+            const SEG_DOTS: usize = 20;
+            let failed_before = self
+                .attempts
+                .iter()
+                .take(idx)
+                .filter(|a| a.status == AttemptStatus::Failed)
+                .count();
+            let stage_frac = if self.controlled || reduced {
+                0.62_f32
+            } else {
+                let stage_t0 = failed_before as f32 * 0.95_f32;
+                ((run_age_s - stage_t0) / 0.95_f32).clamp(0.18, 0.96)
+            };
+            let mut seg_bar = div().mt(px(4.)).flex().items_center().gap(px(3.));
+            for d_i in 0..SEG_DOTS {
+                let dot_fill = match status {
+                    AttemptStatus::Failed => {
+                        if d_i < 9 {
+                            fail_col.opacity(0.82)
+                        } else {
+                            dot_idle_bg
+                        }
+                    }
+                    AttemptStatus::Trying => {
+                        let lit = ((stage_frac * SEG_DOTS as f32).ceil() as usize).clamp(3, 19);
+                        if d_i + 1 == lit {
+                            accent_blue
+                        } else if d_i < lit {
+                            accent_blue.opacity(0.80)
+                        } else {
+                            dot_idle_bg
+                        }
+                    }
+                    AttemptStatus::Answered => ok_col.opacity(0.80),
+                    AttemptStatus::Waiting | AttemptStatus::Skipped => dot_idle_bg,
+                };
+                seg_bar = seg_bar.child(div().w(px(5.)).h(px(3.5)).rounded(px(1.5)).bg(dot_fill));
+            }
 
             let right_metrics: AnyElement = match status {
                 AttemptStatus::Failed | AttemptStatus::Answered => div()
@@ -1117,7 +1222,7 @@ impl Render for FallbackChain {
                     .items_end()
                     .child(pro_swap_label(
                         pro_eid(&self.id, format!("fbk-lat-{aid}")),
-                        "380ms",
+                        format_ms(((stage_frac * att.duration_ms as f32) as u32).max(380)),
                         11.5,
                         FontWeight::NORMAL,
                         p.ink,
@@ -1126,7 +1231,7 @@ impl Render for FallbackChain {
                         div()
                             .text_size(px(11.))
                             .text_color(p.muted)
-                            .child("<$0.0001"),
+                            .child(format_cost(att.cost_usd * 0.5)),
                     )
                     .into_any_element(),
                 _ => div()
@@ -1139,67 +1244,50 @@ impl Render for FallbackChain {
 
             let aid_toggle = aid.clone();
             let will_fail_now = att.will_fail;
-            let toggle_chip_bg = if will_fail_now {
-                p.red_soft
-            } else {
-                p.green_soft
-            };
-            let toggle_chip_fg = if will_fail_now {
-                p.red_ink
-            } else {
-                p.green_ink
-            };
-
-            let sim_btn = pro_tactile(
-                pro_eid(&self.id, format!("sim-toggle-{aid}")),
-                format!(
-                    "{} {}",
-                    att.model,
-                    if will_fail_now {
-                        tr(cx, "simulating failure", "模拟故障")
-                    } else {
-                        tr(cx, "healthy", "健康可用")
-                    }
-                ),
-                5.0,
-                toggle_chip_bg,
-                pro_mix_color(toggle_chip_bg, toggle_chip_fg, 0.12),
-                toggle_chip_fg.opacity(0.24),
-                toggle_chip_fg.opacity(0.50),
-                false,
+            let hover_hint = is_hovered.then(|| {
+                let (chip_bg, chip_fg, lbl) = if will_fail_now {
+                    (p.red_soft, p.red_ink, tr(cx, "Restore", "恢复正常"))
+                } else {
+                    (p.chip, p.text, tr(cx, "Fail 429", "模拟限流"))
+                };
                 div()
-                    .h(px(20.))
+                    .h(px(19.))
                     .px(px(6.))
+                    .flex_none()
+                    .rounded(px(5.))
+                    .bg(chip_bg)
+                    .border_1()
+                    .border_color(chip_fg.opacity(0.22))
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .child(pro_swap_label(
-                        pro_eid(&self.id, format!("sim-lbl-{aid}")),
-                        if will_fail_now {
-                            tr(cx, "Fail 529", "模拟失败")
-                        } else {
-                            tr(cx, "Healthy", "正常响应")
-                        },
-                        10.5,
-                        FontWeight::MEDIUM,
-                        toggle_chip_fg,
-                    )),
-                cx,
-                move |this, _, cx| {
-                    this.toggle_model_failure(aid_toggle.as_ref(), cx);
-                },
-            )
-            .role(Role::Switch)
-            .aria_toggled((!will_fail_now).into())
-            .flex_none()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_click(|_, _, cx| cx.stop_propagation());
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(chip_fg)
+                    .child(lbl)
+            });
 
             let (row_op, _) = row_springs.get(idx).copied().unwrap_or((1.0, 0.0));
 
             let model_card = pro_tactile(
                 pro_eid(&self.id, format!("mrow-fbk-{aid}")),
-                format!("#{} {}", idx + 1, att.model),
+                format!(
+                    "#{} {} — {}",
+                    idx + 1,
+                    att.model,
+                    if will_fail_now {
+                        tr(
+                            cx,
+                            "simulating outage (click to restore)",
+                            "模拟故障（点击恢复）",
+                        )
+                    } else {
+                        tr(
+                            cx,
+                            "healthy (click to simulate failover)",
+                            "健康可用（点击模拟故障转移）",
+                        )
+                    }
+                ),
                 10.0,
                 card_bg,
                 pro_mix_color(
@@ -1213,7 +1301,7 @@ impl Render for FallbackChain {
                 ),
                 row_border,
                 hover_border,
-                is_sel,
+                false,
                 div()
                     .w_full()
                     .h(px(row_h))
@@ -1265,46 +1353,52 @@ impl Render for FallbackChain {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .gap(px(2.))
+                            .justify_center()
                             .child(
                                 div()
                                     .flex()
-                                    .items_center()
+                                    .items_baseline()
                                     .gap(px(6.))
                                     .min_w_0()
                                     .child(
                                         div()
+                                            .flex_none()
+                                            .whitespace_nowrap()
                                             .text_size(px(12.5))
-                                            .line_height(px(17.))
+                                            .line_height(px(16.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
-                                            .truncate()
                                             .child(att.model.clone()),
                                     )
                                     .when(show_provider, |d| {
                                         d.child(
                                             div()
+                                                .flex_1()
+                                                .min_w_0()
                                                 .text_size(px(11.))
+                                                .line_height(px(15.))
                                                 .text_color(p.faint)
                                                 .truncate()
                                                 .child(att.provider.clone()),
                                         )
                                     }),
                             )
-                            .child(status_el),
+                            .child(status_el)
+                            .child(seg_bar),
                     )
-                    .child(sim_btn)
+                    .when_some(hover_hint, |d, pill| d.child(pill))
                     .child(right_metrics),
                 cx,
                 move |this, _, cx| {
-                    this.inspected = FocusedNode::Model(idx);
-                    cx.notify();
+                    this.toggle_model_failure(aid_toggle.as_ref(), cx);
                 },
             )
+            .role(Role::Switch)
+            .aria_toggled((!will_fail_now).into())
             .w_full()
             .h(px(row_h))
             .opacity(row_op)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 let next = (*inside).then_some(idx);
                 if this.hovered_idx != next {
@@ -1316,7 +1410,7 @@ impl Render for FallbackChain {
             models_col = models_col.child(model_card);
         }
 
-        // 4. Left & Right Bezier Connector Canvases (`48px` wide x `stack_h` tall)
+        // 4. Left & Right Bezier Connector Canvases (`44px` wide x `stack_h` tall)
         let statuses_vec: Vec<AttemptStatus> = self.attempts.iter().map(|a| a.status).collect();
         let st_left = statuses_vec.clone();
         let sp_left = row_springs.clone();
@@ -1413,7 +1507,7 @@ impl Render for FallbackChain {
                 }
             },
         )
-        .w(px(48.))
+        .w(px(44.))
         .h(px(stack_h))
         .flex_none();
 
@@ -1458,7 +1552,7 @@ impl Render for FallbackChain {
                 }
             },
         )
-        .w(px(48.))
+        .w(px(44.))
         .h(px(stack_h))
         .flex_none();
 
@@ -1470,6 +1564,7 @@ impl Render for FallbackChain {
                 .bg(area_bg)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(12.))
@@ -1485,7 +1580,6 @@ impl Render for FallbackChain {
                 )
                 .child(models_col)
         } else {
-            // Subtle dot grid painted behind the 5-column flow
             let dot_col_grid: Hsla = if p.dark {
                 hsla(0., 0., 1., 0.05)
             } else {
@@ -1519,13 +1613,13 @@ impl Render for FallbackChain {
             div()
                 .w_full()
                 .relative()
-                .py(px(22.))
+                .py(px(20.))
                 .px(px(16.))
                 .rounded(px(12.))
                 .bg(area_bg)
                 .border_1()
                 .border_color(p.line)
-                .when(!p.dark, |d| d.shadow_xs())
+                .shadow(pro_card_shadow(p.dark))
                 .overflow_hidden()
                 .child(dots_bg)
                 .child(
@@ -1542,61 +1636,78 @@ impl Render for FallbackChain {
                 )
         };
 
-        // 5. Contextual Detail Strip (shows prompt / model diagnostics / streamed answer for selected node)
-        let detail_key = format!("{:?}", self.inspected);
-        let detail_card = match &self.inspected {
-            FocusedNode::Request => div()
-                .flex()
-                .items_start()
-                .gap(px(10.))
-                .child(pro_app_tile(&self.request.app, 24., cx))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .child(format!(
-                                    "{} · {}",
-                                    self.request.name,
-                                    tr(cx, "Incoming prompt", "入站提示词")
-                                )),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(18.))
-                                .text_color(p.text)
-                                .child(self.request.text.clone()),
-                        ),
-                ),
-            FocusedNode::Response => div()
-                .flex()
-                .items_start()
-                .gap(px(10.))
-                .child(pro_app_tile(&self.response.app, 24., cx))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.strong)
-                                .child(format!(
-                                    "{} · {}",
-                                    self.response.name,
-                                    if let Some(wi) = answered_idx {
+        // Optional compact endpoint inspector strip only when Request or Response pill is clicked
+        let endpoint_detail = match &self.inspected {
+            FocusedNode::Request => Some((
+                "req",
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(9.))
+                    .child(
+                        div()
+                            .size(px(22.))
+                            .flex_none()
+                            .rounded(px(6.))
+                            .bg(req_sq_bg)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_icon(ProIcon::Sparkles, 12., accent_blue)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(tr(cx, "Incoming prompt", "入站提示词")),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .line_height(px(17.))
+                                    .text_color(p.text)
+                                    .child(self.request.text.clone()),
+                            ),
+                    ),
+            )),
+            FocusedNode::Response => Some((
+                "resp",
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(9.))
+                    .child(
+                        div()
+                            .size(px(22.))
+                            .flex_none()
+                            .rounded(px(6.))
+                            .bg(resp_sq_bg)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(pro_icon(ProIcon::Thread, 12., resp_ic_fg)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.strong)
+                                    .child(if let Some(wi) = answered_idx {
                                         format!(
                                             "{} {}",
                                             tr(cx, "Answered by", "响应模型："),
@@ -1604,96 +1715,38 @@ impl Render for FallbackChain {
                                         )
                                     } else {
                                         tr(cx, "Awaiting completion", "等待模型完成响应").to_owned()
-                                    }
-                                )),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(18.))
-                                .text_color(if answered_idx.is_some() {
-                                    p.text
-                                } else {
-                                    p.muted
-                                })
-                                .child(if answered_idx.is_some() {
-                                    self.response.text.clone()
-                                } else if all_failed {
-                                    tr(
-                                        cx,
-                                        "Every configured provider failed — switch a model back to Healthy or press Retry.",
-                                        "所有候选模型均返回错误——可将任一模型切换回“正常响应”或点击重试。",
-                                    )
-                                    .into()
-                                } else {
-                                    tr(cx, "Routing request across fallback chain…", "正在沿备用链路由请求…")
-                                        .into()
-                                }),
-                        ),
-                ),
-            FocusedNode::Model(idx) => {
-                let att = self
-                    .attempts
-                    .get(*idx)
-                    .cloned()
-                    .unwrap_or_else(|| self.attempts[0].clone());
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(10.))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(9.))
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .size(px(24.))
-                                    .rounded(px(6.))
-                                    .bg(fill_bg)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(
-                                        pro_app_artwork(&att.brand, 13., cx).unwrap_or_else(|| {
-                                            pro_icon(ProIcon::Sparkles, 12., p.ink)
-                                        }),
-                                    ),
+                                    }),
                             )
                             .child(
                                 div()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.strong)
-                                            .truncate()
-                                            .child(format!(
-                                                "#{} {} · {}",
-                                                idx + 1,
-                                                att.model,
-                                                att.provider
-                                            )),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(p.muted)
-                                            .truncate()
-                                            .child(tr(
-                                                cx,
-                                                "Click Healthy / Fail 529 on any row to test failover across providers.",
-                                                "点击任意模型行的“正常响应 / 模拟失败”按钮即可实时测试跨厂商故障转移。",
-                                            )),
-                                    ),
+                                    .text_size(px(11.5))
+                                    .line_height(px(17.))
+                                    .text_color(if answered_idx.is_some() {
+                                        p.text
+                                    } else {
+                                        p.muted
+                                    })
+                                    .child(if answered_idx.is_some() {
+                                        self.response.text.clone()
+                                    } else if all_failed {
+                                        tr(
+                                            cx,
+                                            "Every configured provider failed — click a model row to restore it or press Retry.",
+                                            "所有候选模型均返回错误——点击任一模型行恢复正常或点击重试。",
+                                        )
+                                        .into()
+                                    } else {
+                                        tr(
+                                            cx,
+                                            "Routing request across fallback chain…",
+                                            "正在沿备用链路由请求…",
+                                        )
+                                        .into()
+                                    }),
                             ),
-                    )
-            }
+                    ),
+            )),
+            FocusedNode::Model(_) => None,
         };
 
         div()
@@ -1702,7 +1755,7 @@ impl Render for FallbackChain {
             .aria_label(self.localize_str(&self.title, cx).to_owned())
             .track_focus(&self.focus)
             .w_full()
-            .max_w(px(740.))
+            .max_w(px(756.))
             .mx_auto()
             .relative()
             .flex()
@@ -1726,19 +1779,22 @@ impl Render for FallbackChain {
             )
             .child(top_bar)
             .child(flow_stage)
-            .child(pro_view_transition(
-                pro_eid(&self.id, "fbk-det-vtx"),
-                detail_key,
-                div()
-                    .w_full()
-                    .px(px(12.))
-                    .py(px(10.))
-                    .rounded(px(10.))
-                    .bg(card_bg)
-                    .border_1()
-                    .border_color(p.line)
-                    .child(detail_card),
-            ))
+            .when_some(endpoint_detail, |root, (key, detail_card)| {
+                root.child(pro_view_transition(
+                    pro_eid(&self.id, "fbk-det-vtx"),
+                    key,
+                    div()
+                        .w_full()
+                        .px(px(12.))
+                        .py(px(9.))
+                        .rounded(px(10.))
+                        .bg(card_bg)
+                        .border_1()
+                        .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
+                        .child(detail_card),
+                ))
+            })
             .child(pro_toast_banner(self.toast.clone()))
             .into_any_element()
     }

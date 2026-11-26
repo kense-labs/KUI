@@ -12,7 +12,6 @@ pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 
 struct Example {
     view: Entity<AgentLoop>,
-    language: UiLanguage,
 }
 
 impl Example {
@@ -90,7 +89,7 @@ impl Example {
             .autoplay(true);
             if let Some(visible) = visible { agent.visibility(visible) } else { agent }
         });
-        Self { view, language }
+        Self { view }
     }
 }
 
@@ -108,17 +107,6 @@ impl Render for Example {
             .flex()
             .flex_col()
             .items_center()
-            .gap_3()
             .child(div().w_full().max_w(px(760.)).child(self.view.clone()))
-            .child(
-                div()
-                    .text_center()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Sample timeline only. No tools are called.",
-                        "仅演示流程，不会调用真实工具。",
-                    )),
-            )
     }
 }

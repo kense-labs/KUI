@@ -606,27 +606,18 @@ fn render_mini_app_tile(app: &str, side: f32, overlap: bool, cx: &App) -> Div {
             .into_any_element()
     };
 
-    let tile_bg: Hsla = if p.dark {
-        if matches!(
-            lower.as_str(),
-            "gmail" | "google drive" | "drive" | "slack" | "google calendar"
-        ) {
-            rgb(0x1b1b1e).into()
-        } else {
-            p.card
-        }
-    } else {
-        rgb(0xffffff).into()
-    };
-
     div()
         .size(px(side))
         .flex_none()
         .when(overlap, |d| d.ml(px(-4.)))
         .rounded(px(5.))
-        .bg(tile_bg)
+        .bg(p.logo_tile)
         .border_1()
-        .border_color(p.line)
+        .border_color(if p.dark {
+            hsla(0., 0., 1., 0.09)
+        } else {
+            p.line
+        })
         .flex()
         .items_center()
         .justify_center()
@@ -714,6 +705,7 @@ fn render_status_tag(status: AgentRunStatus, cx: &App) -> Div {
         .h(px(20.))
         .px(px(7.))
         .flex_none()
+        .flex_shrink_0()
         .rounded(px(6.))
         .bg(bg)
         .flex()
@@ -726,6 +718,22 @@ fn render_status_tag(status: AgentRunStatus, cx: &App) -> Div {
 }
 
 /// Pro Agents team screen with card/list switcher, right-hand agent inspector, and `New agent` dialog.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agents::{AgentsScreen, AgentsEvent};
+///
+/// let screen = cx.new(|cx| AgentsScreen::new("agents", cx));
+/// cx.subscribe(&screen, |_, event: &AgentsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentsScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -812,7 +820,7 @@ impl AgentsScreen {
                 .with_groups(nav_groups)
                 .with_active("agents")
                 .with_work_area(true, true)
-                .with_panel_width(348.);
+                .with_panel_width(296.);
             s.bind_page(&this, shell_cx, |screen, w, cx| {
                 screen.render_page(w, cx).into_any_element()
             });
@@ -857,7 +865,7 @@ impl AgentsScreen {
             loading: false,
             empty: false,
             clock: now,
-            measured_width: Rc::new(Cell::new(680.)),
+            measured_width: Rc::new(Cell::new(388.)),
         }
     }
 
@@ -1459,7 +1467,7 @@ impl AgentsScreen {
                     .tab_index(0)
                     .relative()
                     .h(px(28.))
-                    .px(px(10.))
+                    .px(px(if narrow { 7. } else { 10. }))
                     .rounded(px(8.))
                     .when(!selected, |d| {
                         d.hover(move |s| s.bg(p.hover).text_color(p.ink))
@@ -1468,8 +1476,8 @@ impl AgentsScreen {
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .flex()
                     .items_center()
-                    .gap(px(6.))
-                    .text_size(px(13.))
+                    .gap(px(if narrow { 4. } else { 6. }))
+                    .text_size(px(if narrow { 12.5 } else { 13. }))
                     .font_weight(if selected {
                         FontWeight::MEDIUM
                     } else {
@@ -1482,7 +1490,7 @@ impl AgentsScreen {
                     .when(!self.loading, |d| {
                         d.child(
                             div()
-                                .text_size(px(12.))
+                                .text_size(px(if narrow { 11.5 } else { 12. }))
                                 .font_weight(FontWeight::NORMAL)
                                 .text_color(p.faint)
                                 .child(count.to_string()),
@@ -1686,16 +1694,17 @@ impl AgentsScreen {
             .child(view_toggle)
             .child(new_btn);
 
+        let need_burger_pad = (self.standalone && narrow) || width < 320.;
         div()
             .min_h(px(48.))
             .py(px(10.))
-            .pl(px(if narrow { 44. } else { 14. }))
+            .pl(px(if need_burger_pad { 44. } else { 14. }))
             .pr(px(if !panel_open { 52. } else { 12. }))
             .flex_none()
             .flex()
             .items_center()
             .justify_between()
-            .gap(px(12.))
+            .gap(px(8.))
             .child(scopes)
             .child(tools)
     }
@@ -1922,8 +1931,8 @@ impl AgentsScreen {
                 ))
                 .child(
                     div()
-                        .when(show_nums, |d| d.w(px(96.)).flex_none())
-                        .when(!show_nums, |d| d.flex_1().min_w_0())
+                        .when(show_role_model, |d| d.w(px(108.)).flex_none())
+                        .when(!show_role_model, |d| d.flex_1().min_w(px(88.)))
                         .truncate()
                         .text_size(px(13.))
                         .font_weight(FontWeight::MEDIUM)
@@ -1948,8 +1957,8 @@ impl AgentsScreen {
                 )))
                 .child(
                     div()
-                        .w(px(74.))
                         .flex_none()
+                        .flex_shrink_0()
                         .child(render_status_tag(agent.status, cx)),
                 )
                 .when(show_role_model, |d| {
@@ -2774,7 +2783,10 @@ impl AgentsScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(toolbar)
             .child(

@@ -9,6 +9,21 @@ use gpui::{prelude::*, *};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct MorphChanged(pub bool);
 const TILE_FADE_SECONDS: f32 = 0.16;
+/// `IconMorph` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::icon_morph::IconMorph;
+/// use kui::primitives::glyph::Glyph;
+///
+/// let control = cx.new(|_| IconMorph::new("player", [Glyph::Play, Glyph::Pause], ["Play", "Pause"]).with_captions(["Paused", "Playing"]));
+/// # }
+/// ```
 pub struct IconMorph {
     id: ElementId,
     pair: [Glyph; 2],

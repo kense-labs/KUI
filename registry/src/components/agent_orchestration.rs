@@ -1146,6 +1146,22 @@ fn default_market_research_events() -> Vec<AoEvent> {
 }
 
 /// Interactive multi-agent orchestration canvas and execution trace screen.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_orchestration::{AgentOrchestrationScreen, AgentOrchestrationEvent};
+///
+/// let screen = cx.new(|cx| AgentOrchestrationScreen::new("agent-orchestration", cx));
+/// cx.subscribe(&screen, |_, event: &AgentOrchestrationEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentOrchestrationScreen {
     id: ElementId,
     shell: Entity<AppShell>,

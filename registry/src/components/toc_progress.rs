@@ -25,6 +25,20 @@ impl ReadingSection {
     }
 }
 pub struct SectionChanged(pub usize);
+/// `ReadingOutline` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::toc_progress::{ReadingOutline, ReadingSection};
+///
+/// let control = cx.new(|_| ReadingOutline::new("Release notes",vec![ReadingSection::new("Overview","Workspace changes",0)], 4));
+/// # }
+/// ```
 pub struct ReadingOutline {
     title: SharedString,
     byline: Option<SharedString>,

@@ -22,8 +22,7 @@ impl Demo {
         let mut usage = LlmUsage::new(8_000., 500., 5_000.);
         usage.cache_enabled = true;
         usage.cache_hit_rate = 0.6;
-        let calculator =
-            cx.new(|cx| LlmCostCalculator::new(models, usage, cx).with_simulated(true));
+        let calculator = cx.new(|cx| LlmCostCalculator::new(models, usage, cx));
         Self { calculator }
     }
 }

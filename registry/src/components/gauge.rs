@@ -31,6 +31,19 @@ impl GaugeThreshold {
 }
 
 /// Displays a value in a range; the host owns the value and thresholds.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::gauge::{Gauge, GaugeThreshold, GaugeTone};
+///
+/// let control = cx.new(|_| Gauge::new("Storage", 68.0).with_range(0.0, 100.0).with_detail("Used capacity").with_thresholds(vec![GaugeThreshold::new(80.0, "High", GaugeTone::Warning)]));
+/// # }
+/// ```
 pub struct Gauge {
     label: SharedString,
     detail: SharedString,

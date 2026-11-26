@@ -5,8 +5,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mix_color, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
+        ProPalette, pro_card_shadow, pro_ease, pro_eid, pro_empty_state, pro_mix_color,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, tr,
     },
     primitives::{
         family::{Slide, disabled_motion},
@@ -215,6 +215,32 @@ fn sample_polyline_y(pts: &[Point<Pixels>], target_x: Pixels) -> Option<Pixels> 
 }
 
 /// Multi-series KPI metric card (`kpi-chart`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{prelude::*, rgb};
+/// use kui::components::kpi_chart::{KpiChart, KpiChartEvent, KpiSeries};
+///
+/// let chart = cx.new(|cx| {
+///     KpiChart::new("revenue-kpi", cx)
+///         .with_title("Revenue")
+///         .with_labels(["Mar 3", "Mar 4", "Mar 5", "Mar 6", "Mar 7"])
+///         .with_series(vec![
+///             KpiSeries::new("organic", "Organic", rgb(0x4fb0fe).into(), vec![4200., 4700., 3900., 4600., 5400.]),
+///             KpiSeries::new("paid", "Paid ads", rgb(0xee3e9e).into(), vec![3600., 3300., 4400., 4800., 4000.]),
+///         ])
+///         .with_delta(Some(7_900.0))
+///         .with_footer("Top channels")
+/// });
+/// cx.subscribe(&chart, |_, ev: &KpiChartEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct KpiChart {
     id: ElementId,
     title: SharedString,
@@ -1364,7 +1390,7 @@ impl Render for KpiChart {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(dark))
             .on_key_down(cx.listener(Self::handle_key_down))
             .child(
                 div()

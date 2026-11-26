@@ -9,11 +9,11 @@ use crate::{
     components::{
         app_shell::{AppShell, AppShellEvent, AppShellLayout, ShellNavGroup, ShellNavItem},
         pro_chrome::{
-            ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
-            pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator,
-            pro_popover_presence, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
-            pro_spring_bar, pro_spring_f32, pro_swap_label, pro_switch, pro_tactile,
-            pro_toast_banner, pro_view_transition, tr,
+            ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+            pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+            pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
+            pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_switch,
+            pro_tactile, pro_toast_banner, pro_view_transition, tr,
         },
     },
     foundation::Theme,
@@ -545,52 +545,59 @@ fn rasterize_hero_glow(dark: bool, panel_rgb: [u8; 3], elapsed: f32) -> RenderIm
         let vc = v - cy_off;
 
         let hero_rgb = if dark {
-            // Base #131527 with cobalt/cyan/lavender drifting nocturnal layers
-            let mut col = [19.0 / 255.0, 21.0 / 255.0, 41.0 / 255.0];
+            // Deep atmospheric midnight-cobalt & sapphire aurora matching affectUI dark depth
+            let mut col = [21.0 / 255.0, 26.0 / 255.0, 56.0 / 255.0];
             let base_lin = [
-                (20.0 + 5.0 * va) / 255.0,
-                (22.0 + 6.0 * va) / 255.0,
-                (44.0 + 6.0 * va) / 255.0,
+                (23.0 + 7.0 * va) / 255.0,
+                (29.0 + 9.0 * va) / 255.0,
+                (62.0 + 10.0 * va) / 255.0,
             ];
-            col = blend_over(col, base_lin, 0.80);
+            col = blend_over(col, base_lin, 0.84);
 
-            let blue_l = radial_falloff(ua, va, 0.14, 0.58, 0.70, 0.88, 0.76);
+            let blue_l = radial_falloff(ua, va, 0.16, 0.54, 0.78, 0.94, 0.72);
             col = blend_over(
                 col,
-                [68.0 / 255.0, 120.0 / 255.0, 232.0 / 255.0],
-                0.52 * blue_l,
+                [76.0 / 255.0, 134.0 / 255.0, 248.0 / 255.0],
+                0.62 * blue_l,
             );
 
-            let cyan_r = radial_falloff(ua, va, 0.86, 0.56, 0.62, 0.78, 0.76);
+            let center_crown = radial_falloff(ua, va, 0.50, 0.28, 0.85, 0.72, 0.68);
             col = blend_over(
                 col,
-                [58.0 / 255.0, 166.0 / 255.0, 204.0 / 255.0],
-                0.32 * cyan_r,
+                [64.0 / 255.0, 118.0 / 255.0, 236.0 / 255.0],
+                0.42 * center_crown,
+            );
+
+            let cyan_r = radial_falloff(ua, va, 0.85, 0.54, 0.68, 0.84, 0.74);
+            col = blend_over(
+                col,
+                [66.0 / 255.0, 178.0 / 255.0, 224.0 / 255.0],
+                0.42 * cyan_r,
             );
 
             // Diagonal atmospheric silk beams (screen-like lift on left/right flanks)
-            let flank = ((ub - 0.50).abs() * 1.65).clamp(0.15, 1.0);
+            let flank = ((ub - 0.50).abs() * 1.55).clamp(0.22, 1.0);
             let silk_wave =
                 0.5 + 0.5 * ((ub * 4.2 + vb * 2.1).sin() * 0.6 + (ub * 7.5 - vb * 3.4).cos() * 0.4);
-            let silk = flank * silk_wave * (1.0 - (vb - 0.38).abs() * 1.1).clamp(0., 1.);
+            let silk = flank * silk_wave * (1.0 - (vb - 0.38).abs() * 1.05).clamp(0., 1.);
             col = [
-                (col[0] + 0.12 * silk).clamp(0., 1.),
-                (col[1] + 0.19 * silk).clamp(0., 1.),
-                (col[2] + 0.34 * silk).clamp(0., 1.),
+                (col[0] + 0.14 * silk).clamp(0., 1.),
+                (col[1] + 0.22 * silk).clamp(0., 1.),
+                (col[2] + 0.38 * silk).clamp(0., 1.),
             ];
 
-            let lav_br = radial_falloff(uc, vc, 0.85, 0.82, 1.15, 1.15, 0.68);
+            let lav_br = radial_falloff(uc, vc, 0.85, 0.80, 1.18, 1.18, 0.68);
             col = blend_over(
                 col,
-                [118.0 / 255.0, 90.0 / 255.0, 220.0 / 255.0],
-                0.34 * lav_br,
+                [126.0 / 255.0, 98.0 / 255.0, 232.0 / 255.0],
+                0.38 * lav_br,
             );
 
-            let top_tl = radial_falloff(uc, vc, 0.14, 0.24, 1.10, 1.10, 0.62);
+            let top_tl = radial_falloff(uc, vc, 0.14, 0.22, 1.14, 1.14, 0.64);
             col = blend_over(
                 col,
-                [62.0 / 255.0, 96.0 / 255.0, 196.0 / 255.0],
-                0.30 * top_tl,
+                [72.0 / 255.0, 112.0 / 255.0, 218.0 / 255.0],
+                0.38 * top_tl,
             );
             col
         } else {
@@ -988,7 +995,7 @@ impl PromptExplorerScreen {
             hero_surface: Rc::new(RefCell::new(HeroGlowSurface::new())),
             composer_bounds: Rc::new(Cell::new(None)),
             page_bounds: Rc::new(Cell::new(None)),
-            measured_width: Rc::new(Cell::new(960.)),
+            measured_width: Rc::new(Cell::new(660.)),
             boot_at: Instant::now(),
         }
     }
@@ -1518,9 +1525,13 @@ impl PromptExplorerScreen {
         cx: &Context<Self>,
     ) -> AnyElement {
         let p = ProPalette::get(cx);
-        let show_spark = with_spark && !mobile;
+        let tight_cols = self.measured_width.get() < 760.0;
+        let show_spark = with_spark && !mobile && self.measured_width.get() >= 620.0;
+        let chg_w = if mobile || tight_cols { 58. } else { 72. };
+        let vol_w = if mobile || tight_cols { 44. } else { 52. };
+        let row_gap = if tight_cols { 8. } else { 16. };
         if self.loading {
-            let widths = [180., 140., 200., 120., 160., 110., 150.];
+            let widths = [160., 130., 176., 116., 148., 108., 140.];
             let mut list = div().mx(px(-8.)).flex().flex_col();
             for (idx, &bar_w) in widths.iter().enumerate() {
                 list = list.child(
@@ -1530,7 +1541,7 @@ impl PromptExplorerScreen {
                         .when(idx > 0, |d| d.border_t_1().border_color(p.line))
                         .flex()
                         .items_center()
-                        .gap(px(16.))
+                        .gap(px(row_gap))
                         .child(
                             div()
                                 .flex_1()
@@ -1538,21 +1549,21 @@ impl PromptExplorerScreen {
                                 .child(pro_skeleton_bar(bar_w, 10., 4., skel_phase, cx)),
                         )
                         .when(show_spark, |d| {
-                            d.child(pro_skeleton_bar(48., 8., 4., skel_phase, cx))
+                            d.child(pro_skeleton_bar(42., 8., 4., skel_phase, cx))
                         })
                         .child(
                             div()
-                                .w(px(if mobile { 64. } else { 72. }))
+                                .w(px(chg_w))
                                 .flex()
                                 .justify_end()
-                                .child(pro_skeleton_bar(44., 10., 4., skel_phase, cx)),
+                                .child(pro_skeleton_bar(42., 10., 4., skel_phase, cx)),
                         )
                         .child(
                             div()
-                                .w(px(if mobile { 48. } else { 52. }))
+                                .w(px(vol_w))
                                 .flex()
                                 .justify_end()
-                                .child(pro_skeleton_bar(36., 10., 4., skel_phase, cx)),
+                                .child(pro_skeleton_bar(34., 10., 4., skel_phase, cx)),
                         ),
                 );
             }
@@ -1613,14 +1624,14 @@ impl PromptExplorerScreen {
                 .px(px(8.))
                 .flex()
                 .items_center()
-                .gap(px(16.))
+                .gap(px(row_gap))
                 .text_size(px(13.))
                 .text_color(p.ink)
                 .child(div().flex_1().min_w_0().truncate().child(item.text.clone()))
                 .when(show_spark, |d| {
                     d.child(
                         div()
-                            .w(px(56.))
+                            .w(px(if tight_cols { 44. } else { 56. }))
                             .flex_none()
                             .flex()
                             .items_center()
@@ -1628,42 +1639,32 @@ impl PromptExplorerScreen {
                             .child(render_mini_sparkline(
                                 pro_eid(&self.id, format!("kw-spk-{metric_prefix}-{idx}")),
                                 &item.trend,
-                                48.,
+                                if tight_cols { 40. } else { 48. },
                                 16.,
                                 p.faint,
                             )),
                     )
                 })
-                .child(
-                    div()
-                        .w(px(if mobile { 64. } else { 72. }))
-                        .flex_none()
-                        .flex()
-                        .justify_end()
-                        .child(Self::render_change_badge(
-                            pro_eid(&self.id, format!("kw-chg-{metric_prefix}-{idx}")),
-                            item.change,
-                            true,
-                            up_color,
-                            down_color,
-                            p.muted,
-                        )),
-                )
-                .child(
-                    div()
-                        .w(px(if mobile { 48. } else { 52. }))
-                        .flex_none()
-                        .flex()
-                        .justify_end()
-                        .child(rolling_prompt_volume(
-                            pro_eid(&self.id, format!("kw-vol-{metric_prefix}-{idx}")),
-                            item.volume as i64,
-                            false,
-                            13.,
-                            FontWeight::NORMAL,
-                            p.ink,
-                        )),
-                );
+                .child(div().w(px(chg_w)).flex_none().flex().justify_end().child(
+                    Self::render_change_badge(
+                        pro_eid(&self.id, format!("kw-chg-{metric_prefix}-{idx}")),
+                        item.change,
+                        true,
+                        up_color,
+                        down_color,
+                        p.muted,
+                    ),
+                ))
+                .child(div().w(px(vol_w)).flex_none().flex().justify_end().child(
+                    rolling_prompt_volume(
+                        pro_eid(&self.id, format!("kw-vol-{metric_prefix}-{idx}")),
+                        item.volume as i64,
+                        false,
+                        13.,
+                        FontWeight::NORMAL,
+                        p.ink,
+                    ),
+                ));
             let row = pro_tactile(
                 pro_eid(&self.id, format!("kw-{col_key}-{idx}")),
                 aria,
@@ -2023,12 +2024,24 @@ impl PromptExplorerScreen {
             move || insp_el.unwrap_or_else(|| div().into_any_element()),
         );
 
+        let card_surface: Hsla = if p.dark {
+            rgb(0x18181d).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let card_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.08)
+        } else {
+            p.line
+        };
+
         div()
             .w_full()
             .rounded(px(10.))
-            .bg(p.card)
+            .bg(card_surface)
             .border_1()
-            .border_color(p.line)
+            .border_color(card_border)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(
@@ -2118,8 +2131,8 @@ impl PromptExplorerScreen {
         let p = ProPalette::get(cx);
         let reduced = Theme::global(cx).reduced_motion;
         let width = self.measured_width.get();
-        let stack_cols = width < 860.0;
-        let mobile = width < 560.0;
+        let stack_cols = width < 540.0;
+        let mobile = width < 500.0;
 
         self.ensure_editor(mobile, w, cx);
 
@@ -2153,8 +2166,13 @@ impl PromptExplorerScreen {
         } else {
             hsla(0., 0., 0., 0.88)
         };
+        let page_surface: Hsla = if p.dark {
+            rgb(0x141417).into()
+        } else {
+            p.panel
+        };
         let box_bg: Hsla = if p.dark {
-            rgb(0x1c1c1f).into()
+            rgb(0x1b1b20).into()
         } else {
             rgb(0xffffff).into()
         };
@@ -2204,7 +2222,7 @@ impl PromptExplorerScreen {
         // Atmospheric drifting hero background canvas
         let surface_ref = self.hero_surface.clone();
         let dark = p.dark;
-        let panel_bg = p.panel;
+        let panel_bg = page_surface;
         let boot_at = self.boot_at;
         let hero_bg_canvas = canvas(
             |_, _, _| (),
@@ -2771,7 +2789,28 @@ impl PromptExplorerScreen {
             ),
         );
 
-        let col_px = if mobile { 14.0 } else { 20.0 };
+        let col_px = if mobile {
+            14.0
+        } else if width < 760.0 {
+            16.0
+        } else {
+            20.0
+        };
+        let card_surface: Hsla = if p.dark {
+            rgb(0x18181d).into()
+        } else {
+            rgb(0xffffff).into()
+        };
+        let card_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.08)
+        } else {
+            p.line
+        };
+        let divider_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.08)
+        } else {
+            p.line_strong
+        };
         let left_col = div()
             .flex_1()
             .min_w_0()
@@ -2804,8 +2843,8 @@ impl PromptExplorerScreen {
             .pt(px(16.))
             .px(px(col_px))
             .pb(px(10.))
-            .when(!stack_cols, |d| d.border_l_1().border_color(p.line_strong))
-            .when(stack_cols, |d| d.border_t_1().border_color(p.line_strong))
+            .when(!stack_cols, |d| d.border_l_1().border_color(divider_border))
+            .when(stack_cols, |d| d.border_t_1().border_color(divider_border))
             .flex()
             .flex_col()
             .child(
@@ -2831,9 +2870,10 @@ impl PromptExplorerScreen {
         let keywords_card = div()
             .w_full()
             .rounded(px(10.))
-            .bg(p.card)
+            .bg(card_surface)
             .border_1()
-            .border_color(p.line)
+            .border_color(card_border)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .when(stack_cols, |d| d.flex_col())
             .child(left_col)
@@ -2863,16 +2903,23 @@ impl PromptExplorerScreen {
         let mw_cell = self.measured_width.clone();
         let pb_cell = self.page_bounds.clone();
         let width_sensor = canvas(
-            move |bounds, _, _| {
+            move |bounds, w, _| {
                 let bw = f32::from(bounds.size.width);
                 if bw > 40.0 {
+                    let prev = mw_cell.get();
                     mw_cell.set(bw);
+                    if (prev - bw).abs() > 1.0 {
+                        w.request_animation_frame();
+                    }
                 }
                 pb_cell.set(Some(bounds));
             },
             |_, _, _, _| (),
         )
-        .w_full()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
         .h(px(0.));
 
         let scroll = div()
@@ -2886,7 +2933,6 @@ impl PromptExplorerScreen {
             .flex()
             .flex_col()
             .gap(px(section_gap))
-            .child(width_sensor)
             .child(hero_section)
             .child(
                 div()
@@ -2903,7 +2949,7 @@ impl PromptExplorerScreen {
             .relative()
             .size_full()
             .min_h_0()
-            .bg(p.panel)
+            .bg(page_surface)
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, w, cx| {
                 if this.editor_focused {
                     return;
@@ -2920,6 +2966,7 @@ impl PromptExplorerScreen {
                     cx.stop_propagation();
                 }
             }))
+            .child(width_sensor)
             .child(scroll);
 
         // Floating combobox listbox painted above all cards via `deferred` + `pro_popover_presence`

@@ -6,6 +6,20 @@ use crate::primitives::{
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
+/// `ExpandableText` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::expandable_text::ExpandableText;
+///
+/// let control = cx.new(|_| ExpandableText::new("A long release note that wraps across several lines in a narrow column.", 2));
+/// # }
+/// ```
 pub struct ExpandableText {
     text: SharedString,
     lines: usize,

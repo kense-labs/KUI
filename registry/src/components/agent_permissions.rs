@@ -841,6 +841,22 @@ fn render_level_dot(
 }
 
 /// Interactive `Agent / Permissions` governance screen hosted in [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_permissions::{AgentPermissionsScreen, AgentPermissionsEvent};
+///
+/// let screen = cx.new(|cx| AgentPermissionsScreen::new("agent-permissions", cx));
+/// cx.subscribe(&screen, |_, event: &AgentPermissionsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentPermissionsScreen {
     id: ElementId,
     shell: Entity<AppShell>,

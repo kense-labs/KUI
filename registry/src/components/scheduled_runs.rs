@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_ease, pro_eid, pro_empty_state, pro_icon_btn,
-        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_ease, pro_eid, pro_empty_state,
+        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
         pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
         pro_tactile, pro_toast_banner, tr,
     },
@@ -423,6 +423,34 @@ pub enum ScheduledRunsEvent {
 impl EventEmitter<ScheduledRunsEvent> for ScheduledRuns {}
 
 /// Weekly session-quota task packer with gap packing, multi-session splitting, and fly-in stagger.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::scheduled_runs::{
+///     ScheduledRuns, ScheduledRunsEvent, ScheduledTask, SessionSlot,
+/// };
+///
+/// let board = cx.new(|cx| {
+///     ScheduledRuns::new("weekly-sessions", cx)
+///         .with_note("5-hour sessions")
+///         .with_now(SessionSlot::new(0, 1))
+///         .with_tasks(vec![
+///             ScheduledTask::new("metrics", "Weekly metrics report", "Gemini CLI", "gemini", 55)
+///                 .with_booked_at(SessionSlot::new(0, 0)),
+///             ScheduledTask::new("oauth", "Migrate auth to OAuth 2.1", "Claude Code", "claude", 140),
+///             ScheduledTask::new("flaky", "Fix flaky checkout tests", "Claude Code", "claude", 40),
+///         ])
+/// });
+/// cx.subscribe(&board, |_, ev: &ScheduledRunsEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ScheduledRuns {
     id: ElementId,
     title: SharedString,
@@ -1176,7 +1204,7 @@ impl Render for ScheduledRuns {
 
                 let card = div()
                     .w_full()
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .opacity(if dimmed { 0.35 } else { 1.0 })
                     .child(pro_tactile(
                         pro_eid(&self.id, format!("stk-{}", task.id)),

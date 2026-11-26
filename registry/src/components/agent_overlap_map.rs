@@ -5,15 +5,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_eid, pro_empty_state, pro_icon_btn,
-        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_mix_color, pro_person_avatar,
+        pro_pill_indicator, pro_popover_presence, pro_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::activate,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork},
+        pro_icons::{ProIcon, pro_app_artwork},
     },
 };
 use gpui::{prelude::*, *};
@@ -185,10 +186,14 @@ struct AgentSlot {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_overlap_map::AgentOverlapMap;
 ///
 /// let map = cx.new(|cx| AgentOverlapMap::new("agent-overlap-map", cx));
+/// # }
 /// ```
 pub struct AgentOverlapMap {
     id: ElementId,
@@ -486,7 +491,14 @@ impl AgentOverlapMap {
                         .flex()
                         .items_center()
                         .gap(px(8.))
-                        .child(pro_agent_avatar(&sl.key, col, 22., false, 0., cx))
+                        .child(pro_agent_avatar(
+                            overlap_avatar_seed(&sl.harness, &sl.agent_name),
+                            col,
+                            22.,
+                            false,
+                            0.,
+                            cx,
+                        ))
                         .child(
                             div()
                                 .flex_1()
@@ -741,7 +753,14 @@ impl AgentOverlapMap {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(pro_agent_avatar(&slot.key, col, 26., false, 0., cx))
+                    .child(pro_agent_avatar(
+                        overlap_avatar_seed(&slot.harness, &slot.agent_name),
+                        col,
+                        26.,
+                        false,
+                        0.,
+                        cx,
+                    ))
                     .child(
                         div()
                             .flex_1()
@@ -822,6 +841,7 @@ impl Render for AgentOverlapMap {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(20.))
@@ -1032,6 +1052,7 @@ impl Render for AgentOverlapMap {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(18.))
@@ -1208,7 +1229,7 @@ impl Render for AgentOverlapMap {
                             .absolute()
                             .inset_0(),
                         )
-                        .child(render_bare_pixel_mark(&sl.key, col, !reduced, elapsed_ms))
+                        .child(pro_person_avatar(&sl.full_name, 18.0, false, None, cx))
                         .child(
                             div()
                                 .text_size(px(13.))
@@ -1440,6 +1461,7 @@ impl Render for AgentOverlapMap {
 
         let sync_footer = if !synced.is_empty() {
             let names = synced.join(", ");
+            let first_sync_name = synced.first().map(|s| s.as_str()).unwrap_or("Jonas");
             let phrase = if synced.len() == 1 {
                 format!("{names} {}", tr(cx, "is in sync", "处于同步状态"))
             } else {
@@ -1456,7 +1478,7 @@ impl Render for AgentOverlapMap {
                     .gap(px(8.))
                     .text_size(px(12.))
                     .text_color(p.muted)
-                    .child(render_bare_pixel_mark("jonas-sync", p.muted, false, 0.0))
+                    .child(pro_person_avatar(first_sync_name, 18.0, false, None, cx))
                     .child(phrase),
             )
         } else {
@@ -1535,6 +1557,7 @@ impl Render for AgentOverlapMap {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .relative()
             .overflow_hidden()
             .flex()
@@ -1563,28 +1586,35 @@ impl Render for AgentOverlapMap {
     }
 }
 
-fn render_bare_pixel_mark(seed: &str, color: Hsla, twinkle: bool, elapsed_ms: f32) -> Div {
-    let cells = agent_pixel_cells(seed);
-    let mut grid = div().flex_none().flex().flex_col().gap(px(1.5));
-    for r in 0..3usize {
-        let mut row = div().flex().items_center().gap(px(1.5));
-        for c in 0..3usize {
-            let i = r * 3 + c;
-            let on = cells[i];
-            let alpha = if twinkle {
-                let phase = ((elapsed_ms + AGENT_WAVE_MS[i]) / 1350.0) * std::f32::consts::TAU;
-                let wave = 0.62 + 0.38 * phase.cos();
-                if on { wave } else { 0.14 * wave }
-            } else if on {
-                0.85
-            } else {
-                0.0
-            };
-            row = row.child(div().size(px(3.)).rounded(px(0.8)).bg(color.opacity(alpha)));
+fn overlap_avatar_seed(harness: &str, agent_name: &str) -> &'static str {
+    let h = harness.to_ascii_lowercase();
+    if h.contains("claude") || h.contains("anthropic") {
+        "claude"
+    } else if h.contains("gemini") {
+        "gemini"
+    } else if h.contains("deepseek") {
+        "deepseek"
+    } else if h.contains("mistral") {
+        "mistral"
+    } else if h.contains("qwen") {
+        "qwen"
+    } else if h.contains("codex")
+        || h.contains("openai")
+        || h.contains("gpt")
+        || h.contains("cursor")
+    {
+        "gpt"
+    } else {
+        let a = agent_name.to_ascii_lowercase();
+        if a.contains("claude") || a.contains("opus") || a.contains("sonnet") || a.contains("docs")
+        {
+            "claude"
+        } else if a.contains("gemini") {
+            "gemini"
+        } else {
+            "gpt"
         }
-        grid = grid.child(row);
     }
-    grid
 }
 
 fn paint_dashed_cubic_bezier(

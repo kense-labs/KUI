@@ -367,18 +367,17 @@ fn render_tool_tile(app: &str, side: f32, cx: &App) -> AnyElement {
         let p = ProPalette::get(cx);
         let radius = (side * 0.27).clamp(5., 8.);
         let mark_side = (side * 0.56).round();
-        let tile_bg: Hsla = if p.dark {
-            rgb(0x222226).into()
-        } else {
-            rgb(0xffffff).into()
-        };
         return div()
             .size(px(side))
             .flex_none()
             .rounded(px(radius))
-            .bg(tile_bg)
+            .bg(p.logo_tile)
             .border_1()
-            .border_color(p.line)
+            .border_color(if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                p.line
+            })
             .flex()
             .items_center()
             .justify_center()
@@ -944,6 +943,22 @@ fn default_calls() -> Vec<ToolCallRecord> {
 }
 
 /// KUI Pro screen inspecting one agent's connected tool org chart and invocation log.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_tool_calls::{AgentToolCallsScreen, AgentToolCallsEvent};
+///
+/// let screen = cx.new(|cx| AgentToolCallsScreen::new("agent-tool-calls", cx));
+/// cx.subscribe(&screen, |_, event: &AgentToolCallsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentToolCallsScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -5378,7 +5393,10 @@ impl AgentToolCallsScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

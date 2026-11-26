@@ -78,6 +78,23 @@ impl SlopeVisual {
     }
 }
 /// A before-and-after slope chart with a focus item, rank moves and a gliding tooltip.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::slope_chart::{SlopeChart, SlopeSeries};
+///
+/// let series = vec![
+///     SlopeSeries::new("design", "Design", 40.0, 70.0),
+///     SlopeSeries::new("product", "Product", 55.0, 45.0),
+/// ];
+/// let control = cx.new(|_| SlopeChart::new("Progress", series));
+/// # }
+/// ```
 pub struct SlopeChart {
     label: SharedString,
     meta: Option<SharedString>,

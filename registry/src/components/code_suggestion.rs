@@ -76,6 +76,27 @@ struct CodeStyle {
     scroll_x: Pixels,
 }
 
+/// `PatchReview` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::code_suggestion::{Decision, Hunk, PatchReview};
+///
+/// let control = cx.new(|cx| {
+///     PatchReview::new("patch", "release.rs", vec![Hunk {
+///         line: 2,
+///         before: vec!["    let attempts = 1;".into()],
+///         after: vec!["    let attempts = 4;".into()],
+///         decision: Decision::Pending,
+///     }], cx).with_original("fn release() {\n    let attempts = 1;\n}\n")
+/// });
+/// # }
+/// ```
 pub struct PatchReview {
     id: SharedString,
     pub file: String,

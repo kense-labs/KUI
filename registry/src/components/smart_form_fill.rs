@@ -101,6 +101,20 @@ struct FieldState {
     flash: PhaseClock,
 }
 /// Extraction is supplied by the host. No source text leaves this component by itself.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::smart_form_fill::{SmartField, SmartFormFill};
+///
+/// let fields = vec![SmartField::new("name", "Name"), SmartField::new("email", "Email")];
+/// let control = cx.new(|cx| SmartFormFill::new(fields, window, cx));
+/// # }
+/// ```
 pub struct SmartFormFill {
     source: Entity<Textarea>,
     fields: Vec<FieldState>,

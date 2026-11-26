@@ -5,9 +5,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
-        tr,
+        ProPalette, pro_card_shadow, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, tr,
     },
     primitives::{
         family::{PhaseClock, Slide, disabled_motion},
@@ -773,6 +773,35 @@ impl RenderOnce for TrendPlotCanvas {
 }
 
 /// Versatile standalone time-series chart and synchronized multi-chart showcase (`trend-chart`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::trend_chart::{
+///     TrendChart, TrendChartEvent, TrendSeries, TrendVariant,
+/// };
+///
+/// let chart = cx.new(|cx| {
+///     TrendChart::standalone("spend-trend", cx)
+///         .with_variant(TrendVariant::Area)
+///         .with_label("Spend per day")
+///         .with_labels(["Mar 3", "Mar 4", "Mar 5", "Mar 6"])
+///         .with_format("$", "", 0)
+///         .with_series(vec![
+///             TrendSeries::new("this", "This week", vec![412., 455., 398., 470.]),
+///             TrendSeries::new("last", "Last week", vec![356., 380., 371., 390.])
+///                 .with_previous(true),
+///         ])
+/// });
+/// cx.subscribe(&chart, |_, ev: &TrendChartEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct TrendChart {
     id: ElementId,
     showcase_mode: bool,
@@ -1826,7 +1855,7 @@ impl Render for TrendChart {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(dark))
             .px(px(16.))
             .pt(px(14.))
             .pb(px(12.))
@@ -1987,7 +2016,7 @@ impl Render for TrendChart {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(dark))
                     .px(px(14.))
                     .pt(px(12.))
                     .pb(px(10.))

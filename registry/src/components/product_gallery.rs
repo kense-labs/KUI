@@ -124,6 +124,33 @@ fn landing(current: f32, origin: f32, speed: f32, step: f32) -> f32 {
     }
     landed.round()
 }
+/// `ProductGallery` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::product_gallery::{ProductColor, ProductGallery, ProductPhoto, ProductSize};
+///
+/// let colors = vec![ProductColor::new(
+///     "olive",
+///     "Olive",
+///     gpui::rgb(0x6b6a4a).into(),
+///     vec![
+///         ProductPhoto::new("https://images.unsplash.com/photo-1", "Olive jacket, front"),
+///         ProductPhoto::new("https://images.unsplash.com/photo-2", "Olive jacket, back"),
+///     ],
+/// )];
+/// let sizes = vec![
+///     ProductSize::new("s", "S"),
+///     ProductSize::new("m", "M").unavailable_for(vec!["olive".into()]),
+/// ];
+/// let control = cx.new(|cx| ProductGallery::new("Field jacket", colors, sizes, cx));
+/// # }
+/// ```
 pub struct ProductGallery {
     label: SharedString,
     header: Option<GalleryContent>,
@@ -852,22 +879,52 @@ impl ProductGallery {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
         let gap = if width < 420. { 4. } else { 8. };
-        let count = self.sizes.len().max(1) as f32;
-        let minimum = self
+        let count = self.sizes.len().max(1);
+        let naturals: Vec<f32> = self
             .sizes
             .iter()
-            .map(|size| measure(&size.label, 14., w) + 12.)
-            .fold(44., f32::max)
-            .min(width);
-        let available = (width - (count - 1.) * gap) / count;
-        let wrap = available < minimum;
-        let slot_width = available.min(SIZE_W).max(minimum);
-        let size_pos = self.size_fill.get(w, cx).clamp(0., count - 1.);
+            .map(|size| (measure(&size.label, 14., w) + 8.).clamp(38., width.max(38.)))
+            .collect();
+        let total_gaps = count.saturating_sub(1) as f32 * gap;
+        let natural_sum: f32 = naturals.iter().sum();
+        let wrap = natural_sum + total_gaps > width + 0.5;
+        let mobile_wrap = wrap || f32::from(w.viewport_size().width) < 460.;
+        let target_row = (width.floor() - 1. - total_gaps).max(natural_sum);
+        let extra = if wrap {
+            0.
+        } else {
+            (target_row - natural_sum).max(0.) / count as f32
+        };
+        let slot_widths: Vec<f32> = naturals
+            .iter()
+            .map(|n| (n + extra).floor().min(SIZE_W).min(width))
+            .collect();
+        let mut slot_lefts = Vec::with_capacity(count);
+        let mut cursor = 0f32;
+        for &sw in &slot_widths {
+            slot_lefts.push(cursor);
+            cursor += sw + gap;
+        }
+        let size_pos = self
+            .size_fill
+            .get(w, cx)
+            .clamp(0., count.saturating_sub(1) as f32);
+        let (fill_left, fill_width) = if slot_widths.is_empty() {
+            (0., 0.)
+        } else {
+            let i0 = (size_pos.floor() as usize).min(slot_widths.len() - 1);
+            let i1 = (i0 + 1).min(slot_widths.len() - 1);
+            let t = (size_pos - i0 as f32).clamp(0., 1.);
+            (
+                slot_lefts[i0] + (slot_lefts[i1] - slot_lefts[i0]) * t,
+                slot_widths[i0] + (slot_widths[i1] - slot_widths[i0]) * t,
+            )
+        };
         let fill = div()
             .absolute()
-            .left(px(size_pos * (slot_width + gap)))
+            .left(px(fill_left))
             .top_0()
-            .w(px(slot_width))
+            .w(px(fill_width))
             .h(px(SIZE_H))
             .rounded(r)
             .bg(p.ink);
@@ -877,7 +934,7 @@ impl ProductGallery {
             .relative()
             .flex()
             .gap(px(gap))
-            .when(wrap, |row| row.flex_wrap())
+            .when(mobile_wrap, |row| row.flex_wrap())
             .when(!wrap && self.size.is_some(), |row| row.child(fill))
             .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
                 let len = s.sizes.len();
@@ -921,6 +978,7 @@ impl ProductGallery {
             } else {
                 self.size.is_some() && (size_pos - si as f32).abs() < 0.5
             };
+            let slot_width = slot_widths.get(si).copied().unwrap_or(SIZE_W);
             sizes = sizes.child(
                 button(("product-size", si), size.label.clone(), cx)
                     .w(px(slot_width))
@@ -1279,5 +1337,61 @@ mod tests {
     #[test]
     fn landing_clamps_inside_track() {
         assert_eq!(landing(-0.4, 0.0, -900., 564.), 1.);
+    }
+
+    #[test]
+    fn five_bed_sizes_stay_on_one_row_at_desktop_width() {
+        use super::{ProductColor, ProductSize};
+        use gpui::{
+            AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled,
+            TestAppContext, Window, div, rgb, size,
+        };
+
+        struct Host(Entity<ProductGallery>);
+        impl Render for Host {
+            fn render(&mut self, w: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let pad = (f32::from(w.viewport_size().width) * 0.087).clamp(16., 54.);
+                div()
+                    .size_full()
+                    .p(px(pad))
+                    .child(div().w_full().max_w(px(824.)).child(self.0.clone()))
+            }
+        }
+
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (_, window) = app.add_window_view(|_, cx| {
+            let colors = vec![ProductColor::new(
+                "oat",
+                "Oat",
+                rgb(0xd7ccb8).into(),
+                vec![],
+            )];
+            let sizes = vec![
+                ProductSize::new("twin", "Twin"),
+                ProductSize::new("full", "Full"),
+                ProductSize::new("queen", "Queen"),
+                ProductSize::new("king", "King"),
+                ProductSize::new("cal-king", "Cal king"),
+            ];
+            Host(cx.new(|cx| ProductGallery::new("Photos", colors, sizes, cx)))
+        });
+        for viewport_w in [800., 920.] {
+            window.simulate_resize(size(px(viewport_w), px(720.)));
+            for _ in 0..3 {
+                window.update(|w, cx| {
+                    w.simulate_next_frame(cx);
+                    w.refresh();
+                });
+                window.run_until_parked();
+            }
+            let twin = window.debug_bounds("Twin").expect("Twin");
+            let cal_king = window.debug_bounds("Cal king").expect("Cal king");
+            assert_eq!(
+                twin.top(),
+                cal_king.top(),
+                "Cal king wrapped onto a second row at viewport {viewport_w}px"
+            );
+        }
     }
 }

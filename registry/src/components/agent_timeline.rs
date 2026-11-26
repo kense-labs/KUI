@@ -16,6 +16,20 @@ pub struct Span {
     pub parent: Option<usize>,
 }
 
+/// `RunLanes` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_timeline::{RunLanes, Span};
+///
+/// let control = cx.new(|_| RunLanes::new("run","Release review",vec!["Planner".into()],vec![Span {lane:0,start:0.,end:4.,detail:"Read changes".into(),kind:0,parent:None}]));
+/// # }
+/// ```
 pub struct RunLanes {
     id: SharedString,
     pub title: String,

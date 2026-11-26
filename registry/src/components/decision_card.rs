@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_popover_presence, pro_skeleton_bar,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_popover_presence, pro_skeleton_bar,
         pro_step_transition, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
@@ -401,6 +401,24 @@ fn render_wireframe_preview(kind: DecisionTileWireframe, p: &ProPalette) -> AnyE
 }
 
 /// Structured agent decision card docked above a composer with numbered shortcuts, tiles, and Later fold.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::decision_card::{DecisionCard, DecisionCardEvent};
+///
+/// let card = cx.new(|cx| {
+///     DecisionCard::new("composer-decision-card", cx)
+/// });
+/// cx.subscribe(&card, |_, event: &DecisionCardEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct DecisionCard {
     id: ElementId,
     focus: FocusHandle,
@@ -778,7 +796,7 @@ impl Render for DecisionCard {
                 .bg(card_bg)
                 .border_1()
                 .border_color(p.line_strong)
-                .when(!p.dark, |d| d.shadow_sm())
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .items_center()
                 .gap(px(8.0))
@@ -1242,6 +1260,8 @@ impl Render for DecisionCard {
                                 .flex_1()
                                 .min_w_0()
                                 .h(px(22.0))
+                                .flex()
+                                .items_center()
                                 .when_some(ed_view, |d, ed| d.child(ed)),
                         )
                         .when(has_own_text, |d| {
@@ -1299,7 +1319,7 @@ impl Render for DecisionCard {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line_strong)
-                    .shadow_md()
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .gap(px(4.0))
@@ -1399,7 +1419,7 @@ impl Render for DecisionCard {
                     .items_center()
                     .gap(px(8.0))
                     .child(pro_agent_avatar(
-                        "orchestrator",
+                        "claude",
                         p.purple,
                         20.0,
                         open_len > 0,
@@ -1608,7 +1628,7 @@ impl Render for DecisionCard {
                     } else {
                         p.line_strong
                     })
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .gap(px(12.0))
@@ -1617,6 +1637,7 @@ impl Render for DecisionCard {
                             .w_full()
                             .h(px(38.0))
                             .px(px(2.0))
+                            .flex()
                             .when_some(comp_ed, |d, ed| d.child(ed)),
                     )
                     .child(

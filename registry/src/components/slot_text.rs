@@ -94,6 +94,20 @@ fn match_reels(old: &[&str], new: &[&str]) -> Vec<Option<usize>> {
     result
 }
 
+/// `SlotText` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::slot_text::SlotText;
+///
+/// let control = cx.new(|_| SlotText::new("12,480"));
+/// # }
+/// ```
 pub struct SlotText {
     value: SharedString,
     reels: Vec<Reel>,
@@ -174,9 +188,10 @@ impl SlotText {
             let previous = matches[index]
                 .and_then(|old_index| self.reels.get(old_index).map(|reel| (old_index, reel)));
             let new_digit = digit(part);
-            let old_digit = previous.and_then(|(_, reel)| digit(&reel.target));
-            let (from, to) = if let (Some(target), Some(_)) = (new_digit, old_digit) {
-                let (old_index, reel) = previous.unwrap();
+            let (from, to) = if let (Some(target), Some((old_index, reel))) = (
+                new_digit,
+                previous.filter(|(_, reel)| digit(&reel.target).is_some()),
+            ) {
                 let progress = landing(
                     (age / reel_time(self.duration, self.stagger, old_index)).clamp(0., 1.),
                 );

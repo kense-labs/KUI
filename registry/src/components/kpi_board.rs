@@ -1300,6 +1300,26 @@ fn default_board_data() -> HashMap<SharedString, KpiBoardData> {
 }
 
 /// Top-of-dashboard KPI board block combining headline trend cards, a period comparison chart, and a focus card.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::kpi_board::{KpiBoardBlock, KpiBoardEvent};
+///
+/// let board = cx.new(|cx| {
+///     KpiBoardBlock::new("overview-kpi-board", cx)
+///         .with_default_range("30d")
+///         .with_compare_label("vs. last month")
+/// });
+/// cx.subscribe(&board, |_, event: &KpiBoardEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct KpiBoardBlock {
     id: ElementId,
     focus: FocusHandle,

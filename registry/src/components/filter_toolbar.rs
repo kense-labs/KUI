@@ -20,6 +20,20 @@ impl Facet {
     }
 }
 pub struct FiltersChanged(pub BTreeMap<usize, usize>);
+/// `FilterToolbar` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::filter_toolbar::{FilterToolbar, Facet};
+///
+/// let control = cx.new(|_| FilterToolbar::new(vec![Facet::new("Status", vec!["In review".into(), "Done".into()])], vec![(0,0)]));
+/// # }
+/// ```
 pub struct FilterToolbar {
     facets: Vec<Facet>,
     active: BTreeMap<usize, usize>,
@@ -145,8 +159,10 @@ impl Render for FilterToolbar {
                 .child(add)
                 .on_click(cx.listener(|s, _, w, cx| {
                     s.menu = !s.menu;
-                    if s.menu {
-                        s.menu_focus.as_ref().unwrap().focus(w, cx);
+                    if s.menu
+                        && let Some(focus) = &s.menu_focus
+                    {
+                        focus.focus(w, cx);
                     }
                     s.facet = None;
                     cx.notify()
@@ -213,7 +229,9 @@ impl Render for FilterToolbar {
                                 s.pane.duration(1., 0.16, cx);
                             } else {
                                 s.menu = false;
-                                s.launch.as_ref().unwrap().focus(w, cx);
+                                if let Some(focus) = &s.launch {
+                                    focus.focus(w, cx);
+                                }
                             }
                             cx.notify()
                         })),
@@ -226,7 +244,9 @@ impl Render for FilterToolbar {
                             .child(v.clone())
                             .on_click(cx.listener(move |s, _, w, cx| {
                                 s.set(f, Some(i), cx);
-                                s.launch.as_ref().unwrap().focus(w, cx);
+                                if let Some(focus) = &s.launch {
+                                    focus.focus(w, cx);
+                                }
                             })),
                     )
                 }
@@ -264,7 +284,9 @@ impl Render for FilterToolbar {
                 .on_key_down(cx.listener(|s, e: &KeyDownEvent, w, cx| {
                     if e.keystroke.key == "escape" {
                         s.menu = false;
-                        s.launch.as_ref().unwrap().focus(w, cx);
+                        if let Some(focus) = &s.launch {
+                            focus.focus(w, cx);
+                        }
                         cx.stop_propagation();
                         cx.notify();
                     }

@@ -171,6 +171,21 @@ fn tip_size(profiles: &[RadarProfile]) -> (f32, f32) {
 }
 
 /// Radial comparison. Three to twelve dimensions are supported.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::radar_chart::{RadarAxis, RadarChart, RadarProfile};
+///
+/// let axes = vec![RadarAxis::new("speed", "Speed"), RadarAxis::new("quality", "Quality"), RadarAxis::new("reach", "Reach")];
+/// let profiles = vec![RadarProfile::new("current", "Current", vec![80.0, 65.0, 90.0], gpui::rgb(0x9d83e8).into())];
+/// let control = cx.new(|_| RadarChart::new("Capabilities", axes, profiles));
+/// # }
+/// ```
 pub struct RadarChart {
     title: SharedString,
     meta: Option<SharedString>,

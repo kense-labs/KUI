@@ -7,9 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_connector_pulse,
-        pro_eid, pro_empty_state, pro_icon_btn, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_presence, pro_rolling_number, pro_selection_sensor,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_presence, pro_rolling_number, pro_selection_sensor,
         pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner,
         pro_view_transition, tr,
     },
@@ -580,6 +580,25 @@ fn format_duration(ms: u32) -> String {
 }
 
 /// Radial/hub map of an agent and every tool in the run, with call history inspection and inline replay.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tool_access_map::{ToolAccessMap, ToolAccessMapEvent};
+///
+/// let map = cx.new(|cx| {
+///     ToolAccessMap::new("tool-access-map", cx)
+///         .with_default_agent("coder")
+/// });
+/// cx.subscribe(&map, |_, event: &ToolAccessMapEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ToolAccessMap {
     id: ElementId,
     focus: FocusHandle,
@@ -2132,7 +2151,7 @@ impl Render for ToolAccessMap {
                 .bg(card_bg)
                 .border_1()
                 .border_color(p.line_strong)
-                .shadow_md()
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(8.))

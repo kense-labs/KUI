@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_mix_color, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar,
-        pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mix_color, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     primitives::{
         control::activate,
@@ -168,6 +168,26 @@ pub enum DropzoneEvent {
 }
 
 /// Tactile multi-file upload dropzone with fanning document stack, progress ETA, and retry.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::dropzone::{Dropzone, DropzoneEvent};
+///
+/// let uploader = cx.new(|cx| {
+///     Dropzone::new("attachments-dropzone", cx)
+///         .with_accept([".pdf", ".csv", ".png", ".json"])
+///         .with_max_size(25 * 1024 * 1024)
+/// });
+/// cx.subscribe(&uploader, |_, event: &DropzoneEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct Dropzone {
     id: ElementId,
     accept: Vec<SharedString>,
@@ -1500,7 +1520,7 @@ impl Render for Dropzone {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

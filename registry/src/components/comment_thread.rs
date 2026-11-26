@@ -23,6 +23,20 @@ pub enum CommentEvent {
     Like(u64),
     Resolve(bool),
 }
+/// `CommentThread` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::comment_thread::{CommentThread, Comment};
+///
+/// let control = cx.new(|cx| CommentThread::new("review","Release notes",vec![Comment{key:1,parent:None,author:"Maya".into(),text:"Check the date.".into(),age:"2h".into(),likes:0,mine:false}],window,cx));
+/// # }
+/// ```
 pub struct CommentThread {
     id: SharedString,
     pub subject: String,

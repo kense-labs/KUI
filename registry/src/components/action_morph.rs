@@ -270,6 +270,41 @@ impl Spring {
 }
 
 /// One bottom-corner surface with separately preserved drafts and a ticketed save lifecycle.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::action_morph::{
+///     ActionMorph, ActionMorphAction, ActionMorphComposer, ActionMorphSubmit,
+/// };
+/// use kui::primitives::glyph::Glyph;
+///
+/// let create = cx.new(|cx| {
+///     ActionMorph::new(
+///         vec![ActionMorphAction::new(
+///             "task",
+///             "Task",
+///             Glyph::Check,
+///             ActionMorphComposer::new("New task", "What needs doing?", "Add task", "Task added"),
+///         ).with_shortcut('t')],
+///         window,
+///         cx,
+///     )
+///     .with_deferred_submit()
+///     .with_style(|e| e.absolute().bottom(gpui::px(16.)).right(gpui::px(16.)))
+/// });
+/// window.subscribe(&create, cx, |control, submission: &ActionMorphSubmit, w, cx| {
+///     // This example accepts immediately. Resolve with the persistence result in an app.
+///     control.update(cx, |control, cx| {
+///         control.complete(submission.ticket, Ok(()), w, cx);
+///     });
+/// }).detach();
+/// # }
+/// ```
 pub struct ActionMorph {
     id: ElementId,
     actions: Vec<ActionSlot>,

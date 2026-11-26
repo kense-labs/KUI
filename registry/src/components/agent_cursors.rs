@@ -824,6 +824,25 @@ impl RenderOnce for GlidingPointer {
 }
 
 /// Collaborative multiplayer-editor surface showing live AI agent pointers, patches, image handles, and margin comments.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_cursors::{AgentCursors, AgentCursorsEvent};
+///
+/// let stage = cx.new(|cx| {
+///     AgentCursors::new("launch-brief-cursors", cx)
+///         .with_title("Product / Launches")
+/// });
+/// cx.subscribe(&stage, |_, ev: &AgentCursorsEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentCursors {
     id: ElementId,
     title: SharedString,

@@ -77,6 +77,26 @@ type Visibility = Box<dyn Fn(&App) -> bool>;
 type ScrollRegion = Rc<dyn Fn(Bounds<Pixels>, bool, bool, &App)>;
 
 /// Hosts keyed GPUI rows in a refreshable panel.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{div, prelude::*, px, SharedString, Task};
+/// use kui::components::stretch_refresh::StretchRefresh;
+///
+/// let feed = cx.new(|cx| StretchRefresh::new(
+///     "Activity",
+///     vec![SharedString::from("Build passed")],
+///     |item| item.clone(),
+///     |item, _, _| div().p(px(12.)).child(item.clone()).into_any_element(),
+///     |_, _| Task::ready(Ok(None)),
+///     cx,
+/// ).with_subtitle("Updated just now"));
+/// # }
+/// ```
 pub struct StretchRefresh<T: 'static> {
     id: ElementId,
     title: SharedString,

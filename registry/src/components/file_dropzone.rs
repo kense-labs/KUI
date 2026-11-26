@@ -26,6 +26,20 @@ pub struct FileRow {
     progress: Slide,
     reveal: Slide,
 }
+/// `FileDropzone` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::file_dropzone::FileDropzone;
+///
+/// let control = cx.new(|cx| FileDropzone::new("Add files", 10 * 1024 * 1024, 6, cx).with_extensions(&["pdf", "png"]));
+/// # }
+/// ```
 pub struct FileDropzone {
     label: SharedString,
     max_bytes: u64,

@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_popover_presence, pro_progress_ring, pro_rolling_number,
-        pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_popover_presence, pro_progress_ring,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner,
+        pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -123,6 +124,26 @@ pub enum RunningNowEvent {
 impl EventEmitter<RunningNowEvent> for RunningNow {}
 
 /// Live header/sidebar pill and background-task popover.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::running_now::{RunningNow, RunningNowAlign, RunningNowEvent};
+///
+/// let indicator = cx.new(|cx| {
+///     RunningNow::new("header-running-now", cx)
+///         .with_align(RunningNowAlign::End)
+///         .with_open(true)
+/// });
+/// cx.subscribe(&indicator, |_, event: &RunningNowEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct RunningNow {
     id: ElementId,
     focus: FocusHandle,
@@ -597,7 +618,7 @@ impl Render for RunningNow {
                 |this, _, cx| this.set_open(!this.open, cx),
             )
             .flex_none()
-            .shadow_xs()
+            .shadow(pro_card_shadow(p.dark))
         };
 
         // Popover panel via pro_popover_presence so opening/closing via header pill animates both ways
@@ -1133,7 +1154,10 @@ impl Render for RunningNow {
                     },
                     |_, _, _, _| (),
                 )
-                .w(px(0.))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
                 .h(px(0.)),
             )
             .child(body)

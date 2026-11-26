@@ -14,7 +14,7 @@ use crate::{
     primitives::{
         control::UiLanguage,
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_icon},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -24,6 +24,9 @@ use std::{
     time::Duration,
 };
 use web_time::Instant;
+
+const ICON_OPTION: &str = r#"<path d="M4 7h4.5l5 10H20M14.5 7H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#;
+const ICON_RETURN: &str = r#"<path d="M18 6v4.5a2.5 2.5 0 0 1-2.5 2.5H6m3.5-3.5L6 13l3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#;
 
 /// Default 68-bar speech rhythm profile (`<= 3` represents quiet breath pauses).
 pub const DEFAULT_VOICE_PROFILE: [u8; 68] = [
@@ -201,6 +204,9 @@ fn paint_fading_panel(panel_bg: Hsla, border_col: Hsla, shadow_col: Hsla) -> imp
 }
 
 fn render_kbd_cap(label: impl Into<SharedString>, bg: Hsla, fg: Hsla) -> Div {
+    let lbl: SharedString = label.into();
+    let is_opt = lbl.as_ref() == "⌥" || lbl.as_ref().eq_ignore_ascii_case("alt");
+    let is_ret = lbl.as_ref() == "↵" || lbl.as_ref().eq_ignore_ascii_case("enter");
     div()
         .min_w(px(16.0))
         .h(px(16.0))
@@ -214,7 +220,13 @@ fn render_kbd_cap(label: impl Into<SharedString>, bg: Hsla, fg: Hsla) -> Div {
         .line_height(px(12.0))
         .font_weight(FontWeight::MEDIUM)
         .text_color(fg)
-        .child(label.into())
+        .when(is_opt, |d| {
+            d.child(pro_svg("0 0 24 24", ICON_OPTION, 10.5, fg))
+        })
+        .when(is_ret, |d| {
+            d.child(pro_svg("0 0 24 24", ICON_RETURN, 10.5, fg))
+        })
+        .when(!is_opt && !is_ret, |d| d.child(lbl))
 }
 
 /// Product-scene dictation panel with animated vertical voice bars, live clock, and under-glow.

@@ -1,6 +1,20 @@
 //! Animated headline, change indicator and comparison period.
 use crate::primitives::{family::Paint, presentation::*};
 use gpui::{prelude::*, *};
+/// `MetricCard` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::metric_card::MetricCard;
+///
+/// let control = cx.new(|_| MetricCard::new("Active users", 2486.0, 18.4, "Previous 7 days"));
+/// # }
+/// ```
 pub struct MetricCard {
     label: SharedString,
     value: RollingNumber,

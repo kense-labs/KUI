@@ -108,6 +108,25 @@ struct Drag {
     origin_y: f32,
     samples: Vec<(Instant, f32, f32)>,
 }
+/// `CardStack` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::card_stack::{CardStack, StackCard, StackFact};
+/// use kui::primitives::glyph::Glyph;
+///
+/// let cards = vec![StackCard::new("kyo", "Kyoto", "Japan")
+///     .with_meta("KIX", "3–9 Nov")
+///     .with_pitch("Temple mornings, ryokan evenings.")
+///     .with_fact(StackFact::new(Glyph::Plane, "15h 40m with one stop"))];
+/// let control = cx.new(|cx| CardStack::new("Offsite destinations", cards, cx));
+/// # }
+/// ```
 pub struct CardStack {
     cards: Vec<StackCard>,
     index: usize,

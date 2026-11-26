@@ -947,7 +947,7 @@ impl BrandRegionsScreen {
             anchor_topics: Rc::new(Cell::new(None)),
             anchor_platforms: Rc::new(Cell::new(None)),
             anchor_config: Rc::new(Cell::new(None)),
-            measured_width: Rc::new(Cell::new(980.)),
+            measured_width: Rc::new(Cell::new(666.)),
             boot_at: Instant::now(),
         }
     }
@@ -1721,9 +1721,9 @@ impl BrandRegionsScreen {
         let p = ProPalette::get(cx);
         let reduced = Theme::global(cx).reduced_motion;
         let width = self.measured_width.get();
-        let stack_layout = width < 620.0;
-        let compact_split = width < 760.0;
-        let mobile = width < 560.0;
+        let stack_layout = width < 540.0;
+        let compact_split = width < 780.0;
+        let mobile = width < 500.0;
 
         if let Some(cur_pop) = self.open_popover {
             self.last_popover = Some(cur_pop);
@@ -1780,10 +1780,10 @@ impl BrandRegionsScreen {
             .relative()
             .flex_1()
             .min_w_0()
-            .overflow_x_hidden()
+            .overflow_x_scroll()
             .flex()
             .items_center()
-            .gap(px(12.))
+            .gap(px(if compact_split { 4. } else { 12. }))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
                 let all = BrandRegionsTab::all();
                 let pos = all.iter().position(|&t| t == this.active_tab).unwrap_or(4);
@@ -1822,11 +1822,12 @@ impl BrandRegionsScreen {
                     false,
                     div()
                         .h(px(40.))
-                        .px(px(6.))
+                        .px(px(if compact_split { 3.5 } else { 6. }))
                         .flex()
                         .items_center()
                         .whitespace_nowrap()
-                        .text_size(px(13.))
+                        .flex_shrink_0()
+                        .text_size(px(if compact_split { 12. } else { 13. }))
                         .text_color(if selected { p.strong } else { p.muted })
                         .when(selected, |d| d.font_weight(FontWeight::MEDIUM))
                         .child(lbl),
@@ -1834,7 +1835,7 @@ impl BrandRegionsScreen {
                     move |this, _, cx| this.select_tab(tab, cx),
                 )
                 .relative()
-                .flex_none()
+                .flex_shrink_0()
                 .when(selected, |d| d.child(pro_mark_selected(&tab_sensor)))
             }));
 
@@ -1890,19 +1891,19 @@ impl BrandRegionsScreen {
             false,
             div()
                 .h(px(28.))
-                .px(px(10.))
+                .px(px(if compact_split { 8. } else { 10. }))
                 .flex()
                 .items_center()
-                .gap(px(6.))
+                .gap(px(if compact_split { 5. } else { 6. }))
                 .whitespace_nowrap()
                 .child(pro_swap_label(
                     pro_eid(&self.id, "answers-lbl"),
                     answers_txt,
-                    13.,
+                    if compact_split { 12.5 } else { 13. },
                     FontWeight::MEDIUM,
                     p.ink,
                 ))
-                .child(pro_icon(ProIcon::ExternalArrow, 13.5, p.muted)),
+                .child(pro_icon(ProIcon::ExternalArrow, 13., p.muted)),
             cx,
             |this, _, cx| {
                 cx.emit(BrandRegionsEvent::OpenAnswers);
@@ -1937,7 +1938,7 @@ impl BrandRegionsScreen {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap(px(12.))
+                    .gap(px(if compact_split { 8. } else { 12. }))
                     .child(tabs_strip)
                     .child(
                         div()
@@ -1945,7 +1946,7 @@ impl BrandRegionsScreen {
                             .flex_none()
                             .flex()
                             .items_center()
-                            .gap(px(8.))
+                            .gap(px(if compact_split { 6. } else { 8. }))
                             .child(more_btn)
                             .child(answers_btn),
                     ),
@@ -2133,6 +2134,13 @@ impl BrandRegionsScreen {
         let vh = pro_spring_f32(pro_eid(&self.id, "br-zoom-vh"), tvh, 0.34, w, cx).max(10.0);
 
         let sb_opt = self.stage_bounds.get();
+        let fallback_stage_w = if stack_layout {
+            (width - 52.0).max(240.0)
+        } else if compact_split {
+            (width - 332.0).max(220.0)
+        } else {
+            (width - 428.0).max(260.0)
+        };
         let (stage_w, stage_h) = sb_opt
             .map(|b| {
                 (
@@ -2140,7 +2148,7 @@ impl BrandRegionsScreen {
                     f32::from(b.size.height).max(120.),
                 )
             })
-            .unwrap_or((620.0, 380.0));
+            .unwrap_or((fallback_stage_w, 380.0));
         let pad_top = 8.0f32;
         let pad_bot = 28.0f32;
         let avail_w = (stage_w - 8.0).max(80.0);
@@ -2537,12 +2545,12 @@ impl BrandRegionsScreen {
                     false,
                     div()
                         .h(px(26.))
-                        .px(px(6.))
+                        .px(px(if compact_split { 5. } else { 7. }))
                         .flex()
                         .items_center()
                         .justify_center()
                         .whitespace_nowrap()
-                        .text_size(px(12.5))
+                        .text_size(px(if compact_split { 11.5 } else { 12.5 }))
                         .text_color(if active { p.strong } else { p.muted })
                         .when(active, |d| d.font_weight(FontWeight::MEDIUM))
                         .child(lbl),
@@ -2550,8 +2558,8 @@ impl BrandRegionsScreen {
                     move |this, _, cx| this.set_measure(m, cx),
                 )
                 .relative()
-                .flex_1()
-                .min_w_0()
+                .flex_grow(1.0)
+                .flex_shrink_0()
                 .when(active, |d| d.child(pro_mark_selected(&measure_sensor)))
             }));
 
@@ -2642,7 +2650,7 @@ impl BrandRegionsScreen {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap(px(10.))
+                    .gap(px(8.))
                     .text_size(px(13.))
                     .text_color(p.ink)
                     .child(
@@ -2678,8 +2686,8 @@ impl BrandRegionsScreen {
                             .flex_none()
                             .flex()
                             .items_center()
-                            .gap(px(10.))
-                            .child(div().min_w(px(44.)).flex().justify_end().child(
+                            .gap(px(if compact_split { 8. } else { 10. }))
+                            .child(div().min_w(px(42.)).flex().justify_end().child(
                                 pro_rolling_number(
                                     pro_eid(&self.id, format!("br-rval-{}", row.id)),
                                     val as f64,
@@ -2691,7 +2699,7 @@ impl BrandRegionsScreen {
                                     p.strong,
                                 ),
                             ))
-                            .child(div().min_w(px(46.)).flex().justify_end().child(
+                            .child(div().min_w(px(44.)).flex().justify_end().child(
                                 pro_swap_label(
                                     pro_eid(&self.id, format!("br-rdel-{}", row.id)),
                                     format_delta_pct(delta),
@@ -2807,7 +2815,7 @@ impl BrandRegionsScreen {
 
         let right_side = div()
             .when(!stack_layout, |d| {
-                d.w(px(if compact_split { 276. } else { 340. }))
+                d.w(px(if compact_split { 268. } else { 336. }))
                     .flex_none()
                     .border_l_1()
                     .border_color(p.line_strong)
@@ -2817,7 +2825,7 @@ impl BrandRegionsScreen {
             })
             .min_h_0()
             .pt(px(14.))
-            .px(px(14.))
+            .px(px(if compact_split { 12. } else { 14. }))
             .pb(px(6.))
             .flex()
             .flex_col()
@@ -2854,7 +2862,10 @@ impl BrandRegionsScreen {
             },
             |_, _, _, _| (),
         )
-        .w_full()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
         .h(px(0.));
 
         let scroll = div()
@@ -2862,13 +2873,24 @@ impl BrandRegionsScreen {
             .size_full()
             .min_h_0()
             .overflow_y_scroll()
-            .pt(px(if mobile { 16. } else { 28. }))
-            .px(px(if mobile { 12. } else { 32. }))
+            .pt(px(if mobile {
+                14.
+            } else if compact_split {
+                20.
+            } else {
+                28.
+            }))
+            .px(px(if mobile {
+                12.
+            } else if compact_split {
+                18.
+            } else {
+                32.
+            }))
             .pb(px(if mobile { 16. } else { 24. }))
             .flex()
             .flex_col()
             .gap(px(if mobile { 12. } else { 16. }))
-            .child(sensor)
             .child(header_block)
             .child(toolbar_row)
             .child(split_card);
@@ -2888,6 +2910,7 @@ impl BrandRegionsScreen {
                     cx.notify();
                 }
             }))
+            .child(sensor)
             .child(scroll);
 
         if let Some(pop) = self.open_popover.or(self.last_popover)

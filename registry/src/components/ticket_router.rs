@@ -189,6 +189,21 @@ impl Entry {
     }
 }
 /// Requests are emitted to the host; a ticket is marked routed only after host confirmation.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ticket_router::{Ticket, TicketLane, TicketRouter};
+///
+/// let lanes = vec![TicketLane::new("support", "Support"), TicketLane::new("billing", "Billing")];
+/// let tickets = vec![Ticket::new("one", "Invoice question", "Please check the invoice.")];
+/// let control = cx.new(|_| TicketRouter::new("Inbox", lanes, tickets));
+/// # }
+/// ```
 pub struct TicketRouter {
     title: SharedString,
     model: Option<SharedString>,
@@ -1216,7 +1231,9 @@ impl Render for TicketRouter {
                         ),
                 );
             for (j, entry) in items.iter().enumerate() {
-                let decision = entry.decision.as_ref().unwrap();
+                let Some(decision) = entry.decision.as_ref() else {
+                    continue;
+                };
                 let subject = entry.ticket.subject.clone();
                 let landing = if animate {
                     ease(entry.clock.time(ROUTE_TRAVEL_SECONDS, w, cx) / ROUTE_TRAVEL_SECONDS)
@@ -1353,7 +1370,9 @@ impl Render for TicketRouter {
             .skip(review_page * per_page)
             .take(per_page)
         {
-            let decision = entry.decision.as_ref().unwrap();
+            let Some(decision) = entry.decision.as_ref() else {
+                continue;
+            };
             let ticket = entry.ticket.id.clone();
             let lane = decision.lane.clone();
             let suggested = self

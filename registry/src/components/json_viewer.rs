@@ -178,6 +178,19 @@ fn highlights(text: &str, needle: &str) -> Vec<Range<usize>> {
 }
 
 /// Searchable, paged JSON inspector. The data is indexed once, in its supplied iteration order.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::json_viewer::{JsonViewer, JsonValue};
+///
+/// let control = cx.new(|cx| JsonViewer::new("payload", r#"{"status":"ok","items":[1,2]}"#.parse::<JsonValue>().unwrap(),window,cx));
+/// # }
+/// ```
 pub struct JsonViewer {
     value: JsonValue,
     nodes: Vec<Node>,

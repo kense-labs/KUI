@@ -281,6 +281,37 @@ struct FocusTargets {
 type TimeFormat = Box<dyn Fn(DateTime<Local>) -> SharedString>;
 
 /// A workspace's compact settings panel and its two detail surfaces.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::control_center::{ControlCenter, ControlCenterChanged, FocusMode, NotificationChannel};
+/// use kui::primitives::glyph::Glyph;
+///
+/// let settings = cx.new(|cx| {
+///     ControlCenter::new(
+///         vec![
+///             FocusMode::new("deep", "Deep work", Glyph::Lock, "Only mentions get through", 50),
+///             FocusMode::new("meeting", "Meetings", Glyph::Clock, "Keep calendar alerts", 30),
+///         ],
+///         vec![
+///             NotificationChannel::new("mentions", "Mentions").with_default_on(true),
+///             NotificationChannel::new("deploys", "Deploy alerts"),
+///         ],
+///         cx,
+///     )
+/// });
+/// cx.subscribe(&settings, |_, event: &ControlCenterChanged, _| {
+///     // Persist the settings and apply notification, presenting and text preferences in the host.
+///     let settings = &event.0;
+///     println!("Alert volume: {}", settings.volume);
+/// }).detach();
+/// # }
+/// ```
 pub struct ControlCenter {
     id: ElementId,
     label: Option<SharedString>,

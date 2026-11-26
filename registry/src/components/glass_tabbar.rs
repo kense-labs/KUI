@@ -221,6 +221,43 @@ struct Drag {
 }
 
 /// A bottom bar with one tab stop, an optional action and a shared geometry spring.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::glass_tabbar::{
+///     GlassTabBar, GlassTabBarCompactChanged, GlassTabBarItem, GlassTabBarValueChanged, GlassTabIcon,
+/// };
+///
+/// let scroll = gpui::ScrollHandle::new();
+/// let bar = cx.new(|cx| {
+///     GlassTabBar::new(
+///         vec![
+///             GlassTabBarItem::new("home", "Home", GlassTabIcon::Home),
+///             GlassTabBarItem::new("explore", "Explore", GlassTabIcon::Explore),
+///             GlassTabBarItem::new("saved", "Saved", GlassTabIcon::Saved).with_badge(3),
+///             GlassTabBarItem::new("profile", "Profile", GlassTabIcon::Profile),
+///         ],
+///         cx,
+///     )
+///     .with_label("Main")
+///     .with_action(GlassTabBarItem::new("search", "Search", GlassTabIcon::Search), cx)
+///     .with_scroll_handle(scroll.clone())
+///     .with_value("home")
+///     .with_compact(false)
+/// });
+/// cx.subscribe(&bar, |bar, event: &GlassTabBarValueChanged, cx| {
+///     bar.update(cx, |bar, cx| bar.set_value(event.0.clone(), cx));
+/// }).detach();
+/// cx.subscribe(&bar, |bar, event: &GlassTabBarCompactChanged, cx| {
+///     bar.update(cx, |bar, cx| bar.set_compact(event.0, cx));
+/// }).detach();
+/// # }
+/// ```
 pub struct GlassTabBar {
     id: SharedString,
     label: SharedString,

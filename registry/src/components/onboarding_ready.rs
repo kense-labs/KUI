@@ -332,6 +332,22 @@ impl StarterPromptKind {
 }
 
 /// Step 4 of 4 in the AI assistant onboarding wizard: completion summary and live launch.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::onboarding_ready::{OnboardingReadyScreen, OnboardingReadyEvent};
+///
+/// let screen = cx.new(|cx| OnboardingReadyScreen::new("onboarding-ready", cx));
+/// cx.subscribe(&screen, |_, event: &OnboardingReadyEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct OnboardingReadyScreen {
     id: ElementId,
     domains: Vec<SharedString>,
@@ -1928,7 +1944,10 @@ impl Render for OnboardingReadyScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .when_some(preview, |d, p| d.child(p))
             .child(top_bar)

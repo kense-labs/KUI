@@ -63,6 +63,20 @@ impl MorphOption {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MorphSelectionChanged(pub SharedString);
 /// One choice from a local, optionally grouped and searchable list.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::morph_select::{MorphOption, MorphSelect};
+///
+/// let options = vec![MorphOption::new("todo", "To do").with_group("Open"), MorphOption::new("done", "Done").with_group("Closed")];
+/// let control = cx.new(|cx| MorphSelect::new("Status", options, window, cx).with_value("todo").with_searchable(true));
+/// # }
+/// ```
 pub struct MorphSelect {
     label: SharedString,
     placeholder: SharedString,

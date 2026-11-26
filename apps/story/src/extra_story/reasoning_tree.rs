@@ -10,7 +10,6 @@ pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 }
 struct Example {
     view: Entity<ReasoningTree>,
-    language: UiLanguage,
 }
 impl Example {
     fn new(cx: &mut Context<Self>) -> Self {
@@ -49,7 +48,7 @@ impl Example {
         view.update(cx, |tree, cx| {
             tree.step(cx);
         });
-        Self { view, language }
+        Self { view }
     }
 }
 impl Render for Example {
@@ -57,7 +56,7 @@ impl Render for Example {
         let p = Paint::get(cx);
         div()
             .size_full()
-            .min_h(px(540.))
+            .min_h(px(520.))
             .p_4()
             .bg(p.stage)
             .text_color(p.ink)
@@ -65,16 +64,6 @@ impl Render for Example {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap_3()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Illustrative scores — no model is called",
-                        "分数仅作演示，不调用模型",
-                    )),
-            )
             .child(div().w_full().max_w(px(522.)).child(self.view.clone()))
     }
 }

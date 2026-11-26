@@ -107,6 +107,20 @@ impl PairReel {
 }
 
 /// A countdown whose host supplies the initial duration.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::countdown::Countdown;
+/// use std::time::Duration;
+///
+/// let control = cx.new(|cx| Countdown::new("Launch", Duration::from_secs(95), cx).with_complete_label("Live now"));
+/// # }
+/// ```
 pub struct Countdown {
     label: SharedString,
     complete_label: SharedString,

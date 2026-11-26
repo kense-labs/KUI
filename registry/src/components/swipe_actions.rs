@@ -95,6 +95,23 @@ struct Drag {
     armed: bool,
     samples: VecDeque<(Instant, f32)>,
 }
+/// `SwipeActions` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::swipe_actions::{SwipeAction, SwipeActions, SwipeRow};
+/// use kui::primitives::glyph::Glyph;
+///
+/// let row = SwipeRow::new("draft", "Draft", |_, _| gpui::div().child("Draft").into_any_element())
+///     .leading(vec![SwipeAction::new("archive", "Archive", Glyph::Archive)]);
+/// let control = cx.new(|cx| SwipeActions::new("inbox", "Inbox", vec![row], cx));
+/// # }
+/// ```
 pub struct SwipeActions {
     id: ElementId,
     label: SharedString,

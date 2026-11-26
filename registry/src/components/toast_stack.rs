@@ -18,6 +18,20 @@ struct Entry {
     toast: Entity<Toast>,
     _subscription: Subscription,
 }
+/// `ToastStack` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::toast_stack::ToastStack;
+///
+/// let control = cx.new(|_| ToastStack::new("Notifications"));
+/// # }
+/// ```
 pub struct ToastStack {
     entries: Vec<Entry>,
     next: u64,
@@ -135,20 +149,23 @@ impl ToastStack {
 }
 impl Render for ToastStack {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.focus.is_none() {
-            let focus = cx.focus_handle().tab_stop(true);
-            self.focus_subs.push(cx.on_focus_in(&focus, w, |s, _, cx| {
-                s.focused = true;
-                s.sync_expanded(cx);
-            }));
-            self.focus_subs
-                .push(cx.on_focus_out(&focus, w, |s, _, _, cx| {
-                    s.focused = false;
+        let focus = match &self.focus {
+            Some(focus) => focus.clone(),
+            None => {
+                let focus = cx.focus_handle().tab_stop(true);
+                self.focus_subs.push(cx.on_focus_in(&focus, w, |s, _, cx| {
+                    s.focused = true;
                     s.sync_expanded(cx);
                 }));
-            self.focus = Some(focus);
-        }
-        let focus = self.focus.as_ref().unwrap();
+                self.focus_subs
+                    .push(cx.on_focus_out(&focus, w, |s, _, _, cx| {
+                        s.focused = false;
+                        s.sync_expanded(cx);
+                    }));
+                self.focus = Some(focus.clone());
+                focus
+            }
+        };
         let p = Paint::get(cx);
         let n = self.entries.len().min(3);
         let expanded = self.expanded.get(w, cx).clamp(0., 1.);
@@ -157,7 +174,7 @@ impl Render for ToastStack {
             .id("toast-stack")
             .role(Role::Region)
             .aria_label(self.label.clone())
-            .track_focus(focus)
+            .track_focus(&focus)
             .relative()
             .w(px(360.))
             .max_w_full()

@@ -16,7 +16,7 @@
   "files": [
     {
       "path": "components/popover.rs",
-      "content": "//! An anchored, non-modal contextual panel.\nuse crate::primitives::disclosure::{Surface, SurfaceStyle};\npub struct PopoverStyle;\nimpl SurfaceStyle for PopoverStyle {\n    const MODAL: bool = false;\n}\npub type Popover = Surface<PopoverStyle>;\n"
+      "content": "//! An anchored, non-modal contextual panel.\nuse crate::primitives::disclosure::{Surface, SurfaceStyle};\n/// `Popover` component.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::popover::Popover;\n///\n/// let control = cx.new(|cx| Popover::new(\"checks\", \"Why this status?\", \"Ready for review\", cx)\n///         .with_description(\"All required checks passed.\").with_cancel(\"Got it\"));\n/// # }\n/// ```\npub struct PopoverStyle;\nimpl SurfaceStyle for PopoverStyle {\n    const MODAL: bool = false;\n}\npub type Popover = Surface<PopoverStyle>;\n"
     },
     {
       "path": "primitives/control.rs",

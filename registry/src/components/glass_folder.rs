@@ -759,10 +759,14 @@ fn rasterize_glass_folder(
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::glass_folder::GlassFolder;
 ///
 /// let folder = cx.new(|cx| GlassFolder::new("kb-folder", cx));
+/// # }
 /// ```
 pub struct GlassFolder {
     id: ElementId,

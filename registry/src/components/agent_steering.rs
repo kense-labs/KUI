@@ -173,7 +173,7 @@ pub enum AgentSteeringEvent {
         /// `true` when promoted from an already-queued chip via `"Now"`.
         from_queue: bool,
     },
-    /// Emitted when a queued note is removed via `✕`.
+    /// Emitted when a queued note is removed.
     Removed(SharedString),
     /// Emitted when the run is paused, resumed, or completed.
     StatusChanged(SteerRunStatus),
@@ -189,6 +189,26 @@ pub enum AgentSteeringEvent {
 impl EventEmitter<AgentSteeringEvent> for AgentSteering {}
 
 /// Mid-run steering card pairing a live step-by-step plan with next-step queue and instant interrupt.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_steering::{AgentSteering, AgentSteeringEvent};
+///
+/// let steering = cx.new(|cx| {
+///     AgentSteering::new("migrate-steering", cx)
+///         .with_title("Migrate users table")
+///         .with_agent("Opus 5.5")
+/// });
+/// cx.subscribe(&steering, |_, event: &AgentSteeringEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentSteering {
     id: ElementId,
     focus: FocusHandle,
@@ -1151,13 +1171,13 @@ impl Render for AgentSteering {
         let queue_fold = pro_fold(pro_eid(&self.id, "queue-fold"), queue_open, 76., 0., {
             let base_id = self.id.clone();
             let header_lbl = tr(cx, "QUEUED FOR THE NEXT STEP", "等待下一步采纳").to_owned();
-            let finish_lbl = tr(cx, "Finish step ▸", "完成当前步 ▸");
+            let finish_lbl = tr(cx, "Finish step", "完成当前步");
             let can_advance = self.status != SteerRunStatus::Done;
             let adv_pill = can_advance.then(|| {
                 div().ml_auto().child(pro_btn(
                     pro_eid(&base_id, "adv-step-btn"),
                     finish_lbl,
-                    None,
+                    Some(ProIcon::ChevronRight),
                     ProBtnStyle::Ghost,
                     true,
                     cx,
@@ -1387,7 +1407,7 @@ impl Render for AgentSteering {
             let next_hint = tr(cx, "next step", "下一步采纳").to_owned();
             let now_hint = tr(cx, "interrupt now", "立即中断执行").to_owned();
             let now_btn_lbl = if narrow {
-                "⚡"
+                tr(cx, "Now", "立即")
             } else {
                 tr(cx, "Interrupt now", "立即中断")
             };
@@ -1559,7 +1579,10 @@ impl Render for AgentSteering {
                     },
                     |_, _, _, _| (),
                 )
-                .w(px(0.))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
                 .h(px(0.)),
             )
             .child(card)

@@ -54,6 +54,24 @@ fn caption_height(has_detail: bool) -> f32 {
     if has_detail { 37.8 } else { 20. }
 }
 
+/// `Carousel` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::carousel::{Carousel, CarouselSlide};
+///
+/// let slides = vec![
+///     CarouselSlide::new("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee", "Landscape"),
+///     CarouselSlide::new("https://images.unsplash.com/photo-1470770841072-f978cf4d019e", "Lake"),
+/// ];
+/// let control = cx.new(|cx| Carousel::new("Gallery", slides, cx));
+/// # }
+/// ```
 pub struct Carousel {
     label: SharedString,
     slides: Vec<CarouselSlide>,

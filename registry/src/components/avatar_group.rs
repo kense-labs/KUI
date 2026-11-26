@@ -28,6 +28,21 @@ impl Slot {
         }
     }
 }
+/// `AvatarGroup` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::avatar_group::AvatarGroup;
+/// use kui::components::avatar::Person;
+///
+/// let control = cx.new(|_| AvatarGroup::new(vec![Person::new("Ari Singh"), Person::new("Emma Collins")], 1));
+/// # }
+/// ```
 pub struct AvatarGroup {
     people: Vec<Person>,
     slots: Vec<Slot>,

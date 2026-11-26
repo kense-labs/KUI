@@ -1,7 +1,9 @@
+//! Shared interaction state contract for KUI button-like controls.
+
 use gpui::ElementId;
 
 /// Behavior contract for a KUI button-like control (no default chrome).
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ButtonBehavior {
     pub id: ElementId,
     pub disabled: bool,

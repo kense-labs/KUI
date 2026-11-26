@@ -5,9 +5,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw,
-        pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
-        pro_modal_appear, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_connector_pulse, pro_ease, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_modal_appear, pro_popover_presence, pro_rolling_number, pro_shimmer_text,
         pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
@@ -307,10 +307,14 @@ struct ActiveFlight {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_crew::AgentCrew;
 ///
 /// let crew = cx.new(|cx| AgentCrew::new("checkout-crew", cx));
+/// # }
 /// ```
 pub struct AgentCrew {
     id: ElementId,
@@ -1078,10 +1082,10 @@ impl AgentCrew {
                     .w_full()
                     .flex()
                     .items_center()
-                    .gap(px(8.))
+                    .gap(px(7.))
                     .min_w_0()
                     .child(pro_agent_avatar(
-                        &agent.id,
+                        crew_avatar_seed(agent),
                         branch_color,
                         22.,
                         agent.status == CrewStatus::Active,
@@ -1280,8 +1284,9 @@ impl AgentCrew {
             },
         )
         .role(Role::TreeItem)
+        .shadow(pro_card_shadow(p.dark))
         .when(full_width, |d| d.w_full())
-        .when(!full_width, |d| d.w(px(214.)))
+        .when(!full_width, |d| d.w(px(220.)))
         .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
             let next = if *hovered {
                 Some(hover_id.clone())
@@ -1670,7 +1675,7 @@ impl AgentCrew {
                     .items_center()
                     .gap(px(8.))
                     .child(pro_agent_avatar(
-                        &agent.id,
+                        crew_avatar_seed(agent),
                         branch_color,
                         26.,
                         agent.status == CrewStatus::Active,
@@ -2117,7 +2122,7 @@ impl Render for AgentCrew {
                 .unwrap_or_else(|| Rc::new(Cell::new(None)));
             let c1 = self.render_card(l1, bcol, false, !wide, s1, elapsed_ms, &p, cx);
 
-            let mut below = div().pl(px(28.)).flex().flex_col().gap(px(10.));
+            let mut below = div().pl(px(24.)).flex().flex_col().gap(px(10.));
             for l2 in &l1.children {
                 let s2 = sensors
                     .get(&l2.id)
@@ -2127,7 +2132,7 @@ impl Render for AgentCrew {
                     below.child(self.render_card(l2, bcol, true, !wide, s2, elapsed_ms, &p, cx));
             }
 
-            let col_w = if l1.children.is_empty() { 214. } else { 242. };
+            let col_w = if l1.children.is_empty() { 220. } else { 244. };
             let hang = div()
                 .when(wide, |d| d.w(px(col_w)).flex_none())
                 .when(!wide, |d| d.w_full())
@@ -2615,8 +2620,62 @@ fn infer_provider_key(model: &str) -> &'static str {
         "claude"
     } else if lower.contains("gemini") {
         "gemini"
+    } else if lower.contains("deepseek") {
+        "deepseek"
+    } else if lower.contains("mistral") {
+        "mistral"
+    } else if lower.contains("qwen") {
+        "qwen"
+    } else if lower.contains("llama") || lower.contains("meta") {
+        "meta"
+    } else if lower.contains("grok") || lower.contains("xai") {
+        "xai"
     } else {
         "openai"
+    }
+}
+
+fn crew_avatar_seed(agent: &CrewAgent) -> &'static str {
+    let m = agent.model.to_ascii_lowercase();
+    if m.contains("claude") || m.contains("opus") || m.contains("sonnet") || m.contains("haiku") {
+        return "claude";
+    }
+    if m.contains("gpt") || m.contains("openai") || m.contains("codex") {
+        return "gpt";
+    }
+    if m.contains("gemini") {
+        return "gemini";
+    }
+    if m.contains("deepseek") {
+        return "deepseek";
+    }
+    if m.contains("mistral") {
+        return "mistral";
+    }
+    if m.contains("qwen") {
+        return "qwen";
+    }
+    if m.contains("llama") || m.contains("meta") {
+        return "llama";
+    }
+    if m.contains("grok") || m.contains("xai") {
+        return "grok";
+    }
+    let combined = format!("{} {}", agent.name, agent.id).to_ascii_lowercase();
+    if combined.contains("gemini")
+        || combined.contains("seo")
+        || combined.contains("audit")
+        || combined.contains("search")
+    {
+        "gemini"
+    } else if combined.contains("gpt")
+        || combined.contains("lint")
+        || combined.contains("test")
+        || combined.contains("code")
+    {
+        "gpt"
+    } else {
+        "claude"
     }
 }
 

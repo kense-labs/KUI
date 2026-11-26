@@ -6,17 +6,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_bar,
-        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_popover_presence, pro_rolling_number,
+        pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         family::{Slide, disabled_motion},
-        pro_icons::{
-            AGENT_WAVE_MS, ProIcon, agent_pixel_cells, person_initials, pro_icon, pro_svg,
-        },
+        pro_icons::{ProIcon, person_initials, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -193,6 +192,28 @@ impl EventEmitter<VoiceSessionEvent> for VoiceSession {}
 const WAVE_BINS: usize = 52;
 
 /// Live bidirectional voice call card with dual waveforms, silence pause meter, transcript, and latency budget.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::voice_session::{VoiceSession, VoiceSessionEvent};
+///
+/// let call = cx.new(|cx| {
+///     VoiceSession::new("billing-voice-call", cx)
+///         .with_agent("atlas", "Atlas")
+///         .with_subtitle(Some("Billing support".into()))
+///         .with_person_name("Maya")
+///         .with_budget_ms(800)
+/// });
+/// cx.subscribe(&call, |_, event: &VoiceSessionEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct VoiceSession {
     id: ElementId,
     focus: FocusHandle,
@@ -486,43 +507,6 @@ impl VoiceSession {
         }
     }
 
-    fn render_pixel_mark(&self, busy: bool, elapsed_ms: f32, p: &ProPalette, cx: &App) -> Div {
-        let reduced = Theme::global(cx).reduced_motion;
-        let cells = agent_pixel_cells(&self.agent.id);
-        let mut grid = div()
-            .size(px(16.))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(1.5));
-        for r in 0..3usize {
-            let mut row = div().flex().items_center().gap(px(1.5));
-            for c in 0..3usize {
-                let i = r * 3 + c;
-                let on = cells[i];
-                let alpha = if busy && !reduced {
-                    let ph = ((elapsed_ms + AGENT_WAVE_MS[i]) / 1200.0) * std::f32::consts::TAU;
-                    let wv = 0.56 + 0.44 * ph.cos();
-                    if on { wv } else { 0.16 * wv }
-                } else if on {
-                    0.90
-                } else {
-                    0.0
-                };
-                row = row.child(
-                    div()
-                        .size(px(3.))
-                        .rounded(px(0.8))
-                        .bg(p.blue.opacity(alpha)),
-                );
-            }
-            grid = grid.child(row);
-        }
-        grid
-    }
-
     fn render_person_dot(&self, p: &ProPalette) -> Div {
         let init = person_initials(&self.person_name);
         let ch: String = init.chars().take(1).collect();
@@ -568,6 +552,7 @@ impl Render for VoiceSession {
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .p(px(20.))
                         .flex()
                         .flex_col()
@@ -586,6 +571,7 @@ impl Render for VoiceSession {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Mic,
                     tr(cx, "No active voice call", "当前无活跃语音通话"),
@@ -777,13 +763,28 @@ impl Render for VoiceSession {
                 ))
         };
 
+        let agent_seed: SharedString = if self.agent.id.eq_ignore_ascii_case("atlas")
+            || self.agent.name.eq_ignore_ascii_case("atlas")
+        {
+            "claude".into()
+        } else {
+            self.agent.id.clone()
+        };
+
         let head = div()
             .px(px(20.))
             .pt(px(16.))
             .flex()
             .items_center()
             .gap(px(8.))
-            .child(self.render_pixel_mark(agent_busy, elapsed_ms, &p, cx))
+            .child(pro_agent_avatar(
+                &agent_seed,
+                p.blue,
+                22.,
+                agent_busy,
+                elapsed_ms,
+                cx,
+            ))
             .child(
                 div()
                     .text_size(px(13.))
@@ -792,13 +793,14 @@ impl Render for VoiceSession {
                     .child(self.agent.name.clone()),
             )
             .when_some(self.subtitle.clone().filter(|_| !compact), |d, sub| {
-                d.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(p.muted)
-                        .truncate()
-                        .child(sub),
-                )
+                d.child(div().text_size(px(13.)).text_color(p.faint).child("·"))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(p.muted)
+                            .truncate()
+                            .child(sub),
+                    )
             })
             .child(
                 div()
@@ -854,7 +856,7 @@ impl Render for VoiceSession {
                 let person_nm = self.person_name.clone();
                 let agent_nm = self.agent.name.clone();
                 let p_dot = self.render_person_dot(&p);
-                let a_mark = self.render_pixel_mark(agent_busy, elapsed_ms, &p, cx);
+                let a_mark = pro_agent_avatar(&agent_seed, p.blue, 16., agent_busy, elapsed_ms, cx);
                 let cut_lbl = tr(cx, "Interrupted", "已打断").to_owned();
                 let wait_lbl = tr(cx, "Preparing reply…", "正在组织语音回复…").to_owned();
                 let cur_status = self.status;
@@ -971,13 +973,13 @@ impl Render for VoiceSession {
             (self.sample_accum / 0.09).clamp(0.0, 1.0)
         };
 
-        let person_col = p.ink.opacity((0.55 + 0.35 * person_gain).clamp(0.55, 0.90));
-        let agent_col = p.blue.opacity((0.62 + 0.38 * agent_gain).clamp(0.62, 1.0));
+        let person_col = p.ink.opacity((0.60 + 0.34 * person_gain).clamp(0.60, 0.94));
+        let agent_col = p.blue.opacity((0.68 + 0.32 * agent_gain).clamp(0.68, 1.0));
         let dot_col = p.line_strong;
         let bracket_col = if over_budget {
-            p.red_ink.opacity(0.65)
+            p.red_ink.opacity(0.68)
         } else {
-            p.muted.opacity(0.55)
+            p.muted.opacity(0.62)
         };
 
         let wave_canvas = canvas(
@@ -995,7 +997,7 @@ impl Render for VoiceSession {
                 let y_person = oy + 18.0;
                 let y_mid = oy + bh * 0.5;
                 let y_agent = oy + bh - 18.0;
-                let max_half = 14.0;
+                let max_half = 13.5;
 
                 for i in 0..n {
                     let x = ox + (i as f32 + 0.5 - glide_frac) * step_x;
@@ -1003,12 +1005,16 @@ impl Render for VoiceSession {
                         continue;
                     }
                     // Left-edge soft fade (first 16% of track)
-                    let edge_fade = ((x - ox) / (bw * 0.16)).clamp(0.15, 1.0);
+                    let edge_fade = ((x - ox) / (bw * 0.16)).clamp(0.18, 1.0);
 
                     // Top lane: Person
                     let pv = p_wave[i].clamp(0.0, 1.0);
-                    let ph = (pv * max_half).max(1.2);
-                    let mut pb_p = PathBuilder::stroke(px(2.3));
+                    let ph = if pv < 0.06 {
+                        1.0
+                    } else {
+                        (pv * max_half).max(2.2)
+                    };
+                    let mut pb_p = PathBuilder::stroke(px(2.0));
                     pb_p.move_to(point(px(x), px(y_person - ph)));
                     pb_p.line_to(point(px(x), px(y_person + ph)));
                     if let Ok(path) = pb_p.build() {
@@ -1022,8 +1028,12 @@ impl Render for VoiceSession {
 
                     // Bottom lane: Agent (with blue shimmer wave while Thinking)
                     let av = a_wave[i].clamp(0.0, 1.0);
-                    let ah = (av * max_half).max(1.2);
-                    let mut pb_a = PathBuilder::stroke(px(2.3));
+                    let ah = if av < 0.06 {
+                        1.0
+                    } else {
+                        (av * max_half).max(2.2)
+                    };
+                    let mut pb_a = PathBuilder::stroke(px(2.0));
                     pb_a.move_to(point(px(x), px(y_agent - ah)));
                     pb_a.line_to(point(px(x), px(y_agent + ah)));
                     if let Ok(path) = pb_a.build() {
@@ -1048,7 +1058,7 @@ impl Render for VoiceSession {
                 let rel1 = (gap_end as f32 * step_x).clamp(min_r1, max_r1);
                 let gx0 = ox + rel0;
                 let gx1 = ox + rel1;
-                let mut brk = PathBuilder::stroke(px(1.1));
+                let mut brk = PathBuilder::stroke(px(1.15));
                 brk.move_to(point(px(gx0), px(y_mid - 4.5)));
                 brk.line_to(point(px(gx0), px(y_mid + 4.5)));
                 brk.move_to(point(px(gx0), px(y_mid)));
@@ -1200,7 +1210,14 @@ impl Render for VoiceSession {
                             .gap(px(6.))
                             .text_size(px(12.))
                             .text_color(p.text)
-                            .child(self.render_pixel_mark(agent_busy, elapsed_ms, &p, cx))
+                            .child(pro_agent_avatar(
+                                &agent_seed,
+                                p.blue,
+                                16.,
+                                agent_busy,
+                                elapsed_ms,
+                                cx,
+                            ))
                             .when(!compact, |d| {
                                 d.child(div().truncate().child(self.agent.name.clone()))
                             }),
@@ -1236,7 +1253,7 @@ impl Render for VoiceSession {
 
         let seg_colors: [Hsla; 5] = if p.dark {
             [
-                hsla(0., 0., 1., 0.32),
+                hsla(0., 0., 1., 0.34),
                 rgb(0xa78bfa).into(),
                 rgb(0x3aa8ff).into(),
                 rgb(0xf472b6).into(),
@@ -1244,7 +1261,7 @@ impl Render for VoiceSession {
             ]
         } else {
             [
-                hsla(0., 0., 0., 0.24),
+                hsla(0., 0., 0., 0.26),
                 rgb(0x5e3ee0).into(),
                 rgb(0x0090fe).into(),
                 rgb(0xdd0674).into(),
@@ -1264,8 +1281,8 @@ impl Render for VoiceSession {
             .relative()
             .mt(px(14.))
             .w_full()
-            .h(px(7.))
-            .rounded(px(3.5))
+            .h(px(8.))
+            .rounded(px(4.))
             .bg(p.subtle)
             .flex()
             .items_center()
@@ -1275,7 +1292,7 @@ impl Render for VoiceSession {
         for (si, &ms_val) in raw_vals.iter().enumerate() {
             let frac = pro_spring_f32(
                 pro_eid(&self.id, format!("vsn-seg-{si}")),
-                (ms_val as f32 / scale_max).clamp(0.01, 0.95),
+                (ms_val as f32 / scale_max).clamp(0.015, 0.95),
                 0.34,
                 w,
                 cx,
@@ -1285,7 +1302,7 @@ impl Render for VoiceSession {
                 div()
                     .h_full()
                     .w(relative(frac))
-                    .rounded(px(2.))
+                    .rounded(px(2.5))
                     .bg(seg_colors[si])
                     .opacity(if dimmed { 0.26 } else { 1.0 }),
             );
@@ -1298,7 +1315,8 @@ impl Render for VoiceSession {
                 .left(relative(budget_ratio))
                 .top(px(-4.))
                 .bottom(px(-4.))
-                .w(px(1.5))
+                .w(px(2.))
+                .rounded(px(1.))
                 .bg(if over_budget { p.red_ink } else { p.text }),
         );
 
@@ -1502,7 +1520,7 @@ impl Render for VoiceSession {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .shadow_sm()
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(head)
@@ -1642,7 +1660,10 @@ impl Render for VoiceSession {
                     },
                     |_, _, _, _| (),
                 )
-                .w(px(0.))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
                 .h(px(0.)),
             )
             .child(card)

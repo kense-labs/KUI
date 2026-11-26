@@ -35,6 +35,20 @@ pub struct MentionValue {
     pub text: String,
     pub mentions: Vec<MentionToken>,
 }
+/// `MentionInput` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::mention_input::{MentionInput, Mention};
+///
+/// let control = cx.new(|cx| MentionInput::new("Update", vec![Mention { id: "ava".into(), label: "Ava".into(), trigger: '@' }], window, cx));
+/// # }
+/// ```
 pub struct MentionInput {
     editor: Entity<Editor>,
     items: Vec<Mention>,
@@ -531,9 +545,8 @@ impl Render for MentionInput {
                     .child(bar),
             );
         let open = self.span.is_some();
-        if open {
+        if let Some(r) = self.span.as_ref() {
             self.painted.clone_from(&self.matches);
-            let r = self.span.as_ref().unwrap();
             let offset = self.previous[..r.start].encode_utf16().count();
             let field = self.field_bounds.get();
             let mut marker = self

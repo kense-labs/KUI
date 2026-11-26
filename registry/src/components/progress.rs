@@ -5,6 +5,20 @@ use crate::primitives::{
     presentation::*,
 };
 use gpui::{prelude::*, *};
+/// `Progress` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::progress::Progress;
+///
+/// let control = cx.new(|cx| Progress::new("Preparing workspace", Some(0.68), cx));
+/// # }
+/// ```
 pub struct Progress {
     label: SharedString,
     value: Option<f32>,

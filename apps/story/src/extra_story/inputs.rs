@@ -207,10 +207,6 @@ impl Render for SmartFillExample {
             .flex_col()
             .gap(px(10.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text(
-                "Sample parser runs locally; no text is sent.",
-                "样例解析仅在本地运行，不会发送文本。",
-            )))
             .child(
                 div()
                     .id("smart-example-fail")
@@ -232,7 +228,9 @@ impl Render for SmartFillExample {
                         }
                     })),
             )
-            .child(div().text_size(px(12.)).child(self.note.clone()))
+            .when(!self.note.is_empty(), |d| {
+                d.child(div().text_size(px(12.)).child(self.note.clone()))
+            })
     }
 }
 #[derive(Clone, Copy, Default)]
@@ -586,10 +584,6 @@ impl Render for AskDataExample {
             .items_center()
             .gap(px(10.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text(
-                "Example only: fixed SQL and sample data; no database is queried.",
-                "仅为示例：使用固定查询和样例数据，不会连接数据库。",
-            )))
             .child(
                 div()
                     .id("ask-example-fail")
@@ -821,10 +815,6 @@ impl Render for PiiExample {
             .flex_col()
             .gap(px(10.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text(
-                "Local simulation using four fictional example values.",
-                "本地模拟使用四个虚构样例值。",
-            )))
             .child(
                 div()
                     .id("pii-example-fail")
@@ -950,10 +940,6 @@ impl Render for ReplyExample {
             .flex_col()
             .gap(px(10.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text(
-                "Sample text is generated locally. No message is sent.",
-                "样例文本在本地生成，不会发送消息。",
-            )))
             .child(
                 div()
                     .id("reply-example-fail")
@@ -975,7 +961,9 @@ impl Render for ReplyExample {
                         }
                     })),
             )
-            .child(div().text_size(px(12.)).child(self.note.clone()))
+            .when(!self.note.is_empty(), |d| {
+                d.child(div().text_size(px(12.)).child(self.note.clone()))
+            })
     }
 }
 
@@ -1253,7 +1241,6 @@ impl TicketExample {
 impl Render for TicketExample {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let l = UiLanguage::current(cx);
-        let p = Paint::get(cx);
         let radius = kui::foundation::surface_radius(cx).into();
         let options = [
             (
@@ -1281,15 +1268,6 @@ impl Render for TicketExample {
             .flex_col()
             .gap(px(10.))
             .child(self.control.clone())
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(l.text(
-                        "Sample inbox. No messages are sent or assigned.",
-                        "样例收件箱，不会发送或分配工单。",
-                    )),
-            )
             .child(div().flex().flex_wrap().gap(px(4.)).children(
                 options.into_iter().enumerate().map(|(index, (id, label))| {
                     let perform = move |s: &mut Self, cx: &mut Context<Self>| {
@@ -1431,19 +1409,16 @@ impl EnrichExample {
     }
 }
 impl Render for EnrichExample {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let l = UiLanguage::current(cx);
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
             .w_full()
             .flex()
             .flex_col()
             .gap(px(10.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text(
-                "Illustrative results. The first Vercel lookup fails so you can try again.",
-                "结果为演示数据。Vercel 首次查询模拟失败，可测试重试。",
-            )))
-            .child(div().text_size(px(12.)).child(self.note.clone()))
+            .when(!self.note.is_empty(), |d| {
+                d.child(div().text_size(px(12.)).child(self.note.clone()))
+            })
     }
 }
 
@@ -1575,10 +1550,6 @@ impl Render for TldrExample {
             .flex_col()
             .gap(px(12.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(l.text(
-                "Sample summary: no content is sent.",
-                "样例摘要：不会发送文章内容。",
-            )))
             .child(
                 div()
                     .id("tldr-fail-next")
@@ -2180,16 +2151,12 @@ impl TreeExample {
     }
 }
 impl Render for TreeExample {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
             .gap(px(8.))
             .child(self.control.clone())
-            .child(div().text_size(px(12.)).child(UiLanguage::current(cx).text(
-                "The first Growth load fails; click it again to retry.",
-                "首次加载增长项目会失败，再点击可重试。",
-            )))
     }
 }
 struct UndoExample {

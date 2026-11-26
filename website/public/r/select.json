@@ -18,7 +18,7 @@
   "files": [
     {
       "path": "components/select.rs",
-      "content": "//! A single-choice field with directional value transitions.\nuse crate::primitives::picker::{Picker, PickerStyle};\npub struct SelectStyle;\nimpl PickerStyle for SelectStyle {\n    const SEARCH: bool = false;\n}\npub type Select = Picker<SelectStyle>;\n"
+      "content": "//! A single-choice field with directional value transitions.\nuse crate::primitives::picker::{Picker, PickerStyle};\n/// `Select` component.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::select::Select;\n/// use kui::primitives::picker::PickerOption;\n///\n/// let control = cx.new(|cx| Select::new(\"team\", \"Team\", vec![\n///         PickerOption::new(\"design\", \"Design\"), PickerOption::new(\"engineering\", \"Engineering\"),\n///     ], window, cx).with_value(\"design\"));\n/// # }\n/// ```\npub struct SelectStyle;\nimpl PickerStyle for SelectStyle {\n    const SEARCH: bool = false;\n}\npub type Select = Picker<SelectStyle>;\n"
     },
     {
       "path": "primitives/control.rs",

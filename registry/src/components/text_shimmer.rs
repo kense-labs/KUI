@@ -63,6 +63,20 @@ fn glide_duration(duration: f32, t: f32) -> f32 {
     (0.42_f32).min(duration * (1. - t).max(0.) * 0.5)
 }
 
+/// `TextShimmer` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::text_shimmer::TextShimmer;
+///
+/// let control = cx.new(|cx| TextShimmer::new("Thinking…", cx));
+/// # }
+/// ```
 pub struct TextShimmer {
     font_size: f32,
     text: SharedString,

@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_connector_pulse, pro_eid,
-        pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_connector_pulse,
+        pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_shimmer_text,
         pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile,
         pro_toast_banner, pro_view_transition, tr,
     },
@@ -354,6 +354,26 @@ struct ResolvedMatch {
 }
 
 /// LLM-as-a-judge tournament bracket pairing candidate completions round by round with side-by-side rubric inspection.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::judge_bracket::{JudgeBracket, JudgeBracketEvent};
+///
+/// let bracket = cx.new(|cx| {
+///     JudgeBracket::new("judge-bracket", cx)
+///         .with_judge("Claude Opus 4.6")
+///         .with_live(true)
+/// });
+/// cx.subscribe(&bracket, |_, event: &JudgeBracketEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct JudgeBracket {
     id: ElementId,
     focus: FocusHandle,
@@ -690,6 +710,7 @@ impl Render for JudgeBracket {
                 .bg(p.panel)
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Sparkles,
                     tr(cx, "Need at least two contenders", "至少需要两个候选结果"),

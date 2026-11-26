@@ -82,6 +82,29 @@ type Confirm = Box<dyn Fn(Booking, &mut App) -> Task<Result<(), SharedString>>>;
 type Refine = Box<dyn Fn(Div) -> Div>;
 
 /// A bottom-anchored booking flow with host-owned availability and confirmation.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use chrono::NaiveDate;
+/// use gpui::{Task, prelude::*};
+/// use kui::components::booking_pill::{BookingPill, BookingStepChanged};
+///
+/// let today = NaiveDate::from_ymd_opt(2026, 9, 21).expect("valid sample date");
+/// let control = cx.new(|cx| {
+///     BookingPill::new("Olea", today, cx)
+///         .with_venue_detail("432 Octavia Street")
+///         .with_confirm(|booking, _| {
+///             let _selected_table = booking;
+///             Task::ready(Ok(()))
+///         })
+/// });
+/// window.subscribe(&control, cx, |_, _: &BookingStepChanged, _, _| {}).detach();
+/// # }
+/// ```
 pub struct BookingPill {
     id: ElementId,
     venue: SharedString,

@@ -100,6 +100,27 @@ impl Frame {
 }
 
 /// A paper ticket with host-rendered content and a one-time pull gesture.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{div, prelude::*, px};
+/// use kui::components::ticket_tear::TicketTear;
+///
+/// let ticket = cx.new(|cx| {
+///     TicketTear::new(
+///         |_, _| div().p_5().h(px(211.)).child("Kense Day").into_any_element(),
+///         |_, _| div().size_full().flex().items_center().justify_center().child("Seat 12").into_any_element(),
+///         cx,
+///     )
+///     .with_stub_width(px(96.))
+///     .with_label("Tear off stub to check in")
+/// });
+/// # }
+/// ```
 pub struct TicketTear {
     id: ElementId,
     label: SharedString,

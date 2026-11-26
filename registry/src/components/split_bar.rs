@@ -56,6 +56,20 @@ struct SegmentEdge {
     legend_counter: Option<Entity<AnimatedCounter>>,
 }
 /// Data is host controlled; visibility and the inspected segment are local.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::split_bar::{SplitBar, SplitSegment};
+///
+/// let data = vec![SplitSegment::new("first", "First", 68.0, gpui::rgb(0x9d83e8).into()), SplitSegment::new("second", "Second", 32.0, gpui::rgb(0x62b5d0).into())];
+/// let control = cx.new(|_| SplitBar::new("Values", data));
+/// # }
+/// ```
 pub struct SplitBar {
     title: SharedString,
     description: SharedString,

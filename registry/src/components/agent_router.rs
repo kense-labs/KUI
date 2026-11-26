@@ -5,13 +5,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_connector_pulse,
+        ProPalette, pro_agent_avatar, pro_card_shadow, pro_check_draw, pro_connector_pulse,
         pro_ease, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_presence,
         pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
         pro_swap_label, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
-    primitives::pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+    primitives::{
+        family::disabled_motion,
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+    },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, rc::Rc};
@@ -279,10 +282,14 @@ struct RoutingFlight {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::agent_router::AgentRouter;
 ///
 /// let router = cx.new(|cx| AgentRouter::new("support-router", cx));
+/// # }
 /// ```
 pub struct AgentRouter {
     id: ElementId,
@@ -726,7 +733,8 @@ impl AgentRouter {
                             .child(pro_icon(ProIcon::User, 12., p.on_primary))
                             .into_any_element()
                     } else {
-                        pro_agent_avatar(&ag.id, acol, 22., false, 0., cx)
+                        let cand_seed = format!("{} {}", ag.model, ag.id);
+                        pro_agent_avatar(&cand_seed, acol, 22., false, 0., cx)
                     })
                     .child(
                         div()
@@ -929,7 +937,7 @@ impl AgentRouter {
 impl Render for AgentRouter {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = Theme::global(cx).reduced_motion;
+        let reduced = disabled_motion(cx) || Theme::global(cx).reduced_motion;
         if self.advance_flight(reduced, cx) {
             w.request_animation_frame();
         }
@@ -1040,7 +1048,7 @@ impl Render for AgentRouter {
 
         let header = div()
             .w_full()
-            .mb(px(14.))
+            .mb(px(16.))
             .flex()
             .flex_wrap()
             .items_center()
@@ -1048,27 +1056,10 @@ impl Render for AgentRouter {
             .gap(px(8.))
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .child(
-                        div()
-                            .text_size(px(13.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .child(title_str.clone()),
-                    )
-                    .child(pro_btn(
-                        pro_eid(&self.id, "r-sim-btn"),
-                        tr(cx, "+ New request", "+ 模拟新请求"),
-                        Some(ProIcon::Plus),
-                        ProBtnStyle::Secondary,
-                        true,
-                        cx,
-                        |this, _, cx| {
-                            this.simulate_incoming(cx);
-                        },
-                    )),
+                    .text_size(px(13.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.strong)
+                    .child(title_str.clone()),
             )
             .child(
                 div()
@@ -1285,8 +1276,9 @@ impl Render for AgentRouter {
                     cx.notify();
                 },
             )
-            .when(wide, |d| d.w(px(244.)))
+            .when(wide, |d| d.w(px(286.)))
             .when(!wide, |d| d.w_full())
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 let next = if *inside { req_to_hov.clone() } else { None };
                 if this.hovered_req_target != next {
@@ -1306,14 +1298,16 @@ impl Render for AgentRouter {
         let conf_col = if conf_val < 0.65 { p.amber } else { p.blue };
         let r_sens = router_sensor.clone();
         let r_pkey = infer_provider_key(&self.router.model);
+        let router_seed = format!("{} {}", self.router.model, self.router.id);
 
         let router_card = div()
-            .when(wide, |d| d.w(px(244.)))
+            .when(wide, |d| d.w(px(286.)))
             .when(!wide, |d| d.w_full())
             .rounded(px(10.))
             .bg(p.tray)
             .border_1()
             .border_color(p.line_soft)
+            .shadow(pro_card_shadow(p.dark))
             .p(px(2.5))
             .flex()
             .flex_col()
@@ -1347,9 +1341,9 @@ impl Render for AgentRouter {
                             .gap(px(8.))
                             .min_w_0()
                             .child(pro_agent_avatar(
-                                &self.router.id,
+                                &router_seed,
                                 p.blue,
-                                22.,
+                                24.,
                                 router_busy,
                                 elapsed_ms,
                                 cx,
@@ -1655,6 +1649,7 @@ impl Render for AgentRouter {
             });
 
             let pkey = infer_provider_key(&spec.model);
+            let spec_seed = format!("{} {}", spec.model, spec.id);
             let filter_click = sid.clone();
             let is_filtered = self.filter_agent_id.as_ref() == Some(&sid);
 
@@ -1699,9 +1694,9 @@ impl Render for AgentRouter {
                                 .gap(px(8.))
                                 .min_w_0()
                                 .child(pro_agent_avatar(
-                                    &spec.id,
+                                    &spec_seed,
                                     acol,
-                                    22.,
+                                    24.,
                                     q_cnt > 0,
                                     elapsed_ms,
                                     cx,
@@ -1798,6 +1793,7 @@ impl Render for AgentRouter {
                 },
             )
             .w_full()
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 let next = if *inside {
                     Some(sid_hov.clone())
@@ -1862,7 +1858,7 @@ impl Render for AgentRouter {
                 queue_box = queue_box.child(
                     div()
                         .w_full()
-                        .py(px(16.))
+                        .py(px(18.))
                         .rounded(px(7.))
                         .border_1()
                         .border_color(p.line_soft)
@@ -1905,7 +1901,7 @@ impl Render for AgentRouter {
                             self.inspect_req_id.as_ref() == Some(&qrid),
                             div()
                                 .w_full()
-                                .p(px(8.))
+                                .p(px(9.))
                                 .flex()
                                 .flex_col()
                                 .gap(px(5.))
@@ -1913,26 +1909,46 @@ impl Render for AgentRouter {
                                     div()
                                         .w_full()
                                         .flex()
-                                        .items_center()
-                                        .gap(px(6.))
+                                        .items_start()
+                                        .justify_between()
+                                        .gap(px(8.))
                                         .min_w_0()
-                                        .child(pro_icon(qreq.channel.icon(), 12., p.muted))
                                         .child(
                                             div()
                                                 .flex_1()
                                                 .min_w_0()
                                                 .text_size(px(12.))
+                                                .line_height(px(16.5))
                                                 .font_weight(FontWeight::MEDIUM)
                                                 .text_color(p.strong)
-                                                .truncate()
+                                                .line_clamp(2)
                                                 .child(qreq.title.clone()),
                                         )
                                         .child(
                                             div()
-                                                .text_size(px(10.5))
+                                                .flex_none()
+                                                .text_size(px(11.))
                                                 .font_weight(FontWeight::MEDIUM)
-                                                .text_color(acol)
+                                                .text_color(p.muted)
                                                 .child(format!("{qconf}%")),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .min_w_0()
+                                        .text_size(px(11.))
+                                        .text_color(p.muted)
+                                        .child(pro_icon(qreq.channel.icon(), 11.5, p.muted))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .truncate()
+                                                .child(qreq.from.clone()),
                                         ),
                                 )
                                 .when(!qreq.tags.is_empty(), |d| d.child(tags_el)),
@@ -1947,6 +1963,7 @@ impl Render for AgentRouter {
                             },
                         )
                         .w_full()
+                        .shadow(pro_card_shadow(p.dark))
                         .on_hover(cx.listener(
                             move |this, inside: &bool, _, cx| {
                                 let next = if *inside { q_target.clone() } else { None };

@@ -139,6 +139,25 @@ impl Timing {
 type Payment = Box<dyn Fn(&mut App) -> Task<Result<(), SharedString>>>;
 
 /// A shared GPUI trial banner, sidebar card or expandable pill.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::trial_banner::{CivilDate, TrialBanner, TrialVariant};
+///
+/// let today = CivilDate::new(2026, 10, 27).expect("valid example date");
+/// let ends_at = today.add_days(9);
+/// let control = cx.new(|cx| {
+///     TrialBanner::new("workspace-trial", cx)
+///         .with_variant(TrialVariant::Banner)
+///         .with_schedule(today, ends_at, 9, 14)
+/// });
+/// # }
+/// ```
 pub struct TrialBanner {
     id: ElementId,
     variant: TrialVariant,

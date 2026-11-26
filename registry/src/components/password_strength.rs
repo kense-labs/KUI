@@ -42,6 +42,20 @@ pub enum StrengthEvent {
     Submitted,
     Visibility(bool),
 }
+/// `PasswordStrength` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::password_strength::PasswordStrength;
+///
+/// let control = cx.new(|cx| PasswordStrength::new("password", "New password", window, cx));
+/// # }
+/// ```
 pub struct PasswordStrength {
     field: Entity<PasswordField>,
     rules: Vec<PasswordRule>,

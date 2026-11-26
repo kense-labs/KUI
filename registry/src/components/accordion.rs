@@ -17,6 +17,20 @@ impl AccordionItem {
         }
     }
 }
+/// `Accordion` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::accordion::{Accordion, AccordionItem};
+///
+/// let control = cx.new(|cx| Accordion::new(vec![AccordionItem::new("Included", "All workspace members can review the draft.")], Some(0), cx));
+/// # }
+/// ```
 pub struct Accordion {
     items: Vec<(AccordionItem, Fold)>,
     multiple: bool,

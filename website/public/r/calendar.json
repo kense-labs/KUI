@@ -16,7 +16,7 @@
   "files": [
     {
       "path": "components/calendar.rs",
-      "content": "//! Calendar on a proleptic Gregorian grid.\npub use crate::primitives::form_dates::{CivilDate, DateSpan};\nuse crate::primitives::form_dates::{DateControl, DateLayout};\npub struct CalendarLayout;\nimpl DateLayout for CalendarLayout {\n    const FIELD: bool = false;\n    const RANGE: bool = false;\n}\npub type Calendar = DateControl<CalendarLayout>;\n"
+      "content": "//! Calendar on a proleptic Gregorian grid.\npub use crate::primitives::form_dates::{CivilDate, DateSpan};\nuse crate::primitives::form_dates::{DateControl, DateLayout};\n/// `Calendar` component.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::calendar::{Calendar, CivilDate};\n///\n/// let control = cx.new(|cx| Calendar::new(\"Review date\", CivilDate::today_utc(), cx));\n/// # }\n/// ```\npub struct CalendarLayout;\nimpl DateLayout for CalendarLayout {\n    const FIELD: bool = false;\n    const RANGE: bool = false;\n}\npub type Calendar = DateControl<CalendarLayout>;\n"
     },
     {
       "path": "primitives/control.rs",

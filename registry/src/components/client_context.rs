@@ -6,8 +6,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw, pro_ease,
+        pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
         pro_person_avatar, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
         pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_switch,
         pro_tactile, pro_toast_banner, pro_view_transition, tr,
@@ -850,6 +850,25 @@ impl RenderOnce for SyncSpinIcon {
 }
 
 /// Client context workspace block with switcher, live rolling KPIs, search, type filter pills, and timeline composer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::client_context::{ClientContextBlock, ClientContextEvent};
+///
+/// let workspace = cx.new(|cx| {
+///     ClientContextBlock::new("client-context", cx)
+///         .with_me("Lena Hart")
+/// });
+/// cx.subscribe(&workspace, |_, event: &ClientContextEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ClientContextBlock {
     id: ElementId,
     focus: FocusHandle,
@@ -1557,20 +1576,8 @@ impl ClientContextBlock {
         )
     }
 
-    fn render_context_panel(
-        &self,
-        client: &ContextClient,
-        compact: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn build_type_filter_pills(&self, cx: &mut Context<Self>) -> Stateful<Div> {
         let p = ProPalette::get(cx);
-        let query = self
-            .search_editor
-            .as_ref()
-            .map(|e| e.read(cx).value().to_owned())
-            .unwrap_or_default();
-
-        // Filter pills strip: All | Meetings | Emails | Files | Notes
         let filter_sensor = pro_selection_sensor();
         let mut filter_pills = div()
             .id(pro_eid(&self.id, "ctx-filter-tabs"))
@@ -1583,7 +1590,7 @@ impl ClientContextBlock {
             .flex()
             .flex_wrap()
             .items_center()
-            .gap(px(2.))
+            .gap(px(1.))
             .self_start()
             .child(pro_pill_indicator(
                 pro_eid(&self.id, "ctx-type-pill"),
@@ -1610,11 +1617,11 @@ impl ClientContextBlock {
                     active,
                     div()
                         .h(px(24.))
-                        .px(px(9.))
+                        .px(px(8.))
                         .flex()
                         .items_center()
                         .whitespace_nowrap()
-                        .text_size(px(12.))
+                        .text_size(px(11.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if active { p.strong } else { p.text })
                         .child(tf_lbl),
@@ -1632,6 +1639,28 @@ impl ClientContextBlock {
                 .when(active, |d| d.child(pro_mark_selected(&filter_sensor))),
             );
         }
+        filter_pills
+    }
+
+    fn render_context_panel(
+        &self,
+        client: &ContextClient,
+        compact: bool,
+        show_inline_filters: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let p = ProPalette::get(cx);
+        let query = self
+            .search_editor
+            .as_ref()
+            .map(|e| e.read(cx).value().to_owned())
+            .unwrap_or_default();
+
+        let filter_pills_opt = if show_inline_filters {
+            Some(self.build_type_filter_pills(cx))
+        } else {
+            None
+        };
 
         // Composer card
         let comp_click = self.composer_editor.clone();
@@ -1731,17 +1760,17 @@ impl ClientContextBlock {
             .flex_1()
             .min_w_0()
             .rounded(px(10.))
-            .bg(p.card)
+            .bg(p.subtle)
             .border_1()
-            .border_color(p.line_strong)
+            .border_color(p.line)
             .flex()
             .flex_col()
             .child(
                 div()
-                    .min_h(px(44.))
+                    .min_h(px(34.))
                     .px(px(12.))
-                    .pt(px(10.))
-                    .pb(px(4.))
+                    .pt(px(8.))
+                    .pb(px(2.))
                     .cursor_text()
                     .on_mouse_down(
                         MouseButton::Left,
@@ -1756,7 +1785,7 @@ impl ClientContextBlock {
                             div()
                                 .w_full()
                                 .min_w_0()
-                                .h(px(38.))
+                                .h(px(26.))
                                 .overflow_hidden()
                                 .child(ed),
                         )
@@ -1781,7 +1810,7 @@ impl ClientContextBlock {
             .child(
                 div()
                     .px(px(8.))
-                    .py(px(7.))
+                    .py(px(5.))
                     .flex()
                     .items_center()
                     .gap(px(4.))
@@ -1789,7 +1818,7 @@ impl ClientContextBlock {
                         pro_eid(&self.id, "attach-file-btn"),
                         tr(cx, "Attach file", "添加附件文件"),
                         ProIcon::Paperclip,
-                        28.,
+                        26.,
                         false,
                         cx,
                         |this, _, cx| {
@@ -1817,7 +1846,7 @@ impl ClientContextBlock {
                             transparent_black(),
                             self.mention_menu_open,
                             div()
-                                .h(px(28.))
+                                .h(px(26.))
                                 .px(px(7.))
                                 .flex()
                                 .items_center()
@@ -1870,7 +1899,12 @@ impl ClientContextBlock {
                                         .text_color(p.muted)
                                         .flex()
                                         .items_center()
-                                        .child("↵"),
+                                        .child(pro_svg(
+                                            "0 0 16 16",
+                                            r#"<path d="M12.5 3.5v4a2 2 0 0 1-2 2H4m0 0 2.8-2.8M4 9.5l2.8 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>"#,
+                                            11.,
+                                            p.muted,
+                                        )),
                                 ),
                         )
                     })
@@ -1888,14 +1922,14 @@ impl ClientContextBlock {
             );
 
         let composer_row = div()
-            .mt(px(16.))
+            .mt(px(if filter_pills_opt.is_some() { 10. } else { 2. }))
             .flex()
             .items_start()
-            .gap(px(12.))
+            .gap(px(10.))
             .child(
                 div()
                     .mt(px(4.))
-                    .child(pro_person_avatar(&self.me_name, 26., false, None, cx)),
+                    .child(pro_person_avatar(&self.me_name, 24., false, None, cx)),
             )
             .child(composer_card);
 
@@ -1908,12 +1942,12 @@ impl ClientContextBlock {
 
         let timeline_el = if visible_entries.is_empty() {
             div()
-                .mt(px(20.))
+                .mt(px(16.))
                 .rounded(px(10.))
                 .bg(p.subtle)
                 .border_1()
                 .border_color(p.line)
-                .py(px(28.))
+                .py(px(22.))
                 .px(px(16.))
                 .flex()
                 .flex_col()
@@ -1943,7 +1977,7 @@ impl ClientContextBlock {
                 ))
                 .into_any_element()
         } else {
-            let mut list = div().mt(px(22.)).flex().flex_col().gap(px(18.));
+            let mut list = div().mt(px(14.)).flex().flex_col().gap(px(12.));
             for entry in visible_entries {
                 let eid = entry.id.clone();
                 let hover_id = entry.id.clone();
@@ -1956,9 +1990,9 @@ impl ClientContextBlock {
                 let is_new_entry = self.added_entry_ids.contains(&entry.id);
 
                 let node = if let Some(app_name) = &entry.app {
-                    pro_app_tile(app_name, 28., cx)
+                    pro_app_tile(app_name, 24., cx)
                 } else if entry.kind == ContextEntryKind::Note {
-                    pro_person_avatar(&entry.author, 28., false, None, cx)
+                    pro_person_avatar(&entry.author, 24., false, None, cx)
                 } else {
                     let ic = match entry.kind {
                         ContextEntryKind::Meeting => ProIcon::Calendar,
@@ -1969,32 +2003,36 @@ impl ClientContextBlock {
                         ContextEntryKind::Note => ProIcon::Note,
                     };
                     div()
-                        .size(px(28.))
-                        .rounded(px(8.))
-                        .bg(p.subtle)
+                        .size(px(24.))
+                        .rounded(px(6.5))
+                        .bg(if p.dark {
+                            rgb(0x27272b).into()
+                        } else {
+                            p.subtle
+                        })
                         .border_1()
                         .border_color(p.line)
                         .flex_none()
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_icon(ic, 14., p.muted))
+                        .child(pro_icon(ic, 13., p.muted))
                         .into_any_element()
                 };
 
-                let mut files_row = div().mt(px(6.)).flex().flex_wrap().gap(px(6.));
+                let mut files_row = div().mt(px(5.)).flex().flex_wrap().gap(px(6.));
                 for f in &entry.files {
                     files_row = files_row.child(
                         div()
-                            .h(px(24.))
-                            .px(px(8.))
-                            .rounded(px(6.))
+                            .h(px(23.))
+                            .px(px(7.))
+                            .rounded(px(5.5))
                             .bg(p.subtle)
                             .border_1()
                             .border_color(p.line)
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(px(5.))
                             .child(Self::render_file_badge(f.kind, &p))
                             .child(
                                 div()
@@ -2010,7 +2048,7 @@ impl ClientContextBlock {
                     .id(pro_eid(&self.id, format!("tline-hit-{eid}")))
                     .flex()
                     .items_start()
-                    .gap(px(12.))
+                    .gap(px(10.))
                     .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                         if *inside {
                             this.hovered_entry_id = Some(hover_id.clone());
@@ -2028,7 +2066,7 @@ impl ClientContextBlock {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .pt(px(2.))
+                            .pt(px(1.))
                             .flex()
                             .flex_col()
                             .child(
@@ -2045,11 +2083,11 @@ impl ClientContextBlock {
                                             .flex_wrap()
                                             .items_center()
                                             .gap_x(px(5.))
-                                            .text_size(px(13.))
-                                            .line_height(px(20.))
+                                            .text_size(px(12.5))
+                                            .line_height(px(19.))
                                             .child(
                                                 div()
-                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .font_weight(FontWeight::SEMIBOLD)
                                                     .text_color(p.strong)
                                                     .child(entry.author.clone()),
                                             )
@@ -2067,7 +2105,7 @@ impl ClientContextBlock {
                                                         ))
                                                         .role(Role::Button)
                                                         .tab_index(0)
-                                                        .h(px(20.))
+                                                        .h(px(19.))
                                                         .px(px(6.))
                                                         .rounded(px(5.))
                                                         .bg(p.accent_soft)
@@ -2097,7 +2135,7 @@ impl ClientContextBlock {
                                             })
                                             .child(
                                                 div()
-                                                    .text_size(px(12.))
+                                                    .text_size(px(11.5))
                                                     .text_color(p.muted)
                                                     .child(format!("· {}", entry.when)),
                                             ),
@@ -2109,7 +2147,7 @@ impl ClientContextBlock {
                                                 pro_eid(&self.id, format!("rm-entry-{eid}")),
                                                 tr(cx, "Remove context entry", "移除此条记录"),
                                                 ProIcon::Close,
-                                                22.,
+                                                20.,
                                                 false,
                                                 cx,
                                                 move |this, _, cx| {
@@ -2134,9 +2172,9 @@ impl ClientContextBlock {
                             .when_some(entry.body.clone(), |d, body| {
                                 d.child(
                                     div()
-                                        .mt(px(4.))
-                                        .text_size(px(13.))
-                                        .line_height(px(20.))
+                                        .mt(px(2.))
+                                        .text_size(px(12.5))
+                                        .line_height(px(19.))
                                         .text_color(p.ink)
                                         .child(body),
                                 )
@@ -2147,7 +2185,7 @@ impl ClientContextBlock {
                 list = list.child(TimelineEntryEntrance {
                     id: pro_eid(&self.id, format!("tline-{eid}")),
                     animate_in: is_new_entry,
-                    parent_gap: 18.,
+                    parent_gap: 12.,
                     content: row_inner.into_any_element(),
                 });
             }
@@ -2155,10 +2193,10 @@ impl ClientContextBlock {
         };
 
         div()
-            .pt(px(14.))
+            .pt(px(10.))
             .flex()
             .flex_col()
-            .child(filter_pills)
+            .when_some(filter_pills_opt, |d, fp| d.child(fp))
             .child(composer_row)
             .child(pro_view_transition(
                 pro_eid(&self.id, "tline-vtx"),
@@ -2677,18 +2715,18 @@ impl Render for ClientContextBlock {
             div()
                 .flex()
                 .items_center()
-                .gap(px(12.))
+                .gap(px(11.))
                 .min_w_0()
                 .child(
                     div()
-                        .size(px(34.))
-                        .rounded(px(10.))
+                        .size(px(32.))
+                        .rounded(px(8.))
                         .bg(client.mark_color)
                         .border_1()
                         .border_color(hsla(0., 0., 0., 0.10))
                         .text_color(rgb(0xffffff))
-                        .text_size(px(17.))
-                        .font_weight(FontWeight::MEDIUM)
+                        .text_size(px(15.5))
+                        .font_weight(FontWeight::SEMIBOLD)
                         .flex_none()
                         .flex()
                         .items_center()
@@ -2702,9 +2740,9 @@ impl Render for ClientContextBlock {
                         .flex_col()
                         .child(
                             div()
-                                .text_size(px(if compact { 20. } else { 24. }))
-                                .line_height(px(if compact { 26. } else { 30. }))
-                                .font_weight(FontWeight::MEDIUM)
+                                .text_size(px(if compact { 18. } else { 20. }))
+                                .line_height(px(if compact { 24. } else { 26. }))
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(p.strong)
                                 .truncate()
                                 .child(client.name.clone()),
@@ -2840,9 +2878,9 @@ impl Render for ClientContextBlock {
             ));
 
         let header = div()
-            .pb(px(18.))
+            .pb(px(14.))
             .flex()
-            .when(compact, |d| d.flex_col().gap(px(12.)))
+            .when(compact, |d| d.flex_col().gap(px(10.)))
             .when(!compact, |d| {
                 d.items_center().justify_between().gap(px(16.))
             })
@@ -2903,14 +2941,14 @@ impl Render for ClientContextBlock {
                     },
                     picked,
                     div()
-                        .p(px(14.))
+                        .p(px(12.))
                         .flex()
                         .flex_col()
-                        .gap(px(8.))
+                        .gap(px(5.))
                         .child(
                             div()
-                                .text_size(px(12.5))
-                                .text_color(p.text)
+                                .text_size(px(12.))
+                                .text_color(p.muted)
                                 .truncate()
                                 .child(kpi_lbl),
                         )
@@ -2926,8 +2964,8 @@ impl Render for ClientContextBlock {
                                     kpi.decimals,
                                     kpi.prefix.clone(),
                                     kpi.suffix.clone(),
-                                    20.,
-                                    FontWeight::MEDIUM,
+                                    18.5,
+                                    FontWeight::SEMIBOLD,
                                     p.strong,
                                 ))
                                 .child(Self::render_kpi_spark(&kpi.spark, p.accent_info, p.card)),
@@ -2944,6 +2982,8 @@ impl Render for ClientContextBlock {
                 )
                 .flex_1()
                 .min_w_0()
+                .rounded(px(10.))
+                .shadow(pro_card_shadow(p.dark))
                 .opacity(card_alpha)
                 .into_any_element(),
             );
@@ -2975,10 +3015,10 @@ impl Render for ClientContextBlock {
                         .when_some(c3, |d, el| d.child(el)),
                 )
         } else {
-            div().mb(px(12.)).flex().gap(px(12.)).children(kpi_cards)
+            div().mb(px(10.)).flex().gap(px(10.)).children(kpi_cards)
         };
 
-        // Main card toolbar: Section tabs + Search box
+        // Main card toolbar: Section tabs + inline type filters (on wide desktop) + Search box
         let tab_sensor = pro_selection_sensor();
         let seg_thumb: Hsla = if p.dark {
             rgb(0x2c2c2e).into()
@@ -3019,8 +3059,8 @@ impl Render for ClientContextBlock {
                     transparent_black(),
                     active,
                     div()
-                        .when(!compact, |d| d.px(px(13.)))
-                        .h(px(25.))
+                        .when(!compact, |d| d.px(px(12.)))
+                        .h(px(24.))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -3052,9 +3092,12 @@ impl Render for ClientContextBlock {
             .as_ref()
             .is_some_and(|e| !e.read(cx).value().is_empty());
 
+        let wide_toolbar = !compact && container_w >= 760.;
         let search_box = div()
             .when(compact, |d| d.w_full())
-            .when(!compact, |d| d.w(px(210.)))
+            .when(!compact, |d| {
+                d.w(px(if wide_toolbar { 154. } else { 196. }))
+            })
             .h(px(28.))
             .px(px(8.))
             .rounded(px(6.))
@@ -3101,19 +3144,34 @@ impl Render for ClientContextBlock {
                 ))
             });
 
+        let toolbar_filters = if wide_toolbar && self.section_tab == ClientSectionTab::Context {
+            Some(self.build_type_filter_pills(cx))
+        } else {
+            None
+        };
+
         let card_toolbar = div()
             .flex()
             .when(compact, |d| d.flex_col().items_stretch().gap(px(10.)))
             .when(!compact, |d| {
-                d.items_center().justify_between().gap(px(12.))
+                d.items_center().justify_between().gap(px(10.))
             })
             .child(section_seg)
             .when(self.section_tab == ClientSectionTab::Context, |d| {
-                d.child(search_box)
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(search_box)
+                        .when_some(toolbar_filters, |r, fp| r.child(fp)),
+                )
             });
 
         let tab_panel = match self.section_tab {
-            ClientSectionTab::Context => self.render_context_panel(&client, compact, cx),
+            ClientSectionTab::Context => {
+                self.render_context_panel(&client, compact, !wide_toolbar, cx)
+            }
             ClientSectionTab::Reports => self.render_reports_panel(&client, cx),
             ClientSectionTab::Financials => self.render_financials_panel(&client, compact, cx),
             ClientSectionTab::Settings => self.render_settings_panel(cx),
@@ -3124,7 +3182,8 @@ impl Render for ClientContextBlock {
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .p(px(if compact { 12. } else { 16. }))
+            .shadow(pro_card_shadow(p.dark))
+            .p(px(if compact { 12. } else { 14. }))
             .flex()
             .flex_col()
             .child(card_toolbar)
@@ -3140,8 +3199,8 @@ impl Render for ClientContextBlock {
             .role(Role::Region)
             .aria_label(client.name)
             .w_full()
-            .px(px(if compact { 16. } else { 36. }))
-            .py(px(if compact { 20. } else { 32. }))
+            .px(px(if compact { 16. } else { 28. }))
+            .py(px(if compact { 16. } else { 20. }))
             .relative()
             .flex()
             .flex_col()

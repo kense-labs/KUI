@@ -13,7 +13,7 @@ use crate::{
     },
     primitives::{
         family::disabled_motion,
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork},
+        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_app_artwork, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
@@ -652,6 +652,40 @@ fn default_seq_messages() -> Vec<SeqMessage> {
 }
 
 /// Interactive UML sequence diagram of an autonomous multi-agent run.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_sequence::{
+///     AgentSequence, AgentSequenceEvent, SeqMessage, SeqParticipant,
+/// };
+///
+/// let diagram = cx.new(|cx| {
+///     AgentSequence::new("checkout-sequence", cx)
+///         .with_title("Fix the checkout crash")
+///         .with_participants(vec![
+///             SeqParticipant::person("you", "You"),
+///             SeqParticipant::agent("lead", "Lead").with_model("Claude Opus"),
+///             SeqParticipant::agent("research", "Researcher").with_model("Claude Sonnet"),
+///             SeqParticipant::tool("github", "GitHub", "github"),
+///         ])
+///         .with_messages(vec![
+///             SeqMessage::call("m1", "you", "lead", "Fix the checkout crash").with_at_ms(0),
+///             SeqMessage::call("m2", "lead", "research", "Find the cause").with_at_ms(3_000),
+///             SeqMessage::call("m3", "research", "github", "search_code(\"emptyCart\")").with_at_ms(5_000),
+///             SeqMessage::reply("m4", "github", "research", "m3", "3 matches").with_at_ms(6_200),
+///             SeqMessage::reply("m5", "research", "lead", "m2", "Null total at cart.ts:142").with_at_ms(9_600),
+///         ])
+/// });
+/// cx.subscribe(&diagram, |_, ev: &AgentSequenceEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentSequence {
     id: ElementId,
     title: Option<SharedString>,
@@ -1981,8 +2015,9 @@ impl Render for AgentSequence {
                     let msg = &self.messages[row.msg_idx];
                     let from_name = self.participants[row.from_col].display_name(cx).to_string();
                     let to_name = self.participants[row.to_col].display_name(cx).to_string();
-                    let route = if row.from_col == row.to_col {
-                        format!("{from_name} ↻")
+                    let is_self_call = row.from_col == row.to_col;
+                    let route = if is_self_call {
+                        from_name.clone()
                     } else {
                         format!("{from_name} → {to_name}")
                     };
@@ -2109,11 +2144,21 @@ impl Render for AgentSequence {
                                     .child(
                                         div()
                                             .flex_1()
-                                            .truncate()
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.ink)
-                                            .child(route),
+                                            .min_w_0()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(4.))
+                                            .child(
+                                                div()
+                                                    .truncate()
+                                                    .text_size(px(12.))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(p.ink)
+                                                    .child(route),
+                                            )
+                                            .when(is_self_call, |d| {
+                                                d.child(pro_icon(ProIcon::Refresh, 11.5, p.muted))
+                                            }),
                                     )
                                     .child(close_btn),
                             )

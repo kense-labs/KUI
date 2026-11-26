@@ -22,6 +22,20 @@ pub enum ConnectionAction {
     Connect { service: String, ticket: u64 },
     Disconnect(String),
 }
+/// `ConnectionWizard` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::connector_setup::{ConnectionWizard, Service, ConnectionState};
+///
+/// let control = cx.new(|_| ConnectionWizard::new("tools",vec![Service{id:"git".into(),name:"Git".into(),description:"Search commits".into(),scopes:vec!["read".into()],state:ConnectionState::Offline}]));
+/// # }
+/// ```
 pub struct ConnectionWizard {
     id: SharedString,
     pub services: Vec<Service>,

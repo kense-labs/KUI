@@ -136,6 +136,20 @@ fn stop_tile(tile: &mut Tile) {
         TileStatus::Stopped
     };
 }
+/// `ImageGeneration` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::image_generation::ImageGeneration;
+///
+/// let control = cx.new(|cx| ImageGeneration::new(window, cx));
+/// # }
+/// ```
 pub struct ImageGeneration {
     editor: Entity<Editor>,
     prompt: String,

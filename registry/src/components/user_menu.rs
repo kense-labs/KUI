@@ -46,6 +46,23 @@ impl Account {
         }
     }
 }
+/// `UserMenu` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::user_menu::{Account, UserMenu};
+/// use kui::primitives::menu::MenuItem;
+///
+/// let control = cx.new(|cx| UserMenu::new("account",
+///     Account::new("Emma Collins", "emma@example.com"),
+///     vec![MenuItem::new("profile", "Profile")], cx).show_name());
+/// # }
+/// ```
 pub struct UserMenu {
     core: MenuCore,
     account: Account,

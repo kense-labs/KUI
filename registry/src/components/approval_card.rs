@@ -401,6 +401,32 @@ impl RenderOnce for ApcTactileBtn {
 }
 
 /// Human-in-the-loop agent action approval card with pausing countdown and resolved row morph.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::approval_card::{ApprovalCard, ApprovalCardEvent, ApprovalDetail, ApprovalRisk};
+///
+/// let card = cx.new(|cx| {
+///     ApprovalCard::new("send-campaign-approval", cx)
+///         .with_title("Send campaign email")
+///         .with_description(Some("October product update · Newsletter".into()))
+///         .with_risk(Some(ApprovalRisk::Medium))
+///         .with_details(vec![
+///             ApprovalDetail::new("Subject", "What's new in October"),
+///             ApprovalDetail::new("Send", "Today, 9:00 AM"),
+///         ])
+///         .with_expires_in(Some(45))
+/// });
+/// cx.subscribe(&card, |_, event: &ApprovalCardEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ApprovalCard {
     id: ElementId,
     focus: FocusHandle,

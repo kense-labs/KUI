@@ -57,6 +57,21 @@ struct Visible {
     siblings: usize,
 }
 /// Renders a hierarchical table. Stable unique row IDs are supplied by the host.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tree_table::{TreeTable, TreeTableRow};
+///
+/// let rows = vec![TreeTableRow::new("team", "Team").with_children(vec![TreeTableRow::new("project", "Project")])];
+/// let columns = vec!["Name".into(), "Owner".into()];
+/// let control = cx.new(|cx| TreeTable::new("Projects", columns, rows, cx).with_expanded(&["team"]));
+/// # }
+/// ```
 pub struct TreeTable {
     label: SharedString,
     columns: Vec<SharedString>,

@@ -7,8 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_eid, pro_empty_state, pro_mix_color, pro_presence,
-        pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_eid, pro_empty_state, pro_mix_color,
+        pro_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32, pro_tactile,
+        pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -26,7 +27,6 @@ use web_time::Instant;
 
 const LEDGER_DOC_SVG: &str = r#"<rect x="2" y="1.8" width="12" height="12.4" rx="2.6" stroke="currentColor" stroke-width="1.3"></rect><path d="M5 5.4h6M5 8h6M5 10.6h3.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path>"#;
 const REDO_SVG: &str = r#"<path d="M20 7H9C5.68629 7 3 9.68629 3 13C3 16.3137 5.68629 19 9 19H16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><path d="M16 3L20 7L16 11" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>"#;
-const VERCEL_TILE_SVG: &str = r#"<path d="M12 3.5 22 20.5H2z" fill="currentColor"></path>"#;
 
 /// Single system mutation recorded in [`AgentLedger`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -233,33 +233,11 @@ fn format_relative_age(secs: u64, cx: &App) -> String {
 }
 
 fn render_ledger_app_tile(entry: &LedgerEntry, dimmed: bool, cx: &App) -> AnyElement {
-    let p = ProPalette::get(cx);
     let key = entry.icon.as_deref().unwrap_or(entry.system.as_ref());
-    let tile = if key.eq_ignore_ascii_case("vercel") {
-        let tile_bg: Hsla = if p.dark {
-            rgb(0x232326).into()
-        } else {
-            rgb(0xffffff).into()
-        };
-        div()
-            .size(px(28.0))
-            .flex_none()
-            .rounded(px(7.0))
-            .bg(tile_bg)
-            .border_1()
-            .border_color(p.line)
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(pro_svg("0 0 24 24", VERCEL_TILE_SVG, 14.0, p.ink))
-            .into_any_element()
-    } else {
-        pro_app_tile(key, 28.0, cx)
-    };
     div()
         .flex_none()
         .opacity(if dimmed { 0.48 } else { 1.0 })
-        .child(tile)
+        .child(pro_app_tile(key, 28.0, cx))
         .into_any_element()
 }
 
@@ -305,6 +283,25 @@ fn default_ledger_entries(cx: &App) -> Vec<LedgerEntry> {
 }
 
 /// System-mutation audit ledger with `before -> after` diffs and dependency-aware Undo.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_ledger::{AgentLedger, AgentLedgerEvent};
+///
+/// let ledger = cx.new(|cx| {
+///     AgentLedger::new("launch-ledger", cx)
+///         .with_agent("Launch agent")
+/// });
+/// cx.subscribe(&ledger, |_, ev: &AgentLedgerEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentLedger {
     id: ElementId,
     title: Option<SharedString>,
@@ -479,6 +476,7 @@ impl Render for AgentLedger {
                         .bg(panel_bg)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .gap(px(4.0))
@@ -637,6 +635,7 @@ impl Render for AgentLedger {
                         .bg(panel_bg)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .child(pro_empty_state(
                             ProIcon::ClipboardDoc,
                             tr(cx, "No system changes yet", "尚无外部系统变更"),
@@ -674,7 +673,7 @@ impl Render for AgentLedger {
             .bg(panel_bg)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col();
 
@@ -747,21 +746,22 @@ impl Render for AgentLedger {
                 div()
                     .w_full()
                     .flex()
-                    .items_baseline()
-                    .gap(px(6.0))
+                    .items_center()
+                    .gap(px(5.0))
                     .overflow_hidden()
                     .text_size(px(12.0))
                     .line_height(px(17.0))
                     .child(
                         div()
+                            .flex_none()
                             .text_color(p.muted)
                             .line_through()
-                            .truncate()
                             .child(before.clone()),
                     )
-                    .child(div().flex_none().text_color(p.faint).child("→"))
+                    .child(pro_icon(ProIcon::ArrowRight, 11.0, p.faint))
                     .child(
                         div()
+                            .min_w_0()
                             .text_color(if is_undone { p.muted } else { p.text })
                             .truncate()
                             .child(after.clone()),
@@ -993,18 +993,20 @@ impl Render for AgentLedger {
                 .items_baseline()
                 .gap(px(6.0))
                 .max_w_full()
+                .min_w_0()
                 .overflow_hidden()
                 .child(
                     div()
+                        .flex_none()
                         .text_size(px(13.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if is_undone { p.muted } else { p.ink })
-                        .truncate()
                         .child(entry.action.clone()),
                 )
                 .when_some(entry.target.clone(), |d, tgt| {
                     d.child(
                         div()
+                            .min_w_0()
                             .text_size(px(13.0))
                             .text_color(if is_undone { p.muted } else { p.text })
                             .truncate()

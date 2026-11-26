@@ -12,6 +12,19 @@ use gpui::{prelude::*, *};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ElasticChanged(pub f64);
 /// A single-ended elastic slider built on the shared KUI slider behavior.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::elastic_slider::ElasticSlider;
+///
+/// let control = cx.new(|cx| ElasticSlider::new("Volume", 0.0..=100.0, 1.0, 50.0, "%", window, cx));
+/// # }
+/// ```
 pub struct ElasticSlider {
     slider: Entity<Slider>,
     range: std::ops::RangeInclusive<f64>,

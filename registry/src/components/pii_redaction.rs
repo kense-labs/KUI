@@ -24,6 +24,24 @@ use unicode_segmentation::UnicodeSegmentation;
 mod reply {
     use std::collections::HashMap;
 
+    /// `PiiRedaction` component.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[allow(unused_variables, unused_imports)]
+    /// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+    /// # use gpui::prelude::*;
+    /// use gpui::prelude::*;
+    /// use kui::components::pii_redaction::PiiRedaction;
+    ///
+    /// let control = cx.new(|cx| {
+    ///     PiiRedaction::new(window, cx)
+    ///         .with_model("Claude Sonnet 5.5")
+    ///         .with_reply()
+    /// });
+    /// # }
+    /// ```
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub enum PiiReplyPhase {
         #[default]

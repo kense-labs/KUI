@@ -345,6 +345,22 @@ fn render_output_glyph(kind: OutputKind, side: f32, p: &ProPalette) -> AnyElemen
 }
 
 /// AI chat screen pairing a tool-assisted thread with a live progress and outputs panel.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_chat_progress::{AgentChatProgressScreen, AgentChatProgressEvent};
+///
+/// let screen = cx.new(|cx| AgentChatProgressScreen::new("agent-chat-progress", cx));
+/// cx.subscribe(&screen, |_, event: &AgentChatProgressEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentChatProgressScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -3053,7 +3069,10 @@ impl AgentChatProgressScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

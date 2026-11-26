@@ -6,14 +6,14 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_check_draw, pro_eid, pro_empty_state, pro_icon_btn,
-        pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar, pro_spring_f32,
-        pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProPalette, pro_agent_avatar, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_icon_btn, pro_mix_color, pro_popover_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
@@ -21,12 +21,63 @@ use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
 const CARD_MAX_W: f32 = 760.0;
-const WHO_COL_W: f32 = 196.0;
-const CHART_H: f32 = 136.0;
+const WHO_COL_W: f32 = 206.0;
+const CHART_H: f32 = 142.0;
 const LANE_H: f32 = 34.0;
 const SAMPLE_COUNT: usize = 145; // Every 10 minutes across 1440m
 
-const SPREAD_ICON_SVG: &str = r#"<path d="M2.5 11.5c1.6 0 2-6 3.5-6s1.9 6 3.5 6 1.9-6 3.5-6" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"></path><path d="M2.5 13.5h11" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"></path>"#;
+fn spread_wave_icon(side: f32, color: Hsla) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, win, _| {
+            let s = f32::from(bounds.size.width).min(f32::from(bounds.size.height)) / 16.0;
+            if s <= 0.05 {
+                return;
+            }
+            let ox = f32::from(bounds.left());
+            let oy = f32::from(bounds.top());
+            let pt = |x: f32, y: f32| point(px(ox + x * s), px(oy + y * s));
+            let sw = (1.35 * s).clamp(1.05, 1.6);
+
+            let mut wave = PathBuilder::stroke(px(sw));
+            wave.move_to(pt(2.4, 11.2));
+            wave.curve_to(pt(6.0, 5.4), pt(4.3, 11.2));
+            wave.curve_to(pt(9.5, 11.2), pt(7.8, 5.4));
+            wave.curve_to(pt(13.2, 5.4), pt(11.3, 11.2));
+            if let Ok(path) = wave.build() {
+                win.paint_path(path, color);
+            }
+
+            let mut base = PathBuilder::stroke(px(sw));
+            base.move_to(pt(2.4, 13.5));
+            base.line_to(pt(13.6, 13.5));
+            if let Ok(path) = base.build() {
+                win.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(side))
+    .flex_none()
+    .into_any_element()
+}
+
+fn run_avatar_seed(run: &PlannedRun) -> String {
+    let low_id = run.id.to_ascii_lowercase();
+    let low_nm = run.name.to_ascii_lowercase();
+    for kw in ["claude", "gpt", "openai", "gemini", "grok"] {
+        if low_id.contains(kw) || low_nm.contains(kw) {
+            return format!("{} {}", run.id, run.name);
+        }
+    }
+    let brand = match low_id.as_str() {
+        "triage" => "gemini",
+        "research" => "claude",
+        "report" => "gpt",
+        "review" => "claude",
+        _ => ["gemini", "claude", "gpt", "grok"][run.color_idx % 4],
+    };
+    format!("{brand} {}", run.name)
+}
 
 /// Capacity health state relative to the API ceiling and safety buffer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,6 +307,32 @@ pub enum RateLimitPlannerEvent {
 impl EventEmitter<RateLimitPlannerEvent> for RateLimitPlanner {}
 
 /// Interactive 24-hour API TPM capacity planner with red overflow hatching and draggable run bars.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::rate_limit_planner::{
+///     PlannedRun, RateLimitPlanner, RateLimitPlannerEvent,
+/// };
+///
+/// let planner = cx.new(|cx| {
+///     RateLimitPlanner::new("org-tpm-planner", cx)
+///         .with_limit(120_000.0)
+///         .with_runs(vec![
+///             PlannedRun::new("triage", "Inbox triage", 8 * 60, 46_000.0).with_pinned_running(true),
+///             PlannedRun::new("research", "Lead research", 11 * 60, 82_000.0).with_color_idx(1),
+///             PlannedRun::new("report", "Report writer", 11 * 60 + 30, 74_000.0).with_color_idx(2),
+///         ])
+/// });
+/// cx.subscribe(&planner, |_, ev: &RateLimitPlannerEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct RateLimitPlanner {
     id: ElementId,
     title: SharedString,
@@ -548,10 +625,11 @@ impl Render for RateLimitPlanner {
                 .w_full()
                 .max_w(px(CARD_MAX_W))
                 .p(px(16.))
-                .rounded(px(10.))
+                .rounded(px(12.))
                 .bg(card_bg)
                 .border_1()
                 .border_color(card_border)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(14.))
@@ -573,10 +651,11 @@ impl Render for RateLimitPlanner {
                 .id(self.id.clone())
                 .w_full()
                 .max_w(px(CARD_MAX_W))
-                .rounded(px(10.))
+                .rounded(px(12.))
                 .bg(card_bg)
                 .border_1()
                 .border_color(card_border)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::UsageChart,
                     tr(cx, "No scheduled agent runs", "暂无计划运行任务"),
@@ -671,7 +750,7 @@ impl Render for RateLimitPlanner {
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.ink)
-                .child(pro_svg("0 0 16 16", SPREAD_ICON_SVG, 15., p.muted))
+                .child(spread_wave_icon(15., p.muted))
                 .child(tr(cx, "Spread out", "一键错峰")),
             cx,
             |this, _, cx| {
@@ -730,20 +809,10 @@ impl Render for RateLimitPlanner {
                                 p.muted,
                             ))
                             .child("·")
-                            .child(pro_rolling_number(
-                                pro_eid(&self.id, "rlp-peak-k"),
-                                (summary.peak_tpm / 1_000.0) as f64,
-                                0,
-                                tr(cx, "peak ", "峰值 "),
-                                "k/min",
-                                12.,
-                                FontWeight::MEDIUM,
-                                p.ink,
-                            ))
                             .child(format!(
-                                " ({} {})",
+                                "{} / {}",
                                 format_k(self.limit),
-                                tr(cx, "cap", "上限")
+                                tr(cx, "min", "分钟")
                             )),
                     ),
             )
@@ -785,7 +854,7 @@ impl Render for RateLimitPlanner {
                                 pro_eid(&self.id, "rlp-peak-pct"),
                                 f64::from(peak_pct),
                                 0,
-                                "",
+                                tr(cx, "peak ", "峰值 "),
                                 "%",
                                 12.,
                                 FontWeight::MEDIUM,
@@ -1103,6 +1172,53 @@ impl Render for RateLimitPlanner {
                 },
             ));
 
+        let peak_x_frac =
+            ((summary.peak_min - base_min).rem_euclid(1_440) as f32 / 1_440.0).clamp(0.08, 0.78);
+        let peak_y_px =
+            (6.0 + (1.0 - (summary.peak_tpm / y_max).clamp(0.0, 1.0)) * (CHART_H - 6.0) - 25.0)
+                .clamp(0.0, CHART_H - 26.0);
+        let peak_pill_bg: Hsla = if summary.health == LimitHealth::Over {
+            p.red_soft
+        } else if p.dark {
+            p.logo_tile
+        } else {
+            card_bg
+        };
+        let peak_pill_fg = if summary.health == LimitHealth::Over {
+            p.red_ink
+        } else {
+            p.ink
+        };
+        let peak_pill_bdr = if summary.health == LimitHealth::Over {
+            p.red.opacity(0.32)
+        } else {
+            p.line_strong
+        };
+        let peak_callout = (self.hover_chart_frac.is_none()).then(|| {
+            div()
+                .absolute()
+                .left(relative(peak_x_frac))
+                .top(px(peak_y_px))
+                .ml(px(-42.))
+                .h(px(19.))
+                .px(px(6.))
+                .rounded(px(5.))
+                .bg(peak_pill_bg)
+                .border_1()
+                .border_color(peak_pill_bdr)
+                .text_size(px(10.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(peak_pill_fg)
+                .flex()
+                .items_center()
+                .child(format!(
+                    "{} {} · {}",
+                    tr(cx, "Peak", "峰值"),
+                    format_k(summary.peak_tpm),
+                    format_clock_hhmm(summary.peak_min)
+                ))
+        });
+
         let chart_bounds_move = chart_bounds_cell;
         let chart_row = div()
             .w_full()
@@ -1181,6 +1297,7 @@ impl Render for RateLimitPlanner {
                         }
                     }))
                     .child(chart_canvas)
+                    .when_some(peak_callout, |d, pc| d.child(pc))
                     .child(hover_tooltip),
             );
 
@@ -1346,6 +1463,7 @@ impl Render for RateLimitPlanner {
             let init_off = (real_start - base_min).rem_euclid(1_440) as f32;
             let is_selected_row = self.selected_id.as_ref() == Some(&run.id);
 
+            let av_seed = run_avatar_seed(run);
             let who_pill = pro_tactile(
                 pro_eid(&self.id, format!("who-btn-{}", run.id)),
                 run.display_name(cx).to_string(),
@@ -1364,9 +1482,9 @@ impl Render for RateLimitPlanner {
                     .items_center()
                     .gap(px(8.))
                     .child(pro_agent_avatar(
-                        run.id.as_ref(),
+                        &av_seed,
                         r_col,
-                        16.0,
+                        18.0,
                         run.pinned_running,
                         elapsed_ms,
                         cx,
@@ -1620,6 +1738,7 @@ impl Render for RateLimitPlanner {
         div()
             .id(self.id.clone())
             .w_full()
+            .py(px(14.))
             .flex()
             .justify_center()
             .child(
@@ -1627,11 +1746,11 @@ impl Render for RateLimitPlanner {
                     .relative()
                     .w_full()
                     .max_w(px(CARD_MAX_W))
-                    .rounded(px(10.))
+                    .rounded(px(12.))
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)

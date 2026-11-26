@@ -6,31 +6,252 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_fold, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
-        pro_toast_banner, tr,
+        ProPalette, pro_card_shadow, pro_eid, pro_empty_state, pro_fold, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         direct_touch::Contact,
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon},
     },
 };
 use gpui::{prelude::*, *};
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
+    f32::consts::{FRAC_PI_2, PI},
     rc::Rc,
 };
 use web_time::Instant;
 
-const SPARK_HEADER_SVG: &str = r#"<path d="M7 1.2c.4 2.9 1.9 4.4 4.8 4.8-2.9.4-4.4 1.9-4.8 4.8C6.6 7.9 5.1 6.4 2.2 6 5.1 5.6 6.6 4.1 7 1.2Z" fill="currentColor"></path><circle cx="11.6" cy="11.4" r="1.1" fill="currentColor" opacity="0.55"></circle>"#;
-const WARN_TRIANGLE_SVG: &str = r#"<path d="M13.92 21H10.08C5.44 21 3.13 21 2.28 19.49C1.42 17.99 2.61 15.99 4.98 12L6.9 8.75C9.18 4.92 10.31 3 12 3C13.69 3 14.82 4.92 17.1 8.75L19.02 12C21.39 15.99 22.58 17.99 21.72 19.49C20.87 21 18.56 21 13.92 21Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 9V13" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="16.7" r="1" fill="currentColor"></circle>"#;
-const DANGER_DIAMOND_SVG: &str = r#"<path d="M5.92 5.92C8.16 3.68 9.28 2.56 10.59 2.2C11.51 1.93 12.49 1.93 13.41 2.2C14.72 2.56 15.84 3.68 18.08 5.92C20.32 8.16 21.44 9.28 21.8 10.59C22.07 11.51 22.07 12.49 21.8 13.41C21.44 14.72 20.32 15.84 18.08 18.08C15.84 20.32 14.72 21.44 13.41 21.8C12.49 22.07 11.51 22.07 10.59 21.8C9.28 21.44 8.16 20.32 5.92 18.08C3.68 15.84 2.56 14.72 2.2 13.41C1.93 12.49 1.93 11.51 2.2 10.59C2.56 9.28 3.68 8.16 5.92 5.92Z" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 8V12.2" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"></path><circle cx="12" cy="15.8" r="1" fill="currentColor"></circle>"#;
-const LOCK_CLOSED_SVG: &str = r#"<path d="M12 14.5V17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><circle cx="12" cy="14.3" r="1" fill="currentColor"></circle><path d="M16.5 9V6.5C16.5 4.01 14.49 2 12 2C9.51 2 7.5 4.01 7.5 6.5V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><rect x="4" y="9" width="16" height="13" rx="4.2" stroke="currentColor" stroke-width="1.6"></rect>"#;
-const LOCK_OPEN_SVG: &str = r#"<path d="M12 14.5V17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><circle cx="12" cy="14.3" r="1" fill="currentColor"></circle><path d="M7.5 9V6.5C7.5 4.01 9.51 2 12 2C13.96 2 15.65 3.18 16.3 4.85" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><rect x="4" y="9" width="16" height="13" rx="4.2" stroke="currentColor" stroke-width="1.6"></rect>"#;
+fn sparkle_header_icon(side: f32, color: Hsla) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, win, _| {
+            let w = f32::from(bounds.size.width);
+            let h = f32::from(bounds.size.height);
+            if w <= 2.0 || h <= 2.0 {
+                return;
+            }
+            let ox = f32::from(bounds.left());
+            let oy = f32::from(bounds.top());
+            let map = |u: f32, v: f32| point(px(ox + u * w), px(oy + v * h));
+            let cx_u = 0.48_f32;
+            let cy_v = 0.44_f32;
+            let r_outer = 0.37_f32;
+            let r_inner = 0.105_f32;
+            let d = r_inner * 0.72;
+            let mut pb = PathBuilder::fill();
+            let pts = [
+                (cx_u, cy_v - r_outer),
+                (cx_u + d, cy_v - d),
+                (cx_u + r_outer, cy_v),
+                (cx_u + d, cy_v + d),
+                (cx_u, cy_v + r_outer),
+                (cx_u - d, cy_v + d),
+                (cx_u - r_outer, cy_v),
+                (cx_u - d, cy_v - d),
+            ];
+            pb.move_to(map(pts[0].0, pts[0].1));
+            for i in 0..4 {
+                let ctrl = pts[i * 2 + 1];
+                let next = pts[(i * 2 + 2) % 8];
+                pb.curve_to(map(next.0, next.1), map(ctrl.0, ctrl.1));
+            }
+            pb.close();
+            if let Ok(path) = pb.build() {
+                win.paint_path(path, color);
+            }
+            let dot_r = (w * 0.085).max(1.1);
+            let dot_c = map(0.82, 0.80);
+            win.paint_quad(
+                fill(
+                    Bounds::new(
+                        point(dot_c.x - px(dot_r), dot_c.y - px(dot_r)),
+                        size(px(dot_r * 2.0), px(dot_r * 2.0)),
+                    ),
+                    color.opacity(0.62),
+                )
+                .corner_radii(px(dot_r)),
+            );
+        },
+    )
+    .size(px(side))
+    .flex_none()
+    .into_any_element()
+}
+
+fn warn_triangle_icon(side: f32, color: Hsla) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, win, _| {
+            let s = f32::from(bounds.size.width).min(f32::from(bounds.size.height)) / 24.0;
+            if s <= 0.05 {
+                return;
+            }
+            let ox = f32::from(bounds.left());
+            let oy = f32::from(bounds.top());
+            let pt = |x: f32, y: f32| point(px(ox + x * s), px(oy + y * s));
+            let sw = (1.75 * s).clamp(1.05, 1.8);
+
+            let mut tri = PathBuilder::stroke(px(sw));
+            tri.move_to(pt(10.6, 4.4));
+            tri.curve_to(pt(13.4, 4.4), pt(12.0, 2.3));
+            tri.line_to(pt(20.6, 17.2));
+            tri.curve_to(pt(19.1, 20.2), pt(21.6, 19.8));
+            tri.line_to(pt(4.9, 20.2));
+            tri.curve_to(pt(3.4, 17.2), pt(2.4, 19.8));
+            tri.close();
+            if let Ok(path) = tri.build() {
+                win.paint_path(path, color);
+            }
+
+            let mut stem = PathBuilder::stroke(px(sw));
+            stem.move_to(pt(12.0, 9.2));
+            stem.line_to(pt(12.0, 13.5));
+            if let Ok(path) = stem.build() {
+                win.paint_path(path, color);
+            }
+
+            let r = (1.15 * s).max(0.85);
+            let dc = pt(12.0, 16.7);
+            win.paint_quad(
+                fill(
+                    Bounds::new(
+                        point(dc.x - px(r), dc.y - px(r)),
+                        size(px(r * 2.0), px(r * 2.0)),
+                    ),
+                    color,
+                )
+                .corner_radii(px(r)),
+            );
+        },
+    )
+    .size(px(side))
+    .flex_none()
+    .into_any_element()
+}
+
+fn danger_diamond_icon(side: f32, color: Hsla) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, win, _| {
+            let s = f32::from(bounds.size.width).min(f32::from(bounds.size.height)) / 24.0;
+            if s <= 0.05 {
+                return;
+            }
+            let ox = f32::from(bounds.left());
+            let oy = f32::from(bounds.top());
+            let pt = |x: f32, y: f32| point(px(ox + x * s), px(oy + y * s));
+            let sw = (1.75 * s).clamp(1.05, 1.8);
+
+            let mut dia = PathBuilder::stroke(px(sw));
+            dia.move_to(pt(10.3, 3.5));
+            dia.curve_to(pt(13.7, 3.5), pt(12.0, 1.8));
+            dia.line_to(pt(20.5, 10.3));
+            dia.curve_to(pt(20.5, 13.7), pt(22.2, 12.0));
+            dia.line_to(pt(13.7, 20.5));
+            dia.curve_to(pt(10.3, 20.5), pt(12.0, 22.2));
+            dia.line_to(pt(3.5, 13.7));
+            dia.curve_to(pt(3.5, 10.3), pt(1.8, 12.0));
+            dia.close();
+            if let Ok(path) = dia.build() {
+                win.paint_path(path, color);
+            }
+
+            let mut stem = PathBuilder::stroke(px(sw));
+            stem.move_to(pt(12.0, 8.1));
+            stem.line_to(pt(12.0, 12.6));
+            if let Ok(path) = stem.build() {
+                win.paint_path(path, color);
+            }
+
+            let r = (1.15 * s).max(0.85);
+            let dc = pt(12.0, 15.9);
+            win.paint_quad(
+                fill(
+                    Bounds::new(
+                        point(dc.x - px(r), dc.y - px(r)),
+                        size(px(r * 2.0), px(r * 2.0)),
+                    ),
+                    color,
+                )
+                .corner_radii(px(r)),
+            );
+        },
+    )
+    .size(px(side))
+    .flex_none()
+    .into_any_element()
+}
+
+fn padlock_icon(side: f32, locked: bool, color: Hsla) -> AnyElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, win, _| {
+            let s = f32::from(bounds.size.width).min(f32::from(bounds.size.height)) / 24.0;
+            if s <= 0.05 {
+                return;
+            }
+            let ox = f32::from(bounds.left());
+            let oy = f32::from(bounds.top());
+            let pt = |x: f32, y: f32| point(px(ox + x * s), px(oy + y * s));
+            let sw = (1.65 * s).clamp(1.1, 1.7);
+
+            win.paint_quad(quad(
+                Bounds::new(pt(4.5, 9.5), size(px(15.0 * s), px(11.8 * s))),
+                Corners::all(px(3.6 * s)),
+                transparent_black(),
+                Edges::all(px(sw)),
+                color,
+                BorderStyle::Solid,
+            ));
+
+            let mut shackle = PathBuilder::stroke(px(sw));
+            shackle.move_to(pt(7.7, 9.5));
+            shackle.line_to(pt(7.7, 6.6));
+            let end_a = if locked { 0.0 } else { -0.45 };
+            let steps = 12usize;
+            for i in 0..=steps {
+                let t = i as f32 / steps as f32;
+                let a = -PI + t * (PI + end_a);
+                shackle.line_to(pt(12.0 + 4.3 * a.cos(), 6.6 + 4.3 * a.sin()));
+            }
+            if locked {
+                let _ = FRAC_PI_2;
+                shackle.line_to(pt(16.3, 9.5));
+            }
+            if let Ok(path) = shackle.build() {
+                win.paint_path(path, color);
+            }
+
+            let kr = (1.05 * s).max(0.8);
+            let kc = pt(12.0, 14.3);
+            win.paint_quad(
+                fill(
+                    Bounds::new(
+                        point(kc.x - px(kr), kc.y - px(kr)),
+                        size(px(kr * 2.0), px(kr * 2.0)),
+                    ),
+                    color,
+                )
+                .corner_radii(px(kr)),
+            );
+            let mut key_stem = PathBuilder::stroke(px(sw));
+            key_stem.move_to(pt(12.0, 14.6));
+            key_stem.line_to(pt(12.0, 17.4));
+            if let Ok(path) = key_stem.build() {
+                win.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(side))
+    .flex_none()
+    .into_any_element()
+}
 
 /// Three-stop autonomy tier for [`AutonomyDial`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -203,6 +424,26 @@ fn default_actions() -> Vec<AutonomyAction> {
 }
 
 /// Three-stop agent autonomy dial with gliding action lists and per-action padlock overrides.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::autonomy_dial::{AutonomyDial, AutonomyDialEvent, AutonomyLevel};
+///
+/// let dial = cx.new(|cx| {
+///     AutonomyDial::new("sales-agent-autonomy", cx)
+///         .with_title("Sales agent")
+///         .with_level(AutonomyLevel::IfRisky)
+/// });
+/// cx.subscribe(&dial, |_, event: &AutonomyDialEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AutonomyDial {
     id: ElementId,
     focus: FocusHandle,
@@ -514,7 +755,7 @@ impl AutonomyDial {
                         .flex()
                         .items_center()
                         .gap(px(3.0))
-                        .child(pro_svg("0 0 24 24", WARN_TRIANGLE_SVG, 12.0, fg))
+                        .child(warn_triangle_icon(12.0, fg))
                         .child(tr(cx, "Risky", "有风险")),
                 )
             }
@@ -538,7 +779,7 @@ impl AutonomyDial {
                         .flex()
                         .items_center()
                         .gap(px(3.0))
-                        .child(pro_svg("0 0 24 24", DANGER_DIAMOND_SVG, 12.0, fg))
+                        .child(danger_diamond_icon(12.0, fg))
                         .child(tr(cx, "Destructive", "破坏性")),
                 )
             }
@@ -708,14 +949,9 @@ impl AutonomyDial {
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.toggle_pin(act_id_pin.as_ref(), cx);
                     }))
-                    .child(div().relative().top(px(0.5 * pin_down)).child(pro_svg(
-                        "0 0 24 24",
-                        if is_locked {
-                            LOCK_CLOSED_SVG
-                        } else {
-                            LOCK_OPEN_SVG
-                        },
+                    .child(div().relative().top(px(0.5 * pin_down)).child(padlock_icon(
                         16.0 * (1.0 - 0.08 * pin_down),
+                        is_locked,
                         pin_color,
                     ))),
             )
@@ -745,6 +981,7 @@ impl Render for AutonomyDial {
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .gap(px(12.0))
@@ -1016,7 +1253,7 @@ impl Render for AutonomyDial {
                 .h(px(17.0))
                 .px(px(4.5))
                 .rounded(px(4.0))
-                .bg(card_bg)
+                .bg(if p.dark { p.logo_tile } else { card_bg })
                 .border_1()
                 .border_color(p.line_strong)
                 .flex()
@@ -1041,7 +1278,7 @@ impl Render for AutonomyDial {
             .bg(card_bg)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
@@ -1053,7 +1290,7 @@ impl Render for AutonomyDial {
                     .flex()
                     .items_center()
                     .gap(px(10.0))
-                    .child(pro_svg("0 0 14 14", SPARK_HEADER_SVG, 15.0, p.blue))
+                    .child(sparkle_header_icon(15.0, p.blue))
                     .child(
                         div()
                             .flex_1()

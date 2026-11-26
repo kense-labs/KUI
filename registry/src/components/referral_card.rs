@@ -305,6 +305,37 @@ struct Measurement {
 }
 
 /// A controlled referral card with an optional, self-contained demonstration.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{Task, prelude::*};
+/// use kui::components::referral_card::{
+///     ReferralCard, ReferralCardOptions, ReferralMilestone,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     ReferralCard::new(
+///         ReferralCardOptions {
+///             link: "https://example.com/r/kense20".into(),
+///             referrals: Some(Vec::new()),
+///             milestone: ReferralMilestone::new(5, "3 months free"),
+///             ..Default::default()
+///         },
+///         window,
+///         cx,
+///     )
+///     .on_invite(|invite, _, _| {
+///         // Hand invite.emails and invite.signal to the host's delivery service.
+///         let _ = invite;
+///         Task::ready(Ok(()))
+///     })
+/// });
+/// # }
+/// ```
 pub struct ReferralCard {
     id: ElementId,
     options: ReferralCardOptions,

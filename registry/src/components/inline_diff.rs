@@ -6,10 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_ease, pro_eid,
+        pro_empty_state, pro_icon_btn, pro_popover_presence, pro_rolling_number, pro_skeleton_bar,
+        pro_spring_f32, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -216,23 +215,6 @@ pub enum InlineDiffEvent {
 
 impl EventEmitter<InlineDiffEvent> for InlineDiff {}
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum DiffViewFilter {
-    All,
-    Pending,
-    Accepted,
-}
-
-impl DiffViewFilter {
-    fn key(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Pending => "pending",
-            Self::Accepted => "accepted",
-        }
-    }
-}
-
 #[derive(Clone)]
 struct ChangeSlot {
     remove: SharedString,
@@ -243,6 +225,25 @@ struct ChangeSlot {
 }
 
 /// Inline AI prose edit reviewer with per-change popover, keyboard shortcuts, and undo stack.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::inline_diff::{InlineDiff, InlineDiffEvent};
+///
+/// let review = cx.new(|cx| {
+///     InlineDiff::new("prose-inline-diff", cx)
+///         .with_label(Some("Suggested by AI · Make it shorter".into()))
+/// });
+/// cx.subscribe(&review, |_, event: &InlineDiffEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct InlineDiff {
     id: ElementId,
     focus: FocusHandle,
@@ -251,10 +252,11 @@ pub struct InlineDiff {
     changes: Vec<ChangeSlot>,
     history: Vec<Vec<(usize, DiffDecision)>>,
     active_change: Option<usize>,
+    hovered_change: Option<usize>,
+    popover_hovered: bool,
+    keyboard_focused: bool,
     done_at: Option<Instant>,
     done_clock: PhaseClock,
-    view_filter: DiffViewFilter,
-    filter_sensor: ProSelectionSensor,
     card_origin: Rc<Cell<Point<Pixels>>>,
     #[allow(clippy::type_complexity)]
     active_anchor: Rc<Cell<Option<(Point<Pixels>, Size<Pixels>)>>>,
@@ -265,7 +267,7 @@ pub struct InlineDiff {
 }
 
 impl InlineDiff {
-    /// Create an [`InlineDiff`] preloaded with the 4-edit `"Suggested by AI · Make it shorter"` announcement rewrite.
+    /// Create an [`InlineDiff`] preloaded with the `"Suggested by AI · Make it shorter"` announcement rewrite.
     pub fn new(id: impl Into<ElementId>, cx: &mut Context<Self>) -> Self {
         cx.observe_global::<Theme>(|_, cx| cx.notify()).detach();
         cx.observe_global::<UiLanguage>(|_, cx| cx.notify())
@@ -273,7 +275,6 @@ impl InlineDiff {
         let (orig, sugg) = default_diff_pair();
         let segments = diff_words(orig, sugg);
         let changes = build_change_slots(&segments);
-        let active_change = (!changes.is_empty()).then_some(0);
         Self {
             id: id.into(),
             focus: cx.focus_handle(),
@@ -281,11 +282,12 @@ impl InlineDiff {
             segments,
             changes,
             history: Vec::new(),
-            active_change,
+            active_change: None,
+            hovered_change: None,
+            popover_hovered: false,
+            keyboard_focused: false,
             done_at: None,
             done_clock: PhaseClock::default(),
-            view_filter: DiffViewFilter::All,
-            filter_sensor: pro_selection_sensor(),
             card_origin: Rc::new(Cell::new(point(px(0.), px(0.)))),
             active_anchor: Rc::new(Cell::new(None)),
             loading: false,
@@ -301,7 +303,10 @@ impl InlineDiff {
         self.changes = build_change_slots(&self.segments);
         self.history.clear();
         self.done_at = None;
-        self.active_change = (!self.changes.is_empty()).then_some(0);
+        self.active_change = None;
+        self.hovered_change = None;
+        self.popover_hovered = false;
+        self.keyboard_focused = false;
         self
     }
 
@@ -311,7 +316,10 @@ impl InlineDiff {
         self.segments = segments;
         self.history.clear();
         self.done_at = None;
-        self.active_change = (!self.changes.is_empty()).then_some(0);
+        self.active_change = None;
+        self.hovered_change = None;
+        self.popover_hovered = false;
+        self.keyboard_focused = false;
         self
     }
 
@@ -402,6 +410,7 @@ impl InlineDiff {
     pub fn step_highlight(&mut self, forward: bool, cx: &mut Context<Self>) {
         if self.pending_count() == 0 {
             self.active_change = None;
+            self.keyboard_focused = false;
             cx.notify();
             return;
         }
@@ -426,6 +435,7 @@ impl InlineDiff {
             }
         };
         self.active_change = next;
+        self.keyboard_focused = next.is_some();
         cx.notify();
     }
 
@@ -449,7 +459,13 @@ impl InlineDiff {
             slot.accept_clock.restart(cx);
         }
         self.history.push(vec![(change_index, prev)]);
-        self.active_change = self.next_pending_after(change_index);
+        self.hovered_change = None;
+        self.popover_hovered = false;
+        self.active_change = if self.keyboard_focused {
+            self.next_pending_after(change_index)
+        } else {
+            None
+        };
         let text = self.current_text();
         cx.emit(InlineDiffEvent::Decided {
             change_index,
@@ -457,6 +473,7 @@ impl InlineDiff {
             current_text: text.clone(),
         });
         if self.pending_count() == 0 {
+            self.keyboard_focused = false;
             self.done_at = Some(Instant::now());
             self.done_clock.restart(cx);
             cx.emit(InlineDiffEvent::Done(text));
@@ -492,6 +509,9 @@ impl InlineDiff {
         }
         self.history.push(batch);
         self.active_change = None;
+        self.hovered_change = None;
+        self.popover_hovered = false;
+        self.keyboard_focused = false;
         self.done_at = Some(now);
         self.done_clock.restart(cx);
         let text = self.current_text();
@@ -521,7 +541,9 @@ impl InlineDiff {
         if self.pending_count() > 0 {
             self.done_at = None;
         }
-        if let Some(idx) = first_restored {
+        if self.keyboard_focused
+            && let Some(idx) = first_restored
+        {
             self.active_change = Some(idx);
         }
         let text = self.current_text();
@@ -537,7 +559,10 @@ impl InlineDiff {
         }
         self.history.clear();
         self.done_at = None;
-        self.active_change = (!self.changes.is_empty()).then_some(0);
+        self.active_change = None;
+        self.hovered_change = None;
+        self.popover_hovered = false;
+        self.keyboard_focused = false;
         cx.emit(InlineDiffEvent::Reset);
         cx.notify();
     }
@@ -561,15 +586,33 @@ impl InlineDiff {
             "enter" | "y" | "Y" => {
                 if let Some(idx) = self.active_change {
                     self.decide_change(idx, DiffDecision::Accepted, cx);
+                } else if let Some(first) = self
+                    .changes
+                    .iter()
+                    .position(|c| c.decision == DiffDecision::Pending)
+                {
+                    self.decide_change(first, DiffDecision::Accepted, cx);
                 }
             }
             "backspace" | "n" | "N" => {
                 if let Some(idx) = self.active_change {
                     self.decide_change(idx, DiffDecision::Rejected, cx);
+                } else if let Some(first) = self
+                    .changes
+                    .iter()
+                    .position(|c| c.decision == DiffDecision::Pending)
+                {
+                    self.decide_change(first, DiffDecision::Rejected, cx);
                 }
             }
             "z" | "Z" => self.undo(cx),
-            "escape" if self.active_change.take().is_some() => {
+            "escape"
+                if self.active_change.take().is_some()
+                    || self.hovered_change.take().is_some()
+                    || self.keyboard_focused =>
+            {
+                self.keyboard_focused = false;
+                self.popover_hovered = false;
                 cx.notify();
             }
             _ => {}
@@ -584,6 +627,12 @@ impl Render for InlineDiff {
         let width = self.measured_width.get();
         let compact = width < 400.0;
         let measure_cell = self.measured_width.clone();
+        let card_bg: Hsla = if p.dark { rgb(0x1c1c1f).into() } else { p.card };
+        let card_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.10)
+        } else {
+            hsla(0., 0., 0., 0.075)
+        };
 
         if self.loading {
             if !reduced {
@@ -597,18 +646,19 @@ impl Render for InlineDiff {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(520.))
-                        .rounded(px(10.))
-                        .bg(p.card)
+                        .max_w(px(500.))
+                        .rounded(px(12.))
+                        .bg(card_bg)
                         .border_1()
-                        .border_color(p.line)
+                        .border_color(card_border)
+                        .shadow(pro_card_shadow(p.dark))
                         .p(px(16.))
                         .flex()
                         .flex_col()
                         .gap(px(10.))
                         .child(pro_skeleton_bar(190., 14., 4., 0.1, cx))
-                        .child(pro_skeleton_bar(460., 72., 6., 0.35, cx))
-                        .child(pro_skeleton_bar(480., 32., 6., 0.65, cx)),
+                        .child(pro_skeleton_bar(450., 68., 6., 0.35, cx))
+                        .child(pro_skeleton_bar(460., 32., 6., 0.65, cx)),
                 );
         }
 
@@ -616,10 +666,13 @@ impl Render for InlineDiff {
             return div()
                 .id(self.id.clone())
                 .w_full()
-                .rounded(px(10.))
-                .bg(p.card)
+                .max_w(px(500.))
+                .mx_auto()
+                .rounded(px(12.))
+                .bg(card_bg)
                 .border_1()
-                .border_color(p.line)
+                .border_color(card_border)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Sparkles,
                     tr(cx, "No prose edits to review", "暂无待审阅的文本润色"),
@@ -633,7 +686,6 @@ impl Render for InlineDiff {
                 ));
         }
 
-        // Request animation frame while any change is collapsing (< 0.42s) or done check is drawing (< 0.55s)
         let any_collapsing = !reduced
             && self.changes.iter().any(|c| {
                 c.decided_at
@@ -650,6 +702,8 @@ impl Render for InlineDiff {
         }
 
         self.active_anchor.set(None);
+        let popover_open =
+            self.hovered_change.is_some() || self.popover_hovered || self.keyboard_focused;
 
         // Render flowing paragraph with inline red deletions + green insertions
         let mut flow = div()
@@ -678,8 +732,9 @@ impl Render for InlineDiff {
                     let Some(slot) = self.changes.get(cur_i) else {
                         continue;
                     };
-                    let is_active =
-                        slot.decision == DiffDecision::Pending && self.active_change == Some(cur_i);
+                    let is_active = slot.decision == DiffDecision::Pending
+                        && self.active_change == Some(cur_i)
+                        && popover_open;
                     let settle_t = match slot.decided_at {
                         Some(t0) if !reduced => {
                             pro_ease((t0.elapsed().as_secs_f32() / 0.38).clamp(0.0, 1.0))
@@ -690,29 +745,25 @@ impl Render for InlineDiff {
 
                     let anchor_cell = self.active_anchor.clone();
                     let del_bg = p.red.opacity(if is_active {
-                        if p.dark { 0.24 } else { 0.16 }
+                        if p.dark { 0.25 } else { 0.16 }
                     } else if p.dark {
-                        0.15
+                        0.16
                     } else {
-                        0.09
+                        0.10
                     });
                     let add_bg = p.green.opacity(if is_active {
-                        if p.dark { 0.24 } else { 0.18 }
+                        if p.dark { 0.25 } else { 0.18 }
                     } else if p.dark {
-                        0.15
+                        0.16
                     } else {
                         0.11
                     });
-                    let strike_col = p.red.opacity(if p.dark { 0.72 } else { 0.60 });
+                    let strike_col = p.red.opacity(if p.dark { 0.76 } else { 0.62 });
 
                     match slot.decision {
                         DiffDecision::Pending => {
-                            if self.view_filter == DiffViewFilter::Accepted {
-                                for w_str in slot.remove.split_whitespace() {
-                                    flow = flow.child(w_str.to_owned());
-                                }
-                                continue;
-                            }
+                            let is_anchor = slot.decision == DiffDecision::Pending
+                                && self.active_change == Some(cur_i);
                             let mut chg_group = div()
                                 .id(pro_eid(&self.id, format!("chg-pill-{cur_i}")))
                                 .role(Role::Button)
@@ -724,8 +775,11 @@ impl Render for InlineDiff {
                                 .tab_index(0)
                                 .relative()
                                 .rounded(px(4.))
-                                .when(is_active, |d| {
-                                    d.border_1().border_color(p.focus.opacity(0.65)).child(
+                                .when(is_active && self.keyboard_focused, |d| {
+                                    d.border_1().border_color(p.focus.opacity(0.65))
+                                })
+                                .when(is_anchor, |d| {
+                                    d.child(
                                         canvas(
                                             move |b, _, _| {
                                                 anchor_cell.set(Some((b.origin, b.size)));
@@ -742,18 +796,17 @@ impl Render for InlineDiff {
                                 .gap(px(3.))
                                 .cursor_pointer()
                                 .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                                    if *inside && this.active_change != Some(cur_i) {
+                                    if *inside {
+                                        this.hovered_change = Some(cur_i);
                                         this.active_change = Some(cur_i);
+                                        cx.notify();
+                                    } else if this.hovered_change == Some(cur_i) {
+                                        this.hovered_change = None;
                                         cx.notify();
                                     }
                                 }))
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if this.active_change == Some(cur_i) {
-                                        this.decide_change(cur_i, DiffDecision::Accepted, cx);
-                                    } else {
-                                        this.active_change = Some(cur_i);
-                                        cx.notify();
-                                    }
+                                    this.decide_change(cur_i, DiffDecision::Accepted, cx);
                                 }));
 
                             if !slot.remove.is_empty() {
@@ -764,7 +817,11 @@ impl Render for InlineDiff {
                                         .py(px(1.))
                                         .rounded(px(4.))
                                         .bg(del_bg)
-                                        .text_color(p.muted)
+                                        .text_color(if p.dark {
+                                            p.red_ink.opacity(0.85)
+                                        } else {
+                                            p.red_ink
+                                        })
                                         .line_through()
                                         .child(slot.remove.clone())
                                         .child(
@@ -785,7 +842,7 @@ impl Render for InlineDiff {
                                         .py(px(1.))
                                         .rounded(px(4.))
                                         .bg(add_bg)
-                                        .text_color(p.ink)
+                                        .text_color(p.green_ink)
                                         .font_weight(FontWeight::MEDIUM)
                                         .child(slot.insert.clone()),
                                 );
@@ -794,7 +851,6 @@ impl Render for InlineDiff {
                         }
                         DiffDecision::Accepted => {
                             let acc_drawn = reduced || slot.accept_clock.time(0.28, w, cx) > 0.012;
-                            // Collapsing deleted span during first 380ms
                             let rem_alpha = (1.0 - settle_t).clamp(0.0, 1.0);
                             if rem_alpha > 0.04 && !slot.remove.is_empty() {
                                 flow = flow.child(
@@ -809,16 +865,14 @@ impl Render for InlineDiff {
                                         .child(slot.remove.clone()),
                                 );
                             }
-                            let show_accepted_badge = self.view_filter == DiffViewFilter::Accepted;
                             let fade_tint = (1.0 - settle_t).clamp(0.0, 1.0);
-                            if show_accepted_badge || fade_tint > 0.02 {
-                                let chip_tint = if show_accepted_badge { 1.0 } else { fade_tint };
+                            if fade_tint > 0.02 {
                                 flow = flow.child(
                                     div()
-                                        .px(px((4.0 * chip_tint).max(2.0)))
+                                        .px(px((4.0 * fade_tint).max(2.0)))
                                         .py(px(1.))
                                         .rounded(px(4.))
-                                        .bg(add_bg.opacity(chip_tint))
+                                        .bg(add_bg.opacity(fade_tint))
                                         .flex()
                                         .items_center()
                                         .gap(px(3.))
@@ -877,7 +931,7 @@ impl Render for InlineDiff {
             }
         }
 
-        // Gliding popover (`Accept [Y]` | `Reject [N]`) above the active pending change
+        // Gliding popover (`✓ Accept [Y]` | `× Reject [N]`) shown cleanly on hunk hover / keyboard focus
         let pending_cnt = self.pending_count();
         let active_idx = self.active_change.filter(|&i| {
             self.changes
@@ -885,22 +939,26 @@ impl Render for InlineDiff {
                 .map(|c| c.decision == DiffDecision::Pending)
                 .unwrap_or(false)
         });
+        let show_popover = active_idx.is_some() && popover_open;
         let card_origin_pt = self.card_origin.get();
         let (target_x, target_y) = match self.active_anchor.get() {
             Some((orig, sz)) => {
-                let rx = f32::from(orig.x - card_origin_pt.x) + f32::from(sz.width) * 0.5 - 108.0;
-                let ry = f32::from(orig.y - card_origin_pt.y) - 42.0;
-                let max_x = (width.min(520.0) - 224.0).max(8.0);
-                (
-                    rx.clamp(8.0, max_x),
-                    if ry < 6.0 {
-                        f32::from(orig.y - card_origin_pt.y) + f32::from(sz.height) + 6.0
-                    } else {
-                        ry
-                    },
-                )
+                let rel_x = f32::from(orig.x - card_origin_pt.x);
+                let rel_y = f32::from(orig.y - card_origin_pt.y);
+                let hunk_w = f32::from(sz.width);
+                let hunk_h = f32::from(sz.height);
+                let rx = rel_x + hunk_w * 0.5 - 92.0;
+                let max_x = (width.min(500.0) - 196.0).max(10.0);
+                // Keep top header `"Suggested by AI · Make it shorter"` unobstructed (`y >= 34`)
+                let above_y = rel_y - 38.0;
+                let ry = if above_y >= 34.0 {
+                    above_y
+                } else {
+                    rel_y + hunk_h + 6.0
+                };
+                (rx.clamp(10.0, max_x), ry)
             }
-            None => (16.0, 8.0),
+            None => (16.0, 44.0),
         };
         let pop_x = pro_spring_f32(pro_eid(&self.id, "pop-x"), target_x, 0.20, w, cx);
         let pop_y = pro_spring_f32(pro_eid(&self.id, "pop-y"), target_y, 0.20, w, cx);
@@ -910,49 +968,34 @@ impl Render for InlineDiff {
             let base_id = self.id.clone();
             let acc_lbl = tr(cx, "Accept", "接受").to_owned();
             let rej_lbl = tr(cx, "Reject", "拒绝").to_owned();
-            let hunk_badge = pro_view_transition(
-                pro_eid(&base_id, "pop-hunk-tx"),
-                format!("hunk-{chosen_idx}"),
-                div()
-                    .px(px(5.))
-                    .h(px(20.))
-                    .rounded(px(5.))
-                    .bg(p.subtle)
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.muted)
-                    .child(format!("{}/{}", chosen_idx + 1, total_changes.max(1))),
-            );
 
             let accept_inner = div()
-                .h(px(28.))
+                .h(px(26.))
                 .pl(px(8.))
                 .pr(px(6.))
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .text_size(px(12.5))
+                .text_size(px(12.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.on_primary)
-                .child(pro_icon(ProIcon::Check, 13., p.on_primary))
+                .child(pro_icon(ProIcon::Check, 12.5, p.on_primary))
                 .child(acc_lbl.clone())
                 .child(
                     div()
-                        .min_w(px(16.))
-                        .h(px(16.))
-                        .px(px(4.))
+                        .min_w(px(15.))
+                        .h(px(15.))
+                        .px(px(3.5))
                         .rounded(px(4.))
                         .bg(if p.dark {
-                            hsla(0., 0., 0., 0.14)
+                            hsla(0., 0., 0., 0.16)
                         } else {
-                            hsla(0., 0., 1., 0.18)
+                            hsla(0., 0., 1., 0.20)
                         })
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(10.))
+                        .text_size(px(9.5))
                         .child("Y"),
                 );
 
@@ -975,28 +1018,28 @@ impl Render for InlineDiff {
 
             let reject_rest = if p.dark { rgb(0x28282c).into() } else { p.card };
             let reject_inner = div()
-                .h(px(28.))
+                .h(px(26.))
                 .pl(px(8.))
                 .pr(px(6.))
                 .flex()
                 .items_center()
                 .gap(px(5.))
-                .text_size(px(12.5))
+                .text_size(px(12.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.strong)
-                .child(pro_icon(ProIcon::Close, 13., p.muted))
+                .child(pro_icon(ProIcon::Close, 12.5, p.muted))
                 .child(rej_lbl.clone())
                 .child(
                     div()
-                        .min_w(px(16.))
-                        .h(px(16.))
-                        .px(px(4.))
+                        .min_w(px(15.))
+                        .h(px(15.))
+                        .px(px(3.5))
                         .rounded(px(4.))
                         .bg(p.chip)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(10.))
+                        .text_size(px(9.5))
                         .text_color(p.muted)
                         .child("N"),
                 );
@@ -1007,7 +1050,7 @@ impl Render for InlineDiff {
                 6.,
                 reject_rest,
                 p.chip_hover,
-                p.line_strong,
+                transparent_black(),
                 p.line_strong,
                 false,
                 reject_inner,
@@ -1019,24 +1062,31 @@ impl Render for InlineDiff {
             .flex_none();
 
             div()
+                .id(pro_eid(&self.id, "diff-pop-hit"))
                 .absolute()
                 .left(px(pop_x))
                 .top(px(pop_y))
+                .py(px(4.))
+                .on_hover(cx.listener(|this, inside: &bool, _, cx| {
+                    if this.popover_hovered != *inside {
+                        this.popover_hovered = *inside;
+                        cx.notify();
+                    }
+                }))
                 .child(pro_popover_presence(
                     pro_eid(&self.id, "diff-pop-pres"),
-                    active_idx.is_some() && self.view_filter != DiffViewFilter::Accepted,
+                    show_popover,
                     move || {
                         div()
-                            .p(px(4.))
-                            .rounded(px(10.))
+                            .p(px(3.5))
+                            .rounded(px(9.))
                             .bg(if p.dark { rgb(0x222226).into() } else { p.card })
                             .border_1()
                             .border_color(p.line_strong)
-                            .shadow_lg()
+                            .shadow(pro_card_shadow(p.dark))
                             .flex()
                             .items_center()
                             .gap(px(4.))
-                            .child(hunk_badge)
                             .child(accept_btn)
                             .child(reject_btn)
                             .into_any_element()
@@ -1089,18 +1139,12 @@ impl Render for InlineDiff {
                                     )),
                             )
                             .when(!compact, |d| {
-                                d.child(div().text_size(px(13.)).text_color(p.text).child(word_lbl))
-                            })
-                            .when_some(active_idx.filter(|_| !compact), |d, ai| {
-                                d.child(pro_view_transition(
-                                    pro_eid(&self.id, "foot-hunk-tx"),
-                                    format!("fhunk-{ai}"),
-                                    div().text_size(px(12.)).text_color(p.muted).child(format!(
-                                        "· #{}/{}",
-                                        ai + 1,
-                                        total_changes.max(1)
-                                    )),
-                                ))
+                                d.child(
+                                    div()
+                                        .text_size(px(12.5))
+                                        .text_color(p.muted)
+                                        .child(word_lbl),
+                                )
                             })
                             .when(has_undo, |d| {
                                 d.child(pro_icon_btn(
@@ -1137,7 +1181,7 @@ impl Render for InlineDiff {
                                                 "上一处修改",
                                             )),
                                             ProIcon::ChevronLeft,
-                                            28.,
+                                            26.,
                                             false,
                                             cx,
                                             |this, _, cx| this.step_highlight(false, cx),
@@ -1150,7 +1194,7 @@ impl Render for InlineDiff {
                                                 "下一处修改",
                                             )),
                                             ProIcon::ChevronRight,
-                                            28.,
+                                            26.,
                                             false,
                                             cx,
                                             |this, _, cx| this.step_highlight(true, cx),
@@ -1169,7 +1213,7 @@ impl Render for InlineDiff {
                             .child(pro_btn(
                                 pro_eid(&self.id, "btn-accept-all"),
                                 tr(cx, "Accept all", "全部接受"),
-                                Some(ProIcon::Check),
+                                None,
                                 ProBtnStyle::Primary,
                                 true,
                                 cx,
@@ -1236,87 +1280,11 @@ impl Render for InlineDiff {
             )
         };
 
-        // Liquid pill filter tabs (`All` / `Pending` / `Accepted`)
-        let accepted_cnt = self
-            .changes
-            .iter()
-            .filter(|c| c.decision == DiffDecision::Accepted)
-            .count();
-        let filter_bar = (total_changes > 0 && !compact).then(|| {
-            let tabs = [
-                (DiffViewFilter::All, tr(cx, "All", "全部"), total_changes),
-                (
-                    DiffViewFilter::Pending,
-                    tr(cx, "Pending", "待定"),
-                    pending_cnt,
-                ),
-                (
-                    DiffViewFilter::Accepted,
-                    tr(cx, "Accepted", "已采纳"),
-                    accepted_cnt,
-                ),
-            ];
-            let mut strip = div()
-                .relative()
-                .p(px(2.))
-                .rounded(px(7.))
-                .bg(p.subtle)
-                .flex()
-                .items_center()
-                .gap(px(2.))
-                .child(pro_pill_indicator(
-                    pro_eid(&self.id, "diff-flt-pill"),
-                    self.view_filter.key(),
-                    self.filter_sensor.clone(),
-                    5.,
-                    p.card,
-                    Some(p.line),
-                    true,
-                ));
-            for (flt, lbl, cnt) in tabs {
-                let sel = self.view_filter == flt;
-                strip = strip.child(
-                    div()
-                        .id(pro_eid(&self.id, format!("diff-flt-{}", flt.key())))
-                        .role(Role::Button)
-                        .tab_index(0)
-                        .relative()
-                        .h(px(22.))
-                        .px(px(7.))
-                        .rounded(px(5.))
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
-                        .cursor_pointer()
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(if sel { p.ink } else { p.muted })
-                        .hover(move |s| if sel { s } else { s.text_color(p.ink) })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if this.view_filter != flt {
-                                this.view_filter = flt;
-                                cx.notify();
-                            }
-                        }))
-                        .when(sel, |d| d.child(pro_mark_selected(&self.filter_sensor)))
-                        .child(lbl)
-                        .child(
-                            div()
-                                .text_size(px(10.5))
-                                .text_color(if sel { p.muted } else { p.faint })
-                                .child(format!("{cnt}")),
-                        ),
-                );
-            }
-            strip
-        });
-
         let card_origin_writer = self.card_origin.clone();
         let card = div()
             .relative()
             .w_full()
-            .max_w(px(520.))
-            .pt(px(28.))
+            .max_w(px(500.))
             .child(
                 canvas(
                     move |b, _, _| {
@@ -1330,48 +1298,32 @@ impl Render for InlineDiff {
             .child(
                 div()
                     .w_full()
-                    .rounded(px(10.))
-                    .bg(p.card)
+                    .rounded(px(12.))
+                    .bg(card_bg)
                     .border_1()
-                    .border_color(p.line)
-                    .shadow_sm()
+                    .border_color(card_border)
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(
                         div()
                             .p(px(16.))
-                            .pb(px(18.))
+                            .pb(px(16.))
                             .flex()
                             .flex_col()
-                            .gap(px(8.))
-                            .when(self.label.is_some() || filter_bar.is_some(), |d| {
+                            .gap(px(10.))
+                            .when_some(self.label.clone(), |d, lbl| {
                                 d.child(
                                     div()
                                         .w_full()
+                                        .min_w_0()
                                         .flex()
-                                        .flex_wrap()
                                         .items_center()
-                                        .justify_between()
-                                        .gap(px(8.))
-                                        .when_some(self.label.clone(), |hdr, lbl| {
-                                            hdr.child(
-                                                div()
-                                                    .min_w_0()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(6.))
-                                                    .text_size(px(12.))
-                                                    .text_color(p.text)
-                                                    .child(pro_svg(
-                                                        "0 0 16 16",
-                                                        TWIN_SPARK_SVG,
-                                                        15.,
-                                                        p.blue,
-                                                    ))
-                                                    .child(div().truncate().child(lbl)),
-                                            )
-                                        })
-                                        .when_some(filter_bar, |hdr, fb| hdr.child(fb)),
+                                        .gap(px(6.))
+                                        .text_size(px(12.))
+                                        .text_color(p.muted)
+                                        .child(pro_svg("0 0 16 16", TWIN_SPARK_SVG, 14., p.blue))
+                                        .child(div().truncate().child(lbl)),
                                 )
                             })
                             .child(flow),
@@ -1380,10 +1332,10 @@ impl Render for InlineDiff {
                         div()
                             .min_h(px(44.))
                             .pl(px(16.))
-                            .pr(px(8.))
+                            .pr(px(10.))
                             .py(px(8.))
                             .border_t_1()
-                            .border_color(p.line)
+                            .border_color(card_border)
                             .flex()
                             .items_center()
                             .child(footer_content),
@@ -1417,7 +1369,10 @@ impl Render for InlineDiff {
                     },
                     |_, _, _, _| (),
                 )
-                .w(px(0.))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
                 .h(px(0.)),
             )
             .child(card)
@@ -1443,8 +1398,8 @@ fn build_change_slots(segments: &[DiffSegment]) -> Vec<ChangeSlot> {
 
 fn default_diff_pair() -> (&'static str, &'static str) {
     (
-        "Hi everyone, we are very excited to announce that the new dashboard is now available for all users. It loads a lot faster than before, and you can now export any report to CSV with just a single click. Let us know what you think!",
-        "Hi everyone, the new dashboard is now live for all users. It loads twice as fast, and you can now export any report to CSV in one click. Let us know what you think!",
+        "Hi everyone, the new dashboard is now available for all users. It loads a lot faster than before, and you can now export any report to CSV with just a single click. Let us know what you think!",
+        "Hi everyone, the new dashboard is now available for all users. It loads twice as fast, and you can now export any report to CSV in one click. Let us know what you think!",
     )
 }
 
@@ -1453,7 +1408,7 @@ mod tests {
     use super::{DiffDecision, DiffSegment, default_diff_pair, diff_words};
 
     #[test]
-    fn diff_words_groups_adjacent_deletions_and_insertions_into_four_changes() {
+    fn diff_words_groups_adjacent_deletions_and_insertions_cleanly() {
         let (orig, sugg) = default_diff_pair();
         let segs = diff_words(orig, sugg);
         let changes: Vec<(&str, &str)> = segs
@@ -1466,10 +1421,27 @@ mod tests {
         assert_eq!(
             changes,
             vec![
-                ("we are very excited to announce that", ""),
-                ("available", "live"),
                 ("a lot faster than before", "twice as fast"),
                 ("with just a single", "in one"),
+            ]
+        );
+
+        let multi = diff_words(
+            "Hi everyone, we are very excited to announce that the new dashboard is now available.",
+            "Hi everyone, the new dashboard is now live.",
+        );
+        let multi_changes: Vec<(&str, &str)> = multi
+            .iter()
+            .filter_map(|s| match s {
+                DiffSegment::Change { remove, insert } => Some((remove.as_ref(), insert.as_ref())),
+                DiffSegment::Equal(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            multi_changes,
+            vec![
+                ("we are very excited to announce that", ""),
+                ("available", "live"),
             ]
         );
         assert_eq!(DiffDecision::default(), DiffDecision::Pending);

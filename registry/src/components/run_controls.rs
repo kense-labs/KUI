@@ -7,17 +7,18 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, ProSelectionSensor, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_popover_presence, pro_progress_ring, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, ProSelectionSensor, pro_agent_avatar, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_progress_ring,
+        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
+        pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
         family::{PhaseClock, Slide, disabled_motion},
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -184,7 +185,7 @@ pub enum RunControlsEvent {
         /// Queued text.
         text: SharedString,
     },
-    /// Emitted when a queued message is removed (`✕`).
+    /// Emitted when a queued message is removed via its close button.
     Unqueued(SharedString),
     /// Emitted when the active stream is stopped (`Esc` or Stop button).
     Stopped {
@@ -212,6 +213,28 @@ pub enum RunControlsEvent {
 impl EventEmitter<RunControlsEvent> for RunControls {}
 
 /// Unified agent composer and live run-control deck.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::run_controls::{RunControls, RunControlsEvent, RunMode, RunPermission};
+///
+/// let controls = cx.new(|cx| {
+///     RunControls::new("assistant-run-controls", cx)
+///         .with_agent("travel", "Trip planner")
+///         .with_mode(RunMode::Act)
+///         .with_permission(RunPermission::AskFirst)
+///         .with_context_used(0.44)
+/// });
+/// cx.subscribe(&controls, |_, event: &RunControlsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct RunControls {
     id: ElementId,
     focus: FocusHandle,
@@ -256,16 +279,16 @@ impl RunControls {
         Self {
             id: id.into(),
             focus: cx.focus_handle(),
-            agent: RunAgentSpec::new("travel", "Trip planner"),
+            agent: RunAgentSpec::new("claude-travel", "Trip planner"),
             prompt: Some(
                 "Plan four days in Lisbon in March – good food, one day trip, nothing too touristy."
                     .into(),
             ),
-            word_cursor: 48.min(words.len()),
+            word_cursor: 52.min(words.len()),
             words,
             status: RunControlStatus::Running,
             error_note: "Stream connection dropped while generating Day 2".into(),
-            steers: vec![RunSteerChip::new(30, "Keep it to three days")],
+            steers: vec![RunSteerChip::new(35, "Keep it to three days")],
             queue: vec![RunQueuedMessage::new(
                 "q1",
                 "Add a packing list for March weather",
@@ -668,42 +691,15 @@ impl RunControls {
         }
     }
 
-    fn render_pixel_mark(&self, busy: bool, elapsed_ms: f32, p: &ProPalette, cx: &App) -> Div {
-        let reduced = Theme::global(cx).reduced_motion;
-        let cells = agent_pixel_cells(&self.agent.id);
-        let mark_col = p.blue;
-        let mut grid = div()
-            .size(px(16.))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(1.5));
-        for r in 0..3usize {
-            let mut row = div().flex().items_center().gap(px(1.5));
-            for c in 0..3usize {
-                let idx = r * 3 + c;
-                let on = cells[idx];
-                let alpha = if busy && !reduced {
-                    let ph = ((elapsed_ms + AGENT_WAVE_MS[idx]) / 1200.0) * std::f32::consts::TAU;
-                    let wv = 0.58 + 0.42 * ph.cos();
-                    if on { wv } else { 0.16 * wv }
-                } else if on {
-                    0.90
-                } else {
-                    0.0
-                };
-                row = row.child(
-                    div()
-                        .size(px(3.))
-                        .rounded(px(0.8))
-                        .bg(mark_col.opacity(alpha)),
-                );
-            }
-            grid = grid.child(row);
-        }
-        grid
+    fn render_pixel_mark(
+        &self,
+        busy: bool,
+        elapsed_ms: f32,
+        p: &ProPalette,
+        cx: &App,
+    ) -> AnyElement {
+        let seed = format!("{} {} claude", self.agent.id, self.agent.name);
+        pro_agent_avatar(&seed, p.blue, 20.0, busy, elapsed_ms, cx)
     }
 }
 
@@ -987,40 +983,24 @@ impl Render for RunControls {
                 RunControlStatus::Running => div()
                     .pl(px(24.))
                     .mt(px(10.))
-                    .min_h(px(28.))
+                    .min_h(px(24.))
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .gap(px(8.))
+                    .gap(px(5.))
+                    .text_size(px(12.))
+                    .text_color(p.muted)
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .text_size(px(12.))
-                            .text_color(p.muted)
-                            .child(
-                                div()
-                                    .px(px(5.))
-                                    .py(px(1.))
-                                    .rounded(px(4.))
-                                    .bg(p.subtle)
-                                    .border_1()
-                                    .border_color(p.line_strong)
-                                    .text_size(px(11.))
-                                    .child("Esc"),
-                            )
-                            .child(tr(cx, "to stop", "停止输出")),
+                            .px(px(5.))
+                            .py(px(1.))
+                            .rounded(px(4.))
+                            .bg(p.subtle)
+                            .border_1()
+                            .border_color(p.line_strong)
+                            .text_size(px(11.))
+                            .child("Esc"),
                     )
-                    .child(pro_btn(
-                        pro_eid(&self.id, "sim-drop-btn"),
-                        tr(cx, "Simulate drop", "模拟中断"),
-                        None,
-                        ProBtnStyle::Ghost,
-                        true,
-                        cx,
-                        |this, _, cx| this.simulate_error(cx),
-                    )),
+                    .child(tr(cx, "to stop", "停止输出")),
                 RunControlStatus::Stopped => div()
                     .pl(px(24.))
                     .mt(px(10.))
@@ -1061,7 +1041,7 @@ impl Render for RunControls {
                             .child(pro_btn(
                                 pro_eid(&self.id, "act-dismiss-stop"),
                                 tr(cx, "Dismiss", "忽略"),
-                                None,
+                                Some(ProIcon::Close),
                                 ProBtnStyle::Ghost,
                                 true,
                                 cx,
@@ -1100,7 +1080,7 @@ impl Render for RunControls {
                             .child(pro_btn(
                                 pro_eid(&self.id, "act-dismiss-err"),
                                 tr(cx, "Dismiss", "关闭"),
-                                None,
+                                Some(ProIcon::Close),
                                 ProBtnStyle::Ghost,
                                 true,
                                 cx,
@@ -1174,7 +1154,7 @@ impl Render for RunControls {
                 )
                 .child(
                     div()
-                        .mt(px(14.))
+                        .mt(px(12.))
                         .flex()
                         .items_center()
                         .gap(px(8.))
@@ -1189,7 +1169,6 @@ impl Render for RunControls {
                             )
                         } else {
                             self.render_pixel_mark(is_running, elapsed_ms, &p, cx)
-                                .into_any_element()
                         })
                         .child(
                             div()
@@ -1756,8 +1735,10 @@ impl Render for RunControls {
         let composer_tray = div()
             .w_full()
             .p(px(4.))
-            .rounded(px(10.))
+            .rounded_b(px(10.))
             .bg(p.tray)
+            .border_t_1()
+            .border_color(p.line)
             .flex()
             .flex_col()
             .child(queue_tray_fold)
@@ -1766,18 +1747,20 @@ impl Render for RunControls {
         let outer_card = div()
             .w_full()
             .max_w(px(520.))
-            .rounded(px(10.))
+            .rounded(px(11.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
-            .shadow_sm()
+            .shadow(pro_card_shadow(p.dark))
+            .overflow_hidden()
             .flex()
             .flex_col()
             .child(
                 div()
                     .id(pro_eid(&self.id, "conv-log-scroll"))
                     .w_full()
-                    .h(px(254.))
+                    .min_h(px(276.))
+                    .max_h(px(340.))
                     .p(px(16.))
                     .overflow_y_scroll()
                     .child(log_body),
@@ -1812,7 +1795,10 @@ impl Render for RunControls {
                     },
                     |_, _, _, _| (),
                 )
-                .w(px(0.))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
                 .h(px(0.)),
             )
             .child(outer_card)

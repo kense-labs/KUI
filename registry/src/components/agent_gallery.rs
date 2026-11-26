@@ -1148,6 +1148,25 @@ impl RenderOnce for ContextNoteEntrance {
 }
 
 /// Feature-section gallery block showcasing expandable gradient agent panels and a live product screen.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_gallery::{AgentGalleryBlock, AgentGalleryEvent};
+///
+/// let block = cx.new(|cx| {
+///     AgentGalleryBlock::new("agent-gallery", cx)
+///         .with_title("Agents that run your playbook")
+/// });
+/// cx.subscribe(&block, |_, event: &AgentGalleryEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentGalleryBlock {
     id: ElementId,
     focus: FocusHandle,

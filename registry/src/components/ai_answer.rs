@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_eid, pro_empty_state,
-        pro_fold, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
         pro_shimmer_text, pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner,
         pro_view_transition, tr,
     },
@@ -24,7 +24,7 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
-const SVG_SPARK_MARK: &str = r#"<path d="M6.5 2.2c.2 0 .36.14.4.33.53 2.6 1.4 3.48 4 4.02a.4.4 0 0 1 0 .79c-2.6.53-3.47 1.4-4 4a.4.4 0 0 1-.8 0c-.53-2.6-1.4-3.47-4-4a.4.4 0 0 1 0-.79c2.6-.54 3.47-1.42 4-4.02a.4.4 0 0 1 .4-.33Z" fill="currentColor"></path><path d="M12 9.6c.12 0 .22.08.25.2.28 1.3.72 1.75 2.03 2.03a.25.25 0 0 1 0 .49c-1.31.28-1.75.72-2.03 2.03a.25.25 0 0 1-.5 0c-.28-1.31-.72-1.75-2.03-2.03a.25.25 0 0 1 0-.49c1.31-.28 1.75-.73 2.03-2.03.03-.12.13-.2.25-.2Z" fill="currentColor" opacity="0.72"></path>"#;
+const SVG_SPARK_MARK: &str = r#"<path d="M6.5 2.2c.2 0 .36.14.4.33.53 2.6 1.4 3.48 4 4.02a.4.4 0 0 1 0 .79c-2.6.53-3.47 1.4-4 4a.4.4 0 0 1-.8 0c-.53-2.6-1.4-3.47-4-4a.4.4 0 0 1 0-.79c2.6-.54 3.47-1.42 4-4.02a.4.4 0 0 1 .4-.33Z" fill="currentColor"></path><path d="M12 9.6c.12 0 .22.08.25.2.28 1.3.72 1.75 2.03 2.03a.25.25 0 0 1 0 .49c-1.31.28-1.75.72-2.03 2.03a.25.25 0 0 1-.5 0c-.28-1.31-.72-1.75-2.03-2.03a.25.25 0 0 1 0-.49c1.31-.28 1.75-.73 2.03-2.03.03-.12.13-.2.25-.2Z" fill="currentColor"></path>"#;
 
 const SVG_THUMB_UP: &str = r#"<path d="M7 11V19C7 19.5523 6.55228 20 6 20H4C3.44772 20 3 19.5523 3 19V12C3 11.4477 3.44772 11 4 11H7ZM7 11L10.6 4.7C11.1 3.8 12.3 3.6 13.1 4.2C13.7 4.7 13.9 5.5 13.7 6.3L12.8 10H18.4C19.8 10 20.8 11.3 20.4 12.7L18.9 18.2C18.6 19.3 17.6 20 16.5 20H9C7.9 20 7 19.1 7 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
@@ -924,10 +924,10 @@ impl AiAnswer {
                 AnswerToken::Word { text, bold } => {
                     wrap = wrap.child(
                         div()
-                            .text_size(px(13.))
-                            .line_height(px(20.))
+                            .text_size(px(13.5))
+                            .line_height(px(21.6))
                             .font_weight(if *bold {
-                                FontWeight::MEDIUM
+                                FontWeight::SEMIBOLD
                             } else {
                                 FontWeight::NORMAL
                             })
@@ -948,10 +948,21 @@ impl AiAnswer {
                         .get(first_num.saturating_sub(1))
                         .map(|s| s.name.clone())
                         .unwrap_or_else(|| SharedString::from(format!("{first_num}")));
-                    let badge_text = if nums.len() > 1 {
-                        format!("{} +{}", lead_name, nums.len() - 1)
+                    let suffix_badge: Option<String> = if nums.len() > 1 {
+                        Some(format!("+{}", nums.len() - 1))
                     } else {
-                        format!("{} [{}]", lead_name, first_num)
+                        Some(format!("[{first_num}]"))
+                    };
+                    let aria_text = match &suffix_badge {
+                        Some(sfx) => format!("Citation {lead_name} {sfx}"),
+                        None => format!("Citation {lead_name}"),
+                    };
+                    let pill_bg: Hsla = if is_lit {
+                        p.accent_soft
+                    } else if p.dark {
+                        rgb(0x27272b).into()
+                    } else {
+                        rgb(0xf2f2f4).into()
                     };
                     let nums_hover = nums.clone();
                     let nums_click = nums.clone();
@@ -962,17 +973,17 @@ impl AiAnswer {
                         div()
                             .id(pro_eid(&self.id, chip_key))
                             .role(Role::Button)
-                            .aria_label(format!("Citation {badge_text}"))
+                            .aria_label(aria_text)
                             .tab_index(0)
                             .h(px(19.))
                             .px(px(6.))
                             .rounded(px(5.))
-                            .bg(if is_lit { p.accent_soft } else { p.chip })
+                            .bg(pill_bg)
                             .border_1()
-                            .border_color(if is_lit { p.blue.opacity(0.40) } else { p.line })
+                            .border_color(if is_lit { p.blue.opacity(0.42) } else { p.line })
                             .flex()
                             .items_center()
-                            .gap(px(3.))
+                            .gap(px(3.5))
                             .cursor_pointer()
                             .text_size(px(11.))
                             .font_weight(FontWeight::MEDIUM)
@@ -1004,7 +1015,15 @@ impl AiAnswer {
                                 }
                                 cx.notify();
                             }))
-                            .child(badge_text),
+                            .child(lead_name)
+                            .when_some(suffix_badge, |d, sfx| {
+                                d.child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(if is_lit { p.blue } else { p.muted })
+                                        .child(sfx),
+                                )
+                            }),
                     );
                 }
             }
@@ -1199,8 +1218,8 @@ impl Render for AiAnswer {
                         div()
                             .text_size(px(11.))
                             .whitespace_nowrap()
-                            .text_color(p.text)
-                            .child(tr(cx, "Sources", "来源")),
+                            .text_color(p.muted)
+                            .child(tr(cx, "more", "更多")),
                     );
                 row = row.child(
                     pro_tactile(
@@ -1219,7 +1238,7 @@ impl Render for AiAnswer {
                             cx.notify();
                         },
                     )
-                    .w(px(68.))
+                    .w(px(58.))
                     .flex_none(),
                 );
             }
@@ -1240,12 +1259,7 @@ impl Render for AiAnswer {
                 if self.follow_up_override.is_some() {
                     tr(cx, "Follow-up answer", "追问回答").to_owned()
                 } else {
-                    format!(
-                        "{} · {} {}",
-                        tr(cx, "Answered", "已完成回答"),
-                        self.sources.len(),
-                        tr(cx, "sources", "个来源")
-                    )
+                    tr(cx, "Answer", "回答").to_owned()
                 }
             }
         };
@@ -1465,7 +1479,7 @@ impl Render for AiAnswer {
         let show_follow_ups = matches!(self.phase, AiAnswerPhase::Done | AiAnswerPhase::Stopped)
             && !self.follow_ups.is_empty();
         let follow_body: AnyElement = {
-            let label_txt = tr(cx, "Related follow-ups", "相关追问").to_owned();
+            let label_txt = tr(cx, "Related", "相关追问").to_owned();
             let mut col = div().mt(px(14.)).w_full().flex().flex_col().child(
                 div()
                     .pb(px(4.))
@@ -1490,15 +1504,15 @@ impl Render for AiAnswer {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(12.5))
+                            .text_size(px(13.))
                             .text_color(p.ink)
                             .child(q.clone()),
                     )
                     .child(GlideArrow {
                         id: pro_eid(&self.id, format!("follow-arr-{fi}")),
                         active: is_hov,
-                        size: 14.,
-                        rest_color: p.muted,
+                        size: 13.5,
+                        rest_color: p.text,
                         active_color: p.strong,
                     });
                 col = col.child(
@@ -1604,21 +1618,15 @@ impl Render for AiAnswer {
             let status_note: Option<SharedString> = self.picked_reason.as_ref().map(|reason| {
                 format!("{}: {reason}", tr(cx, "Feedback noted", "已记录反馈")).into()
             });
-            let copy_lbl = if just_copied {
-                tr(cx, "Copied", "已复制")
-            } else {
-                tr(cx, "Copy", "复制")
-            };
-            let copy_fg = if just_copied { p.green_ink } else { p.text };
             let copy_icon_slot = div()
                 .relative()
-                .size(px(14.))
+                .size(px(15.))
                 .flex_none()
                 .flex()
                 .items_center()
                 .justify_center()
                 .when(!just_copied, |d| {
-                    d.child(pro_icon(ProIcon::Copy, 14., p.muted))
+                    d.child(pro_icon(ProIcon::Copy, 15., p.text))
                 })
                 .child(
                     div()
@@ -1626,41 +1634,37 @@ impl Render for AiAnswer {
                         .child(pro_check_draw(
                             pro_eid(&self.id, "act-copy-chk"),
                             just_copied,
-                            14.,
+                            15.,
                             false,
                             p.green,
                         )),
                 );
             let copy_content = div()
                 .h(px(28.))
-                .px(px(8.))
+                .px(px(if just_copied { 8. } else { 7. }))
                 .flex()
                 .items_center()
                 .gap(px(5.))
                 .child(copy_icon_slot)
-                .child(pro_swap_label(
-                    pro_eid(&self.id, "act-copy-lbl"),
-                    copy_lbl,
-                    12.,
-                    FontWeight::MEDIUM,
-                    copy_fg,
-                ));
+                .when(just_copied, |d| {
+                    d.child(pro_swap_label(
+                        pro_eid(&self.id, "act-copy-lbl"),
+                        tr(cx, "Copied", "已复制"),
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.green_ink,
+                    ))
+                });
 
-            let helpful_lbl = if is_up {
-                tr(cx, "Helpful", "已赞有帮助")
-            } else {
-                tr(cx, "Helpful", "有帮助")
-            };
-            let helpful_fg = if is_up { p.green_ink } else { p.text };
             let helpful_icon_slot = div()
                 .relative()
-                .size(px(14.))
+                .size(px(15.))
                 .flex_none()
                 .flex()
                 .items_center()
                 .justify_center()
                 .when(!is_up, |d| {
-                    d.child(pro_svg("0 0 24 24", SVG_THUMB_UP, 14., p.muted))
+                    d.child(pro_svg("0 0 24 24", SVG_THUMB_UP, 15., p.text))
                 })
                 .child(
                     div()
@@ -1668,25 +1672,27 @@ impl Render for AiAnswer {
                         .child(pro_check_draw(
                             pro_eid(&self.id, "act-up-chk"),
                             is_up,
-                            14.,
+                            15.,
                             false,
                             p.green,
                         )),
                 );
             let helpful_content = div()
                 .h(px(28.))
-                .px(px(8.))
+                .px(px(if is_up { 8. } else { 7. }))
                 .flex()
                 .items_center()
                 .gap(px(5.))
                 .child(helpful_icon_slot)
-                .child(pro_swap_label(
-                    pro_eid(&self.id, "act-up-lbl"),
-                    helpful_lbl,
-                    12.,
-                    FontWeight::MEDIUM,
-                    helpful_fg,
-                ));
+                .when(is_up, |d| {
+                    d.child(pro_swap_label(
+                        pro_eid(&self.id, "act-up-lbl"),
+                        tr(cx, "Helpful", "已赞"),
+                        12.,
+                        FontWeight::MEDIUM,
+                        p.green_ink,
+                    ))
+                });
 
             let down_content = div()
                 .size(px(28.))
@@ -1697,12 +1703,12 @@ impl Render for AiAnswer {
                     "0 0 24 24",
                     SVG_THUMB_DOWN,
                     15.,
-                    if is_down { p.amber_ink } else { p.muted },
+                    if is_down { p.amber_ink } else { p.text },
                 ));
 
             div()
                 .min_h(px(44.))
-                .px(px(if self.framed { 14. } else { 0. }))
+                .px(px(if self.framed { 16. } else { 0. }))
                 .when(self.framed, |d| d.border_t_1().border_color(p.line))
                 .flex()
                 .flex_wrap()
@@ -1713,8 +1719,8 @@ impl Render for AiAnswer {
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(3.))
-                        // Copy ->Copied with `pro_check_draw` + `pro_swap_label`
+                        .gap(px(2.))
+                        // Copy -> Copied with `pro_check_draw`
                         .child(
                             pro_tactile(
                                 pro_eid(&self.id, "act-copy"),
@@ -1749,13 +1755,59 @@ impl Render for AiAnswer {
                             cx,
                             |this, _, cx| this.regenerate(cx),
                         ))
+                        // Thumbs Up / Helpful (`pro_tactile` + `pro_check_draw`)
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, "act-thumb-up"),
+                                tr(cx, "Good answer", "回答有帮助"),
+                                6.,
+                                if is_up {
+                                    p.green_soft
+                                } else {
+                                    transparent_black()
+                                },
+                                p.hover,
+                                transparent_black(),
+                                if is_up {
+                                    p.green.opacity(0.35)
+                                } else {
+                                    transparent_black()
+                                },
+                                is_up,
+                                helpful_content,
+                                cx,
+                                |this, _, cx| {
+                                    this.set_feedback(AiAnswerFeedback::Up, cx);
+                                },
+                            )
+                            .flex_none(),
+                        )
+                        // Thumbs Down (`pro_tactile`)
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, "act-thumb-down"),
+                                tr(cx, "Poor answer", "回答需改进"),
+                                6.,
+                                if is_down { p.chip } else { transparent_black() },
+                                p.hover,
+                                transparent_black(),
+                                transparent_black(),
+                                is_down,
+                                down_content,
+                                cx,
+                                |this, _, cx| {
+                                    this.set_feedback(AiAnswerFeedback::Down, cx);
+                                },
+                            )
+                            .flex_none(),
+                        )
                         // Version switcher `1/2`
                         .when(
                             version_total > 1 && self.follow_up_override.is_none(),
                             |d| {
                                 d.child(
                                     div()
-                                        .mx(px(2.))
+                                        .ml(px(4.))
                                         .h(px(24.))
                                         .px(px(4.))
                                         .rounded(px(6.))
@@ -1818,52 +1870,6 @@ impl Render for AiAnswer {
                                         ),
                                 )
                             },
-                        )
-                        // Thumbs Up / Helpful (`pro_tactile` + `pro_check_draw` + `pro_swap_label`)
-                        .child(
-                            pro_tactile(
-                                pro_eid(&self.id, "act-thumb-up"),
-                                tr(cx, "Good answer", "回答有帮助"),
-                                6.,
-                                if is_up {
-                                    p.green_soft
-                                } else {
-                                    transparent_black()
-                                },
-                                p.hover,
-                                transparent_black(),
-                                if is_up {
-                                    p.green.opacity(0.35)
-                                } else {
-                                    transparent_black()
-                                },
-                                is_up,
-                                helpful_content,
-                                cx,
-                                |this, _, cx| {
-                                    this.set_feedback(AiAnswerFeedback::Up, cx);
-                                },
-                            )
-                            .flex_none(),
-                        )
-                        // Thumbs Down (`pro_tactile`)
-                        .child(
-                            pro_tactile(
-                                pro_eid(&self.id, "act-thumb-down"),
-                                tr(cx, "Poor answer", "回答需改进"),
-                                6.,
-                                if is_down { p.chip } else { transparent_black() },
-                                p.hover,
-                                transparent_black(),
-                                transparent_black(),
-                                is_down,
-                                down_content,
-                                cx,
-                                |this, _, cx| {
-                                    this.set_feedback(AiAnswerFeedback::Down, cx);
-                                },
-                            )
-                            .flex_none(),
                         ),
                 )
                 .child(
@@ -1871,6 +1877,13 @@ impl Render for AiAnswer {
                         .flex()
                         .items_center()
                         .gap(px(8.))
+                        .when(status_note.is_none(), |d| {
+                            d.child(div().text_size(px(11.5)).text_color(p.muted).child(tr(
+                                cx,
+                                "Answered in 3.4s",
+                                "用时 3.4s",
+                            )))
+                        })
                         .child(pro_presence(
                             pro_eid(&self.id, "status-note-pres"),
                             status_note.is_some(),
@@ -1895,7 +1908,7 @@ impl Render for AiAnswer {
                         ))
                         .child(pro_btn(
                             pro_eid(&self.id, "act-replay"),
-                            tr(cx, "Replay stream", "重播流式输出"),
+                            tr(cx, "Replay", "重播"),
                             Some(ProIcon::Play),
                             ProBtnStyle::Ghost,
                             true,
@@ -1910,7 +1923,7 @@ impl Render for AiAnswer {
         let reasons_body: AnyElement = {
             let mut wrap = div()
                 .w_full()
-                .px(px(if self.framed { 14. } else { 0. }))
+                .px(px(if self.framed { 16. } else { 0. }))
                 .pb(px(if self.framed { 12. } else { 4. }))
                 .pt(px(2.))
                 .flex()
@@ -1972,11 +1985,11 @@ impl Render for AiAnswer {
             .w_full()
             .max_w(px(640.))
             .when(self.framed, |d| {
-                d.rounded(px(10.))
+                d.rounded(px(12.))
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .shadow_xs()
+                    .shadow(pro_card_shadow(p.dark))
             })
             .flex()
             .flex_col()

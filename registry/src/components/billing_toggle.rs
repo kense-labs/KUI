@@ -85,6 +85,19 @@ pub enum BillingPeriod {
 pub struct BillingChanged(pub BillingPeriod);
 
 /// A monthly/yearly radio control. The host owns price and checkout behavior.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::billing_toggle::BillingToggle;
+///
+/// let control = cx.new(|cx| BillingToggle::new("Billing period", cx).with_savings("Save 20%"));
+/// # }
+/// ```
 pub struct BillingToggle {
     label: SharedString,
     hide_label: bool,

@@ -75,6 +75,22 @@ pub struct ActivityGoalClosed {
 struct Ring {
     progress: Slide,
 }
+/// `ActivityRings` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::activity_rings::{ActivityDay, ActivityGoal, ActivityRings};
+///
+/// let goals = vec![ActivityGoal::new("move", "Move", 500.0, "kcal", gpui::rgb(0xe96080).into())];
+/// let days = vec![ActivityDay::new("today", "Today", vec![("move".into(), 420.0)])];
+/// let control = cx.new(|cx| ActivityRings::new("Daily activity", goals, days, cx));
+/// # }
+/// ```
 pub struct ActivityRings {
     title: SharedString,
     goals: Vec<ActivityGoal>,
@@ -245,10 +261,24 @@ impl Render for ActivityRings {
             center.set_value(center_percent, cx);
         });
         while self.rings.len() < self.goals.len() {
-            let mut initial = Slide::new(0.);
-            initial.duration(self.progress(self.rings.len()), 0.4, cx);
+            let target = self.progress(self.rings.len());
+            let mut initial = Slide::new(if crate::primitives::family::disabled_motion(cx) {
+                target
+            } else {
+                0.
+            });
+            initial.duration(target, 0.4, cx);
             self.rings.push(Ring { progress: initial });
         }
+        let dark = p.panel.l < 0.5;
+        let dial_bg = if self.surface { p.panel } else { p.stage };
+        let active_bg = if dark {
+            p.tray
+        } else if self.surface {
+            p.stage
+        } else {
+            p.panel
+        };
         let items: Vec<(Hsla, f32)> = self
             .goals
             .iter()
@@ -311,6 +341,7 @@ impl Render for ActivityRings {
                         let center =
                             point(b.origin.x + px(width / 2.), b.origin.y + px(height / 2.));
                         let scale = width.min(height) / 220.;
+                        let track_alpha = if dark { 0.14 } else { 0.12 };
                         for (index, (color, progress)) in items.iter().enumerate() {
                             let outer_u = 106. - 20. * index as f32;
                             if outer_u <= 20. {
@@ -339,7 +370,7 @@ impl Render for ActivityRings {
                                 path.move_to(tick_at(inner, turn));
                                 path.line_to(tick_at(outer, turn));
                                 if let Ok(path) = path.build() {
-                                    w.paint_path(path, p.ink.opacity(0.11 * alpha));
+                                    w.paint_path(path, p.ink.opacity(track_alpha * alpha));
                                 }
                                 // The reference mask reveals each tick fully or not at all.
                                 if *progress * ticks as f32 > tick as f32 {
@@ -386,7 +417,7 @@ impl Render for ActivityRings {
                             halo.move_to(head);
                             halo.line_to(tail);
                             if let Ok(path) = halo.build() {
-                                w.paint_path(path, p.panel);
+                                w.paint_path(path, dial_bg);
                             }
                             // The reference pointers stay at full opacity while rings dim.
                             let mut body = PathBuilder::stroke(px(6. * scale));
@@ -439,6 +470,7 @@ impl Render for ActivityRings {
                     .child(
                         div()
                             .max_w(px(112.))
+                            .truncate()
                             .text_size(px(12.))
                             .line_height(px(15.))
                             .text_color(p.secondary)
@@ -448,83 +480,93 @@ impl Render for ActivityRings {
                             )),
                     ),
             );
-        let legend =
-            column()
-                .min_w(px(0.))
-                .flex_1()
-                .when(compact, |legend| legend.w_full())
-                .gap(px(2.))
-                .children(self.goals.iter().enumerate().map(|(i, goal)| {
-                    let value = self.value(i);
-                    let pct = if goal.goal.is_finite() && goal.goal > 0. {
-                        value / goal.goal * 100.
-                    } else {
-                        0.
-                    };
-                    face(
-                        ("activity-goal", i),
-                        format!(
-                            "{} {:.0} / {:.0} {} ({pct:.0}%)",
-                            goal.label, value, goal.goal, goal.unit
+        let legend = column()
+            .min_w(px(0.))
+            .flex_1()
+            .when(compact, |legend| legend.w_full())
+            .gap(px(2.))
+            .children(self.goals.iter().enumerate().map(|(i, goal)| {
+                let value = self.value(i);
+                let pct = if goal.goal.is_finite() && goal.goal > 0. {
+                    value / goal.goal * 100.
+                } else {
+                    0.
+                };
+                face(
+                    ("activity-goal", i),
+                    format!(
+                        "{} {:.0} / {:.0} {} ({pct:.0}%)",
+                        goal.label, value, goal.goal, goal.unit
+                    ),
+                    legend_height,
+                    crate::foundation::surface_radius(cx).into(),
+                    Tone::Clear,
+                    cx,
+                )
+                .w_full()
+                .px(px(12.))
+                .py(px(legend_pad))
+                .aria_toggled((self.active == Some(i)).into())
+                .hover(move |s| s.bg(active_bg))
+                .when(highlighted == Some(i), |v| v.bg(active_bg))
+                .when(highlighted.is_some() && highlighted != Some(i), |v| {
+                    v.opacity(0.5)
+                })
+                .on_hover(cx.listener(move |s, over: &bool, _, cx| {
+                    s.hovered = if *over { Some(i) } else { None };
+                    cx.notify();
+                }))
+                .on_click(cx.listener(move |s, _, _, cx| {
+                    s.active = if s.active == Some(i) { None } else { Some(i) };
+                    cx.notify();
+                }))
+                .child(
+                    row()
+                        .items_center()
+                        .gap(px(12.))
+                        .w_full()
+                        .child(
+                            div()
+                                .w(px(3.))
+                                .h(px(swatch_height))
+                                .rounded(px(2.))
+                                .bg(goal.color),
+                        )
+                        .child(
+                            column()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(
+                                    div()
+                                        .text_size(px(14.))
+                                        .line_height(px(20.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(goal.label.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.secondary)
+                                        .font_features(FontFeatures(
+                                            vec![("tnum".into(), 1)].into(),
+                                        ))
+                                        .child(format!(
+                                            "{value:.0} / {:.0} {}",
+                                            goal.goal, goal.unit
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .text_color(p.secondary)
+                                .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
+                                .child(format!("{pct:.0}%")),
                         ),
-                        legend_height,
-                        crate::foundation::surface_radius(cx).into(),
-                        Tone::Clear,
-                        cx,
-                    )
-                    .w_full()
-                    .px(px(12.))
-                    .py(px(legend_pad))
-                    .aria_toggled((self.active == Some(i)).into())
-                    .hover(|s| s.bg(p.tray))
-                    .when(highlighted == Some(i), |v| v.bg(p.tray))
-                    .when(highlighted.is_some() && highlighted != Some(i), |v| {
-                        v.opacity(0.5)
-                    })
-                    .on_hover(cx.listener(move |s, over: &bool, _, cx| {
-                        s.hovered = if *over { Some(i) } else { None };
-                        cx.notify();
-                    }))
-                    .on_click(cx.listener(move |s, _, _, cx| {
-                        s.active = if s.active == Some(i) { None } else { Some(i) };
-                        cx.notify();
-                    }))
-                    .child(
-                        row()
-                            .items_center()
-                            .gap(px(12.))
-                            .w_full()
-                            .child(
-                                div()
-                                    .w(px(3.))
-                                    .h(px(swatch_height))
-                                    .rounded(px(2.))
-                                    .bg(goal.color),
-                            )
-                            .child(
-                                column()
-                                    .flex_1()
-                                    .min_w(px(0.))
-                                    .child(
-                                        div()
-                                            .text_size(px(14.))
-                                            .line_height(px(20.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .child(goal.label.clone()),
-                                    )
-                                    .child(div().text_size(px(12.)).text_color(p.secondary).child(
-                                        format!("{value:.0} / {:.0} {}", goal.goal, goal.unit),
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(14.))
-                                    .text_color(p.secondary)
-                                    .child(format!("{pct:.0}%")),
-                            ),
-                    )
-                }));
+                )
+            }));
         let day = self.day;
+        let mini_track_alpha = if dark { 0.14 } else { 0.12 };
         let week = div()
             .id("activity-week")
             .role(Role::RadioGroup)
@@ -589,7 +631,7 @@ impl Render for ActivityRings {
                                 }
                             }
                             if let Ok(path) = path.build() {
-                                w.paint_path(path, p.ink.opacity(0.09));
+                                w.paint_path(path, p.ink.opacity(mini_track_alpha));
                             }
                             if *share > 0.001 {
                                 let steps = (48. * share).round().max(1.) as usize;
@@ -622,9 +664,17 @@ impl Render for ActivityRings {
                 .flex_1()
                 .pt(px(8.))
                 .pb(px(6.))
+                .border_1()
+                .border_color(if day == i {
+                    if dark { hsla(0., 0., 1., 0.08) } else { p.line }
+                } else {
+                    transparent_black()
+                })
                 .text_color(if day == i { p.ink } else { p.secondary })
                 .hover(|s| s.text_color(p.ink))
-                .when(day == i, |v| v.bg(p.tray))
+                .when(day == i, |v| {
+                    v.bg(active_bg).font_weight(FontWeight::MEDIUM)
+                })
                 .role(Role::RadioButton)
                 .track_focus(&self.day_focus[&d.id].clone().tab_stop(day == i))
                 .aria_toggled((day == i).into())

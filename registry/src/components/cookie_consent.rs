@@ -55,6 +55,20 @@ enum Panel {
     Closed,
 }
 /// Consent control. Optional categories are off unless explicitly configured.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::cookie_consent::{ConsentCategory, CookieConsent};
+///
+/// let categories = vec![ConsentCategory::new("essential", "Essential").with_required(true), ConsentCategory::new("analytics", "Analytics")];
+/// let control = cx.new(|cx| CookieConsent::new(categories, window, cx));
+/// # }
+/// ```
 pub struct CookieConsent {
     categories: Vec<ConsentCategory>,
     switches: Vec<Entity<Switch>>,

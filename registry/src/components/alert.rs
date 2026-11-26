@@ -12,6 +12,20 @@ pub enum Severity {
     Warning,
     Error,
 }
+/// `Alert` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::alert::{Alert, Severity};
+///
+/// let control = cx.new(|_| Alert::new("Sync paused", "Reconnect to upload changes.", Severity::Warning).with_action("Reconnect"));
+/// # }
+/// ```
 pub struct Alert {
     title: ChangingText,
     body: ChangingText,

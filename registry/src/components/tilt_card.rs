@@ -801,6 +801,7 @@ fn paint_default_membership_card(
 /// }
 /// ```
 #[derive(IntoElement)]
+#[must_use]
 pub struct TiltCard {
     id: ElementId,
     max_tilt: f32,

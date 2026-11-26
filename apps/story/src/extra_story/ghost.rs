@@ -187,24 +187,13 @@ impl Render for Example {
                                     )
                                     .child(div().text_size(px(12.)).text_color(p.secondary).child(
                                         language.text(
-                                            "Daniel Kim wants to merge a sample billing change",
-                                            "Daniel Kim 请求合并一项示例账单改动",
+                                            "Daniel Kim wants to merge 1 commit into main",
+                                            "Daniel Kim 请求将 1 个提交合并至 main",
                                         ),
                                     )),
                             ),
                     )
-                    .child(div().p(px(16.)).child(self.view.clone()))
-                    .child(
-                        div()
-                            .px(px(16.))
-                            .pb(px(12.))
-                            .text_size(px(11.))
-                            .text_color(p.secondary)
-                            .child(language.text(
-                                "Sample suggestions · nothing is sent",
-                                "样例建议 · 不会发送数据",
-                            )),
-                    ),
+                    .child(div().p(px(16.)).child(self.view.clone())),
             )
     }
 }

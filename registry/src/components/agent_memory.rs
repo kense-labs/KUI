@@ -593,6 +593,22 @@ fn filter_and_group_memories(
 }
 
 /// Interactive `Agent / Memory` governance screen hosted in [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_memory::{AgentMemoryScreen, AgentMemoryEvent};
+///
+/// let screen = cx.new(|cx| AgentMemoryScreen::new("agent-memory", cx));
+/// cx.subscribe(&screen, |_, event: &AgentMemoryEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentMemoryScreen {
     id: ElementId,
     shell: Entity<AppShell>,

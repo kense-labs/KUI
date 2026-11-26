@@ -47,6 +47,20 @@ impl Row {
         }
     }
 }
+/// `Timeline` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::timeline::{Timeline, TimelineEntry};
+///
+/// let control = cx.new(|_| Timeline::new(vec![TimelineEntry::new("Today", "Deployment passed", "Build 1284", "11m")]));
+/// # }
+/// ```
 pub struct Timeline {
     rows: Vec<Row>,
 }

@@ -18,6 +18,20 @@ pub enum CommandEvent {
     Ask { ticket: u64, query: String },
     Cancel,
 }
+/// `CommandDesk` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ai_command::{CommandDesk, Command};
+///
+/// let control = cx.new(|cx| CommandDesk::new("desk",vec![Command{id:"inbox".into(),label:"Inbox".into(),section:"Pages".into(),hint:"G I".into()}],window,cx));
+/// # }
+/// ```
 pub struct CommandDesk {
     id: SharedString,
     pub commands: Vec<Command>,

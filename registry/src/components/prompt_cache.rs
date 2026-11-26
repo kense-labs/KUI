@@ -111,6 +111,22 @@ pub struct PromptCacheAction {
     pub request: SharedString,
     pub change_segment: Option<SharedString>,
 }
+/// `PromptCache` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::prompt_cache::{CacheRequest, CacheSegment, CacheSnapshot, PromptCache};
+///
+/// let segments = vec![CacheSegment::new("system", "System", 2400, gpui::rgb(0xa08ad2).into())];
+/// let requests = vec![CacheRequest::new("one", "Request 1", 200)];
+/// let control = cx.new(|_| PromptCache::new(segments, CacheSnapshot::new(requests)));
+/// # }
+/// ```
 pub struct PromptCache {
     segments: Vec<CacheSegment>,
     snapshot: CacheSnapshot,

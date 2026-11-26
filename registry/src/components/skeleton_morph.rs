@@ -274,6 +274,27 @@ fn critical_progress(age: f32, duration: f32) -> f32 {
 }
 
 /// A loading region that clips and animates to its measured ready height.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{div, prelude::*, px};
+/// use kui::components::skeleton_morph::{MorphBlock, SkeletonMorph};
+///
+/// let profile = cx.new(|cx| SkeletonMorph::new(
+///     "profile-loading",
+///     true,
+///     |layout| div().child(layout.block(
+///         MorphBlock::new("profile-name").with_width(px(120.)).with_lines(1),
+///         |_, _| div().line_height(px(20.)).child("Riley Morgan").into_any_element(),
+///     )).into_any_element(),
+///     cx,
+/// ));
+/// # }
+/// ```
 pub struct SkeletonMorph {
     id: ElementId,
     loading: bool,

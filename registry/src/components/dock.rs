@@ -187,6 +187,29 @@ struct Drag {
 }
 
 /// A horizontal toolbar with stable slots and a controlled selected value.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::dock::{Dock, DockIcon, DockItem, DockSelected};
+///
+/// let items = vec![
+///     DockItem::new("move", "Move", DockIcon::Pointer).with_shortcut("V"),
+///     DockItem::new("shapes", "Shapes", DockIcon::Rectangle).with_items(vec![
+///         DockItem::new("rectangle", "Rectangle", DockIcon::Rectangle).with_shortcut("R"),
+///         DockItem::new("ellipse", "Ellipse", DockIcon::Ellipse).with_shortcut("O"),
+///     ]),
+/// ];
+/// let control = cx.new(|cx| Dock::new(items, cx).with_value("move", cx));
+/// cx.subscribe(&control, |control, event: &DockSelected, cx| {
+///     control.update(cx, |dock, cx| dock.set_value(Some(event.0.clone()), cx));
+/// }).detach();
+/// # }
+/// ```
 pub struct Dock {
     label: Option<SharedString>,
     slots: Vec<Slot>,

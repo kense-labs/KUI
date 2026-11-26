@@ -437,6 +437,32 @@ struct LayoutSample {
 }
 
 /// Omitting a host snapshot starts the local, deterministic sample stream.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::live_visitors::{
+///     LivePage, LiveVisitors, LiveVisitorsPaused, LiveVisitorsSnapshot,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     LiveVisitors::new(cx)
+///         .with_snapshot(LiveVisitorsSnapshot {
+///             count: 128,
+///             pages: vec![LivePage::new("/pricing", 31)],
+///             ..Default::default()
+///         })
+///         .with_paused(false)
+/// });
+/// cx.subscribe(&control, |control, event: &LiveVisitorsPaused, cx| {
+///     control.update(cx, |control, cx| control.set_paused(event.0, cx));
+/// }).detach();
+/// # }
+/// ```
 pub struct LiveVisitors {
     id: ElementId,
     title: Option<SharedString>,

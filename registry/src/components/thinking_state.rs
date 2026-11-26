@@ -7,9 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_popover_presence, pro_shimmer_text, pro_skeleton_bar,
-        pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_app_tile, pro_btn, pro_card_shadow, pro_check_draw, pro_ease,
+        pro_eid, pro_empty_state, pro_fold, pro_popover_presence, pro_shimmer_text,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -982,7 +982,7 @@ impl Render for ThinkingState {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .shadow_xs()
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header_row)

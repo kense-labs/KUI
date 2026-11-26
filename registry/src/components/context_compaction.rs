@@ -8,9 +8,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_fold, pro_mix_color, pro_presence, pro_rolling_number,
-        pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_swap_label, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_presence,
+        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_swap_label, tr,
     },
     foundation::Theme,
     primitives::{
@@ -189,6 +189,28 @@ pub fn format_tokens_compact(tokens: u64) -> String {
 }
 
 /// Live context-window bar and shimmer-to-summary compaction visualizer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::context_compaction::{ContextCompaction, ContextCompactionEvent};
+///
+/// let compaction = cx.new(|cx| {
+///     ContextCompaction::new("cart-context", cx)
+///         .with_title("Fix the cart total")
+///         .with_model("Claude Sonnet")
+///         .with_limit(200_000)
+///         .with_threshold(0.80)
+/// });
+/// cx.subscribe(&compaction, |_, ev: &ContextCompactionEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ContextCompaction {
     id: ElementId,
     title: SharedString,
@@ -578,6 +600,12 @@ impl Render for ContextCompaction {
                     )),
             );
 
+        let card_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.10)
+        } else {
+            hsla(0., 0., 0., 0.075)
+        };
+
         if self.loading {
             let phase = (self.started_at.elapsed().as_secs_f32() * 0.9).fract();
             return div()
@@ -588,20 +616,21 @@ impl Render for ContextCompaction {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(520.0))
+                        .max_w(px(490.0))
                         .p(px(16.0))
-                        .rounded(px(10.0))
+                        .rounded(px(12.0))
                         .bg(card_bg)
                         .border_1()
-                        .border_color(p.line)
+                        .border_color(card_border)
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .gap(px(10.0))
                         .child(header)
-                        .child(pro_skeleton_bar(480.0, 8.0, 3.0, phase, cx))
-                        .child(pro_skeleton_bar(480.0, 28.0, 6.0, phase + 0.15, cx))
-                        .child(pro_skeleton_bar(480.0, 28.0, 6.0, phase + 0.30, cx))
-                        .child(pro_skeleton_bar(480.0, 28.0, 6.0, phase + 0.45, cx)),
+                        .child(pro_skeleton_bar(456.0, 8.0, 3.0, phase, cx))
+                        .child(pro_skeleton_bar(456.0, 26.0, 6.0, phase + 0.15, cx))
+                        .child(pro_skeleton_bar(456.0, 26.0, 6.0, phase + 0.30, cx))
+                        .child(pro_skeleton_bar(456.0, 26.0, 6.0, phase + 0.45, cx)),
                 )
                 .into_any_element();
         }
@@ -615,12 +644,13 @@ impl Render for ContextCompaction {
                 .child(
                     div()
                         .w_full()
-                        .max_w(px(520.0))
+                        .max_w(px(490.0))
                         .p(px(16.0))
-                        .rounded(px(10.0))
+                        .rounded(px(12.0))
                         .bg(card_bg)
                         .border_1()
-                        .border_color(p.line)
+                        .border_color(card_border)
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .child(header)
@@ -841,13 +871,13 @@ impl Render for ContextCompaction {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(520.0))
+                    .max_w(px(490.0))
                     .p(px(16.0))
-                    .rounded(px(10.0))
+                    .rounded(px(12.0))
                     .bg(card_bg)
                     .border_1()
-                    .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .border_color(card_border)
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header)
@@ -984,7 +1014,7 @@ impl ContextCompaction {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let len = self.entries.len();
-        let mut rows_col = div().mx(px(-6.0)).flex().flex_col().gap(px(1.5));
+        let mut rows_col = div().mx(px(-6.0)).flex().flex_col().gap(px(1.0));
 
         for (idx, entry) in self.entries.iter().enumerate() {
             let eid = entry.id.clone();
@@ -1012,14 +1042,14 @@ impl ContextCompaction {
                     label_str.clone(),
                     p.muted,
                     p.accent_info,
-                    13.0,
+                    12.5,
                     FontWeight::NORMAL,
                     true,
                 )
             } else {
                 div()
                     .truncate()
-                    .text_size(px(13.0))
+                    .text_size(px(12.5))
                     .font_weight(if entry.kind == ContextEntryKind::Summary {
                         FontWeight::MEDIUM
                     } else {
@@ -1044,7 +1074,7 @@ impl ContextCompaction {
                 app_badges =
                     app_badges.child(div().when(a_i > 0, |d| d.ml(px(-4.0))).child(pro_app_tile(
                         app_key.as_ref(),
-                        18.0,
+                        17.0,
                         cx,
                     )));
             }
@@ -1052,7 +1082,7 @@ impl ContextCompaction {
                 app_badges = app_badges.child(
                     div()
                         .ml(px(4.0))
-                        .text_size(px(11.5))
+                        .text_size(px(11.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .child(format!("+{}", entry.extra_apps)),
@@ -1064,7 +1094,7 @@ impl ContextCompaction {
                 .role(Role::ListBoxOption)
                 .aria_label(format!("{kind_lbl}: {label_str}, {tok_str} tokens"))
                 .aria_selected(is_hot)
-                .h(px(32.0))
+                .h(px(29.0))
                 .px(px(8.0))
                 .rounded(px(6.0))
                 .bg(row_bg)
@@ -1149,7 +1179,7 @@ impl ContextCompaction {
                     pro_fold(
                         pro_eid(&self.id, format!("ret-squeeze-{}", entry.id)),
                         false,
-                        count_ret as f32 * 28.0,
+                        count_ret as f32 * 26.0,
                         0.0,
                         || div().into_any_element(),
                     )
@@ -1229,11 +1259,20 @@ impl ContextCompaction {
     fn render_entry_icon(&self, entry: &ContextEntry, p: &ProPalette, cx: &App) -> AnyElement {
         let c = entry.kind.slice_color(p);
         match entry.kind {
-            ContextEntryKind::System => pro_icon(ProIcon::Settings, 15.0, c),
-            ContextEntryKind::Tools => pro_icon(ProIcon::Sliders, 15.0, c),
-            ContextEntryKind::User => pro_icon(ProIcon::User, 15.0, p.ink),
-            ContextEntryKind::Assistant => pro_agent_avatar("agent", c, 16.0, false, 0.0, cx),
-            ContextEntryKind::ToolResult => pro_icon(ProIcon::Search, 15.0, c),
+            ContextEntryKind::System => pro_icon(ProIcon::Settings, 14.5, p.muted),
+            ContextEntryKind::Tools => pro_icon(ProIcon::Sliders, 14.5, c),
+            ContextEntryKind::User => pro_icon(ProIcon::User, 14.5, p.ink),
+            ContextEntryKind::Assistant => {
+                let model_seed = self.model.as_deref().unwrap_or("claude");
+                pro_agent_avatar(model_seed, c, 16.0, false, 0.0, cx)
+            }
+            ContextEntryKind::ToolResult => {
+                if entry.label.starts_with("run_") || entry.label.contains("test") {
+                    pro_icon(ProIcon::Terminal, 14.5, c)
+                } else {
+                    pro_icon(ProIcon::Search, 14.5, c)
+                }
+            }
             ContextEntryKind::File => div()
                 .w(px(16.0))
                 .h(px(18.0))
@@ -1249,7 +1288,7 @@ impl ContextCompaction {
                 .text_color(c)
                 .child("TS")
                 .into_any_element(),
-            ContextEntryKind::Summary => pro_icon(ProIcon::Sparkles, 15.0, c),
+            ContextEntryKind::Summary => pro_icon(ProIcon::Sparkles, 14.5, c),
         }
     }
 

@@ -357,6 +357,22 @@ struct TaskDetailRecord {
 }
 
 /// Interactive Agent / Thread workspace screen (`agent-thread`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_thread::{AgentThreadScreen, AgentThreadEvent};
+///
+/// let screen = cx.new(|cx| AgentThreadScreen::new("agent-thread", cx));
+/// cx.subscribe(&screen, |_, event: &AgentThreadEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentThreadScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -1546,7 +1562,10 @@ impl AgentThreadScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .when_some(head_el, |d, h| d.child(h))
             .child(conn_banner)

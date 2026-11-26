@@ -310,17 +310,6 @@ impl Render for AudioStory {
             .gap_4()
             .items_center()
             .justify_center()
-            .when(!matches!(self.example, Example::Player(_)), |view| {
-                view.child(
-                    div()
-                        .text_sm()
-                        .text_color(p.secondary)
-                        .child(self.language.text(
-                            "Sample audio — no microphone requested",
-                            "样例音频，不会申请麦克风",
-                        )),
-                )
-            })
             .child(div().max_w_full().child(view))
     }
 }

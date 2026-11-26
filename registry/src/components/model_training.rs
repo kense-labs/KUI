@@ -42,6 +42,20 @@ pub struct TrainingStepChanged {
 pub struct TrainingPlaybackChanged {
     pub paused: bool,
 }
+/// `ModelTraining` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::model_training::{ModelTraining, TrainingConfig};
+///
+/// let control = cx.new(|_| ModelTraining::new(TrainingConfig::default()));
+/// # }
+/// ```
 pub struct ModelTraining {
     config: TrainingConfig,
     elapsed: f32,

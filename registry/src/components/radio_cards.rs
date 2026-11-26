@@ -172,6 +172,31 @@ struct CardInk {
     indicator_fill: ColorFade,
 }
 /// One roving tab stop, responsive grid columns, and a shared moving outline.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::radio_cards::{RadioCardOption, RadioCards};
+///
+/// let items = vec![
+///     RadioCardOption::new("one", "One bag")
+///         .with_detail("12 oz, whole bean").with_price("$18"),
+///     RadioCardOption::new("two", "Two bags")
+///         .with_detail("Two origins each month").with_price("$34"),
+/// ];
+/// let control = cx.new(|cx| {
+///     RadioCards::new("Plan", items, cx)
+///         .with_min_column_width(200.)
+///         .with_selected("two")
+///         .with_name("plan")
+///         .with_required(true)
+/// });
+/// # }
+/// ```
 pub struct RadioCards {
     label: SharedString,
     items: Vec<RadioCardOption>,

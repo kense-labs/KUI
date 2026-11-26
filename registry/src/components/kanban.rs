@@ -467,6 +467,22 @@ struct CardPressState {
 }
 
 /// Kanban issue board screen with board/list views, filtering, drag-move, composer modal, and issue detail view.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::kanban::{KanbanScreen, KanbanEvent};
+///
+/// let screen = cx.new(|cx| KanbanScreen::new("kanban", cx));
+/// cx.subscribe(&screen, |_, event: &KanbanEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct KanbanScreen {
     id: ElementId,
     id_name: SharedString,
@@ -693,7 +709,7 @@ impl KanbanScreen {
             editor_focused: false,
             focus: cx.focus_handle(),
             started_at: Instant::now(),
-            measured_width: Rc::new(Cell::new(920.)),
+            measured_width: Rc::new(Cell::new(684.)),
         }
     }
 
@@ -1611,11 +1627,11 @@ impl KanbanScreen {
         if comments > 0 {
             wrap = wrap.child(
                 div()
-                    .px(px(if attachments > 0 { 7. } else { 0. }))
+                    .pr(px(if attachments > 0 { 5. } else { 0. }))
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .child(pro_svg("0 0 24 24", SVG_COMMENT_BUBBLE, 13., p.faint))
+                    .gap(px(3.5))
+                    .child(pro_svg("0 0 24 24", SVG_COMMENT_BUBBLE, 12.5, p.faint))
                     .child(format!("{comments}")),
             );
         }
@@ -1625,11 +1641,11 @@ impl KanbanScreen {
             }
             wrap = wrap.child(
                 div()
-                    .pl(px(if comments > 0 { 7. } else { 0. }))
+                    .pl(px(if comments > 0 { 5. } else { 0. }))
                     .flex()
                     .items_center()
-                    .gap(px(3.5))
-                    .child(pro_svg("0 0 24 24", SVG_PAPERCLIP_META, 13., p.faint))
+                    .gap(px(3.))
+                    .child(pro_svg("0 0 24 24", SVG_PAPERCLIP_META, 12.5, p.faint))
                     .child(format!("{attachments}")),
             );
         }
@@ -2615,10 +2631,12 @@ impl KanbanScreen {
         &mut self,
         query: &str,
         phase: f32,
+        w_px: f32,
         compact: bool,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let p = ProPalette::get(cx);
+        let tight_board = w_px < 860.;
         let frame_bg: Hsla = if p.dark {
             hsla(0., 0., 1., 0.03)
         } else {
@@ -2636,14 +2654,28 @@ impl KanbanScreen {
             .cloned()
             .collect();
 
+        let col_min_w = if visible_cols.len() >= 4 && (560. ..880.).contains(&w_px) {
+            148.
+        } else if w_px < 780. {
+            176.
+        } else {
+            236.
+        };
+
         let mut board = div()
             .id(pro_eid(&self.id, "board-scroll"))
             .flex_1()
             .min_h_0()
-            .px(px(if compact { 8. } else { 12. }))
+            .px(px(if compact {
+                8.
+            } else if tight_board {
+                10.
+            } else {
+                12.
+            }))
             .pb(px(if compact { 8. } else { 12. }))
             .flex()
-            .gap(px(10.))
+            .gap(px(if tight_board { 8. } else { 10. }))
             .overflow_x_scroll();
 
         for (col_idx, col) in visible_cols.iter().enumerate() {
@@ -2664,12 +2696,12 @@ impl KanbanScreen {
 
             let col_head = div()
                 .h(px(36.))
-                .px(px(6.))
+                .px(px(if tight_board { 4. } else { 6. }))
                 .flex_none()
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap(px(6.))
+                .gap(px(if tight_board { 4. } else { 6. }))
                 .child(Self::render_priority_mark(col.tone, &p))
                 .child(
                     div()
@@ -2677,22 +2709,23 @@ impl KanbanScreen {
                         .min_w_0()
                         .text_center()
                         .truncate()
-                        .text_size(px(11.))
+                        .text_size(px(if tight_board { 10.5 } else { 11. }))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .child(col.label.to_uppercase()),
                 )
                 .child(
                     div()
-                        .min_w(px(20.))
+                        .min_w(px(19.))
                         .h(px(18.))
-                        .px(px(5.))
+                        .px(px(4.5))
                         .rounded(px(6.))
                         .bg(p.chip)
+                        .flex_none()
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(11.5))
+                        .text_size(px(11.))
                         .text_color(p.muted)
                         .child(format!("{count}")),
                 );
@@ -2717,9 +2750,9 @@ impl KanbanScreen {
                             .bg(p.card)
                             .border_1()
                             .border_color(p.line)
-                            .pt(px(12.))
-                            .pb(px(10.))
-                            .px(px(14.))
+                            .pt(px(if tight_board { 10. } else { 12. }))
+                            .pb(px(9.))
+                            .px(px(if tight_board { 11. } else { 14. }))
                             .flex()
                             .flex_col()
                             .gap(px(8.))
@@ -2729,26 +2762,26 @@ impl KanbanScreen {
                                     .items_center()
                                     .gap(px(8.))
                                     .child(pro_skeleton_bar(14., 14., 4., p_off, cx))
-                                    .child(pro_skeleton_bar(132., 12., 4., p_off, cx)),
+                                    .child(pro_skeleton_bar(104., 12., 4., p_off, cx)),
                             )
                             .child(
                                 div()
-                                    .ml(px(22.))
+                                    .when(!tight_board, |d| d.ml(px(22.)))
                                     .flex()
                                     .flex_col()
                                     .gap(px(6.))
-                                    .child(pro_skeleton_bar(168., 10., 4., p_off, cx))
-                                    .child(pro_skeleton_bar(124., 10., 4., p_off, cx)),
+                                    .child(pro_skeleton_bar(124., 10., 4., p_off, cx))
+                                    .child(pro_skeleton_bar(96., 10., 4., p_off, cx)),
                             )
                             .child(
                                 div()
-                                    .ml(px(22.))
+                                    .when(!tight_board, |d| d.ml(px(22.)))
                                     .mt(px(2.))
                                     .flex()
                                     .items_center()
                                     .justify_between()
-                                    .child(pro_skeleton_bar(78., 11., 4., p_off, cx))
-                                    .child(pro_skeleton_bar(42., 11., 4., p_off, cx)),
+                                    .child(pro_skeleton_bar(68., 11., 4., p_off, cx))
+                                    .child(pro_skeleton_bar(36., 11., 4., p_off, cx)),
                             ),
                     );
                 }
@@ -2778,14 +2811,15 @@ impl KanbanScreen {
                             .role(Role::Button)
                             .aria_label(card.title.clone())
                             .tab_index(0)
-                            .pt(px(12.))
-                            .pb(px(10.))
-                            .px(px(14.))
+                            .pt(px(if tight_board { 10. } else { 12. }))
+                            .pb(px(if tight_board { 9. } else { 10. }))
+                            .px(px(if tight_board { 11. } else { 14. }))
                             .rounded(px(10.))
                             .bg(p.card)
                             .border_1()
                             .border_color(if is_focused { p.line_strong } else { p.line })
                             .when(is_dragging, |d| d.opacity(0.4))
+                            .overflow_hidden()
                             .flex()
                             .flex_col()
                             .gap(px(6.))
@@ -2825,7 +2859,7 @@ impl KanbanScreen {
                                     .min_w_0()
                                     .flex()
                                     .items_start()
-                                    .gap(px(8.))
+                                    .gap(px(if tight_board { 6. } else { 8. }))
                                     .child(
                                         div()
                                             .mt(px(2.))
@@ -2836,8 +2870,8 @@ impl KanbanScreen {
                                             .flex_1()
                                             .min_w_0()
                                             .truncate()
-                                            .text_size(px(13.))
-                                            .line_height(px(20.))
+                                            .text_size(px(if tight_board { 12.5 } else { 13. }))
+                                            .line_height(px(19.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
                                             .child(card.title.clone()),
@@ -2845,11 +2879,11 @@ impl KanbanScreen {
                             )
                             .child(
                                 div()
-                                    .ml(px(23.))
-                                    .h(px(38.))
+                                    .when(!tight_board, |d| d.ml(px(23.)))
+                                    .h(px(36.))
                                     .overflow_hidden()
-                                    .text_size(px(12.5))
-                                    .line_height(px(19.))
+                                    .text_size(px(if tight_board { 12. } else { 12.5 }))
+                                    .line_height(px(18.))
                                     .text_color(if card.description.is_empty() {
                                         p.faint
                                     } else {
@@ -2863,23 +2897,24 @@ impl KanbanScreen {
                             )
                             .child(
                                 div()
-                                    .ml(px(23.))
+                                    .when(!tight_board, |d| d.ml(px(23.)))
                                     .mt(px(2.))
-                                    .min_h(px(22.))
+                                    .min_h(px(20.))
                                     .flex()
                                     .items_center()
                                     .justify_between()
-                                    .gap(px(8.))
+                                    .gap(px(6.))
                                     .child(
                                         div()
+                                            .flex_1()
                                             .min_w_0()
                                             .flex()
                                             .items_center()
-                                            .gap(px(7.))
-                                            .text_size(px(12.5))
+                                            .gap(px(if tight_board { 5. } else { 7. }))
+                                            .text_size(px(if tight_board { 11.5 } else { 12.5 }))
                                             .text_color(p.text)
                                             .child(Self::render_status_mark(card.status, &p))
-                                            .child(div().truncate().child(status_txt)),
+                                            .child(div().min_w_0().truncate().child(status_txt)),
                                     )
                                     .child(Self::render_counts(
                                         card.comments,
@@ -2926,10 +2961,10 @@ impl KanbanScreen {
                 div()
                     .id(pro_eid(&self.id, format!("col-{}", col.id)))
                     .flex_1()
-                    .min_w(px(if compact { 244. } else { 256. }))
+                    .min_w(px(col_min_w))
                     .max_w(px(if visible_cols.len() == 1 { 460. } else { 340. }))
                     .min_h_0()
-                    .p(px(4.))
+                    .p(px(if tight_board { 3.5 } else { 4. }))
                     .rounded(px(14.))
                     .bg(if is_over { p.chip } else { frame_bg })
                     .flex()
@@ -5230,8 +5265,12 @@ impl KanbanScreen {
         let query = self.current_query(cx);
 
         let ruler = canvas(
-            move |bounds, _, _| {
-                width_cell.set(f32::from(bounds.size.width));
+            move |bounds, window, _| {
+                let nw = f32::from(bounds.size.width);
+                if nw > 10. && (width_cell.get() - nw).abs() > 1.0 {
+                    width_cell.set(nw);
+                    window.request_animation_frame();
+                }
             },
             |_, _, _, _| {},
         )
@@ -5358,7 +5397,7 @@ impl KanbanScreen {
                     .child(empty_el)
                     .into_any_element()
             } else if self.view_mode == KanbanViewMode::Board {
-                self.render_board_view(&query, phase, compact, cx)
+                self.render_board_view(&query, phase, w_px, compact, cx)
                     .into_any_element()
             } else {
                 self.render_list_view(&query, phase, elapsed_ms, compact, cx)

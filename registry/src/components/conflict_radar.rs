@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_eid,
-        pro_empty_state, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_eid, pro_empty_state, pro_mark_selected, pro_pill_indicator, pro_popover_presence,
         pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile,
         pro_view_transition, tr,
     },
@@ -205,6 +205,41 @@ pub fn overlapping_agent_columns(agents: &[RadarAgent], edits: &[RadarEdit]) -> 
 }
 
 /// Multi-branch coding-agent conflict matrix with [`PathBuilder`] overlap connectors and resolution radio cards.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::conflict_radar::{
+///     ConflictRadar, ConflictRadarEvent, RadarAgent, RadarEdit, RadarFile,
+/// };
+///
+/// let radar = cx.new(|cx| {
+///     ConflictRadar::new("checkout-branches", cx)
+///         .with_agents(vec![
+///             RadarAgent::new("checkout", "Checkout"),
+///             RadarAgent::new("stripe", "Stripe v2"),
+///         ])
+///         .with_files(vec![
+///             RadarFile::new(
+///                 "src/checkout/payment.ts",
+///                 vec![
+///                     RadarEdit::new("checkout", 42, 78)
+///                         .with_summary("Validates card intent client-side.", "客户端预校验支付意图。"),
+///                     RadarEdit::new("stripe", 54, 92)
+///                         .with_summary("Uses Stripe PaymentElement webhook.", "使用 Stripe 回调确认。"),
+///                 ],
+///             ),
+///         ])
+/// });
+/// cx.subscribe(&radar, |_, ev: &ConflictRadarEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ConflictRadar {
     id: ElementId,
     title: SharedString,
@@ -586,6 +621,7 @@ impl Render for ConflictRadar {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -619,6 +655,7 @@ impl Render for ConflictRadar {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -668,7 +705,7 @@ impl Render for ConflictRadar {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -711,8 +748,14 @@ impl ConflictRadar {
             );
             let avatar_col = ag.color.unwrap_or(p.accent_info);
             let is_running = ag.status == RadarAgentStatus::Running;
-            let avatar =
-                pro_agent_avatar(ag.id.as_ref(), avatar_col, 18.0, is_running, elapsed_ms, cx);
+            let avatar = pro_agent_avatar(
+                radar_avatar_seed(ag),
+                avatar_col,
+                18.0,
+                is_running,
+                elapsed_ms,
+                cx,
+            );
             let name_txt = ag.display_name(cx).to_string();
 
             // Per-agent KPI counts for hover popover
@@ -1473,7 +1516,14 @@ impl ConflictRadar {
                 cx,
             );
             let avatar_col = ag.color.unwrap_or(p.accent_info);
-            let avatar = pro_agent_avatar(ag.id.as_ref(), avatar_col, 18.0, false, elapsed_ms, cx);
+            let avatar = pro_agent_avatar(
+                radar_avatar_seed(ag),
+                avatar_col,
+                18.0,
+                false,
+                elapsed_ms,
+                cx,
+            );
             let ag_name = ag.display_name(cx).to_string();
             let summary_txt = ed
                 .display_summary(cx)
@@ -1703,6 +1753,46 @@ fn split_dir_file(path: &str) -> (String, String) {
         (format!("{d}/"), f.to_string())
     } else {
         (String::new(), path.to_string())
+    }
+}
+
+fn radar_avatar_seed(ag: &RadarAgent) -> &'static str {
+    if let Some(m) = &ag.model {
+        let s = m.to_ascii_lowercase();
+        if s.contains("claude")
+            || s.contains("opus")
+            || s.contains("sonnet")
+            || s.contains("haiku")
+            || s.contains("anthropic")
+        {
+            return "claude";
+        } else if s.contains("gemini") {
+            return "gemini";
+        } else if s.contains("deepseek") {
+            return "deepseek";
+        } else if s.contains("mistral") || s.contains("codestral") {
+            return "mistral";
+        } else if s.contains("qwen") {
+            return "qwen";
+        } else if s.contains("llama") {
+            return "llama";
+        } else if s.contains("grok") {
+            return "grok";
+        } else if s.contains("gpt") || s.contains("openai") || s.contains("codex") {
+            return "gpt";
+        }
+    }
+    let s = format!("{} {}", ag.id, ag.name).to_ascii_lowercase();
+    if s.contains("checkout") || s.contains("claude") || s.contains("lead") {
+        "claude"
+    } else if s.contains("retri") || s.contains("gemini") || s.contains("review") {
+        "gemini"
+    } else if s.contains("deepseek") {
+        "deepseek"
+    } else if s.contains("mistral") {
+        "mistral"
+    } else {
+        "gpt"
     }
 }
 

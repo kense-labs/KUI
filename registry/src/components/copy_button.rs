@@ -12,6 +12,20 @@ use gpui::{prelude::*, *};
 use std::time::Duration;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CopyResult(pub bool);
+/// `CopyButton` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::copy_button::CopyButton;
+///
+/// let control = cx.new(|_| CopyButton::new("invite", "KUI-4821", "Copy invite code").icon_only());
+/// # }
+/// ```
 pub struct CopyButton {
     id: ElementId,
     text: SharedString,

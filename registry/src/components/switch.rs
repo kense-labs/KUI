@@ -12,6 +12,20 @@ const THUMB: f32 = 18.;
 const TRAVEL: f32 = 18.;
 const FADE: f32 = 0.24;
 
+/// `Switch` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::switch::Switch;
+///
+/// let control = cx.new(|cx| Switch::new("digest", "Weekly digest", window, cx).with_checked(true));
+/// # }
+/// ```
 pub struct Switch {
     id: ElementId,
     label: SharedString,

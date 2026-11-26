@@ -82,6 +82,20 @@ pub struct GlassMenuSelected {
     pub checked: Option<bool>,
 }
 /// Single-level contextual action menu. Host state owns the result of each action.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::glass_menu::{GlassMenu, GlassMenuGroup, GlassMenuItem};
+///
+/// let items = vec![GlassMenuGroup::new(vec![GlassMenuItem::new("copy", "Copy"), GlassMenuItem::new("move", "Move to").with_children(vec![GlassMenuItem::new("archive", "Archive")])])];
+/// let control = cx.new(|cx| GlassMenu::new("photo-actions", "Photo actions", items, cx));
+/// # }
+/// ```
 pub struct GlassMenu {
     core: MenuCore,
     title: SharedString,

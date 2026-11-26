@@ -19,6 +19,20 @@ pub enum ImageRevealEvent {
 fn accepts_update(current: u64, status: RevealStatus, incoming: u64) -> bool {
     current == incoming && matches!(status, RevealStatus::Queued | RevealStatus::Generating)
 }
+/// `ImageReveal` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::image_reveal::ImageReveal;
+///
+/// let control = cx.new(|_| ImageReveal::new("Quiet room", 1.5));
+/// # }
+/// ```
 pub struct ImageReveal {
     label: SharedString,
     source: Option<ImageSource>,

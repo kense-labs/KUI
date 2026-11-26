@@ -6,6 +6,20 @@ use crate::primitives::{
     glyph::Glyph,
 };
 use gpui::{prelude::*, *};
+/// `NumberField` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::number_field::NumberField;
+///
+/// let control = cx.new(|cx| NumberField::new("Seats", 8.0, 1.0..=50.0, 1.0, window, cx));
+/// # }
+/// ```
 pub struct NumberField {
     label: SharedString,
     min: f64,

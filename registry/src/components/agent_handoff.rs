@@ -100,6 +100,21 @@ impl RequestGate {
 fn draft_is_unchanged(sent: Option<&str>, current: &str) -> bool {
     sent == Some(current)
 }
+/// `AgentHandoff` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_handoff::{AgentHandoff, HandoffSummary};
+///
+/// let summary = HandoffSummary::new("Customer needs help with an order");
+/// let control = cx.new(|cx| AgentHandoff::new("Support", "Order 1042", summary, window, cx));
+/// # }
+/// ```
 pub struct AgentHandoff {
     title: SharedString,
     subtitle: SharedString,

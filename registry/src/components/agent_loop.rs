@@ -168,6 +168,21 @@ fn landed_lanes(beats: &[Beat]) -> Lanes {
     lanes
 }
 
+/// `AgentLoop` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_loop::{AgentLoop, LoopIteration};
+///
+/// let iterations = vec![LoopIteration::new("Read logs", 1200, true, "Checks passed")];
+/// let control = cx.new(|_| AgentLoop::new("Verify the build", iterations));
+/// # }
+/// ```
 pub struct AgentLoop {
     title: SharedString,
     task: SharedString,
@@ -960,10 +975,14 @@ impl AgentLoop {
 
 impl Render for AgentLoop {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.next_focus.is_none() {
-            self.next_focus = Some(cx.focus_handle().tab_stop(true));
-            self.restart_focus = Some(cx.focus_handle().tab_stop(true));
-        }
+        let next_focus = self
+            .next_focus
+            .get_or_insert_with(|| cx.focus_handle().tab_stop(true))
+            .clone();
+        let restart_focus = self
+            .restart_focus
+            .get_or_insert_with(|| cx.focus_handle().tab_stop(true))
+            .clone();
         let p = Paint::get(cx);
         let radius = crate::foundation::surface_radius(cx);
         let mode = Theme::global(cx).mode;
@@ -978,8 +997,8 @@ impl Render for AgentLoop {
         let visible = self.in_view && (self.visibility)() && w.is_visible();
         self.tick(visible, reduce, w, cx);
         let done = self.finished();
-        if done && self.next_focus.as_ref().is_some_and(|h| h.is_focused(w)) {
-            let target = self.restart_focus.as_ref().unwrap().clone();
+        if done && next_focus.is_focused(w) {
+            let target = restart_focus.clone();
             cx.on_next_frame(w, move |_, w, cx| target.focus(w, cx));
         }
         let passed = self.iterations.last().is_some_and(|it| it.passed);
@@ -1232,7 +1251,7 @@ impl Render for AgentLoop {
                                 !done,
                             )
                             .when(!done, |v| {
-                                v.track_focus(self.next_focus.as_ref().unwrap())
+                                v.track_focus(&next_focus)
                                     .on_click(cx.listener(|s, _, _, cx| s.step(cx)))
                             }),
                         )
@@ -1243,7 +1262,7 @@ impl Render for AgentLoop {
                                 Glyph::Undo,
                                 true,
                             )
-                            .track_focus(self.restart_focus.as_ref().unwrap())
+                            .track_focus(&restart_focus)
                             .on_click(cx.listener(|s, _, _, cx| {
                                 s.restart(cx);
                                 s.set_playing(true, cx);

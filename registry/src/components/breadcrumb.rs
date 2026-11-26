@@ -5,6 +5,20 @@ use crate::primitives::{
     nav::*,
 };
 use gpui::{prelude::*, *};
+/// `Breadcrumb` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::breadcrumb::Breadcrumb;
+///
+/// let control = cx.new(|_| Breadcrumb::new(vec!["Projects".into(), "Launch".into(), "Files".into()]).limit(3));
+/// # }
+/// ```
 pub struct Breadcrumb {
     segments: Vec<SharedString>,
     current: usize,

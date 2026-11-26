@@ -43,6 +43,20 @@ pub struct UsageBreakdown {
 
 pub struct RetryGeneration;
 
+/// `GenerationReadout` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::generation_stats::{GenerationReadout, Metrics};
+///
+/// let control = cx.new(|_| GenerationReadout::new("stats","Assistant",Metrics {first_token_ms:400,duration_ms:2400,input_tokens:800,output_tokens:120,input_rate:2.,output_rate:8.,..Metrics::default()}));
+/// # }
+/// ```
 pub struct GenerationReadout {
     id: SharedString,
     pub model: String,

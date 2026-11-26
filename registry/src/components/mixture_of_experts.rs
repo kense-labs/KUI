@@ -61,6 +61,22 @@ enum Pin {
     Token(usize),
     Expert(usize),
 }
+/// `MixtureOfExperts` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::mixture_of_experts::{MixtureOfExperts, MoeExpert, MoeToken};
+///
+/// let experts = vec![MoeExpert::new("language", "Language", "Words"), MoeExpert::new("math", "Math", "Numbers")];
+/// let tokens = vec![MoeToken::new("42", vec![0.2, 0.8])];
+/// let control = cx.new(|_| MixtureOfExperts::new(experts, tokens));
+/// # }
+/// ```
 pub struct MixtureOfExperts {
     experts: Vec<MoeExpert>,
     tokens: Vec<MoeToken>,

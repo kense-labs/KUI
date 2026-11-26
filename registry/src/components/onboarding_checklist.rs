@@ -39,6 +39,20 @@ struct TaskMotion {
     settled: bool,
     revision: usize,
 }
+/// `SetupChecklist` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::onboarding_checklist::{SetupChecklist, ChecklistItem};
+///
+/// let control = cx.new(|_| SetupChecklist::new("Set up workspace", vec![ChecklistItem::new("Invite team", "Invite a collaborator.", "Send invite")]));
+/// # }
+/// ```
 pub struct SetupChecklist {
     heading: SharedString,
     tasks: Vec<ChecklistItem>,

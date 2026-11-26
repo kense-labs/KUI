@@ -147,6 +147,20 @@ fn scroll_report(scroll: ScrollHandle) -> impl IntoElement {
 }
 
 /// A navigation surface with hover intent, keyboard operation and a compact sheet.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::mega_menu_morph::{MegaMenuGroup, MegaMenuLink, MegaMenuMorph, MegaMenuSection};
+///
+/// let sections = vec![MegaMenuSection::new("products", "Products").with_groups(vec![MegaMenuGroup::new("Build", vec![MegaMenuLink::new("components", "Components")])])];
+/// let control = cx.new(|cx| MegaMenuMorph::new("Kense", sections, cx).with_primary("start", "Get started"));
+/// # }
+/// ```
 pub struct MegaMenuMorph {
     brand: SharedString,
     brand_id: SharedString,

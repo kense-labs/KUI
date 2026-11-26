@@ -7,9 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_icon_btn, pro_rolling_number, pro_skeleton_bar,
-        pro_spring_bar, pro_step_transition, pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_ease, pro_eid, pro_empty_state, pro_fold, pro_icon_btn, pro_mix_color,
+        pro_rolling_number, pro_skeleton_bar, pro_spring_bar, pro_step_transition, pro_swap_label,
+        pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -336,7 +337,45 @@ fn agent_accent(agent: &str, p: &ProPalette) -> Hsla {
     }
 }
 
+fn agent_avatar_seed(agent: &str) -> String {
+    let low = agent.to_ascii_lowercase();
+    if low.contains("claude")
+        || low.contains("gpt")
+        || low.contains("openai")
+        || low.contains("gemini")
+        || low.contains("grok")
+    {
+        return agent.to_owned();
+    }
+    match low.as_str() {
+        "coder" => format!("claude {agent}"),
+        "outreach" | "growth agent" | "writer" => format!("gpt {agent}"),
+        "ops" | "deployer" => format!("gemini {agent}"),
+        _ => format!("claude {agent}"),
+    }
+}
+
 /// Stacked deck of pending agent approval requests with inline editing, held-step tracking, and decided history.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::approval_gates::{ApprovalGates, ApprovalGatesEvent};
+///
+/// let gates = cx.new(|cx| {
+///     ApprovalGates::new("run-approval-gates", cx)
+///         .with_task(Some("Launch the new pricing page".into()))
+///         .with_live(true)
+/// });
+/// cx.subscribe(&gates, |_, event: &ApprovalGatesEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct ApprovalGates {
     id: ElementId,
     focus: FocusHandle,
@@ -842,13 +881,14 @@ impl Render for ApprovalGates {
             p.blue
         };
 
+        let has_task_inline = !narrow && task_str.is_some();
         let summary_card = div()
             .w_full()
             .rounded(px(12.0))
             .bg(card_bg)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .overflow_hidden()
             .flex()
             .flex_col()
@@ -884,7 +924,7 @@ impl Render for ApprovalGates {
                             )
                         })
                     })
-                    .child(div().flex_1())
+                    .when(!has_task_inline, |d| d.child(div().flex_1()))
                     .when(decided_len > 1, |d| {
                         let replay_lbl = tr(cx, "Replay", "重置");
                         d.child(pro_btn(
@@ -1033,33 +1073,34 @@ impl Render for ApprovalGates {
         // Stacked Open Deck + Holds/Pager Footer
         let stack_section = if let Some(g_idx) = active_gate_idx {
             let active = self.gates[g_idx].clone();
-            let peek = 11.0_f32;
+            let peek = 9.0_f32;
             let back_count = open_len.saturating_sub(1).min(2);
-            let top_pad = peek * 2.0;
+            let top_pad = (back_count as f32) * peek;
 
             let mut pile = div().relative().w_full().pt(px(top_pad)).left(px(shake_dx));
 
-            // Render up to 2 peeking cards behind the active card (from backmost k=2 to k=1)
+            // Render up to 2 peeking card rims behind the active card (from backmost k=2 to k=1)
             for k in (1..=back_count).rev() {
                 let next_open_pos = (cur_pos + k) % open_len;
                 let behind_gate = &self.gates[open_idxs[next_open_pos]];
                 let behind_action = behind_gate.action.clone();
-                let inset_x = (k as f32) * 14.0;
+                let inset_x = (k as f32) * 12.0;
                 let lift_y = top_pad - (k as f32) * peek;
-                let alpha = (1.0 - (k as f32) * 0.22).clamp(0.4, 0.9);
+                let peek_bg = pro_mix_color(card_bg, p.subtle, (0.38 * k as f32).clamp(0.0, 0.8));
+                let alpha = (1.0 - (k as f32) * 0.18).clamp(0.55, 0.92);
                 pile = pile.child(
                     div()
                         .id(pro_eid(&self.id, format!("peek-{k}")))
                         .role(Role::Button)
-                        .aria_label(behind_action.clone())
+                        .aria_label(behind_action)
                         .tab_index(0)
                         .absolute()
                         .top(px(lift_y))
                         .left(px(inset_x))
                         .right(px(inset_x))
-                        .h(px(64.0))
+                        .h(px(48.0))
                         .rounded(px(14.0))
-                        .bg(card_bg)
+                        .bg(peek_bg)
                         .border_1()
                         .border_color(p.line_strong)
                         .opacity(alpha)
@@ -1075,23 +1116,15 @@ impl Render for ApprovalGates {
                             this.deck_rise.duration(1.0, 0.24, cx);
                             cx.emit(ApprovalGatesEvent::ActiveGateChanged(next_open_pos));
                             cx.notify();
-                        }))
-                        .px(px(14.0))
-                        .pt(px(2.0))
-                        .child(
-                            div()
-                                .text_size(px(10.5))
-                                .text_color(p.muted)
-                                .truncate()
-                                .child(behind_action),
-                        ),
+                        })),
                 );
             }
 
             // Active Top Card
             let is_editing = self.editing_gate.as_ref() == Some(&active.id);
+            let active_seed = agent_avatar_seed(active.agent.as_ref());
             let avatar_el = pro_agent_avatar(
-                active.agent.as_ref(),
+                &active_seed,
                 agent_accent(active.agent.as_ref(), &p),
                 20.0,
                 true,
@@ -1168,9 +1201,9 @@ impl Render for ApprovalGates {
                 let mut diff_box = div()
                     .id(pro_eid(&self.id, "active-diff"))
                     .w_full()
-                    .max_h(px(138.0))
+                    .max_h(px(176.0))
                     .overflow_y_scroll()
-                    .py(px(7.0))
+                    .py(px(8.0))
                     .rounded(px(8.0))
                     .bg(well_bg)
                     .border_1()
@@ -1267,7 +1300,7 @@ impl Render for ApprovalGates {
                     d.child(pro_fold(
                         pro_eid(&self.id, "gate-ro-fold"),
                         !is_editing,
-                        116.0,
+                        168.0,
                         0.0,
                         move || ro,
                     ))
@@ -1413,6 +1446,8 @@ impl Render for ApprovalGates {
                                     .font_weight(FontWeight::MEDIUM)
                                     .flex()
                                     .items_center()
+                                    .gap(px(4.0))
+                                    .child(pro_icon(ProIcon::Lock, 11.0, p.amber_ink))
                                     .child(tr(cx, "Blocking", "阻塞中")),
                             ),
                     )
@@ -1453,7 +1488,7 @@ impl Render for ApprovalGates {
                 .bg(card_bg)
                 .border_1()
                 .border_color(p.line_strong)
-                .shadow_md()
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(10.0))
@@ -1740,7 +1775,7 @@ impl Render for ApprovalGates {
             .child(pro_fold(
                 pro_eid(&self.id, "open-deck-fold"),
                 open_len > 0,
-                310.0,
+                364.0,
                 0.0,
                 move || stack_section.unwrap_or_else(|| div().into_any_element()),
             ))
@@ -1864,6 +1899,7 @@ impl Render for ApprovalGates {
                             .child(act_txt.clone()),
                     )
                     .when(!narrow, |d| {
+                        let dec_seed = agent_avatar_seed(dg.agent.as_ref());
                         d.child(
                             div()
                                 .flex_none()
@@ -1871,7 +1907,7 @@ impl Render for ApprovalGates {
                                 .items_center()
                                 .gap(px(5.0))
                                 .child(pro_agent_avatar(
-                                    dg.agent.as_ref(),
+                                    &dec_seed,
                                     agent_accent(dg.agent.as_ref(), &p),
                                     15.0,
                                     false,
@@ -1887,6 +1923,15 @@ impl Render for ApprovalGates {
                         )
                     })
                     .child(outcome_el)
+                    .when(!narrow && !dg.at.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .flex_none()
+                                .text_size(px(11.5))
+                                .text_color(p.faint)
+                                .child(format!("· {}", dg.at)),
+                        )
+                    })
                     .child(pro_icon(
                         if row_open {
                             ProIcon::ChevronUp
@@ -1931,6 +1976,7 @@ impl Render for ApprovalGates {
                     .bg(card_bg)
                     .border_1()
                     .border_color(p.line)
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(header_tactile)

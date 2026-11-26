@@ -4,12 +4,29 @@
 //! [`AppShell`](crate::components::app_shell::AppShell) while laying the sidebar,
 //! header bar, main scroll container, and work area flat across the window.
 
+pub use crate::components::app_shell::AppShellEvent as AppShellFlatEvent;
 use crate::components::app_shell::{
     AppShell, AppShellEvent, AppShellLayout, AppShellPreset, ShellNavGroup,
 };
 use gpui::{prelude::*, *};
 
 /// Edge-to-edge variant of [`AppShell`] with a continuous header bar and hairline dividers.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::app_shell_flat::{AppShellFlat, AppShellFlatEvent};
+///
+/// let screen = cx.new(|cx| AppShellFlat::new("app-shell-flat", cx));
+/// cx.subscribe(&screen, |_, event: &AppShellFlatEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AppShellFlat {
     inner: Entity<AppShell>,
 }

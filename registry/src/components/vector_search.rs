@@ -102,6 +102,23 @@ pub struct VectorStageChanged {
 pub struct VectorPlaybackChanged {
     pub paused: bool,
 }
+/// `VectorSearch` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::vector_search::{VectorDocument, VectorMatch, VectorSearch, VectorSearchSnapshot};
+///
+/// let documents = vec![VectorDocument::new("doc", "Guide", "Access", 0.1, 0.2, gpui::rgb(0x9b84d6).into())];
+/// let matches = vec![VectorMatch::new("doc", 0.9)];
+/// let snapshot = VectorSearchSnapshot::new("Query", documents, matches);
+/// let control = cx.new(|_| VectorSearch::new(snapshot));
+/// # }
+/// ```
 pub struct VectorSearch {
     snapshot: VectorSearchSnapshot,
     elapsed: f32,

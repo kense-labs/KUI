@@ -178,7 +178,9 @@ fn parse_inline(mut s: &str, style: Inline, out: &mut Block) {
         if matched {
             continue;
         }
-        let ch = s.chars().next().unwrap();
+        let Some(ch) = s.chars().next() else {
+            break;
+        };
         out.text.push(ch);
         out.style.push(style.clone());
         s = &s[ch.len_utf8()..]
@@ -415,6 +417,20 @@ struct Snapshot {
     index: usize,
     selection: Range<usize>,
 }
+/// `RichTextEditor` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::rich_text_editor::RichTextEditor;
+///
+/// let control = cx.new(|cx| RichTextEditor::new("Release notes", "# Notes", window, cx));
+/// # }
+/// ```
 pub struct RichTextEditor {
     label: SharedString,
     lines: Vec<Line>,

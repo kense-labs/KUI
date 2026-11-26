@@ -13,6 +13,20 @@ impl ColorValue {
         format!("#{:06X}", self.0 & 0xffffff)
     }
 }
+/// `ColorPicker` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::color_picker::{ColorPicker, ColorValue};
+///
+/// let control = cx.new(|cx| ColorPicker::new("Accent", ColorValue(0x2F6BFF), window, cx));
+/// # }
+/// ```
 pub struct ColorPicker {
     label: SharedString,
     h: f32,

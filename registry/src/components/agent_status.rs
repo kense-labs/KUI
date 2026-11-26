@@ -11,6 +11,20 @@ pub struct Step {
     pub result: String,
     pub complete: bool,
 }
+/// `WorkBadge` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_status::{WorkBadge, Step};
+///
+/// let control = cx.new(|_| WorkBadge::new("agent","Assistant","Ready",vec![Step { label:"Check files".into(),result:String::new(),complete:false }]));
+/// # }
+/// ```
 pub struct WorkBadge {
     id: SharedString,
     pub agent: String,

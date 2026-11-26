@@ -285,6 +285,30 @@ impl NavSearch {
 }
 
 /// A responsive navigation landmark with a single expanding surface.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::morph_nav::{MorphNav, MorphNavItem, MorphNavLink, MorphNavSearchItem};
+///
+/// let docs = MorphNavLink::new("docs", "Documentation")
+///     .with_description("Guides and API reference")
+///     .with_href("/docs");
+/// let search = MorphNavSearchItem::new(docs.clone()).with_section("resources");
+/// let control = cx.new(|cx| {
+///     MorphNav::new("KUI", vec![
+///         MorphNavItem::new("resources", "Resources").with_links(vec![docs]),
+///         MorphNavItem::new("pricing", "Pricing").with_href("/pricing"),
+///     ], window, cx)
+///         .with_label("Main")
+///         .with_search("Search KUI", vec![search], window, cx)
+/// });
+/// # }
+/// ```
 pub struct MorphNav {
     label: Option<SharedString>,
     brand: MorphNavLink,

@@ -371,7 +371,7 @@ impl Session {
                         duration,
                     } => {
                         at += OUTPUT_DELAY;
-                        transcript.push(format!("{label} {}", done.as_deref().unwrap_or("✓")));
+                        transcript.push(format!("{label} {}", done.as_deref().unwrap_or("done")));
                         (
                             secs(*duration, 0.55),
                             LineKind::Task {
@@ -707,7 +707,7 @@ impl TimedLine {
                     TerminalTone::Default => ("", Syntax::Ink, Syntax::Ink),
                     TerminalTone::Muted => ("", Syntax::Muted, Syntax::Muted),
                     TerminalTone::Accent => ("", Syntax::Accent, Syntax::Accent),
-                    TerminalTone::Success => ("✓ ", Syntax::Success, Syntax::Ink),
+                    TerminalTone::Success => ("  ", Syntax::Success, Syntax::Ink),
                     TerminalTone::Warning => ("! ", Syntax::Warning, Syntax::Ink),
                     TerminalTone::Danger => ("× ", Syntax::Danger, Syntax::Ink),
                 };
@@ -734,17 +734,7 @@ impl TimedLine {
             }
             LineKind::Progress(label) => LineText::new(label.to_string(), Syntax::Muted),
             LineKind::Task { label, done } => {
-                const BRAILLE: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-                let (marker, syntax) = if let Phase::Spinner(frame) = phase {
-                    (BRAILLE[usize::from(frame)], Syntax::Accent)
-                } else {
-                    ('✓', Syntax::Success)
-                };
-                let mut text = LineText::new(format!("{marker} {label}"), Syntax::Ink);
-                text.spans.push(Span {
-                    range: 0..marker.len_utf8(),
-                    syntax,
-                });
+                let mut text = LineText::new(format!("  {label}"), Syntax::Ink);
                 if phase == Phase::Done
                     && let Some(done) = done
                 {
@@ -824,14 +814,29 @@ struct LinkPart {
     url: SharedString,
 }
 
+#[derive(Clone, Copy)]
+enum LeadIcon {
+    Check,
+    Spinner(u8),
+}
+
 #[derive(Clone)]
 struct TerminalRow {
     shaped: ShapedLine,
     links: Vec<LinkPart>,
     meter: Option<Pixels>,
+    lead: Option<LeadIcon>,
 }
 
 fn render_line(line: &TimedLine, phase: Phase, g: Geometry, w: &Window) -> Vec<TerminalRow> {
+    let lead = match &line.kind {
+        LineKind::Text(output) if output.tone == TerminalTone::Success => Some(LeadIcon::Check),
+        LineKind::Task { .. } => Some(match phase {
+            Phase::Spinner(frame) => LeadIcon::Spinner(frame),
+            _ => LeadIcon::Check,
+        }),
+        _ => None,
+    };
     let text = line.text(phase);
     let mut offset = 0;
     let mut rows = Vec::new();
@@ -878,10 +883,12 @@ fn render_line(line: &TimedLine, phase: Phase, g: Geometry, w: &Window) -> Vec<T
                     })
                 })
                 .collect();
+            let row_lead = if rows.is_empty() { lead } else { None };
             rows.push(TerminalRow {
                 shaped,
                 links,
                 meter: None,
+                lead: row_lead,
             });
         }
         offset = span.end + 1;
@@ -895,6 +902,7 @@ fn render_line(line: &TimedLine, phase: Phase, g: Geometry, w: &Window) -> Vec<T
                 shaped: ShapedLine::default(),
                 links: Vec::new(),
                 meter: Some(px(0.)),
+                lead: None,
             });
         } else {
             last.meter = Some(start);
@@ -943,6 +951,36 @@ pub enum TerminalAction {
     Replay,
 }
 
+/// `TypewriterTerminal` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::typewriter_terminal::{
+///     TerminalOutput, TerminalStep, TerminalTone, TypewriterTerminal,
+/// };
+///
+/// let control = cx.new(|cx| {
+///     TypewriterTerminal::new(cx)
+///         .with_title("Quick start")
+///         .with_steps(vec![
+///             TerminalStep::new("kui add button").with_output([
+///                 TerminalOutput::progress("Preparing components"),
+///                 TerminalOutput::text("Button installed", TerminalTone::Success),
+///             ]),
+///             TerminalStep::new("cargo check")
+///                 .with_cwd("~/acme")
+///                 .with_output([TerminalOutput::task("Checking the workspace")]),
+///         ])
+///         .with_rows(8)
+///         .with_loop(false)
+/// });
+/// # }
+/// ```
 pub struct TypewriterTerminal {
     id: ElementId,
     title: SharedString,
@@ -1384,6 +1422,7 @@ impl TypewriterTerminal {
                 0.26 + 0.68 * (0.5 + (frame.time * 5.7).cos() * 0.5)
             };
             let row = data.shaped.clone();
+            let lead = data.lead;
             let meter = data.meter.map(|x| {
                 let elapsed = frame.time - source.at;
                 let progress = progress_at(if source.end <= source.at {
@@ -1398,6 +1437,51 @@ impl TypewriterTerminal {
                     |_, _, _| (),
                     move |b, _, w, cx| {
                         let _ = row.paint(b.origin, geometry.line, TextAlign::Left, None, w, cx);
+                        if let Some(lead) = lead {
+                            let side = f32::from(geometry.em) * 0.92;
+                            let ox = b.origin.x;
+                            let oy = b.origin.y + (geometry.line - px(side)) * 0.5;
+                            match lead {
+                                LeadIcon::Check => {
+                                    let mut path = PathBuilder::stroke(px((side / 13.5).max(1.35)));
+                                    for stroke in Glyph::Check.strokes() {
+                                        for (idx, &(sx, sy)) in stroke.iter().enumerate() {
+                                            let pt = point(
+                                                ox + px(sx * side / 24.),
+                                                oy + px(sy * side / 24.),
+                                            );
+                                            if idx == 0 {
+                                                path.move_to(pt);
+                                            } else {
+                                                path.line_to(pt);
+                                            }
+                                        }
+                                    }
+                                    if let Ok(path) = path.build() {
+                                        w.paint_path(path, geometry.palette.color(Syntax::Success));
+                                    }
+                                }
+                                LeadIcon::Spinner(frame) => {
+                                    let turn = f32::from(frame) / 10.;
+                                    let mut path = PathBuilder::stroke(px((side / 14.).max(1.3)));
+                                    for step in 0..24 {
+                                        let a = (turn + step as f32 / 32.) * std::f32::consts::TAU;
+                                        let pt = point(
+                                            ox + px(side * (0.5 + 0.36 * a.cos())),
+                                            oy + px(side * (0.5 + 0.36 * a.sin())),
+                                        );
+                                        if step == 0 {
+                                            path.move_to(pt);
+                                        } else {
+                                            path.line_to(pt);
+                                        }
+                                    }
+                                    if let Ok(path) = path.build() {
+                                        w.paint_path(path, geometry.palette.accent);
+                                    }
+                                }
+                            }
+                        }
                         if caret {
                             let width = px(8.).min(b.size.width);
                             let x = row.width.min((b.size.width - width).max(px(0.)));

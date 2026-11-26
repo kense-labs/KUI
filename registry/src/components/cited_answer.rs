@@ -7,9 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_mix_color, pro_popover_presence, pro_skeleton_bar, pro_swap_label, pro_tactile,
-        pro_toast_banner, pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_fold, pro_mix_color, pro_popover_presence, pro_skeleton_bar, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -366,11 +366,21 @@ fn render_source_glyph(idx: usize, src: &CitedSource, side: f32, cx: &App) -> An
         return pro_app_tile(icon_key, side, cx);
     }
     let p = ProPalette::get(cx);
-    let (bg, fg) = match idx % 4 {
-        0 => (p.accent_soft, p.blue),
-        1 => (p.purple.opacity(0.16), p.purple),
-        2 => (p.green_soft, p.green_ink),
-        _ => (p.amber_soft, p.amber_ink),
+    let (bg, fg, bdr) = if p.dark {
+        let accent = match idx % 4 {
+            0 => p.blue,
+            1 => p.green,
+            2 => p.purple,
+            _ => p.amber,
+        };
+        (rgb(0x27272b).into(), accent, hsla(0., 0., 1., 0.09))
+    } else {
+        match idx % 4 {
+            0 => (p.accent_soft, p.blue, hsla(0., 0., 0., 0.06)),
+            1 => (p.green_soft, p.green_ink, hsla(0., 0., 0., 0.06)),
+            2 => (p.purple.opacity(0.12), p.purple, hsla(0., 0., 0., 0.06)),
+            _ => (p.amber_soft, p.amber_ink, hsla(0., 0., 0., 0.06)),
+        }
     };
     let initial = person_initials(&src.site)
         .chars()
@@ -379,12 +389,14 @@ fn render_source_glyph(idx: usize, src: &CitedSource, side: f32, cx: &App) -> An
     div()
         .size(px(side))
         .flex_none()
-        .rounded(px(4.5))
+        .rounded(px((side * 0.28).clamp(4.5, 6.)))
         .bg(bg)
+        .border_1()
+        .border_color(bdr)
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px((side * 0.60).clamp(9., 11.)))
+        .text_size(px((side * 0.58).clamp(9., 11.)))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(fg)
         .child(initial)
@@ -441,7 +453,7 @@ impl CitedAnswer {
             sources: default_sources(),
             segments: default_segments(),
             pages_read: Some(12),
-            open_source_id: Some("caching".into()),
+            open_source_id: Some("layout".into()),
             hovered_marker: None,
             last_hovered_marker: None,
             hovered_source: None,
@@ -735,9 +747,14 @@ impl Render for CitedAnswer {
             }
         }
 
-        let mut prose_col = div().mt(px(12.)).w_full().flex().flex_col().gap(px(10.));
+        let mut prose_col = div().mt(px(12.)).w_full().flex().flex_col().gap(px(12.));
         for para in paragraphs {
-            let mut para_col = div().w_full().flex().flex_col().gap(px(4.));
+            let mut para_wrap = div()
+                .w_full()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_y(px(2.5));
             for (si, seg) in para {
                 let valid_cites: Vec<(usize, SharedString)> = seg
                     .cite
@@ -758,60 +775,56 @@ impl Render for CitedAnswer {
                 let seg_dim = any_pointer_spotlight && !seg_lit;
                 let first_cite = valid_cites.first().map(|(_, cid)| cid.clone());
 
-                let mut seg_row = div()
-                    .id(pro_eid(&self.id, format!("seg-{si}")))
-                    .px(px(5.))
-                    .py(px(2.5))
-                    .mx(px(-5.))
-                    .rounded(px(5.))
-                    .bg(if seg_lit {
-                        hl_sentence_bg
-                    } else {
-                        transparent_black()
-                    })
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_x(px(3.5))
-                    .gap_y(px(2.));
-
-                if let Some(primary_cid) = first_cite {
-                    let cid_click = primary_cid.clone();
-                    seg_row = seg_row
-                        .cursor_pointer()
-                        .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                            if *inside {
-                                this.hovered_marker = Some((si, primary_cid.clone()));
-                            } else if this
-                                .hovered_marker
-                                .as_ref()
-                                .is_some_and(|(idx, _)| *idx == si)
-                            {
-                                this.hovered_marker = None;
-                            }
-                            cx.notify();
-                        }))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.toggle_source_preview(cid_click.clone(), cx);
-                        }));
-                }
-
-                for word in seg.text.split_whitespace() {
-                    seg_row = seg_row.child(
-                        div()
-                            .text_size(px(13.))
-                            .line_height(px(20.))
-                            .text_color(if seg_lit {
-                                p.strong
-                            } else if seg_dim {
-                                p.faint
+                for (wi, word) in seg.text.split_whitespace().enumerate() {
+                    let mut w_el = div()
+                        .id(pro_eid(
+                            &self.id,
+                            if wi == 0 {
+                                format!("seg-{si}")
                             } else {
-                                p.ink
-                            })
-                            .child(word.to_owned()),
-                    );
+                                format!("seg-{si}-w-{wi}")
+                            },
+                        ))
+                        .pr(px(3.5))
+                        .when(seg_lit, |d| {
+                            d.pl(px(2.)).ml(px(-2.)).rounded(px(2.5)).bg(hl_sentence_bg)
+                        })
+                        .text_size(px(13.5))
+                        .line_height(px(21.6))
+                        .text_color(if seg_lit {
+                            p.strong
+                        } else if seg_dim {
+                            p.faint
+                        } else {
+                            p.ink
+                        })
+                        .child(word.to_owned());
+
+                    if let Some(ref primary_cid) = first_cite {
+                        let cid_hov = primary_cid.clone();
+                        let cid_clk = primary_cid.clone();
+                        w_el = w_el
+                            .cursor_pointer()
+                            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
+                                if *inside {
+                                    this.hovered_marker = Some((si, cid_hov.clone()));
+                                } else if this
+                                    .hovered_marker
+                                    .as_ref()
+                                    .is_some_and(|(idx, _)| *idx == si)
+                                {
+                                    this.hovered_marker = None;
+                                }
+                                cx.notify();
+                            }))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.toggle_source_preview(cid_clk.clone(), cx);
+                            }));
+                    }
+                    para_wrap = para_wrap.child(w_el);
                 }
 
+                let cite_len = valid_cites.len();
                 for (mi, (num, cid)) in valid_cites.into_iter().enumerate() {
                     let marker_lit = active_source_spotlight == Some(&cid)
                         || self.open_source_id.as_ref() == Some(&cid);
@@ -822,19 +835,27 @@ impl Render for CitedAnswer {
                         .unwrap_or_else(|| format!("Source {num}"));
                     let cid_hov = cid.clone();
                     let cid_clk = cid.clone();
+                    let pill_bg: Hsla = if marker_lit {
+                        p.accent_soft
+                    } else if p.dark {
+                        rgb(0x27272b).into()
+                    } else {
+                        rgb(0xf1f1f3).into()
+                    };
 
-                    seg_row = seg_row.child(
+                    para_wrap = para_wrap.child(
                         div()
                             .id(pro_eid(&self.id, format!("marker-{si}-{mi}")))
                             .role(Role::Button)
                             .aria_label(src_title)
                             .aria_expanded(self.open_source_id.as_ref() == Some(&cid))
                             .tab_index(0)
+                            .mr(px(if mi + 1 == cite_len { 4.5 } else { 3. }))
                             .min_w(px(17.))
                             .h(px(17.))
                             .px(px(4.5))
-                            .rounded(px(4.))
-                            .bg(if marker_lit { p.accent_soft } else { p.chip })
+                            .rounded(px(4.5))
+                            .bg(pill_bg)
                             .border_1()
                             .border_color(if marker_lit {
                                 p.blue.opacity(0.45)
@@ -869,10 +890,8 @@ impl Render for CitedAnswer {
                             .child(format!("{num}")),
                     );
                 }
-
-                para_col = para_col.child(seg_row);
             }
-            prose_col = prose_col.child(para_col);
+            prose_col = prose_col.child(para_wrap);
         }
 
         // Hovered citation preview card (`pro_popover_presence` smooth enter & exit!)
@@ -956,19 +975,112 @@ impl Render for CitedAnswer {
             },
         );
 
-        // Source Rows wired two-way + `pro_fold` quoted passage directly underneath each source!
-        let mut sources_list = div().mt(px(14.)).w_full().flex().flex_col().gap(px(6.));
+        // Source selector pill bar + single unfolded quote card matching `affectUI` reference.
+        let mut pill_row = div()
+            .mt(px(16.))
+            .w_full()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(6.));
         for (idx, src) in self.sources.iter().cloned().enumerate() {
             let num = idx + 1;
             let sid = src.id.clone();
             let is_open = self.open_source_id.as_ref() == Some(&sid);
             let is_spotlit = active_source_spotlight == Some(&sid);
             let is_dim = any_pointer_spotlight && !is_spotlit && !is_open;
-            let cite_count = self
-                .segments
-                .iter()
-                .filter(|seg| seg.cite.iter().any(|c| c == &sid))
-                .count();
+            let sid_hov = sid.clone();
+            let sid_clk = sid.clone();
+
+            let pill_inner = div()
+                .h(px(28.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(render_source_glyph(idx, &src, 15., cx))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .font_weight(if is_spotlit || is_open {
+                            FontWeight::SEMIBOLD
+                        } else {
+                            FontWeight::MEDIUM
+                        })
+                        .text_color(if is_spotlit || is_open {
+                            p.strong
+                        } else {
+                            p.text
+                        })
+                        .whitespace_nowrap()
+                        .child(src.site.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(if is_spotlit || is_open {
+                            p.blue
+                        } else {
+                            p.muted
+                        })
+                        .child(format!("{num}")),
+                );
+
+            let pill_rest_bg: Hsla = if is_open || is_spotlit {
+                if p.dark {
+                    rgb(0x27272b).into()
+                } else {
+                    rgb(0xf4f4f6).into()
+                }
+            } else {
+                p.subtle
+            };
+
+            pill_row = pill_row.child(
+                div().when(is_dim, |d| d.opacity(0.55)).child(
+                    pro_tactile(
+                        pro_eid(&self.id, format!("source-row-{idx}")),
+                        format!("Source {}: {} — {}", num, src.site, src.title),
+                        7.,
+                        pill_rest_bg,
+                        p.hover,
+                        if is_open { p.line_strong } else { p.line },
+                        p.blue.opacity(0.45),
+                        is_spotlit,
+                        pill_inner,
+                        cx,
+                        move |this, _, cx| {
+                            this.toggle_source_preview(sid_clk.clone(), cx);
+                        },
+                    )
+                    .flex_none()
+                    .aria_expanded(is_open)
+                    .on_hover(cx.listener(
+                        move |this, inside: &bool, _, cx| {
+                            if *inside {
+                                this.hovered_source = Some(sid_hov.clone());
+                            } else if this.hovered_source.as_ref() == Some(&sid_hov) {
+                                this.hovered_source = None;
+                            }
+                            cx.notify();
+                        },
+                    )),
+                ),
+            );
+        }
+
+        let open_idx = self
+            .open_source_id
+            .as_ref()
+            .and_then(|oid| self.sources.iter().position(|s| &s.id == oid));
+        let quote_card_open = open_idx.is_some();
+        let display_idx = open_idx.unwrap_or(0);
+        let quote_card_body: AnyElement = if let Some(src) = self.sources.get(display_idx).cloned()
+        {
+            let idx = display_idx;
+            let num = idx + 1;
+            let sid = src.id.clone();
             let citing_texts: Vec<&str> = self
                 .segments
                 .iter()
@@ -980,332 +1092,278 @@ impl Render for CitedAnswer {
                 .copied_quote_for
                 .as_ref()
                 .is_some_and(|(cid, t)| cid == &sid && t.elapsed().as_secs_f32() < 2.0);
+            let domain = src.domain_hint();
+            let date = src.date.clone();
+            let title = src.title.clone();
+            let src_open = src.clone();
+            let sid_copy = sid.clone();
+            let sid_close = sid.clone();
+            let glyph = render_source_glyph(idx, &src, 16., cx);
+            let copy_txt: SharedString = if just_copied_this {
+                tr(cx, "Quote copied", "已复制引文").into()
+            } else {
+                tr(cx, "Copy quote", "复制引文").into()
+            };
+            let open_txt: SharedString = tr(cx, "Open source", "打开原文").into();
 
-            let sid_hov = sid.clone();
-            let sid_clk = sid.clone();
+            let mut quote_wrap = div()
+                .pl(px(12.))
+                .border_l_2()
+                .border_color(if p.dark {
+                    hsla(0., 0., 1., 0.16)
+                } else {
+                    hsla(0., 0., 0., 0.14)
+                })
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_y(px(2.5));
 
-            let row_header_inner = div()
+            for (span_str, highlighted) in quote_runs {
+                for word in span_str.split_whitespace() {
+                    quote_wrap = quote_wrap.child(
+                        div()
+                            .pr(px(3.5))
+                            .when(highlighted, |d| {
+                                d.pl(px(2.5)).ml(px(-2.5)).rounded(px(3.)).bg(mark_bg)
+                            })
+                            .text_size(px(12.5))
+                            .line_height(px(20.))
+                            .font_weight(if highlighted {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .text_color(if highlighted { p.strong } else { p.text })
+                            .child(word.to_owned()),
+                    );
+                }
+            }
+
+            let open_btn_inner = div()
+                .h(px(27.))
                 .px(px(10.))
-                .py(px(8.))
                 .flex()
                 .items_center()
-                .gap(px(8.))
-                .child(render_source_glyph(idx, &src, 18., cx))
+                .gap(px(5.))
+                .text_size(px(12.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.strong)
+                .whitespace_nowrap()
+                .child(pro_icon(ProIcon::ExternalArrow, 12.5, p.muted))
+                .child(open_txt.clone());
+
+            let copy_icon_slot = div()
+                .relative()
+                .size(px(13.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .when(!just_copied_this, |d| {
+                    d.child(pro_icon(ProIcon::Copy, 13., p.muted))
+                })
                 .child(
-                    div().flex_1().min_w_0().flex().flex_col().child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(if is_spotlit || is_open {
-                                        p.strong
-                                    } else {
-                                        p.ink
-                                    })
-                                    .child(src.site.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(px(11.5))
-                                    .text_color(p.muted)
-                                    .child(format!("— {}", src.title)),
-                            ),
-                    ),
+                    div()
+                        .when(!just_copied_this, |d| d.absolute().inset_0().opacity(0.))
+                        .child(pro_check_draw(
+                            pro_eid(&self.id, format!("copy-quote-chk-{idx}")),
+                            just_copied_this,
+                            13.,
+                            false,
+                            p.green,
+                        )),
+                );
+
+            let copy_btn_inner = div()
+                .h(px(27.))
+                .px(px(9.))
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .child(copy_icon_slot)
+                .child(pro_swap_label(
+                    pro_eid(&self.id, format!("copy-quote-lbl-{idx}")),
+                    copy_txt.clone(),
+                    12.,
+                    FontWeight::MEDIUM,
+                    if just_copied_this {
+                        p.green_ink
+                    } else {
+                        p.text
+                    },
+                ));
+
+            let close_btn = div()
+                .id(pro_eid(&self.id, format!("close-quote-{idx}")))
+                .role(Role::Button)
+                .aria_label(tr(cx, "Close quote preview", "关闭引文预览"))
+                .tab_index(0)
+                .size(px(20.))
+                .rounded(px(5.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(move |s| s.bg(p.hover))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_source_preview(sid_close.clone(), cx);
+                }))
+                .child(pro_icon(ProIcon::Close, 12., p.muted));
+
+            let card_inner = div()
+                .p(px(14.))
+                .rounded(px(10.))
+                .bg(p.subtle)
+                .border_1()
+                .border_color(p.line)
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(7.))
+                                .min_w_0()
+                                .child(glyph)
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(domain),
+                                )
+                                .when_some(date, |d, dt| {
+                                    d.child(div().text_size(px(11.5)).text_color(p.muted).child(dt))
+                                }),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .child(
+                                    div()
+                                        .min_w(px(18.))
+                                        .h(px(18.))
+                                        .px(px(5.))
+                                        .rounded(px(4.5))
+                                        .bg(if p.dark { rgb(0x27272b) } else { rgb(0xededf0) })
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(p.text)
+                                        .child(format!("{num}")),
+                                )
+                                .child(close_btn),
+                        ),
                 )
                 .child(
                     div()
-                        .h(px(18.))
-                        .px(px(5.5))
-                        .rounded(px(4.))
-                        .bg(if is_spotlit || is_open {
-                            p.accent_soft
-                        } else {
-                            p.chip
-                        })
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.strong)
+                        .child(title),
+                )
+                .child(quote_wrap)
+                .child(
+                    div()
+                        .pt(px(2.))
                         .flex()
                         .items_center()
-                        .text_size(px(10.5))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(if is_spotlit || is_open {
-                            p.blue
-                        } else {
-                            p.muted
-                        })
-                        .child(format!("[{num}] · {cite_count}")),
-                )
-                .child(pro_icon(
-                    if is_open {
-                        ProIcon::ChevronUp
-                    } else {
-                        ProIcon::ChevronDown
-                    },
-                    13.,
-                    p.muted,
-                ));
-
-            let row_header = pro_tactile(
-                pro_eid(&self.id, format!("source-row-{idx}")),
-                format!("Source {}: {} — {}", num, src.site, src.title),
-                7.,
-                transparent_black(),
-                p.hover,
-                transparent_black(),
-                transparent_black(),
-                is_spotlit || is_open,
-                row_header_inner,
-                cx,
-                move |this, _, cx| {
-                    this.toggle_source_preview(sid_clk.clone(), cx);
-                },
-            )
-            .aria_expanded(is_open)
-            .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
-                if *inside {
-                    this.hovered_source = Some(sid_hov.clone());
-                } else if this.hovered_source.as_ref() == Some(&sid_hov) {
-                    this.hovered_source = None;
-                }
-                cx.notify();
-            }));
-
-            let quote_fold_body: AnyElement = {
-                let domain = src.domain_hint();
-                let date = src.date.clone();
-                let title = src.title.clone();
-                let src_open = src.clone();
-                let sid_copy = sid.clone();
-                let copy_txt: SharedString = if just_copied_this {
-                    tr(cx, "Quote copied", "已复制引文").into()
-                } else {
-                    tr(cx, "Copy quote", "复制引文").into()
-                };
-                let open_txt: SharedString = tr(cx, "Open source", "打开原文").into();
-                let is_row_hov = self.hovered_source.as_ref() == Some(&sid);
-
-                let mut quote_wrap = div()
-                    .pl(px(10.))
-                    .border_l_2()
-                    .border_color(p.blue.opacity(0.60))
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_x(px(3.5))
-                    .gap_y(px(2.));
-
-                for (span_str, highlighted) in quote_runs {
-                    for word in span_str.split_whitespace() {
-                        quote_wrap = quote_wrap.child(
-                            div()
-                                .when(highlighted, |d| d.px(px(3.)).rounded(px(3.)).bg(mark_bg))
-                                .text_size(px(12.))
-                                .line_height(px(18.5))
-                                .font_weight(if highlighted {
-                                    FontWeight::MEDIUM
-                                } else {
-                                    FontWeight::NORMAL
-                                })
-                                .text_color(if highlighted { p.strong } else { p.text })
-                                .child(word.to_owned()),
-                        );
-                    }
-                }
-
-                let open_btn_inner = div()
-                    .h(px(26.))
-                    .px(px(9.))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.strong)
-                    .whitespace_nowrap()
-                    .child(open_txt.clone())
-                    .child(CiteGlideArrow {
-                        id: pro_eid(&self.id, format!("open-src-arr-{idx}")),
-                        active: is_row_hov,
-                        size: 12.,
-                        rest_color: p.muted,
-                        active_color: p.strong,
-                    });
-
-                let copy_icon_slot = div()
-                    .relative()
-                    .size(px(13.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .when(!just_copied_this, |d| {
-                        d.child(pro_icon(ProIcon::Copy, 13., p.muted))
-                    })
-                    .child(
-                        div()
-                            .when(!just_copied_this, |d| d.absolute().inset_0().opacity(0.))
-                            .child(pro_check_draw(
-                                pro_eid(&self.id, format!("copy-quote-chk-{idx}")),
-                                just_copied_this,
-                                13.,
+                        .gap(px(6.))
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, format!("open-src-{idx}")),
+                                open_txt,
+                                6.,
+                                p.card,
+                                p.hover,
+                                p.line_strong,
+                                p.line_strong,
                                 false,
-                                p.green,
-                            )),
-                    );
-
-                let copy_btn_inner = div()
-                    .h(px(26.))
-                    .px(px(9.))
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .child(copy_icon_slot)
-                    .child(pro_swap_label(
-                        pro_eid(&self.id, format!("copy-quote-lbl-{idx}")),
-                        copy_txt.clone(),
-                        12.,
-                        FontWeight::MEDIUM,
-                        if just_copied_this {
-                            p.green_ink
-                        } else {
-                            p.text
-                        },
-                    ));
-
-                div()
-                    .px(px(12.))
-                    .pb(px(11.))
-                    .pt(px(6.))
-                    .border_t_1()
-                    .border_color(p.line)
-                    .flex()
-                    .flex_col()
-                    .gap(px(7.))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(8.))
-                            .text_size(px(11.5))
-                            .text_color(p.muted)
-                            .child(match date {
-                                Some(dt) => format!("{domain} · {dt}"),
-                                None => domain,
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.strong)
-                            .child(title),
-                    )
-                    .child(quote_wrap)
-                    .child(
-                        div()
-                            .pt(px(2.))
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .child(
-                                pro_tactile(
-                                    pro_eid(&self.id, format!("open-src-{idx}")),
-                                    open_txt,
-                                    6.,
-                                    p.card,
-                                    p.hover,
-                                    p.line_strong,
-                                    p.line_strong,
-                                    false,
-                                    open_btn_inner,
-                                    cx,
-                                    move |this, _, cx| {
-                                        let s_ev = src_open.clone();
-                                        this.toast = Some((
-                                            SharedString::from(format!(
-                                                "{} · {}",
-                                                s_ev.site,
-                                                s_ev.domain_hint()
-                                            )),
-                                            Instant::now(),
-                                        ));
-                                        cx.emit(CitedAnswerEvent::OpenSource(s_ev));
-                                        cx.notify();
-                                    },
-                                )
-                                .flex_none(),
+                                open_btn_inner,
+                                cx,
+                                move |this, _, cx| {
+                                    let s_ev = src_open.clone();
+                                    this.toast = Some((
+                                        SharedString::from(format!(
+                                            "{} · {}",
+                                            s_ev.site,
+                                            s_ev.domain_hint()
+                                        )),
+                                        Instant::now(),
+                                    ));
+                                    cx.emit(CitedAnswerEvent::OpenSource(s_ev));
+                                    cx.notify();
+                                },
                             )
-                            .child(
-                                pro_tactile(
-                                    pro_eid(&self.id, format!("copy-quote-{idx}")),
-                                    copy_txt,
-                                    6.,
-                                    if just_copied_this {
-                                        p.green_soft
-                                    } else {
-                                        transparent_black()
-                                    },
-                                    p.hover,
-                                    transparent_black(),
-                                    if just_copied_this {
-                                        p.green.opacity(0.35)
-                                    } else {
-                                        transparent_black()
-                                    },
-                                    just_copied_this,
-                                    copy_btn_inner,
-                                    cx,
-                                    move |this, _, cx| {
-                                        this.copy_quote(sid_copy.clone(), cx);
-                                    },
-                                )
-                                .flex_none(),
-                            ),
-                    )
-                    .into_any_element()
-            };
+                            .flex_none(),
+                        )
+                        .child(
+                            pro_tactile(
+                                pro_eid(&self.id, format!("copy-quote-{idx}")),
+                                copy_txt,
+                                6.,
+                                if just_copied_this {
+                                    p.green_soft
+                                } else {
+                                    transparent_black()
+                                },
+                                p.hover,
+                                transparent_black(),
+                                if just_copied_this {
+                                    p.green.opacity(0.35)
+                                } else {
+                                    transparent_black()
+                                },
+                                just_copied_this,
+                                copy_btn_inner,
+                                cx,
+                                move |this, _, cx| {
+                                    this.copy_quote(sid_copy.clone(), cx);
+                                },
+                            )
+                            .flex_none(),
+                        ),
+                );
 
-            let quote_fold = pro_fold(
-                pro_eid(&self.id, format!("quote-fold-{idx}")),
-                is_open,
-                118.,
-                0.,
-                move || quote_fold_body,
-            );
+            div()
+                .pt(px(8.))
+                .child(pro_view_transition(
+                    pro_eid(&self.id, "quote-src-vtx"),
+                    sid,
+                    card_inner,
+                ))
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
 
-            sources_list = sources_list.child(
-                div()
-                    .w_full()
-                    .rounded(px(8.))
-                    .bg(if is_spotlit || is_open {
-                        p.subtle
-                    } else {
-                        transparent_black()
-                    })
-                    .border_1()
-                    .border_color(if is_spotlit {
-                        p.blue.opacity(0.45)
-                    } else if is_open {
-                        p.line_strong
-                    } else {
-                        p.line
-                    })
-                    .when(is_dim, |d| d.opacity(0.55))
-                    .flex()
-                    .flex_col()
-                    .child(row_header)
-                    .child(quote_fold),
-            );
-        }
+        let quote_fold = pro_fold(
+            pro_eid(&self.id, "quote-fold-active"),
+            quote_card_open,
+            165.,
+            0.,
+            move || quote_card_body,
+        );
+        let sources_list = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .child(pill_row)
+            .child(quote_fold);
 
-        // Dynamic Footer Tray (`5 of 6 sentences backed by a source` / hovered source summary / `Quote copied`).
+        // Dynamic Footer Tray (`Quote from Latency Notes` when open / `5 of 6 sentences backed by a source` / hovered summary).
         let (backed_n, total_n) = self.backed_sentence_counts();
         let any_just_copied = self
             .copied_quote_for
@@ -1345,6 +1403,14 @@ impl Render for CitedAnswer {
                     cnt,
                     tr(cx, "sentences cited", "处句子引用")
                 ),
+                false,
+            )
+        } else if let Some(oid) = open_idx
+            && let Some(src) = self.sources.get(oid)
+        {
+            (
+                SharedString::from(format!("open-{}", src.id)),
+                format!("{} {}", tr(cx, "Quote from", "引自"), src.site),
                 false,
             )
         } else {
@@ -1555,11 +1621,11 @@ impl Render for CitedAnswer {
                 div()
                     .w_full()
                     .max_w(px(540.))
-                    .rounded(px(10.))
+                    .rounded(px(12.))
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
-                    .shadow_xs()
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .child(

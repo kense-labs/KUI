@@ -659,6 +659,22 @@ impl StepFilter {
 }
 
 /// Interactive single-agent run waterfall and step detail screen.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_run_detail::{AgentRunDetailScreen, AgentRunDetailEvent};
+///
+/// let screen = cx.new(|cx| AgentRunDetailScreen::new("agent-run-detail", cx));
+/// cx.subscribe(&screen, |_, event: &AgentRunDetailEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentRunDetailScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -740,7 +756,7 @@ impl AgentRunDetailScreen {
                 .with_groups(groups)
                 .with_active("agents")
                 .with_work_area(true, true)
-                .with_panel_width(340.);
+                .with_panel_width(300.);
             s.bind_page(&this, shell_cx, |screen, w, cx| {
                 screen.render_page(w, cx).into_any_element()
             });
@@ -779,7 +795,7 @@ impl AgentRunDetailScreen {
             copied_key: None,
             boot_instant: Instant::now(),
             play_instant: None,
-            measured_width: Rc::new(Cell::new(720.)),
+            measured_width: Rc::new(Cell::new(384.)),
         }
     }
 
@@ -940,15 +956,20 @@ impl AgentRunDetailScreen {
             && let Some(ref app_name) = step.app
         {
             let lower = app_name.to_ascii_lowercase();
+            let tile_border = if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                p.line
+            };
             if lower.contains("postgres") {
                 let inner_side = (side * 0.68).round().clamp(11., 15.);
                 return div()
                     .size(px(side))
                     .flex_none()
                     .rounded(px((side * 0.28).clamp(5., 6.)))
-                    .bg(p.card)
+                    .bg(p.logo_tile)
                     .border_1()
-                    .border_color(p.line)
+                    .border_color(tile_border)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -974,9 +995,9 @@ impl AgentRunDetailScreen {
                     .size(px(side))
                     .flex_none()
                     .rounded(px((side * 0.28).clamp(5., 6.)))
-                    .bg(p.card)
+                    .bg(p.logo_tile)
                     .border_1()
-                    .border_color(p.line)
+                    .border_color(tile_border)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -1090,12 +1111,12 @@ impl AgentRunDetailScreen {
         let (axis_max, axis_ticks) = compute_axis_ticks(display_time.max(max_step_end), is_live);
 
         let width = self.measured_width.get();
-        let compact = width < 640.;
-        let stacked = width < 480.;
+        let compact = width < 540.;
+        let stacked = width < 330.;
         let label_col_w = if stacked {
             0.0
         } else if compact {
-            156.0
+            144.0
         } else {
             248.0
         };
@@ -1154,20 +1175,29 @@ impl AgentRunDetailScreen {
             .flex()
             .items_center()
             .justify_between()
-            .gap(px(12.))
+            .gap(px(if compact { 8. } else { 12. }))
             .child(
                 div()
+                    .flex_1()
                     .min_w_0()
                     .flex()
                     .items_center()
-                    .gap(px(10.))
+                    .gap(px(if compact { 8. } else { 10. }))
                     .child(if self.loading {
-                        pro_skeleton_bar(22., 22., 6., skel_phase, cx).into_any_element()
+                        pro_skeleton_bar(20., 20., 6., skel_phase, cx).into_any_element()
                     } else {
-                        pro_agent_avatar(&self.run.agent_id, agent_color, 22., is_live, anim_ms, cx)
+                        pro_agent_avatar(
+                            &self.run.agent_id,
+                            agent_color,
+                            if compact { 20. } else { 22. },
+                            is_live,
+                            anim_ms,
+                            cx,
+                        )
                     })
                     .child(
                         div()
+                            .flex_1()
                             .min_w_0()
                             .flex()
                             .flex_col()
@@ -1191,7 +1221,7 @@ impl AgentRunDetailScreen {
                                     .into_any_element()
                             } else {
                                 div()
-                                    .text_size(px(12.))
+                                    .text_size(px(if compact { 11.5 } else { 12. }))
                                     .line_height(px(16.))
                                     .text_color(p.muted)
                                     .truncate()
@@ -1203,9 +1233,10 @@ impl AgentRunDetailScreen {
             .child(
                 div()
                     .flex_none()
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .gap(px(8.))
+                    .gap(px(if compact { 6. } else { 8. }))
                     .when(!self.loading, |d| {
                         d.child(Self::render_status_badge(run_badge_lbl, run_badge_key, &p))
                     })
@@ -1219,7 +1250,7 @@ impl AgentRunDetailScreen {
                                     .aria_label(stop_lbl.clone())
                                     .tab_index(0)
                                     .h(px(28.))
-                                    .px(px(11.))
+                                    .px(px(if compact { 9. } else { 11. }))
                                     .rounded(px(8.))
                                     .bg(p.card)
                                     .border_1()
@@ -1228,12 +1259,13 @@ impl AgentRunDetailScreen {
                                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                                     .flex()
                                     .items_center()
-                                    .gap(px(6.))
+                                    .gap(px(5.))
                                     .text_size(px(12.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.ink)
+                                    .whitespace_nowrap()
                                     .cursor_pointer()
-                                    .child(pro_svg("0 0 24 24", STOP_SQUARE_SVG, 13., p.muted))
+                                    .child(pro_svg("0 0 24 24", STOP_SQUARE_SVG, 12.5, p.muted))
                                     .child(stop_lbl),
                                 cx,
                                 |this, _, cx| this.stop_run(cx),
@@ -1247,7 +1279,7 @@ impl AgentRunDetailScreen {
                                     .aria_label(rerun_lbl.clone())
                                     .tab_index(0)
                                     .h(px(28.))
-                                    .px(px(11.))
+                                    .px(px(if compact { 9. } else { 11. }))
                                     .rounded(px(8.))
                                     .bg(p.card)
                                     .border_1()
@@ -1256,12 +1288,13 @@ impl AgentRunDetailScreen {
                                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                                     .flex()
                                     .items_center()
-                                    .gap(px(6.))
+                                    .gap(px(5.))
                                     .text_size(px(12.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.ink)
+                                    .whitespace_nowrap()
                                     .cursor_pointer()
-                                    .child(pro_icon(ProIcon::Refresh, 13., p.muted))
+                                    .child(pro_icon(ProIcon::Refresh, 12.5, p.muted))
                                     .child(rerun_lbl),
                                 cx,
                                 |this, _, cx| this.rerun(cx),
@@ -1939,7 +1972,10 @@ impl AgentRunDetailScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()
@@ -1947,7 +1983,13 @@ impl AgentRunDetailScreen {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .px(px(if stacked { 12. } else { 20. }))
+                    .px(px(if stacked {
+                        10.
+                    } else if compact {
+                        14.
+                    } else {
+                        20.
+                    }))
                     .pt(px(18.))
                     .pb(px(40.))
                     .flex()

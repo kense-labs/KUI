@@ -542,13 +542,17 @@ impl RenderOnce for PricingCardSurface {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::pricing_plans::{PricingBillingPeriod, PricingPlansBlock};
 ///
 /// let block = cx.new(|cx| {
 ///     PricingPlansBlock::new("pricing-plans", cx)
 ///         .with_default_billing(PricingBillingPeriod::Yearly)
 /// });
+/// # }
 /// ```
 pub struct PricingPlansBlock {
     id: ElementId,

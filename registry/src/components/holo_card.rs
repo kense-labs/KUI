@@ -259,6 +259,30 @@ pub struct HoloCardFlipped(pub bool);
 pub struct HoloCardOrientationRequested;
 
 /// A 5:7 collectible card with optional reverse face and orientation input.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::holo_card::{HoloCard, HoloCardFlipped, HoloFace};
+///
+/// let card = cx.new(|cx| {
+///     let front = HoloFace::new("Jasmine Brooks, member", |_, _| {
+///         gpui::div().size_full().p_4().child("Jasmine Brooks").into_any_element()
+///     });
+///     let back = HoloFace::new("Member since 2023", |_, _| {
+///         gpui::div().size_full().p_4().child("Member since 2023").into_any_element()
+///     });
+///     HoloCard::new(front, cx).with_back(back).with_flipped(false)
+/// });
+/// cx.subscribe(&card, |card, event: &HoloCardFlipped, cx| {
+///     card.update(cx, |card, cx| card.set_flipped(event.0, cx));
+/// }).detach();
+/// # }
+/// ```
 pub struct HoloCard {
     id: ElementId,
     front: HoloFace,

@@ -6,10 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_connector_pulse,
-        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_popover_presence, pro_presence,
-        pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32, pro_switch,
-        pro_tactile, pro_toast_banner, pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_app_tile, pro_btn, pro_card_shadow,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_popover_presence, pro_presence, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_f32, pro_switch, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -589,6 +589,25 @@ fn paint_dashed_segment(
 }
 
 /// Radial agent memory & connected-tools graph with live pulses, Gradient Floor washes, and popovers.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::memory_graph::{MemoryGraph, MemoryGraphEvent};
+///
+/// let graph = cx.new(|cx| {
+///     MemoryGraph::new("memory-graph", cx)
+///         .with_title("What Assistant knows and can reach")
+/// });
+/// cx.subscribe(&graph, |_, event: &MemoryGraphEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct MemoryGraph {
     id: ElementId,
     focus: FocusHandle,
@@ -1794,7 +1813,7 @@ impl Render for MemoryGraph {
                         .gap(px(9.))
                         .min_w_0()
                         .child(pro_agent_avatar(
-                            &self.agent.id,
+                            &format!("{} {} claude", self.agent.id, self.agent.name),
                             light_blue,
                             30.,
                             is_busy,
@@ -1846,7 +1865,7 @@ impl Render for MemoryGraph {
         .w(px(agent_w))
         .h(px(agent_h))
         .aria_expanded(agent_is_open)
-        .shadow_sm()
+        .shadow(pro_card_shadow(p.dark))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
 
         // Determine visible memory slice (up to 6 slots; if > 6, 5 cards + "+N more" cycler)
@@ -2225,7 +2244,7 @@ impl Render for MemoryGraph {
             .h(px(card_h))
             .aria_expanded(open)
             .opacity(op)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 let next = (*inside).then(|| tid_hov.clone());
                 if this.hovered_tool != next {

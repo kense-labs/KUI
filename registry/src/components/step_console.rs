@@ -177,6 +177,26 @@ impl StepLogLine {
 pub struct StepSelected(pub SharedString);
 
 /// Split workbench pairing a vertical execution stepper with a live step log console.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::step_console::{StepConsole, StepStage, StepStatus};
+///
+/// let control = cx.new(|_| {
+///     StepConsole::new(
+///         "pipeline",
+///         "Pipeline execution",
+///         vec![StepStage::new("boot", "Runtime boot", StepStatus::Running)],
+///         vec![],
+///     )
+/// });
+/// # }
+/// ```
 pub struct StepConsole {
     id: ElementId,
     title: SharedString,

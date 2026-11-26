@@ -5,9 +5,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_toast_banner, tr,
+        ProPalette, pro_card_shadow, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_popover_presence, pro_rolling_number,
+        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_toast_banner,
+        tr,
     },
     primitives::{
         family::{PhaseClock, disabled_motion},
@@ -366,15 +367,20 @@ impl RenderOnce for StatSparkCanvas {
                 if kind == StatSparkKind::Bars {
                     let max_v = values.iter().copied().fold(0.0f32, f32::max).max(1e-3);
                     let n = values.len();
-                    let gap = if n > 16 { 2.0 } else { 3.5 };
-                    let bar_w = ((bw - gap * (n.saturating_sub(1) as f32)) / n as f32).max(2.0);
+                    let col_w = bw / n.max(1) as f32;
+                    let bar_w = (col_w * 0.34).clamp(4.0, 12.0);
+                    let step = if n > 1 {
+                        (bw - bar_w) / (n - 1) as f32
+                    } else {
+                        0.0
+                    };
                     let bot_y = f32::from(bounds.bottom());
                     for (i, &v) in values.iter().enumerate() {
-                        let h_px = ((v.max(0.0) / max_v) * (bh - 2.0)).max(2.0);
-                        let x0 = f32::from(bounds.left()) + i as f32 * (bar_w + gap);
+                        let h_px = ((v.max(0.0) / max_v) * (bh - 6.0)).max(2.0);
+                        let x0 = f32::from(bounds.left()) + i as f32 * step;
                         let y0 = bot_y - h_px;
                         let dimmed = hovered_idx.is_some_and(|hi| hi != i);
-                        let alpha = if dimmed { 0.36 } else { 0.88 };
+                        let alpha = if dimmed { 0.36 } else { 0.94 };
                         let r = px(2.5f32.min(bar_w * 0.5).min(h_px * 0.5));
                         window.paint_quad(
                             fill(
@@ -593,6 +599,36 @@ fn build_showcase_cards(range: &str) -> Vec<StatCardItem> {
 }
 
 /// KPI stat card and synchronized 4-card KPI grid (`stat-card`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::stat_card::{
+///     StatCard, StatCardEvent, StatSparkKind, StatSparkSpec,
+/// };
+///
+/// let spend = cx.new(|cx| {
+///     StatCard::single("spend-stat", "Spend", 2_741.0, cx)
+///         .with_format(1_000.0, 1, "$", "k")
+///         .with_change(16.5, "vs last week")
+///         .with_spark(
+///             StatSparkSpec::new(
+///                 StatSparkKind::Area,
+///                 ["Mar 3", "Mar 4", "Mar 5", "Mar 6"],
+///                 vec![412., 455., 398., 470.],
+///             )
+///             .with_format(1.0, 0, "$", ""),
+///         )
+/// });
+/// cx.subscribe(&spend, |_, ev: &StatCardEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct StatCard {
     id: ElementId,
     showcase_mode: bool,
@@ -1168,7 +1204,7 @@ impl StatCard {
             .when_else(
                 hov_amt > 0.25 && press_amt < 0.5,
                 |d| d.shadow_sm(),
-                |d| d.when(!dark, |s| s.shadow_xs()),
+                |d| d.shadow(pro_card_shadow(dark)),
             )
             .flex()
             .flex_col();
@@ -1297,6 +1333,7 @@ impl Render for StatCard {
                 .bg(card_bg)
                 .border_1()
                 .border_color(card_border)
+                .shadow(pro_card_shadow(dark))
                 .child(pro_empty_state::<Self>(
                     ProIcon::UsageChart,
                     tr(cx, "No metric available", "暂无指标数据"),

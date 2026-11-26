@@ -615,6 +615,22 @@ fn provider_for_model(model: &str) -> &'static str {
 }
 
 /// Prompt evaluation dashboard hosted inside [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::evals::{EvalsScreen, EvalsEvent};
+///
+/// let screen = cx.new(|cx| EvalsScreen::new("evals", cx));
+/// cx.subscribe(&screen, |_, event: &EvalsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct EvalsScreen {
     id: ElementId,
     standalone: bool,
@@ -3091,7 +3107,10 @@ impl EvalsScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(body);

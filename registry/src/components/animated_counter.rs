@@ -9,6 +9,19 @@ struct Digit {
     width: Slide,
 }
 /// A host-controlled, formatted value. Values are not announced automatically.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::animated_counter::AnimatedCounter;
+///
+/// let control = cx.new(|_| AnimatedCounter::new(12540.25).with_label("Revenue").with_prefix("$").with_decimals(2));
+/// # }
+/// ```
 pub struct AnimatedCounter {
     value: f64,
     label: SharedString,

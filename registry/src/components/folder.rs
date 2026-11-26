@@ -380,6 +380,22 @@ fn append_prompt_to_thread(
 }
 
 /// Detail screen for an open project folder (`Folders / Detail`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::folder::{FolderScreen, FolderEvent};
+///
+/// let screen = cx.new(|cx| FolderScreen::new("folder", cx));
+/// cx.subscribe(&screen, |_, event: &FolderEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct FolderScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -491,7 +507,7 @@ impl FolderScreen {
             rename_editor: None,
             upload_seq: 0,
             focus: cx.focus_handle(),
-            measured_width: Rc::new(Cell::new(920.)),
+            measured_width: Rc::new(Cell::new(684.)),
             boot_instant: Instant::now(),
             toast: None,
         }
@@ -1189,7 +1205,7 @@ impl FolderScreen {
                 .tab_index(0)
                 .flex_1()
                 .min_w_0()
-                .max_w(px(239.))
+                .overflow_hidden()
                 .flex()
                 .flex_col()
                 .cursor_pointer()
@@ -1218,6 +1234,8 @@ impl FolderScreen {
                 .child(name_el)
                 .child(
                     div()
+                        .w_full()
+                        .min_w_0()
                         .text_size(px(12.))
                         .line_height(px(16.))
                         .text_color(p.muted)
@@ -2004,7 +2022,7 @@ impl FolderScreen {
         let crumbs = div()
             .h(px(48.))
             .flex_none()
-            .pl(px(if main_w < 680. { 50. } else { 16. }))
+            .pl(px(if main_w < 460. { 50. } else { 20. }))
             .pr(px(16.))
             .bg(p.panel)
             .flex()
@@ -2457,12 +2475,12 @@ impl FolderScreen {
         // Files grid / loading / empty
         let cols = if main_w < 460. {
             1usize
-        } else if main_w < 760. {
+        } else if main_w < 580. {
             2usize
         } else {
             4usize
         };
-        let preview_h = if main_w < 600. { 128. } else { 152. };
+        let preview_h = if main_w < 600. { 128. } else { 148. };
 
         let content_body = if self.loading {
             let mut skel_grid = div().mt(px(20.)).flex().flex_col().gap(px(16.));
@@ -2474,7 +2492,7 @@ impl FolderScreen {
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .max_w(px(239.))
+                                .overflow_hidden()
                                 .flex()
                                 .flex_col()
                                 .child(
@@ -2516,7 +2534,7 @@ impl FolderScreen {
                 }
                 if chunk.len() < cols {
                     for _ in chunk.len()..cols {
-                        row = row.child(div().flex_1().min_w_0().max_w(px(239.)));
+                        row = row.child(div().flex_1().min_w_0());
                     }
                 }
                 skel_grid = skel_grid.child(row);
@@ -2554,7 +2572,7 @@ impl FolderScreen {
                 }
                 if chunk.len() < cols {
                     for _ in chunk.len()..cols {
-                        row = row.child(div().flex_1().min_w_0().max_w(px(239.)));
+                        row = row.child(div().flex_1().min_w_0());
                     }
                 }
                 grid = grid.child(row);
@@ -2564,8 +2582,8 @@ impl FolderScreen {
 
         let pad_x = if main_w < 600. {
             16.
-        } else if main_w < 900. {
-            24.
+        } else if main_w < 840. {
+            20.
         } else {
             32.
         };
@@ -2613,7 +2631,10 @@ impl FolderScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(crumbs)
             .child(

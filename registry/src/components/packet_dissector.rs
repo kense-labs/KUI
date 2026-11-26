@@ -173,6 +173,25 @@ impl PacketFrame {
 pub struct FrameSelected(pub SharedString);
 
 /// Split frame list, protocol layer tree, and hex/ASCII wire inspector.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::packet_dissector::{FrameDirection, PacketDissector, PacketFrame};
+///
+/// let control = cx.new(|_| {
+///     PacketDissector::new(
+///         "frames",
+///         "Protocol frames",
+///         vec![PacketFrame::new("1", 1, FrameDirection::Outbound, "HTTP", "GET /health")],
+///     )
+/// });
+/// # }
+/// ```
 pub struct PacketDissector {
     id: ElementId,
     title: SharedString,

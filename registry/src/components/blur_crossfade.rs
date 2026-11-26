@@ -121,6 +121,7 @@ impl BxState {
 ///     .with_duration_ms(420.);
 /// ```
 #[derive(IntoElement)]
+#[must_use]
 pub struct BlurCrossfade {
     id: ElementId,
     content_key: SharedString,

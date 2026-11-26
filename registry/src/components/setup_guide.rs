@@ -7,9 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_fold, pro_icon_btn,
-        pro_progress_ring, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
-        pro_tactile, tr,
+        ProPalette, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
+        pro_icon_btn, pro_progress_ring, pro_skeleton_bar, pro_spring_bar, pro_spring_f32,
+        pro_swap_label, pro_tactile, tr,
     },
     foundation::Theme,
     primitives::{
@@ -521,7 +521,7 @@ impl Render for SetupGuide {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
-                        .shadow_sm()
+                        .shadow(pro_card_shadow(p.dark))
                         .p(px(16.))
                         .flex()
                         .flex_col()
@@ -543,6 +543,7 @@ impl Render for SetupGuide {
                 .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Tasks,
                     tr(cx, "No setup steps", "暂无初始化任务"),
@@ -605,7 +606,7 @@ impl Render for SetupGuide {
                         },
                     )
                     .flex_none()
-                    .shadow_sm(),
+                    .shadow(pro_card_shadow(p.dark)),
                 )
                 .into_any_element();
         }
@@ -1077,7 +1078,7 @@ impl Render for SetupGuide {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .shadow_sm()
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

@@ -62,6 +62,20 @@ fn seek_at(bounds: Bounds<Pixels>, x: Pixels, duration: f32) -> f32 {
         (f32::from(x - bounds.left()) / f32::from(bounds.size.width).max(1.)).clamp(0., 1.);
     fraction * duration.max(0.)
 }
+/// `SpeechPlayer` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::speech_player::SpeechPlayer;
+///
+/// let control = cx.new(|_| SpeechPlayer::new("Read aloud", "A thoughtful interface."));
+/// # }
+/// ```
 pub struct SpeechPlayer {
     label: SharedString,
     text: SharedString,
@@ -765,7 +779,9 @@ impl Render for SpeechPlayer {
                         Tone::Surface,
                         cx,
                     )
-                    .track_focus(self.trigger_focus.as_ref().unwrap())
+                    .when_some(self.trigger_focus.as_ref(), |el, focus| {
+                        el.track_focus(focus)
+                    })
                     .aria_expanded(self.voice_menu)
                     .h(px(32.))
                     .pl(px(8.))
@@ -813,7 +829,7 @@ impl Render for SpeechPlayer {
                 .id("speech-voice-menu")
                 .role(Role::Menu)
                 .aria_label(tr(cx, "Choose voice", "选择声音"))
-                .track_focus(self.menu_focus.as_ref().unwrap())
+                .when_some(self.menu_focus.as_ref(), |el, focus| el.track_focus(focus))
                 .w(px(240.))
                 .p(px(6.))
                 .rounded(r)

@@ -877,6 +877,22 @@ struct ConnectDialogState {
 }
 
 /// SaaS integrations marketplace block with sidebar/chip categories, search, filter menu, and OAuth/API-key connect modal.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::app_directory::{AppDirectoryBlock, AppDirectoryEvent};
+///
+/// let directory = cx.new(|cx| AppDirectoryBlock::new("app-directory", cx));
+/// cx.subscribe(&directory, |_, event: &AppDirectoryEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AppDirectoryBlock {
     id: ElementId,
     focus: FocusHandle,

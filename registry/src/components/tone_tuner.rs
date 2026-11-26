@@ -135,6 +135,20 @@ fn can_apply(
 ) -> bool {
     active == Some(incoming) && revision == requested_revision && requested_draft == current
 }
+/// `ToneTuner` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tone_tuner::ToneTuner;
+///
+/// let control = cx.new(|cx| ToneTuner::new("Reply", "Thanks for your message.", window, cx));
+/// # }
+/// ```
 pub struct ToneTuner {
     label: SharedString,
     recipient: Option<(SharedString, SharedString)>,

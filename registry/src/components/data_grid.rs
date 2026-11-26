@@ -1,7 +1,7 @@
 //! Virtual, editable spreadsheet. Stable backing row indices survive view sorting.
 use crate::primitives::{
     editor::{EditEvent, Editor, EditorScrollRegion, InputMode},
-    family::{Paint, PhaseClock, Slide, disabled_motion},
+    family::{Paint, PhaseClock, Slide, disabled_motion, measure},
     flyout::TriggerBounds,
     glyph::{Glyph, icon},
     nav::*,
@@ -39,18 +39,92 @@ struct GridTracks {
     columns: Vec<Pixels>,
 }
 impl GridTracks {
-    fn new(viewport: Pixels, count: usize, minimum: Pixels) -> Self {
+    fn distribute(total: f32, weights: &[f32]) -> Vec<Pixels> {
+        if weights.is_empty() {
+            return Vec::new();
+        }
+        let sum: f32 = weights.iter().sum();
+        let mut acc = 0f32;
+        let mut prev = 0f32;
+        weights
+            .iter()
+            .enumerate()
+            .map(|(i, w)| {
+                acc += *w;
+                let next = if i + 1 == weights.len() {
+                    total.round()
+                } else if sum > 0. {
+                    (total * acc / sum).round()
+                } else {
+                    (total * (i + 1) as f32 / weights.len() as f32).round()
+                };
+                let span = (next - prev).max(1.);
+                prev = next;
+                px(span)
+            })
+            .collect()
+    }
+
+    fn new(viewport: Pixels, naturals: &[f32], minimum: Pixels) -> Self {
         let gutter = px(32.);
-        let space = f32::from((viewport - gutter).max(minimum * count as f32));
-        let edge = |i: usize| (space * i as f32 / count.max(1) as f32).round();
-        let columns = (0..count).map(|i| px(edge(i + 1) - edge(i))).collect();
+        let count = naturals.len();
+        let avail = f32::from(viewport - gutter).max(1.);
+        if count == 0 {
+            return Self {
+                width: gutter + px(avail.round()),
+                gutter,
+                columns: Vec::new(),
+            };
+        }
+        let min_w = f32::from(minimum);
+        let floor_weights: Vec<f32> = naturals.iter().map(|n| n.max(min_w)).collect();
+        let floor_sum: f32 = floor_weights.iter().sum();
+        let columns = if floor_sum <= avail {
+            Self::distribute(avail, &floor_weights)
+        } else if avail >= 420. {
+            let natural_sum: f32 = naturals.iter().sum();
+            if natural_sum <= avail && avail / count as f32 >= 88. {
+                Self::distribute(avail, naturals)
+            } else {
+                let mut vis = 1usize;
+                for k in 2..=count {
+                    let prefix_sum: f32 = naturals[..k].iter().sum();
+                    if prefix_sum <= avail && avail / k as f32 >= 112. {
+                        vis = k;
+                    }
+                }
+                let mut cols = Self::distribute(avail, &naturals[..vis]);
+                let fallback = min_w.min(avail / vis as f32);
+                for &n in &naturals[vis..] {
+                    cols.push(px(n.max(fallback).round()));
+                }
+                cols
+            }
+        } else {
+            floor_weights.iter().map(|w| px(w.round())).collect()
+        };
+        let total_cols: Pixels = columns.iter().copied().sum();
         Self {
-            width: gutter + px(space.round()),
+            width: gutter + total_cols,
             gutter,
             columns,
         }
     }
 }
+/// `DataGrid` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::data_grid::DataGrid;
+///
+/// let control = cx.new(|cx| DataGrid::new("Renewals", vec!["Account".into(),"Seats".into()], vec![vec!["Northwind".into(),"40".into()]],window,cx));
+/// # }
+/// ```
 pub struct DataGrid {
     visible: Vec<usize>,
     filters: Vec<Entity<Editor>>,
@@ -828,7 +902,21 @@ impl Render for DataGrid {
             fit(w, 680.) - px(2.)
         };
         self.edits.retain(|_, phase| phase.age(cx) < 0.9);
-        let tracks = GridTracks::new(viewport, self.visible.len(), self.min_column_width);
+        let naturals: Vec<f32> = self
+            .visible
+            .iter()
+            .map(|&col| {
+                let head_w = measure(&self.headers[col], 12., w) + 16.;
+                self.data
+                    .iter()
+                    .take(64)
+                    .filter_map(|row| row.get(col))
+                    .map(|cell| measure(cell, 12., w) + 16.)
+                    .fold(head_w, f32::max)
+                    .clamp(76., 220.)
+            })
+            .collect();
+        let tracks = GridTracks::new(viewport, &naturals, self.min_column_width);
         let width = tracks.width;
         let gutter = tracks.gutter;
         // Coordinates are in scroll-content space. Scrolling adds the live
@@ -1078,5 +1166,99 @@ impl Render for DataGrid {
                 .px_2()
                 .py_1(),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DataGrid;
+    use gpui::{
+        AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, TestAppContext,
+        Window, div, px, size,
+    };
+
+    struct Stage(Entity<DataGrid>);
+    impl Render for Stage {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().w(px(522.)).child(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn desktop_stage_fits_first_four_renewal_columns_unclipped() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (_, window) = app.add_window_view(|w, cx| {
+            let headers = [
+                "Account", "Owner", "Region", "Stage", "Seats", "ARR", "Health", "Renews",
+            ]
+            .into_iter()
+            .map(Into::into)
+            .collect();
+            let rows = vec![
+                vec![
+                    "Brightline Freight".into(),
+                    "Marcus Johnson".into(),
+                    "North America".into(),
+                    "Closed won".into(),
+                    "170".into(),
+                    "$40800".into(),
+                    "72%".into(),
+                    "2027-04-01".into(),
+                ],
+                vec![
+                    "Northwind Freight".into(),
+                    "Priya Raman".into(),
+                    "Latin America".into(),
+                    "Negotiation".into(),
+                    "40".into(),
+                    "$9600".into(),
+                    "91%".into(),
+                    "2027-09-12".into(),
+                ],
+            ];
+            Stage(cx.new(|cx| {
+                DataGrid::new("Renewals", headers, rows, w, cx).with_min_column_width(px(146.))
+            }))
+        });
+        window.simulate_resize(size(px(800.), px(600.)));
+        for _ in 0..3 {
+            window.update(|w, cx| {
+                w.simulate_next_frame(cx);
+                w.refresh();
+            });
+            window.run_until_parked();
+        }
+        let stage_col = window.debug_bounds("Stage").expect("Stage header");
+        let grid_left = window
+            .debug_bounds("grid-number-heading")
+            .expect("gutter")
+            .left();
+        assert!(
+            stage_col.right() - grid_left <= px(520.5),
+            "Stage column right edge {:?} should fit inside 520px viewport from {:?}",
+            stage_col.right(),
+            grid_left
+        );
+        for (selector, sample) in [
+            ("grid-cell-0-0", "Brightline Freight"),
+            ("grid-cell-0-1", "Marcus Johnson"),
+            ("grid-cell-0-2", "North America"),
+            ("grid-cell-0-3", "Closed won"),
+            ("grid-cell-1-3", "Negotiation"),
+        ] {
+            let cell = window.debug_bounds(selector).expect("cell");
+            let text_w = window.update(|w, _| {
+                let run = w.text_style().to_run(sample.len());
+                w.text_system()
+                    .shape_line(sample.into(), px(12.), &[run], None)
+                    .width
+            });
+            assert!(
+                text_w + px(9.) <= cell.size.width,
+                "{sample} ({text_w:?}) should fit unclipped inside {selector} ({:?})",
+                cell.size.width
+            );
+        }
     }
 }

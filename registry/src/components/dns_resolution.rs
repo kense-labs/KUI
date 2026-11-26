@@ -271,6 +271,25 @@ fn geometry(narrow: bool) -> &'static Geometry {
 type Refine = Box<dyn Fn(Div) -> Div>;
 type Visibility = Box<dyn Fn(&App) -> bool>;
 
+/// `DnsResolution` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::dns_resolution::{DnsResolution, DnsResolutionOptions};
+///
+/// let options = DnsResolutionOptions {
+///     domain: "app.acme.dev".into(),
+///     address: "203.0.113.24".into(),
+///     ..Default::default()
+/// };
+/// let control = cx.new(|cx| DnsResolution::new(options, cx));
+/// # }
+/// ```
 pub struct DnsResolution {
     options: DnsResolutionOptions,
     elapsed: f32,

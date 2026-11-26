@@ -26,6 +26,20 @@ impl ChipMotion {
 
 #[derive(Clone, Debug)]
 pub struct TagsChanged(pub Vec<SharedString>);
+/// `TagInput` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::tag_input::TagInput;
+///
+/// let control = cx.new(|cx| TagInput::new("Tags", window, cx).with_tags(&["release", "web"]));
+/// # }
+/// ```
 pub struct TagInput {
     label: SharedString,
     values: Vec<SharedString>,

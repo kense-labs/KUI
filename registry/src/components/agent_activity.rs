@@ -565,6 +565,22 @@ fn lerp_hsla(a: Hsla, b: Hsla, t: f32) -> Hsla {
 }
 
 /// Pro Agent Activity screen with day-grouped step rows, search/filter bar, and `Step` inspector.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_activity::{AgentActivityScreen, AgentActivityEvent};
+///
+/// let screen = cx.new(|cx| AgentActivityScreen::new("agent-activity", cx));
+/// cx.subscribe(&screen, |_, event: &AgentActivityEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentActivityScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -1847,7 +1863,10 @@ impl AgentActivityScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(

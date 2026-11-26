@@ -6,10 +6,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_check_draw, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_popover_presence,
-        pro_rolling_number, pro_selection_sensor, pro_skeleton_bar, pro_swap_label, pro_tactile,
-        pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_popover_presence, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -371,6 +371,26 @@ fn addon_line_pool() -> [(&'static str, f64, f64); 4] {
 }
 
 /// Stacked-paper `Invoice` and `Credit note` billing block with spring sheet swap and live rolling totals.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::invoice_credit::{InvoiceCreditBlock, InvoiceCreditEvent};
+///
+/// let billing = cx.new(|cx| {
+///     InvoiceCreditBlock::new("invoice-credit", cx)
+///         .with_invoice_no("INV-2041")
+///         .with_credit_no("CN-0117")
+/// });
+/// cx.subscribe(&billing, |_, event: &InvoiceCreditEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct InvoiceCreditBlock {
     id: ElementId,
     focus: FocusHandle,
@@ -2024,6 +2044,7 @@ impl InvoiceCreditBlock {
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
+                    .shadow(pro_card_shadow(p.dark))
                     .p(px(32.))
                     .flex()
                     .flex_col()
@@ -2281,7 +2302,7 @@ impl Render for InvoiceCreditBlock {
                 .bg(p.card)
                 .border_1()
                 .border_color(p.line_strong)
-                .shadow_md()
+                .shadow(pro_card_shadow(p.dark))
                 .px(px(pad_x))
                 .py(px(pad_y))
                 .child(div().opacity(content_alpha).child(body))

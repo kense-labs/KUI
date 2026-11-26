@@ -696,9 +696,13 @@ fn render_run_app_tile(app: &str, side: f32, cx: &App) -> AnyElement {
             .size(px(side))
             .flex_none()
             .rounded(px(radius))
-            .bg(rgb(0xffffff))
+            .bg(p.logo_tile)
             .border_1()
-            .border_color(p.line_strong)
+            .border_color(if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                p.line_strong
+            })
             .flex()
             .items_center()
             .justify_center()
@@ -722,6 +726,22 @@ fn render_file_chip_glyph(kind: RunFileKind, side: f32, p: &ProPalette) -> AnyEl
 }
 
 /// Autonomous agent run detail screen with plan progress, activity trace, approvals, and diff work area.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_run::{AgentRunScreen, AgentRunEvent};
+///
+/// let screen = cx.new(|cx| AgentRunScreen::new("agent-run", cx));
+/// cx.subscribe(&screen, |_, event: &AgentRunEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentRunScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -813,7 +833,7 @@ impl AgentRunScreen {
             started_at: Instant::now(),
             elapsed_secs_frozen: None,
             last_advanced_stage: 0,
-            measured_width: Rc::new(Cell::new(760.)),
+            measured_width: Rc::new(Cell::new(368.)),
         }
     }
 
@@ -866,7 +886,7 @@ impl AgentRunScreen {
                 .with_active("Runs")
                 .with_side_cards(true)
                 .with_work_area(true, true)
-                .with_panel_width(356.);
+                .with_panel_width(316.);
             s.bind_page(host, shell_cx, |screen, w, cx| {
                 screen.render_page(w, cx).into_any_element()
             });
@@ -2618,7 +2638,8 @@ impl AgentRunScreen {
 
         let measure_cell = self.measured_width.clone();
         let main_w = measure_cell.get();
-        let compact = main_w < 600.;
+        let compact = main_w < 310.;
+        let narrow_mid = main_w < 480.;
         let wide_time = main_w >= 860.;
         let panel_open = self.standalone || self.shell.read(cx).is_panel_open();
 
@@ -2653,7 +2674,7 @@ impl AgentRunScreen {
 
         let top_bar = div()
             .h(px(48.))
-            .pl(px(if compact { 48. } else { 20. }))
+            .pl(px(if self.standalone && compact { 48. } else { 16. }))
             .pr(px(12.))
             .flex_none()
             .flex()
@@ -3050,12 +3071,19 @@ impl AgentRunScreen {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.))
-                                    .child(div().text_size(px(12.)).text_color(p.muted).child(*k))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .text_color(p.muted)
+                                            .whitespace_nowrap()
+                                            .child(*k),
+                                    )
                                     .child(
                                         div()
                                             .text_size(px(15.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
+                                            .whitespace_nowrap()
                                             .child(v.clone()),
                                     )
                             })),
@@ -3070,12 +3098,19 @@ impl AgentRunScreen {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.))
-                                    .child(div().text_size(px(12.)).text_color(p.muted).child(*k))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .text_color(p.muted)
+                                            .whitespace_nowrap()
+                                            .child(*k),
+                                    )
                                     .child(
                                         div()
                                             .text_size(px(15.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
+                                            .whitespace_nowrap()
                                             .child(v.clone()),
                                     )
                             })),
@@ -3084,21 +3119,28 @@ impl AgentRunScreen {
                 div()
                     .mt(px(14.))
                     .flex()
-                    .gap(px(12.))
+                    .justify_between()
+                    .gap(px(if narrow_mid { 8. } else { 12. }))
                     .children(figures_data.iter().map(|(k, v)| {
                         div()
-                            .flex_1()
-                            .min_w_0()
+                            .when(!narrow_mid, |d| d.flex_1().min_w_0())
+                            .when(narrow_mid, |d| d.flex_shrink_0())
                             .flex()
                             .flex_col()
                             .gap(px(2.))
-                            .child(div().text_size(px(12.)).text_color(p.muted).child(*k))
                             .child(
                                 div()
-                                    .text_size(px(15.))
+                                    .text_size(px(if narrow_mid { 11.5 } else { 12. }))
+                                    .text_color(p.muted)
+                                    .whitespace_nowrap()
+                                    .child(*k),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(if narrow_mid { 14. } else { 15. }))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.ink)
-                                    .truncate()
+                                    .whitespace_nowrap()
                                     .child(v.clone()),
                             )
                     }))
@@ -3106,20 +3148,22 @@ impl AgentRunScreen {
 
             let hero = div()
                 .pt(px(4.))
-                .px(px(4.))
-                .pb(px(18.))
+                .px(px(if narrow_mid { 2. } else { 4. }))
+                .pb(px(16.))
                 .flex()
                 .flex_col()
                 .child(
                     div()
+                        .min_w_0()
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .text_size(px(12.5))
+                        .text_size(px(if narrow_mid { 12. } else { 12.5 }))
                         .text_color(p.muted)
                         .child(
                             div()
                                 .size(px(22.))
+                                .flex_none()
                                 .rounded(px(7.))
                                 .bg(p.chip)
                                 .flex()
@@ -3127,20 +3171,20 @@ impl AgentRunScreen {
                                 .justify_center()
                                 .child(pro_svg("0 0 24 24", BRAIN_AGENT_SVG, 14., p.ink)),
                         )
-                        .child(self.agent.clone())
-                        .child(div().text_color(p.faint).child("·"))
-                        .child(format!(
+                        .child(div().flex_none().child(self.agent.clone()))
+                        .child(div().flex_none().text_color(p.faint).child("·"))
+                        .child(div().min_w_0().truncate().child(format!(
                             "{} {} {}",
                             tr(cx, "started by", "由"),
                             self.user_name,
                             tr(cx, "at 9:10 AM", "于 9:10 发起")
-                        )),
+                        ))),
                 )
                 .child(
                     div()
                         .mt(px(10.))
-                        .text_size(px(22.))
-                        .line_height(px(30.))
+                        .text_size(px(if narrow_mid { 18.5 } else { 22. }))
+                        .line_height(px(if narrow_mid { 24. } else { 30. }))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.strong)
                         .child(self.title.clone()),
@@ -3776,7 +3820,10 @@ impl AgentRunScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(top_bar)
             .child(
@@ -3785,8 +3832,22 @@ impl AgentRunScreen {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .pt(px(if compact { 12. } else { 20. }))
-                    .px(px(if compact { 12. } else { 32. }))
+                    .pt(px(if compact {
+                        12.
+                    } else if narrow_mid {
+                        16.
+                    } else {
+                        20.
+                    }))
+                    .px(px(if compact {
+                        12.
+                    } else if narrow_mid {
+                        16.
+                    } else if main_w < 680. {
+                        22.
+                    } else {
+                        32.
+                    }))
                     .pb(px(if compact { 24. } else { 40. }))
                     .child(body_el),
             )

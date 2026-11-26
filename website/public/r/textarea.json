@@ -18,7 +18,7 @@
   "files": [
     {
       "path": "components/textarea.rs",
-      "content": "//! A resizable, multiline text field.\nuse crate::primitives::{\n    editor::InputMode,\n    field::{Field, FieldStyle},\n};\n\n/// Defines the input behavior of this field.\npub struct TextareaStyle;\nimpl FieldStyle for TextareaStyle {\n    const MODE: InputMode = InputMode::Multi;\n}\n/// A resizable, multiline text field.\npub type Textarea = Field<TextareaStyle>;\n"
+      "content": "//! A resizable, multiline text field.\nuse crate::primitives::{\n    editor::InputMode,\n    field::{Field, FieldStyle},\n};\n\n/// Defines the input behavior of this field.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::textarea::Textarea;\n///\n/// let control = cx.new(|cx| Textarea::new(\"notes\", \"Project note\", window, cx).with_value(\"Ready for review.\", window, cx));\n/// # }\n/// ```\npub struct TextareaStyle;\nimpl FieldStyle for TextareaStyle {\n    const MODE: InputMode = InputMode::Multi;\n}\n/// A resizable, multiline text field.\npub type Textarea = Field<TextareaStyle>;\n"
     },
     {
       "path": "primitives/control.rs",

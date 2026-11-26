@@ -219,6 +219,28 @@ impl Geometry {
 }
 
 /// Two rotating rings with a filter strip and an integration detail card.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::orbit_logos::{OrbitLogo, OrbitLogos};
+///
+/// let logos = vec![
+///     OrbitLogo::new("issues", "Issues")
+///         .with_category("Development")
+///         .with_description("Sync issue updates with your workspace."),
+///     OrbitLogo::new("messages", "Messages")
+///         .with_category("Communication")
+///         .with_description("Send status updates to your team.")
+///         .with_connected(true),
+/// ];
+/// let orbit = cx.new(|cx| OrbitLogos::new(logos, cx).with_host_connections());
+/// # }
+/// ```
 pub struct OrbitLogos {
     id: ElementId,
     logos: Vec<OrbitLogo>,

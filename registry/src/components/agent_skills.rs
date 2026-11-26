@@ -617,6 +617,22 @@ struct InstallAnim {
 }
 
 /// Pro Agent Skills screen with category chips, installed/discover grid, 14-day run bars, and `New skill` modal.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_skills::{AgentSkillsScreen, AgentSkillsEvent};
+///
+/// let screen = cx.new(|cx| AgentSkillsScreen::new("agent-skills", cx));
+/// cx.subscribe(&screen, |_, event: &AgentSkillsEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentSkillsScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -3054,7 +3070,10 @@ impl AgentSkillsScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(

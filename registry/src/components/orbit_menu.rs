@@ -121,6 +121,36 @@ struct Press {
 }
 
 /// A circular trigger that opens a short arc of actions.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::orbit_menu::{OrbitAction, OrbitIcon, OrbitInvoked, OrbitMenu, OrbitTone};
+/// use kui::primitives::glyph::Glyph;
+///
+/// let menu = cx.new(|cx| {
+///     OrbitMenu::new(
+///         vec![
+///             OrbitAction::new("pin", "Pin", Glyph::Pin).with_done("Pinned"),
+///             OrbitAction::new("share", "Share", OrbitIcon::Share),
+///             OrbitAction::new("remove", "Remove", Glyph::Trash).with_tone(OrbitTone::Danger),
+///         ],
+///         window,
+///         cx,
+///     )
+///     .with_label("Note actions")
+/// });
+/// cx.subscribe(&menu, |_, event: &OrbitInvoked, _| {
+///     // Dispatch event.0 to the host's action handler.
+///     let action = &event.0;
+///     debug_assert!(matches!(action.as_ref(), "pin" | "share" | "remove"));
+/// }).detach();
+/// # }
+/// ```
 pub struct OrbitMenu {
     id: SharedString,
     slots: Vec<Slot>,

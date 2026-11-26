@@ -130,6 +130,24 @@ struct MovingEntry {
     value: f32,
 }
 /// An interactive bar chart race with a playable, scrubbable timeline.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::race_bar_chart::{RaceBarChart, RaceEntry, RaceFrame};
+///
+/// let entries = vec![RaceEntry::new("first", "First"), RaceEntry::new("second", "Second")];
+/// let frames = vec![
+///     RaceFrame::new("Q1", vec![("first".into(), 68.0), ("second".into(), 32.0)]),
+///     RaceFrame::new("Q2", vec![("first".into(), 54.0), ("second".into(), 72.0)]),
+/// ];
+/// let control = cx.new(|_| RaceBarChart::new("Values", entries).with_frames(frames));
+/// # }
+/// ```
 pub struct RaceBarChart {
     label: SharedString,
     meta: Option<SharedString>,
@@ -779,6 +797,7 @@ impl Render for RaceBarChart {
                 }
             }
         }
+        let dark = p.panel.l < 0.5;
         for i in paint_order {
             let item = &self.data[i];
             let (rank, row_shown, value) = rows[i];
@@ -786,11 +805,20 @@ impl Render for RaceBarChart {
             let dim = self.selected.is_some() && !is_selected;
             let highlighted = self.highlight.as_ref() == Some(&item.id);
             let tone = self.group_tone(item);
+            let bar_tone = if dark {
+                tone.blend(hsla(0., 0., 1., 0.16))
+            } else {
+                tone
+            };
             let fraction = (value / axis_max).clamp(0., 1.);
             let bar_px = (fraction * plot_w).max(2.);
-            let wash = p
-                .panel
-                .blend(tone.opacity(if is_selected { 0.6 } else { 0.4 }));
+            let wash = p.panel.blend(bar_tone.opacity(if is_selected {
+                if dark { 0.68 } else { 0.6 }
+            } else if dark {
+                0.50
+            } else {
+                0.4
+            }));
             let value_x = bar_left + bar_px + VALUE_GAP;
             let label_inside = narrow;
             let place = order.iter().position(|&o| o == i).unwrap_or(0) + 1;
@@ -833,7 +861,7 @@ impl Render for RaceBarChart {
                                 } else {
                                     FontWeight::NORMAL
                                 })
-                                .child(item.label.clone()),
+                                .child(div().min_w_0().truncate().child(item.label.clone())),
                         )
                     })
                     .child(
@@ -855,7 +883,7 @@ impl Render for RaceBarChart {
                                     .top_0()
                                     .bottom_0()
                                     .w(px(3.))
-                                    .bg(tone),
+                                    .bg(bar_tone),
                             )
                             .when(label_inside, |bar| {
                                 bar.child(
@@ -871,7 +899,9 @@ impl Render for RaceBarChart {
                                         .text_size(px(13.))
                                         .line_height(px(BAR_H))
                                         .text_color(p.ink)
-                                        .child(item.label.clone()),
+                                        .child(
+                                            div().min_w_0().truncate().child(item.label.clone()),
+                                        ),
                                 )
                             }),
                     )
@@ -889,10 +919,11 @@ impl Render for RaceBarChart {
                             .items_center()
                             .text_size(px(13.))
                             .line_height(px(ROW_H))
+                            .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
                             .text_color(if highlighted {
                                 p.ink
                             } else {
-                                p.ink.opacity(0.9)
+                                p.ink.opacity(0.92)
                             })
                             .font_weight(if highlighted {
                                 FontWeight::MEDIUM
@@ -917,7 +948,7 @@ impl Render for RaceBarChart {
                                 .flex()
                                 .flex_col()
                                 .gap(px(2.))
-                                .rounded(px(14.))
+                                .rounded(crate::foundation::surface_radius(cx))
                                 .border_1()
                                 .border_color(p.line)
                                 .bg(p.tray)
@@ -959,6 +990,11 @@ impl Render for RaceBarChart {
             row().flex_wrap().gap_x(px(16.)).gap_y(px(6.)).children(
                 self.groups.iter().enumerate().map(|(k, (_, label))| {
                     let tone: Hsla = rgb(SERIES[k % SERIES.len()]).into();
+                    let swatch_tone = if dark {
+                        tone.blend(hsla(0., 0., 1., 0.16))
+                    } else {
+                        tone
+                    };
                     row()
                         .id(("race-legend", k))
                         .items_center()
@@ -973,7 +1009,11 @@ impl Render for RaceBarChart {
                                 .overflow_hidden()
                                 .rounded_tr(px(3.))
                                 .rounded_br(px(3.))
-                                .bg(p.panel.blend(tone.opacity(0.4)))
+                                .bg(p.panel.blend(swatch_tone.opacity(if dark {
+                                    0.50
+                                } else {
+                                    0.4
+                                })))
                                 .child(
                                     div()
                                         .absolute()
@@ -981,7 +1021,7 @@ impl Render for RaceBarChart {
                                         .top_0()
                                         .bottom_0()
                                         .w(px(2.))
-                                        .bg(tone),
+                                        .bg(swatch_tone),
                                 ),
                         )
                         .child(label.clone())
@@ -1155,9 +1195,17 @@ impl Render for RaceBarChart {
                         .ml(px(-8.))
                         .size(px(16.))
                         .rounded_full()
-                        .bg(p.tray)
+                        .bg(if dark {
+                            hsla(0., 0., 0.90, 1.)
+                        } else {
+                            p.panel
+                        })
                         .border_1()
-                        .border_color(p.line)
+                        .border_color(if dark {
+                            black().opacity(0.35)
+                        } else {
+                            p.secondary.opacity(0.35)
+                        })
                         .shadow_sm(),
                 )
                 .child(touch);

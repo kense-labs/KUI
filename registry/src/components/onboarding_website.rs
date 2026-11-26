@@ -266,6 +266,22 @@ impl ObwTokens {
 }
 
 /// First-step website and knowledge-domain wizard screen with live dashboard preview.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::onboarding_website::{OnboardingWebsiteScreen, OnboardingWebsiteEvent};
+///
+/// let screen = cx.new(|cx| OnboardingWebsiteScreen::new("onboarding-website", cx));
+/// cx.subscribe(&screen, |_, event: &OnboardingWebsiteEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct OnboardingWebsiteScreen {
     id: ElementId,
     focus: FocusHandle,

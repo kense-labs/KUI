@@ -3,6 +3,23 @@
 //! Shapes text with GPUI's native font engine so kerning, weight, and baseline match
 //! surrounding headline copy, then paints clipped liquid-gradient slices across the
 //! glyphs and wipes color in from left to right on first view.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! # #[allow(unused_variables, unused_imports)]
+//! # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+//! # use gpui::prelude::*;
+//! use gpui::{FontWeight, prelude::*, px};
+//! use kui::components::gradient_text::GradientText;
+//!
+//! let payoff = GradientText::new("hero-payoff", "feel.")
+//!     .with_font_size(px(56.))
+//!     .with_font_weight(FontWeight::SEMIBOLD)
+//!     .with_speed(8.0)
+//!     .with_sweep(true);
+//! # }
+//! ```
 
 use crate::{
     components::pro_chrome::{ProBtnStyle, pro_btn},
@@ -248,6 +265,7 @@ impl ScrubSpringState {
 ///     .with_speed(8.0)
 ///     .with_sweep(true);
 /// ```
+#[must_use]
 #[derive(IntoElement)]
 pub struct GradientText {
     id: ElementId,

@@ -26,6 +26,25 @@ pub struct ThemeChange {
 pub struct ThemeIconIntent(pub ThemeMode);
 impl Global for ThemeIconIntent {}
 
+/// `ThemeSwitch` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::theme_switch::ThemeSwitch;
+///
+/// let control = cx.new(|_| ThemeSwitch::new("appearance"));
+/// use kui::components::theme_switch::ThemeChange;
+/// cx.subscribe(&control, |_control, request: &ThemeChange, cx| {
+///     kui::foundation::Theme::global_mut(cx).set_mode(request.next);
+///     cx.refresh_windows();
+/// }).detach();
+/// # }
+/// ```
 pub struct ThemeSwitch {
     id: ElementId,
     mode: Transition,

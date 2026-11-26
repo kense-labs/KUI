@@ -1,6 +1,22 @@
 //! A segmented group with shared highlighting.
 use crate::primitives::strip::{Activated, Layout, Segment, Strip, StripControl, draw};
 use gpui::{prelude::*, *};
+/// `ButtonGroup` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::button_group::ButtonGroup;
+/// use kui::primitives::glyph::Glyph;
+/// use kui::primitives::strip::{Segment};
+///
+/// let control = cx.new(|cx| ButtonGroup::new("editor", vec![Segment::new("save", "Save", Some(Glyph::Save), 93.), Segment::new("preview", "Preview", Some(Glyph::Eye), 104.)], cx));
+/// # }
+/// ```
 pub struct ButtonGroup {
     strip: Strip,
 }

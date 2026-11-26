@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_agent_avatar, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state,
-        pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar, pro_spring_f32,
-        pro_tactile, tr,
+        ProPalette, pro_agent_avatar, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid,
+        pro_empty_state, pro_fold, pro_rolling_number, pro_shimmer_text, pro_skeleton_bar,
+        pro_spring_f32, pro_tactile, tr,
     },
     primitives::{
         family::disabled_motion,
@@ -357,6 +357,37 @@ fn format_tok(n: u64) -> String {
 }
 
 /// Compact multi-model reasoning breakdown card with cross-linked highlighting and collapsible traces.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::reasoning_summary::{
+///     EffortLevel, ReasonKind, ReasonModel, ReasonStep, ReasoningSummary, ReasoningSummaryEvent,
+/// };
+///
+/// let summary = cx.new(|cx| {
+///     ReasoningSummary::new("answer-reasoning", cx)
+///         .with_steps(vec![
+///             ReasonStep::new("s1", ReasonKind::Search, "Searched API docs for 429 limits", 1_800).with_model("opus"),
+///             ReasonStep::new("s2", ReasonKind::Read, "Compared token bucket headers", 2_100).with_model("grok"),
+///             ReasonStep::new("s3", ReasonKind::Plan, "Designed adaptive backoff policy", 2_300).with_model("gpt"),
+///             ReasonStep::new("s4", ReasonKind::Verify, "Verifying against sandbox burst", 1_900).with_model("gpt").with_running(true),
+///         ])
+///         .with_models(vec![
+///             ReasonModel::new("opus", "Claude Opus 4.6", "claude", "Anthropic").with_effort(EffortLevel::Medium).with_cost(0.086),
+///             ReasonModel::new("grok", "Grok 3", "xai", "xAI").with_effort(EffortLevel::High).with_cost(0.064),
+///             ReasonModel::new("gpt", "GPT-5", "openai", "OpenAI").with_effort(EffortLevel::Max).with_cost(0.142),
+///         ])
+/// });
+/// cx.subscribe(&summary, |_, ev: &ReasoningSummaryEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ReasoningSummary {
     id: ElementId,
     agent_seed: SharedString,
@@ -384,7 +415,7 @@ impl ReasoningSummary {
             .detach();
         Self {
             id: id.into(),
-            agent_seed: SharedString::from("kense-reasoner"),
+            agent_seed: SharedString::from("claude"),
             steps: default_reason_steps(),
             models: default_reason_models(),
             sources: default_reason_sources(),
@@ -401,7 +432,7 @@ impl ReasoningSummary {
         }
     }
 
-    /// Set the deterministic seed used for the 3x3 agent pixel mark.
+    /// Set the model or agent seed used for the header brand mark.
     pub fn with_agent_seed(mut self, seed: impl Into<SharedString>) -> Self {
         self.agent_seed = seed.into();
         self
@@ -544,7 +575,7 @@ impl ReasoningSummary {
 }
 
 fn model_logo_tile(icon: &str, name: &str, side: f32, p: &ProPalette, cx: &App) -> AnyElement {
-    let bg: Hsla = if p.dark { rgb(0x232327).into() } else { p.card };
+    let bg: Hsla = if p.dark { p.logo_tile } else { p.card };
     let art_sz = (side * 0.60).round();
     let content = if let Some(art) = pro_app_artwork(icon, art_sz, cx) {
         art
@@ -578,7 +609,7 @@ fn model_logo_tile(icon: &str, name: &str, side: f32, p: &ProPalette, cx: &App) 
 impl Render for ReasoningSummary {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
-        let reduced = disabled_motion(cx);
+        let reduced = disabled_motion(cx) || crate::foundation::Theme::global(cx).reduced_motion;
         let elapsed_s = self.started_at.elapsed().as_secs_f32();
         let elapsed_ms = elapsed_s * 1_000.0;
         let card_bg: Hsla = if p.dark {
@@ -606,6 +637,7 @@ impl Render for ReasoningSummary {
                 .bg(card_bg)
                 .border_1()
                 .border_color(card_border)
+                .shadow(pro_card_shadow(p.dark))
                 .flex()
                 .flex_col()
                 .gap(px(12.))
@@ -625,6 +657,7 @@ impl Render for ReasoningSummary {
                 .bg(card_bg)
                 .border_1()
                 .border_color(card_border)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Memory,
                     tr(cx, "No reasoning steps recorded", "暂无推理记录"),
@@ -689,7 +722,12 @@ impl Render for ReasoningSummary {
             }
         };
 
-        // Header: twinkling pixel mark + status label + total clock
+        // Header: brand mark + status label + total clock
+        let head_seed = if self.agent_seed.is_empty() {
+            "claude"
+        } else {
+            self.agent_seed.as_ref()
+        };
         let head_label = if is_live {
             pro_shimmer_text(
                 pro_eid(&self.id, "head-shim"),
@@ -698,7 +736,7 @@ impl Render for ReasoningSummary {
                 p.strong,
                 13.0,
                 FontWeight::NORMAL,
-                true,
+                !reduced,
             )
         } else {
             div()
@@ -738,12 +776,7 @@ impl Render for ReasoningSummary {
                     .gap(px(7.))
                     .min_w_0()
                     .child(pro_agent_avatar(
-                        self.agent_seed.as_ref(),
-                        p.blue,
-                        18.0,
-                        is_live,
-                        elapsed_ms,
-                        cx,
+                        head_seed, p.blue, 18.0, is_live, elapsed_ms, cx,
                     ))
                     .child(head_label),
             )
@@ -1427,7 +1460,7 @@ impl Render for ReasoningSummary {
                             p.strong,
                             12.0,
                             FontWeight::NORMAL,
-                            true,
+                            !reduced,
                         )
                     } else {
                         div()
@@ -1518,6 +1551,7 @@ impl Render for ReasoningSummary {
         div()
             .id(self.id.clone())
             .w_full()
+            .py(px(12.))
             .flex()
             .justify_center()
             .child(
@@ -1528,7 +1562,7 @@ impl Render for ReasoningSummary {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .when(!p.dark, |d| d.shadow_sm())
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

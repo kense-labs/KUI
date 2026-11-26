@@ -11,6 +11,20 @@ pub enum CardEvent {
     Open,
     Saved(bool),
 }
+/// `Card` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::card::Card;
+///
+/// let control = cx.new(|_| Card::new("Lobby lounge", "A quiet space by the window.").with_byline("Updated today"));
+/// # }
+/// ```
 pub struct Card {
     heading: SharedString,
     description: SharedString,

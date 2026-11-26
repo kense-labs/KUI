@@ -6,6 +6,20 @@ use crate::primitives::{
     nav::Content,
 };
 use gpui::{prelude::*, *};
+/// `ScrollArea` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::scroll_area::ScrollArea;
+///
+/// let control = cx.new(|_| ScrollArea::new(80., Box::new(|_, _| gpui::div().flex().flex_col().children((1..20).map(|n| gpui::div().child(n.to_string()))).into_any_element())));
+/// # }
+/// ```
 pub struct ScrollArea {
     body: Content,
     height: f32,

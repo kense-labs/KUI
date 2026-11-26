@@ -140,6 +140,25 @@ struct WheelRun {
 }
 
 /// One state model and GPU-rendered rail for native windows and embedded previews.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::cover_flow::{CoverFlow, CoverFlowItem};
+///
+/// let items = vec![
+///     CoverFlowItem::new("ridge", "Ridge Loop", "ridge.jpg".to_owned())
+///         .with_subtitle("Coastal Range")
+///         .with_meta("8 km"),
+///     CoverFlowItem::new("lake", "Quiet Lake", "lake.jpg".to_owned()),
+/// ];
+/// let rail = cx.new(|cx| CoverFlow::new("Autumn hikes", items, cx));
+/// # }
+/// ```
 pub struct CoverFlow<T: 'static = ()> {
     label: SharedString,
     items: Vec<CoverFlowItem<T>>,

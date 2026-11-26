@@ -428,6 +428,22 @@ fn filter_and_sort_templates(
 }
 
 /// Workspace folder overview and template library screen (`Folders / Overview`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::files::{FilesScreen, FilesEvent};
+///
+/// let screen = cx.new(|cx| FilesScreen::new("files", cx));
+/// cx.subscribe(&screen, |_, event: &FilesEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct FilesScreen {
     id: ElementId,
     shell: Entity<AppShell>,
@@ -528,7 +544,7 @@ impl FilesScreen {
             quick_look: None,
             created_seq: 0,
             focus: cx.focus_handle(),
-            measured_width: Rc::new(Cell::new(920.)),
+            measured_width: Rc::new(Cell::new(684.)),
             boot_instant: Instant::now(),
             toast: None,
         }
@@ -1226,9 +1242,10 @@ impl FilesScreen {
         let ed_for_clear = editor.clone();
         let box_el_id: ElementId = box_id.into();
         let clear_id: ElementId = (box_el_id.clone(), "clear").into();
+        let compact_search = self.measured_width.get() < 780.;
         div()
             .id(box_el_id)
-            .w(px(172.))
+            .w(px(if compact_search { 136. } else { 172. }))
             .h(px(28.))
             .px(px(8.))
             .rounded(px(6.))
@@ -1517,9 +1534,9 @@ impl FilesScreen {
             );
 
         // Section body
-        let cols = if !is_grid || main_w < 480. {
+        let cols = if !is_grid || main_w < 460. {
             1usize
-        } else if main_w < 760. {
+        } else if main_w < 580. {
             2usize
         } else {
             4usize
@@ -1734,6 +1751,7 @@ impl FilesScreen {
         let hover_border = if is_selected { p.focus } else { p.line_strong };
         let focus_c = p.focus;
 
+        let compact_card = self.measured_width.get() < 820.;
         activate(
             div()
                 .id(pro_eid(&self.id, format!("fcard-{fid}")))
@@ -1742,9 +1760,10 @@ impl FilesScreen {
                 .tab_index(0)
                 .flex_1()
                 .min_w_0()
+                .overflow_hidden()
                 .h(px(56.))
-                .pl(px(12.))
-                .pr(px(14.))
+                .pl(px(if compact_card { 10. } else { 12. }))
+                .pr(px(if compact_card { 11. } else { 14. }))
                 .rounded(px(10.))
                 .bg(p.card)
                 .border_1()
@@ -1753,31 +1772,38 @@ impl FilesScreen {
                 .focus_visible(move |s| s.border_color(focus_c))
                 .flex()
                 .items_center()
-                .gap(px(12.))
+                .gap(px(if compact_card { 9. } else { 12. }))
                 .cursor_pointer()
-                .child(pro_svg(
+                .child(div().flex_none().child(pro_svg(
                     "0 0 67 67",
                     FOLDER_MARK_SVG,
-                    26.,
+                    if compact_card { 24. } else { 26. },
                     rgb(0xffffff).into(),
-                ))
+                )))
                 .child(
                     div()
                         .flex_1()
                         .min_w_0()
+                        .overflow_hidden()
                         .flex()
                         .flex_col()
                         .child(title_el)
                         .child(
                             div()
+                                .min_w_0()
+                                .overflow_hidden()
                                 .flex()
                                 .items_center()
                                 .gap(px(4.))
                                 .text_size(px(12.))
                                 .line_height(px(16.))
                                 .text_color(p.muted)
-                                .child(pro_icon(folder.access.icon(), 12., p.faint))
-                                .child(div().truncate().child(meta_txt)),
+                                .child(div().flex_none().child(pro_icon(
+                                    folder.access.icon(),
+                                    12.,
+                                    p.faint,
+                                )))
+                                .child(div().flex_1().min_w_0().truncate().child(meta_txt)),
                         ),
                 ),
             cx,
@@ -2348,12 +2374,12 @@ impl FilesScreen {
 
         let cols = if main_w < 460. {
             1usize
-        } else if main_w < 760. {
+        } else if main_w < 580. {
             2usize
         } else {
             4usize
         };
-        let preview_h = if main_w < 600. { 128. } else { 152. };
+        let preview_h = if main_w < 600. { 128. } else { 148. };
 
         let body = if self.loading {
             let mut skel_grid = div().mt(px(16.)).flex().flex_col().gap(px(16.));
@@ -2364,7 +2390,7 @@ impl FilesScreen {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .max_w(px(239.))
+                            .overflow_hidden()
                             .flex()
                             .flex_col()
                             .child(
@@ -2476,7 +2502,7 @@ impl FilesScreen {
                 }
                 if chunk.len() < cols {
                     for _ in chunk.len()..cols {
-                        row = row.child(div().flex_1().min_w_0().max_w(px(239.)));
+                        row = row.child(div().flex_1().min_w_0());
                     }
                 }
                 grid = grid.child(row);
@@ -2579,7 +2605,7 @@ impl FilesScreen {
                 .tab_index(0)
                 .flex_1()
                 .min_w_0()
-                .max_w(px(239.))
+                .overflow_hidden()
                 .flex()
                 .flex_col()
                 .cursor_pointer()
@@ -2608,14 +2634,16 @@ impl FilesScreen {
                 .child(name_el)
                 .child(
                     div()
+                        .w_full()
+                        .min_w_0()
+                        .overflow_hidden()
                         .flex()
                         .items_center()
                         .gap(px(4.))
-                        .min_w_0()
                         .text_size(px(12.))
                         .line_height(px(16.))
                         .text_color(p.muted)
-                        .child(div().min_w_0().truncate().child(left_meta))
+                        .child(div().flex_1().min_w_0().truncate().child(left_meta))
                         .child(div().flex_none().text_color(p.faint).child("·"))
                         .child(
                             div()
@@ -3197,8 +3225,8 @@ impl FilesScreen {
         let measure_cell = self.measured_width.clone();
         let pad_x = if main_w < 600. {
             16.
-        } else if main_w < 900. {
-            24.
+        } else if main_w < 840. {
+            20.
         } else {
             32.
         };
@@ -3326,7 +3354,10 @@ impl FilesScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(
                 div()

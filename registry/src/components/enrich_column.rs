@@ -105,6 +105,20 @@ struct Cell {
     clock: PhaseClock,
 }
 /// Controls scheduling and renders cell states; all enrichment work belongs to the host.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::enrich_column::{EnrichColumn, EnrichRow};
+///
+/// let rows = vec![EnrichRow::new("one", "Northstar").with_domain("northstar.example")];
+/// let control = cx.new(|cx| EnrichColumn::new("Accounts", rows, "Find a description", window, cx));
+/// # }
+/// ```
 pub struct EnrichColumn {
     title: SharedString,
     prompt: Entity<Textarea>,

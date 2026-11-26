@@ -175,6 +175,20 @@ enum Panel {
 
 type Payment = Box<dyn Fn(UpgradeSelection, &mut App) -> Task<Result<(), SharedString>>>;
 
+/// `UpgradePrompt` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::upgrade_prompt::{UpgradePrompt, UpgradePromptOptions};
+///
+/// let control = cx.new(|cx| UpgradePrompt::new(UpgradePromptOptions::default(), cx));
+/// # }
+/// ```
 pub struct UpgradePrompt {
     options: UpgradePromptOptions,
     interval: BillingPeriod,
@@ -528,15 +542,15 @@ impl UpgradePrompt {
                     BillingPeriod::Yearly => localized(
                         cx,
                         format!(
-                            "{} billed yearly. Cancel anytime.",
+                            "{} billed yearly · Cancel anytime",
                             money(plan, charge.amount)
                         ),
-                        format!("每年支付 {}，可随时取消。", money(plan, charge.amount)),
+                        format!("每年支付 {} · 可随时取消", money(plan, charge.amount)),
                     ),
                     BillingPeriod::Monthly => tr(
                         cx,
-                        "Billed monthly. Cancel anytime.",
-                        "按月付费，可随时取消。",
+                        "Billed monthly · Cancel anytime",
+                        "按月付费 · 可随时取消",
                     )
                     .into(),
                 };
@@ -545,7 +559,7 @@ impl UpgradePrompt {
                     .child(
                         div()
                             .flex()
-                            .gap(px(12.))
+                            .gap(px(6.))
                             .items_center()
                             .justify_between()
                             .when(stacked, |d| d.flex_col().items_start().gap(px(8.)))
@@ -576,7 +590,9 @@ impl UpgradePrompt {
                                     )
                                     .child(
                                         div()
-                                            .text_size(px(12.))
+                                            .id("upgrade-recurring")
+                                            .debug_selector(|| "upgrade-recurring".into())
+                                            .text_size(px(11.))
                                             .line_height(px(18.))
                                             .text_color(p.faint)
                                             .max_w_full()
@@ -719,8 +735,9 @@ impl Render for UpgradePrompt {
         } else {
             f32::from(viewport.width).min(440.)
         };
-        let padding = if width < 420. { 20. } else { 24. };
-        let inner_width = (width - 2. * padding - 2.).max(1.);
+        let pad_y = if width < 420. { 20. } else { 24. };
+        let pad_x = 20.;
+        let inner_width = (width - 2. * pad_x - 2.).max(1.);
         let stacked = inner_width < 340.;
         let header_height = [Panel::Offer, Panel::Success]
             .into_iter()
@@ -890,7 +907,8 @@ impl Render for UpgradePrompt {
             .w(px(440.))
             .max_w_full()
             .min_w_0()
-            .p(px(padding))
+            .px(px(pad_x))
+            .py(px(pad_y))
             .border_1()
             .border_color(p.line)
             .rounded(radius)
@@ -1159,5 +1177,30 @@ mod tests {
         assert_eq!(calls.get(), 2);
         assert!(window.update(|_, cx| control.read(cx).panel == Panel::Success));
         assert_eq!(window.debug_bounds("upgrade-prompt").unwrap(), narrow);
+    }
+
+    #[test]
+    fn yearly_recurring_copy_fits_unclipped_beside_billing_toggle_at_desktop_width() {
+        let mut app = TestAppContext::single();
+        app.update(crate::init);
+        let (_, window) = app.add_window_view(|_, cx| {
+            Page(cx.new(|cx| UpgradePrompt::new(UpgradePromptOptions::default(), cx)))
+        });
+        window.simulate_resize(size(px(440.), px(650.)));
+        window.run_until_parked();
+        let card = window.debug_bounds("upgrade-prompt").unwrap();
+        assert_eq!(card.size, size(px(440.), px(415.)));
+        let recurring = window.debug_bounds("upgrade-recurring").unwrap();
+        let monthly_pill = window.debug_bounds("Monthly").unwrap();
+        let toggle_left = monthly_pill.left() - px(4.);
+        assert!(
+            recurring.right() <= toggle_left,
+            "recurring bounds {recurring:?} must not collide with toggle at {toggle_left:?}"
+        );
+        assert!(
+            recurring.size.width >= px(182.),
+            "desktop recurring column ({:?}) must retain full >=182px width for 11px copy",
+            recurring.size.width
+        );
     }
 }

@@ -259,6 +259,22 @@ fn apply_retry_task(tasks: &mut [BoardTask], task_id: &str) -> bool {
 }
 
 /// Multi-column background agent task board hosted in [`AppShell`].
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_inbox_board::{AgentInboxBoardScreen, AgentInboxBoardEvent};
+///
+/// let screen = cx.new(|cx| AgentInboxBoardScreen::new("agent-inbox-board", cx));
+/// cx.subscribe(&screen, |_, event: &AgentInboxBoardEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentInboxBoardScreen {
     id: ElementId,
     standalone: bool,
@@ -346,7 +362,7 @@ impl AgentInboxBoardScreen {
             pending_clear_search: false,
             focus: cx.focus_handle().tab_stop(true),
             shell,
-            measured_width: Rc::new(Cell::new(920.)),
+            measured_width: Rc::new(Cell::new(464.)),
             started_at: Instant::now(),
         }
     }
@@ -415,7 +431,7 @@ impl AgentInboxBoardScreen {
                 .with_active("inbox")
                 .with_side_cards(false)
                 .with_work_area(true, panel_open)
-                .with_panel_width(348.);
+                .with_panel_width(220.);
             s.bind_page(&this, shell_cx, |screen, w, cx| {
                 screen.render_page(w, cx).into_any_element()
             });
@@ -1005,7 +1021,7 @@ impl AgentInboxBoardScreen {
                     .tab_index(0)
                     .relative()
                     .h(px(28.))
-                    .px(px(10.))
+                    .px(px(if compact_bar { 7. } else { 10. }))
                     .rounded(px(8.))
                     .when(!selected, |d| {
                         d.hover(move |s| s.bg(p.hover).text_color(p.ink))
@@ -1014,8 +1030,8 @@ impl AgentInboxBoardScreen {
                     .focus_visible(move |s| s.border_1().border_color(p.focus))
                     .flex()
                     .items_center()
-                    .gap(px(6.))
-                    .text_size(px(13.))
+                    .gap(px(if compact_bar { 4. } else { 6. }))
+                    .text_size(px(if compact_bar { 12.5 } else { 13. }))
                     .font_weight(if selected {
                         FontWeight::MEDIUM
                     } else {
@@ -1028,7 +1044,7 @@ impl AgentInboxBoardScreen {
                     .when(!self.empty && !self.loading, |d| {
                         d.child(
                             div()
-                                .text_size(px(12.))
+                                .text_size(px(if compact_bar { 11.5 } else { 12. }))
                                 .font_weight(FontWeight::NORMAL)
                                 .text_color(p.faint)
                                 .child(count.to_string()),
@@ -1333,25 +1349,25 @@ impl AgentInboxBoardScreen {
             .flex_none()
             .flex()
             .items_center()
-            .text_size(px(12.))
+            .text_size(px(11.5))
             .text_color(p.faint)
             .child(
                 div()
-                    .pr(px(7.))
+                    .pr(px(4.5))
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .child(pro_icon(ProIcon::Search, 12., p.faint))
+                    .gap(px(3.))
+                    .child(pro_icon(ProIcon::Search, 11.5, p.faint))
                     .child(sources.to_string()),
             )
-            .child(div().w(px(1.)).h(px(11.)).bg(p.line_strong))
+            .child(div().w(px(1.)).h(px(10.)).bg(p.line_strong))
             .child(
                 div()
-                    .pl(px(7.))
+                    .pl(px(4.5))
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .child(pro_svg("0 0 24 24", SVG_WRENCH, 12., p.faint))
+                    .gap(px(3.))
+                    .child(pro_svg("0 0 24 24", SVG_WRENCH, 11.5, p.faint))
                     .child(tools.to_string()),
             )
     }
@@ -1359,7 +1375,7 @@ impl AgentInboxBoardScreen {
     fn render_board_view(
         &self,
         stack_cols: bool,
-        compact_bar: bool,
+        compact_cards: bool,
         elapsed_ms: f32,
         phase: f32,
         cx: &mut Context<Self>,
@@ -1383,13 +1399,13 @@ impl AgentInboxBoardScreen {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
-            .px(px(12.))
+            .px(px(if compact_cards { 8. } else { 12. }))
             .pt(px(2.))
             .pb(px(16.))
             .flex()
             .when(stack_cols, |d| d.flex_col().items_stretch())
             .when(!stack_cols, |d| d.items_start())
-            .gap(px(10.));
+            .gap(px(if compact_cards { 6. } else { 10. }));
 
         for col in BoardColumn::ALL {
             if !col.matches_scope(self.scope) {
@@ -1409,15 +1425,15 @@ impl AgentInboxBoardScreen {
                 .collect();
 
             let col_head = div()
-                .h(px(36.))
-                .px(px(6.))
+                .h(px(34.))
+                .px(px(if compact_cards { 4. } else { 6. }))
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap(px(6.))
+                .gap(px(4.))
                 .child(
                     div()
-                        .w(px(20.))
+                        .w(px(18.))
                         .flex()
                         .items_center()
                         .child(Self::render_state_glyph(
@@ -1432,24 +1448,25 @@ impl AgentInboxBoardScreen {
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_size(px(11.))
+                        .text_size(px(10.5))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted)
                         .when(!stack_cols, |d| d.text_center())
+                        .whitespace_nowrap()
                         .truncate()
                         .child(col_label),
                 )
                 .child(
                     div()
-                        .min_w(px(20.))
+                        .min_w(px(18.))
                         .h(px(18.))
-                        .px(px(5.))
+                        .px(px(4.5))
                         .rounded(px(6.))
                         .bg(p.chip)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(11.5))
+                        .text_size(px(11.))
                         .text_color(p.muted)
                         .child(if self.loading {
                             "–".to_owned()
@@ -1468,9 +1485,9 @@ impl AgentInboxBoardScreen {
                             .bg(p.card)
                             .border_1()
                             .border_color(p.line)
-                            .pt(px(12.))
-                            .pb(px(10.))
-                            .px(px(14.))
+                            .pt(px(10.))
+                            .pb(px(9.))
+                            .px(px(if compact_cards { 10. } else { 14. }))
                             .flex()
                             .flex_col()
                             .gap(px(8.))
@@ -1481,7 +1498,7 @@ impl AgentInboxBoardScreen {
                                     .gap(px(8.))
                                     .child(pro_skeleton_bar(14., 14., 4., phase, cx))
                                     .child(pro_skeleton_bar(
-                                        if si == 0 { 132. } else { 112. },
+                                        if si == 0 { 96. } else { 84. },
                                         12.,
                                         4.,
                                         phase,
@@ -1490,22 +1507,22 @@ impl AgentInboxBoardScreen {
                             )
                             .child(
                                 div()
-                                    .ml(px(22.))
+                                    .when(!compact_cards, |d| d.ml(px(22.)))
                                     .flex()
                                     .flex_col()
                                     .gap(px(6.))
-                                    .child(pro_skeleton_bar(176., 10., 4., phase, cx))
-                                    .child(pro_skeleton_bar(142., 10., 4., phase, cx)),
+                                    .child(pro_skeleton_bar(112., 10., 4., phase, cx))
+                                    .child(pro_skeleton_bar(92., 10., 4., phase, cx)),
                             )
                             .child(
                                 div()
-                                    .ml(px(22.))
+                                    .when(!compact_cards, |d| d.ml(px(22.)))
                                     .pt(px(2.))
                                     .flex()
                                     .items_center()
                                     .justify_between()
-                                    .child(pro_skeleton_bar(54., 11., 4., phase, cx))
-                                    .child(pro_skeleton_bar(62., 11., 4., phase, cx)),
+                                    .child(pro_skeleton_bar(48., 11., 4., phase, cx))
+                                    .child(pro_skeleton_bar(52., 11., 4., phase, cx)),
                             ),
                     );
                 }
@@ -1539,19 +1556,20 @@ impl AgentInboxBoardScreen {
                             .border_color(if is_open { p.line_strong } else { p.line })
                             .hover(move |s| s.border_color(p.line_strong))
                             .focus_visible(move |s| s.border_1().border_color(p.focus))
-                            .pt(px(12.))
-                            .pb(px(10.))
-                            .px(px(14.))
+                            .pt(px(if compact_cards { 10. } else { 12. }))
+                            .pb(px(if compact_cards { 9. } else { 10. }))
+                            .px(px(if compact_cards { 10. } else { 14. }))
+                            .overflow_hidden()
                             .flex()
                             .flex_col()
-                            .gap(px(6.))
+                            .gap(px(5.))
                             .cursor_pointer()
                             .child(
                                 div()
                                     .min_h(px(20.))
                                     .flex()
                                     .items_center()
-                                    .gap(px(8.))
+                                    .gap(px(if compact_cards { 6. } else { 8. }))
                                     .min_w_0()
                                     .child(Self::render_bare_agent_mark(
                                         &task.agent,
@@ -1564,8 +1582,8 @@ impl AgentInboxBoardScreen {
                                         div()
                                             .flex_1()
                                             .min_w_0()
-                                            .text_size(px(13.))
-                                            .line_height(px(20.))
+                                            .text_size(px(if compact_cards { 12.5 } else { 13. }))
+                                            .line_height(px(19.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
                                             .truncate()
@@ -1574,30 +1592,30 @@ impl AgentInboxBoardScreen {
                             )
                             .child(
                                 div()
-                                    .when(!compact_bar, |d| d.ml(px(24.)))
-                                    .h(px(38.))
+                                    .when(!compact_cards, |d| d.ml(px(24.)))
+                                    .h(px(36.))
                                     .overflow_hidden()
-                                    .text_size(px(12.5))
-                                    .line_height(px(19.))
+                                    .text_size(px(12.))
+                                    .line_height(px(18.))
                                     .text_color(p.muted)
                                     .child(task.description.clone()),
                             )
                             .child(
                                 div()
-                                    .when(!compact_bar, |d| d.ml(px(24.)))
+                                    .when(!compact_cards, |d| d.ml(px(24.)))
                                     .mt(px(2.))
-                                    .min_h(px(22.))
+                                    .min_h(px(20.))
                                     .flex()
                                     .items_center()
                                     .justify_between()
-                                    .gap(px(8.))
+                                    .gap(px(6.))
                                     .child(
                                         div()
                                             .flex()
                                             .items_center()
-                                            .gap(px(6.))
+                                            .gap(px(5.))
                                             .min_w_0()
-                                            .text_size(px(12.5))
+                                            .text_size(px(12.))
                                             .text_color(p.text)
                                             .child(Self::render_state_glyph(
                                                 task.status,
@@ -2219,8 +2237,9 @@ impl AgentInboxBoardScreen {
         };
 
         let width = self.measured_width.get();
-        let stack_cols = width < 760.;
-        let compact_bar = width < 560.;
+        let stack_cols = width < 400.;
+        let compact_bar = width < 520.;
+        let compact_cards = width < 620.;
         let measure = self.measured_width.clone();
 
         let main_body: AnyElement = if self.empty && !self.loading {
@@ -2252,7 +2271,7 @@ impl AgentInboxBoardScreen {
                 ))
                 .into_any_element()
         } else if self.view_mode == BoardViewMode::Board {
-            self.render_board_view(stack_cols, compact_bar, elapsed_ms, phase, cx)
+            self.render_board_view(stack_cols, compact_cards, elapsed_ms, phase, cx)
                 .into_any_element()
         } else {
             self.render_list_view(stack_cols, elapsed_ms, phase, cx)
@@ -2317,7 +2336,10 @@ impl AgentInboxBoardScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(self.render_toolbar(compact_bar, cx))
             .child(wrapped_main)
@@ -2341,18 +2363,18 @@ impl AgentInboxBoardScreen {
 
         if self.loading {
             let skel = div()
-                .p(px(16.))
+                .p(px(12.))
                 .flex()
                 .flex_col()
-                .gap(px(22.))
+                .gap(px(20.))
                 .child(
                     div()
                         .flex()
                         .flex_col()
                         .gap(px(8.))
-                        .child(pro_skeleton_bar(168., 15., 4., phase, cx))
-                        .child(pro_skeleton_bar(220., 12., 4., phase, cx))
-                        .child(pro_skeleton_bar(186., 12., 4., phase, cx))
+                        .child(pro_skeleton_bar(148., 15., 4., phase, cx))
+                        .child(pro_skeleton_bar(184., 12., 4., phase, cx))
+                        .child(pro_skeleton_bar(156., 12., 4., phase, cx))
                         .child(
                             div()
                                 .pt(px(4.))
@@ -2363,26 +2385,26 @@ impl AgentInboxBoardScreen {
                         ),
                 )
                 .child(div().flex().flex_col().gap(px(10.)).children(
-                    [120., 84., 72., 88.].into_iter().map(|bar_w| {
+                    [104., 76., 68., 80.].into_iter().map(|bar_w| {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(12.))
-                            .child(pro_skeleton_bar(56., 12., 4., phase, cx))
+                            .gap(px(10.))
+                            .child(pro_skeleton_bar(48., 12., 4., phase, cx))
                             .child(pro_skeleton_bar(bar_w, 12., 4., phase, cx))
                     }),
                 ))
                 .child(
                     div()
-                        .p(px(14.))
+                        .p(px(12.))
                         .rounded(px(10.))
                         .bg(p.chip)
                         .flex()
                         .flex_col()
                         .gap(px(10.))
-                        .child(pro_skeleton_bar(188., 12., 4., phase, cx))
-                        .child(pro_skeleton_bar(168., 12., 4., phase, cx))
-                        .child(pro_skeleton_bar(154., 12., 4., phase, cx)),
+                        .child(pro_skeleton_bar(164., 12., 4., phase, cx))
+                        .child(pro_skeleton_bar(148., 12., 4., phase, cx))
+                        .child(pro_skeleton_bar(136., 12., 4., phase, cx)),
                 )
                 .into_any_element();
             return Some((tr(cx, "Task", "任务").into(), ProIcon::Inbox, skel));
@@ -2395,7 +2417,7 @@ impl AgentInboxBoardScreen {
         let Some(ref open_id) = self.open_task_id else {
             let none_el = div()
                 .min_h(px(240.))
-                .p(px(24.))
+                .p(px(20.))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -2518,11 +2540,12 @@ impl AgentInboxBoardScreen {
                 .min_h(px(22.))
                 .flex()
                 .items_center()
+                .gap(px(6.))
                 .child(
                     div()
-                        .w(px(76.))
+                        .w(px(62.))
                         .flex_none()
-                        .text_size(px(13.))
+                        .text_size(px(12.5))
                         .text_color(p.muted)
                         .child(label),
                 )
@@ -2530,11 +2553,11 @@ impl AgentInboxBoardScreen {
         };
 
         let body = div()
-            .p(px(16.))
-            .pb(px(24.))
+            .p(px(12.))
+            .pb(px(20.))
             .flex()
             .flex_col()
-            .gap(px(22.))
+            .gap(px(18.))
             .child(
                 div()
                     .flex()

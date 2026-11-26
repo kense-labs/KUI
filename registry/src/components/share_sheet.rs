@@ -222,6 +222,34 @@ struct PersonBounds {
 }
 
 /// Sharing UI backed by host operations and the platform clipboard.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::{Task, prelude::*};
+/// use kui::components::share_sheet::{ShareChannel, SharePerson, ShareSheet, ShareSheetAccess};
+///
+/// let control = cx.new(|cx| ShareSheet::new(
+///     "Release plan",
+///     "https://example.com/docs/release-plan",
+///     vec![SharePerson::new("riley", "Riley Morgan")],
+///     vec![
+///         ShareSheetAccess::new("team", "Workspace members").with_description("Can comment"),
+///         ShareSheetAccess::new("link", "Anyone with the link").with_description("Can view"),
+///     ],
+///     cx,
+/// )
+/// .with_channels(vec![ShareChannel::new("email", "Email").with_done_label("Sent")])
+/// .on_send(|submission, _, _| {
+///     // Pass the selected people and access value to the application's share service.
+///     let _ = submission;
+///     Task::ready(Ok(()))
+/// }));
+/// # }
+/// ```
 pub struct ShareSheet {
     id: ElementId,
     title: SharedString,

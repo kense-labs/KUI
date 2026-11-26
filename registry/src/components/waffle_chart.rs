@@ -1,3 +1,5 @@
+//! Proportional unit-grid waffle chart with animated category shares and hover inspection.
+
 use gpui::{prelude::*, *};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -51,6 +53,23 @@ struct Square {
     color: Hsla,
 }
 /// The host owns the data; legend visibility and inspection are local state.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::waffle_chart::{WaffleCategory, WaffleChart};
+///
+/// let items = vec![
+///     WaffleCategory::new("search", "Search", 42.0),
+///     WaffleCategory::new("direct", "Direct", 58.0),
+/// ];
+/// let control = cx.new(|_| WaffleChart::new("Visitors", items));
+/// # }
+/// ```
 pub struct WaffleChart {
     label: SharedString,
     data: Vec<WaffleCategory>,

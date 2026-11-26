@@ -151,15 +151,6 @@ impl Render for Example {
             .items_center()
             .justify_center()
             .gap_3()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Simulated generation — no data is sent",
-                        "模拟生成，不会发送数据",
-                    )),
-            )
             .child(div().w_full().max_w(px(522.)).child(self.view.clone()))
             .child(
                 face(

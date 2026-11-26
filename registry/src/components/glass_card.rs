@@ -18,6 +18,33 @@ const EXPAND_SECONDS: f32 = 0.42;
 pub struct GlassCardOpenChanged(pub bool);
 
 /// A reusable 4:5 photo card. The host supplies the header slots and interactive details.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::glass_card::{GlassCard, GlassCardOpenChanged};
+///
+/// let card = cx.new(|cx| {
+///     GlassCard::new("images/jasmine.jpg", "Portrait of Jasmine Brooks", "Jasmine Brooks", cx)
+///         .with_id("featured-profile")
+///         .with_subtitle(Box::new(|_, _| gpui::div().child("Design lead, Lisbon").into_any_element()))
+///         .with_aside(Box::new(|_, _| gpui::div().child("★ 4.9").into_any_element()))
+///         .with_body(Box::new(|_, _| {
+///             gpui::div().child("Design systems and motion.").into_any_element()
+///         }))
+///         .with_open(false)
+/// });
+/// window
+///     .subscribe(&card, cx, |card, event: &GlassCardOpenChanged, w, cx| {
+///         card.update(cx, |card, cx| card.set_open(event.0, w, cx));
+///     })
+///     .detach();
+/// # }
+/// ```
 pub struct GlassCard {
     id: ElementId,
     image: ImageSource,

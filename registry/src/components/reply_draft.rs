@@ -83,6 +83,21 @@ pub enum ReplyDraftEvent {
     Insert(SharedString),
 }
 /// Generation is performed by the host. This control never sends a message.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::reply_draft::{ReplyDraft, ReplyHint, ReplyMessage};
+///
+/// let message = ReplyMessage::new("Alex", "Review", "Can we meet next week?");
+/// let hints = vec![ReplyHint::new("yes", "Sounds good")];
+/// let control = cx.new(|cx| ReplyDraft::new(message, hints, window, cx));
+/// # }
+/// ```
 pub struct ReplyDraft {
     message: ReplyMessage,
     sender_image: Option<ImageSource>,

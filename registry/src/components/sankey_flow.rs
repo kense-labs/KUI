@@ -183,6 +183,29 @@ struct FlowTip {
     note: String,
 }
 type ValueFormatter = Box<dyn Fn(f64) -> String>;
+/// `SankeyFlow` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::sankey_flow::{FlowLink, FlowNode, SankeyFlow};
+///
+/// let nodes = vec![FlowNode::new("a", "Source", gpui::rgb(0x6a9fe5).into()), FlowNode::new("b", "Activated", gpui::rgb(0xa8acb4).into())];
+/// let links = vec![FlowLink::new("a", "b", 42.0)];
+/// let control = cx.new(|_| {
+///     SankeyFlow::new("Journey", nodes, links)
+///         .with_unit(" people")
+///         .with_total_label("signups")
+///         .with_columns(vec!["Source".into(), "Activated".into()])
+///         .with_periods(vec!["Q2".into(), "Q3".into()], 1)
+///         .with_period_details(vec!["Apr to Jun 2026".into(), "Jul to Sep 2026".into()])
+/// });
+/// # }
+/// ```
 pub struct SankeyFlow {
     title: SharedString,
     description: SharedString,
@@ -1159,12 +1182,14 @@ impl Render for SankeyFlow {
                                 path.close();
                                 path.build()
                             };
+                            let dark = p.panel.l < 0.5;
                             let color = nodes.get(band.source).map_or(p.bright, |n| n.color);
                             if let Ok(path) = ribbon(band.thickness) {
                                 let fill = if paint_layout.columns[band.source] == 0 {
-                                    color.opacity(mix(0.22, 0.07, dim))
+                                    color.opacity(mix(if dark { 0.28 } else { 0.22 }, 0.08, dim))
                                 } else {
-                                    p.ink.opacity(mix(0.09, 0.05, dim))
+                                    p.ink
+                                        .opacity(mix(if dark { 0.13 } else { 0.09 }, 0.05, dim))
                                 };
                                 w.paint_path(path, fill);
                             }
@@ -1172,7 +1197,10 @@ impl Render for SankeyFlow {
                             if traced_width > 0.001
                                 && let Ok(path) = ribbon(traced_width)
                             {
-                                w.paint_path(path, trace_color.opacity(0.34));
+                                w.paint_path(
+                                    path,
+                                    trace_color.opacity(if dark { 0.42 } else { 0.34 }),
+                                );
                             }
                             // With nothing selected the stream runs on every ribbon;
                             // a selection focuses the stream onto its connected bands.
@@ -1213,6 +1241,7 @@ impl Render for SankeyFlow {
                                 }
                             }
                         }
+                        let dark = p.panel.l < 0.5;
                         for (i, bar) in paint_layout.bars.iter().enumerate() {
                             if bar.h <= 0. {
                                 continue;
@@ -1221,23 +1250,50 @@ impl Render for SankeyFlow {
                             let at =
                                 |major, minor| chart_point(major, minor, paint_layout.vertical, b);
                             let source_column = paint_layout.columns[i] == 0;
-                            let paint_bar = |height: f32, fill_color, w: &mut Window| {
-                                let bounds = Bounds::from_corners(
-                                    at(bar.x, bar.y),
-                                    at(bar.x + bar.w, bar.y + height),
-                                );
-                                let radius = 2.5f32.min(bar.w * 0.5).min(height * 0.5);
-                                w.paint_quad(fill(bounds, fill_color).corner_radii(px(radius)));
-                            };
+                            let paint_bar =
+                                |height: f32,
+                                 fill_color: Hsla,
+                                 stroke: Option<Hsla>,
+                                 w: &mut Window| {
+                                    let bounds = Bounds::from_corners(
+                                        at(bar.x, bar.y),
+                                        at(bar.x + bar.w, bar.y + height),
+                                    );
+                                    let radius = 2.5f32.min(bar.w * 0.5).min(height * 0.5);
+                                    if let Some(stroke) = stroke {
+                                        w.paint_quad(quad(
+                                            bounds,
+                                            px(radius),
+                                            fill_color,
+                                            px(1.),
+                                            stroke,
+                                            BorderStyle::Solid,
+                                        ));
+                                    } else {
+                                        w.paint_quad(
+                                            fill(bounds, fill_color).corner_radii(px(radius)),
+                                        );
+                                    }
+                                };
                             let base = if source_column {
                                 oklab_mix(p.panel, color, mix(1., 0.4, dim))
                             } else {
                                 oklab_mix(p.panel, p.ink, mix(0.72, 0.28, dim))
                             };
-                            paint_bar(bar.h, base, w);
+                            let outline = if dark {
+                                Some(hsla(
+                                    0.,
+                                    0.,
+                                    1.,
+                                    if source_column { 0.16 } else { 0.14 } * mix(1., 0.5, dim),
+                                ))
+                            } else {
+                                Some(black().opacity(0.06 * mix(1., 0.5, dim)))
+                            };
+                            paint_bar(bar.h, base, outline, w);
                             let traced_height = bar.h * node_trace[i];
                             if traced_height > 0.001 {
-                                paint_bar(traced_height, trace_color, w);
+                                paint_bar(traced_height, trace_color, None, w);
                             }
                             if !paint_layout.vertical
                                 && let Some(node) = nodes.get(i)
@@ -1483,11 +1539,20 @@ impl Render for SankeyFlow {
                             }),
                     )
                     .when(!self.periods.is_empty(), |v| {
+                        let dark = p.panel.l < 0.5;
+                        let track_bg = if dark { p.tray } else { p.stage };
+                        let active_border = if dark {
+                            hsla(0., 0., 1., 0.10)
+                        } else {
+                            p.line.opacity(0.85)
+                        };
                         v.child(
                             row()
                                 .p(px(3.))
                                 .gap(px(2.))
-                                .bg(p.tray)
+                                .bg(track_bg)
+                                .border_1()
+                                .border_color(p.line)
                                 .rounded_full()
                                 .children(self.periods.iter().enumerate().map(|(i, label)| {
                                     face(
@@ -1502,7 +1567,12 @@ impl Render for SankeyFlow {
                                         Tone::Clear,
                                         cx,
                                     )
-                                    .when(self.period == i, |v| v.bg(p.panel))
+                                    .when(self.period == i, |v| {
+                                        v.bg(p.panel)
+                                            .border_1()
+                                            .border_color(active_border)
+                                            .shadow_xs()
+                                    })
                                     .px(px(12.))
                                     .text_size(px(14.))
                                     .font_weight(FontWeight::MEDIUM)
@@ -1543,18 +1613,31 @@ impl Render for SankeyFlow {
                 self.particle_toggle && !reduced && layout.total > 0.,
                 |view| {
                     // Capsule toggle with a three-bar flow glyph, tucked bottom-right.
+                    let dark = p.panel.l < 0.5;
                     let dot = if self.particles { p.ink } else { p.secondary };
+                    let pill_bg = if self.particles {
+                        if dark { p.tray } else { p.stage }
+                    } else {
+                        p.panel
+                    };
                     view.child(
                         row().justify_end().mt(px(-8.)).child(
                             face(
                                 "flow-particles",
                                 tr(cx, "Flow", "流动"),
                                 32.,
-                                999.,
+                                crate::foundation::Theme::global(cx)
+                                    .tokens
+                                    .radius
+                                    .full
+                                    .into(),
                                 Tone::Clear,
                                 cx,
                             )
-                            .bg(p.panel)
+                            .bg(pill_bg)
+                            .border_1()
+                            .border_color(p.line)
+                            .hover(move |s| s.bg(p.hover))
                             .rounded_full()
                             .pl(px(10.))
                             .pr(px(12.))

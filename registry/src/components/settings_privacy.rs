@@ -397,6 +397,22 @@ fn settings_nav_groups(cx: &App) -> Vec<ShellNavGroup> {
 }
 
 /// Personal privacy settings screen (`settings-privacy`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_privacy::{SettingsPrivacyScreen, SettingsPrivacyEvent};
+///
+/// let screen = cx.new(|cx| SettingsPrivacyScreen::new("settings-privacy", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsPrivacyEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsPrivacyScreen {
     id: ElementId,
     focus: FocusHandle,

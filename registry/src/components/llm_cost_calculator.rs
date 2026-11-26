@@ -119,6 +119,22 @@ pub enum LlmCostEvent {
     UsageChanged(LlmUsage),
     Selected(SharedString),
 }
+/// `LlmCostCalculator` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::llm_cost_calculator::{LlmCostCalculator, LlmModelPrice, LlmUsage};
+///
+/// let prices = vec![LlmModelPrice::new("sample", "Sample model", "Example", 1.0, 3.0)];
+/// let usage = LlmUsage::new(8000.0, 500.0, 5000.0);
+/// let control = cx.new(|cx| LlmCostCalculator::new(prices, usage, cx).with_simulated(true));
+/// # }
+/// ```
 pub struct LlmCostCalculator {
     models: Vec<LlmModelPrice>,
     usage: LlmUsage,
@@ -241,6 +257,21 @@ impl LlmCostCalculator {
         }
     }
 }
+fn tabular() -> FontFeatures {
+    FontFeatures(vec![("tnum".into(), 1)].into())
+}
+
+fn group_whole(whole: &str) -> String {
+    let mut out = String::with_capacity(whole.len() + whole.len() / 3);
+    for (i, ch) in whole.chars().enumerate() {
+        if i > 0 && (whole.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
+}
+
 fn money(v: Option<f64>) -> String {
     v.map_or_else(
         || "—".into(),
@@ -252,17 +283,52 @@ fn money(v: Option<f64>) -> String {
                     format!("${:.1}K", v / 1_000.)
                 }
             } else {
-                format!("${v:.2}")
+                let raw = format!("{:.2}", v.max(0.));
+                let (whole, frac) = raw.split_once('.').unwrap_or((&raw, "00"));
+                format!("${}.{frac}", group_whole(whole))
             }
         },
     )
 }
+
+fn model_badge(model: &LlmModelPrice, side: f32, p: Paint, cx: &App) -> Div {
+    let mark = brand_mark(&model.name, side - 8., cx)
+        .or_else(|| brand_mark(&model.provider, side - 8., cx));
+    let fallback_char = model
+        .provider
+        .chars()
+        .next()
+        .or_else(|| model.name.chars().next())
+        .unwrap_or('M')
+        .to_uppercase()
+        .to_string();
+    div()
+        .size(px(side))
+        .flex_none()
+        .rounded(px(6.))
+        .bg(p.tray)
+        .border_1()
+        .border_color(p.line)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(mark.unwrap_or_else(|| {
+            div()
+                .text_size(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.secondary)
+                .child(fallback_char)
+                .into_any_element()
+        }))
+}
+
 impl Render for LlmCostCalculator {
     fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         while self.focus.len() < self.models.len() {
             self.focus.push(cx.focus_handle().tab_stop(true));
         }
         let p = Paint::get(cx);
+        let radius = crate::foundation::surface_radius(cx);
         let mut ranking: Vec<usize> = (0..self.models.len()).collect();
         ranking.sort_by(|a, b| {
             match (
@@ -279,6 +345,7 @@ impl Render for LlmCostCalculator {
             .selected
             .as_ref()
             .and_then(|id| self.models.iter().position(|m| &m.id == id));
+        let selected_model = selected.and_then(|i| self.models.get(i));
         let selected_cost = selected.and_then(|i| compute_llm_cost(&self.models[i], self.usage));
         let maximum = ranking
             .iter()
@@ -288,17 +355,17 @@ impl Render for LlmCostCalculator {
             .id("llm-cost-models")
             .role(Role::List)
             .w_full()
-            .gap(px(0.))
-            .pt(px(16.))
+            .gap(px(4.))
+            .pt(px(14.))
             .border_t_1()
             .border_color(p.line);
         for (rank, &index) in ranking.iter().enumerate() {
             let model = &self.models[index];
             let cost = compute_llm_cost(model, self.usage);
             let amount = money(cost.map(|c| c.total));
-            let selected = self.selected.as_ref() == Some(&model.id);
+            let is_selected = self.selected.as_ref() == Some(&model.id);
             let share = if maximum > 0. {
-                cost.map_or(0., |c| (c.total / maximum).clamp(0., 1.) as f32)
+                cost.map_or(0., |c| (c.total / maximum).clamp(0.03, 1.) as f32)
             } else {
                 0.
             };
@@ -315,100 +382,124 @@ impl Render for LlmCostCalculator {
             let first = ranking[0];
             let last = ranking[ranking.len() - 1];
             let hot = self.hovered == Some(index);
-            let item = face(("llm-cost-model", index), label, 44., 2., Tone::Clear, cx)
-                .w_full()
-                .h(px(44.))
-                .px(px(8.))
-                .bg(if selected {
-                    p.bright.opacity(0.07)
-                } else if hot {
-                    p.ink.opacity(0.04)
-                } else {
-                    gpui::transparent_black()
-                })
-                .when(!selected, |b| b.hover(|s| s.bg(p.ink.opacity(0.04))))
-                .when(selected, |b| b.hover(|s| s.bg(p.bright.opacity(0.10))))
-                .on_hover(cx.listener(move |s, over: &bool, _, cx| {
-                    s.hovered = if *over { Some(index) } else { None };
-                    cx.notify();
-                }))
-                .track_focus(&self.focus[index])
-                .aria_toggled(selected.into())
-                .child(
-                    row()
-                        .w_full()
-                        .items_center()
-                        .gap(px(12.))
-                        .child(
-                            div()
-                                .w(px(16.))
-                                .text_size(px(13.))
-                                .line_height(px(20.))
-                                .text_color(p.faint)
-                                .text_center()
-                                .child((rank + 1).to_string()),
-                        )
-                        .when_some(
-                            brand_mark(&model.name, 16., cx)
-                                .or_else(|| brand_mark(&model.provider, 16., cx)),
-                            |row, mark| row.child(mark),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .max_w(px(168.))
-                                .min_w(px(0.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(model.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .h(px(6.))
-                                .rounded_full()
-                                .bg(p.ink.opacity(0.06))
-                                .child(div().h_full().w(relative(share)).rounded_full().bg(
-                                    if selected {
-                                        p.bright
-                                    } else if hot {
-                                        p.ink.opacity(0.34)
-                                    } else {
-                                        p.ink.opacity(0.24)
-                                    },
-                                )),
-                        )
-                        .child(
-                            div()
-                                .w(px(88.))
-                                .text_right()
-                                .text_color(if selected { p.ink } else { p.secondary })
-                                .child(amount),
-                        ),
-                )
-                .on_click(cx.listener(move |s, _, _, cx| s.select(index, cx)))
-                .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
-                    let target = match e.keystroke.key.as_str() {
-                        "enter" | "space" => Some(index),
-                        "up" | "left" => Some(previous),
-                        "down" | "right" => Some(next),
-                        "home" => Some(first),
-                        "end" => Some(last),
-                        _ => None,
-                    };
-                    if let Some(target) = target {
-                        s.select(target, cx);
-                        if let Some(focus) = s.focus.get(target) {
-                            focus.focus(w, cx);
-                        }
-                        cx.stop_propagation();
+            let item = face(
+                ("llm-cost-model", index),
+                label,
+                46.,
+                radius.into(),
+                Tone::Clear,
+                cx,
+            )
+            .w_full()
+            .h(px(46.))
+            .px(px(10.))
+            .border_1()
+            .border_color(if is_selected {
+                p.line.blend(p.bright.opacity(0.42))
+            } else {
+                gpui::transparent_black()
+            })
+            .bg(if is_selected {
+                p.tray
+            } else if hot {
+                p.ink.opacity(0.035)
+            } else {
+                gpui::transparent_black()
+            })
+            .when(!is_selected, |b| b.hover(|s| s.bg(p.ink.opacity(0.04))))
+            .on_hover(cx.listener(move |s, over: &bool, _, cx| {
+                s.hovered = if *over { Some(index) } else { None };
+                cx.notify();
+            }))
+            .track_focus(&self.focus[index])
+            .aria_toggled(is_selected.into())
+            .child(
+                row()
+                    .w_full()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .w(px(14.))
+                            .text_size(px(12.))
+                            .line_height(px(18.))
+                            .font_features(tabular())
+                            .text_color(p.faint)
+                            .text_center()
+                            .child((rank + 1).to_string()),
+                    )
+                    .child(model_badge(model, 24., p, cx))
+                    .child(
+                        div()
+                            .w(px(138.))
+                            .min_w(px(0.))
+                            .truncate()
+                            .text_size(px(13.5))
+                            .font_weight(if is_selected {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
+                            .child(model.name.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(36.))
+                            .h(px(6.))
+                            .rounded_full()
+                            .bg(p.ink.opacity(0.07))
+                            .child(div().h_full().w(relative(share)).rounded_full().bg(
+                                if is_selected {
+                                    p.bright
+                                } else if hot {
+                                    p.ink.opacity(0.36)
+                                } else {
+                                    p.ink.opacity(0.22)
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .w(px(78.))
+                            .text_right()
+                            .font_features(tabular())
+                            .font_weight(if is_selected {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
+                            .text_color(if is_selected { p.ink } else { p.secondary })
+                            .child(amount),
+                    ),
+            )
+            .on_click(cx.listener(move |s, _, _, cx| s.select(index, cx)))
+            .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                let target = match e.keystroke.key.as_str() {
+                    "enter" | "space" => Some(index),
+                    "up" | "left" => Some(previous),
+                    "down" | "right" => Some(next),
+                    "home" => Some(first),
+                    "end" => Some(last),
+                    _ => None,
+                };
+                if let Some(target) = target {
+                    s.select(target, cx);
+                    if let Some(focus) = s.focus.get(target) {
+                        focus.focus(w, cx);
                     }
-                }));
+                    cx.stop_propagation();
+                }
+            }));
             list = list.child(item);
         }
-        let model_name = selected.and_then(|i| self.models.get(i)).map_or_else(
+        let model_name = selected_model.map_or_else(
             || tr(cx, "No model selected", "未选择模型").into(),
             |m| m.name.clone(),
         );
+        let header_mark = selected_model.and_then(|m| {
+            brand_mark(&m.name, 14., cx).or_else(|| brand_mark(&m.provider, 14., cx))
+        });
         let cache_label = if self.usage.cache_hit_rate.is_finite() {
             format!("{:.0}%", self.usage.cache_hit_rate * 100.)
         } else {
@@ -419,33 +510,37 @@ impl Render for LlmCostCalculator {
             .role(Role::Group)
             .aria_label(tr(cx, "Estimated monthly cost", "每月费用估算"))
             .w_full()
-            .max_w(px(720.))
-            .gap(px(24.))
+            .max_w(px(470.))
+            .gap(px(18.))
             .p(px(24.))
-            .rounded(crate::foundation::surface_radius(cx))
+            .rounded(radius)
             .bg(p.panel)
             .border_1()
             .border_color(p.line)
             .text_color(p.ink)
             .child(
                 row()
-                    .gap(px(16.))
-                    .flex_wrap()
+                    .gap(px(12.))
+                    .items_start()
                     .justify_between()
+                    .pb(px(14.))
+                    .border_b_1()
+                    .border_color(p.line)
                     .child(
                         column()
+                            .min_w_0()
                             .gap(px(2.))
                             .child(
                                 div()
-                                    .text_size(px(14.))
+                                    .text_size(px(15.))
                                     .line_height(px(20.))
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .child(tr(cx, "Estimated monthly cost", "每月费用估算")),
                             )
                             .child(
                                 div()
-                                    .text_size(px(13.))
-                                    .line_height(px(20.))
+                                    .text_size(px(12.))
+                                    .line_height(px(18.))
                                     .text_color(p.faint)
                                     .child(tr(
                                         cx,
@@ -456,33 +551,49 @@ impl Render for LlmCostCalculator {
                     )
                     .child(
                         column()
-                            .gap(px(2.))
+                            .items_end()
+                            .gap(px(3.))
                             .child(
                                 div()
-                                    .text_size(px(24.))
-                                    .line_height(px(26.))
+                                    .text_size(px(26.))
+                                    .line_height(px(28.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .font_features(tabular())
                                     .child(money(selected_cost.map(|c| c.total))),
                             )
                             .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .line_height(px(20.))
-                                    .text_color(p.faint)
-                                    .child(model_name),
+                                row()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .when_some(header_mark, |r, mark| r.child(mark))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .line_height(px(18.))
+                                            .text_color(p.secondary)
+                                            .child(model_name),
+                                    ),
                             ),
                     ),
             )
-            .children(self.sliders.iter().cloned());
+            .child(
+                column()
+                    .w_full()
+                    .gap(px(14.))
+                    .children(self.sliders.iter().cloned()),
+            );
         panel = panel.child(
             row()
+                .justify_between()
+                .items_center()
                 .gap_2()
                 .flex_wrap()
                 .child(
                     face(
                         "llm-cache",
                         tr(cx, "Cached input", "输入缓存"),
-                        36.,
-                        crate::foundation::surface_radius(cx).into(),
+                        34.,
+                        radius.into(),
                         if self.usage.cache_enabled {
                             Tone::Primary
                         } else {
@@ -490,10 +601,13 @@ impl Render for LlmCostCalculator {
                         },
                         cx,
                     )
-                    .px(px(10.))
+                    .px(px(12.))
+                    .when(!self.usage.cache_enabled, |b| {
+                        b.border_1().border_color(p.line)
+                    })
                     .aria_toggled(self.usage.cache_enabled.into())
                     .child(format!(
-                        "{} {}",
+                        "{} · {}",
                         tr(cx, "Cached input", "输入缓存"),
                         cache_label
                     ))
@@ -515,12 +629,15 @@ impl Render for LlmCostCalculator {
                     face(
                         "llm-reset",
                         tr(cx, "Reset", "重置"),
-                        36.,
-                        crate::foundation::surface_radius(cx).into(),
+                        34.,
+                        radius.into(),
                         Tone::Surface,
                         cx,
                     )
-                    .px(px(10.))
+                    .px(px(12.))
+                    .border_1()
+                    .border_color(p.line)
+                    .hover(|s| s.bg(p.tray))
                     .child(tr(cx, "Reset", "重置"))
                     .on_click(cx.listener(|s, _, _, cx| s.reset(cx)))
                     .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
@@ -537,54 +654,62 @@ impl Render for LlmCostCalculator {
             panel = panel.child(list);
         }
         if let Some(cost) = selected_cost {
-            panel = panel.child(
+            let breakdown_row = |label: &'static str, val: String| {
                 row()
-                    .gap(px(16.))
-                    .flex_wrap()
-                    .child(hint(
-                        format!("{} {}", tr(cx, "Input", "输入"), money(Some(cost.input))),
-                        p,
+                    .justify_between()
+                    .items_center()
+                    .text_size(px(12.5))
+                    .line_height(px(18.))
+                    .child(div().text_color(p.secondary).child(label))
+                    .child(
+                        div()
+                            .font_features(tabular())
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .child(val),
+                    )
+            };
+            panel = panel.child(
+                column()
+                    .w_full()
+                    .p(px(12.))
+                    .gap(px(6.))
+                    .rounded(radius)
+                    .bg(p.tray)
+                    .border_1()
+                    .border_color(p.line)
+                    .child(breakdown_row(
+                        tr(cx, "Input tokens", "输入费用"),
+                        money(Some(cost.input)),
                     ))
-                    .child(hint(
-                        format!(
-                            "{} {}",
-                            tr(cx, "Cached", "缓存"),
-                            money(Some(cost.cached_input))
-                        ),
-                        p,
+                    .child(breakdown_row(
+                        tr(cx, "Cached input", "缓存输入"),
+                        money(Some(cost.cached_input)),
                     ))
-                    .child(hint(
-                        format!("{} {}", tr(cx, "Output", "输出"), money(Some(cost.output))),
-                        p,
+                    .child(breakdown_row(
+                        tr(cx, "Output tokens", "输出费用"),
+                        money(Some(cost.output)),
                     ))
-                    .child(hint(
-                        format!(
-                            "{} ${:.5}",
-                            tr(cx, "Per request", "每次请求"),
-                            cost.per_request
-                        ),
-                        p,
-                    )),
+                    .child(
+                        div()
+                            .pt(px(6.))
+                            .mt(px(2.))
+                            .border_t_1()
+                            .border_color(p.line)
+                            .child(breakdown_row(
+                                tr(cx, "Cost per request", "每次请求成本"),
+                                format!("${:.5}", cost.per_request),
+                            )),
+                    ),
             );
         } else if !self.models.is_empty() {
-            panel=panel.child(div().text_color(p.danger).child(tr(cx,"Invalid price or usage; enter finite non-negative values and a cache rate between 0 and 1.","价格或用量无效；请输入有限的非负数和 0 到 1 之间的缓存比例。")));
+            panel = panel.child(div().text_color(p.danger).child(tr(
+                cx,
+                "Invalid price or usage; enter finite non-negative values and a cache rate between 0 and 1.",
+                "价格或用量无效；请输入有限的非负数和 0 到 1 之间的缓存比例。",
+            )));
         }
-        panel.child(hint(
-            if self.simulated {
-                tr(
-                    cx,
-                    "Sample prices and usage · illustrative estimate only",
-                    "样例价格和用量 · 仅供演示",
-                )
-            } else {
-                tr(
-                    cx,
-                    "Estimate from host-provided prices and usage",
-                    "根据宿主提供的价格和用量估算",
-                )
-            },
-            p,
-        ))
+        panel
     }
 }
 #[cfg(test)]

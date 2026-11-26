@@ -6,26 +6,25 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_btn, pro_ease, pro_eid, pro_empty_state, pro_fold,
-        pro_icon_btn, pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_presence,
-        pro_rolling_number, pro_selection_sensor, pro_shimmer_text, pro_skeleton_bar,
-        pro_spring_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_ease, pro_eid,
+        pro_empty_state, pro_fold, pro_icon_btn, pro_mark_selected, pro_mix_color,
+        pro_pill_indicator, pro_presence, pro_rolling_number, pro_selection_sensor,
+        pro_shimmer_text, pro_skeleton_bar, pro_spring_bar, pro_spring_f32, pro_swap_label,
+        pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
         family::{Slide, disabled_motion},
-        pro_icons::{AGENT_WAVE_MS, ProIcon, agent_pixel_cells, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, collections::HashMap, rc::Rc};
 use web_time::Instant;
 
-const SVG_HAND_APPROVAL: &str = r#"<path d="M52.5305 32.6557V24.8463C52.5305 22.1016 54.7555 19.8766 57.5001 19.8766C60.2448 19.8766 62.4698 22.1016 62.4698 24.8463V42.027C62.4698 53.3194 53.3154 62.4735 42.0233 62.4735H34.2388M22.7127 39.7552L15.94 31.8537C14.8314 30.5602 13.2129 29.8159 11.5094 29.8159H11.1235C8.11379 29.8159 5.67395 32.2558 5.67395 35.2655C5.67395 36.3412 5.99241 37.393 6.58919 38.2881L16.4118 53.0221C20.3482 58.9269 26.9753 62.4735 34.0719 62.4735" stroke="currentColor" stroke-width="4.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M52.534 24.1378V16.3284C52.534 13.5837 50.3091 11.3588 47.5644 11.3588C44.8197 11.3588 42.5948 13.5837 42.5948 16.3284V29.8174" stroke="currentColor" stroke-width="4.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M42.5958 29.8198V10.6513C42.5958 7.90661 40.3708 5.68163 37.6262 5.68163C34.8815 5.68163 32.6565 7.90661 32.6565 10.6513V28.4" stroke="currentColor" stroke-width="4.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M32.6576 28.3975V16.3284C32.6576 13.5837 30.4326 11.3588 27.6879 11.3588C24.9433 11.3588 22.7183 13.5837 22.7183 16.3284V39.7567" stroke="currentColor" stroke-width="4.7" stroke-linecap="round" stroke-linejoin="round"></path>"#;
-const SVG_THUMBS_UP: &str = r#"<path d="M2 12.5C2 11.3954 2.89543 10.5 4 10.5C5.65685 10.5 7 11.8431 7 13.5V17.5C7 19.1569 5.65685 20.5 4 20.5C2.89543 20.5 2 19.6046 2 18.5V12.5Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"></path><path d="M15.4787 7.80626L15.2124 8.66634C14.9942 9.37111 14.8851 9.72349 14.969 10.0018C15.0369 10.2269 15.1859 10.421 15.389 10.5487C15.64 10.7065 16.0197 10.7065 16.7791 10.7065H17.1831C19.7532 10.7065 21.0382 10.7065 21.6452 11.4673C21.7145 11.5542 21.7762 11.6467 21.8296 11.7437C22.2965 12.5921 21.7657 13.7351 20.704 16.0211C19.7297 18.1189 19.2425 19.1678 18.338 19.7852C18.2505 19.8449 18.1605 19.9013 18.0683 19.9541C17.116 20.5 15.9362 20.5 13.5764 20.5H13.0646C10.2057 20.5 8.77628 20.5 7.88814 19.6395C7 18.7789 7 17.3939 7 14.6239V13.6503C7 12.1946 7 11.4668 7.25834 10.8006C7.51668 10.1344 8.01135 9.58664 9.00069 8.49112L13.0921 3.96056C13.1947 3.84694 13.246 3.79012 13.2913 3.75075C13.7135 3.38328 14.3652 3.42464 14.7344 3.84235C14.774 3.8871 14.8172 3.94991 14.9036 4.07554C15.0388 4.27205 15.1064 4.37031 15.1654 4.46765C15.6928 5.33913 15.8524 6.37436 15.6108 7.35715C15.5838 7.46692 15.5488 7.5801 15.4787 7.80626Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"></path>"#;
+const SVG_HAND_APPROVAL: &str = r#"<path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v6M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 
 const COMPOSER_MODELS: [&str; 4] = ["Auto", "Sonnet 4.6", "Opus 4.6", "GPT-5.4"];
 
@@ -511,10 +510,14 @@ pub fn synthesize_revenue_reply(
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
 /// use kui::components::revenue_chat::RevenueChatBlock;
 ///
 /// let chat = cx.new(|cx| RevenueChatBlock::new("revenue-chat", cx));
+/// # }
 /// ```
 pub struct RevenueChatBlock {
     id: ElementId,
@@ -1113,7 +1116,7 @@ impl RevenueChatBlock {
                 let inner = div()
                     .w_full()
                     .px(px(14.))
-                    .py(px(12.))
+                    .py(px(11.))
                     .opacity(op)
                     .flex()
                     .flex_col()
@@ -1126,7 +1129,7 @@ impl RevenueChatBlock {
                             .truncate()
                             .child(kpi.label.clone()),
                     )
-                    .child(div().min_h(px(28.)).flex().items_center().child(val_el))
+                    .child(div().min_h(px(26.)).flex().items_center().child(val_el))
                     .when_some(kpi.change.clone(), |d, chg| {
                         d.child(
                             div()
@@ -1162,7 +1165,7 @@ impl RevenueChatBlock {
                 )
                 .flex_1()
                 .min_w(px(if narrow { 130. } else { 150. }))
-                .when(sel_t > 0.12, |d| d.shadow_xs())
+                .shadow(pro_card_shadow(p.dark))
             };
 
         if narrow && kpis.len() == 3 {
@@ -1410,7 +1413,11 @@ impl RevenueChatBlock {
             (lo, hi, br.from == br.to)
         });
 
-        let reveal = if reduced {
+        let is_streaming_turn = self
+            .stream_state
+            .as_ref()
+            .is_some_and(|(sid, _, _)| sid == turn_id);
+        let reveal = if reduced || !is_streaming_turn {
             1.0
         } else {
             pro_ease((self.boot_at.elapsed().as_secs_f32() / 0.80).clamp(0.0, 1.0))
@@ -1504,7 +1511,7 @@ impl RevenueChatBlock {
                     );
                 }
 
-                let mut line = PathBuilder::stroke(px(1.7));
+                let mut line = PathBuilder::stroke(px(1.8));
                 for (i, &ny) in cur_norm.iter().enumerate().take(vis_n) {
                     let pt = pt_at(i, ny);
                     if i == 0 {
@@ -1582,7 +1589,7 @@ impl RevenueChatBlock {
                     .bg(if p.dark { rgb(0x252528).into() } else { p.card })
                     .border_1()
                     .border_color(p.line_strong)
-                    .shadow_md()
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .gap(px(4.))
@@ -1757,13 +1764,13 @@ impl RevenueChatBlock {
                     transparent_black(),
                     sel,
                     div()
-                        .h(px(22.))
-                        .px(px(7.))
+                        .h(px(20.))
+                        .px(px(6.))
                         .flex()
                         .items_center()
                         .justify_center()
                         .whitespace_nowrap()
-                        .text_size(px(11.5))
+                        .text_size(px(11.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if sel { p.strong } else { p.muted })
                         .child(pr),
@@ -1794,12 +1801,13 @@ impl RevenueChatBlock {
 
         div()
             .px(px(if narrow { 10. } else { 14. }))
-            .pt(px(14.))
+            .pt(px(13.))
             .pb(px(10.))
-            .rounded(px(14.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .gap(px(10.))
@@ -1812,32 +1820,35 @@ impl RevenueChatBlock {
                     .gap(px(8.))
                     .child(
                         div()
-                            .text_size(px(12.5))
+                            .flex_1()
+                            .min_w(px(180.))
+                            .truncate()
+                            .text_size(px(12.))
                             .text_color(p.muted)
                             .child(caption.unwrap_or_default()),
                     )
                     .child(
                         div()
+                            .flex_none()
                             .flex()
-                            .flex_wrap()
                             .items_center()
                             .gap(px(10.))
-                            .text_size(px(12.))
+                            .text_size(px(11.5))
                             .text_color(p.muted)
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap(px(6.))
-                                    .child(div().w(px(10.)).h(px(3.)).rounded(px(1.5)).bg(blue_c))
+                                    .gap(px(5.))
+                                    .child(div().w(px(9.)).h(px(2.5)).rounded(px(1.5)).bg(blue_c))
                                     .child(tr(cx, "This year", "今年")),
                             )
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap(px(6.))
-                                    .child(div().w(px(10.)).h(px(2.)).rounded(px(1.)).bg(prev_c))
+                                    .gap(px(5.))
+                                    .child(div().w(px(9.)).h(px(2.)).rounded(px(1.)).bg(prev_c))
                                     .child(tr(cx, "Last year", "去年")),
                             )
                             .child(period_seg),
@@ -2068,10 +2079,11 @@ impl RevenueChatBlock {
                     .px(px(if narrow { 12. } else { 18. }))
                     .pt(px(16.))
                     .pb(px(14.))
-                    .rounded(px(14.))
+                    .rounded(px(12.))
                     .bg(p.card)
                     .border_1()
                     .border_color(p.line)
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
                     .gap(px(12.))
@@ -2590,10 +2602,11 @@ impl RevenueChatBlock {
             .px(px(if narrow { 10. } else { 14. }))
             .pt(px(14.))
             .pb(px(10.))
-            .rounded(px(14.))
+            .rounded(px(12.))
             .bg(p.card)
             .border_1()
             .border_color(p.line)
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .gap(px(10.))
@@ -2761,7 +2774,9 @@ impl RevenueChatBlock {
                         .flex()
                         .items_center()
                         .gap(px(12.))
-                        .child(analyst_pixel_mark(mark_color, true, elapsed_ms, reduced))
+                        .child(pro_agent_avatar(
+                            "claude", mark_color, 20., true, elapsed_ms, cx,
+                        ))
                         .child(pro_shimmer_text(
                             pro_eid(&self.id, format!("shim-{id}")),
                             tr(
@@ -2828,6 +2843,13 @@ impl RevenueChatBlock {
                     let tid_retry = id.clone();
                     let retry_txt = text.clone();
 
+                    let src_pill_bg: Hsla = if p.dark { rgb(0x27272b).into() } else { p.chip };
+                    let src_pill_bdr: Hsla = if p.dark {
+                        hsla(0., 0., 1., 0.08)
+                    } else {
+                        hsla(0., 0., 0., 0.06)
+                    };
+
                     let foot = div()
                         .flex()
                         .flex_wrap()
@@ -2845,15 +2867,20 @@ impl RevenueChatBlock {
                                 .when(!sources.is_empty(), |d| {
                                     d.child(tr(cx, "From", "数据来自")).children(
                                         sources.into_iter().map(|src| {
+                                            let art = pro_app_artwork(&src, 11.5, cx);
                                             div()
-                                                .h(px(20.))
+                                                .h(px(21.))
                                                 .px(px(7.))
                                                 .rounded(px(6.))
-                                                .bg(p.chip)
+                                                .bg(src_pill_bg)
+                                                .border_1()
+                                                .border_color(src_pill_bdr)
                                                 .flex()
                                                 .items_center()
+                                                .gap(px(5.))
                                                 .text_size(px(12.))
-                                                .text_color(p.text)
+                                                .text_color(p.ink)
+                                                .when_some(art, |el, icon| el.child(icon))
                                                 .child(src)
                                         }),
                                     )
@@ -2929,9 +2956,9 @@ impl RevenueChatBlock {
                                             .justify_center()
                                             .child(pro_svg(
                                                 "0 0 24 24",
-                                                SVG_THUMBS_UP,
+                                                r#"<path d="M7 11V19C7 19.5523 6.55228 20 6 20H4C3.44772 20 3 19.5523 3 19V12C3 11.4477 3.44772 11 4 11H7ZM7 11L10.6 4.7C11.1 3.8 12.3 3.6 13.1 4.2C13.7 4.7 13.9 5.5 13.7 6.3L12.8 10H18.4C19.8 10 20.8 11.3 20.4 12.7L18.9 18.2C18.6 19.3 17.6 20 16.5 20H9C7.9 20 7 19.1 7 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>"#,
                                                 14.,
-                                                if liked { p.blue } else { p.muted },
+                                                if liked { p.blue } else { p.text },
                                             )),
                                         cx,
                                         move |this, _, cx| {
@@ -3015,13 +3042,14 @@ impl RevenueChatBlock {
                                         .text_size(px(13.))
                                         .text_color(p.text)
                                         .child(prompt)
-                                        .child(pro_icon(ProIcon::ExternalArrow, 12.5, p.faint)),
+                                        .child(pro_icon(ProIcon::ExternalArrow, 12.5, p.muted)),
                                     cx,
                                     move |this, _, cx| {
                                         this.ask(p_str.clone(), None, cx);
                                     },
                                 )
                                 .flex_none()
+                                .shadow(pro_card_shadow(p.dark))
                             }),
                         );
                         body = body.child(chips);
@@ -3034,8 +3062,8 @@ impl RevenueChatBlock {
                     .items_start()
                     .gap(px(if narrow { 0. } else { 12. }))
                     .when(!narrow, |d| {
-                        d.child(div().mt(px(3.)).child(analyst_pixel_mark(
-                            mark_color, streaming, elapsed_ms, reduced,
+                        d.child(div().mt(px(2.)).child(pro_agent_avatar(
+                            "claude", mark_color, 20., streaming, elapsed_ms, cx,
                         )))
                     })
                     .child(
@@ -3077,7 +3105,7 @@ impl RevenueChatBlock {
             cx,
         );
         let send_bg = pro_mix_color(p.chip, p.primary, send_t);
-        let send_fg = pro_mix_color(p.faint, p.on_primary, send_t);
+        let send_fg = pro_mix_color(p.muted, p.on_primary, send_t);
         let model_name = COMPOSER_MODELS[self.model_index % COMPOSER_MODELS.len()];
         let policy_lbl = self.approval_policy.label(cx);
         let ed_opt = self.composer_editor.clone();
@@ -3093,7 +3121,7 @@ impl RevenueChatBlock {
                     .px(px(12.))
                     .pt(px(12.))
                     .pb(px(10.))
-                    .rounded(px(16.))
+                    .rounded(px(14.))
                     .bg(p.card)
                     .border_1()
                     .border_color(if self.editor_focused {
@@ -3101,10 +3129,10 @@ impl RevenueChatBlock {
                     } else {
                         p.line
                     })
-                    .when(!p.dark, |d| d.shadow_xs())
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .flex_col()
-                    .gap(px(12.))
+                    .gap(px(10.))
                     .child(pro_fold(
                         pro_eid(&self.id, "rc-attach-fold"),
                         self.attached_context,
@@ -3179,10 +3207,10 @@ impl RevenueChatBlock {
                                                 .gap(px(6.))
                                                 .whitespace_nowrap()
                                                 .child(pro_svg(
-                                                    "0 0 68.155 68.155",
+                                                    "0 0 24 24",
                                                     SVG_HAND_APPROVAL,
                                                     14.,
-                                                    p.muted,
+                                                    p.text,
                                                 ))
                                                 .when(!narrow, |d| {
                                                     d.child(pro_swap_label(
@@ -3725,42 +3753,6 @@ impl RenderOnce for TurnEntrance {
             .opacity(amt)
             .child(self.content)
     }
-}
-
-fn analyst_pixel_mark(color: Hsla, busy: bool, elapsed_ms: f32, reduced: bool) -> Div {
-    let cells = agent_pixel_cells("RevenueAnalyst");
-    let mut grid = div()
-        .size(px(16.))
-        .flex_none()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(px(1.5));
-    for r in 0..3usize {
-        let mut row = div().flex().items_center().gap(px(1.5));
-        for c in 0..3usize {
-            let i = r * 3 + c;
-            let on = cells[i];
-            let alpha = if busy && !reduced {
-                let phase = ((elapsed_ms + AGENT_WAVE_MS[i]) / 1200.0) * std::f32::consts::TAU;
-                let wave = 0.58 + 0.42 * phase.cos();
-                if on { wave } else { 0.16 * wave }
-            } else if on {
-                1.0
-            } else {
-                0.0
-            };
-            row = row.child(
-                div()
-                    .size(px(3.))
-                    .rounded(px(0.75))
-                    .bg(color.opacity(alpha)),
-            );
-        }
-        grid = grid.child(row);
-    }
-    grid
 }
 
 fn paint_ringed_dot(

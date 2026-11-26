@@ -6,9 +6,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_ease, pro_eid,
-        pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number, pro_skeleton_bar,
-        pro_swap_label, pro_tactile, pro_toast_banner, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_ease, pro_eid, pro_empty_state, pro_fold, pro_mix_color, pro_rolling_number,
+        pro_skeleton_bar, pro_swap_label, pro_tactile, pro_toast_banner, tr,
     },
     foundation::Theme,
     primitives::{
@@ -158,6 +158,26 @@ fn sort_items_by_priority(mut items: Vec<AwayItem>) -> Vec<AwayItem> {
 }
 
 /// Inline thread catch-up card showing updates since the user left, folding into a one-line divider.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::away_summary::{AwaySummary, AwaySummaryEvent};
+///
+/// let summary = cx.new(|cx| {
+///     AwaySummary::new("thread-away-summary", cx)
+///         .with_since_duration("2h 14m")
+///         .with_limit(5)
+/// });
+/// cx.subscribe(&summary, |_, event: &AwaySummaryEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AwaySummary {
     id: ElementId,
     focus: FocusHandle,
@@ -618,6 +638,7 @@ impl Render for AwaySummary {
                         .bg(p.card)
                         .border_1()
                         .border_color(p.line)
+                        .shadow(pro_card_shadow(p.dark))
                         .flex()
                         .flex_col()
                         .gap(px(10.0))
@@ -925,7 +946,7 @@ impl Render for AwaySummary {
             .bg(card_bg)
             .border_1()
             .border_color(p.line)
-            .when(!p.dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(p.dark))
             .flex()
             .flex_col()
             .child(
@@ -1055,7 +1076,7 @@ impl Render for AwaySummary {
                         .flex()
                         .items_center()
                         .gap(px(10.0))
-                        .child(pro_agent_avatar("orchestrator", p.purple, 20.0, false, 0.0, cx))
+                        .child(pro_agent_avatar("claude", p.purple, 20.0, false, 0.0, cx))
                         .child(
                             div()
                                 .flex_1()
@@ -1143,6 +1164,7 @@ impl Render for AwaySummary {
                     } else {
                         p.line_strong
                     })
+                    .shadow(pro_card_shadow(p.dark))
                     .flex()
                     .items_center()
                     .gap(px(10.0))
@@ -1151,6 +1173,8 @@ impl Render for AwaySummary {
                             .flex_1()
                             .min_w_0()
                             .h(px(22.0))
+                            .flex()
+                            .items_center()
                             .when_some(ed_view, |d, ed| d.child(ed)),
                     )
                     .child(

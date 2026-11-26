@@ -158,6 +158,25 @@ fn target(status: MascotStatus, time: f32, age: f32, reduced: bool) -> Pose {
     }
     pose
 }
+/// `AiMascot` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ai_mascot::{AiMascot, MascotStatus};
+///
+/// let control = cx.new(|_| {
+///     AiMascot::new("Kense")
+///         .with_status(MascotStatus::Thinking)
+///         .with_size(24.0)
+///         .follow_pointer(false)
+/// });
+/// # }
+/// ```
 pub struct AiMascot {
     name: SharedString,
     status: MascotStatus,

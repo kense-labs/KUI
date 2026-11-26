@@ -100,6 +100,23 @@ pub enum InstallSnippetEvent {
     },
 }
 /// Frameworks and snippets are supplied by the host. Tokens `{{API_KEY}}` are filled only after explicit key generation.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::install_snippet::{InstallCommand, InstallFramework, InstallSnippet, InstallStep};
+///
+/// let steps = vec![InstallStep::new("install", "Install", vec![
+///     InstallCommand::new("Cargo", "cargo add kense-kui --rename kui"),
+/// ])];
+/// let frameworks = vec![InstallFramework::new("rust", "Rust", steps)];
+/// let control = cx.new(|cx| InstallSnippet::new(frameworks, cx));
+/// # }
+/// ```
 pub struct InstallSnippet {
     frameworks: Vec<InstallFramework>,
     title: Option<SharedString>,
@@ -579,11 +596,6 @@ impl Render for InstallSnippet {
                 .gap(px(24.));
             for (i, step) in steps.iter().enumerate() {
                 let done = self.done.contains(&(self.selected, i));
-                let marker = if done {
-                    "✓".to_string()
-                } else {
-                    (i + 1).to_string()
-                };
                 let confirm_pending = self
                     .active_confirm
                     .is_some_and(|(_, f, index)| f == self.selected && index == i);
@@ -714,7 +726,11 @@ impl Render for InstallSnippet {
                             .items_center()
                             .justify_center()
                             .text_size(px(12.))
-                            .child(marker),
+                            .child(if done {
+                                icon(Glyph::Check, 13., p.success).into_any_element()
+                            } else {
+                                (i + 1).to_string().into_any_element()
+                            }),
                     )
                     .child(
                         div()

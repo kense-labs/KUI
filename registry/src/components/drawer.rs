@@ -10,6 +10,20 @@ pub enum DrawerEvent {
     Opened,
     Closed,
 }
+/// `Drawer` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::drawer::Drawer;
+///
+/// let control = cx.new(|cx| Drawer::new("Open details", "Project details", Box::new(|_, _| gpui::div().child("Owner: Maya").into_any_element()), cx));
+/// # }
+/// ```
 pub struct Drawer {
     trigger: SharedString,
     title: SharedString,

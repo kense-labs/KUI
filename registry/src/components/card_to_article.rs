@@ -149,6 +149,24 @@ fn mix(from: Bounds<Pixels>, to: Bounds<Pixels>, t: f32) -> Bounds<Pixels> {
 }
 
 /// Grid and article reader driven by the same image and title.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::card_to_article::{ArticleItem, CardToArticle};
+///
+/// let item = ArticleItem::new("journal", "The journal", "story.jpg".to_owned(), "An open notebook", |_, _| {
+///     gpui::div().child("A first paragraph.").into_any_element()
+/// })
+/// .with_tag("Journal")
+/// .with_meta("3 min read");
+/// let control = cx.new(|cx| CardToArticle::new(vec![item], cx));
+/// # }
+/// ```
 pub struct CardToArticle {
     items: Vec<ArticleItem>,
     slots: Vec<(FocusHandle, TriggerBounds)>,

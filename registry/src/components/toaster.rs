@@ -7,8 +7,8 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_eid, pro_empty_state, pro_skeleton_bar, pro_spring_f32, pro_tactile,
-        pro_view_transition, tr,
+        ProPalette, pro_card_shadow, pro_eid, pro_empty_state, pro_skeleton_bar, pro_spring_f32,
+        pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -848,9 +848,10 @@ impl Render for Toaster {
                 .w_full()
                 .max_w(px(356.))
                 .rounded(px(10.))
-                .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
+                .bg(if p.dark { rgb(0x222226) } else { rgb(0xffffff) })
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Bell,
                     tr(cx, "No notifications", "暂无通知提醒"),
@@ -866,12 +867,12 @@ impl Render for Toaster {
         }
 
         let card_bg: Hsla = if p.dark {
-            rgb(0x1c1c1e).into()
+            rgb(0x222226).into()
         } else {
             rgb(0xffffff).into()
         };
         let card_border: Hsla = if p.dark {
-            hsla(0., 0., 1., 0.10)
+            hsla(0., 0., 1., 0.09)
         } else {
             hsla(0., 0., 0., 0.08)
         };
@@ -968,7 +969,7 @@ impl Render for Toaster {
                             .bg(card_bg)
                             .border_1()
                             .border_color(card_border)
-                            .shadow_sm()
+                            .shadow(pro_card_shadow(p.dark))
                             .flex()
                             .flex_col()
                             .gap(px(12.))
@@ -1210,6 +1211,7 @@ impl Render for Toaster {
         // Collect snapshot data and step per-card `Slide` springs (`0.94 -> 1.0` scale & vertical offset)
         struct CardRenderSpec {
             id: u64,
+            slot: usize,
             kind: ToastKind,
             title: SharedString,
             desc: Option<SharedString>,
@@ -1268,6 +1270,7 @@ impl Render for Toaster {
             };
             specs_rev.push(CardRenderSpec {
                 id: t.spec.id,
+                slot,
                 kind: t.spec.kind,
                 title: t.spec.title.clone(),
                 desc: t.spec.description.clone(),
@@ -1285,6 +1288,36 @@ impl Render for Toaster {
             let anim_scale = card.anim_scale;
             let anim_content = card.anim_content;
             let card_eid = pro_eid(&self.id, format!("toast-{}", card.id));
+
+            // Tonal elevation steps across stacked background toasts (`#222226` -> `#1c1c20` -> `#17171b` in dark)
+            let slot_bg: Hsla = if p.dark {
+                let stacked_hex = match card.slot {
+                    0 => 0x222226,
+                    1 => 0x1c1c20,
+                    _ => 0x17171b,
+                };
+                if fanned && card.slot > 0 {
+                    rgb(0x222226).into()
+                } else {
+                    rgb(stacked_hex).into()
+                }
+            } else {
+                let stacked_hex = match card.slot {
+                    0 => 0xffffff,
+                    1 => 0xfafafb,
+                    _ => 0xf3f3f5,
+                };
+                if fanned && card.slot > 0 {
+                    rgb(0xffffff).into()
+                } else {
+                    rgb(stacked_hex).into()
+                }
+            };
+            let slot_border: Hsla = if p.dark {
+                hsla(0., 0., 1., 0.09)
+            } else {
+                hsla(0., 0., 0., 0.08)
+            };
 
             let inset_x = ((1.0 - anim_scale) * CARD_WIDTH * 0.5).max(0.);
             let card_h = CARD_HEIGHT * (0.90 + 0.10 * anim_scale);
@@ -1420,10 +1453,10 @@ impl Render for Toaster {
                 .h(px(card_h))
                 .opacity(swipe_fade)
                 .rounded(px(10.))
-                .bg(card_bg)
+                .bg(slot_bg)
                 .border_1()
-                .border_color(card_border)
-                .shadow_md()
+                .border_color(slot_border)
+                .shadow(pro_card_shadow(p.dark))
                 .overflow_hidden()
                 .cursor(if self.active_drag.is_some_and(|d| d.toast_id == card.id) {
                     CursorStyle::ClosedHand

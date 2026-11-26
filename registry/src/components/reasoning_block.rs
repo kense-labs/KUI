@@ -19,6 +19,20 @@ pub enum NoteState {
 pub struct StopRequested;
 pub struct RetryRequested;
 
+/// `ExplanationNote` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::reasoning_block::{ExplanationNote};
+///
+/// let control = cx.new(|_| ExplanationNote::new("explanation",vec![("Read sources".into(),"Checked release notes and public docs.".into())]));
+/// # }
+/// ```
 pub struct ExplanationNote {
     id: SharedString,
     pub notes: Vec<(String, String)>,

@@ -48,6 +48,20 @@ impl Compaction {
     }
 }
 
+/// `CapacityBands` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::context_window::{CapacityBands, Band};
+///
+/// let control = cx.new(|_| CapacityBands::new("context", "Assistant", 128000, vec![Band { label: "Messages".into(), tokens: 24000, color: gpui::rgb(0x628995).into() }]));
+/// # }
+/// ```
 pub struct CapacityBands {
     id: SharedString,
     pub model: String,

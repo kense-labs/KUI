@@ -7,9 +7,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_icon_btn,
-        pro_mark_selected, pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar,
-        pro_swap_label, pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_icon_btn, pro_mark_selected, pro_pill_indicator, pro_selection_sensor,
+        pro_skeleton_bar, pro_swap_label, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -23,7 +23,7 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
 
-const ICON_RETURN: &str = r#"<path d="M12.5 4v3a2 2 0 0 1-2 2h-7M6 6.5 3.5 9 6 11.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>"#;
+const ICON_RETURN: &str = r#"<path d="M18 6v4.5a2.5 2.5 0 0 1-2.5 2.5H6m3.5-3.5L6 13l3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>"#;
 
 const ICON_HELP: &str = r#"<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>"#;
 
@@ -478,11 +478,15 @@ fn render_highlighted_text(text: &str, query: &str, fg: Hsla, mark_bg: Hsla) -> 
 }
 
 fn render_keycap(label: &str, active: bool, p: &ProPalette) -> Div {
+    let fg = if active { p.text } else { p.muted };
+    let is_return =
+        label == "↵" || label.eq_ignore_ascii_case("enter") || label.eq_ignore_ascii_case("return");
     div()
         .min_w(px(20.))
         .h(px(20.))
         .px(px(5.))
         .rounded(px(5.))
+        .bg(p.chip)
         .border_1()
         .border_color(p.line_strong)
         .flex()
@@ -491,8 +495,11 @@ fn render_keycap(label: &str, active: bool, p: &ProPalette) -> Div {
         .text_size(px(11.))
         .line_height(px(16.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(if active { p.text } else { p.muted })
-        .child(label.to_string())
+        .text_color(fg)
+        .when(is_return, |d| {
+            d.child(pro_svg("0 0 24 24", ICON_RETURN, 12., fg))
+        })
+        .when(!is_return, |d| d.child(label.to_string()))
 }
 
 #[derive(IntoElement)]
@@ -894,7 +901,7 @@ impl Render for CommandMenu {
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
-                        .shadow_lg()
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -935,6 +942,7 @@ impl Render for CommandMenu {
                 .bg(if p.dark { rgb(0x1c1c1e) } else { rgb(0xffffff) })
                 .border_1()
                 .border_color(p.line)
+                .shadow(pro_card_shadow(p.dark))
                 .child(pro_empty_state(
                     ProIcon::Terminal,
                     tr(cx, "No commands registered", "暂无可用命令"),
@@ -1047,12 +1055,13 @@ impl Render for CommandMenu {
                         .w(px(22.))
                         .h(px(20.))
                         .rounded(px(5.))
+                        .bg(p.chip)
                         .border_1()
                         .border_color(p.line_strong)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(pro_svg("0 0 16 16", ICON_RETURN, 12., p.muted)),
+                        .child(pro_svg("0 0 24 24", ICON_RETURN, 12., p.muted)),
                 )
             });
 
@@ -1111,9 +1120,13 @@ impl Render for CommandMenu {
                     .size(px(20.))
                     .flex_none()
                     .rounded(px(5.))
-                    .bg(if p.dark { rgb(0x242428) } else { rgb(0xffffff) })
+                    .bg(p.logo_tile)
                     .border_1()
-                    .border_color(p.line)
+                    .border_color(if p.dark {
+                        hsla(0., 0., 1., 0.09)
+                    } else {
+                        hsla(0., 0., 0., 0.08)
+                    })
                     .flex()
                     .items_center()
                     .justify_center()
@@ -1459,7 +1472,7 @@ impl Render for CommandMenu {
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .shadow_lg()
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

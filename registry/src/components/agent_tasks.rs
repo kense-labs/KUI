@@ -361,6 +361,22 @@ enum TreeFocusTarget {
 }
 
 /// Interactive Agent / Tasks workspace screen (`agent-tasks`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::agent_tasks::{AgentTasksScreen, AgentTasksEvent};
+///
+/// let screen = cx.new(|cx| AgentTasksScreen::new("agent-tasks", cx));
+/// cx.subscribe(&screen, |_, event: &AgentTasksEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct AgentTasksScreen {
     id: ElementId,
     id_name: SharedString,
@@ -1888,7 +1904,10 @@ impl AgentTasksScreen {
                     |_, _, _, _| (),
                 )
                 .absolute()
-                .size_0(),
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(px(0.)),
             )
             .child(header)
             .child(new_bar)

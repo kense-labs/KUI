@@ -18,7 +18,7 @@
   "files": [
     {
       "path": "components/search_field.rs",
-      "content": "//! A query field with a reserved clear action.\nuse crate::primitives::{\n    editor::InputMode,\n    field::{Field, FieldStyle},\n};\n\n/// Defines the input behavior of this field.\npub struct SearchFieldStyle;\nimpl FieldStyle for SearchFieldStyle {\n    const MODE: InputMode = InputMode::Search;\n}\n/// A query field with a reserved clear action.\npub type SearchField = Field<SearchFieldStyle>;\n"
+      "content": "//! A query field with a reserved clear action.\nuse crate::primitives::{\n    editor::InputMode,\n    field::{Field, FieldStyle},\n};\n\n/// Defines the input behavior of this field.\n///\n/// # Examples\n///\n/// ```no_run\n/// # #[allow(unused_variables, unused_imports)]\n/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {\n/// # use gpui::prelude::*;\n/// use gpui::prelude::*;\n/// use kui::components::search_field::SearchField;\n///\n/// let control = cx.new(|cx| SearchField::new(\"query\", \"Search projects\", window, cx).with_placeholder(\"Search by name\", cx));\n/// # }\n/// ```\npub struct SearchFieldStyle;\nimpl FieldStyle for SearchFieldStyle {\n    const MODE: InputMode = InputMode::Search;\n}\n/// A query field with a reserved clear action.\npub type SearchField = Field<SearchFieldStyle>;\n"
     },
     {
       "path": "primitives/control.rs",

@@ -7,10 +7,10 @@
 
 use crate::{
     components::pro_chrome::{
-        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_check_draw, pro_connector_pulse,
-        pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color, pro_popover_presence,
-        pro_skeleton_bar, pro_spring_f32, pro_step_transition, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProBtnStyle, ProPalette, pro_agent_avatar, pro_btn, pro_card_shadow, pro_check_draw,
+        pro_connector_pulse, pro_eid, pro_empty_state, pro_icon_btn, pro_mix_color,
+        pro_popover_presence, pro_skeleton_bar, pro_spring_f32, pro_step_transition, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -418,6 +418,24 @@ struct TreeBoundsMap {
 }
 
 /// Interactive branching decision tree with live `PathBuilder` connectors, consequence flags, and custom path input.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::decision_tree::{DecisionTree, DecisionTreeEvent};
+///
+/// let tree = cx.new(|cx| {
+///     DecisionTree::new("incident-decision-tree", cx)
+/// });
+/// cx.subscribe(&tree, |_, event: &DecisionTreeEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct DecisionTree {
     id: ElementId,
     focus: FocusHandle,
@@ -1041,10 +1059,20 @@ impl Render for DecisionTree {
             for (ri, slot) in row_weights.iter_mut().enumerate().take(total_rows.min(5)) {
                 let row_dim = confirmed_idx.is_some_and(|ci| ci != ri)
                     || (confirmed_idx.is_none() && hot_idx.is_some_and(|hi| hi != ri));
+                let rest_quiet = confirmed_idx.is_none()
+                    && hot_idx.is_none()
+                    && pick_idx.is_some_and(|pi| pi != ri);
                 let row_hot = hot_idx == Some(ri);
+                let target_op = if row_dim {
+                    0.34
+                } else if rest_quiet {
+                    0.56
+                } else {
+                    1.0
+                };
                 let op = pro_spring_f32(
                     pro_eid(&self.id, format!("dt-row-op-{}-{ri}", dec.id)),
-                    if row_dim { 0.32 } else { 1.0 },
+                    target_op,
                     0.22,
                     w,
                     cx,
@@ -1161,6 +1189,7 @@ impl Render for DecisionTree {
                 ),
             };
 
+            let agent_seed = format!("{} {}", dec.agent, dec.model);
             let root_sensor = bounds_map.root.clone();
             let root_col = div()
                 .when(!stacked, |d| d.w(px(208.0)).flex_none())
@@ -1181,22 +1210,22 @@ impl Render for DecisionTree {
                         .child(
                             div()
                                 .w_full()
-                                .p(px(14.0))
+                                .p(px(13.0))
                                 .rounded(px(9.0))
                                 .bg(card_bg)
                                 .border_1()
                                 .border_color(p.line_strong)
-                                .when(!p.dark, |d| d.shadow_xs())
+                                .shadow(pro_card_shadow(p.dark))
                                 .flex()
                                 .flex_col()
-                                .gap(px(10.0))
+                                .gap(px(9.0))
                                 .child(
                                     div()
                                         .flex()
                                         .items_center()
                                         .gap(px(9.0))
                                         .child(pro_agent_avatar(
-                                            dec.agent.as_ref(),
+                                            agent_seed.as_str(),
                                             p.orange,
                                             28.0,
                                             self.confirmed.is_none(),
@@ -1255,7 +1284,7 @@ impl Render for DecisionTree {
                 })
                 .flex()
                 .flex_col()
-                .gap(px(14.0));
+                .gap(px(9.0));
 
             for (bi, branch) in dec.branches.iter().take(4).enumerate() {
                 let is_chosen = self.confirmed.as_ref().is_some_and(|c| c.branch_idx == bi);
@@ -1265,7 +1294,7 @@ impl Render for DecisionTree {
                 let br_border = if is_chosen {
                     p.green
                 } else if branch.pick {
-                    p.blue.opacity(if is_hot { 0.65 } else { 0.38 })
+                    p.blue.opacity(if is_hot { 0.72 } else { 0.48 })
                 } else if is_hot {
                     p.line_strong
                 } else {
@@ -1274,9 +1303,23 @@ impl Render for DecisionTree {
                 let br_hov_border = if is_chosen {
                     p.green
                 } else if branch.pick {
-                    p.blue.opacity(0.75)
+                    p.blue.opacity(0.80)
                 } else {
                     p.line_strong
+                };
+                let br_shadow = if branch.pick && confirmed_idx.is_none() {
+                    let mut sh = pro_card_shadow(p.dark);
+                    sh.push(
+                        BoxShadow::new(
+                            px(0.),
+                            px(0.),
+                            p.blue.opacity(if p.dark { 0.20 } else { 0.14 }),
+                        )
+                        .blur_radius(px(14.)),
+                    );
+                    sh
+                } else {
+                    pro_card_shadow(p.dark)
                 };
 
                 let br_sensor = bounds_map.branches[bi].clone();
@@ -1303,15 +1346,15 @@ impl Render for DecisionTree {
                             is_chosen,
                             div()
                                 .w_full()
-                                .px(px(12.0))
-                                .py(px(9.0))
+                                .px(px(11.0))
+                                .py(px(8.0))
                                 .flex()
                                 .items_start()
                                 .gap(px(8.0))
                                 .child(
                                     div()
                                         .size(px(17.0))
-                                        .mt(px(1.0))
+                                        .mt(px(0.5))
                                         .flex_none()
                                         .rounded(px(4.5))
                                         .bg(fill_bg)
@@ -1329,19 +1372,19 @@ impl Render for DecisionTree {
                                         .min_w_0()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(2.0))
+                                        .gap(px(1.5))
                                         .child(
                                             div()
                                                 .text_size(px(13.0))
                                                 .font_weight(FontWeight::MEDIUM)
-                                                .line_height(px(18.0))
+                                                .line_height(px(17.0))
                                                 .text_color(p.ink)
                                                 .child(branch.label.clone()),
                                         )
                                         .when(branch.pick, |d| {
                                             d.child(
                                                 div()
-                                                    .text_size(px(11.5))
+                                                    .text_size(px(11.0))
                                                     .text_color(p.blue)
                                                     .child(pick_tag),
                                             )
@@ -1353,7 +1396,7 @@ impl Render for DecisionTree {
                             },
                         )
                         .w_full()
-                        .when(!p.dark, |d| d.shadow_xs())
+                        .shadow(br_shadow)
                         .on_hover(cx.listener(
                             move |this, inside: &bool, _, cx| {
                                 if *inside {
@@ -1383,6 +1426,7 @@ impl Render for DecisionTree {
                             .bg(card_bg)
                             .border_1()
                             .border_color(p.green.opacity(0.5))
+                            .shadow(pro_card_shadow(p.dark))
                             .flex()
                             .flex_col()
                             .gap(px(5.0))
@@ -1422,27 +1466,16 @@ impl Render for DecisionTree {
                             ))),
                     )
                 } else if let Some(sub_q) = &branch.sub_question {
-                    let mut sub_col = div().flex().flex_col().items_start().gap(px(6.0));
+                    let mut sub_col = div().flex().flex_col().items_start().gap(px(5.0));
                     sub_col = sub_col.child(
                         div()
-                            .px(px(10.0))
-                            .py(px(5.5))
-                            .rounded(px(8.0))
-                            .bg(card_bg)
-                            .border_1()
-                            .border_color(p.line)
+                            .px(px(2.0))
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.ink)
+                            .text_color(p.text)
                             .child(sub_q.clone()),
                     );
-                    let mut sub_list = div()
-                        .pl(px(14.0))
-                        .border_l_1()
-                        .border_color(p.line_strong)
-                        .flex()
-                        .flex_col()
-                        .gap(px(5.0));
+                    let mut sub_list = div().flex().flex_col().gap(px(4.5));
                     for (si, so) in branch.sub_options.iter().enumerate() {
                         let eff_el =
                             self.render_consequence_line(&so.effect, format!("s-{bi}-{si}"), cx);
@@ -1455,7 +1488,7 @@ impl Render for DecisionTree {
                                 card_bg,
                                 pro_mix_color(card_bg, p.hover, 0.70),
                                 if so.pick {
-                                    p.blue.opacity(0.35)
+                                    p.blue.opacity(0.42)
                                 } else {
                                     p.line
                                 },
@@ -1463,15 +1496,29 @@ impl Render for DecisionTree {
                                 false,
                                 div()
                                     .px(px(10.0))
-                                    .py(px(6.0))
+                                    .py(px(5.5))
                                     .flex()
                                     .flex_col()
-                                    .gap(px(2.0))
+                                    .gap(px(1.5))
                                     .child(
                                         div()
                                             .flex()
                                             .items_center()
-                                            .gap(px(7.0))
+                                            .gap(px(6.5))
+                                            .child(
+                                                div()
+                                                    .size(px(15.0))
+                                                    .flex_none()
+                                                    .rounded(px(4.0))
+                                                    .bg(fill_bg)
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .text_size(px(10.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(p.muted)
+                                                    .child(format!("{}", si + 1)),
+                                            )
                                             .child(
                                                 div()
                                                     .text_size(px(12.5))
@@ -1492,6 +1539,7 @@ impl Render for DecisionTree {
                                         div()
                                             .flex()
                                             .items_center()
+                                            .justify_between()
                                             .gap(px(8.0))
                                             .child(eff_el)
                                             .when_some(apps_el, |d, a| d.child(a)),
@@ -1501,6 +1549,7 @@ impl Render for DecisionTree {
                                     this.choose_branch(bi, Some(si), cx);
                                 },
                             )
+                            .shadow(pro_card_shadow(p.dark))
                             .on_hover(cx.listener(
                                 move |this, inside: &bool, _, cx| {
                                     if *inside {
@@ -1513,7 +1562,7 @@ impl Render for DecisionTree {
                     }
                     sub_col.child(sub_list).into_any_element()
                 } else {
-                    let mut lines = div().flex_1().min_w_0().flex().flex_col().gap(px(2.0));
+                    let mut lines = div().flex_1().min_w_0().flex().flex_col().gap(px(1.5));
                     for (ei, eff) in branch.effects.iter().enumerate() {
                         lines = lines.child(self.render_consequence_line(
                             eff,
@@ -1523,8 +1572,8 @@ impl Render for DecisionTree {
                     }
                     let apps_el = render_app_cluster(&branch.apps, card_bg, &p, cx);
                     div()
-                        .px(px(12.0))
-                        .py(px(8.0))
+                        .px(px(11.0))
+                        .py(px(6.5))
                         .rounded(px(8.0))
                         .bg(leaf_bg)
                         .border_1()
@@ -1894,15 +1943,15 @@ impl Render for DecisionTree {
                     .w_full()
                     .flex()
                     .flex_col()
-                    .gap(px(14.0))
+                    .gap(px(10.0))
                     .child(
                         div()
                             .relative()
                             .w_full()
-                            .py(px(14.0))
+                            .py(px(6.0))
                             .flex()
-                            .when(stacked, |d| d.flex_col().items_start().gap(px(18.0)))
-                            .when(!stacked, |d| d.items_center().gap(px(34.0)))
+                            .when(stacked, |d| d.flex_col().items_start().gap(px(16.0)))
+                            .when(!stacked, |d| d.items_center().gap(px(30.0)))
                             .when_some(connector_layer, |d, cl| d.child(cl))
                             .child(root_col)
                             .child(branches_col),
@@ -1981,7 +2030,7 @@ impl Render for DecisionTree {
             .tab_index(0)
             .relative()
             .w_full()
-            .py(px(22.0))
+            .py(px(14.0))
             .px(px(16.0))
             .flex()
             .flex_col()
@@ -2053,7 +2102,7 @@ impl Render for DecisionTree {
                     .max_w(px(800.0))
                     .flex()
                     .flex_col()
-                    .gap(px(14.0))
+                    .gap(px(10.0))
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(b) = bounds.first() {
                             let w_px = f32::from(b.size.width);

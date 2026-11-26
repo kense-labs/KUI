@@ -5,9 +5,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_check_draw, pro_eid, pro_empty_state, pro_popover_presence,
-        pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_popover_presence, pro_skeleton_bar, pro_spring_f32, pro_swap_label, pro_tactile,
+        pro_toast_banner, pro_view_transition, tr,
     },
     primitives::{
         clipboard,
@@ -34,10 +34,6 @@ const SORT_DOWN_SVG: &str = r#"<path d="M8 3.5v9M5 9.5l3 3 3-3" stroke="currentC
 const SORT_UP_SVG: &str = r#"<path d="M8 12.5v-9M5 6.5l3-3 3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>"#;
 const PLUS_ROW_SVG: &str = r#"<path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>"#;
 
-const FIGMA_LOGO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 38 57" fill="none"><path d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0Z" fill="#1ABCFE"/><path d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 1 1-19 0Z" fill="#0ACF83"/><path d="M19 0v19h9.5a9.5 9.5 0 1 0 0-19H19Z" fill="#FF7262"/><path d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5Z" fill="#F24E1E"/><path d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5Z" fill="#A259FF"/></svg>"##;
-const LINEAR_LOGO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#5E6AD2"><path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z"/></svg>"##;
-const VERCEL_INNER_SVG: &str =
-    r#"<path d="M24 22.525H0l12-21.05 12 21.05z" fill="currentColor"></path>"#;
 const FRAMER_INNER_SVG: &str =
     r#"<path d="M4 0h16v8h-8zM4 8h8l8 8H4zM4 16h8v8z" fill="currentColor"></path>"#;
 const LOOM_LOGO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#625DF5"><path d="M24 10.665h-7.018l6.078-3.509-1.335-2.312-6.078 3.509 3.508-6.077L16.843.94l-3.508 6.077V0h-2.67v7.018L7.156.94 4.844 2.275l3.509 6.077-6.078-3.508L.94 7.156l6.078 3.509H0v2.67h7.017L.94 16.844l1.335 2.313 6.077-3.508-3.509 6.077 2.312 1.335 3.509-6.078V24h2.67v-7.017l3.508 6.077 2.312-1.335-3.509-6.078 6.078 3.509 1.335-2.313-6.077-3.508h7.017v-2.67H24zm-12 4.966a3.645 3.645 0 1 1 0-7.29 3.645 3.645 0 0 1 0 7.29z"/></svg>"##;
@@ -373,6 +369,40 @@ fn parse_numeric_sort(raw: &str) -> Option<f64> {
 }
 
 /// Spreadsheet-style editable data table component (`data-table`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::data_table::{DataColumn, DataColumnType, DataRow, DataTable, DataTableEvent};
+///
+/// let table = cx.new(|cx| {
+///     DataTable::new("design-stack", cx)
+///         .with_title("Design Stack")
+///         .with_columns(vec![
+///             DataColumn::new("tool", "Tool").with_type(DataColumnType::Title),
+///             DataColumn::new("category", "Category")
+///                 .with_type(DataColumnType::Tag)
+///                 .with_options(["Design", "Hosting", "Website"]),
+///             DataColumn::new("website", "Website").with_type(DataColumnType::Link),
+///             DataColumn::new("seats", "Seats").with_type(DataColumnType::Number),
+///         ])
+///         .with_rows(vec![
+///             DataRow::new("figma")
+///                 .with_cell("tool", "Figma")
+///                 .with_cell("category", "Design")
+///                 .with_cell("website", "figma.com")
+///                 .with_cell("seats", "24"),
+///         ])
+/// });
+/// cx.subscribe(&table, |_, ev: &DataTableEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct DataTable {
     id: ElementId,
     title: SharedString,
@@ -1318,27 +1348,52 @@ impl DataTable {
     }
 
     fn render_row_logo(&self, logo: &DataRowLogo, p: &ProPalette, cx: &App) -> AnyElement {
-        let fg = if p.dark {
-            rgb(0xffffff).into()
+        let fg: Hsla = if p.dark {
+            rgb(0xf4f4f6).into()
         } else {
-            rgb(0x000000).into()
+            rgb(0x111113).into()
+        };
+        let tile_border: Hsla = if p.dark {
+            hsla(0., 0., 1., 0.09)
+        } else {
+            hsla(0., 0., 0., 0.08)
+        };
+        let wrap_tile = |inner: AnyElement| -> AnyElement {
+            div()
+                .size(px(20.))
+                .flex_none()
+                .rounded(px(5.))
+                .bg(p.logo_tile)
+                .border_1()
+                .border_color(tile_border)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(inner)
+                .into_any_element()
         };
         match logo {
-            DataRowLogo::Figma => pro_raw_svg(FIGMA_LOGO_SVG, 16., 16.),
-            DataRowLogo::Linear => pro_raw_svg(LINEAR_LOGO_SVG, 16., 16.),
-            DataRowLogo::Vercel => pro_svg("0 0 24 24", VERCEL_INNER_SVG, 15., fg),
-            DataRowLogo::Framer => pro_svg("0 0 24 24", FRAMER_INNER_SVG, 15., fg),
-            DataRowLogo::Loom => pro_raw_svg(LOOM_LOGO_SVG, 16., 16.),
-            DataRowLogo::App(name) => pro_app_artwork(name, 16., cx).unwrap_or_else(|| {
-                div()
-                    .size(px(16.))
-                    .rounded(px(4.))
-                    .bg(p.chip)
-                    .into_any_element()
-            }),
+            DataRowLogo::Figma => pro_app_tile("figma", 20., cx),
+            DataRowLogo::Linear => pro_app_tile("linear", 20., cx),
+            DataRowLogo::Vercel => pro_app_tile("vercel", 20., cx),
+            DataRowLogo::Framer => wrap_tile(pro_svg("0 0 24 24", FRAMER_INNER_SVG, 13., fg)),
+            DataRowLogo::Loom => wrap_tile(pro_raw_svg(LOOM_LOGO_SVG, 13.5, 13.5)),
+            DataRowLogo::App(name) => {
+                if pro_app_artwork(name, 13., cx).is_some() {
+                    pro_app_tile(name, 20., cx)
+                } else {
+                    div()
+                        .size(px(20.))
+                        .rounded(px(5.))
+                        .bg(p.chip)
+                        .border_1()
+                        .border_color(tile_border)
+                        .into_any_element()
+                }
+            }
             DataRowLogo::None => div()
-                .size(px(16.))
-                .rounded(px(4.))
+                .size(px(20.))
+                .rounded(px(5.))
                 .bg(p.chip)
                 .into_any_element(),
         }
@@ -2311,7 +2366,7 @@ impl Render for DataTable {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(dark))
             .overflow_hidden()
             .on_key_down(cx.listener(Self::handle_key_down))
             .on_mouse_up(

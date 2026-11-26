@@ -272,6 +272,22 @@ fn settings_nav_groups(cx: &App) -> Vec<ShellNavGroup> {
 }
 
 /// Personal profile settings screen (`settings-profile`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::settings_profile::{SettingsProfileScreen, SettingsProfileEvent};
+///
+/// let screen = cx.new(|cx| SettingsProfileScreen::new("settings-profile", cx));
+/// cx.subscribe(&screen, |_, event: &SettingsProfileEvent, _| {
+///     let _ = event;
+/// }).detach();
+/// # }
+/// ```
 pub struct SettingsProfileScreen {
     id: ElementId,
     focus: FocusHandle,

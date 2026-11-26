@@ -258,14 +258,14 @@ impl Slider {
             }
             if !cancelled {
                 let current = if high {
-                    self.value.high.unwrap()
+                    self.value.high.unwrap_or(self.value.low)
                 } else {
                     self.value.low
                 };
                 self.set(self.snapped(current), high, cx);
             }
             let next = if high {
-                self.value.high.unwrap()
+                self.value.high.unwrap_or(self.value.low)
             } else {
                 self.value.low
             };
@@ -353,7 +353,7 @@ impl Render for Slider {
         {
             let high = i == 1;
             let value = if high {
-                self.value.high.unwrap()
+                self.value.high.unwrap_or(self.value.low)
             } else {
                 self.value.low
             };
@@ -409,7 +409,7 @@ impl Render for Slider {
                 .focus_visible(move |s| s.border_2().border_color(p.focus))
                 .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
                     let current = if high {
-                        s.value.high.unwrap()
+                        s.value.high.unwrap_or(s.value.low)
                     } else {
                         s.value.low
                     };

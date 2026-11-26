@@ -5,9 +5,9 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_ease, pro_eid, pro_empty_state, pro_mark_selected, pro_mix_color,
-        pro_pill_indicator, pro_rolling_number, pro_selection_sensor, pro_skeleton_bar,
-        pro_spring_f32, pro_swap_label, tr,
+        ProPalette, pro_card_shadow, pro_ease, pro_eid, pro_empty_state, pro_mark_selected,
+        pro_mix_color, pro_pill_indicator, pro_rolling_number, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_f32, pro_swap_label, tr,
     },
     primitives::{
         family::{Slide, disabled_motion},
@@ -359,6 +359,26 @@ fn scaled_rolling_spec(val: f64, metric: UsageMetric) -> (f64, usize, &'static s
 }
 
 /// AI provider model usage breakdown component (`model-usage`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::model_usage::{ModelUsage, ModelUsageEvent, UsageMetric};
+///
+/// let usage = cx.new(|cx| {
+///     ModelUsage::new("weekly-model-usage", cx)
+///         .with_title("This week")
+///         .with_default_metric(UsageMetric::Tokens)
+/// });
+/// cx.subscribe(&usage, |_, ev: &ModelUsageEvent, _| {
+///     let _ = ev;
+/// }).detach();
+/// # }
+/// ```
 pub struct ModelUsage {
     id: ElementId,
     title: SharedString,
@@ -1080,10 +1100,11 @@ impl Render for ModelUsage {
 
             // Build segments top-to-bottom visually (lightest smallest on top, darkest largest at bottom).
             let mut stack_col = div()
-                .w(px(64.))
+                .w(px(68.))
                 .max_w_full()
                 .h(px(bar_px))
-                .rounded_t(px(5.))
+                .rounded_t(px(6.))
+                .rounded_b(px(2.))
                 .overflow_hidden()
                 .flex()
                 .flex_col()
@@ -1110,9 +1131,9 @@ impl Render for ModelUsage {
                 }
                 let strength = match rev_i {
                     0 => 1.0,
-                    1 => 0.54,
-                    2 => 0.32,
-                    _ => (0.22 - (rev_i.saturating_sub(3) as f32 * 0.04)).max(0.14),
+                    1 => 0.58,
+                    2 => 0.35,
+                    _ => (0.24 - (rev_i.saturating_sub(3) as f32 * 0.04)).max(0.15),
                 };
                 let seg_color = if seg_count <= 1 || rev_i == 0 {
                     base_c
@@ -1125,6 +1146,7 @@ impl Render for ModelUsage {
                         .flex_grow(1.0)
                         .flex_basis(relative(sp_share))
                         .min_h(px(3.))
+                        .rounded(px(1.5))
                         .bg(seg_color),
                 );
             }
@@ -1341,7 +1363,7 @@ impl Render for ModelUsage {
 
         let mut axis_row = div()
             .ml(px(44.))
-            .mt(px(10.))
+            .mt(px(12.))
             .px(px(8.))
             .flex()
             .items_center()
@@ -1350,7 +1372,7 @@ impl Render for ModelUsage {
             let is_on = self.hovered_company == Some(ci);
             let label_alpha = (0.35 + 0.65 * col_alphas[ci]).clamp(0.45, 1.0);
             let brand_key = comp.brand.as_ref().unwrap_or(&comp.id);
-            let logo = pro_app_artwork(brand_key, 13., cx);
+            let logo = pro_app_artwork(brand_key, 14., cx);
             axis_row = axis_row.child(
                 div()
                     .flex_1()
@@ -1358,12 +1380,12 @@ impl Render for ModelUsage {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .gap(px(5.))
+                    .gap(px(6.))
                     .opacity(label_alpha)
                     .when_some(logo, |d, lg| d.child(lg))
                     .child(
                         div()
-                            .text_size(px(12.))
+                            .text_size(px(12.5))
                             .line_height(px(18.))
                             .font_weight(if is_on {
                                 FontWeight::MEDIUM
@@ -1489,7 +1511,7 @@ impl Render for ModelUsage {
             task_pairs.push(row_el);
         }
 
-        let mut tasks_grid = div().w_full().flex().flex_col().gap(px(2.));
+        let mut tasks_grid = div().w_full().flex().flex_col().gap(px(6.));
         let mut iter = task_pairs.into_iter();
         while let Some(left_item) = iter.next() {
             let mut line_row = div().w_full().flex().flex_wrap().gap_x(px(16.));
@@ -1520,10 +1542,10 @@ impl Render for ModelUsage {
             .bg(card_bg)
             .border_1()
             .border_color(card_border)
-            .when(!dark, |d| d.shadow_xs())
+            .shadow(pro_card_shadow(dark))
             .px(px(20.))
             .pt(px(18.))
-            .pb(px(14.))
+            .pb(px(16.))
             .flex()
             .flex_col()
             .on_key_down(cx.listener(Self::handle_key_down))

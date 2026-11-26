@@ -19,6 +19,20 @@ impl Allocation {
         }
     }
 }
+/// `UsageMeter` component.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::usage_meter::{UsageMeter, Allocation};
+///
+/// let control = cx.new(|_| UsageMeter::new("Storage", "GB", 15.0, vec![Allocation::new("Photos", 4.0, gpui::rgb(0x7195ca).into())]));
+/// # }
+/// ```
 pub struct UsageMeter {
     label: SharedString,
     unit: SharedString,

@@ -7,16 +7,16 @@
 
 use crate::{
     components::pro_chrome::{
-        ProPalette, pro_app_tile, pro_check_draw, pro_eid, pro_empty_state, pro_mark_selected,
-        pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_swap_label,
-        pro_switch, pro_tactile, pro_view_transition, tr,
+        ProPalette, pro_app_tile, pro_card_shadow, pro_check_draw, pro_eid, pro_empty_state,
+        pro_mark_selected, pro_pill_indicator, pro_selection_sensor, pro_skeleton_bar,
+        pro_spring_f32, pro_swap_label, pro_switch, pro_tactile, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
         control::UiLanguage,
         editor::{EditEvent, Editor, InputMode},
         family::disabled_motion,
-        pro_icons::{ProIcon, pro_app_artwork, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_icon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -454,6 +454,16 @@ pub(crate) fn partition_services(
 }
 
 fn render_kbd(label: &str, p: &ProPalette) -> Div {
+    let content: AnyElement = if label == "↵" {
+        pro_svg(
+            "0 0 16 16",
+            r#"<path d="M12.5 3.5v4a2 2 0 0 1-2 2H4m0 0 2.8-2.8M4 9.5l2.8 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>"#,
+            11.,
+            p.muted,
+        )
+    } else {
+        div().child(label.to_string()).into_any_element()
+    };
     div()
         .min_w(px(20.))
         .h(px(20.))
@@ -468,7 +478,7 @@ fn render_kbd(label: &str, p: &ProPalette) -> Div {
         .line_height(px(16.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(p.muted)
-        .child(label.to_string())
+        .child(content)
 }
 
 /// Two-pane integrations command-menu page with Workspace and Personal OAuth scope cards.
@@ -776,11 +786,11 @@ impl Render for IntegrationPicker {
                     div()
                         .w_full()
                         .max_w(px(660.))
-                        .rounded(px(10.))
+                        .rounded(px(12.))
                         .bg(card_bg)
                         .border_1()
                         .border_color(p.line)
-                        .shadow_lg()
+                        .shadow(pro_card_shadow(p.dark))
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -1023,7 +1033,7 @@ impl Render for IntegrationPicker {
                                 cx.emit(IntegrationPickerEvent::Selected(svc_id.clone()));
                                 cx.notify();
                             }))
-                            .child(pro_app_tile(svc.app_mark.as_ref(), 24., cx))
+                            .child(pro_app_tile(svc.app_mark.as_ref(), 26., cx))
                             .child(
                                 div()
                                     .flex_1()
@@ -1034,6 +1044,11 @@ impl Render for IntegrationPicker {
                                         div()
                                             .text_size(px(13.))
                                             .line_height(px(18.))
+                                            .font_weight(if is_sel {
+                                                FontWeight::MEDIUM
+                                            } else {
+                                                FontWeight::NORMAL
+                                            })
                                             .text_color(p.ink)
                                             .truncate()
                                             .child(svc.name.clone()),
@@ -1071,15 +1086,15 @@ impl Render for IntegrationPicker {
                 stacked,
                 |d| d.w_full().max_h(px(180.)).border_b_1().border_color(p.line),
                 |d| {
-                    d.w(px(262.))
+                    d.w(px(236.))
                         .flex_none()
                         .h_full()
                         .border_r_1()
                         .border_color(p.line)
                 },
             )
-            .px(px(4.))
-            .pb(px(4.))
+            .px(px(6.))
+            .pb(px(6.))
             .overflow_y_scroll()
             .child(list_inner);
 
@@ -1156,14 +1171,25 @@ impl Render for IntegrationPicker {
             .absolute()
             .inset_0();
 
-            let kense_glyph = pro_app_artwork("kense", 20., cx)
-                .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, 18., rgb(0xffffff).into()));
+            let kense_glyph = {
+                static KENSE_ON_BRAND: std::sync::OnceLock<std::sync::Arc<Image>> =
+                    std::sync::OnceLock::new();
+                let image = KENSE_ON_BRAND
+                    .get_or_init(|| {
+                        std::sync::Arc::new(Image::from_bytes(
+                            ImageFormat::Png,
+                            crate::primitives::kense_mark::DARK.to_vec(),
+                        ))
+                    })
+                    .clone();
+                img(image).size(px(22.)).flex_none().into_any_element()
+            };
 
             let art_banner = div()
                 .relative()
                 .h(px(88.))
-                .mx(px(8.))
-                .mt(px(8.))
+                .mx(px(10.))
+                .mt(px(10.))
                 .flex_none()
                 .rounded(px(8.))
                 .bg(soft_surface)
@@ -1704,11 +1730,11 @@ impl Render for IntegrationPicker {
                 div()
                     .w_full()
                     .max_w(px(660.))
-                    .rounded(px(10.))
+                    .rounded(px(12.))
                     .bg(card_bg)
                     .border_1()
                     .border_color(card_border)
-                    .shadow_lg()
+                    .shadow(pro_card_shadow(p.dark))
                     .overflow_hidden()
                     .flex()
                     .flex_col()

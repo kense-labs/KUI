@@ -112,6 +112,19 @@ pub enum AskDataEvent {
     Cancelled(u64),
 }
 /// The host performs SQL generation and query execution. This view performs neither itself.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[allow(unused_variables, unused_imports)]
+/// # fn example(window: &mut gpui::Window, cx: &mut gpui::App) {
+/// # use gpui::prelude::*;
+/// use gpui::prelude::*;
+/// use kui::components::ask_your_data::AskYourData;
+///
+/// let control = cx.new(|cx| AskYourData::new("Analytics", window, cx));
+/// # }
+/// ```
 pub struct AskYourData {
     question: Entity<Input>,
     source: SharedString,
